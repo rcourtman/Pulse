@@ -170,6 +170,35 @@ func TestDeriveIndex(t *testing.T) {
 			},
 		},
 		{
+			name: "PVE task falls back to node backup task label instead of raw task id",
+			point: RecoveryPoint{
+				ID:       "pve-task:delly-UPID:minipc:0014B9F1:22DC4693:69C600C1:vzdump::root@pam:",
+				Provider: ProviderProxmoxPVE,
+				Kind:     KindBackup,
+				Mode:     ModeLocal,
+				Outcome:  OutcomeSuccess,
+				Details: map[string]any{
+					"instance": "delly",
+					"node":     "minipc",
+					"vmid":     0,
+					"type":     "vzdump",
+					"taskID":   "delly-UPID:minipc:0014B9F1:22DC4693:69C600C1:vzdump::root@pam:",
+				},
+			},
+			expected: PointIndex{
+				SubjectLabel:    "minipc backup task",
+				SubjectType:     "",
+				ItemType:        "task",
+				IsWorkload:      false,
+				ClusterLabel:    "delly",
+				NodeHostLabel:   "minipc",
+				NamespaceLabel:  "",
+				EntityIDLabel:   "",
+				RepositoryLabel: "",
+				DetailsSummary:  "",
+			},
+		},
+		{
 			name: "TrueNAS with hostname",
 			point: RecoveryPoint{
 				ID:       "truenas-snap-1",

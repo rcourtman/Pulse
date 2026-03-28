@@ -287,6 +287,80 @@ func TestStore_OpenBackfillsLegacyNumericPBSSubjectLabels(t *testing.T) {
 	}
 }
 
+func TestStore_OpenBackfillsLegacyPVETaskSubjectLabels(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	now := time.Date(2026, 3, 27, 4, 7, 9, 0, time.UTC)
+	point := recovery.RecoveryPoint{
+		ID:          "pve-task:delly-UPID:minipc:0014B9F1:22DC4693:69C600C1:vzdump::root@pam:",
+		Provider:    recovery.ProviderProxmoxPVE,
+		Kind:        recovery.KindBackup,
+		Mode:        recovery.ModeLocal,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   &now,
+		CompletedAt: &now,
+		Details: map[string]any{
+			"instance": "delly",
+			"node":     "minipc",
+			"status":   "OK",
+			"type":     "vzdump",
+			"taskID":   "delly-UPID:minipc:0014B9F1:22DC4693:69C600C1:vzdump::root@pam:",
+			"vmid":     0,
+		},
+	}
+
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points
+		 SET subject_label = ?, entity_id_label = ?
+		 WHERE id = ?`,
+		point.ID,
+		"0",
+		point.ID,
+	); err != nil {
+		t.Fatalf("degrade legacy pve task label: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	points, total, err := reopened.ListPoints(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListPoints() error = %v", err)
+	}
+	if total != 1 || len(points) != 1 {
+		t.Fatalf("ListPoints() total=%d len=%d, want 1/1", total, len(points))
+	}
+	if points[0].Display == nil || points[0].Display.SubjectLabel != "minipc backup task" {
+		t.Fatalf("ListPoints() display = %#v, want backfilled subject label minipc backup task", points[0].Display)
+	}
+	if points[0].Display != nil && points[0].Display.EntityIDLabel != "" {
+		t.Fatalf("ListPoints() display entity id = %#v, want empty for synthetic PVE task label", points[0].Display)
+	}
+	if points[0].Display == nil || points[0].Display.ItemType != "task" {
+		t.Fatalf("ListPoints() display = %#v, want synthetic item type task", points[0].Display)
+	}
+}
+
 func createLegacyRecoveryDBWithoutItemType(t *testing.T, dbPath string, point recovery.RecoveryPoint) {
 	t.Helper()
 

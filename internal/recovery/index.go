@@ -91,6 +91,51 @@ func preferredProxmoxBackupCommentLabel(comment, entityID string) string {
 	return comment
 }
 
+func isOpaqueProxmoxTaskLabel(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return false
+	}
+	return strings.HasPrefix(value, "pve-task:") || strings.Contains(value, "upid:")
+}
+
+func preferredProxmoxTaskLabelFromDetails(p RecoveryPoint, currentLabel string) string {
+	if strings.TrimSpace(string(p.Provider)) != string(ProviderProxmoxPVE) {
+		return ""
+	}
+	currentLabel = strings.TrimSpace(currentLabel)
+	if currentLabel != "" && !isOpaqueProxmoxTaskLabel(currentLabel) {
+		return ""
+	}
+
+	taskType := strings.ToLower(strings.TrimSpace(detailsString(p, "type")))
+	baseLabel := ""
+	switch taskType {
+	case "vzdump", "backup":
+		baseLabel = "backup task"
+	case "":
+		baseLabel = "task"
+	default:
+		baseLabel = strings.ReplaceAll(taskType, "-", " ") + " task"
+	}
+
+	entityID := entityIDLabel(p)
+	node := nodeHostLabel(p)
+	if entityID != "" {
+		if node != "" {
+			return fmt.Sprintf("%s guest %s %s", node, entityID, baseLabel)
+		}
+		return fmt.Sprintf("guest %s %s", entityID, baseLabel)
+	}
+	if node != "" {
+		return node + " " + baseLabel
+	}
+	if cluster := clusterLabel(p); cluster != "" {
+		return cluster + " " + baseLabel
+	}
+	return "proxmox " + baseLabel
+}
+
 func preferredSubjectLabelFromDetails(p RecoveryPoint, currentLabel string) string {
 	currentLabel = strings.TrimSpace(currentLabel)
 	if !strings.HasPrefix(string(p.Provider), "proxmox-") {
@@ -99,6 +144,9 @@ func preferredSubjectLabelFromDetails(p RecoveryPoint, currentLabel string) stri
 
 	entityID := entityIDLabel(p)
 	if currentLabel != "" && currentLabel != entityID && !isNumericOnlyLabel(currentLabel) {
+		if candidate := preferredProxmoxTaskLabelFromDetails(p, currentLabel); candidate != "" {
+			return candidate
+		}
 		return ""
 	}
 
@@ -106,6 +154,10 @@ func preferredSubjectLabelFromDetails(p RecoveryPoint, currentLabel string) stri
 		if candidate := preferredProxmoxBackupCommentLabel(detailsString(p, key), entityID); candidate != "" {
 			return candidate
 		}
+	}
+
+	if candidate := preferredProxmoxTaskLabelFromDetails(p, currentLabel); candidate != "" {
+		return candidate
 	}
 
 	return ""
@@ -274,11 +326,17 @@ func namespaceLabel(p RecoveryPoint) string {
 func entityIDLabel(p RecoveryPoint) string {
 	// Proxmox VMID (int or string depending on source).
 	if v := detailsString(p, "vmid"); v != "" {
+		if strings.TrimSpace(string(p.Provider)) == string(ProviderProxmoxPVE) && v == "0" {
+			return ""
+		}
 		return v
 	}
 	if p.Details != nil {
 		if raw, ok := p.Details["vmid"]; ok {
 			if v := anyToString(raw); v != "" {
+				if strings.TrimSpace(string(p.Provider)) == string(ProviderProxmoxPVE) && v == "0" {
+					return ""
+				}
 				return v
 			}
 		}
@@ -401,6 +459,11 @@ func DeriveIndex(p RecoveryPoint) PointIndex {
 	if p.SubjectRef != nil {
 		subjectType = strings.TrimSpace(p.SubjectRef.Type)
 	}
+	subjectLabel := subjectLabel(p)
+	itemType := NormalizeRecoveryItemType(subjectType)
+	if itemType == "" && preferredProxmoxTaskLabelFromDetails(p, "") != "" {
+		itemType = "task"
+	}
 
 	isWorkload := isWorkloadSubjectType(subjectType)
 	// If the point is linked to a unified resource, treat it as a protected subject (workload)
@@ -410,9 +473,9 @@ func DeriveIndex(p RecoveryPoint) PointIndex {
 	}
 
 	return PointIndex{
-		SubjectLabel:    subjectLabel(p),
+		SubjectLabel:    subjectLabel,
 		SubjectType:     subjectType,
-		ItemType:        NormalizeRecoveryItemType(subjectType),
+		ItemType:        itemType,
 		IsWorkload:      isWorkload,
 		ClusterLabel:    clusterLabel(p),
 		NodeHostLabel:   nodeHostLabel(p),

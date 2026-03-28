@@ -667,6 +667,10 @@ That same summary rule also applies within individual cards: recovery posture,
 freshness, attention, footprint, and history cards should favor compact rows
 and metric lists over stacked prose callouts so the summary strip reads like
 Pulse monitoring telemetry rather than a page-local narrative panel.
+That same card-level scan rule should prefer one dominant metric per card with
+short supporting readouts, the same quick-scan rhythm operators already get on
+infrastructure and workloads, instead of nested sub-cards that turn recovery
+summary into a denser bespoke dashboard than the rest of Pulse.
 That same inventory surface should also follow the established monitoring-table
 scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
@@ -676,6 +680,11 @@ That same row contract should avoid duplicating context that already has a
 dedicated column. When `Item Type` and `Platform` columns are visible, the
 primary item cell should not restate those same badges on desktop; duplicate
 context belongs only as a small-screen fallback when those columns collapse.
+That same item-identity contract also applies to synthetic Proxmox task
+recovery points. When the persisted subject label is just a raw
+`pve-task:*`/`UPID:*` identifier or `vmid=0`, the canonical recovery index
+should derive a readable task label and `task` item type from point details so
+recovery tables scan by operator meaning instead of transport IDs.
 That same inventory surface should stay on the flat monitoring-table pattern
 already used elsewhere in Pulse. Protected items should surface posture through
 row-level status cues, outcome pills, and filters rather than inserting extra

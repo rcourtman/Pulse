@@ -10,7 +10,6 @@ import {
   buildRecoveryPlatformCoverage,
   buildRecoveryPostureSegments,
   buildRecoveryPostureSummary,
-  getRecoveryAttentionDotClass,
   RECOVERY_SUMMARY_TIME_RANGES,
   RECOVERY_SUMMARY_TIME_RANGE_LABELS,
   type RecoverySummaryTimeRange,
@@ -43,35 +42,35 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const activity = createMemo(() => buildRecoveryActivitySummary(props.series()));
   const healthyCount = createMemo(() => postureSummary().healthy);
   const attentionCount = createMemo(() => postureSummary().attention);
+  const primaryPostureMetric = createMemo(() => {
+    if (attentionCount() > 0) {
+      return {
+        value: attentionCount(),
+        label: 'need attention',
+        valueClass: 'text-amber-600 dark:text-amber-400',
+      };
+    }
+    if (postureSummary().running > 0) {
+      return {
+        value: postureSummary().running,
+        label: 'currently running',
+        valueClass: 'text-blue-600 dark:text-blue-400',
+      };
+    }
+    return {
+      value: healthyCount(),
+      label: 'healthy items',
+      valueClass: 'text-emerald-600 dark:text-emerald-400',
+    };
+  });
+  const visiblePostureSegments = createMemo(() =>
+    postureSegments().filter((segment) => segment.count > 0).slice(0, 4),
+  );
   const recentWindowLabel = createMemo(() => {
     const activitySummary = activity();
     if (!activitySummary.startLabel || !activitySummary.endLabel) return null;
     return `${activitySummary.startLabel} to ${activitySummary.endLabel}`;
   });
-  const attentionItems = createMemo(() =>
-    [
-      {
-        label: 'Stale',
-        count: summary().stale,
-        tone: 'amber',
-      },
-      {
-        label: 'Never succeeded',
-        count: summary().neverSucceeded,
-        tone: 'rose',
-      },
-      {
-        label: 'Attention',
-        count: attentionCount(),
-        tone: 'amber',
-      },
-      {
-        label: 'Running',
-        count: postureSummary().running,
-        tone: 'blue',
-      },
-    ].filter((item) => item.count > 0),
-  );
   const handleTimeRangeChange = (range: string) =>
     props.onTimeRangeChange?.(range as RecoverySummaryTimeRange);
 
@@ -108,30 +107,26 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         class="overflow-hidden"
       >
         <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2">
-            <div class="grid grid-cols-3 gap-2 text-[11px]">
-              <div class="rounded-md border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
-                <div class="uppercase tracking-wide text-muted">Healthy</div>
-                <div class="mt-1 font-semibold text-emerald-600 dark:text-emerald-400">
-                  {healthyCount()}
+          <div class="flex h-full flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class={`text-2xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
+                  {primaryPostureMetric().value}
                 </div>
+                <div class="text-xs text-muted">{primaryPostureMetric().label}</div>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
-                <div class="uppercase tracking-wide text-muted">Attention</div>
-                <div class="mt-1 font-semibold text-amber-600 dark:text-amber-400">
-                  {attentionCount()}
+              <div class="text-right">
+                <div class="text-sm font-semibold tabular-nums text-base-content">
+                  {summary().total}
                 </div>
-              </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
-                <div class="uppercase tracking-wide text-muted">Protected</div>
-                <div class="mt-1 font-semibold text-base-content">{summary().total}</div>
+                <div class="text-[11px] text-muted">protected items</div>
               </div>
             </div>
 
             <div class="space-y-1.5">
               <div class="h-1.5 overflow-hidden rounded-full bg-surface-alt">
                 <div class="flex h-full">
-                  <For each={postureSegments()}>
+                  <For each={visiblePostureSegments()}>
                     {(segment) => (
                       <div
                         class={segment.color}
@@ -143,7 +138,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                <For each={postureSegments()}>
+                <For each={visiblePostureSegments()}>
                   {(segment) => (
                     <div class="flex items-center justify-between gap-3">
                       <div class="flex items-center gap-2 text-base-content">
@@ -162,121 +157,117 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2">
-            <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
-              <div class="flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
-                <span class="uppercase tracking-wide text-muted">Stale</span>
-                <span class="font-semibold text-amber-600 dark:text-amber-400">
+          <div class="flex h-full flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-2xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">
                   {summary().stale}
-                </span>
+                </div>
+                <div class="text-xs text-muted">stale items</div>
               </div>
-              <div class="flex items-center justify-between gap-2 border-b border-border-subtle pb-1.5">
-                <span class="uppercase tracking-wide text-muted">Never succeeded</span>
-                <span class="font-semibold text-rose-600 dark:text-rose-400">
-                  {summary().neverSucceeded}
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-2">
-                <span class="uppercase tracking-wide text-muted">Running</span>
-                <span class="font-semibold text-blue-600 dark:text-blue-400">
-                  {postureSummary().running}
-                </span>
-              </div>
-              <div class="flex items-center justify-between gap-2">
-                <span class="uppercase tracking-wide text-muted">Attention</span>
-                <span class="font-semibold text-amber-600 dark:text-amber-400">
-                  {attentionCount()}
-                </span>
+              <div class="space-y-1 text-right text-xs">
+                <div>
+                  <span class="font-semibold text-rose-600 dark:text-rose-400">
+                    {summary().neverSucceeded}
+                  </span>{' '}
+                  <span class="text-muted">never succeeded</span>
+                </div>
+                <div>
+                  <span class="font-semibold text-blue-600 dark:text-blue-400">
+                    {postureSummary().running}
+                  </span>{' '}
+                  <span class="text-muted">running</span>
+                </div>
               </div>
             </div>
 
-            <div class="flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
+            <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
               <For each={freshnessBuckets()}>
                 {(bucket) => (
-                  <div class="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface-alt/35 px-2 py-1 text-[11px]">
-                    <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
-                    <span class="text-base-content">{bucket.label}</span>
-                    <span class="tabular-nums text-base-content">{bucket.count}</span>
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-2 text-base-content">
+                      <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
+                      <span>{bucket.label}</span>
+                    </div>
+                    <span class="tabular-nums font-semibold text-base-content">{bucket.count}</span>
                   </div>
                 )}
               </For>
-              <For each={attentionItems()}>
-                {(item) => (
-                  <Show when={item.label === 'Never succeeded' || item.label === 'Running'}>
-                    <div class="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface-alt/35 px-2 py-1 text-[11px]">
-                      <span
-                        class={`h-2 w-2 rounded-full ${getRecoveryAttentionDotClass(item.tone)}`}
-                      />
-                      <span class="text-base-content">{item.label}</span>
-                      <span class="tabular-nums text-base-content">{item.count}</span>
-                    </div>
-                  </Show>
-                )}
-              </For>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2 border-t border-border-subtle pt-2 text-[11px]">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
+                <div class="text-muted">Attention</div>
+                <div class="mt-1 font-semibold text-base-content">{attentionCount()}</div>
+              </div>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
+                <div class="text-muted">Fresh &lt;24h</div>
+                <div class="mt-1 font-semibold text-base-content">
+                  {freshnessBuckets()
+                    .filter((bucket) => bucket.key === 'under1h' || bucket.key === 'under24h')
+                    .reduce((total, bucket) => total + bucket.count, 0)}
+                </div>
+              </div>
             </div>
           </div>
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2">
-            <dl class="space-y-1.5 text-sm">
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Item Types</dt>
-                <dd class="font-semibold text-base-content">{itemCoverage().itemTypeCount}</dd>
+          <div class="flex h-full flex-col gap-3">
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
+                <div class="text-muted">Item Types</div>
+                <div class="mt-1 text-xl font-semibold tabular-nums text-base-content">
+                  {itemCoverage().itemTypeCount}
+                </div>
               </div>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Primary Item</dt>
-                <dd class="font-semibold text-base-content">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
+                <div class="text-muted">Platforms</div>
+                <div class="mt-1 text-xl font-semibold tabular-nums text-base-content">
+                  {platformCoverage().platformCount}
+                </div>
+              </div>
+            </div>
+
+            <dl class="space-y-1.5 text-xs">
+              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-1.5">
+                <dt class="text-muted">Primary Item</dt>
+                <dd class="font-medium text-base-content">
                   {itemCoverage().primaryItemLabel ?? 'n/a'}
                 </dd>
               </div>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Platforms</dt>
-                <dd class="font-semibold text-base-content">{platformCoverage().platformCount}</dd>
-              </div>
               <div class="flex items-center justify-between gap-3">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Primary Platform</dt>
-                <dd class="font-semibold text-base-content">
+                <dt class="text-muted">Primary Platform</dt>
+                <dd class="font-medium text-base-content">
                   {platformCoverage().primaryPlatformLabel ?? 'n/a'}
                 </dd>
               </div>
             </dl>
 
-            <Show when={itemCoverage().items.length > 0}>
-              <div class="flex flex-wrap gap-1.5 pt-1">
-                  <For each={itemCoverage().items.slice(0, 6)}>
+            <div class="grid gap-2 border-t border-border-subtle pt-2">
+              <Show when={itemCoverage().items.length > 0}>
+                <div class="flex flex-wrap gap-1.5">
+                  <For each={itemCoverage().items.slice(0, 3)}>
                     {(item) => (
-                      <div class="inline-flex items-center gap-2 text-[11px]">
+                      <div class="inline-flex items-center gap-1.5 text-[11px]">
                         <span class={item.toneClass}>{item.label}</span>
                         <span class="tabular-nums text-base-content">{item.count}</span>
-                        <span class="text-muted">{item.percent}%</span>
                       </div>
                     )}
                   </For>
-              </div>
-            </Show>
-
-            <div class="border-t border-border-subtle pt-2">
-              <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
-                Platform Mix
-              </div>
-              <Show when={platformCoverage().multiPlatformCount > 0}>
-                <div class="mb-1.5 text-xs text-muted">
-                  {platformCoverage().multiPlatformCount} multi-platform item
-                  {platformCoverage().multiPlatformCount === 1 ? '' : 's'}
                 </div>
               </Show>
+
               <div class="flex flex-wrap gap-1.5">
-                <For each={platformCoverage().items.slice(0, 6)}>
+                <For each={platformCoverage().items.slice(0, 3)}>
                   {(item) => {
                     const badge = getSourcePlatformBadge(item.key);
                     return (
-                      <div class="inline-flex items-center gap-2 text-[11px]">
+                      <div class="inline-flex items-center gap-1.5 text-[11px]">
                         <span class={badge?.classes || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>
                           {badge?.label || item.label}
                         </span>
                         <span class="tabular-nums text-base-content">{item.count}</span>
-                        <span class="text-muted">{item.percent}%</span>
                       </div>
                     );
                   }}
@@ -292,47 +283,48 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
-          <div class="flex h-full flex-col gap-2">
-            <dl class="space-y-1.5 text-sm">
+          <div class="flex h-full flex-col gap-3">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-2xl font-semibold tabular-nums text-base-content">
+                  {activity().totalEvents}
+                </div>
+                <div class="text-xs text-muted">recovery points</div>
+              </div>
               <Show when={recentWindowLabel()}>
-                <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                  <dt class="text-[11px] uppercase tracking-wide text-muted">Window</dt>
-                  <dd class="text-right text-xs text-base-content">{recentWindowLabel()}</dd>
+                <div class="max-w-[9rem] text-right text-[11px] text-muted">
+                  {recentWindowLabel()}
                 </div>
               </Show>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Recovery Points</dt>
-                <dd class="font-semibold text-base-content">{activity().totalEvents}</dd>
-              </div>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Days Active</dt>
-                <dd class="font-semibold text-base-content">{activity().activeDays}</dd>
-              </div>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Peak Day</dt>
-                <dd class="font-semibold text-base-content">{activity().busiestLabel ?? 'n/a'}</dd>
-              </div>
-              <div class="flex items-center justify-between gap-3">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Latest Activity</dt>
-                <dd class="font-semibold text-base-content">{activity().latestLabel ?? 'n/a'}</dd>
-              </div>
-            </dl>
-            <div class="grid grid-cols-3 gap-2 border-t border-border-subtle pt-2 text-[11px]">
+            </div>
+
+            <div class="grid grid-cols-3 gap-2 text-[11px]">
               <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="uppercase tracking-wide text-muted">Avg / Day</div>
+                <div class="text-muted">Days Active</div>
+                <div class="mt-1 font-semibold text-base-content">{activity().activeDays}</div>
+              </div>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
+                <div class="text-muted">Avg / Day</div>
                 <div class="mt-1 font-semibold text-base-content">
                   {activity().averagePerDay.toFixed(1)}
                 </div>
               </div>
               <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="uppercase tracking-wide text-muted">Peak</div>
+                <div class="text-muted">Peak</div>
                 <div class="mt-1 font-semibold text-base-content">{activity().busiestCount}</div>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="uppercase tracking-wide text-muted">Latest</div>
-                <div class="mt-1 font-semibold text-base-content">{activity().latestCount}</div>
-              </div>
             </div>
+
+            <dl class="space-y-1.5 border-t border-border-subtle pt-2 text-xs">
+              <div class="flex items-center justify-between gap-3">
+                <dt class="text-muted">Peak Day</dt>
+                <dd class="font-medium text-base-content">{activity().busiestLabel ?? 'n/a'}</dd>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <dt class="text-muted">Latest Activity</dt>
+                <dd class="font-medium text-base-content">{activity().latestLabel ?? 'n/a'}</dd>
+              </div>
+            </dl>
           </div>
         </SummaryMetricCard>
       </SummaryPanel>

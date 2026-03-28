@@ -37,6 +37,10 @@ describe('recoveryItemTypePresentation', () => {
       key: 'dataset',
       label: 'Dataset',
     });
+    expect(getRecoveryItemTypePresentation('task')).toMatchObject({
+      key: 'task',
+      label: 'Task',
+    });
   });
 
   it('falls back cleanly for unknown item types', () => {

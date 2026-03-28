@@ -42,7 +42,9 @@ func (s *Store) BackfillIndex(ctx context.Context) error {
 			  subject_label IS NOT NULL AND TRIM(subject_label) <> '' AND
 			  entity_id_label IS NOT NULL AND TRIM(entity_id_label) <> '' AND
 			  TRIM(subject_label) = TRIM(entity_id_label) AND
-			  details_json IS NOT NULL AND TRIM(details_json) <> ''))
+			  details_json IS NOT NULL AND TRIM(details_json) <> '') OR
+			 (provider = 'proxmox-pve' AND
+			  subject_label IS NOT NULL AND TRIM(subject_label) LIKE 'pve-task:%'))
 		LIMIT `+fmt.Sprint(maxBackfillRows)+`
 	`)
 	if err != nil {
