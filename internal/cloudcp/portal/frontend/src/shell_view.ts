@@ -91,6 +91,16 @@ function countWorkspacesByHealth(workspaces: PortalWorkspaceSummary[], status: '
   return count;
 }
 
+function countReadyWorkspaces(workspaces: PortalWorkspaceSummary[]): number {
+  var count = 0;
+  for (var i = 0; i < workspaces.length; i += 1) {
+    if (String(workspaces[i].state || '') === 'active' && workspaceHealthState(workspaces[i]) === 'healthy') {
+      count += 1;
+    }
+  }
+  return count;
+}
+
 function healthBadgeHTML(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
   if (status === 'healthy') {
@@ -314,10 +324,12 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
 
 function renderAccountOverviewSection(account: PortalAccountSummary): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
+  var totalCount = workspaces.length;
+  var readyCount = countReadyWorkspaces(workspaces);
   var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
   var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
-  var activeCount = countWorkspacesByState(workspaces, 'active');
+  var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   var postureTitle = unhealthyCount > 0
     ? 'Hosted posture needs review'
     : checkingCount > 0
@@ -389,12 +401,12 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
           '</div>' +
           '<div class="account-metric-strip">' +
             '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Active workspaces</span>' +
-              '<span class="account-stat-value">' + String(activeCount) + '</span>' +
+              '<span class="account-stat-label">Total</span>' +
+              '<span class="account-stat-value">' + String(totalCount) + '</span>' +
             '</div>' +
             '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Healthy</span>' +
-              '<span class="account-stat-value account-stat-healthy">' + String(healthyCount) + '</span>' +
+              '<span class="account-stat-label">Ready now</span>' +
+              '<span class="account-stat-value account-stat-healthy">' + String(readyCount) + '</span>' +
             '</div>' +
             '<div class="account-stat-card account-stat-card-inline">' +
               '<span class="account-stat-label">Checking</span>' +
@@ -403,6 +415,10 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
             '<div class="account-stat-card account-stat-card-inline">' +
               '<span class="account-stat-label">Needs attention</span>' +
               '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
+            '</div>' +
+            '<div class="account-stat-card account-stat-card-inline">' +
+              '<span class="account-stat-label">Suspended</span>' +
+              '<span class="account-stat-value">' + String(suspendedCount) + '</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -423,9 +439,10 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
 
 function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
-  var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
+  var readyCount = countReadyWorkspaces(workspaces);
   var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
+  var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   var workspaceManagement = '';
   var addWorkspaceForm = '';
   var workspaceHeaderActions = '';
@@ -572,9 +589,10 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-list-summary">Review the hosted fleet, open a workspace, and keep lifecycle actions explicit.</div>' +
           '<div class="workspace-list-stats">' +
             '<span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span>' +
-            '<span class="workspace-list-stat"><strong>' + String(healthyCount) + '</strong> healthy</span>' +
+            '<span class="workspace-list-stat"><strong>' + String(readyCount) + '</strong> ready</span>' +
             '<span class="workspace-list-stat"><strong>' + String(checkingCount) + '</strong> checking</span>' +
             '<span class="workspace-list-stat workspace-list-stat-attention"><strong>' + String(unhealthyCount) + '</strong> needs attention</span>' +
+            '<span class="workspace-list-stat"><strong>' + String(suspendedCount) + '</strong> suspended</span>' +
           '</div>' +
         '</div>' +
         '<div class="workspace-list-head">' +

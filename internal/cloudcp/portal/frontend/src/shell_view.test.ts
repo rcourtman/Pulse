@@ -157,9 +157,10 @@ describe('shell view', function() {
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
-    expect(html).toContain('Active workspaces');
+    expect(html).toContain('Ready now');
+    expect(html).toContain('Suspended');
     expect(html).toContain('Needs attention');
-    expect(html).toContain('Healthy</span>');
+    expect(html).toContain('ready</span>');
     expect(html).toContain('Needs attention</span>');
     expect(html).toContain('Checking</span>');
     expect(html).toContain('Ready for operator work');
