@@ -1,14 +1,14 @@
 :root {
   color-scheme: light;
-  --bg: #eef2f6;
+  --bg: #edf2f6;
   --panel: #ffffff;
-  --panel-strong: #f8fafc;
-  --panel-muted: #f2f5f8;
+  --panel-strong: #f7fafc;
+  --panel-muted: #eff4f8;
   --ink: #0f172a;
   --ink-soft: #475569;
   --ink-muted: #64748b;
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
+  --line: #d9e2ec;
+  --line-strong: #c1cdda;
   --accent: #0f766e;
   --accent-strong: #115e59;
   --accent-soft: #ccfbf1;
@@ -40,7 +40,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-family: "Avenir Next", "Segoe UI Variable Text", "Segoe UI", Helvetica, Arial, sans-serif;
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -224,6 +224,7 @@ header .logout-btn:hover,
 
 .portal-shell-head-title {
   margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   font-size: 28px;
   line-height: 1;
   letter-spacing: -0.06em;
@@ -293,8 +294,8 @@ header .logout-btn:hover,
   align-items: start;
   border: 1px solid var(--line);
   border-radius: 14px;
-  background: #fff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+  background: linear-gradient(180deg, rgba(248, 251, 253, 0.96), rgba(242, 246, 250, 0.96));
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.055);
   overflow: hidden;
 }
 
@@ -326,6 +327,7 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-title {
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   font-size: 18px;
   line-height: 1.02;
   letter-spacing: -0.04em;
@@ -449,7 +451,7 @@ header .logout-btn:hover,
 .portal-shell-main {
   min-width: 0;
   padding: 0 0 24px;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fbfd 0%, #f4f7fa 100%);
 }
 
 .portal-shell-main > .portal-content-panel {
@@ -463,7 +465,8 @@ header .logout-btn:hover,
   align-items: start;
   padding: 12px 14px 12px;
   border-bottom: 1px solid var(--line);
-  background: #fff;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(8px);
 }
 
 .portal-account-context-copy {
@@ -496,6 +499,7 @@ header .logout-btn:hover,
 
 .portal-account-context-row h2 {
   margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   font-size: 22px;
   line-height: 0.98;
   letter-spacing: -0.05em;
@@ -601,6 +605,7 @@ header .logout-btn:hover,
 .portal-top-section-header h2,
 .service-header h2 {
   margin: 4px 0 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   font-size: clamp(1.34rem, 1.7vw, 1.72rem);
   line-height: 1.02;
   letter-spacing: -0.045em;
@@ -744,6 +749,7 @@ header .logout-btn:hover,
 .service-panel h3,
 .service-panel .subsection h4 {
   margin: 8px 0 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   font-size: 18px;
   line-height: 1.08;
   letter-spacing: -0.03em;
@@ -1054,6 +1060,7 @@ header .logout-btn:hover,
 
 .portal-support-panel h2 {
   margin: 8px 0 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
   font-size: clamp(1.48rem, 2vw, 1.95rem);
   line-height: 1.02;
   letter-spacing: -0.05em;
@@ -1243,7 +1250,7 @@ header .logout-btn:hover,
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #fafcfd 0%, #f5f8fb 100%);
   box-shadow: none;
 }
 
