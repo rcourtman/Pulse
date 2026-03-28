@@ -122,6 +122,7 @@ describe('account runtime', function() {
         role: 'owner',
         can_manage: true,
         has_billing: true,
+        members: [],
         workspaces: [{
           id: 'ws_2',
           display_name: 'Alpha Workspace',
@@ -204,6 +205,7 @@ describe('account runtime', function() {
         role: 'owner',
         can_manage: true,
         has_billing: true,
+        members: [],
         workspaces: [{
           id: 'ws_2',
           display_name: 'Alpha Workspace',

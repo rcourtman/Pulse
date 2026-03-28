@@ -831,6 +831,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 
 func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	lastHealthCheck := time.Date(2026, 3, 27, 9, 0, 0, 0, time.UTC)
+	memberCreatedAt := time.Date(2026, 3, 27, 8, 30, 0, 0, time.UTC)
 	bootstrapJSON, err := MarshalBootstrapJSON(BuildBootstrapData(true, "owner@example.com", []portalPageAccount{
 		{
 			ID:         "a_test",
@@ -840,6 +841,14 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 			Role:       "owner",
 			CanManage:  true,
 			HasBilling: true,
+			Members: []portalPageMember{
+				{
+					UserID:    "u_owner",
+					Email:     "owner@example.com",
+					Role:      registry.MemberRoleOwner,
+					CreatedAt: memberCreatedAt,
+				},
+			},
 			Workspaces: []portalPageWorkspace{
 				{
 					ID:              "t_one",
@@ -908,6 +917,23 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 	if got := account["can_manage"]; got != true {
 		t.Fatalf("account can_manage = %#v", got)
+	}
+	members, ok := account["members"].([]any)
+	if !ok || len(members) != 1 {
+		t.Fatalf("members = %#v, want one member", account["members"])
+	}
+	member, ok := members[0].(map[string]any)
+	if !ok {
+		t.Fatalf("member payload = %#v", members[0])
+	}
+	if got := member["email"]; got != "owner@example.com" {
+		t.Fatalf("member email = %#v", got)
+	}
+	if got := member["role"]; got != "owner" {
+		t.Fatalf("member role = %#v", got)
+	}
+	if got := member["created_at"]; got != "2026-03-27T08:30:00Z" {
+		t.Fatalf("member created_at = %#v", got)
 	}
 
 	workspaces, ok := account["workspaces"].([]any)
@@ -981,6 +1007,17 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	account, ok := accounts[0].(map[string]any)
 	if !ok {
 		t.Fatalf("account = %#v", accounts[0])
+	}
+	members, ok := account["members"].([]any)
+	if !ok || len(members) != 1 {
+		t.Fatalf("members = %#v", account["members"])
+	}
+	member, ok := members[0].(map[string]any)
+	if !ok {
+		t.Fatalf("member = %#v", members[0])
+	}
+	if got := member["email"]; got != "owner@example.com" {
+		t.Fatalf("member email = %#v", got)
 	}
 	workspaces, ok := account["workspaces"].([]any)
 	if !ok || len(workspaces) != 1 {

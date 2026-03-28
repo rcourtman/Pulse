@@ -42,6 +42,7 @@ describe('portal store', function() {
           role: 'owner',
           can_manage: true,
           has_billing: true,
+          members: [],
           workspaces: [],
         },
       ],
@@ -74,6 +75,59 @@ describe('portal store', function() {
     });
 
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  it('seeds hosted access state from the bootstrap roster snapshot', function() {
+    var store = createPortalStore(bootstrapDefaults, {
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [
+        {
+          id: 'acct_1',
+          name: 'Acme MSP',
+          kind: 'msp',
+          kind_label: 'MSP',
+          role: 'owner',
+          can_manage: true,
+          has_billing: true,
+          members: [
+            { email: 'owner@example.com', role: 'owner', user_id: 'u_1', created_at: '2026-03-28T10:00:00Z' },
+          ],
+          workspaces: [],
+        },
+      ],
+    });
+
+    var entry = store.getAccountState().byAccountID.acct_1;
+    expect(entry.accessQuery.status).toBe('ready');
+    expect(entry.accessQuery.error).toBe('');
+    expect(entry.accessQuery.data).toEqual([
+      { email: 'owner@example.com', role: 'owner', user_id: 'u_1', created_at: '2026-03-28T10:00:00Z' },
+    ]);
+
+    store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [
+        {
+          id: 'acct_1',
+          name: 'Acme MSP',
+          kind: 'msp',
+          kind_label: 'MSP',
+          role: 'owner',
+          can_manage: true,
+          has_billing: true,
+          members: [
+            { email: 'admin@example.com', role: 'admin', user_id: 'u_2', created_at: '2026-03-28T11:00:00Z' },
+          ],
+          workspaces: [],
+        },
+      ],
+    });
+
+    expect(store.getAccountState().byAccountID.acct_1.accessQuery.data).toEqual([
+      { email: 'admin@example.com', role: 'admin', user_id: 'u_2', created_at: '2026-03-28T11:00:00Z' },
+    ]);
   });
 
   it('keeps login and service state in the same owned store with selective notifications', function() {

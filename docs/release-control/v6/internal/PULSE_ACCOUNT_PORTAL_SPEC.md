@@ -200,56 +200,60 @@ Core rules:
 25. `Access` must default to the hosted roster plus explicit job entry points,
     not a permanently open mutation rail. Invite, role-change, and remove
     controls should appear only when that exact access job is active.
-26. `Billing` must default to hosted billing plus explicit self-hosted job
+26. The first hosted `Access` render must come from bootstrap-owned roster
+    truth, not a fetch-first placeholder. The portal bootstrap/runtime
+    contract must carry the current hosted roster snapshot so `Access` opens
+    as a real review surface before any later refresh or mutation follow-up.
+27. `Billing` must default to hosted billing plus explicit self-hosted job
     entry points, not an always-open billing dashboard. Self-hosted billing,
     license, refund, and privacy panels should appear only when that exact
     billing job is active, and opening one on phone widths must reveal the
     active panel in-frame. When no hosted account exists, `Billing` must lead
     directly with the self-hosted job picker instead of front-loading an
     empty hosted-billing block.
-27. `Support` must stay honest to account shape. Self-hosted-only accounts
+28. `Support` must stay honest to account shape. Self-hosted-only accounts
     must reduce `Support` to the billing escalation path only; hosted
     workspace or access failure routes and task buttons must not render
     without hosted accounts.
-28. The portal bootstrap/runtime contract must carry explicit truth for
+29. The portal bootstrap/runtime contract must carry explicit truth for
     whether self-hosted commercial history is relevant to the signed-in
     account. Hosted-only accounts must not render self-hosted licenses,
     refunds, privacy utilities, or self-hosted escalation copy by default.
-29. Hosted view-only users must see permission-honest task copy. `Workspaces`,
+30. Hosted view-only users must see permission-honest task copy. `Workspaces`,
     `Access`, and hosted `Billing` may not advertise create, roster-mutation,
     or hosted-billing actions when the current account role cannot perform
     them; those surfaces must say that an owner or admin is required.
-30. The compact account-context strip must also stay permission-honest. It
+31. The compact account-context strip must also stay permission-honest. It
     must describe what the current user can actually do on the account, not
     restate the account's full hosted capability set when access or billing
     changes require an owner or admin.
-31. Hosted `Support` must stay permission-honest too. View-only hosted users
+32. Hosted `Support` must stay permission-honest too. View-only hosted users
     may be sent back to `Workspaces`, `Access`, or `Billing` only as review
     and owner/admin handoff paths; `Support` must not imply they can perform
     hosted lifecycle, access-mutation, or hosted-billing changes themselves
     before escalation.
-32. `Overview` must keep billing cues honest to account shape and permission.
+33. `Overview` must keep billing cues honest to account shape and permission.
     Hosted-only accounts may not mention self-hosted billing utilities by
     default, and hosted view-only roles must say when owner/admin authority is
     still required to open hosted billing.
-33. User-facing role labels must stay on product vocabulary. The portal may
+34. User-facing role labels must stay on product vocabulary. The portal may
     describe account role as `Owner`, `Admin`, `Tech`, or `Read-only`, but it
     must not leak internal identifiers such as `read_only` or legacy aliases
     such as `member`.
-34. `Overview` must also keep `Next action` permission-honest for hosted
+35. `Overview` must also keep `Next action` permission-honest for hosted
     view-only accounts. When no workspace is ready, the primary route must
     stay on reviewable `Workspaces` or `Access` surfaces before any blocked
     hosted billing or owner/admin-only mutation path.
-35. Task surfaces must keep failure copy on owned user jobs. The portal may
+36. Task surfaces must keep failure copy on owned user jobs. The portal may
     not leak raw transport strings such as `Network error.` into `Access`,
     `Workspaces`, or `Billing`; each failure must stay on the task-specific
     action the user was trying to complete.
-36. `Overview` must keep `Ready` honest when no hosted workspace exists yet.
+37. `Overview` must keep `Ready` honest when no hosted workspace exists yet.
     Hosted accounts with zero workspaces may not tell the user to review
     current workspace state; they must say that nothing is ready yet and that
     the first hosted workspace still needs owner/admin creation before routine
     work can start.
-37. `Overview` must keep `Needs attention` honest when only suspended
+38. `Overview` must keep `Needs attention` honest when only suspended
     workspaces remain. The shell may not imply active work is ready merely
     because a suspended workspace exists; suspended-only states must say that
     no active workspace is ready for routine use right now.

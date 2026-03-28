@@ -859,7 +859,11 @@ create-workspace job is active. `Access` follows the same rule: the hosted
 roster must be the default state, while invite, role-change, and remove
 controls appear only when that exact access job is active, and a hosted
 view-only roster must stay a review surface instead of a row-by-row action
-table with fake disabled action state. `Billing` follows
+table with fake disabled action state. That same task-first `Access` contract
+must also start from bootstrap-owned roster truth: the first hosted roster
+render must come from the portal bootstrap payload itself, with later member
+API reads reserved for refresh and mutation follow-through instead of
+placeholder-first rendering. `Billing` follows
 the same task-first rule: hosted billing leads when present, the self-hosted
 billing, license, refund, and privacy paths reduce to explicit job pickers,
 and the active self-hosted billing panel must stay hidden until that exact job

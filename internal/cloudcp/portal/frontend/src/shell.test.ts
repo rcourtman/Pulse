@@ -40,6 +40,7 @@ describe('shell runtime', function() {
           role: 'owner',
           can_manage: true,
           has_billing: true,
+          members: [],
           workspaces: [],
         },
       ],

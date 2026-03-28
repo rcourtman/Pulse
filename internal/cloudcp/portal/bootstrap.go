@@ -16,6 +16,13 @@ type BootstrapWorkspace struct {
 	CreatedAt       string `json:"created_at"`
 }
 
+type BootstrapMember struct {
+	UserID    string `json:"user_id"`
+	Email     string `json:"email"`
+	Role      string `json:"role"`
+	CreatedAt string `json:"created_at,omitempty"`
+}
+
 type BootstrapAccount struct {
 	ID         string               `json:"id"`
 	Kind       string               `json:"kind"`
@@ -25,6 +32,7 @@ type BootstrapAccount struct {
 	CanManage  bool                 `json:"can_manage"`
 	HasBilling bool                 `json:"has_billing"`
 	Workspaces []BootstrapWorkspace `json:"workspaces"`
+	Members    []BootstrapMember    `json:"members"`
 }
 
 type BootstrapData struct {
@@ -72,6 +80,19 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 				CreatedAt:       workspace.CreatedAt.UTC().Format(time.RFC3339),
 			})
 		}
+		members := make([]BootstrapMember, 0, len(account.Members))
+		for _, member := range account.Members {
+			createdAt := ""
+			if !member.CreatedAt.IsZero() {
+				createdAt = member.CreatedAt.UTC().Format(time.RFC3339)
+			}
+			members = append(members, BootstrapMember{
+				UserID:    member.UserID,
+				Email:     member.Email,
+				Role:      string(member.Role),
+				CreatedAt: createdAt,
+			})
+		}
 		bootstrapAccounts = append(bootstrapAccounts, BootstrapAccount{
 			ID:         account.ID,
 			Kind:       account.Kind,
@@ -81,6 +102,7 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 			CanManage:  account.CanManage,
 			HasBilling: account.HasBilling,
 			Workspaces: workspaces,
+			Members:    members,
 		})
 	}
 

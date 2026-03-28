@@ -94,6 +94,7 @@ describe('portal app', function() {
           role: 'owner',
           can_manage: true,
           has_billing: true,
+          members: [],
           workspaces: [],
         },
       ],
@@ -172,6 +173,7 @@ describe('portal app', function() {
           role: 'owner',
           can_manage: true,
           has_billing: true,
+          members: [],
           workspaces: [],
         },
       ],
@@ -224,6 +226,7 @@ describe('portal app', function() {
         role: 'owner',
         can_manage: true,
         has_billing: true,
+        members: [],
         workspaces: [],
       },
     ];
@@ -304,7 +307,7 @@ describe('portal app', function() {
     expect(document.getElementById('retrieve-inline-status')?.textContent).toContain('License retrieved successfully.');
   });
 
-  it('loads team membership through the real authenticated account shell', async function() {
+  it('renders the hosted access roster from bootstrap through the real authenticated account shell', async function() {
     var accounts = [
       {
         id: 'acct_1',
@@ -314,6 +317,9 @@ describe('portal app', function() {
         role: 'owner',
         can_manage: true,
         has_billing: true,
+        members: [
+          { email: 'owner@example.com', role: 'owner', user_id: 'u_1' },
+        ],
         workspaces: [],
       },
     ];
@@ -327,10 +333,7 @@ describe('portal app', function() {
         authenticated: true,
         email: 'owner@example.com',
         accounts: accounts,
-      }))
-      .mockResolvedValueOnce(jsonResponse([
-        { email: 'owner@example.com', role: 'owner', user_id: 'u_1' },
-      ]));
+      }));
     vi.stubGlobal('fetch', fetchMock);
 
     var app = installPortalApp({
@@ -342,7 +345,7 @@ describe('portal app', function() {
     document.querySelector('[data-shell-action="activate-section"][data-shell-section="access"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushAsync();
 
-    expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/accounts/acct_1/members');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(document.getElementById('access-section-acct_1')?.classList.contains('visible')).toBe(true);
     expect(document.getElementById('access-list-acct_1')?.textContent).toContain('owner@example.com');
   });

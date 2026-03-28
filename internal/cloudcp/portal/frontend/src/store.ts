@@ -3,10 +3,21 @@ import {
   createPortalLoginState,
   createPortalShellState,
   createPortalBillingState,
+  syncPortalAccountStateBootstrap,
   syncLoginStateBootstrapEmail,
   syncBillingStateBootstrapEmail,
 } from './state';
-import type { PortalAccountState, PortalBootstrapData, PortalLoginState, PortalBillingState, PortalShellSection, PortalShellState } from './types';
+import type {
+  PortalAccessMember,
+  PortalAccountState,
+  PortalAccountSummary,
+  PortalBootstrapData,
+  PortalLoginState,
+  PortalBillingState,
+  PortalShellSection,
+  PortalShellState,
+  PortalWorkspaceSummary,
+} from './types';
 
 interface MutationOptions {
   notify?: boolean;
@@ -56,6 +67,7 @@ export function createPortalStore(
 ): PortalStore {
   var bootstrapState = normalizeBootstrap(bootstrapDefaults, initialBootstrap);
   var accountState = createPortalAccountState();
+  syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
   var loginState = createPortalLoginState();
   var shellState = createPortalShellState();
   var billingState = createPortalBillingState();
@@ -91,6 +103,7 @@ export function createPortalStore(
     },
     setBootstrap: function(nextBootstrap) {
       bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
+      syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
       syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
       syncBillingStateBootstrapEmail(billingState, bootstrapState.email || '');
       notify(bootstrapSubscribers);
@@ -156,5 +169,30 @@ export function createPortalStore(
 }
 
 function normalizeAccounts(accounts: Partial<PortalBootstrapData>['accounts']): PortalBootstrapData['accounts'] {
-  return Array.isArray(accounts) ? accounts : [];
+  if (!Array.isArray(accounts)) {
+    return [];
+  }
+  return accounts.map(function(account) {
+    return {
+      ...(account as PortalAccountSummary),
+      workspaces: normalizeWorkspaces(account && Array.isArray(account.workspaces) ? account.workspaces : []),
+      members: normalizeMembers(account && Array.isArray(account.members) ? account.members : []),
+    };
+  });
+}
+
+function normalizeWorkspaces(workspaces: PortalWorkspaceSummary[]): PortalWorkspaceSummary[] {
+  return workspaces.map(function(workspace) {
+    return {
+      ...(workspace as PortalWorkspaceSummary),
+    };
+  });
+}
+
+function normalizeMembers(members: PortalAccessMember[]): PortalAccessMember[] {
+  return members.map(function(member) {
+    return {
+      ...(member as PortalAccessMember),
+    };
+  });
 }

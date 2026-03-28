@@ -1,6 +1,7 @@
 import type {
   PortalMutationState,
   PortalAccountState,
+  PortalAccountSummary,
   PortalAccountUIEntry,
   PortalLoginState,
   PortalShellState,
@@ -84,6 +85,29 @@ export function ensurePortalAccountUIEntry(accountState: PortalAccountState, acc
     };
   }
   return accountState.byAccountID[accountID];
+}
+
+function clonePortalAccessMembers(members: PortalAccessMember[]): PortalAccessMember[] {
+  var cloned = [] as PortalAccessMember[];
+  for (var i = 0; i < members.length; i += 1) {
+    cloned.push({
+      email: members[i].email,
+      role: members[i].role,
+      user_id: members[i].user_id,
+      created_at: members[i].created_at,
+    });
+  }
+  return cloned;
+}
+
+export function syncPortalAccountStateBootstrap(accountState: PortalAccountState, accounts: PortalAccountSummary[]): void {
+  for (var i = 0; i < accounts.length; i += 1) {
+    var account = accounts[i];
+    var entry = ensurePortalAccountUIEntry(accountState, account.id);
+    entry.accessQuery.status = 'ready';
+    entry.accessQuery.error = '';
+    entry.accessQuery.data = clonePortalAccessMembers(account.members || []);
+  }
 }
 
 export function createPortalBillingState(): PortalBillingState {

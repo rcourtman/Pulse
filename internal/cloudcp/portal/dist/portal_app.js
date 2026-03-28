@@ -757,6 +757,27 @@
     }
     return accountState.byAccountID[accountID];
   }
+  function clonePortalAccessMembers(members) {
+    var cloned = [];
+    for (var i = 0; i < members.length; i += 1) {
+      cloned.push({
+        email: members[i].email,
+        role: members[i].role,
+        user_id: members[i].user_id,
+        created_at: members[i].created_at
+      });
+    }
+    return cloned;
+  }
+  function syncPortalAccountStateBootstrap(accountState, accounts) {
+    for (var i = 0; i < accounts.length; i += 1) {
+      var account = accounts[i];
+      var entry = ensurePortalAccountUIEntry(accountState, account.id);
+      entry.accessQuery.status = "ready";
+      entry.accessQuery.error = "";
+      entry.accessQuery.data = clonePortalAccessMembers(account.members || []);
+    }
+  }
   function createPortalBillingState() {
     return {
       openBillingPanelID: "",
@@ -2558,6 +2579,7 @@
   function createPortalStore(bootstrapDefaults, initialBootstrap) {
     var bootstrapState = normalizeBootstrap(bootstrapDefaults, initialBootstrap);
     var accountState = createPortalAccountState();
+    syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
     var loginState = createPortalLoginState();
     var shellState = createPortalShellState();
     var billingState = createPortalBillingState();
@@ -2591,6 +2613,7 @@
       },
       setBootstrap: function(nextBootstrap) {
         bootstrapState = normalizeBootstrap(bootstrapDefaults, nextBootstrap);
+        syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
         syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
         syncBillingStateBootstrapEmail(billingState, bootstrapState.email || "");
         notify(bootstrapSubscribers);
@@ -2655,7 +2678,30 @@
     };
   }
   function normalizeAccounts(accounts) {
-    return Array.isArray(accounts) ? accounts : [];
+    if (!Array.isArray(accounts)) {
+      return [];
+    }
+    return accounts.map(function(account) {
+      return {
+        ...account,
+        workspaces: normalizeWorkspaces(account && Array.isArray(account.workspaces) ? account.workspaces : []),
+        members: normalizeMembers(account && Array.isArray(account.members) ? account.members : [])
+      };
+    });
+  }
+  function normalizeWorkspaces(workspaces) {
+    return workspaces.map(function(workspace) {
+      return {
+        ...workspace
+      };
+    });
+  }
+  function normalizeMembers(members) {
+    return members.map(function(member) {
+      return {
+        ...member
+      };
+    });
   }
 
   // src/runtime.ts

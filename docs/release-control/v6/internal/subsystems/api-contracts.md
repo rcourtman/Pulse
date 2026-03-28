@@ -185,6 +185,7 @@ Own canonical runtime payload shapes between backend and frontend.
 18. Monitoring command-trigger clients open-coding `parseOptionalAPIResponse(response, { success: true }, ...)` success-envelope fallbacks instead of using a canonical shared success-envelope helper
 19. Governed frontend API clients open-coding `try/catch` wrappers around `apiFetchJSON(...)` just to map `402` or `404` into `[]`, `{ plans: [] }`, or `null` instead of using canonical shared API-error-status fallback helpers
 20. Backend config/settings handlers pointing operator guidance at GitHub `main` docs when the running build already ships that guidance locally under `/docs/`
+21. Telemetry preview or reset endpoints returning payloads that drift from the exact server-owned telemetry runtime contract instead of reusing the same source-of-truth snapshot and install-ID state the background sender uses
 
 ## Completion Obligations
 
@@ -293,7 +294,11 @@ runtime rule now also applies to `Access`: the hosted roster is the default
 surface, and invite, role-change, or remove controls only appear when the
 matching access job is active. When `can_manage` is false, that same roster
 must stay a review surface rather than rendering a third action column full of
-fake disabled row state. `Billing` follows the same shared runtime
+fake disabled row state. That same typed bootstrap/runtime contract must also
+ship the current hosted roster snapshot in the portal bootstrap payload so the
+first `Access` render is a real review surface rather than a fetch-first or
+error-first placeholder; later member API reads remain refresh and mutation
+follow-through. `Billing` follows the same shared runtime
 contract: hosted billing remains the default primary path, self-hosted billing
 jobs open one panel at a time, and the runtime must reveal the active billing
 panel on phone-width layouts instead of leaving it offscreen. The same

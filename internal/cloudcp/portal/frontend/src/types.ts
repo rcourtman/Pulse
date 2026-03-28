@@ -8,6 +8,13 @@ export interface PortalWorkspaceSummary {
   created_at?: string;
 }
 
+export interface PortalAccessMember {
+  email: string;
+  role: string;
+  user_id: string;
+  created_at?: string;
+}
+
 export interface PortalAccountSummary {
   id: string;
   name: string;
@@ -17,6 +24,7 @@ export interface PortalAccountSummary {
   can_manage: boolean;
   has_billing: boolean;
   workspaces: PortalWorkspaceSummary[];
+  members: PortalAccessMember[];
 }
 
 export interface PortalBootstrapData {
@@ -41,12 +49,6 @@ export interface PortalLoginState {
   request: PortalMutationState;
   success: boolean;
   successMessage: string;
-}
-
-export interface PortalAccessMember {
-  email: string;
-  role: string;
-  user_id: string;
 }
 
 export type AsyncStatus = 'idle' | 'loading' | 'ready' | 'error';

@@ -32,6 +32,16 @@ describe('account view', function() {
   });
 
   function createAccount(overrides: Partial<PortalAccountSummary> = {}): PortalAccountSummary {
+    var defaultWorkspaces = [
+      {
+        id: 'ws_1',
+        display_name: 'Alpha Workspace',
+        state: 'active',
+        healthy: true,
+        health_status: 'healthy' as const,
+        created_at: '2026-03-26T10:00:00Z',
+      },
+    ];
     return {
       id: 'acct_1',
       name: 'Acme MSP',
@@ -40,17 +50,9 @@ describe('account view', function() {
       role: 'owner',
       can_manage: true,
       has_billing: true,
-      workspaces: [
-        {
-          id: 'ws_1',
-          display_name: 'Alpha Workspace',
-          state: 'active',
-          healthy: true,
-          health_status: 'healthy',
-          created_at: '2026-03-26T10:00:00Z',
-        },
-      ],
       ...overrides,
+      members: overrides.members || [],
+      workspaces: overrides.workspaces || defaultWorkspaces,
     };
   }
 

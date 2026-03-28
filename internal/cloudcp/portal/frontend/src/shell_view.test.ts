@@ -97,6 +97,7 @@ describe('shell view', function() {
               role: 'owner',
               can_manage: true,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_active',
@@ -241,6 +242,7 @@ describe('shell view', function() {
               role: 'owner',
               can_manage: true,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_mixed',
@@ -283,6 +285,7 @@ describe('shell view', function() {
               role: 'owner',
               can_manage: true,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_nav',
@@ -325,6 +328,7 @@ describe('shell view', function() {
               role: 'admin',
               can_manage: true,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_context',
@@ -361,6 +365,7 @@ describe('shell view', function() {
               role: 'tech',
               can_manage: false,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_ro',
@@ -430,6 +435,7 @@ describe('shell view', function() {
               role: 'read_only',
               can_manage: false,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_view',
@@ -464,6 +470,7 @@ describe('shell view', function() {
               role: 'read_only',
               can_manage: false,
               has_billing: true,
+              members: [],
               workspaces: [],
             },
           ],
@@ -491,6 +498,7 @@ describe('shell view', function() {
               role: 'read_only',
               can_manage: false,
               has_billing: true,
+              members: [],
               workspaces: [],
             },
           ],
@@ -516,6 +524,7 @@ describe('shell view', function() {
               role: 'owner',
               can_manage: true,
               has_billing: true,
+              members: [],
               workspaces: [],
             },
           ],
@@ -541,6 +550,7 @@ describe('shell view', function() {
               role: 'read_only',
               can_manage: false,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_view_suspended',
@@ -576,6 +586,7 @@ describe('shell view', function() {
               role: 'read_only',
               can_manage: false,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_view_suspended',
@@ -679,6 +690,7 @@ describe('shell view', function() {
               role: 'owner',
               can_manage: true,
               has_billing: true,
+              members: [],
               workspaces: [
                 {
                   id: 'ws_suspended',

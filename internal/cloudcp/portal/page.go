@@ -23,6 +23,13 @@ type portalPageWorkspace struct {
 	CreatedAt       time.Time
 }
 
+type portalPageMember struct {
+	UserID    string
+	Email     string
+	Role      registry.MemberRole
+	CreatedAt time.Time
+}
+
 // portalPageAccount holds per-account display data including the user's role.
 type portalPageAccount struct {
 	ID         string
@@ -33,6 +40,7 @@ type portalPageAccount struct {
 	CanManage  bool // owner or admin
 	HasBilling bool // true when a Stripe customer exists for the account
 	Workspaces []portalPageWorkspace
+	Members    []portalPageMember
 }
 
 // portalPageData is passed to the portal HTML template.
@@ -143,6 +151,11 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 			log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: list tenants")
 			continue
 		}
+		members, err := loadPortalAccountMembers(reg, accountID)
+		if err != nil {
+			log.Error().Err(err).Str("account_id", accountID).Msg("cloudcp.portal.page: list members")
+			continue
+		}
 
 		workspaces := make([]portalPageWorkspace, 0, len(tenants))
 		for _, t := range tenants {
@@ -184,10 +197,43 @@ func loadPortalAccountsForUser(reg *registry.TenantRegistry, userID string) ([]p
 			CanManage:  m.Role == registry.MemberRoleOwner || m.Role == registry.MemberRoleAdmin,
 			HasBilling: hasBilling,
 			Workspaces: workspaces,
+			Members:    members,
 		})
 	}
 
 	return accounts, nil
+}
+
+func loadPortalAccountMembers(reg *registry.TenantRegistry, accountID string) ([]portalPageMember, error) {
+	memberships, err := reg.ListMembersByAccount(accountID)
+	if err != nil {
+		return nil, err
+	}
+	if memberships == nil {
+		return []portalPageMember{}, nil
+	}
+
+	members := make([]portalPageMember, 0, len(memberships))
+	for _, membership := range memberships {
+		if membership == nil {
+			continue
+		}
+		user, err := reg.GetUser(membership.UserID)
+		if err != nil {
+			return nil, err
+		}
+		if user == nil {
+			return nil, errors.New("portal member user not found")
+		}
+		members = append(members, portalPageMember{
+			UserID:    membership.UserID,
+			Email:     user.Email,
+			Role:      membership.Role,
+			CreatedAt: membership.CreatedAt,
+		})
+	}
+
+	return members, nil
 }
 
 func workspaceHealthStatus(healthy bool, lastHealthCheck *time.Time) string {
