@@ -231,6 +231,7 @@ describe('Recovery', () => {
     expect(within(vmRow!).getAllByText('PVE').length).toBeGreaterThan(0);
     expect(within(vmRow!).getAllByText('VM').length).toBeGreaterThan(0);
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
+    expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
 
     fireEvent.click(await screen.findByText('VM 123'));
 
@@ -254,6 +255,7 @@ describe('Recovery', () => {
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
     expect(within(historyTable).queryByText('Target')).not.toBeInTheDocument();
     expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
+    expect(screen.getByText('Recovery Activity')).toBeInTheDocument();
   });
 
   it('persists the selected recovery workspace view in the route when explicitly changed', async () => {
@@ -1081,14 +1083,17 @@ describe('Recovery', () => {
       .filter((url) => url.includes('/api/recovery/points'));
     const initialPointsUrl = initialPointUrls[initialPointUrls.length - 1];
 
-    const timelineButtons = await screen.findAllByRole('button', { name: /recovery points/i });
-    fireEvent.click(timelineButtons[0]);
+    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
+
     await waitFor(() => {
       expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
         'aria-selected',
         'true',
       );
     });
+
+    const timelineButtons = await screen.findAllByRole('button', { name: /recovery points/i });
+    fireEvent.click(timelineButtons[0]);
 
     const selectedDay = '2026-02-13';
     const selectedStart = parseRecoveryDateKey(selectedDay);
@@ -1195,12 +1200,21 @@ describe('Recovery', () => {
   it('persists the selected timeline range in the recovery URL', async () => {
     render(() => <Recovery />);
 
-    await screen.findByRole('tab', { name: /protected items/i });
+    fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
 
     fireEvent.click(await screen.findByRole('button', { name: '7d' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?range=7', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&range=7', {
+        replace: true,
+      });
     });
   });
 

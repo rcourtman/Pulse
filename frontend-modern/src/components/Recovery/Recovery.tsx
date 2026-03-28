@@ -537,119 +537,121 @@ const Recovery: Component = () => {
                 />
               </Show>
 
-              <Show when={workspaceView() === 'events' && !recoveryPoints.response.loading && recoveryPoints.response.error}>
-                <Card padding="sm">
-                  <EmptyState
-                    title={getRecoveryPointsFailureState().title}
-                    description={String(
-                      (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
-                    )}
-                  />
-                </Card>
-              </Show>
-
-              <Show when={workspaceView() === 'events' && !recoveryPoints.response.error}>
-                <RecoveryHistorySection
-                  activeAdvancedFilterCount={activeAdvancedFilterCount}
-                  artifactColumnVisibility={artifactColumnVisibility}
-                  availableOutcomes={['all', 'success', 'warning', 'failed', 'running']}
-                  clusterFilter={clusterFilter}
-                  clusterOptions={clusterOptions}
-                  currentPage={currentPage}
-                  groupedByDay={groupedByDay}
-                  hasActiveArtifactFilters={hasActiveArtifactFilters}
-                  historyOutcomeFilter={historyOutcomeFilter}
+              <Show when={workspaceView() === 'events'}>
+                <RecoveryActivitySection
+                  activitySummary={activitySummary}
+                  activeClusterLabel={activeClusterLabel}
+                  activeItemTypeLabel={activeItemTypeLabel}
+                  activeNamespaceLabel={activeNamespaceLabel}
+                  activeNodeLabel={activeNodeLabel}
+                  chartRangeDays={chartRangeDays}
+                  clearClusterFilter={() => {
+                    setClusterFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearFocusedRollup={() => setRollupId('')}
+                  clearItemTypeFilter={() => {
+                    setItemTypeFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearNamespaceFilter={() => {
+                    setNamespaceFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearNodeFilter={() => {
+                    setNodeFilter('all');
+                    setCurrentPage(1);
+                  }}
+                  clearSelectedDate={() => {
+                    setSelectedDateKey(null);
+                    setCurrentPage(1);
+                  }}
+                  hasFocusedRollup={() => rollupId().trim().length > 0}
                   isMobile={isMobile()}
-                  kioskMode={kioskMode()}
-                  mobileVisibleArtifactColumns={mobileVisibleArtifactColumns}
-                  modeFilter={modeFilter}
-                  itemTypeFilter={itemTypeFilter}
-                  itemTypeOptions={itemTypeOptions}
-                  namespaceFilter={namespaceFilter}
-                  namespaceOptions={namespaceOptions}
-                  nodeFilter={nodeFilter}
-                  nodeOptions={nodeOptions}
-                  platformFilter={platformFilter}
-                  platformOptions={platformOptions}
-                  queryFilter={queryFilter}
-                  recoveryPoints={recoveryPoints}
-                  resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
-                  resetAllArtifactFilters={resetAllArtifactFilters}
-                  resourcesById={resourcesById}
-                  scopeFilter={scopeFilter}
-                  setClusterFilter={setClusterFilter}
-                  setCurrentPage={setCurrentPage}
-                  setHistoryOutcomeFilter={setHistoryOutcomeFilter}
-                  setItemTypeFilter={setItemTypeFilter}
-                  setModeFilter={setModeFilter}
-                  setNamespaceFilter={setNamespaceFilter}
-                  setNodeFilter={setNodeFilter}
-                  setPlatformFilter={setPlatformFilter}
-                  setQueryFilter={setQueryFilter}
-                  setScopeFilter={setScopeFilter}
-                  setVerificationFilter={setVerificationFilter}
-                  showClusterFilter={showClusterFilter}
-                  showNamespaceFilter={showNamespaceFilter}
-                  showNodeFilter={showNodeFilter}
-                  showVerificationFilter={showVerificationFilter}
-                  tableColumnCount={tableColumnCount}
-                  tableMinWidth={tableMinWidth}
-                  totalPages={totalPages}
-                  verificationFilter={verificationFilter}
-                  workspaceControls={workspaceControls}
+                  loading={() => recoverySeries.response.loading}
+                  overallRollupsSummary={overallRollupsSummary}
+                  selectedDateKey={selectedDateKey}
+                  selectedDateLabel={selectedDateLabel}
+                  selectedHistoryItemLabel={selectedHistoryItemLabel}
+                  setChartRangeDays={(range) => {
+                    setChartRangeDays(range);
+                    setSelectedDateKey(null);
+                    setCurrentPage(1);
+                  }}
+                  timeline={timeline}
+                  toggleSelectedDate={(key) => {
+                    setWorkspaceView('events');
+                    setSelectedDateKey((previous) => (previous === key ? null : key));
+                    setCurrentPage(1);
+                  }}
                 />
+
+                <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
+                  <Card padding="sm">
+                    <EmptyState
+                      title={getRecoveryPointsFailureState().title}
+                      description={String(
+                        (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
+                      )}
+                    />
+                  </Card>
+                </Show>
+
+                <Show when={!recoveryPoints.response.error}>
+                  <RecoveryHistorySection
+                    activeAdvancedFilterCount={activeAdvancedFilterCount}
+                    artifactColumnVisibility={artifactColumnVisibility}
+                    availableOutcomes={['all', 'success', 'warning', 'failed', 'running']}
+                    clusterFilter={clusterFilter}
+                    clusterOptions={clusterOptions}
+                    currentPage={currentPage}
+                    groupedByDay={groupedByDay}
+                    hasActiveArtifactFilters={hasActiveArtifactFilters}
+                    historyOutcomeFilter={historyOutcomeFilter}
+                    isMobile={isMobile()}
+                    kioskMode={kioskMode()}
+                    mobileVisibleArtifactColumns={mobileVisibleArtifactColumns}
+                    modeFilter={modeFilter}
+                    itemTypeFilter={itemTypeFilter}
+                    itemTypeOptions={itemTypeOptions}
+                    namespaceFilter={namespaceFilter}
+                    namespaceOptions={namespaceOptions}
+                    nodeFilter={nodeFilter}
+                    nodeOptions={nodeOptions}
+                    platformFilter={platformFilter}
+                    platformOptions={platformOptions}
+                    queryFilter={queryFilter}
+                    recoveryPoints={recoveryPoints}
+                    resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
+                    resetAllArtifactFilters={resetAllArtifactFilters}
+                    resourcesById={resourcesById}
+                    scopeFilter={scopeFilter}
+                    setClusterFilter={setClusterFilter}
+                    setCurrentPage={setCurrentPage}
+                    setHistoryOutcomeFilter={setHistoryOutcomeFilter}
+                    setItemTypeFilter={setItemTypeFilter}
+                    setModeFilter={setModeFilter}
+                    setNamespaceFilter={setNamespaceFilter}
+                    setNodeFilter={setNodeFilter}
+                    setPlatformFilter={setPlatformFilter}
+                    setQueryFilter={setQueryFilter}
+                    setScopeFilter={setScopeFilter}
+                    setVerificationFilter={setVerificationFilter}
+                    showClusterFilter={showClusterFilter}
+                    showNamespaceFilter={showNamespaceFilter}
+                    showNodeFilter={showNodeFilter}
+                    showVerificationFilter={showVerificationFilter}
+                    tableColumnCount={tableColumnCount}
+                    tableMinWidth={tableMinWidth}
+                    totalPages={totalPages}
+                    verificationFilter={verificationFilter}
+                    workspaceControls={workspaceControls}
+                  />
+                </Show>
               </Show>
             </>
           );
         })()}
-
-        <RecoveryActivitySection
-          activitySummary={activitySummary}
-          activeClusterLabel={activeClusterLabel}
-          activeItemTypeLabel={activeItemTypeLabel}
-          activeNamespaceLabel={activeNamespaceLabel}
-          activeNodeLabel={activeNodeLabel}
-          chartRangeDays={chartRangeDays}
-          clearClusterFilter={() => {
-            setClusterFilter('all');
-            setCurrentPage(1);
-          }}
-          clearFocusedRollup={() => setRollupId('')}
-          clearItemTypeFilter={() => {
-            setItemTypeFilter('all');
-            setCurrentPage(1);
-          }}
-          clearNamespaceFilter={() => {
-            setNamespaceFilter('all');
-            setCurrentPage(1);
-          }}
-          clearNodeFilter={() => {
-            setNodeFilter('all');
-            setCurrentPage(1);
-          }}
-          clearSelectedDate={() => {
-            setSelectedDateKey(null);
-            setCurrentPage(1);
-          }}
-          hasFocusedRollup={() => rollupId().trim().length > 0}
-          isMobile={isMobile()}
-          loading={() => recoverySeries.response.loading}
-          overallRollupsSummary={overallRollupsSummary}
-          selectedDateKey={selectedDateKey}
-          selectedDateLabel={selectedDateLabel}
-          selectedHistoryItemLabel={selectedHistoryItemLabel}
-          setChartRangeDays={(range) => {
-            setChartRangeDays(range);
-            setSelectedDateKey(null);
-            setCurrentPage(1);
-          }}
-          timeline={timeline}
-          toggleSelectedDate={(key) => {
-            setWorkspaceView('events');
-            setSelectedDateKey((previous) => (previous === key ? null : key));
-            setCurrentPage(1);
-          }}
-        />
       </div>
     </div>
   );

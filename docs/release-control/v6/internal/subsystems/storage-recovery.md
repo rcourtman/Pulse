@@ -489,11 +489,13 @@ inside the table shell itself. `RecoveryProtectedInventorySection.tsx` should
 expose the current bounded range, page, and sort state near the primary grid,
 and the first column should carry enough secondary item metadata to read as a
 monitored inventory row rather than a bare export line.
-That same hierarchy rule also applies to the activity panel below the primary
-workspace. `RecoveryActivitySection.tsx` should read as timeline analysis for
-the selected history window, not as a second copy of the page-level posture
-summary, so its framing should emphasize recovery-point cadence and focused
-history context rather than re-announcing the full protected-estate health mix.
+That same hierarchy rule also applies to the activity timeline. The governed
+recovery surface should not append `RecoveryActivitySection.tsx` underneath the
+default protected-items view as if trend telemetry were a second page bolted
+onto inventory. The timeline owns recovery-event day selection, so it belongs
+inside the `Recovery events` workspace and should read as history analysis for
+the selected window rather than as a second copy of the page-level posture
+summary.
 The same owned vocabulary applies to recovery events as well:
 `frontend-modern/src/utils/recoveryTablePresentation.ts` must keep the
 history-table `type` column labeled as `Item Type` within recovery surfaces so
@@ -636,12 +638,13 @@ forcing each UI surface to re-derive protected item classes from raw
 provider-native `subjectType` values.
 That same recovery product surface keeps the primary workspace visually ahead
 of secondary analytics: once the summary frame ends,
-`frontend-modern/src/components/Recovery/Recovery.tsx` must lead into the
-route-backed recovery workspace and its protected-item or recovery-event table
-surface before it drops into `RecoveryActivitySection`, so operators reach the
-main control surface ahead of trend telemetry. The activity timeline remains
-required even when point-history loading fails, but it is secondary to the
-workspace rather than a competing top-of-page peer.
+`frontend-modern/src/components/Recovery/Recovery.tsx` must lead directly into
+the route-backed recovery workspace, with protected-items defaulting straight
+to the primary inventory table and recovery-events owning both the activity
+timeline and the event table together. The activity timeline remains required
+even when point-history loading fails, but it belongs to the events workspace
+rather than hanging below the inventory workspace as a competing page-level
+peer.
 That same recovery product surface must also stay stylistically aligned with
 established Pulse monitoring surfaces once shared primitives already exist.
 `frontend-modern/src/components/Recovery/RecoverySummary.tsx` should compose

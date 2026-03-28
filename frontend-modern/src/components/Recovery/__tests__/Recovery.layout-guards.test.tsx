@@ -146,12 +146,13 @@ describe('Recovery layout guards', () => {
     vi.clearAllMocks();
   });
 
-  it('keeps the activity chart mounted when recovery events fail', () => {
+  it('mounts the activity chart only in the recovery events workspace and keeps it there when events fail', () => {
     render(() => <Recovery />);
 
     expect(screen.getByTestId('protected-inventory')).toBeInTheDocument();
-    expect(screen.getByTestId('activity-chart')).toBeInTheDocument();
+    expect(screen.queryByTestId('activity-chart')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('tab', { name: /recovery events/i }));
+    expect(screen.getByTestId('activity-chart')).toBeInTheDocument();
     expect(screen.queryByTestId('protected-inventory')).not.toBeInTheDocument();
     expect(screen.queryByTestId('history-section')).not.toBeInTheDocument();
     expect(screen.getByText('Failed to load recovery points')).toBeInTheDocument();
