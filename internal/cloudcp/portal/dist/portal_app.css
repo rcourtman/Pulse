@@ -1325,6 +1325,12 @@ header .logout-btn:hover,
   gap: 14px;
   align-items: start;
 }
+.team-roster-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
 .team-management-panel {
   box-shadow: var(--shadow-sm);
 }
@@ -1366,6 +1372,39 @@ header .logout-btn:hover,
   border-radius: 12px;
   background: var(--panel-muted);
   padding: 14px;
+}
+.team-review-desk {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.team-review-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.team-review-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel-muted);
+}
+.team-review-card strong {
+  font-size: 13px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.team-review-card span {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--ink-soft);
 }
 .team-panel-heading {
   margin-bottom: 12px;
@@ -1999,6 +2038,7 @@ header .logout-btn:hover,
 @media (max-width: 1180px) {
   .account-management-grid,
   .team-management-grid,
+  .team-review-grid,
   .account-overview-secondary,
   .account-overview-card,
   .service-shell,

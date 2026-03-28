@@ -179,6 +179,9 @@ describe('shell view', function() {
     expect(html).toContain('Team management');
     expect(html).toContain('Invite someone new');
     expect(html).toContain('Access model');
+    expect(html).toContain('Review desk');
+    expect(html).toContain('Keep access disciplined');
+    expect(html).toContain('Owners stay rare');
     expect(html).toContain('Workspace operations without billing ownership.');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
