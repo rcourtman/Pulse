@@ -951,15 +951,15 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                     '<div class="account-panel-kicker">Active service desk</div>' +
                     '<h3>Choose a commercial desk</h3>' +
                     '<p>Open one commercial request from the navigator and keep it in this desk until it is finished.</p>' +
-                    '<div class="service-empty-command-grid">' +
-                      '<div class="service-empty-command-card">' +
+                    '<div class="service-empty-stack">' +
+                      '<div class="service-empty-section">' +
                         '<div class="service-empty-column-title">Request rules</div>' +
                         '<div class="service-empty-points service-empty-points-stack">' +
                           '<div class="service-empty-point"><strong>Verify first</strong><span>Each desk confirms the commercial email before opening sensitive actions.</span></div>' +
                           '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +
                         '</div>' +
                       '</div>' +
-                      '<div class="service-empty-command-card service-empty-command-card-wide">' +
+                      '<div class="service-empty-section">' +
                         '<div class="service-empty-column-title">Desk coverage</div>' +
                         '<div class="service-empty-flow-list">' +
                           '<div class="service-empty-flow"><strong>Billing desk</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
@@ -968,7 +968,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                           '<div class="service-empty-flow"><strong>Privacy desk</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
                         '</div>' +
                       '</div>' +
-                      '<div class="service-empty-command-card service-empty-command-card-support">' +
+                      '<div class="service-empty-section service-empty-section-support">' +
                         '<div class="service-empty-column-title">Escalation</div>' +
                         '<div class="service-empty-checklist">' +
                           '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, license, refund, or privacy work does not behave as expected, escalate from this desk.</span></div>' +

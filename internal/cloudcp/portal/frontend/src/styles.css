@@ -1021,13 +1021,13 @@ header .logout-btn:hover,
 
 .portal-support-card-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
 }
 
 .portal-support-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.88fr);
+  grid-template-columns: minmax(0, 1.05fr) minmax(340px, 0.95fr);
   gap: 14px;
   margin-top: 18px;
 }
@@ -2079,22 +2079,21 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 
-.service-empty-command-grid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
-  gap: 10px;
+.service-empty-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   margin-top: 12px;
 }
 
-.service-empty-command-card {
+.service-empty-section {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 0 10px 12px;
-  border: none;
-  border-left: 2px solid #dbe5ee;
-  border-radius: 0;
-  background: transparent;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fbfcfd;
 }
 
 .service-empty-column-title {
@@ -2214,15 +2213,6 @@ header .logout-btn:hover,
   grid-template-columns: 1fr;
 }
 
-.service-empty-command-card-wide {
-  grid-column: 2;
-  background: #fff;
-}
-
-.service-empty-command-card-support {
-  grid-column: 1 / -1;
-}
-
 .service-empty-support {
   margin-top: 2px;
   font-size: 13px;
@@ -2291,9 +2281,9 @@ header .logout-btn:hover,
 }
 
 .service-empty-flow-list {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
 }
 
 .service-empty-flow {
@@ -2306,7 +2296,7 @@ header .logout-btn:hover,
   background: transparent;
 }
 
-.service-empty-flow:nth-child(-n+2) {
+.service-empty-flow:first-child {
   border-top: none;
   padding-top: 0;
 }
