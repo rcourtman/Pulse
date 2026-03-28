@@ -223,7 +223,8 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               <p class="text-xs text-muted leading-relaxed">
                 Help improve Pulse by sharing anonymous usage data: a rotating install ID,
                 version, platform, resource counts, and feature flags. No hostnames,
-                credentials, or personal information is ever sent.{' '}
+                credentials, or personal information are sent. Telemetry rows are retained for up
+                to 90 days, and IP addresses are not stored in telemetry rows.{' '}
                 <a
                   href={PRIVACY_DOC_URL}
                   target="_blank"

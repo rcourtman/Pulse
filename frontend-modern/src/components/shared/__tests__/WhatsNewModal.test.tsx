@@ -39,6 +39,8 @@ describe('WhatsNewModal', () => {
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_PRIVACY_URL');
     expect(whatsNewModalModelSource).toContain('README_DOC_URL');
     expect(whatsNewModalModelSource).toContain('PRIVACY_DOC_URL');
+    expect(whatsNewModalModelSource).toContain('rotating install ID');
+    expect(whatsNewModalModelSource).toContain('IP addresses are not stored in telemetry rows');
     expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/README.md');
     expect(whatsNewModalModelSource).not.toContain('https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md');
     expect(whatsNewModalModelSource).toContain('WHATS_NEW_DOCS_LABEL');

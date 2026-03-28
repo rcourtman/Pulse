@@ -68,6 +68,15 @@ test.describe('Telemetry disclosure', () => {
     await page.goto('/settings/system-general', { waitUntil: 'domcontentloaded' });
     await page.waitForURL(/\/settings/, { timeout: 15_000 });
 
+    const telemetrySummary = page.getByText(
+      /rotating install ID, version, platform, resource counts, and feature flags/i,
+    );
+    await expect(telemetrySummary).toBeVisible();
+    await expect(telemetrySummary).toContainText('Telemetry rows are retained for up to 90 days');
+    await expect(telemetrySummary).toContainText(
+      'IP addresses are not stored in telemetry rows',
+    );
+
     const disclosureLink = page.getByRole('link', { name: 'Full details' }).first();
     await expect(disclosureLink).toHaveAttribute('href', '/docs/PRIVACY.md');
     await expectPopupDoc(
@@ -114,6 +123,12 @@ test.describe('Telemetry disclosure', () => {
 
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByText('Welcome to the New Navigation!')).toBeVisible();
+    await expect(
+      dialog.getByText(/rotating install ID, version, platform, resource counts, and feature flags/i),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(/IP addresses are not stored in telemetry rows/i),
+    ).toBeVisible();
 
     const privacyLink = dialog.getByRole('link', { name: 'Full details' });
     await expect(privacyLink).toHaveAttribute('href', '/docs/PRIVACY.md');

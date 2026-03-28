@@ -149,6 +149,8 @@ import userAssignmentsDialogSource from '../UserAssignmentsDialog.tsx?raw';
 import userAssignmentsPanelStateSource from '../useUserAssignmentsPanelState.ts?raw';
 import { SETTINGS_HEADER_META } from '../settingsHeaderMeta';
 
+const normalizedGeneralSettingsPanelSource = generalSettingsPanelSource.replace(/\s+/g, ' ');
+
 const extractedModules = [
   '../settingsNavigationModel.ts',
   '../settingsRouting.ts',
@@ -1254,6 +1256,10 @@ describe('Settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).toContain('Preview payload');
     expect(generalSettingsPanelSource).toContain('Reset ID');
     expect(generalSettingsPanelSource).toContain('Telemetry payload preview');
+    expect(normalizedGeneralSettingsPanelSource).toContain('retained for up to 90 days');
+    expect(normalizedGeneralSettingsPanelSource).toContain(
+      'IP addresses are not stored in telemetry rows',
+    );
     expect(apiAccessPanelSource).toContain('@/utils/docsLinks');
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(aiRuntimeControlsSectionSource).toContain('@/utils/docsLinks');

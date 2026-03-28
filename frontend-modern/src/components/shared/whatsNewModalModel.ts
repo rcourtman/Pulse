@@ -43,7 +43,7 @@ export const WHATS_NEW_SUBTITLE =
   'Everything is now organized by what you want to do, not where the data comes from.';
 export const WHATS_NEW_TELEMETRY_TITLE = 'Anonymous telemetry';
 export const WHATS_NEW_TELEMETRY_COPY = [
-  'Pulse now sends a lightweight anonymous ping once a day — just a random install ID, version, platform, resource counts, and feature flags. No hostnames, credentials, IP addresses, or personal information is ever sent.',
+  'Pulse now sends a lightweight anonymous ping once a day — just a rotating install ID, version, platform, resource counts, and feature flags. No hostnames, credentials, or personal information are sent, and IP addresses are not stored in telemetry rows.',
   'This helps the developer understand how Pulse is used and prioritise what to build next.',
 ];
 export const WHATS_NEW_TELEMETRY_SETTINGS_PATH = 'Settings → System → General';

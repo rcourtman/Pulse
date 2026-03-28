@@ -146,6 +146,12 @@ retains telemetry rows for a fixed window or uses client IPs transiently for
 abuse controls, `docs/PRIVACY.md` and the shipped
 `frontend-modern/public/docs/PRIVACY.md` copy must say so explicitly rather
 than implying the server stores nothing at all.
+That same rule also applies to the short in-product summary on the shared
+General settings privacy surface and the whats-new disclosure copy. Those
+surfaces may stay concise, but they must not claim a stronger privacy posture
+than the governed docs; if telemetry rows are retained for a fixed window and
+IP addresses are not stored rather than “never seen,” the summary copy must
+say that plainly.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the

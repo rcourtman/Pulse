@@ -222,6 +222,12 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
     instead of drifting into route-local modals, hidden dev tools, or shell
     chrome that operators would not naturally inspect.
+15. Keep the short telemetry/privacy summary copy on that same shared surface
+    accurate to the governed privacy doc. If the trust boundary depends on a
+    specific retention window or on “IP addresses are not stored” rather than
+    “IPs are never seen,” the summary copy in
+    `GeneralSettingsPanel.tsx` must state those facts plainly instead of
+    reverting to a stronger but inaccurate shorthand.
 
 ## Current State
 
