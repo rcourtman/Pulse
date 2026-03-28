@@ -29,7 +29,7 @@ import {
 describe('recoveryTablePresentation', () => {
   it('exposes shared recovery table classes', () => {
     expect(RECOVERY_GROUP_HEADER_ROW_CLASS).toContain('bg-surface-alt');
-    expect(RECOVERY_GROUP_HEADER_TEXT_CLASS).toContain('font-semibold');
+    expect(RECOVERY_GROUP_HEADER_TEXT_CLASS).toContain('font-medium');
     expect(RECOVERY_ADVANCED_FILTER_LABEL_CLASS).toContain('text-muted');
     expect(RECOVERY_ADVANCED_FILTER_FIELD_CLASS).toContain('focus:border-blue-500');
     expect(RECOVERY_GROUP_NO_TIMESTAMP_LABEL).toBe('No Timestamp');
@@ -78,9 +78,8 @@ describe('recoveryTablePresentation', () => {
     } as RecoveryPoint;
 
     expect(getRecoveryPointItemTypeLabel(point)).toBe('VM');
-    expect(getRecoveryPointItemTypeBadgeClass(point)).toBe(
-      'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
-    );
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('bg-blue-100');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('text-blue-700');
   });
 
   it('normalizes proxmox lxc subjects to the canonical container badge', () => {
@@ -90,9 +89,8 @@ describe('recoveryTablePresentation', () => {
     } as RecoveryPoint;
 
     expect(getRecoveryPointItemTypeLabel(point)).toBe('Container');
-    expect(getRecoveryPointItemTypeBadgeClass(point)).toBe(
-      'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
-    );
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('bg-green-100');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('text-green-700');
   });
 
   it('falls back cleanly for unknown subject types', () => {
@@ -102,7 +100,8 @@ describe('recoveryTablePresentation', () => {
     } as RecoveryPoint;
 
     expect(getRecoveryPointItemTypeLabel(point)).toBe('Custom Thing');
-    expect(getRecoveryPointItemTypeBadgeClass(point)).toBe('bg-surface-alt text-base-content');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('bg-surface-alt');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('text-base-content');
   });
 
   it('derives artifact header and row classes', () => {

@@ -738,6 +738,10 @@ primary identity cell. `RecoveryHistoryTable.tsx` should lead each event row
 with a compact outcome status cue plus the canonical item name, so operators
 can scan event health by row without relying only on the far-right outcome
 column.
+That same density rule should also keep history grouping and badges restrained.
+Day-group headers should read as slim dividers instead of banner rows, and
+platform/method/outcome pills should stay compact enough that the event grid
+still scans like a monitoring table rather than a report export.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must

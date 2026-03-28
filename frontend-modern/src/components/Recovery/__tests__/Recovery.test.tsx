@@ -246,7 +246,7 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const historyTable = screen.getAllByRole('table')[0];
-    expect(screen.getByText(/1 event/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/1 event/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/1 day group/i)).toBeInTheDocument();
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();

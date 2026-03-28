@@ -11,9 +11,9 @@ import type { RecoveryIssueTone } from '@/utils/recoveryIssuePresentation';
 export const STALE_ISSUE_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000;
 export const AGING_THRESHOLD_MS = 2 * 24 * 60 * 60 * 1000;
 
-export const RECOVERY_GROUP_HEADER_ROW_CLASS = 'bg-surface-alt hover:bg-surface-alt';
+export const RECOVERY_GROUP_HEADER_ROW_CLASS = 'bg-surface-alt/55 hover:bg-surface-alt/55';
 export const RECOVERY_GROUP_HEADER_TEXT_CLASS =
-  'py-1.5 pr-3 pl-4 text-[12px] sm:text-sm font-semibold text-base-content';
+  'py-1 pr-3 pl-4 text-[11px] font-medium text-base-content';
 export const RECOVERY_ADVANCED_FILTER_LABEL_CLASS = 'text-[11px] font-medium text-muted';
 export const RECOVERY_ADVANCED_FILTER_FIELD_CLASS =
   'min-h-[2.25rem] w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-base-content outline-none focus:border-blue-500';

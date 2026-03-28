@@ -150,14 +150,9 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                         <span class="truncate" title={group.label}>
                           {group.label}
                         </span>
-                        <Show when={group.tone === 'recent'}>
-                          <span class="inline-flex rounded px-1.5 py-px text-[9px] font-medium border border-border bg-surface">
-                            recent
-                          </span>
-                        </Show>
                       </div>
-                      <span class="shrink-0 font-mono text-[10px] tabular-nums text-muted">
-                        {group.items.length}
+                      <span class="shrink-0 text-[10px] tabular-nums text-muted">
+                        {group.items.length} event{group.items.length === 1 ? '' : 's'}
                       </span>
                     </div>
                   </TableCell>
@@ -257,38 +252,6 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                         <span class="min-w-0 flex-1 truncate text-[12px] font-medium">
                                           {item}
                                         </span>
-                                        <span class="inline-flex shrink-0 items-center gap-1">
-                                          <Show when={point.immutable === true}>
-                                            <svg
-                                              class="h-3 w-3 text-emerald-500 dark:text-emerald-400"
-                                              fill="none"
-                                              stroke="currentColor"
-                                              viewBox="0 0 24 24"
-                                              aria-hidden="true"
-                                            >
-                                              <path
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                                stroke-width="2"
-                                                d="M12 3l7 4v5c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V7l7-4z"
-                                              />
-                                            </svg>
-                                          </Show>
-                                          <Show when={point.encrypted === true}>
-                                            <svg
-                                              class="h-3 w-3 text-amber-500 dark:text-amber-400"
-                                              fill="currentColor"
-                                              viewBox="0 0 20 20"
-                                              aria-hidden="true"
-                                            >
-                                              <path
-                                                fill-rule="evenodd"
-                                                d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2V7a3 3 0 016 0z"
-                                                clip-rule="evenodd"
-                                              />
-                                            </svg>
-                                          </Show>
-                                        </span>
                                       </div>
                                     </TableCell>
                                   );
@@ -321,7 +284,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`${badge?.classes || ''} inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[10px] font-medium`}
+                                        class={`${badge?.classes || ''} inline-flex justify-center px-1.5 py-px text-[9px] font-medium`}
                                       >
                                         {badge?.label || getSourcePlatformLabel(platform)}
                                       </span>
@@ -388,7 +351,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`inline-flex min-w-[3.5rem] justify-center rounded px-1.5 py-px text-[10px] font-medium ${getRecoveryArtifactModePresentation(
+                                        class={`inline-flex min-w-[3.25rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryArtifactModePresentation(
                                           mode as ArtifactMode,
                                         ).badgeClassName}`}
                                       >
@@ -418,7 +381,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                   return (
                                     <TableCell class="whitespace-nowrap px-3 py-1 text-center">
                                       <span
-                                        class={`inline-flex min-w-[4.75rem] justify-center rounded px-1.5 py-px text-[10px] font-medium ${getRecoveryOutcomeBadgeClass(
+                                        class={`inline-flex min-w-[4.5rem] justify-center rounded px-1.5 py-px text-[9px] font-medium ${getRecoveryOutcomeBadgeClass(
                                           outcome,
                                         )}`}
                                       >
@@ -488,7 +451,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
       </Table>
     </div>
 
-    <div class="flex items-center justify-between gap-2 px-3 py-2 text-xs text-muted border-t border-border">
+    <div class="flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] text-muted border-t border-border">
       <div>
         <Show
           when={(props.recoveryPoints.meta().total || 0) > 0}
