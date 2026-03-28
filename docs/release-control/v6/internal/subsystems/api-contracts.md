@@ -305,6 +305,9 @@ honest for hosted view-only roles: when `can_manage` is false, `Workspaces`,
 `Access`, and hosted `Billing` must stop advertising create, roster-mutation,
 or hosted-billing actions and must instead state that an owner or admin is
 required.
+The same permission contract must also drive the compact account-context
+summary: the strip may not describe full hosted access-control or billing
+ownership when the current role can only review workspaces or roster state.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.
@@ -1783,6 +1786,11 @@ The shared direct-node/discovery settings boundary now also includes
 customer-facing mutation and validation copy used by the governed runtime
 hooks stays explicit under the same API-backed settings proof instead of
 living as an unowned utility.
+That same backend-owned config/settings boundary also owns shipped security-doc
+references in operator guidance. `internal/api/config_system_handlers.go` and
+shared setup helpers must not point API responses or runtime guidance at
+GitHub `main` for security instructions that the running build already serves
+locally; those references belong on the shipped `/docs/SECURITY.md` path.
 That same governed token contract must fail closed on mutation. Limited-scope
 API tokens may only create, rotate, or delete tokens whose effective scopes
 are a subset of the caller's own scopes; token-management routes must not let a

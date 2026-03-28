@@ -344,6 +344,7 @@ describe('shell view', function() {
     expect((html.match(/portal-account-context-stat/g) || []).length).toBe(3);
     expect((html.match(/account-context-chip\"/g) || []).length).toBe(3);
     expect(html).toContain('Admin access');
+    expect(html).toContain('Hosted account for workspace access, access control, and billing.');
     expect(html).toContain('Billing enabled');
   });
 
@@ -377,6 +378,10 @@ describe('shell view', function() {
 
     expect(html).toContain('Open a workspace and review current state. An owner or admin must create or change hosted workspaces.');
     expect(html).toContain('Open a workspace and review current state here. An owner or admin must create or change hosted workspaces.');
+    expect(html).toContain('Tech role');
+    expect(html).toContain('Hosted account where you can open workspaces and review who already has access. An owner or admin handles access changes and billing.');
+    expect(html).toContain('View only');
+    expect(html).toContain('Owner/admin required');
     expect(html).toContain('Review access');
     expect(html).toContain('Owner or admin required');
     expect(html).toContain('Review who already has access to this hosted account. An owner or admin must make changes.');

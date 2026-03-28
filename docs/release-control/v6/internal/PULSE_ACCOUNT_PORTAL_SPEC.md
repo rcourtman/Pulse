@@ -204,6 +204,10 @@ Core rules:
     `Access`, and hosted `Billing` may not advertise create, roster-mutation,
     or hosted-billing actions when the current account role cannot perform
     them; those surfaces must say that an owner or admin is required.
+30. The compact account-context strip must also stay permission-honest. It
+    must describe what the current user can actually do on the account, not
+    restate the account's full hosted capability set when access or billing
+    changes require an owner or admin.
 
 ## Screen Model
 

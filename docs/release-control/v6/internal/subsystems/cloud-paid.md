@@ -864,6 +864,9 @@ permissions: when the current role is view-only, `Workspaces`, `Access`, and
 hosted `Billing` copy must not advertise create, roster-mutation, or hosted
 billing actions that the runtime will not allow. Those surfaces must say that
 an owner or admin is required instead of implying blocked jobs are live.
+The same rule applies to the compact account-context strip: it must describe
+the current user's effective hosted tasks, not restate full access-control and
+billing capability when those actions are blocked behind owner/admin roles.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

@@ -300,9 +300,34 @@ function renderOverviewMetricStrip(
   );
 }
 
+function accountContextRoleMeta(account: PortalAccountSummary): string {
+  return titleCase(account.role) + (account.can_manage ? ' access' : ' role');
+}
+
+function accountContextLeadCopy(account: PortalAccountSummary): string {
+  var accountPrefix = account.kind === 'msp' ? 'Hosted workspace account' : 'Hosted account';
+  if (account.can_manage) {
+    return accountPrefix + (account.has_billing
+      ? ' for workspace access, access control, and billing.'
+      : ' for workspace access and access control.');
+  }
+  return accountPrefix + (account.has_billing
+    ? ' where you can open workspaces and review who already has access. An owner or admin handles access changes and billing.'
+    : ' where you can open workspaces and review who already has access. An owner or admin handles account changes.');
+}
+
+function accountContextAccessSummary(account: PortalAccountSummary): string {
+  return account.can_manage ? titleCase(account.role) : 'View only';
+}
+
+function accountContextBillingSummary(account: PortalAccountSummary): string {
+  if (!account.has_billing) return 'Not attached';
+  return account.can_manage ? 'Billing enabled' : 'Owner/admin required';
+}
+
 function renderAccountContextStrip(account: PortalAccountSummary): string {
   var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
-  var billingLabel = account.has_billing ? 'Billing enabled' : 'Billing offline';
+  var billingLabel = accountContextBillingSummary(account);
 
   return (
     '<section class="portal-account-context">' +
@@ -310,7 +335,7 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
         '<div class="portal-account-context-meta">' +
           '<span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span>' +
           '<span class="portal-account-context-separator">/</span>' +
-          '<span class="portal-account-context-access">' + escapeHTML(titleCase(account.role)) + ' access</span>' +
+          '<span class="portal-account-context-access">' + escapeHTML(accountContextRoleMeta(account)) + '</span>' +
         '</div>' +
         '<div class="portal-account-context-row">' +
           '<h2>' + escapeHTML(account.name) + '</h2>' +
@@ -320,12 +345,12 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +
-        '<p>' + escapeHTML(account.kind === 'msp' ? 'Hosted workspace account for workspace access, access control, and billing.' : 'Hosted account for workspace access, access control, and billing.') + '</p>' +
+        '<p>' + escapeHTML(accountContextLeadCopy(account)) + '</p>' +
       '</div>' +
       '<div class="portal-account-context-summary">' +
         '<div class="portal-account-context-stat">' +
           '<span>Access</span>' +
-          '<strong>' + escapeHTML(titleCase(account.role)) + '</strong>' +
+          '<strong>' + escapeHTML(accountContextAccessSummary(account)) + '</strong>' +
         '</div>' +
         '<div class="portal-account-context-stat">' +
           '<span>Workspaces</span>' +
