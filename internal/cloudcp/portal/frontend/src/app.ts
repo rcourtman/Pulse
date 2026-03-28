@@ -71,10 +71,10 @@ export function installPortalApp(deps: PortalAppDeps): PortalApp {
   installShell({
     store: deps.store,
     onSectionChange: function(section) {
-      if (section === 'team') {
+      if (section === 'access') {
         var accounts = deps.store.getBootstrap().accounts || [];
-        if (accounts[0]) {
-          accountRuntime.ensureTeamVisible(accounts[0].id);
+        for (var i = 0; i < accounts.length; i += 1) {
+          accountRuntime.ensureTeamVisible(accounts[i].id);
         }
       }
     },

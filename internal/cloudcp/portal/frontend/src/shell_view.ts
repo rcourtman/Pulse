@@ -147,7 +147,7 @@ function renderServiceActionRow(
         '</div>' +
       '</div>' +
       '<div class="service-action-cta">' +
-        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">' + escapeHTML(actionLabel) + '</button>' +
+        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="billing">' + escapeHTML(actionLabel) + '</button>' +
       '</div>' +
     '</article>'
   );
@@ -296,7 +296,7 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +
-        '<p>' + escapeHTML(account.kind === 'msp' ? 'Hosted workspace account for workspace access, team control, and billing.' : 'Hosted account for workspace access, team control, and billing.') + '</p>' +
+        '<p>' + escapeHTML(account.kind === 'msp' ? 'Hosted workspace account for workspace access, access control, and billing.' : 'Hosted account for workspace access, access control, and billing.') + '</p>' +
       '</div>' +
       '<div class="portal-account-context-summary">' +
         '<div class="portal-account-context-stat">' +
@@ -339,26 +339,30 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
   var workspaces = collectWorkspaces(accounts);
   var totalWorkspaces = workspaces.length;
   var readyWorkspaces = countReadyWorkspaces(workspaces);
+  var attentionCount = attentionWorkspaces(workspaces).length;
+  var hostedBillingCount = 0;
   var canManage = false;
   for (var i = 0; i < accounts.length; i += 1) {
     if (accounts[i].can_manage) {
       canManage = true;
-      break;
+    }
+    if (accounts[i].has_billing) {
+      hostedBillingCount += 1;
     }
   }
   return (
     '<aside class="portal-shell-nav" aria-label="Pulse Account sections">' +
       '<div class="portal-shell-nav-header">' +
         '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
-        '<div class="portal-shell-nav-title">Account center</div>' +
-        '<div class="portal-shell-nav-support">' + (hosted ? 'Workspaces, account access, and commercial services' : 'Commercial account services and support') + '</div>' +
+        '<div class="portal-shell-nav-title">Account tasks</div>' +
+        '<div class="portal-shell-nav-support">' + (hosted ? 'Start with the job you need to finish: workspace work, access, billing, then escalation.' : 'Use billing tools first and escalate only when the self-serve path stops.' ) + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
-        shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Status, priorities, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
-        shellSectionButton('workspaces', activeSection, '02', hosted ? 'Workspaces' : 'Workspace access', hosted ? 'Workspace access and lifecycle actions' : 'No workspaces are attached yet', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
-        shellSectionButton('team', activeSection, '03', 'Team', hosted ? 'Access and team roster' : 'Account membership', canManage ? 'Manage' : 'View') +
-        shellSectionButton('services', activeSection, '04', 'Account services', 'Licenses, billing, refunds, and privacy', '4 tools') +
-        shellSectionButton('support', activeSection, '05', 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact'), supportEmail ? 'Email' : 'Help') +
+        shellSectionButton('overview', activeSection, '01', 'Overview', 'What needs attention, what is ready, and the next obvious action.', attentionCount > 0 ? String(attentionCount) + ' review' : (hosted ? String(readyWorkspaces) + ' ready' : 'Summary')) +
+        shellSectionButton('workspaces', activeSection, '02', 'Workspaces', hosted ? 'Open a workspace, review lifecycle state, or create one.' : 'No hosted workspaces are attached yet.', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
+        shellSectionButton('access', activeSection, '03', 'Access', hosted ? 'Invite people, change roles, and remove account access.' : 'Account access and membership controls.', canManage ? 'Manage' : 'View') +
+        shellSectionButton('billing', activeSection, '04', 'Billing', hostedBillingCount > 0 ? 'Hosted billing first, then self-hosted licenses, refunds, and privacy only when relevant.' : 'Self-hosted billing, licenses, refunds, and privacy.', hostedBillingCount > 0 ? (hostedBillingCount > 1 ? 'Hosted +' : 'Hosted') : 'Self-hosted') +
+        shellSectionButton('support', activeSection, '05', 'Support', 'Escalation only after the workspace, access, or billing path is exhausted.', supportEmail ? 'Email' : 'Help') +
       '</div>' +
     '</aside>'
   );
@@ -419,125 +423,184 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   );
 }
 
-function renderAccountOverviewSection(account: PortalAccountSummary): string {
+function readyWorkspaces(workspaces: PortalWorkspaceSummary[]): PortalWorkspaceSummary[] {
+  var results: PortalWorkspaceSummary[] = [];
+  for (var i = 0; i < workspaces.length; i += 1) {
+    if (String(workspaces[i].state || '') === 'active' && workspaceHealthState(workspaces[i]) === 'healthy') {
+      results.push(workspaces[i]);
+    }
+  }
+  return results;
+}
+
+function renderWorkspaceHandoffForm(accountID: string, workspaceID: string, accountAPIBasePath: string, label: string, buttonClassName = 'btn-secondary btn-compact'): string {
+  if (!accountAPIBasePath) {
+    return '<button class="' + escapeAttr(buttonClassName) + '" type="button" data-shell-action="activate-section" data-shell-section="workspaces">' + escapeHTML(label) + '</button>';
+  }
+  return (
+    '<form method="POST" action="' +
+    escapeAttr(accountAPIBasePath + '/' + accountID + '/tenants/' + workspaceID + '/handoff') +
+    '">' +
+    '<button type="submit" class="' + escapeAttr(buttonClassName) + '">' + escapeHTML(label) + '</button>' +
+    '</form>'
+  );
+}
+
+function renderOverviewAttentionCard(workspaces: PortalWorkspaceSummary[]): string {
+  var attention = attentionWorkspaces(workspaces);
+  if (!attention.length) {
+    return (
+      '<article class="overview-task-card">' +
+        '<div class="account-panel-kicker">Needs attention</div>' +
+        '<h4>Nothing urgent</h4>' +
+        '<p>No active workspace is currently asking for review.</p>' +
+        '<div class="overview-task-list">' +
+          '<div class="overview-task-item"><strong>Healthy now</strong><span>Active workspaces look clear for routine use.</span></div>' +
+          '<div class="overview-task-item"><strong>Suspended stays parked</strong><span>Suspended workspaces stay out of the way until you deliberately resume them.</span></div>' +
+        '</div>' +
+      '</article>'
+    );
+  }
+
+  return (
+    '<article class="overview-task-card overview-task-card-attention">' +
+      '<div class="account-panel-kicker">Needs attention</div>' +
+      '<h4>Review these first</h4>' +
+      '<p>These workspaces still need a human check before you treat the account as settled.</p>' +
+      '<div class="overview-task-list">' +
+        attention.slice(0, 3).map(function(workspace) {
+          return (
+            '<div class="overview-task-item">' +
+              '<strong>' + escapeHTML(workspace.display_name) + '</strong>' +
+              '<span>' + escapeHTML(workspaceStatusCopy(workspace)) + '</span>' +
+            '</div>'
+          );
+        }).join('') +
+      '</div>' +
+    '</article>'
+  );
+}
+
+function renderOverviewReadyCard(account: PortalAccountSummary, workspaces: PortalWorkspaceSummary[], accountAPIBasePath: string): string {
+  var ready = readyWorkspaces(workspaces);
+  if (!ready.length) {
+    return (
+      '<article class="overview-task-card">' +
+        '<div class="account-panel-kicker">Ready</div>' +
+        '<h4>No workspace is ready yet</h4>' +
+        '<p>Use Workspaces to review current state before you start routine work.</p>' +
+      '</article>'
+    );
+  }
+
+  return (
+    '<article class="overview-task-card">' +
+      '<div class="account-panel-kicker">Ready</div>' +
+      '<h4>Open and work</h4>' +
+      '<p>These workspaces are active and healthy right now.</p>' +
+      '<div class="overview-task-list">' +
+        ready.slice(0, 3).map(function(workspace) {
+          return (
+            '<div class="overview-task-item overview-task-item-action">' +
+              '<div class="overview-task-copy">' +
+                '<strong>' + escapeHTML(workspace.display_name) + '</strong>' +
+                '<span>' + escapeHTML(workspaceRowNote(workspace)) + '</span>' +
+              '</div>' +
+              renderWorkspaceHandoffForm(account.id, workspace.id, accountAPIBasePath, 'Open workspace') +
+            '</div>'
+          );
+        }).join('') +
+      '</div>' +
+    '</article>'
+  );
+}
+
+function renderOverviewNextActionCard(account: PortalAccountSummary, workspaces: PortalWorkspaceSummary[], accountAPIBasePath: string): string {
+  var attention = attentionWorkspaces(workspaces);
+  var ready = readyWorkspaces(workspaces);
+  var primaryAction = '';
+  var secondaryAction = '';
+  var title = '';
+  var description = '';
+
+  if (attention.length) {
+    title = 'Review workspace health';
+    description = 'Open Workspaces and resolve the pending health or lifecycle questions before you do anything else.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
+    secondaryAction = account.can_manage
+      ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>'
+      : '';
+  } else if (ready.length) {
+    title = 'Open the next workspace';
+    description = 'The most obvious next step is to open a ready workspace and continue the actual work there.';
+    primaryAction = renderWorkspaceHandoffForm(account.id, ready[0].id, accountAPIBasePath, 'Open ' + ready[0].display_name, 'btn-primary btn-compact');
+    secondaryAction = ready.length > 1
+      ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">See all workspaces</button>'
+      : '';
+  } else if (account.kind === 'msp' && account.can_manage) {
+    title = 'Create the next workspace';
+    description = 'There is no ready workspace yet, so the next clear action is to create one from the Workspaces section.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button>';
+    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Manage access</button>';
+  } else if (account.has_billing && account.can_manage) {
+    title = 'Handle billing in its own place';
+    description = 'Operational work is clear, so the next separate task is billing if that is what you came here to change.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
+    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+  } else {
+    title = 'Choose the right task path';
+    description = 'If this is an access change, go to Access. If it is a billing or license issue, go to Billing. Support is only for escalation.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'access' : 'billing') + '">' + (account.can_manage ? 'Open access' : 'Open billing') + '</button>';
+    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="support">Escalate</button>';
+  }
+
+  return (
+    '<article class="overview-task-card overview-task-card-next">' +
+      '<div class="account-panel-kicker">Next action</div>' +
+      '<h4>' + escapeHTML(title) + '</h4>' +
+      '<p>' + escapeHTML(description) + '</p>' +
+      '<div class="overview-task-actions">' +
+        primaryAction +
+        secondaryAction +
+      '</div>' +
+    '</article>'
+  );
+}
+
+function renderAccountOverviewSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
   var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
   var totalCount = workspaces.length;
   var readyCount = countReadyWorkspaces(workspaces);
-  var healthyCount = countWorkspacesByHealth(workspaces, 'healthy');
   var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
-  var postureTitle = unhealthyCount > 0
-    ? 'Needs review'
-    : checkingCount > 0
-      ? 'Still settling'
-      : suspendedCount > 0
-        ? 'Active workspaces are stable'
-        : 'Workspaces are stable';
-  var postureCopy = unhealthyCount > 0
-    ? 'One or more workspaces still need attention before this account looks healthy.'
-    : checkingCount > 0
-      ? 'Most workspaces look healthy, but some are still waiting on a completed health check.'
-      : suspendedCount > 0
-        ? 'Active workspaces are healthy while suspended workspaces stay parked until you resume them.'
-        : 'All workspaces are healthy and ready for routine use.';
-  var nextStepTitle = unhealthyCount > 0
-    ? 'Start in workspaces'
-    : checkingCount > 0
-      ? 'Review pending checks'
-      : suspendedCount > 0
-        ? 'Next step'
-        : 'Next step';
-  var nextStepCopy = unhealthyCount > 0
-    ? 'One or more workspaces need review before you treat this account as healthy.'
-      : checkingCount > 0
-        ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
-      : suspendedCount > 0
-        ? 'Active workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.'
-        : 'Everything looks stable. Move into Team or Account services only if you need to change access or billing.';
-  var nextStepChecklist = unhealthyCount > 0
-    ? (
-      '<div class="overview-next-checklist">' +
-        '<div class="overview-next-check"><strong>1. Review attention items</strong><span>Open the fleet and inspect any workspace marked as checking or needs attention.</span></div>' +
-        '<div class="overview-next-check"><strong>2. Resolve access blockers</strong><span>Use Team if the right people are not already attached to the hosted account.</span></div>' +
-        '<div class="overview-next-check"><strong>3. Escalate billing separately</strong><span>Keep account billing or self-hosted license work out of the workspace review flow.</span></div>' +
-      '</div>'
-    )
-    : checkingCount > 0
-      ? (
-        '<div class="overview-next-checklist">' +
-          '<div class="overview-next-check"><strong>1. Verify pending checks</strong><span>Open the workspaces still settling and confirm they are safe to operate.</span></div>' +
-          '<div class="overview-next-check"><strong>2. Keep access deliberate</strong><span>Change Team only if a pending workspace needs a different mix of access.</span></div>' +
-          '<div class="overview-next-check"><strong>3. Keep commercial work separate</strong><span>Use account services or billing only when the workspace state is already understood.</span></div>' +
-        '</div>'
-      )
-      : (
-        '<div class="overview-next-checklist">' +
-          '<div class="overview-next-check"><strong>1. Open a workspace for the next operational task</strong><span>Move into Workspaces when you are ready to do workspace work.</span></div>' +
-          '<div class="overview-next-check"><strong>2. Change access in Team only</strong><span>Keep roster changes explicit instead of mixing them into routine workspace work.</span></div>' +
-          '<div class="overview-next-check"><strong>3. Keep billing and privacy separate</strong><span>Licenses, refunds, privacy, and self-hosted billing stay in their own section.</span></div>' +
-        '</div>'
-      );
-  var nextStepActions =
-    '<div class="overview-next-actions">' +
-      '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
-      '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
-    '</div>';
-  var accountScopeCopy = account.kind === 'msp'
-    ? 'Manage client workspaces, billing, and team access from one place.'
-    : 'Manage workspaces, billing, and team access from one place.';
-  var overviewBriefStrip =
-    '<div class="account-overview-brief-strip">' +
-      '<div class="account-overview-brief-point account-overview-brief-point-wide">' +
-        '<strong>Account scope</strong>' +
-        '<span>' + escapeHTML(accountScopeCopy) + '</span>' +
-      '</div>' +
-      '<div class="account-overview-brief-point">' +
-        '<strong>Workspace path</strong>' +
-        '<span>Use Workspaces for tenant access and lifecycle changes, and Team only when access needs to change.</span>' +
-      '</div>' +
-      '<div class="account-overview-brief-point">' +
-        '<strong>Commercial path</strong>' +
-        '<span>Keep licenses, refunds, privacy, and self-hosted billing in Account services instead of mixing them into workspace work.</span>' +
-      '</div>' +
-    '</div>';
+  var attentionCount = attentionWorkspaces(workspaces).length;
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
-      '<div class="account-stage-header account-stage-header-overview">' +
+      '<div class="account-stage-header account-stage-header-overview overview-stage-header">' +
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
-          '<h3>Workspace status</h3>' +
-          '<p>Review workspace status first, then move into the next section.</p>' +
+          '<h3>Account brief</h3>' +
+          '<p>Start with the immediate question, not the platform model.</p>' +
           renderSectionContextChips([
-            String(totalCount) + ' total',
+            String(attentionCount) + ' attention',
             String(readyCount) + ' ready',
-            suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'All active',
+            String(totalCount) + ' total',
+            suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'No suspended',
           ]) +
-          renderOverviewMetricStrip(totalCount, readyCount, checkingCount, unhealthyCount, suspendedCount) +
         '</div>' +
       '</div>' +
-      '<div class="account-command-deck">' +
-        '<div class="account-overview-main-column">' +
-          '<div class="account-overview-card account-overview-briefing-card">' +
-            '<div class="account-overview-lead">' +
-              '<div class="account-panel-kicker">Workspace summary</div>' +
-              '<h3>' + escapeHTML(postureTitle) + '</h3>' +
-              '<p>' + escapeHTML(postureCopy) + '</p>' +
-              overviewBriefStrip +
-            '</div>' +
-            '<div class="account-overview-next-block">' +
-              '<div class="account-panel-kicker">Next move</div>' +
-              '<h4>' + escapeHTML(nextStepTitle) + '</h4>' +
-              '<p>' + escapeHTML(nextStepCopy) + '</p>' +
-              nextStepChecklist +
-              nextStepActions +
-            '</div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="account-overview-side-column">' +
-          renderAttentionPanel(workspaces) +
-        '</div>' +
+      '<div class="overview-task-grid">' +
+        renderOverviewAttentionCard(workspaces) +
+        renderOverviewReadyCard(account, workspaces, accountAPIBasePath) +
+        renderOverviewNextActionCard(account, workspaces, accountAPIBasePath) +
+      '</div>' +
+      '<div class="overview-task-summary-bar">' +
+        '<div class="overview-task-summary-pill"><strong>Healthy</strong><span>' + String(countWorkspacesByHealth(workspaces, 'healthy')) + '</span></div>' +
+        '<div class="overview-task-summary-pill"><strong>Checking</strong><span>' + String(checkingCount) + '</span></div>' +
+        '<div class="overview-task-summary-pill"><strong>Needs attention</strong><span>' + String(unhealthyCount) + '</span></div>' +
+        '<div class="overview-task-summary-pill"><strong>Suspended</strong><span>' + String(suspendedCount) + '</span></div>' +
       '</div>' +
     '</section>'
   );
@@ -557,16 +620,6 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         escapeAttr(account.id) +
         '">Add workspace</button>';
     }
-    if (account.has_billing) {
-      workspaceHeaderActions +=
-        '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' +
-        escapeAttr(account.id) +
-        '">Manage billing</button>';
-    }
-    workspaceHeaderActions +=
-      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
-      escapeAttr(account.id) +
-      '" data-shell-target="team">Manage team</button>';
 
     var workspaceDeskActions = '';
     if (account.kind === 'msp') {
@@ -597,17 +650,6 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '</div>' +
         '</div>';
     }
-    if (account.has_billing) {
-      workspaceDeskActions +=
-        '<button type="button" class="btn-secondary btn-compact" data-action="open-billing" data-account-id="' +
-        escapeAttr(account.id) +
-        '">Manage billing</button>';
-    }
-    workspaceDeskActions +=
-      '<button type="button" class="btn-secondary btn-compact" data-action="toggle-team" data-account-id="' +
-      escapeAttr(account.id) +
-      '" data-shell-target="team">Manage team</button>';
-
     workspaceManagement =
       '<section class="workspace-management-panel" id="workspace-management-' +
       escapeAttr(account.id) +
@@ -627,13 +669,13 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep hosted billing, team changes, and new workspace creation in account actions.</div>' +
+          '<div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep access and billing changes in their own sections.</div>' +
           '<div class="workspace-management-empty-shell">' +
             '<div class="workspace-management-empty-actions-card">' +
               '<div class="workspace-management-empty-actions-copy">' +
-                '<div class="account-panel-kicker">Account actions</div>' +
-                '<h4>Keep account-wide actions separate</h4>' +
-                '<p>Use this area for new workspaces, hosted billing, and team changes. Keep row actions focused on a single workspace.</p>' +
+                '<div class="account-panel-kicker">Workspace tasks</div>' +
+                '<h4>Keep this section workspace-only</h4>' +
+                '<p>Create a workspace here when you need one. Access changes belong in Access, and billing changes belong in Billing.</p>' +
               '</div>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
@@ -708,9 +750,9 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
       '<div class="account-stage-header">' +
         '<div class="account-stage-header-row">' +
           '<div>' +
-            '<div class="account-panel-kicker">Workspace overview</div>' +
+            '<div class="account-panel-kicker">Workspaces</div>' +
             '<h3>Workspaces</h3>' +
-            '<p>Open workspaces, review status, and keep lifecycle actions explicit.</p>' +
+            '<p>Open a workspace, review lifecycle state, or create a new one without mixing in access or billing work.</p>' +
             renderSectionContextChips([
               String(workspaces.length) + ' total',
               String(readyCount) + ' ready',
@@ -736,15 +778,15 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   );
 }
 
-function renderAccountTeamSection(account: PortalAccountSummary): string {
+function renderAccountAccessSection(account: PortalAccountSummary): string {
   var accessPolicy =
     '<div class="team-policy-panel">' +
       '<div class="team-panel-heading">' +
-        '<h4>Access model</h4>' +
-        '<p>Assign the smallest role that still lets someone do the work they own on this account.</p>' +
+        '<h4>Role rules</h4>' +
+        '<p>Invite the smallest role that still lets someone do the work they actually own on this account.</p>' +
       '</div>' +
       '<div class="team-policy-list">' +
-        '<div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full account control.</span></div>' +
+        '<div class="team-policy-row"><strong>Owner</strong><span>Billing, access control, and full account control.</span></div>' +
         '<div class="team-policy-row"><strong>Admin</strong><span>Workspace control plus billing for the account.</span></div>' +
         '<div class="team-policy-row"><strong>Tech</strong><span>Workspace control without billing ownership.</span></div>' +
         '<div class="team-policy-row"><strong>Read-only</strong><span>Workspace review and verification without control-plane changes.</span></div>' +
@@ -755,13 +797,13 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
       '<div class="team-review-strip">' +
         '<div class="team-panel-heading team-panel-heading-tight">' +
           '<div class="account-panel-kicker">Access review</div>' +
-          '<h4>Keep access disciplined</h4>' +
-          '<p>Use the roster as a controlled access list, not a dumping ground for vague shared access.</p>' +
+          '<h4>Keep access explicit</h4>' +
+          '<p>Use the roster as a controlled access list, not a vague shared bucket.</p>' +
         '</div>' +
         '<div class="team-review-grid">' +
             '<div class="team-review-card">' +
               '<strong>Owners stay rare</strong>' +
-            '<span>Reserve Owner for billing, team, and full account control. Default to Admin, Tech, or Read-only first.</span>' +
+            '<span>Reserve Owner for billing, access control, and full account control. Default to Admin, Tech, or Read-only first.</span>' +
             '</div>' +
           '<div class="team-review-card">' +
             '<strong>Keep access narrow</strong>' +
@@ -776,7 +818,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
     '</div>';
 
   return (
-    '<section class="account-content-panel account-content-panel-team">' +
+    '<section class="account-content-panel account-content-panel-access">' +
       '<section class="team-management-panel team-section team-section-shell" id="team-section-' +
       escapeAttr(account.id) +
       '" data-actor-role="' +
@@ -784,16 +826,17 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
       '">' +
         '<div class="team-management-header">' +
           '<div>' +
-            '<div class="account-panel-kicker">Team management</div>' +
-            '<h3>Account access</h3>' +
-            '<p>Owners govern billing and access. Admins and techs keep workspace operations moving day to day.</p>' +
+            '<div class="account-panel-kicker">Access</div>' +
+            '<h3>People and roles</h3>' +
+            '<p>Invite people, change roles, and remove stale access without mixing that work into workspace operations.</p>' +
             renderSectionContextChips([
               account.can_manage ? 'Managed roster' : 'View only',
-              'Least privilege',
-              'Workspace access',
+              'Invite',
+              'Roles',
+              'Remove access',
             ]) +
           '</div>' +
-          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Close team view</button>' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Back to workspaces</button>' +
         '</div>' +
         '<div class="team-management-stats" id="team-stats-' +
         escapeAttr(account.id) +
@@ -803,7 +846,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '<div class="team-roster">' +
               '<div class="team-panel-heading">' +
                 '<h4>People on this account</h4>' +
-                '<p>Keep the roster small and role assignment explicit. The people listed here are the ones who can manage these workspaces.</p>' +
+                '<p>Every person here can reach this hosted account. Keep the list small and the role choice explicit.</p>' +
               '</div>' +
               '<div class="team-roster-list" id="team-list-' +
               escapeAttr(account.id) +
@@ -817,14 +860,14 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '<div class="team-operations-panel">' +
               '<div class="team-panel-heading team-panel-heading-tight">' +
                 '<div class="account-panel-kicker">Access controls</div>' +
-                '<h4>Invite and role policy</h4>' +
-                '<p>Keep the roster deliberate. Invite the smallest role first, then tighten access as responsibilities become clearer.</p>' +
+                '<h4>Invite, role, remove</h4>' +
+                '<p>Use this column when you need to add someone, tighten a role, or remove access that no longer belongs here.</p>' +
               '</div>' +
               '<div class="team-operations-grid">' +
                 '<div class="team-invite-panel">' +
                   '<div class="team-panel-heading">' +
                     '<h4>Invite someone new</h4>' +
-                    '<p>Add another person with the minimum role they need for this account.</p>' +
+                    '<p>Add a person with the minimum role they need for this account.</p>' +
                   '</div>' +
                   '<div class="team-invite">' +
                     '<div><label for="invite-email-' +
@@ -852,79 +895,84 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
   );
 }
 
+function renderHostedBillingCards(accounts: PortalAccountSummary[]): string {
+  var hostedBillingAccounts = accounts.filter(function(account) {
+    return account.has_billing;
+  });
+  if (!hostedBillingAccounts.length) {
+    return (
+      '<div class="billing-task-card billing-task-card-muted">' +
+        '<div class="account-panel-kicker">Hosted billing</div>' +
+        '<h3>No hosted billing attached</h3>' +
+        '<p>Use the self-hosted billing tools below only if you are managing a self-hosted purchase.</p>' +
+      '</div>'
+    );
+  }
+
+  return hostedBillingAccounts.map(function(account) {
+    var actionHTML = account.can_manage
+      ? '<button type="button" class="btn-primary btn-compact" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Open hosted billing</button>'
+      : '<div class="billing-task-note">An owner or admin on this account needs to open hosted billing.</div>';
+    return (
+      '<article class="billing-task-card">' +
+        '<div class="account-panel-kicker">Hosted billing</div>' +
+        '<h3>' + escapeHTML(account.name) + '</h3>' +
+        '<p>Invoices, payment methods, and hosted subscription changes for this account live here.</p>' +
+        '<div class="billing-task-points">' +
+          '<div class="billing-task-point"><strong>Use when hosted billing is the job</strong><span>Keep workspace lifecycle work in Workspaces and access changes in Access.</span></div>' +
+          '<div class="billing-task-point"><strong>Stay account-specific</strong><span>Open billing from the exact hosted account you want to change.</span></div>' +
+        '</div>' +
+        '<div class="billing-task-actions">' + actionHTML + '</div>' +
+      '</article>'
+    );
+  }).join('');
+}
+
 function renderSupportSection(context: ShellViewContext): string {
   return (
     '<section class="portal-support-panel">' +
       '<div class="account-panel-kicker">Support</div>' +
-      '<h2>Support</h2>' +
-      '<p>Use this section when hosted access looks wrong, billing behaves unexpectedly, or you need help with commercial requests.</p>' +
-      renderSectionContextChips(['Hosted issues', 'Commercial requests', context.bootstrap.support_email ? 'Email' : 'Support']) +
-      '<div class="portal-support-brief-strip">' +
-        '<div class="portal-support-brief-card">' +
-          '<strong>Hosted path</strong>' +
-          '<span>Workspace access, team control, tenant handoff, and hosted billing stay on the hosted account route.</span>' +
-        '</div>' +
-        '<div class="portal-support-brief-card">' +
-          '<strong>Commercial path</strong>' +
-          '<span>Self-hosted billing, licenses, refunds, and privacy requests stay in Account services until escalation is needed.</span>' +
-        '</div>' +
-        '<div class="portal-support-brief-card">' +
-          '<strong>Escalate with context</strong>' +
-          '<span>Include the exact account, workspace, section, and failed action so support can continue the same path immediately.</span>' +
-        '</div>' +
-      '</div>' +
+      '<h2>Escalation</h2>' +
+      '<p>Come here only after the workspace, access, or billing path has stopped you.</p>' +
+      renderSectionContextChips(['Escalation only', 'Bring context', context.bootstrap.support_email ? 'Email' : 'Support']) +
       '<div class="portal-support-layout">' +
         '<div class="portal-support-route-grid">' +
           '<div class="portal-support-route-card">' +
             '<div class="account-panel-kicker">Hosted account</div>' +
-            '<h3>Hosted support</h3>' +
-            '<p>Use this route when tenant handoff, workspace access, team control, or hosted billing looks wrong.</p>' +
+            '<h3>Hosted problems</h3>' +
+            '<p>Use support for hosted issues only after you have already tried the Workspaces or Access path.</p>' +
             '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Route here for hosted issues</strong><span>Access, handoff, team, and hosted billing all belong on the hosted account path.</span></div>' +
+              '<div class="portal-support-point"><strong>Use after the hosted path fails</strong><span>Workspace access, lifecycle, and account access should already be narrowed before you escalate.</span></div>' +
               '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same issue quickly.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
+              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
+              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open access</button>' +
               '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
             '</div>' +
           '</div>' +
           '<div class="portal-support-route-card">' +
-            '<div class="account-panel-kicker">Commercial</div>' +
-            '<h3>Commercial requests</h3>' +
-            '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through Account services first.</p>' +
+            '<div class="account-panel-kicker">Billing</div>' +
+            '<h3>Billing and self-hosted issues</h3>' +
+            '<p>Use this route only after hosted billing or the self-hosted billing tools have failed to complete the request cleanly.</p>' +
             '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use Billing, Licenses, Refunds, or Privacy before escalating a commercial issue.</span></div>' +
-              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Keep the request in one place instead of splitting it between billing and account sections.</span></div>' +
+              '<div class="portal-support-point"><strong>Start in Billing</strong><span>Hosted billing, licenses, refunds, and privacy should already be narrowed to one failed request.</span></div>' +
+              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Bring the billing tool or hosted billing action that failed instead of reopening the story from scratch.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
-              '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
+              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' +
+              '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
             '</div>' +
           '</div>' +
         '</div>' +
         '<div class="portal-support-runbook">' +
-          '<div class="account-panel-kicker">Escalation guide</div>' +
-          '<h3>Choose the right path</h3>' +
-          '<p>Keep hosted workspace issues, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
-          '<div class="portal-support-runbook-brief">' +
-            '<div class="portal-support-runbook-brief-card"><strong>Confirm scope</strong><span>Decide first whether the issue is a hosted workspace problem, a commercial self-service request, or direct support escalation.</span></div>' +
-            '<div class="portal-support-runbook-brief-card"><strong>Keep paths separate</strong><span>Workspace and team problems stay out of billing, refund, privacy, and license work.</span></div>' +
-            '<div class="portal-support-runbook-brief-card"><strong>Escalate with facts</strong><span>Bring the exact account, workspace, section, and failed action so support starts with the same state you saw.</span></div>' +
-          '</div>' +
-          '<div class="portal-support-runbook-grid">' +
-            '<div class="portal-support-runbook-section">' +
-              '<div class="portal-support-runbook-section-title">Route checklist</div>' +
-              '<div class="portal-support-runbook-list">' +
-                '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is a hosted workspace issue, a commercial self-service request, or direct support escalation.</span></div>' +
-                '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own sections. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
-                '<div class="portal-support-runbook-step"><strong>3. Escalate with context</strong><span>Include the account, workspace, and exact failed action so the escalation path starts with the same facts you saw.</span></div>' +
-              '</div>' +
-            '</div>' +
-            '<div class="portal-support-runbook-section">' +
-              '<div class="portal-support-runbook-section-title">Escalation packet</div>' +
-              '<div class="portal-support-handoff-note">' +
-                '<strong>Include in the escalation</strong>' +
-                '<span>Account name, workspace name if relevant, the section you were in, the exact button or request that failed, and whether the issue was hosted or commercial.</span>' +
-              '</div>' +
-            '</div>' +
+          '<div class="account-panel-kicker">Escalation packet</div>' +
+          '<h3>What to send</h3>' +
+          '<p>Keep the packet short and concrete so support can pick up the exact failed path immediately.</p>' +
+          '<div class="portal-support-runbook-list">' +
+            '<div class="portal-support-runbook-step"><strong>1. Name the path</strong><span>Say whether the failed path was Workspaces, Access, or Billing.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>2. Name the account</strong><span>Include the hosted account and workspace when relevant, or the billing email for self-hosted work.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>3. Name the action</strong><span>Include the exact button, form, or billing tool that failed and what happened next.</span></div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -960,7 +1008,7 @@ export function renderAccountsHTML(context: ShellViewContext): string {
     );
   }
   return safeAccounts.map(function(account) {
-    return renderAccountOverviewSection(account);
+    return renderAccountOverviewSection(account, context.accountAPIBasePath);
   }).join('');
 }
 
@@ -968,17 +1016,19 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var activeSection = context.activeSection || 'overview';
-  var serviceHeading = hosted ? 'Self-hosted commercial services' : 'Account services';
-  var serviceNote = hosted
-    ? 'Hosted workspace changes stay in Workspaces and Team. Use this area only for self-hosted commercial requests.'
-    : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
+  var hostedBillingCount = accounts.filter(function(account) {
+    return account.has_billing;
+  }).length;
+  var billingNote = hosted
+    ? 'Hosted billing lives here when it applies. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
+    : 'Use this billing surface for self-hosted subscriptions, licenses, refunds, and privacy requests.';
   var hostedContent = accounts.map(function(account) {
     return (
       '<section class="account-surface">' +
         '<div class="account-surface-body">' +
-          renderAccountOverviewSection(account) +
+          renderAccountOverviewSection(account, context.accountAPIBasePath) +
           renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
-          renderAccountTeamSection(account) +
+          renderAccountAccessSection(account) +
         '</div>' +
       '</section>'
     );
@@ -993,38 +1043,39 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
           '<section class="portal-content-panel portal-content-panel-overview">' +
             '<div id="accounts-root">' + hostedContent + '</div>' +
           '</section>' +
-          '<section class="portal-content-panel portal-content-panel-services service-section" id="account-services-section">' +
-            '<div class="service-header">' +
+          '<section class="portal-content-panel portal-content-panel-billing service-section" id="billing-section">' +
+            '<div class="service-header billing-header">' +
               '<div>' +
-                '<div class="account-panel-kicker">Account services</div>' +
-                '<h2>' + serviceHeading + '</h2>' +
+                '<div class="account-panel-kicker">Billing</div>' +
+                '<h2>Billing</h2>' +
                 renderSectionContextChips([
-                  hosted ? 'Self-hosted only' : 'Commercial',
-                  '4 tools',
+                  hostedBillingCount > 0 ? 'Hosted billing' : 'No hosted billing',
+                  'Self-hosted tools',
                 ]) +
               '</div>' +
-              '<div class="service-note">' + serviceNote + '</div>' +
+              '<div class="service-note">' + billingNote + '</div>' +
             '</div>' +
+            '<div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div>' +
             '<div class="service-shell">' +
               '<aside class="service-shell-sidebar">' +
                 '<div class="service-shell-sidebar-head">' +
-                  '<div class="account-panel-kicker">Service navigator</div>' +
+                  '<div class="account-panel-kicker">Self-hosted billing</div>' +
                   '<h3>Self-hosted tools</h3>' +
-                  '<p>Pick one commercial request and keep it separate from workspace and team changes.</p>' +
+                  '<p>Use these only when the job is a self-hosted purchase, license, refund, or privacy request.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
-                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+                  renderServiceActionRow('open-manage-service', 'Self-hosted billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
                   renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Licenses', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
                   renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refunds', 'Request a self-serve refund when the purchase is still eligible.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
                   renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy', 'Request export or deletion for commercial account data.', 'data-service-panel', 'data-export-email', ['Export', 'Deletion']) +
                 '</div>' +
                 '<div class="service-inline-support">' +
-                  '<div class="account-panel-kicker">Commercial routing</div>' +
-                  '<h4>Keep this request separate</h4>' +
-                  '<p>Hosted workspace work stays in Workspaces and Team. Use Support only when a self-hosted billing, license, refund, or privacy request cannot complete cleanly.</p>' +
+                  '<div class="account-panel-kicker">Escalation</div>' +
+                  '<h4>Keep the billing request contained</h4>' +
+                  '<p>Use Support only when a hosted billing or self-hosted billing request cannot complete cleanly from this section.</p>' +
                   '<div class="service-inline-support-points">' +
-                    '<div class="service-inline-support-point"><strong>Hosted stays hosted</strong><span>Tenant handoff, team access, and hosted billing do not belong in this commercial section.</span></div>' +
-                    '<div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the service name and exact failed action if a commercial request needs support.</span></div>' +
+                    '<div class="service-inline-support-point"><strong>Hosted billing first when present</strong><span>Use the hosted billing cards above before you touch the self-hosted tools.</span></div>' +
+                    '<div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the billing tool or hosted billing action and the exact failed step if you need support.</span></div>' +
                   '</div>' +
                   '<div class="service-inline-support-actions">' +
                     '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
@@ -1034,15 +1085,15 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div class="service-shell-main">' +
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
-                    '<div class="account-panel-kicker">Service brief</div>' +
-                    '<h3>Choose a service to begin</h3>' +
-                    '<p>Use one self-hosted request at a time. Each service verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
+                    '<div class="account-panel-kicker">Billing brief</div>' +
+                    '<h3>Choose the billing task</h3>' +
+                    '<p>Pick one self-hosted billing request at a time. Verification happens first so billing, license, refund, or privacy work stays contained.</p>' +
                     '<div class="service-empty-shell">' +
                       '<div class="service-empty-primary">' +
                         '<div class="service-empty-section service-empty-section-compact">' +
                           '<div class="service-empty-column-title">What each tool does</div>' +
                           '<div class="service-empty-flow-list">' +
-                            '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for self-hosted invoices, payment methods, and plan changes.</span></div>' +
                             '<div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
                             '<div class="service-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
                             '<div class="service-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
@@ -1051,9 +1102,9 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                         '<div class="service-empty-section service-empty-section-compact">' +
                           '<div class="service-empty-column-title">Before you start</div>' +
                           '<div class="service-empty-points service-empty-points-stack">' +
-                            '<div class="service-empty-point"><strong>One request</strong><span>Keep a single commercial task active instead of bouncing across sections.</span></div>' +
+                            '<div class="service-empty-point"><strong>One request</strong><span>Keep a single billing request active instead of bouncing across sections.</span></div>' +
                             '<div class="service-empty-point"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div>' +
-                            '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between services.</span></div>' +
+                            '<div class="service-empty-point"><strong>Stay focused</strong><span>Use the hosted billing cards above when the request is tied to a hosted workspace account.</span></div>' +
                           '</div>' +
                         '</div>' +
                       '</div>' +
@@ -1061,8 +1112,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                         '<div class="service-empty-section service-empty-section-support">' +
                           '<div class="service-empty-column-title">Escalation</div>' +
                           '<div class="service-empty-checklist">' +
-                            '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, licenses, refunds, or privacy do not behave as expected, escalate from this section.</span></div>' +
-                            '<div class="service-empty-check"><strong>Commercial packet</strong><span>Bring the service name, commercial email, and the exact failed action so support starts with the same request state.</span></div>' +
+                            '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If hosted billing or the self-hosted tools do not behave as expected, escalate from this section.</span></div>' +
+                            '<div class="service-empty-check"><strong>Billing packet</strong><span>Bring the billing tool, commercial email, and the exact failed action so support starts with the same request state.</span></div>' +
                           '</div>' +
                           '<div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
                           escapeAttr(context.bootstrap.support_email || '') +

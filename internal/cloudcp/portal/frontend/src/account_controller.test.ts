@@ -47,7 +47,7 @@ describe('account controller', function() {
     expect(runtime.openBilling).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('team')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(setShellSection).toHaveBeenCalledWith('team');
+    expect(setShellSection).toHaveBeenCalledWith('access');
     expect(runtime.ensureTeamVisible).toHaveBeenCalledWith('acct_1');
 
     document.getElementById('invite')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));

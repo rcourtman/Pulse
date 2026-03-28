@@ -3,7 +3,7 @@ import type { AccountRuntime } from './account_runtime';
 
 export interface AccountControllerDeps {
   runtime: AccountRuntime;
-  setShellSection: (section: 'overview' | 'workspaces' | 'team' | 'services' | 'support') => void;
+  setShellSection: (section: 'overview' | 'workspaces' | 'access' | 'billing' | 'support') => void;
 }
 
 export function installAccountController(deps: AccountControllerDeps): void {
@@ -27,7 +27,7 @@ export function installAccountController(deps: AccountControllerDeps): void {
         return;
       case 'toggle-team':
         event.preventDefault();
-        deps.setShellSection('team');
+        deps.setShellSection('access');
         deps.runtime.ensureTeamVisible(accountID);
         return;
       case 'invite-member':

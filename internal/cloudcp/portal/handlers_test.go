@@ -651,7 +651,7 @@ func TestBillingPortalRedirect_EmptyURL(t *testing.T) {
 
 // --- Portal page template rendering tests ---
 
-func TestPortalPageTemplate_TeamManagementRendered(t *testing.T) {
+func TestPortalPageTemplate_AccessManagementRendered(t *testing.T) {
 	html := renderPortalHTML(t, BuildBootstrapData(true, "admin@example.com", []portalPageAccount{
 		{
 			ID:         "a_managed",
@@ -669,7 +669,7 @@ func TestPortalPageTemplate_TeamManagementRendered(t *testing.T) {
 		`if (account.can_manage) {`,
 		`data-actor-role="`,
 		`id="team-list-`,
-		`data-action="toggle-team"`,
+		`data-shell-section="access"`,
 		`data-action="invite-member"`,
 	}
 	for _, needle := range mustContain {

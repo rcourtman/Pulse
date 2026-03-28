@@ -33,7 +33,7 @@ function roleLabel(role: string): string {
 function roleCapabilityCopy(role: string): string {
   switch (normalizedTeamRole(role)) {
     case 'owner':
-      return 'Full account control, including billing, team access, and workspace control.';
+      return 'Full account control, including billing, access control, and workspace control.';
     case 'admin':
       return 'Can manage workspaces and billing for this account.';
     case 'tech':

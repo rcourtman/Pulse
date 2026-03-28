@@ -33,7 +33,7 @@ describe('services controller', function() {
       '<button id="refund" data-account-service-action="refund-inline-submit">Refund</button>';
 
     document.getElementById('open')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
-    expect(deps.setShellSection).toHaveBeenCalledWith('services');
+    expect(deps.setShellSection).toHaveBeenCalledWith('billing');
     expect(deps.toggleServicePanel).toHaveBeenCalledWith('retrieve-service-panel');
     expect(deps.focusElement).toHaveBeenCalledWith('retrieve-inline-email');
 

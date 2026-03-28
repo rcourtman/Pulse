@@ -74,7 +74,7 @@ export interface PortalAccountState {
   byAccountID: Record<string, PortalAccountUIEntry>;
 }
 
-export type PortalShellSection = 'overview' | 'workspaces' | 'team' | 'services' | 'support';
+export type PortalShellSection = 'overview' | 'workspaces' | 'access' | 'billing' | 'support';
 
 export interface PortalShellState {
   activeSection: PortalShellSection;

@@ -335,7 +335,7 @@ describe('portal app', function() {
     });
     await app.startupRefresh;
 
-    document.querySelector('[data-action="toggle-team"][data-account-id="acct_1"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    document.querySelector('[data-shell-action="activate-section"][data-shell-section="access"]')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flushAsync();
 
     expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/accounts/acct_1/members');
