@@ -731,8 +731,8 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
         '<div class="team-management-header">' +
           '<div>' +
             '<div class="account-panel-kicker">Team management</div>' +
-            '<h3>Control who can operate this account</h3>' +
-            '<p>Owners manage billing and access. Admins and techs keep the hosted fleet running day to day.</p>' +
+            '<h3>Account access</h3>' +
+            '<p>Owners govern billing and access. Admins and techs keep hosted work moving day to day.</p>' +
             renderSectionContextChips([
               account.can_manage ? 'Managed roster' : 'View only',
               'Least privilege',
@@ -822,8 +822,8 @@ function renderSupportSection(context: ShellViewContext): string {
   return (
     '<section class="portal-support-panel">' +
       '<div class="account-panel-kicker">Support</div>' +
-      '<h2>Support and escalation</h2>' +
-      '<p>Use support when hosted access looks wrong, billing does not behave as expected, or you need help with commercial licensing and privacy actions.</p>' +
+      '<h2>Support desk</h2>' +
+      '<p>Use this desk when hosted access looks wrong, billing behaves unexpectedly, or you need help with commercial requests.</p>' +
       renderSectionContextChips(['Hosted issues', 'Commercial requests', context.bootstrap.support_email ? 'Email' : 'Support']) +
       '<div class="portal-support-layout">' +
         '<div class="portal-support-card-grid">' +
@@ -903,9 +903,9 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var activeSection = context.activeSection || 'overview';
-  var serviceHeading = hosted ? 'Self-hosted licenses and billing' : 'Account services';
+  var serviceHeading = hosted ? 'Self-hosted commercial desk' : 'Account services';
   var serviceNote = hosted
-    ? 'Hosted operations stay in Workspaces and Team. Use this area only for self-hosted commercial requests.'
+    ? 'Hosted operations stay in Workspaces and Team. Use this desk only for self-hosted commercial requests.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
     return (

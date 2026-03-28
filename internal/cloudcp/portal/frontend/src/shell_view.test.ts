@@ -135,7 +135,7 @@ describe('shell view', function() {
     expect(html).toContain('Support');
     expect(html).toContain('Manage');
     expect(html).toContain('id="account-services-section"');
-    expect(html).toContain('Self-hosted licenses and billing');
+    expect(html).toContain('Self-hosted commercial desk');
     expect(html).toContain('portal-account-context');
     expect(html).toContain('Owner access');
     expect(html).toContain('portal-account-context-summary');
@@ -232,7 +232,7 @@ describe('shell view', function() {
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
     expect(html).toContain('Choose one billing, license, refund, or privacy request and keep it contained here.');
     expect(html).toContain('Account services');
-    expect(html).not.toContain('Self-hosted licenses and billing');
+    expect(html).not.toContain('Self-hosted commercial desk');
   });
 
   it('renders signed-out portal with error and success login states', function() {

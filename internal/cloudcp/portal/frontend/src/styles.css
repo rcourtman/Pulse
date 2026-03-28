@@ -570,7 +570,7 @@ header .logout-btn:hover,
 .portal-top-section-header h2,
 .service-header h2 {
   margin: 4px 0 0;
-  font-size: clamp(1.42rem, 1.8vw, 1.9rem);
+  font-size: clamp(1.34rem, 1.7vw, 1.72rem);
   line-height: 1.02;
   letter-spacing: -0.045em;
 }
@@ -578,17 +578,17 @@ header .logout-btn:hover,
 .portal-top-section-header p,
 .service-note {
   margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.42;
   color: var(--ink-soft);
-  max-width: 800px;
+  max-width: 520px;
 }
 
 .service-header {
   display: flex;
-  align-items: end;
+  align-items: start;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
 }
 
@@ -1016,23 +1016,23 @@ header .logout-btn:hover,
 .portal-support-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 16px 18px;
+  padding: 14px 16px;
   background: #fff;
   box-shadow: none;
 }
 
 .portal-support-panel h2 {
   margin: 8px 0 0;
-  font-size: clamp(1.8rem, 2.4vw, 2.5rem);
+  font-size: clamp(1.48rem, 2vw, 1.95rem);
   line-height: 1.02;
   letter-spacing: -0.05em;
 }
 
 .portal-support-panel > p {
-  margin: 12px 0 0;
-  max-width: 760px;
-  font-size: 15px;
-  line-height: 1.7;
+  margin: 10px 0 0;
+  max-width: 680px;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
@@ -1141,7 +1141,7 @@ header .logout-btn:hover,
 }
 
 .account-stage-header {
-  padding: 0 2px 12px;
+  padding: 0 2px 8px;
   border-bottom: none;
   margin-bottom: 0;
 }
@@ -1150,7 +1150,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
 }
 
 .section-context-strip {
@@ -1158,7 +1158,7 @@ header .logout-btn:hover,
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .section-context-chip {
@@ -1179,30 +1179,30 @@ header .logout-btn:hover,
 .account-stage-header-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   justify-content: flex-end;
   flex: 0 0 auto;
-  padding-top: 2px;
+  padding-top: 0;
 }
 
 .account-stage-header h3 {
-  margin: 8px 0 0;
-  font-size: 24px;
+  margin: 7px 0 0;
+  font-size: 21px;
   line-height: 1.02;
   letter-spacing: -0.05em;
 }
 
 .account-stage-header p {
-  margin: 10px 0 0;
-  max-width: 820px;
-  font-size: 14px;
-  line-height: 1.65;
+  margin: 8px 0 0;
+  max-width: 720px;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
 .account-stage-header-overview {
-  margin-bottom: 14px;
+  margin-bottom: 10px;
 }
 
 .workspace-list-wrap {
