@@ -1874,7 +1874,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Mobile is at the RC usefulness floor; broader go-live hardening beyond pairing, auth, reconnect, and approvals remains post-RC follow-up.",
+        "summary": "Mobile is at the RC usefulness floor; broader go-live hardening remains post-RC follow-up, and store-capable work stays draft/TestFlight/internal-only until the current candidate is rerun on physical devices and explicitly judged product-ready.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3089,7 +3089,7 @@
     },
     {
       "id": "mobile-post-rc-hardening",
-      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including work above pairing, auth, reconnect, and approvals recovery.",
+      "summary": "Track broader mobile go-live hardening beyond the RC usefulness floor, including non-public store-capable rehearsal while public rollout stays blocked until the current candidate passes fresh physical-device proof and is judged product-ready.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",
@@ -3707,6 +3707,16 @@
       "lane_ids": [
         "L6",
         "L13"
+      ]
+    },
+    {
+      "id": "mobile-public-release-stays-non-public-until-product-ready",
+      "summary": "Pulse Mobile may complete store setup and candidate submission plumbing before GA, but until the product bar is met it must stay non-public: App Store builds remain in App Store Connect/TestFlight, Google Play stays on the internal track, and public rollout waits for fresh physical-device proof on the current candidate plus an explicit product-ready judgment.",
+      "kind": "release-policy",
+      "decided_at": "2026-03-28",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L5"
       ]
     }
   ]
