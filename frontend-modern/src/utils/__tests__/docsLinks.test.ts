@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -24,6 +24,38 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '..', '..', '..');
 const repoRoot = path.resolve(frontendRoot, '..');
+
+function getRuntimeSourceFiles(dir: string): string[] {
+  const entries = readdirSync(dir, { withFileTypes: true });
+  const files: string[] = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      if (entry.name === '__tests__') {
+        continue;
+      }
+      files.push(...getRuntimeSourceFiles(entryPath));
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    if (!/\.(ts|tsx)$/.test(entry.name)) {
+      continue;
+    }
+
+    if (/(\.test|\.spec)\.(ts|tsx)$/.test(entry.name)) {
+      continue;
+    }
+
+    files.push(entryPath);
+  }
+
+  return files;
+}
 
 describe('docsLinks', () => {
   it('returns canonical shipped doc URLs', () => {
@@ -81,5 +113,17 @@ describe('docsLinks', () => {
     expect(selfHostedCommercialActivationSectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
+  });
+
+  it('keeps non-test frontend runtime files free of GitHub main doc links', () => {
+    const runtimeFiles = getRuntimeSourceFiles(path.join(frontendRoot, 'src'));
+
+    for (const filePath of runtimeFiles) {
+      const source = readFileSync(filePath, 'utf8');
+      expect(
+        source,
+        `${path.relative(frontendRoot, filePath)} should use shipped/local docs owners`,
+      ).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
+    }
   });
 });
