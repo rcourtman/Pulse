@@ -814,13 +814,17 @@ header .logout-btn:hover,
 }
 
 .account-overview-briefing-card {
-  gap: 16px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.06fr) minmax(320px, 0.94fr);
+  gap: 18px;
+  align-items: start;
   background: linear-gradient(180deg, rgba(250, 252, 253, 0.98), rgba(245, 248, 251, 0.98));
 }
 
 .account-overview-lead {
   display: flex;
   flex-direction: column;
+  gap: 0;
   min-width: 0;
 }
 
@@ -828,8 +832,9 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 0;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  min-width: 0;
+  padding-left: 18px;
+  border-left: 1px solid var(--line);
 }
 
 .account-overview-next-block h4 {
@@ -850,22 +855,21 @@ header .logout-btn:hover,
 .account-overview-metrics {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fbfcfd;
+  background: linear-gradient(180deg, rgba(252, 253, 254, 0.98), rgba(246, 249, 252, 0.98));
 }
 
 .account-overview-metrics-header {
   margin-top: 12px;
-  padding: 12px;
-  background: linear-gradient(180deg, rgba(250, 252, 253, 0.98), rgba(244, 248, 251, 0.98));
+  padding: 10px 12px;
 }
 
 .account-metric-strip {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
   padding: 0;
   border: none;
@@ -875,21 +879,20 @@ header .logout-btn:hover,
 
 .account-stat-card-inline {
   min-width: 0;
-  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  min-height: 68px;
+  padding: 8px 12px;
   border: none;
   border-left: 1px solid var(--line);
-  border-top: 1px solid var(--line);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 
-.account-stat-card-inline:first-child,
-.account-stat-card-inline:nth-child(2) {
-  border-top: none;
-}
-
-.account-stat-card-inline:nth-child(odd) {
+.account-stat-card-inline:first-child {
   border-left: none;
 }
 
@@ -2649,10 +2652,10 @@ header .logout-btn:hover,
 
 .account-overview-callout {
   margin-top: 14px;
-  padding-top: 14px;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
   font-size: 13px;
-  line-height: 1.65;
+  line-height: 1.55;
   color: var(--ink-soft);
 }
 
@@ -2744,7 +2747,6 @@ header .logout-btn:hover,
   .team-management-grid,
   .team-review-grid,
   .account-overview-secondary,
-  .account-overview-card,
   .service-shell,
   .service-action-list,
   .service-empty-shell,
@@ -2755,12 +2757,20 @@ header .logout-btn:hover,
   }
 
   .portal-shell-layout,
-  .account-command-deck {
+  .account-command-deck,
+  .account-overview-briefing-card {
     grid-template-columns: 1fr;
   }
 
+  .account-overview-next-block {
+    padding-left: 0;
+    padding-top: 14px;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+
   .account-metric-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .portal-shell-nav {
@@ -2824,6 +2834,10 @@ header .logout-btn:hover,
 
   .workspace-operations-detail {
     position: static;
+  }
+
+  .account-metric-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
