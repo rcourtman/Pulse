@@ -14,12 +14,11 @@ import {
   getActionableDockerRuntimeIdFromResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
+import { API_TOKEN_SCOPES_DOC_URL as SHIPPED_API_TOKEN_SCOPES_DOC_URL } from '@/utils/docsLinks';
 import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import type { Resource } from '@/types/resource';
 
-export const API_TOKEN_SCOPES_DOC_URL =
-  'https://github.com/rcourtman/Pulse/blob/main/docs/CONFIGURATION.md#token-scopes';
-
+export const API_TOKEN_SCOPES_DOC_URL = SHIPPED_API_TOKEN_SCOPES_DOC_URL;
 export const API_TOKEN_WILDCARD_SCOPE = '*';
 
 export interface APITokenPreset {

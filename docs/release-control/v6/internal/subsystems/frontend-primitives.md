@@ -126,6 +126,7 @@ work extends shared components instead of creating new local variants.
 95. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
 96. `frontend-modern/src/utils/environmentLockPresentation.ts`
 97. `frontend-modern/src/utils/docsLinks.ts`
+98. `tests/integration/tests/20-local-doc-links.spec.ts`
 
 ## Shared Boundaries
 
@@ -238,6 +239,13 @@ than hardcoding panel copy, routes, or range presets in the frontend. The
 frontend models may validate and present the catalog, but the canonical panel
 title, descriptions, endpoints, filename prefixes, range windows, and column
 list belong to the API reporting contract.
+That same settings-shell boundary now also owns operator-facing docs referrals
+for governed security panels. `APIAccessPanel.tsx` and
+`SecurityOverviewPanel.tsx` must route scope and proxy-auth guidance through
+the shared shipped-doc helper in `frontend-modern/src/utils/docsLinks.ts`
+instead of hardcoding GitHub `main` URLs that can drift from the running
+build, and `tests/integration/tests/20-local-doc-links.spec.ts` must keep
+browser proof on those settings-shell surfaces.
 The same reporting catalog ownership now also governs the operator resource-
 selection cap for performance reports. `ReportingPanel.tsx` and
 `ResourcePicker.tsx` may present or enforce that limit, but they must receive

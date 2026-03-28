@@ -1732,6 +1732,14 @@ both sides instead of relying only on broad settings-surface coverage on the
 security side: token settings changes must continue to carry the direct
 `api-token-management-surface` API-contract proof together with the
 security-side surface proof.
+That same governed token-settings boundary also owns its operator-facing scope
+reference path. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+may expose the scope-reference URL consumed by the API token settings shell,
+but that URL must resolve through the shared shipped-doc owner in
+`frontend-modern/src/utils/docsLinks.ts` and the local
+`/docs/CONFIGURATION.md` asset instead of hardcoding a GitHub `main` document
+that can drift from the payload contract actually shipped with the running
+build.
 That same shared commercial API boundary now also owns the local trial-start
 transport contract. `/api/license/trial/start` may allow a short human-scale
 burst of retries while the hosted redirect handoff remains canonical, but once

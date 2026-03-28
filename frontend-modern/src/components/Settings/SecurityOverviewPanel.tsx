@@ -1,5 +1,6 @@
 import { Component, Show, Accessor } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
+import { PROXY_AUTH_DOC_URL } from '@/utils/docsLinks';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
 import Shield from 'lucide-solid/icons/shield';
 import Info from 'lucide-solid/icons/info';
@@ -122,7 +123,7 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
                 </a>
               </Show>
               <a
-                href="https://github.com/rcourtman/Pulse/blob/main/docs/PROXY_AUTH.md"
+                href={PROXY_AUTH_DOC_URL}
                 target="_blank"
                 rel="noreferrer"
                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md text-blue-600 dark:text-blue-300 hover:underline"

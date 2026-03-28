@@ -6,16 +6,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const frontendRoot = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(frontendRoot, '..');
-const sourceDocsDir = path.join(repoRoot, 'docs');
 const targetDocsDir = path.join(frontendRoot, 'public', 'docs');
 
-const shippedDocs = ['README.md', 'PRIVACY.md'];
+const shippedDocs = [
+  { source: path.join(repoRoot, 'docs', 'README.md'), target: 'README.md' },
+  { source: path.join(repoRoot, 'docs', 'PRIVACY.md'), target: 'PRIVACY.md' },
+  { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
+  { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },
+  { source: path.join(repoRoot, 'SECURITY.md'), target: 'SECURITY.md' },
+];
 
 export async function syncPublicDocs() {
   await mkdir(targetDocsDir, { recursive: true });
 
-  for (const filename of shippedDocs) {
-    await copyFile(path.join(sourceDocsDir, filename), path.join(targetDocsDir, filename));
+  for (const { source, target } of shippedDocs) {
+    await copyFile(source, path.join(targetDocsDir, target));
   }
 
   console.log(`Synced shipped docs to ${targetDocsDir}`);
