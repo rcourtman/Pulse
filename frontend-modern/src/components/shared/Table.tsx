@@ -27,8 +27,10 @@ export type TableHeaderProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 
 export function TableHeader(props: TableHeaderProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
+  const customBorderPattern = /(?:^|\s)border-[^\s]+/;
+  const borderClass = customBorderPattern.test(local.class ?? '') ? '' : 'border-b border-border';
   return (
-    <thead class={`bg-surface text-muted border-b border-border ${local.class || ''}`} {...rest}>
+    <thead class={`bg-surface text-muted ${borderClass} ${local.class || ''}`.trim()} {...rest}>
       {local.children}
     </thead>
   );
@@ -38,8 +40,12 @@ export type TableBodyProps = JSX.HTMLAttributes<HTMLTableSectionElement>;
 
 export function TableBody(props: TableBodyProps) {
   const [local, rest] = splitProps(props, ['class', 'children']);
+  const customDividePattern = /(?:^|\s)divide-[^\s]+/;
+  const bodyClass = customDividePattern.test(local.class ?? '')
+    ? (local.class ?? '')
+    : `divide-y divide-border ${local.class || ''}`;
   return (
-    <tbody class={`divide-y divide-border ${local.class || ''}`} {...rest}>
+    <tbody class={bodyClass.trim()} {...rest}>
       {local.children}
     </tbody>
   );

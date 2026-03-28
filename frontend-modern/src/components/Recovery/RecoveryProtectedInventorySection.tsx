@@ -338,8 +338,8 @@ export const RecoveryProtectedInventorySection: Component<
               class="w-full border-collapse whitespace-nowrap"
               style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
             >
-            <TableHeader>
-              <TableRow class="border-b border-border bg-surface-alt/95 text-muted">
+            <TableHeader class="border-b-0">
+              <TableRow class="bg-surface-alt/95 text-muted">
                 {(
                   [
                     ['item', getRecoveryArtifactColumnLabel('item', 'Item')],
@@ -379,7 +379,7 @@ export const RecoveryProtectedInventorySection: Component<
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody class="divide-y divide-border-subtle/60">
+            <TableBody class="divide-y-0">
               <For each={visibleRollups()}>
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();

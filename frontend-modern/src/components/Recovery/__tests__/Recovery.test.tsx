@@ -236,6 +236,7 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const inventoryTable = screen.getAllByRole('table')[0];
+    const inventoryBody = inventoryTable.querySelector('tbody');
     expect(
       workspaceTablist.compareDocumentPosition(inventoryControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -247,6 +248,8 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
     expect(within(inventoryTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
     expect(within(inventoryTable).queryByText('PLATFORM')).not.toBeInTheDocument();
+    expect(inventoryBody?.className).toContain('divide-y-0');
+    expect(inventoryBody?.className).not.toContain('divide-border ');
     expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
     const vmRow = screen.getByText('VM 123').closest('tr');
     expect(vmRow).not.toBeNull();

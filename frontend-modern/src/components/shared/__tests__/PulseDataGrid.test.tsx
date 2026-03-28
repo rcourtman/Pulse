@@ -5,6 +5,7 @@ import pulseDataGridSource from '@/components/shared/PulseDataGrid.tsx?raw';
 import pulseDataGridModelSource from '@/components/shared/pulseDataGridModel.ts?raw';
 import pulseDataGridStateSource from '@/components/shared/usePulseDataGridState.ts?raw';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
+import tableSource from '@/components/shared/Table.tsx?raw';
 
 type TestRow = {
   id: string;
@@ -32,6 +33,8 @@ describe('PulseDataGrid', () => {
     expect(pulseDataGridModelSource).toContain('export const getPulseDataGridAlignClass');
     expect(pulseDataGridModelSource).toContain('export const isPulseDataGridInteractiveTarget');
     expect(pulseDataGridModelSource).toContain('target.closest(');
+    expect(tableSource).toContain('customDividePattern');
+    expect(tableSource).toContain('customBorderPattern');
   });
 
   it('triggers the row handler when a non-interactive cell is clicked', () => {

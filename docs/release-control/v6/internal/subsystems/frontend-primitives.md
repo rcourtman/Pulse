@@ -777,6 +777,11 @@ contained styling should come from the same canonical subtabs shell, list, and
 button class treatment already used by established Pulse surfaces rather than
 from a recovery-only variant boundary, adjacent chip row, or recovery-local
 filter-row embedding.
+The shared table primitives now also need to preserve caller-owned separator
+styling. `TableHeader` and `TableBody` may provide canonical default borders
+and dividers, but when a caller supplies explicit border or divide classes the
+shared primitive must defer to that local contract instead of silently forcing
+the default separator treatment back into the rendered DOM.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal
