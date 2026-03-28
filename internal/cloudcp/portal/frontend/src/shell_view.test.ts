@@ -172,6 +172,8 @@ describe('shell view', function() {
     expect(html).toContain('Desk flow');
     expect(html).toContain('Read posture first');
     expect(html).toContain('Escalate account changes separately');
+    expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Workspace management'));
+    expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Keep account actions close'));
     expect(html).toContain('data-action="clear-workspace-selection"');
     expect(html).toContain('Team management');
     expect(html).toContain('Invite someone new');

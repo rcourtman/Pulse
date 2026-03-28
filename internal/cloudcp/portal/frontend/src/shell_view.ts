@@ -352,7 +352,6 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : checkingCount > 0
       ? 'The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check.'
       : 'The hosted fleet is healthy and ready for routine operator work.';
-  var addWorkspaceForm = '';
   var nextStepTitle = unhealthyCount > 0
     ? 'Start in Workspaces'
     : checkingCount > 0
@@ -391,33 +390,6 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
       '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
     '</div>';
-
-  if (account.can_manage) {
-    if (account.kind === 'msp') {
-      addWorkspaceForm =
-        '<div class="add-workspace-form" id="add-ws-form-' +
-        escapeAttr(account.id) +
-        '">' +
-          '<label for="ws-name-' +
-          escapeAttr(account.id) +
-          '">Workspace name (for example, a client name)</label>' +
-          '<input type="text" id="ws-name-' +
-          escapeAttr(account.id) +
-          '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
-          '<div class="form-actions">' +
-            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' +
-            escapeAttr(account.id) +
-            '">Create workspace</button>' +
-            '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
-            escapeAttr(account.id) +
-            '">Cancel</button>' +
-            '<div class="spinner" id="ws-spinner-' +
-            escapeAttr(account.id) +
-            '" hidden></div>' +
-          '</div>' +
-        '</div>';
-    }
-  }
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
@@ -458,7 +430,6 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
             '</div>' +
           '</div>' +
         '</div>' +
-        addWorkspaceForm +
         '<div class="account-overview-secondary">' +
           '<div class="overview-side-card overview-side-card-primary">' +
             '<div class="account-panel-kicker">Next move</div>' +
@@ -480,6 +451,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var workspaceManagement = '';
+  var addWorkspaceForm = '';
   if (account.can_manage) {
     var workspaceDeskActions = '';
     if (account.kind === 'msp') {
@@ -487,6 +459,28 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<button type="button" class="btn-secondary btn-compact" data-action="toggle-add-workspace" data-account-id="' +
         escapeAttr(account.id) +
         '">Add workspace</button>';
+      addWorkspaceForm =
+        '<div class="add-workspace-form" id="add-ws-form-' +
+        escapeAttr(account.id) +
+        '">' +
+          '<label for="ws-name-' +
+          escapeAttr(account.id) +
+          '">Workspace name (for example, a client name)</label>' +
+          '<input type="text" id="ws-name-' +
+          escapeAttr(account.id) +
+          '" placeholder="Acme Corp" maxlength="80" autocomplete="off">' +
+          '<div class="form-actions">' +
+            '<button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' +
+            escapeAttr(account.id) +
+            '">Create workspace</button>' +
+            '<button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' +
+            escapeAttr(account.id) +
+            '">Cancel</button>' +
+            '<div class="spinner" id="ws-spinner-' +
+            escapeAttr(account.id) +
+            '" hidden></div>' +
+          '</div>' +
+        '</div>';
     }
     if (account.has_billing) {
       workspaceDeskActions +=
@@ -525,6 +519,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
               '<h4>Keep account actions close</h4>' +
               '<p>Workspace review happens here while billing, team, and create-workspace actions stay within reach.</p>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
+              addWorkspaceForm +
             '</div>' +
             '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
               '<div class="account-panel-kicker">Desk flow</div>' +
