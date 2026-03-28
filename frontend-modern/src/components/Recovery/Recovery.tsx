@@ -486,36 +486,31 @@ const Recovery: Component = () => {
 
       <div ref={historySectionRef} class="flex flex-col gap-3">
         {(() => {
-          const workspaceControls = (
-            <div class="flex flex-wrap items-center gap-2">
-              <Subtabs
-                value={workspaceView()}
-                onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
-                ariaLabel="Recovery data view"
-                class="rounded-md border border-border bg-surface-alt p-1.5 sm:w-max"
-                listClass="gap-2 overflow-x-auto scrollbar-hide"
-                tabClass="min-h-10 whitespace-nowrap rounded-md border border-transparent px-4 py-2 text-sm"
-                tabs={[
-                  {
-                    value: 'inventory',
-                    label: `Protected items ${filteredRollups().length}`,
-                  },
-                  {
-                    value: 'events',
-                    label: `Recovery events ${recoveryPoints.meta().total}`,
-                  },
-                ]}
-              />
-              <Show when={rollupId().trim().length > 0}>
-                <span class="inline-flex w-fit items-center rounded-md border border-border-subtle bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted">
-                  Focused drill-in
-                </span>
-              </Show>
-            </div>
-          );
-
           return (
             <>
+              <div class="flex flex-wrap items-center gap-3">
+                <Subtabs
+                  value={workspaceView()}
+                  onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+                  ariaLabel="Recovery data view"
+                  tabs={[
+                    {
+                      value: 'inventory',
+                      label: `Protected items ${filteredRollups().length}`,
+                    },
+                    {
+                      value: 'events',
+                      label: `Recovery events ${recoveryPoints.meta().total}`,
+                    },
+                  ]}
+                />
+                <Show when={rollupId().trim().length > 0}>
+                  <span class="inline-flex w-fit items-center rounded-md border border-border-subtle bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted">
+                    Focused drill-in
+                  </span>
+                </Show>
+              </div>
+
               <Show when={workspaceView() === 'inventory'}>
                 <RecoveryProtectedInventorySection
                   filteredRollups={filteredRollups}
@@ -540,7 +535,6 @@ const Recovery: Component = () => {
                   setPlatformFilter={setPlatformFilter}
                   setQueryFilter={setQueryFilter}
                   setVerificationFilter={setVerificationFilter}
-                  workspaceControls={workspaceControls}
                 />
               </Show>
 
@@ -652,7 +646,6 @@ const Recovery: Component = () => {
                     tableMinWidth={tableMinWidth}
                     totalPages={totalPages}
                     verificationFilter={verificationFilter}
-                    workspaceControls={workspaceControls}
                   />
                 </Show>
               </Show>

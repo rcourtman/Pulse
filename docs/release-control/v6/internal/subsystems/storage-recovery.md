@@ -747,25 +747,24 @@ title-case header typography, compact control heights, and thin row density as
 the established Pulse monitoring tables instead of drifting into report-style
 uppercase headers or oversized filter chrome.
 That same workspace-shell rule should also avoid a dedicated recovery-only
-status strip above the control bar. Protected-items and recovery-events should
-surface their tabs, counts, and issue cues through the shared page-controls
-search row inside one standalone shared control card, so the page hands from
-summary into the same controls-card then table-card rhythm used by the stronger
-Pulse monitoring pages.
+status strip above the control bar. Recovery should use the same handoff shape
+as storage: one canonical `Subtabs.tsx` row first, then one shared page-controls
+card, then the active data card, instead of burying the workspace switcher
+inside the filter row or table-card header.
 That same strip should not repeat the broad stale or never-succeeded posture
 counts once the summary already owns those signals. The protected-items control
 row should stay focused on workspace navigation, drill-in context, and active
 filters instead of echoing page-wide posture pills above the same table.
 That same workspace handoff should stay on shared primitive styling too. When
-recovery embeds its workspace tabs inside the page-controls row, the switcher
-should use the same canonical shared `Subtabs.tsx` shell, list, and button
-class pattern already used by established Pulse tab surfaces instead of
-inventing a recovery-only variant or recovery-only class stack.
+recovery renders its workspace tabs, the switcher should use the same canonical
+shared `Subtabs.tsx` shell, list, and button class pattern already used by
+storage and other established Pulse tab surfaces instead of inventing a
+recovery-only variant or recovery-only class stack.
 That same workspace rule also means the protected-items versus recovery-events
-switcher should live inside the shared controls card rather than a recovery-only
-band or a table-card header strip, so the page hands off from summary into one
-canonical active control surface before the data card the way infrastructure
-and workloads do.
+switcher should live in its own canonical subtabs row above the controls card,
+not inside the controls card and not inside a table-card header strip, so the
+page hands off from summary into tabs, then filters, then data the same way the
+storage surface does.
 That same handoff should keep recovery on the standard Pulse summary density.
 `RecoverySummary.tsx` should use the shared default `SummaryPanel` /
 `SummaryMetricCard` rhythm that infrastructure and workloads use, instead of

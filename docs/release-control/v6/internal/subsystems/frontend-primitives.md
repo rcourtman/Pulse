@@ -771,9 +771,11 @@ protected-items versus recovery-events workspace switch. The recovery lane may
 own the active view and route-state semantics, but the top-level tab framing
 must stay on the canonical shared subtabs control instead of reviving a
 recovery-local switcher pattern. When recovery embeds that switcher inside the
-page-controls row, the contained styling should come from the same canonical
-subtabs shell, list, and button class treatment already used by established
-Pulse surfaces rather than from a recovery-only variant boundary.
+page shell, it should follow the same ordering already used by storage: shared
+subtabs row first, shared controls card second, and data card after that. The
+contained styling should come from the same canonical subtabs shell, list, and
+button class treatment already used by established Pulse surfaces rather than
+from a recovery-only variant boundary or recovery-local filter-row embedding.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal

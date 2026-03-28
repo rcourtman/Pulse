@@ -203,36 +203,26 @@ describe('Recovery', () => {
 
     expect(await screen.findByTestId('recovery-summary')).toBeInTheDocument();
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
-    expect(await screen.findByRole('tab', { name: /protected items/i })).toBeInTheDocument();
+    const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
+    expect(within(workspaceTablist).getByRole('tab', { name: /protected items 2/i })).toBeInTheDocument();
+    expect(within(workspaceTablist).getByRole('tab', { name: /recovery events 0/i })).toBeInTheDocument();
     await screen.findByText('VM 123');
     const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
     expect(
       within(inventoryControls).getByPlaceholderText('Search protected items...'),
     ).toBeInTheDocument();
-    expect(
-      within(inventoryControls).getByRole('tab', { name: /protected items/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(inventoryControls).getByRole('tab', { name: /recovery events/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(inventoryControls).getByRole('tab', { name: /protected items 2/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(inventoryControls).getByRole('tab', { name: /recovery events 0/i }),
-    ).toBeInTheDocument();
     expect(within(inventoryControls).queryByText(/^\d+ stale$/i)).not.toBeInTheDocument();
     expect(within(inventoryControls).queryByText(/never succeeded/i)).not.toBeInTheDocument();
     expect(
-      within(inventoryControls)
+      within(workspaceTablist)
         .getByRole('tab', { name: /protected items 2/i })
         .className,
     ).toContain('border-b-2');
     expect(
-      within(inventoryControls)
+      within(workspaceTablist)
         .getByRole('tab', { name: /protected items 2/i })
         .className,
-    ).toContain('rounded-md');
+    ).not.toContain('rounded-md');
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
@@ -245,6 +235,9 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const inventoryTable = screen.getAllByRole('table')[0];
+    expect(
+      workspaceTablist.compareDocumentPosition(inventoryControls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(
       inventoryControls.compareDocumentPosition(inventoryTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -280,24 +273,18 @@ describe('Recovery', () => {
     });
     const historyTable = screen.getAllByRole('table')[0];
     const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
+    const historyTablist = screen.getByRole('tablist', { name: /recovery data view/i });
+    expect(
+      historyTablist.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(
       historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(
       within(historyControls).getByPlaceholderText('Search recovery history...'),
     ).toBeInTheDocument();
-    expect(
-      within(historyControls).getByRole('tab', { name: /protected items/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(historyControls).getByRole('tab', { name: /recovery events/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(historyControls).getByRole('tab', { name: /protected items 2/i }),
-    ).toBeInTheDocument();
-    expect(
-      within(historyControls).getByRole('tab', { name: /recovery events 1/i }),
-    ).toBeInTheDocument();
+    expect(within(historyTablist).getByRole('tab', { name: /protected items 2/i })).toBeInTheDocument();
+    expect(within(historyTablist).getByRole('tab', { name: /recovery events 1/i })).toBeInTheDocument();
     expect(within(historyControls).getByText(/^1 day group$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
     expect(screen.getAllByText(/^1 day group$/i)).toHaveLength(1);

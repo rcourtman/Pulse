@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { Accessor, Component, JSX } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import {
@@ -99,7 +99,6 @@ interface RecoveryHistorySectionProps {
   tableMinWidth: Accessor<string>;
   totalPages: Accessor<number>;
   verificationFilter: Accessor<VerificationFilter>;
-  workspaceControls?: JSX.Element;
 }
 
 export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (props) => {
@@ -136,17 +135,14 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             role="group"
             aria-label="Recovery events controls"
             searchLeading={
-              <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
-                <Show when={props.workspaceControls}>
-                  <div class="shrink-0">{props.workspaceControls}</div>
-                </Show>
-                <Show when={props.groupedByDay().length > 0}>
+              props.groupedByDay().length > 0 ? (
+                <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
                   <span>
                     {props.groupedByDay().length} day group
                     {props.groupedByDay().length === 1 ? '' : 's'}
                   </span>
-                </Show>
-              </div>
+                </div>
+              ) : undefined
             }
             search={
               <SearchInput

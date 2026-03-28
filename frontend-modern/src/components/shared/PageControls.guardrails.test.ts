@@ -104,12 +104,8 @@ describe('page controls guardrails', () => {
 
   it('keeps embedded workspace tabs on the canonical shared subtabs class pattern', () => {
     expect(subtabsSource).not.toContain("variant?: 'default' | 'control'");
-    expect(recoveryPageSource).toContain(
-      'class="rounded-md border border-border bg-surface-alt p-1.5 sm:w-max"',
-    );
-    expect(recoveryPageSource).toContain('listClass="gap-2 overflow-x-auto scrollbar-hide"');
-    expect(recoveryPageSource).toContain(
-      'tabClass="min-h-10 whitespace-nowrap rounded-md border border-transparent px-4 py-2 text-sm"',
-    );
+    expect(recoveryPageSource).not.toContain('variant="control"');
+    expect(recoveryPageSource).not.toContain('listClass=');
+    expect(recoveryPageSource).not.toContain('tabClass=');
   });
 });
