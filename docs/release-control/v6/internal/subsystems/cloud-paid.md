@@ -902,6 +902,9 @@ That same owned `Overview` surface must also keep `Ready` honest when no
 hosted workspace exists yet: hosted accounts with zero workspaces may not tell
 the user to review current workspace state, and must instead say that nothing
 is ready yet until the first hosted workspace exists.
+That same owned `Overview` surface must also keep `Needs attention` honest
+when only suspended workspaces remain: a suspended-only account may not imply
+that active work is ready simply because hosted workspace history exists.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

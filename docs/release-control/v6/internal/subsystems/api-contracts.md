@@ -341,6 +341,9 @@ That same typed overview contract must also keep `Ready` honest when no hosted
 workspace exists yet: hosted accounts with zero workspaces may not route the
 user into current workspace review, and must instead render that nothing is
 ready until the first hosted workspace exists.
+That same typed overview contract must also keep `Needs attention` honest when
+only suspended workspaces remain: hosted workspace history alone may not make
+the shell imply that active work is ready.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

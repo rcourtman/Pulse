@@ -624,6 +624,7 @@ function renderOverviewAttentionCard(
   showSelfHostedCommercial: boolean
 ): string {
   var attention = attentionOverviewEntries(entries);
+  var ready = readyOverviewEntries(entries);
   var includeAccountName = accounts.length > 1;
   var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
     return entry.workspace;
@@ -639,8 +640,10 @@ function renderOverviewAttentionCard(
           : 'No hosted workspace is currently asking for review.'
         ) + '</p>' +
         '<div class="overview-task-list">' +
-          '<div class="overview-task-item"><strong>Healthy now</strong><span>' + escapeHTML(entries.length > 0
+          '<div class="overview-task-item"><strong>Healthy now</strong><span>' + escapeHTML(ready.length > 0
             ? 'Active workspaces look clear for routine use.'
+            : entries.length > 0
+              ? 'No active workspace is ready for routine use right now.'
             : 'There is no hosted workspace waiting for review yet.'
           ) + '</span></div>' +
           '<div class="overview-task-item"><strong>' + escapeHTML(suspendedCount > 0 ? 'Suspended stays parked' : billingSeparation.title) + '</strong><span>' + escapeHTML(suspendedCount > 0

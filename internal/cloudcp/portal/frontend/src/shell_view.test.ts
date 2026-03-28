@@ -563,6 +563,39 @@ describe('shell view', function() {
     expect(html).not.toContain('Choose the right task path');
   });
 
+  it('keeps overview attention copy honest when only suspended workspaces remain', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_view_suspended',
+              name: 'Suspended Hosted Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'read_only',
+              can_manage: false,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_view_suspended',
+                  display_name: 'Paused Workspace',
+                  state: 'suspended',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('No active workspace is ready for routine use right now.');
+    expect(html).toContain('1 suspended workspace stays out of the way until you deliberately resume it.');
+    expect(html).not.toContain('Active workspaces look clear for routine use.');
+  });
+
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({

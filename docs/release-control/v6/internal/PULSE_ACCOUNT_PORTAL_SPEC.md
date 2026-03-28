@@ -249,6 +249,10 @@ Core rules:
     current workspace state; they must say that nothing is ready yet and that
     the first hosted workspace still needs owner/admin creation before routine
     work can start.
+37. `Overview` must keep `Needs attention` honest when only suspended
+    workspaces remain. The shell may not imply active work is ready merely
+    because a suspended workspace exists; suspended-only states must say that
+    no active workspace is ready for routine use right now.
 
 ## Screen Model
 
