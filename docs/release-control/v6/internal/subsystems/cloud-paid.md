@@ -872,6 +872,15 @@ permissions: when the current role is view-only, `Workspaces`, `Access`, and
 hosted `Billing` copy must not advertise create, roster-mutation, or hosted
 billing actions that the runtime will not allow. Those surfaces must say that
 an owner or admin is required instead of implying blocked jobs are live.
+`Support` follows that same permission rule: a hosted view-only user may be
+sent back to `Workspaces`, `Access`, or `Billing` only as review and
+owner/admin handoff paths, not as though the user can perform hosted
+lifecycle, access-mutation, or hosted-billing changes directly before
+escalation.
+`Overview` follows the same account-shape and permission rule: hosted-only
+accounts must not mention self-hosted billing utilities by default, and hosted
+view-only roles must say when hosted billing still needs owner/admin
+authority.
 The same rule applies to the compact account-context strip: it must describe
 the current user's effective hosted tasks, not restate full access-control and
 billing capability when those actions are blocked behind owner/admin roles.

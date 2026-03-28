@@ -2080,9 +2080,17 @@
     }
     return "Self-hosted billing, licenses, refunds, and privacy.";
   }
+  function supportNavCopy(hosted, canManageHostedTasks) {
+    if (!hosted) {
+      return "Escalation only after the billing path is exhausted.";
+    }
+    if (canManageHostedTasks) {
+      return "Escalation only after the workspace, access, or billing path is exhausted.";
+    }
+    return "Escalation only after the review, owner/admin, or billing path is exhausted.";
+  }
   function renderShellNavigation(accounts, supportEmail, activeSection) {
     var hosted = hasHostedAccounts(accounts);
-    var selfHostedOnly = !hosted;
     var workspaces = collectWorkspaces(accounts);
     var totalWorkspaces = workspaces.length;
     var readyWorkspaces = countReadyWorkspaces(workspaces);
@@ -2101,7 +2109,7 @@
         }
       }
     }
-    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Start with the job you need to finish: workspace work, access, billing, then escalation." : "Use billing tools first and escalate only when the self-serve path stops.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "What needs attention, what is ready, and the next obvious action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", selfHostedOnly ? "Escalation only after the billing path is exhausted." : "Escalation only after the workspace, access, or billing path is exhausted.", supportEmail ? "Email" : "Help") + "</div></aside>";
+    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Start with the job you need to finish: workspace work, access, billing, then escalation." : "Use billing tools first and escalate only when the self-serve path stops.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "What needs attention, what is ready, and the next obvious action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", supportNavCopy(hosted, canManage), supportEmail ? "Email" : "Help") + "</div></aside>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
@@ -2153,19 +2161,60 @@
     if (!includeAccountName) return note;
     return entry.account.name + " \xB7 " + note;
   }
-  function renderOverviewAttentionCard(entries, accountCount) {
+  function overviewBillingSeparationCopy(accounts, showSelfHostedCommercial) {
+    var hostedBillingCount = 0;
+    var canManageHostedBilling = false;
+    for (var i = 0; i < accounts.length; i += 1) {
+      if (accounts[i].has_billing) {
+        hostedBillingCount += 1;
+        if (accounts[i].can_manage) {
+          canManageHostedBilling = true;
+        }
+      }
+    }
+    if (!accounts.length) {
+      return {
+        title: "Billing stays separate",
+        copy: "Self-hosted billing, licenses, refunds, and privacy stay in Billing."
+      };
+    }
+    if (showSelfHostedCommercial) {
+      if (hostedBillingCount > 0) {
+        return {
+          title: "Billing stays separate",
+          copy: canManageHostedBilling ? "Hosted billing stays in Billing, and self-hosted tools appear there only when relevant." : "Hosted billing stays in Billing, an owner or admin opens it, and self-hosted tools appear there only when relevant."
+        };
+      }
+      return {
+        title: "Billing stays separate",
+        copy: "Self-hosted tools appear in Billing only when they are relevant to this account."
+      };
+    }
+    if (hostedBillingCount > 0) {
+      return {
+        title: "Hosted billing stays separate",
+        copy: canManageHostedBilling ? "Use Billing only for hosted invoices, payment methods, or subscription changes." : "Hosted billing stays in Billing, and an owner or admin must open it."
+      };
+    }
+    return {
+      title: "Billing stays separate",
+      copy: "Use Billing only when the task is commercial, not operational."
+    };
+  }
+  function renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) {
     var attention = attentionOverviewEntries(entries);
-    var includeAccountName = accountCount > 1;
+    var includeAccountName = accounts.length > 1;
     var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
       return entry.workspace;
     }), "suspended");
+    var billingSeparation = overviewBillingSeparationCopy(accounts, showSelfHostedCommercial);
     if (!attention.length) {
       return '<article class="overview-task-card"><div class="account-panel-kicker">Needs attention</div><h4>Nothing urgent</h4><p>' + escapeHTML(
         entries.length > 0 ? "No active workspace is currently asking for review." : "No hosted workspace is currently asking for review."
       ) + '</p><div class="overview-task-list"><div class="overview-task-item"><strong>Healthy now</strong><span>' + escapeHTML(
         entries.length > 0 ? "Active workspaces look clear for routine use." : "There is no hosted workspace waiting for review yet."
-      ) + '</span></div><div class="overview-task-item"><strong>' + escapeHTML(suspendedCount > 0 ? "Suspended stays parked" : "Billing stays separate") + "</strong><span>" + escapeHTML(
-        suspendedCount > 0 ? String(suspendedCount) + " suspended workspace" + (suspendedCount === 1 ? " stays" : "s stay") + " out of the way until you deliberately resume it." : "Self-hosted billing, licenses, refunds, and privacy stay in Billing."
+      ) + '</span></div><div class="overview-task-item"><strong>' + escapeHTML(suspendedCount > 0 ? "Suspended stays parked" : billingSeparation.title) + "</strong><span>" + escapeHTML(
+        suspendedCount > 0 ? String(suspendedCount) + " suspended workspace" + (suspendedCount === 1 ? " stays" : "s stay") + " out of the way until you deliberately resume it." : billingSeparation.copy
       ) + "</span></div></div></article>";
     }
     return '<article class="overview-task-card overview-task-card-attention"><div class="account-panel-kicker">Needs attention</div><h4>Review these first</h4><p>These workspaces still need a human check before you treat the account as settled.</p><div class="overview-task-list">' + attention.slice(0, 3).map(function(entry) {
@@ -2240,6 +2289,7 @@
   function renderShellOverviewSection(context) {
     var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
     var entries = collectOverviewWorkspaceEntries(accounts);
+    var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
     var totalCount = entries.length;
     var readyCount = readyOverviewEntries(entries).length;
     var attentionCount = attentionOverviewEntries(entries).length;
@@ -2251,7 +2301,7 @@
       attentionCount > 0 ? String(attentionCount) + " attention" : "Nothing urgent",
       suspendedCount > 0 ? String(suspendedCount) + " suspended" : "No suspended"
     ] : ["No hosted account", "Billing available", "Support only on escalation"];
-    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Overview</div><h3>Account triage</h3><p>Only three questions matter here.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid">' + renderOverviewAttentionCard(entries, accounts.length) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath) + "</div></section>";
+    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Overview</div><h3>Account triage</h3><p>Only three questions matter here.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath) + "</div></section>";
   }
   function renderNoHostedWorkspacesSection() {
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div><div class="account-panel-kicker">Workspaces</div><h3>Workspaces</h3><p>No hosted workspace is attached to this account.</p>' + renderSectionContextChips(["None attached", "Billing instead"]) + '</div></div><div class="empty-state empty-state-spaced"><p>There is nothing to open or manage here yet.</p><p class="support-copy">Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.</p></div></section>';
@@ -2314,13 +2364,22 @@
     return '<section class="billing-panel" id="' + escapeAttr(panelID) + '" hidden><div class="billing-task-header"><div><div class="account-panel-kicker">Billing task</div><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + '</p></div><button type="button" class="btn-secondary btn-compact" data-account-billing-action="clear-billing-panel">Close panel</button></div><div class="billing-task-body">' + bodyHTML + "</div></section>";
   }
   function renderSupportSection(context) {
-    var hasHostedAccounts2 = !!(context.bootstrap.accounts || []).length;
+    var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
+    var hasHostedAccounts2 = accounts.length > 0;
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
     var supportEmail = context.bootstrap.support_email || "";
-    var supportLead = hasHostedAccounts2 ? showSelfHostedCommercial ? "Use support only when the Workspaces, Access, or Billing path has already stopped you." : "Use support only when the Workspaces, Access, or hosted Billing path has already stopped you." : "Use support only when the Billing path has already stopped you.";
-    var supportChips = hasHostedAccounts2 ? ["Escalation only", showSelfHostedCommercial ? "Bring context" : "Hosted only", supportEmail ? "Email" : "Support"] : ["Escalation only", "Billing only", supportEmail ? "Email" : "Support"];
-    var routeCards = hasHostedAccounts2 ? '<div class="portal-support-route-card"><div class="account-panel-kicker">Hosted path</div><h3>Workspace or access path failed</h3><p>Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.</p><div class="portal-support-points"><div class="portal-support-point"><strong>Start from the same task</strong><span>Use Workspaces for lifecycle issues and Access for roster issues before you escalate.</span></div><div class="portal-support-point"><strong>Keep the hosted context intact</strong><span>Include the account, workspace, and failed action so support inherits the same request.</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open access</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a></div></div><div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>' + (showSelfHostedCommercial ? "Billing path failed" : "Hosted billing path failed") + "</h3><p>" + (showSelfHostedCommercial ? "Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly." : "Use this route only after hosted billing has failed to complete cleanly.") + '</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>' + (showSelfHostedCommercial ? "Say whether the failed path was hosted billing, licenses, refunds, or privacy." : "Say whether the failed path was hosted billing.") + '</span></div><div class="portal-support-point"><strong>Keep the request intact</strong><span>' + (showSelfHostedCommercial ? "Bring the same account or billing email and the failed action instead of reopening the story." : "Bring the same hosted account and the failed billing action instead of reopening the story.") + '</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div>" : '<div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>Self-hosted billing path failed</h3><p>Use this route only after a self-hosted billing, license, refund, or privacy job has failed to complete cleanly.</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was billing, licenses, refunds, or privacy.</span></div><div class="portal-support-point"><strong>Keep the purchase context intact</strong><span>Bring the same commercial email and the failed action instead of reopening the story.</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div>";
-    var runbookSteps = hasHostedAccounts2 ? '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>' + (showSelfHostedCommercial ? "Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy." : "Say whether the blocked path was Workspaces, Access, or hosted billing.") + '</span></div><div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>' + (showSelfHostedCommercial ? "Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work." : "Include the hosted account and workspace or hosted billing account that the failed path belongs to.") + '</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' : '<div class="portal-support-runbook-step"><strong>1. Billing job</strong><span>Say whether the blocked path was billing, licenses, refunds, or privacy.</span></div><div class="portal-support-runbook-step"><strong>2. Purchase email</strong><span>Include the commercial billing email used for the self-hosted purchase.</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>';
+    var canManageHostedTasks = false;
+    for (var i = 0; i < accounts.length; i += 1) {
+      if (accounts[i].can_manage) {
+        canManageHostedTasks = true;
+        break;
+      }
+    }
+    var hostedViewOnly = hasHostedAccounts2 && !canManageHostedTasks;
+    var supportLead = hasHostedAccounts2 ? hostedViewOnly ? showSelfHostedCommercial ? "Use support only when the same Workspaces review, Access review, owner/admin, or Billing path has already stopped you." : "Use support only when the same Workspaces review, Access review, owner/admin, or hosted Billing path has already stopped you." : showSelfHostedCommercial ? "Use support only when the Workspaces, Access, or Billing path has already stopped you." : "Use support only when the Workspaces, Access, or hosted Billing path has already stopped you." : "Use support only when the Billing path has already stopped you.";
+    var supportChips = hasHostedAccounts2 ? ["Escalation only", hostedViewOnly ? "Owner/admin first" : showSelfHostedCommercial ? "Bring context" : "Hosted only", supportEmail ? "Email" : "Support"] : ["Escalation only", "Billing only", supportEmail ? "Email" : "Support"];
+    var routeCards = hasHostedAccounts2 ? '<div class="portal-support-route-card"><div class="account-panel-kicker">Hosted path</div><h3>' + (hostedViewOnly ? "Hosted review or owner/admin path failed" : "Workspace or access path failed") + "</h3><p>" + (hostedViewOnly ? "Go back to the hosted task first. Review the same workspace or roster here, then have an owner or admin run the blocked change before you escalate." : "Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.") + '</p><div class="portal-support-points"><div class="portal-support-point"><strong>' + (hostedViewOnly ? "Review the same task" : "Start from the same task") + "</strong><span>" + (hostedViewOnly ? "Use Workspaces to confirm workspace state and Access to confirm the current roster before you escalate." : "Use Workspaces for lifecycle issues and Access for roster issues before you escalate.") + '</span></div><div class="portal-support-point"><strong>' + (hostedViewOnly ? "Name the blocked owner/admin action" : "Keep the hosted context intact") + "</strong><span>" + (hostedViewOnly ? "Include the account, workspace, and the lifecycle or access change that still needs an owner or admin." : "Include the account, workspace, and failed action so support inherits the same request.") + '</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">' + (hostedViewOnly ? "Review workspaces" : "Open workspaces") + '</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">' + (hostedViewOnly ? "Review access" : "Open access") + '</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a></div></div><div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>' + (hostedViewOnly ? showSelfHostedCommercial ? "Billing or owner/admin path failed" : "Hosted billing or owner/admin path failed" : showSelfHostedCommercial ? "Billing path failed" : "Hosted billing path failed") + "</h3><p>" + (hostedViewOnly ? showSelfHostedCommercial ? "Use this route only after the relevant billing job has failed, or the affected hosted account still needs an owner or admin to finish hosted billing." : "Use this route only after the affected hosted account still needs an owner or admin to finish hosted billing and that path still cannot complete cleanly." : showSelfHostedCommercial ? "Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly." : "Use this route only after hosted billing has failed to complete cleanly.") + '</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Say whether the failed path was hosted billing, licenses, refunds, or privacy, and whether hosted billing still needed an owner or admin." : "Say whether the failed path was hosted billing and whether the account still needed an owner or admin to open it." : showSelfHostedCommercial ? "Say whether the failed path was hosted billing, licenses, refunds, or privacy." : "Say whether the failed path was hosted billing.") + '</span></div><div class="portal-support-point"><strong>Keep the request intact</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Bring the same account or billing email and the failed owner/admin or billing step instead of reopening the story." : "Bring the same hosted account and the failed billing or owner/admin step instead of reopening the story." : showSelfHostedCommercial ? "Bring the same account or billing email and the failed action instead of reopening the story." : "Bring the same hosted account and the failed billing action instead of reopening the story.") + '</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div>" : '<div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>Self-hosted billing path failed</h3><p>Use this route only after a self-hosted billing, license, refund, or privacy job has failed to complete cleanly.</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was billing, licenses, refunds, or privacy.</span></div><div class="portal-support-point"><strong>Keep the purchase context intact</strong><span>Bring the same commercial email and the failed action instead of reopening the story.</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div>";
+    var runbookSteps = hasHostedAccounts2 ? '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Say whether the blocked path was Workspaces review, Access review, owner/admin hosted change, hosted billing, licenses, refunds, or privacy." : "Say whether the blocked path was Workspaces review, Access review, owner/admin hosted change, or hosted billing." : showSelfHostedCommercial ? "Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy." : "Say whether the blocked path was Workspaces, Access, or hosted billing.") + '</span></div><div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Include the hosted account and workspace for the blocked review or owner/admin path, or the commercial billing email for self-hosted work." : "Include the hosted account and workspace or hosted billing account that still needed owner/admin action." : showSelfHostedCommercial ? "Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work." : "Include the hosted account and workspace or hosted billing account that the failed path belongs to.") + '</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' : '<div class="portal-support-runbook-step"><strong>1. Billing job</strong><span>Say whether the blocked path was billing, licenses, refunds, or privacy.</span></div><div class="portal-support-runbook-step"><strong>2. Purchase email</strong><span>Include the commercial billing email used for the self-hosted purchase.</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>';
     return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Escalation only</h2><p>' + escapeHTML(supportLead) + "</p>" + renderSectionContextChips(supportChips) + '<div class="portal-support-layout"><div class="portal-support-route-grid">' + routeCards + '</div><div class="portal-support-runbook"><div class="account-panel-kicker">What to send</div><h3>Keep the escalation short</h3><p>Support should inherit the same request, not reconstruct it from scratch.</p><div class="portal-support-runbook-list">' + runbookSteps + "</div></div></div></section>";
   }
   function renderHeaderHTML(context) {

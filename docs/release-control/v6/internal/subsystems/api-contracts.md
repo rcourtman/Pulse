@@ -312,6 +312,14 @@ honest for hosted view-only roles: when `can_manage` is false, `Workspaces`,
 `Access`, and hosted `Billing` must stop advertising create, roster-mutation,
 or hosted-billing actions and must instead state that an owner or admin is
 required.
+The same permission contract must also drive hosted `Support`: when
+`can_manage` is false, the support shell may route the user back to
+`Workspaces`, `Access`, or `Billing` only as review and owner/admin handoff
+paths, not as live hosted mutation paths the current role can execute.
+The same typed bootstrap/runtime contract must also keep `Overview` billing
+copy honest to account shape: hosted-only accounts may not mention self-hosted
+billing utilities by default, and hosted view-only roles must say when hosted
+billing still needs owner/admin authority.
 The same permission contract must also drive the compact account-context
 summary: the strip may not describe full hosted access-control or billing
 ownership when the current role can only review workspaces or roster state.

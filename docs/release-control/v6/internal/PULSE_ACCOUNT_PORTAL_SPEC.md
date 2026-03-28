@@ -221,6 +221,15 @@ Core rules:
     must describe what the current user can actually do on the account, not
     restate the account's full hosted capability set when access or billing
     changes require an owner or admin.
+31. Hosted `Support` must stay permission-honest too. View-only hosted users
+    may be sent back to `Workspaces`, `Access`, or `Billing` only as review
+    and owner/admin handoff paths; `Support` must not imply they can perform
+    hosted lifecycle, access-mutation, or hosted-billing changes themselves
+    before escalation.
+32. `Overview` must keep billing cues honest to account shape and permission.
+    Hosted-only accounts may not mention self-hosted billing utilities by
+    default, and hosted view-only roles must say when owner/admin authority is
+    still required to open hosted billing.
 
 ## Screen Model
 
@@ -261,7 +270,9 @@ Each signed-in state should render:
    `Support` should collapse to failed-path routing plus the minimum escalation
    packet needed for handoff. Self-hosted-only accounts must collapse further
    to the self-hosted billing escalation path only and must not surface hosted
-   workspace or access routes.
+   workspace or access routes. Hosted view-only accounts must keep those hosted
+   routes in review-plus-owner/admin-handoff language rather than implying live
+   mutation authority.
 7. explicit action groups, not anonymous menu affordances
 8. explicit unavailable-state panels for top-level tasks that are not active
    for the current account shape
