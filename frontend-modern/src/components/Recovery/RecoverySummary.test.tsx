@@ -64,7 +64,6 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Platforms')).toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(screen.getByText('Failed')).toBeInTheDocument();
-    expect(screen.getByText('<1h')).toBeInTheDocument();
     expect(screen.getByText('>7d')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
     expect(screen.getByText('Latest Activity')).toBeInTheDocument();
@@ -74,7 +73,9 @@ describe('RecoverySummary', () => {
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
     expect(screen.queryByText('Running')).not.toBeInTheDocument();
     expect(screen.queryByText('<7d')).not.toBeInTheDocument();
+    expect(screen.queryByText('<1h')).not.toBeInTheDocument();
     expect(screen.queryByText('<24h')).not.toBeInTheDocument();
+    expect(screen.queryByText('Multi-platform')).not.toBeInTheDocument();
     expect(screen.queryByText('Primary Platform')).not.toBeInTheDocument();
     expect(screen.queryByText('Primary Item')).not.toBeInTheDocument();
     expect(screen.queryByText('Avg / Day')).not.toBeInTheDocument();

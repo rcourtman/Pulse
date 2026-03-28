@@ -723,7 +723,7 @@ stale, and footprint telemetry in multiple stacked readouts inside one card.
 Recovery summary cards should keep one dominant metric with one short support
 band so the strip scans at the same speed as infrastructure and workloads
 instead of behaving like a recovery-only executive summary.
-That support band should stay genuinely short, usually two or three compact
+That support band should stay genuinely short, usually one or two compact
 rows rather than four-item micro reports, so the operator can scan the summary
 as orientation instead of reading each card like a dense checklist.
 Those support rows should also stay signal-driven. Recovery summary cards

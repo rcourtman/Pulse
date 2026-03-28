@@ -63,42 +63,43 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const handleTimeRangeChange = (range: string) =>
     props.onTimeRangeChange?.(range as RecoverySummaryTimeRange);
   const postureRows = createMemo(
-    () =>
-      [
-      {
-        label: 'Healthy',
-        value: healthyCount(),
-        valueClass: 'text-emerald-600 dark:text-emerald-400',
-      },
-      postureSummary().failed + postureSummary().neverSucceeded > 0
-        ? {
-            label: 'Failed',
-            value: postureSummary().failed + postureSummary().neverSucceeded,
-            valueClass: 'text-rose-600 dark:text-rose-400',
-          }
-        : null,
-      postureSummary().stale > 0
-        ? {
-            label: 'Stale',
-            value: postureSummary().stale,
-            valueClass: 'text-amber-600 dark:text-amber-400',
-          }
-        : null,
-      postureSummary().warning > 0
-        ? {
-            label: 'Warning',
-            value: postureSummary().warning,
-            valueClass: 'text-amber-600 dark:text-amber-400',
-          }
-        : null,
-      postureSummary().running > 0
-        ? {
-            label: 'Running',
-            value: postureSummary().running,
-            valueClass: 'text-blue-600 dark:text-blue-400',
-          }
-        : null,
-      ].filter(Boolean) as Array<{ label: string; value: string | number; valueClass?: string }>,
+    () => {
+      const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
+      const failedCount = postureSummary().failed + postureSummary().neverSucceeded;
+      if (healthyCount() > 0) {
+        rows.push({
+          label: 'Healthy',
+          value: healthyCount(),
+          valueClass: 'text-emerald-600 dark:text-emerald-400',
+        });
+      }
+      if (failedCount > 0) {
+        rows.push({
+          label: 'Failed',
+          value: failedCount,
+          valueClass: 'text-rose-600 dark:text-rose-400',
+        });
+      } else if (postureSummary().stale > 0) {
+        rows.push({
+          label: 'Stale',
+          value: postureSummary().stale,
+          valueClass: 'text-amber-600 dark:text-amber-400',
+        });
+      } else if (postureSummary().warning > 0) {
+        rows.push({
+          label: 'Warning',
+          value: postureSummary().warning,
+          valueClass: 'text-amber-600 dark:text-amber-400',
+        });
+      } else if (postureSummary().running > 0) {
+        rows.push({
+          label: 'Running',
+          value: postureSummary().running,
+          valueClass: 'text-blue-600 dark:text-blue-400',
+        });
+      }
+      return rows.slice(0, 2);
+    },
   );
   const freshWithin24hCount = createMemo(
     () =>
@@ -109,24 +110,49 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     () => freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0,
   );
   const freshnessRows = createMemo(
-    () =>
-      [
-        {
+    () => {
+      const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
+      const over7dCount = freshnessBuckets().find((bucket) => bucket.key === 'over7d')?.count ?? 0;
+      if (over7dCount > 0) {
+        rows.push({ label: '>7d', value: over7dCount });
+      }
+      if (summary().neverSucceeded > 0) {
+        rows.push({
+          label: 'Never Succeeded',
+          value: summary().neverSucceeded,
+        });
+      }
+      if (freshWithin1hCount() > 0) {
+        rows.push({
           label: '<1h',
           value: freshWithin1hCount(),
-        },
-        {
-          label: '>7d',
-          value: freshnessBuckets().find((bucket) => bucket.key === 'over7d')?.count ?? 0,
-        },
-        summary().neverSucceeded > 0
-          ? {
-              label: 'Never Succeeded',
-              value: summary().neverSucceeded,
-            }
-          : null,
-      ].filter(Boolean) as Array<{ label: string; value: string | number; valueClass?: string }>,
+        });
+      }
+      return rows.slice(0, 2);
+    },
   );
+
+  const footprintRows = createMemo(() => {
+    const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [
+      { label: 'Platforms', value: platformCoverage().platformCount },
+    ];
+    if (platformCoverage().multiPlatformCount > 0) {
+      rows.push({
+        label: 'Multi-platform',
+        value: platformCoverage().multiPlatformCount,
+      });
+    }
+    return rows.slice(0, 2);
+  });
+
+  const historyRows = createMemo(() => {
+    const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
+    if (activity().latestLabel) {
+      rows.push({ label: 'Latest Activity', value: activity().latestLabel });
+    }
+    rows.push({ label: 'Days Active', value: activity().activeDays });
+    return rows.slice(0, 2);
+  });
 
   const MetricRows = (rowProps: {
     rows: Array<{ label: string; value: string | number; valueClass?: string }>;
@@ -195,11 +221,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="text-[11px] text-muted">item types</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows
-                rows={[
-                  { label: 'Platforms', value: platformCoverage().platformCount },
-                ]}
-              />
+              <MetricRows rows={footprintRows()} />
             </div>
           </div>
         </SummaryMetricCard>
@@ -218,12 +240,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="text-[11px] text-muted">recovery points</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows
-                rows={[
-                  { label: 'Days Active', value: activity().activeDays },
-                  { label: 'Latest Activity', value: activity().latestLabel ?? 'n/a' },
-                ]}
-              />
+              <MetricRows rows={historyRows()} />
             </div>
           </div>
         </SummaryMetricCard>
