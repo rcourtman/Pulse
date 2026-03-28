@@ -2255,6 +2255,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
 }
 .service-empty-section {
   display: flex;
@@ -2383,6 +2384,13 @@ header .logout-btn:hover,
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-soft);
+}
+.service-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
 }
 .service-empty-point {
   display: flex;

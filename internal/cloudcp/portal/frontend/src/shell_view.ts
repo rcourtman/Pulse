@@ -1038,11 +1038,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                     '<h3>Choose a desk to begin</h3>' +
                     '<p>Use one self-hosted desk at a time. Each desk verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
                     '<div class="service-empty-shell">' +
-                      '<div class="service-empty-intro">' +
-                        '<div class="service-empty-intro-item"><strong>One request</strong><span>Keep a single commercial task active instead of bouncing across desks.</span></div>' +
-                        '<div class="service-empty-intro-item"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div>' +
-                        '<div class="service-empty-intro-item"><strong>Escalate fast</strong><span>Route unusual billing, refund, privacy, or license failures to support from this desk.</span></div>' +
-                      '</div>' +
                       '<div class="service-empty-primary">' +
                         '<div class="service-empty-section service-empty-section-compact">' +
                           '<div class="service-empty-column-title">Workflow map</div>' +
@@ -1056,7 +1051,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                         '<div class="service-empty-section service-empty-section-compact">' +
                           '<div class="service-empty-column-title">Before you start</div>' +
                           '<div class="service-empty-points service-empty-points-stack">' +
-                            '<div class="service-empty-point"><strong>Verify first</strong><span>Each desk confirms the commercial email before opening sensitive actions.</span></div>' +
+                            '<div class="service-empty-point"><strong>One request</strong><span>Keep a single commercial task active instead of bouncing across desks.</span></div>' +
+                            '<div class="service-empty-point"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div>' +
                             '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +
                           '</div>' +
                         '</div>' +
@@ -1066,12 +1062,16 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                           '<div class="service-empty-column-title">Escalation</div>' +
                           '<div class="service-empty-checklist">' +
                             '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, license, refund, or privacy work does not behave as expected, escalate from this desk.</span></div>' +
+                            '<div class="service-empty-check"><strong>Commercial packet</strong><span>Bring the desk name, commercial email, and the exact failed action so support starts with the same request state.</span></div>' +
                           '</div>' +
                           '<div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
                           escapeAttr(context.bootstrap.support_email || '') +
                           '">' +
                           escapeHTML(context.bootstrap.support_email || '') +
                           '</a></div>' +
+                          '<div class="service-empty-actions">' +
+                            '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support desk</button>' +
+                          '</div>' +
                         '</div>' +
                       '</div>' +
                     '</div>' +
