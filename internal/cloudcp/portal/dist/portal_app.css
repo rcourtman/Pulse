@@ -1759,6 +1759,13 @@ header .logout-btn:hover,
   gap: 10px;
   padding-top: 2px;
 }
+.team-review-shell {
+  grid-column: 1 / -1;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
 .team-review-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
