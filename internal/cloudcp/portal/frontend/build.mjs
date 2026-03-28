@@ -24,7 +24,7 @@ async function listSourceInputs(relativeDir) {
       files.push(...await listSourceInputs(childRelativePath));
       continue;
     }
-    if (entry.isFile() && /\.(ts|css)$/.test(entry.name)) {
+    if (entry.isFile() && /\.(ts|css|woff2|woff|ttf|otf)$/.test(entry.name)) {
       files.push(childRelativePath);
     }
   }
@@ -68,6 +68,12 @@ await withExclusiveLock(
       entryPoints: ['src/index.ts'],
       outfile: path.join(distRoot, 'portal_app.js'),
       bundle: true,
+      loader: {
+        '.woff2': 'dataurl',
+        '.woff': 'dataurl',
+        '.ttf': 'dataurl',
+        '.otf': 'dataurl',
+      },
       format: 'iife',
       platform: 'browser',
       target: ['es2020'],

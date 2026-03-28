@@ -1,5 +1,5 @@
 {
-  "source_hash": "91b2fa354937cdbd0764b9785f356be7dc3b86e8ede9fd8ddb22eb751a8647d2",
+  "source_hash": "f940112feac696aba21cbd51366cf23604824096f45f386e40358d2854d6c778",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -18,6 +18,8 @@
     "src/async_state.ts",
     "src/auth_controller.test.ts",
     "src/auth_controller.ts",
+    "src/fonts/roboto-latin-ext.woff2",
+    "src/fonts/roboto-latin.woff2",
     "src/index.ts",
     "src/runtime.test.ts",
     "src/runtime.ts",

@@ -58,7 +58,7 @@ func TestCPSecurityHeaders_CSPDirectives(t *testing.T) {
 		"style-src 'self' 'nonce-",
 		"img-src 'self' data:",
 		"connect-src 'self'",
-		"font-src 'self'",
+		"font-src 'self' data:",
 		"form-action 'self' https:",
 		"frame-ancestors 'none'",
 	}

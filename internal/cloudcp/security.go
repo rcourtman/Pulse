@@ -64,7 +64,7 @@ func CPSecurityHeaders(next http.Handler) http.Handler {
 			styleSrc + "; " +
 			"img-src 'self' data:; " +
 			"connect-src 'self'; " +
-			"font-src 'self'; " +
+			"font-src 'self' data:; " +
 			"form-action 'self' https:; " +
 			"frame-ancestors 'none'"
 

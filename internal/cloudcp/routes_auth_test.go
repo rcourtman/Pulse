@@ -433,9 +433,10 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 		`id="pulse-account-bootstrap"`,
 		`id="portal-app-root"`,
 		`"authenticated":true`,
-		"Hosted operations",
+		"Account center",
+		"Workspace status",
 		"Account services",
-		"Self-hosted licenses and billing",
+		"Self-hosted commercial services",
 	} {
 		if !strings.Contains(authRec.Body.String(), needle) {
 			t.Fatalf("expected authenticated portal page to contain %q, body=%q", needle, authRec.Body.String())
