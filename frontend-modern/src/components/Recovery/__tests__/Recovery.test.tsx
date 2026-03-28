@@ -208,11 +208,7 @@ describe('Recovery', () => {
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
-    expect(
-      screen.getAllByText((_, element) =>
-        (element?.textContent || '').replace(/\s+/g, ' ').includes('Latest point'),
-      ).length,
-    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/2 protected items/i).length).toBeGreaterThan(0);
     expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
       'aria-selected',
       'false',

@@ -66,11 +66,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   const visiblePostureSegments = createMemo(() =>
     postureSegments().filter((segment) => segment.count > 0).slice(0, 4),
   );
-  const recentWindowLabel = createMemo(() => {
-    const activitySummary = activity();
-    if (!activitySummary.startLabel || !activitySummary.endLabel) return null;
-    return `${activitySummary.startLabel} to ${activitySummary.endLabel}`;
-  });
   const handleTimeRangeChange = (range: string) =>
     props.onTimeRangeChange?.(range as RecoverySummaryTimeRange);
 
@@ -165,18 +160,12 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 </div>
                 <div class="text-xs text-muted">stale items</div>
               </div>
-              <div class="space-y-0.5 text-right text-[11px]">
+              <div class="text-right text-[11px]">
                 <div>
                   <span class="font-semibold text-rose-600 dark:text-rose-400">
                     {summary().neverSucceeded}
                   </span>{' '}
                   <span class="text-muted">never succeeded</span>
-                </div>
-                <div>
-                  <span class="font-semibold text-blue-600 dark:text-blue-400">
-                    {postureSummary().running}
-                  </span>{' '}
-                  <span class="text-muted">running</span>
                 </div>
               </div>
             </div>
@@ -193,19 +182,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   </div>
                 )}
               </For>
-            </div>
-
-            <div class="border-t border-border-subtle pt-2 text-[11px]">
-              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span class="text-muted">Attention</span>
-                <span class="font-semibold text-base-content">{attentionCount()}</span>
-                <span class="text-muted">Fresh &lt;24h</span>
-                <span class="font-semibold text-base-content">
-                  {freshnessBuckets()
-                    .filter((bucket) => bucket.key === 'under1h' || bucket.key === 'under24h')
-                    .reduce((total, bucket) => total + bucket.count, 0)}
-                </span>
-              </div>
             </div>
           </div>
         </SummaryMetricCard>
@@ -282,18 +258,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
           <div class="flex h-full flex-col gap-2.5">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <div class="text-2xl font-semibold tabular-nums text-base-content">
-                  {activity().totalEvents}
-                </div>
-                <div class="text-xs text-muted">recovery points</div>
+            <div>
+              <div class="text-2xl font-semibold tabular-nums text-base-content">
+                {activity().totalEvents}
               </div>
-              <Show when={recentWindowLabel()}>
-                <div class="max-w-[9rem] text-right text-[11px] text-muted">
-                  {recentWindowLabel()}
-                </div>
-              </Show>
+              <div class="text-xs text-muted">recovery points</div>
             </div>
 
             <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
@@ -307,16 +276,14 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <span class="font-semibold text-base-content">{activity().busiestCount}</span>
             </div>
 
-            <dl class="space-y-1 border-t border-border-subtle pt-2 text-[11px]">
-              <div class="flex items-center justify-between gap-3">
-                <dt class="text-muted">Peak Day</dt>
-                <dd class="font-medium text-base-content">{activity().busiestLabel ?? 'n/a'}</dd>
+            <div class="border-t border-border-subtle pt-2 text-[11px]">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="text-muted">Peak Day</span>
+                <span class="font-medium text-base-content">{activity().busiestLabel ?? 'n/a'}</span>
+                <span class="text-muted">Latest</span>
+                <span class="font-medium text-base-content">{activity().latestLabel ?? 'n/a'}</span>
               </div>
-              <div class="flex items-center justify-between gap-3">
-                <dt class="text-muted">Latest Activity</dt>
-                <dd class="font-medium text-base-content">{activity().latestLabel ?? 'n/a'}</dd>
-              </div>
-            </dl>
+            </div>
           </div>
         </SummaryMetricCard>
       </SummaryPanel>

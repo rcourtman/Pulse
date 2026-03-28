@@ -702,6 +702,11 @@ already establish the active workspace. `RecoveryProtectedInventorySection.tsx`
 should keep page/count/sort orientation inside a slim table-shell status row
 and let the filter strip lead directly into the grid instead of reintroducing a
 second large inventory header card above the same table.
+That same shell rule should also avoid low-signal bookkeeping above the grid.
+The protected-items status row should surface the active workspace, protected
+item count, and issue cues, but page-number and sort-direction bookkeeping
+belongs in the table chrome itself rather than competing with the primary scan
+path before operators even reach the rows.
 That same workspace rule also means the protected-items versus recovery-events
 switcher should live inside the active workspace header strip, not in its own
 separate band above the cards, so the page hands off from summary directly into

@@ -210,24 +210,8 @@ export const RecoveryProtectedInventorySection: Component<
             </Show>
             <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
               <span class="font-medium text-base-content">
-                {sortedRollups().length} shown
-              </span>
-              <span>
-                {protectedPage()} / {protectedTotalPages()}
-              </span>
-              <span>
-                <span class="font-medium text-base-content">
-                  {protectedSortCol() === 'lastBackup'
-                    ? 'Latest point'
-                    : protectedSortCol() === 'item'
-                      ? 'Item'
-                      : protectedSortCol() === 'type'
-                        ? 'Item type'
-                        : protectedSortCol() === 'platform'
-                          ? 'Platform'
-                          : 'Outcome'}
-                </span>{' '}
-                <span class="uppercase tracking-wide text-muted">{protectedSortDir()}</span>
+                {sortedRollups().length}{' '}
+                {sortedRollups().length === 1 ? 'protected item' : 'protected items'}
               </span>
             </div>
           </div>

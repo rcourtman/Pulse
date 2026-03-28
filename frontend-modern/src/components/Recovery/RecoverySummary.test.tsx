@@ -57,7 +57,7 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Protected Footprint')).toBeInTheDocument();
     expect(screen.getByText('Freshness')).toBeInTheDocument();
     expect(screen.getByText('Recent History')).toBeInTheDocument();
-    expect(screen.getAllByText('Attention').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/attention/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/recovery points/i)).toBeInTheDocument();
     expect(screen.getByText(/item types/i)).toBeInTheDocument();
     expect(screen.getByText('Primary Item')).toBeInTheDocument();
