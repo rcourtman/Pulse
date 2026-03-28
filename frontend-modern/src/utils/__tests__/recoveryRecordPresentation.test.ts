@@ -3,6 +3,7 @@ import type { ProtectionRollup, RecoveryPoint } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   getRecoveryPointItemLabel,
+  getRecoveryPointItemSecondaryLabel,
   getRecoveryPointDetailsSummary,
   getRecoveryPointKindLabel,
   getRecoveryPointModeLabel,
@@ -10,6 +11,7 @@ import {
   getRecoveryPointRepositoryLabel,
   getRecoveryPointTimestampMs,
   getRecoveryRollupItemLabel,
+  getRecoveryRollupItemSecondaryLabel,
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 
@@ -80,6 +82,20 @@ describe('recoveryRecordPresentation', () => {
 
     expect(getRecoveryRollupItemLabel(rollup, resources)).toBe('Archive VM');
     expect(getRecoveryPointItemLabel(linkedPoint, resources)).toBe('Payments API');
+  });
+
+  it('derives secondary entity-id labels without replacing the primary name', () => {
+    const rollup = {
+      rollupId: 'rollup-2',
+      display: { itemLabel: 'Archive VM', itemType: 'vm', entityIdLabel: '101' },
+    } as ProtectionRollup;
+    const point = {
+      id: 'point-4',
+      display: { itemLabel: 'debian-go', itemType: 'system-container', entityIdLabel: '112' },
+    } as RecoveryPoint;
+
+    expect(getRecoveryRollupItemSecondaryLabel(rollup)).toBe('VMID 101');
+    expect(getRecoveryPointItemSecondaryLabel(point)).toBe('CTID 112');
   });
 
   it('derives timestamps and normalizes mode query values', () => {

@@ -271,6 +271,12 @@ have a VMID/CTID in the subject ref but still carry a richer backup comment or
 notes label, the canonical recovery index and store backfill must promote that
 human-readable label into the persisted subject/item label instead of leaving
 protected inventory rows to lead with bare numeric IDs.
+That same operator-facing row-identity rule should still preserve the governed
+entity identifier as secondary context when it exists. Recovery inventory and
+event rows should lead with the canonical item name, then show a muted
+secondary `VMID`/`CTID`/`ID` line when `display.entityIdLabel` is available, so
+operators can disambiguate familiar names without turning the primary scan path
+back into raw numeric identifiers.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as

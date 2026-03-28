@@ -42,7 +42,10 @@ import {
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
-import { getRecoveryRollupItemLabel } from '@/utils/recoveryRecordPresentation';
+import {
+  getRecoveryRollupItemLabel,
+  getRecoveryRollupItemSecondaryLabel,
+} from '@/utils/recoveryRecordPresentation';
 import { getSourcePlatformLabel, normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
@@ -397,6 +400,7 @@ export const RecoveryProtectedInventorySection: Component<
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();
                   const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
+                  const secondaryLabel = getRecoveryRollupItemSecondaryLabel(rollup);
                   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
                   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
                   const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
@@ -457,6 +461,11 @@ export const RecoveryProtectedInventorySection: Component<
                               </span>
                             </Show>
                           </div>
+                          <Show when={secondaryLabel}>
+                            <div class="pl-4 text-[10px] font-mono tabular-nums text-muted">
+                              {secondaryLabel}
+                            </div>
+                          </Show>
                           <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
                             <Show when={itemTypePresentation?.label}>
                               <span class={itemTypePresentation?.badgeClasses || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>

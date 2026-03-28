@@ -28,6 +28,7 @@ import {
 import {
   getRecoveryPointDetailsSummary,
   getRecoveryPointItemLabel,
+  getRecoveryPointItemSecondaryLabel,
   getRecoveryPointModeLabel,
   getRecoveryPointRepositoryLabel,
   getRecoveryPointTimestampMs,
@@ -162,6 +163,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                   {(point) => {
                     const resourceIndex = props.resourcesById();
                     const item = getRecoveryPointItemLabel(point, resourceIndex);
+                    const itemSecondary = getRecoveryPointItemSecondaryLabel(point);
                     const tsMs = getRecoveryPointTimestampMs(point);
                     const timeOnly =
                       point.completedAt && Number.isFinite(tsMs)
@@ -241,17 +243,24 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                       class="max-w-[420px] whitespace-nowrap px-3 py-1 text-base-content"
                                       title={item}
                                     >
-                                      <div class="flex min-w-0 max-w-full items-center gap-2">
-                                        <StatusDot
-                                          variant={outcomeVariant}
-                                          size="xs"
-                                          pulse={outcome === 'running'}
-                                          title={getRecoveryOutcomeLabel(outcome)}
-                                          ariaLabel={getRecoveryOutcomeLabel(outcome)}
-                                        />
-                                        <span class="min-w-0 flex-1 truncate text-[12px] font-medium">
-                                          {item}
-                                        </span>
+                                      <div class="flex min-w-0 max-w-full flex-col gap-0.5">
+                                        <div class="flex min-w-0 max-w-full items-center gap-2">
+                                          <StatusDot
+                                            variant={outcomeVariant}
+                                            size="xs"
+                                            pulse={outcome === 'running'}
+                                            title={getRecoveryOutcomeLabel(outcome)}
+                                            ariaLabel={getRecoveryOutcomeLabel(outcome)}
+                                          />
+                                          <span class="min-w-0 flex-1 truncate text-[12px] font-medium">
+                                            {item}
+                                          </span>
+                                        </div>
+                                        <Show when={itemSecondary}>
+                                          <span class="pl-4 text-[10px] font-mono tabular-nums text-muted">
+                                            {itemSecondary}
+                                          </span>
+                                        </Show>
                                       </div>
                                     </TableCell>
                                   );

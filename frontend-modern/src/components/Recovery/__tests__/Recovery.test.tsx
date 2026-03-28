@@ -24,7 +24,7 @@ const rollupsPayload = [
   {
     rollupId: 'res:vm-123',
     itemResourceId: 'vm-123',
-    display: { subjectType: 'proxmox-vm', itemType: 'vm' },
+    display: { subjectType: 'proxmox-vm', itemType: 'vm', entityIdLabel: '123' },
     lastAttemptAt: '2026-02-14T10:00:00.000Z',
     lastSuccessAt: '2026-02-14T10:00:00.000Z',
     lastOutcome: 'success',
@@ -64,6 +64,7 @@ const pointsByRollupId: Record<string, any[]> = {
         clusterLabel: 'Lab Cluster',
         nodeHostLabel: 'pve-01',
         namespaceLabel: 'Finance',
+        entityIdLabel: '123',
       },
     },
   ],
@@ -263,6 +264,7 @@ describe('Recovery', () => {
     expect(within(vmRow!).getByLabelText('Healthy')).toBeInTheDocument();
     expect(within(vmRow!).getAllByText('PVE').length).toBeGreaterThan(0);
     expect(within(vmRow!).getAllByText('VM').length).toBeGreaterThan(0);
+    expect(within(vmRow!).getByText('VMID 123')).toBeInTheDocument();
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
     expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
 
@@ -336,6 +338,7 @@ describe('Recovery', () => {
     const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');
     expect(historyRow).not.toBeNull();
     expect(within(historyRow!).getByLabelText('Healthy')).toBeInTheDocument();
+    expect(within(historyRow!).getByText('VMID 123')).toBeInTheDocument();
     expect(activityHeading).toBeInTheDocument();
   });
 

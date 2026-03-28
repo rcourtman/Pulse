@@ -37,6 +37,36 @@ export function getRecoveryRollupItemLabel(
   return rollup.rollupId;
 }
 
+const getRecoveryEntityIdPrefix = (value: string | null | undefined): string => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) return 'ID';
+  if (normalized.includes('vm')) return 'VMID';
+  if (normalized.includes('lxc') || normalized.includes('container')) return 'CTID';
+  return 'ID';
+};
+
+const getRecoveryItemSecondaryLabel = (
+  itemLabel: string,
+  itemType: string | null | undefined,
+  entityIdLabel: string | null | undefined,
+): string => {
+  const raw = String(entityIdLabel || '').trim();
+  if (!raw) return '';
+  if (raw.toLowerCase() === itemLabel.trim().toLowerCase()) return '';
+  if (/^\d+$/.test(raw)) {
+    return `${getRecoveryEntityIdPrefix(itemType)} ${raw}`;
+  }
+  return raw;
+};
+
+export function getRecoveryRollupItemSecondaryLabel(rollup: ProtectionRollup): string {
+  return getRecoveryItemSecondaryLabel(
+    String(rollup.display?.itemLabel || '').trim(),
+    String(rollup.display?.itemType || rollup.itemRef?.type || rollup.subjectRef?.type || ''),
+    rollup.display?.entityIdLabel,
+  );
+}
+
 export function getRecoveryPointTimestampMs(point: RecoveryPoint): number {
   const raw = String(point.completedAt || point.startedAt || '');
   const parsed = Date.parse(raw);
@@ -62,6 +92,14 @@ export function getRecoveryPointItemLabel(
   if (id) return id;
   if (itemResourceId) return itemResourceId;
   return point.id;
+}
+
+export function getRecoveryPointItemSecondaryLabel(point: RecoveryPoint): string {
+  return getRecoveryItemSecondaryLabel(
+    String(point.display?.itemLabel || '').trim(),
+    String(point.display?.itemType || point.itemRef?.type || point.subjectRef?.type || ''),
+    point.display?.entityIdLabel,
+  );
 }
 
 export function getRecoveryRollupSubjectLabel(
