@@ -1062,8 +1062,8 @@ header .logout-btn:hover,
 
 .workspace-list-head {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) 132px 132px 176px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 2.25fr) 116px 116px 154px;
+  gap: 12px;
   padding: 2px 14px 4px;
   font-size: 11px;
   font-weight: 800;
@@ -1084,8 +1084,8 @@ header .logout-btn:hover,
 
 .workspace-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.8fr) 132px 132px 176px;
-  gap: 14px;
+  grid-template-columns: minmax(0, 2.25fr) 116px 116px 154px;
+  gap: 12px;
   align-items: center;
   padding: 11px 14px;
   background: #fff;
@@ -1142,6 +1142,10 @@ header .logout-btn:hover,
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.workspace-row-heading .workspace-meta:empty {
+  display: none;
 }
 
 .workspace-meta-item {

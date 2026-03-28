@@ -280,9 +280,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
   var status = workspaceHealthState(workspace);
   var state = String(workspace.state || '');
   var createdLabel = formatWorkspaceDate(workspace.created_at);
-  var metaParts = [
-    '<span class="workspace-meta-item">' + escapeHTML(workspace.id) + '</span>',
-  ];
+  var metaParts = [];
   if (createdLabel) {
     metaParts.push('<span class="workspace-meta-item">Created ' + escapeHTML(createdLabel) + '</span>');
   }
