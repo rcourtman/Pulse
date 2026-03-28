@@ -75,6 +75,7 @@ describe('RecoverySummary', () => {
     expect(screen.queryByText('<7d')).not.toBeInTheDocument();
     expect(screen.queryByText('<1h')).not.toBeInTheDocument();
     expect(screen.queryByText('<24h')).not.toBeInTheDocument();
+    expect(screen.queryByText('Days Active')).not.toBeInTheDocument();
     expect(screen.queryByText('Multi-platform')).not.toBeInTheDocument();
     expect(screen.queryByText('Primary Platform')).not.toBeInTheDocument();
     expect(screen.queryByText('Primary Item')).not.toBeInTheDocument();

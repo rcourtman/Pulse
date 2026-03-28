@@ -726,6 +726,8 @@ instead of behaving like a recovery-only executive summary.
 That support band should stay genuinely short, usually one or two compact
 rows rather than four-item micro reports, so the operator can scan the summary
 as orientation instead of reading each card like a dense checklist.
+When a second support row does not materially change triage, recovery should
+prefer a single support row over filling the card just because there is room.
 Those support rows should also stay signal-driven. Recovery summary cards
 should omit zero-value or low-value support rows like `Primary Item` or `Peak
 Day` when they do not materially improve operator triage, so the top strip

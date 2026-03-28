@@ -133,25 +133,16 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   );
 
   const footprintRows = createMemo(() => {
-    const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [
+    return [
       { label: 'Platforms', value: platformCoverage().platformCount },
     ];
-    if (platformCoverage().multiPlatformCount > 0) {
-      rows.push({
-        label: 'Multi-platform',
-        value: platformCoverage().multiPlatformCount,
-      });
-    }
-    return rows.slice(0, 2);
   });
 
   const historyRows = createMemo(() => {
-    const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
     if (activity().latestLabel) {
-      rows.push({ label: 'Latest Activity', value: activity().latestLabel });
+      return [{ label: 'Latest Activity', value: activity().latestLabel }];
     }
-    rows.push({ label: 'Days Active', value: activity().activeDays });
-    return rows.slice(0, 2);
+    return [{ label: 'Days Active', value: activity().activeDays }];
   });
 
   const MetricRows = (rowProps: {
