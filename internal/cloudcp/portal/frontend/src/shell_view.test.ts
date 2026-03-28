@@ -359,7 +359,7 @@ describe('shell view', function() {
               kind_label: 'Cloud',
               role: 'tech',
               can_manage: false,
-              has_billing: false,
+              has_billing: true,
               workspaces: [
                 {
                   id: 'ws_ro',
@@ -375,11 +375,17 @@ describe('shell view', function() {
       })
     );
 
+    expect(html).toContain('Open a workspace and review current state. An owner or admin must create or change hosted workspaces.');
+    expect(html).toContain('Open a workspace and review current state here. An owner or admin must create or change hosted workspaces.');
     expect(html).toContain('Review access');
     expect(html).toContain('Owner or admin required');
     expect(html).toContain('Review who already has access to this hosted account. An owner or admin must make changes.');
     expect(html).toContain('Review the hosted roster here. An owner or admin must make changes.');
+    expect(html).toContain('Hosted billing is attached here, but an owner or admin must open it.');
     expect(html).toContain('data-can-manage="false"');
+    expect(html).not.toContain('Invite people, change roles, and remove account access.');
+    expect(html).not.toContain('Open a workspace, review lifecycle state, or create one.');
+    expect(html).not.toContain('Open a workspace, review lifecycle state, or create a new one without mixing in access or billing work.');
     expect(html).not.toContain('data-action="invite-member"');
     expect(html).not.toContain('data-action="set-access-job"');
   });

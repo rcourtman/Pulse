@@ -2036,6 +2036,33 @@
     var badgeHTML = badge ? '<span class="portal-shell-nav-badge">' + escapeHTML(badge) + "</span>" : "";
     return '<button class="portal-shell-nav-link' + (activeSection === section ? " active" : "") + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '"><span class="portal-shell-nav-row"><span class="portal-shell-nav-label-group"><span class="portal-shell-nav-index">' + escapeHTML(index) + '</span><span class="portal-shell-nav-label">' + title + "</span></span>" + badgeHTML + '</span><span class="portal-shell-nav-copy">' + copy + "</span></button>";
   }
+  function workspaceNavCopy(hosted, canManage) {
+    if (!hosted) {
+      return "Unavailable on this account. Hosted workspaces are not attached here.";
+    }
+    if (canManage) {
+      return "Open a workspace, review lifecycle state, or create one.";
+    }
+    return "Open a workspace and review current state. An owner or admin must create or change hosted workspaces.";
+  }
+  function accessNavCopy(hosted, canManage) {
+    if (!hosted) {
+      return "Unavailable on this account. Hosted roster and role controls live only on hosted workspace accounts.";
+    }
+    if (canManage) {
+      return "Invite people, change roles, and remove account access.";
+    }
+    return "Review who already has access to this hosted account. An owner or admin must make changes.";
+  }
+  function billingNavCopy(hostedBillingCount, canManageHostedBilling) {
+    if (hostedBillingCount > 0) {
+      if (canManageHostedBilling) {
+        return "Hosted billing first, then self-hosted licenses, refunds, and privacy only when relevant.";
+      }
+      return "Hosted billing is attached here, but an owner or admin must open it.";
+    }
+    return "Self-hosted billing, licenses, refunds, and privacy.";
+  }
   function renderShellNavigation(accounts, supportEmail, activeSection) {
     var hosted = hasHostedAccounts(accounts);
     var selfHostedOnly = !hosted;
@@ -2044,6 +2071,7 @@
     var readyWorkspaces = countReadyWorkspaces(workspaces);
     var attentionCount = attentionWorkspaces(workspaces).length;
     var hostedBillingCount = 0;
+    var canManageHostedBilling = false;
     var canManage = false;
     for (var i = 0; i < accounts.length; i += 1) {
       if (accounts[i].can_manage) {
@@ -2051,9 +2079,12 @@
       }
       if (accounts[i].has_billing) {
         hostedBillingCount += 1;
+        if (accounts[i].can_manage) {
+          canManageHostedBilling = true;
+        }
       }
     }
-    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Start with the job you need to finish: workspace work, access, billing, then escalation." : "Use billing tools first and escalate only when the self-serve path stops.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "What needs attention, what is ready, and the next obvious action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", hosted ? "Open a workspace, review lifecycle state, or create one." : "Unavailable on this account. Hosted workspaces are not attached here.", hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", hosted ? "Invite people, change roles, and remove account access." : "Unavailable on this account. Hosted roster and role controls live only on hosted workspace accounts.", hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", hostedBillingCount > 0 ? "Hosted billing first, then self-hosted licenses, refunds, and privacy only when relevant." : "Self-hosted billing, licenses, refunds, and privacy.", hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", selfHostedOnly ? "Escalation only after the billing path is exhausted." : "Escalation only after the workspace, access, or billing path is exhausted.", supportEmail ? "Email" : "Help") + "</div></aside>";
+    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Start with the job you need to finish: workspace work, access, billing, then escalation." : "Use billing tools first and escalate only when the self-serve path stops.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "What needs attention, what is ready, and the next obvious action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", selfHostedOnly ? "Escalation only after the billing path is exhausted." : "Escalation only after the workspace, access, or billing path is exhausted.", supportEmail ? "Email" : "Help") + "</div></aside>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
@@ -2215,6 +2246,8 @@
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
     var readyCount = countReadyWorkspaces(workspaces);
     var suspendedCount = countWorkspacesByState(workspaces, "suspended");
+    var sectionCopy = account.can_manage ? "Open a workspace, review lifecycle state, or create a new one without mixing in access or billing work." : "Open a workspace and review current state here. An owner or admin must create or change hosted workspaces.";
+    var workspaceListSummary = account.can_manage ? "Open a workspace to work in it. Use the lifecycle view only when you are reviewing state or making account-level changes." : "Open a workspace to do the actual work. An owner or admin must handle lifecycle or creation changes.";
     var workspaceManagement = "";
     var addWorkspaceForm = "";
     var workspaceHeaderActions = "";
@@ -2227,10 +2260,10 @@
       }
       workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace task</div><h3>Work on one workspace</h3><p>Open lifecycle for one workspace, or create a new one. Keep access and billing separate.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><div class="account-panel-kicker">Create workspace</div><h4>Open a new hosted workspace</h4><p>Create one workspace here when you need a new customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
     }
-    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">Open a workspace to work in it. Use the lifecycle view only when you are reviewing state or making account-level changes.</div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
+    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">' + escapeHTML(workspaceListSummary) + '</div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);
-    }).join("") + "</div></div>" : '<div class="empty-state"><p>No hosted workspaces yet. Create one to get started.</p></div>';
-    return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div class="account-stage-header-row"><div><div class="account-panel-kicker">Workspaces</div><h3>Workspaces</h3><p>Open a workspace, review lifecycle state, or create a new one without mixing in access or billing work.</p>' + renderSectionContextChips([
+    }).join("") + "</div></div>" : '<div class="empty-state"><p>' + escapeHTML(account.can_manage ? "No hosted workspaces yet. Create one to get started." : "No hosted workspaces are attached yet. An owner or admin must create the first one.") + "</p></div>";
+    return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div class="account-stage-header-row"><div><div class="account-panel-kicker">Workspaces</div><h3>Workspaces</h3><p>' + escapeHTML(sectionCopy) + "</p>" + renderSectionContextChips([
       String(workspaces.length) + " total",
       String(readyCount) + " ready",
       String(suspendedCount) + " suspended"

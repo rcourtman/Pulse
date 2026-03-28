@@ -200,6 +200,10 @@ Core rules:
     whether self-hosted commercial history is relevant to the signed-in
     account. Hosted-only accounts must not render self-hosted licenses,
     refunds, privacy utilities, or self-hosted escalation copy by default.
+29. Hosted view-only users must see permission-honest task copy. `Workspaces`,
+    `Access`, and hosted `Billing` may not advertise create, roster-mutation,
+    or hosted-billing actions when the current account role cannot perform
+    them; those surfaces must say that an owner or admin is required.
 
 ## Screen Model
 

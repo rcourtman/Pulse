@@ -859,6 +859,11 @@ lead directly with the self-hosted job picker. `Support` follows
 the same account-shape rule: self-hosted-only accounts reduce to the billing
 escalation path and billing-specific handoff packet only, and hosted
 workspace/access escalation routes must not render without hosted accounts.
+The same shell/runtime boundary must also stay honest to hosted-account
+permissions: when the current role is view-only, `Workspaces`, `Access`, and
+hosted `Billing` copy must not advertise create, roster-mutation, or hosted
+billing actions that the runtime will not allow. Those surfaces must say that
+an owner or admin is required instead of implying blocked jobs are live.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

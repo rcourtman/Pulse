@@ -300,6 +300,11 @@ account-shape runtime contract: self-hosted-only accounts expose only the
 billing escalation path and billing-specific handoff packet, and hosted
 workspace/access escalation controls must not render when no hosted account
 exists.
+The same typed bootstrap/runtime contract must also keep permission copy
+honest for hosted view-only roles: when `can_manage` is false, `Workspaces`,
+`Access`, and hosted `Billing` must stop advertising create, roster-mutation,
+or hosted-billing actions and must instead state that an owner or admin is
+required.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.
