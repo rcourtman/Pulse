@@ -337,6 +337,10 @@ That same shared request/runtime boundary must also preserve task-specific
 failure copy on transport errors: portal job surfaces may not leak raw strings
 such as `Network error.`, and must instead surface the owned fallback for the
 exact action that failed.
+That same typed overview contract must also keep `Ready` honest when no hosted
+workspace exists yet: hosted accounts with zero workspaces may not route the
+user into current workspace review, and must instead render that nothing is
+ready until the first hosted workspace exists.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

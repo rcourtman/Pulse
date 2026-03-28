@@ -898,6 +898,10 @@ That same owned task surface must also keep failure copy on the user job
 instead of leaking raw transport wording: `Access`, `Workspaces`, and
 `Billing` failures must render the task-specific action that could not
 complete, not generic copy such as `Network error.`.
+That same owned `Overview` surface must also keep `Ready` honest when no
+hosted workspace exists yet: hosted accounts with zero workspaces may not tell
+the user to review current workspace state, and must instead say that nothing
+is ready yet until the first hosted workspace exists.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

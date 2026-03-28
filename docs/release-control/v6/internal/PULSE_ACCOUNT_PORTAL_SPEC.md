@@ -244,6 +244,11 @@ Core rules:
     not leak raw transport strings such as `Network error.` into `Access`,
     `Workspaces`, or `Billing`; each failure must stay on the task-specific
     action the user was trying to complete.
+36. `Overview` must keep `Ready` honest when no hosted workspace exists yet.
+    Hosted accounts with zero workspaces may not tell the user to review
+    current workspace state; they must say that nothing is ready yet and that
+    the first hosted workspace still needs owner/admin creation before routine
+    work can start.
 
 ## Screen Model
 

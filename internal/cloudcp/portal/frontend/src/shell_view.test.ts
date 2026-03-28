@@ -478,6 +478,56 @@ describe('shell view', function() {
     expect(html).not.toContain('If this is an access change, go to Access. If it is a billing or license issue, go to Billing. Support is only for escalation.');
   });
 
+  it('keeps ready state honest for hosted view-only accounts with no workspace yet', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_view_empty',
+              name: 'Empty Hosted Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'read_only',
+              can_manage: false,
+              has_billing: true,
+              workspaces: [],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Nothing is ready yet');
+    expect(html).toContain('An owner or admin still needs to create the first hosted workspace before routine work can start.');
+    expect(html).not.toContain('Use Workspaces to review current state before you start routine work.');
+  });
+
+  it('keeps ready state honest for managed hosted accounts with no workspace yet', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_manage_empty',
+              name: 'Managed Empty Account',
+              kind: 'msp',
+              kind_label: 'MSP',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              workspaces: [],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Nothing is ready yet');
+    expect(html).toContain('The first hosted workspace still needs to be created before routine work can start.');
+    expect(html).not.toContain('Use Workspaces to review current state before you start routine work.');
+  });
+
   it('keeps next action on review surfaces for suspended hosted view-only accounts', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({

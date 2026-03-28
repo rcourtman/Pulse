@@ -678,14 +678,27 @@ function renderOverviewReadyCard(
 ): string {
   var ready = readyOverviewEntries(entries);
   var includeAccountName = accounts.length > 1;
+  var totalWorkspaces = countWorkspaces(accounts);
+  var canManageHosted = accounts.some(function(account) {
+    return account.can_manage;
+  });
   if (!ready.length) {
     return (
       '<article class="overview-task-card">' +
         '<div class="account-panel-kicker">Ready</div>' +
-        '<h4>' + escapeHTML(accounts.length > 0 ? 'No workspace is ready yet' : 'Billing tools are ready') + '</h4>' +
-        '<p>' + escapeHTML(accounts.length > 0
-          ? 'Use Workspaces to review current state before you start routine work.'
-          : 'Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.'
+        '<h4>' + escapeHTML(!accounts.length
+          ? 'Billing tools are ready'
+          : totalWorkspaces > 0
+            ? 'No workspace is ready yet'
+            : 'Nothing is ready yet'
+        ) + '</h4>' +
+        '<p>' + escapeHTML(!accounts.length
+          ? 'Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.'
+          : totalWorkspaces > 0
+            ? 'Use Workspaces to review current state before you start routine work.'
+            : canManageHosted
+              ? 'The first hosted workspace still needs to be created before routine work can start.'
+              : 'An owner or admin still needs to create the first hosted workspace before routine work can start.'
         ) + '</p>' +
       '</article>'
     );
