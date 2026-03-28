@@ -1,6 +1,22 @@
 /* src/styles.css */
 :root {
   color-scheme: light;
+  --font-ui:
+    "Avenir Next",
+    "Segoe UI Variable Text",
+    "Segoe UI",
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif;
+  --font-display:
+    "Avenir Next",
+    "Segoe UI Variable Display",
+    "Segoe UI Variable Text",
+    "Helvetica Neue",
+    Helvetica,
+    Arial,
+    sans-serif;
   --bg: #edf2f6;
   --panel: #ffffff;
   --panel-strong: #f7fafc;
@@ -40,13 +56,7 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  font-family:
-    "Avenir Next",
-    "Segoe UI Variable Text",
-    "Segoe UI",
-    Helvetica,
-    Arial,
-    sans-serif;
+  font-family: var(--font-ui);
   background: var(--bg);
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
@@ -210,16 +220,11 @@ header .logout-btn:hover,
 }
 .portal-shell-head-title {
   margin: 0;
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: 28px;
   line-height: 1;
-  letter-spacing: -0.06em;
-  font-weight: 800;
+  letter-spacing: -0.045em;
+  font-weight: 750;
   color: var(--ink);
 }
 .portal-shell-head-chip {
@@ -316,16 +321,11 @@ header .logout-btn:hover,
   color: #78b6c0;
 }
 .portal-shell-nav-title {
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.02;
-  letter-spacing: -0.04em;
-  font-weight: 800;
+  letter-spacing: -0.028em;
+  font-weight: 720;
   color: var(--nav-ink);
 }
 .portal-shell-nav-support {
@@ -500,15 +500,11 @@ header .logout-btn:hover,
 }
 .portal-account-context-row h2 {
   margin: 0;
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: 22px;
   line-height: 0.98;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.035em;
+  font-weight: 720;
 }
 .portal-account-context-copy p {
   display: block;
@@ -605,15 +601,11 @@ header .logout-btn:hover,
 .portal-top-section-header h2,
 .service-header h2 {
   margin: 4px 0 0;
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: clamp(1.34rem, 1.7vw, 1.72rem);
   line-height: 1.02;
-  letter-spacing: -0.045em;
+  letter-spacing: -0.03em;
+  font-weight: 720;
 }
 .portal-top-section-header p,
 .service-note {
@@ -737,15 +729,11 @@ header .logout-btn:hover,
 .service-panel h3,
 .service-panel .subsection h4 {
   margin: 8px 0 0;
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.08;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.022em;
+  font-weight: 710;
 }
 .account-overview-card p,
 .account-stage-header p,
@@ -839,15 +827,11 @@ header .logout-btn:hover,
 }
 .account-overview-next-block h4 {
   margin: 6px 0 0;
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: 18px;
   line-height: 1.08;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.022em;
+  font-weight: 710;
 }
 .account-overview-next-block > p {
   margin: 8px 0 0;
@@ -1090,15 +1074,11 @@ header .logout-btn:hover,
 }
 .portal-support-panel h2 {
   margin: 8px 0 0;
-  font-family:
-    "Iowan Old Style",
-    "Palatino Linotype",
-    "Book Antiqua",
-    Georgia,
-    serif;
+  font-family: var(--font-display);
   font-size: clamp(1.48rem, 2vw, 1.95rem);
   line-height: 1.02;
-  letter-spacing: -0.05em;
+  letter-spacing: -0.034em;
+  font-weight: 730;
 }
 .portal-support-panel > p {
   margin: 10px 0 0;
