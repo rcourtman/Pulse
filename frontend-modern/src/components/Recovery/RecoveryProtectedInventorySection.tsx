@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
-import type { Accessor, Component } from 'solid-js';
+import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -80,6 +80,7 @@ interface RecoveryProtectedInventorySectionProps {
   setVerificationFilter: (value: VerificationFilter) => void;
   loading: Accessor<boolean>;
   error: Accessor<unknown>;
+  workspaceControls?: JSX.Element;
 }
 
 const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
@@ -203,28 +204,32 @@ export const RecoveryProtectedInventorySection: Component<
     >
       <div class="border-b border-border-subtle/80 bg-surface px-4 py-2">
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
-            <span class="font-medium text-base-content">
-              {sortedRollups().length} of {props.rollups().length} items shown
-            </span>
-            <span>
-              Page {protectedPage()} / {protectedTotalPages()}
-            </span>
-            <span>
-              Sort:{' '}
+          <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <Show when={props.workspaceControls}>
+              <div class="shrink-0">{props.workspaceControls}</div>
+            </Show>
+            <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
               <span class="font-medium text-base-content">
-                {protectedSortCol() === 'lastBackup'
-                  ? 'Latest point'
-                  : protectedSortCol() === 'item'
-                    ? 'Item'
-                    : protectedSortCol() === 'type'
-                      ? 'Item type'
-                      : protectedSortCol() === 'platform'
-                        ? 'Platform'
-                        : 'Outcome'}
-              </span>{' '}
-              <span class="uppercase tracking-wide">{protectedSortDir()}</span>
-            </span>
+                {sortedRollups().length} shown
+              </span>
+              <span>
+                {protectedPage()} / {protectedTotalPages()}
+              </span>
+              <span>
+                <span class="font-medium text-base-content">
+                  {protectedSortCol() === 'lastBackup'
+                    ? 'Latest point'
+                    : protectedSortCol() === 'item'
+                      ? 'Item'
+                      : protectedSortCol() === 'type'
+                        ? 'Item type'
+                        : protectedSortCol() === 'platform'
+                          ? 'Platform'
+                          : 'Outcome'}
+                </span>{' '}
+                <span class="uppercase tracking-wide text-muted">{protectedSortDir()}</span>
+              </span>
+            </div>
           </div>
           <div class="flex flex-wrap items-center gap-2 text-xs">
             <Show when={props.rollupsSummary().stale > 0}>

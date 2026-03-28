@@ -485,129 +485,123 @@ const Recovery: Component = () => {
       />
 
       <div ref={historySectionRef} class="flex flex-col gap-4">
-        <div class="flex flex-col gap-2 border-b border-border-subtle px-1 pb-2 sm:flex-row sm:items-center sm:justify-between">
-          <Subtabs
-            value={workspaceView()}
-            onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
-            ariaLabel="Recovery data view"
-            listClass="flex flex-wrap items-center gap-1.5"
-            tabClass="min-h-7 px-2 py-1 text-sm"
-            tabs={[
-              {
-                value: 'inventory',
-                label: (
-                  <span class="inline-flex items-center gap-2">
-                    <span>Protected items</span>
-                    <span class="text-xs text-muted">{filteredRollups().length}</span>
-                  </span>
-                ),
-              },
-              {
-                value: 'events',
-                label: (
-                  <span class="inline-flex items-center gap-2">
-                    <span>Recovery events</span>
-                    <span class="text-xs text-muted">{recoveryPoints.meta().total}</span>
-                  </span>
-                ),
-              },
-            ]}
-          />
-          <Show when={rollupId().trim().length > 0}>
-            <span class="inline-flex w-fit items-center rounded-md border border-border-subtle bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted">
-              Focused drill-in
-            </span>
-          </Show>
-        </div>
+        {(() => {
+          const workspaceControls = (
+            <div class="flex flex-wrap items-center gap-2">
+              <Subtabs
+                value={workspaceView()}
+                onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+                ariaLabel="Recovery data view"
+                listClass="flex flex-wrap items-center gap-1"
+                tabClass="min-h-6 px-2 py-1 text-xs"
+                tabs={[
+                  { value: 'inventory', label: 'Protected items' },
+                  { value: 'events', label: 'Recovery events' },
+                ]}
+              />
+              <Show when={rollupId().trim().length > 0}>
+                <span class="inline-flex w-fit items-center rounded-md border border-border-subtle bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted">
+                  Focused drill-in
+                </span>
+              </Show>
+            </div>
+          );
 
-        <Show when={workspaceView() === 'inventory'}>
-          <RecoveryProtectedInventorySection
-            filteredRollups={filteredRollups}
-            historyOutcomeFilter={historyOutcomeFilter}
-            isMobile={isMobile()}
-            kioskMode={kioskMode()}
-            loading={() => recoveryRollups.rollups.loading}
-            error={() => recoveryRollups.rollups.error}
-            onSelectRollup={handleSelectRollup}
-            protectedStaleOnly={protectedStaleOnly}
-            itemTypeFilter={itemTypeFilter}
-            itemTypeOptions={itemTypeOptions}
-            platformFilter={platformFilter}
-            platformOptions={platformOptions}
-            queryFilter={queryFilter}
-            resourcesById={resourcesById}
-            rollups={rollups}
-            rollupsSummary={rollupsSummary}
-            setHistoryOutcomeFilter={setHistoryOutcomeFilter}
-            setItemTypeFilter={setItemTypeFilter}
-            setProtectedStaleOnly={setProtectedStaleOnly}
-            setPlatformFilter={setPlatformFilter}
-            setQueryFilter={setQueryFilter}
-            setVerificationFilter={setVerificationFilter}
-          />
-        </Show>
+          return (
+            <>
+              <Show when={workspaceView() === 'inventory'}>
+                <RecoveryProtectedInventorySection
+                  filteredRollups={filteredRollups}
+                  historyOutcomeFilter={historyOutcomeFilter}
+                  isMobile={isMobile()}
+                  kioskMode={kioskMode()}
+                  loading={() => recoveryRollups.rollups.loading}
+                  error={() => recoveryRollups.rollups.error}
+                  onSelectRollup={handleSelectRollup}
+                  protectedStaleOnly={protectedStaleOnly}
+                  itemTypeFilter={itemTypeFilter}
+                  itemTypeOptions={itemTypeOptions}
+                  platformFilter={platformFilter}
+                  platformOptions={platformOptions}
+                  queryFilter={queryFilter}
+                  resourcesById={resourcesById}
+                  rollups={rollups}
+                  rollupsSummary={rollupsSummary}
+                  setHistoryOutcomeFilter={setHistoryOutcomeFilter}
+                  setItemTypeFilter={setItemTypeFilter}
+                  setProtectedStaleOnly={setProtectedStaleOnly}
+                  setPlatformFilter={setPlatformFilter}
+                  setQueryFilter={setQueryFilter}
+                  setVerificationFilter={setVerificationFilter}
+                  workspaceControls={workspaceControls}
+                />
+              </Show>
 
-        <Show when={workspaceView() === 'events' && !recoveryPoints.response.loading && recoveryPoints.response.error}>
-          <Card padding="sm">
-            <EmptyState
-              title={getRecoveryPointsFailureState().title}
-              description={String(
-                (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
-              )}
-            />
-          </Card>
-        </Show>
+              <Show when={workspaceView() === 'events' && !recoveryPoints.response.loading && recoveryPoints.response.error}>
+                <Card padding="sm">
+                  <EmptyState
+                    title={getRecoveryPointsFailureState().title}
+                    description={String(
+                      (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
+                    )}
+                  />
+                </Card>
+              </Show>
 
-        <Show when={workspaceView() === 'events' && !recoveryPoints.response.error}>
-          <RecoveryHistorySection
-            activeAdvancedFilterCount={activeAdvancedFilterCount}
-            artifactColumnVisibility={artifactColumnVisibility}
-            availableOutcomes={['all', 'success', 'warning', 'failed', 'running']}
-            clusterFilter={clusterFilter}
-            clusterOptions={clusterOptions}
-            currentPage={currentPage}
-            groupedByDay={groupedByDay}
-            hasActiveArtifactFilters={hasActiveArtifactFilters}
-            historyOutcomeFilter={historyOutcomeFilter}
-            isMobile={isMobile()}
-            kioskMode={kioskMode()}
-            mobileVisibleArtifactColumns={mobileVisibleArtifactColumns}
-            modeFilter={modeFilter}
-            itemTypeFilter={itemTypeFilter}
-            itemTypeOptions={itemTypeOptions}
-            namespaceFilter={namespaceFilter}
-            namespaceOptions={namespaceOptions}
-            nodeFilter={nodeFilter}
-            nodeOptions={nodeOptions}
-            platformFilter={platformFilter}
-            platformOptions={platformOptions}
-            queryFilter={queryFilter}
-            recoveryPoints={recoveryPoints}
-            resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
-            resetAllArtifactFilters={resetAllArtifactFilters}
-            resourcesById={resourcesById}
-            scopeFilter={scopeFilter}
-            setClusterFilter={setClusterFilter}
-            setCurrentPage={setCurrentPage}
-            setHistoryOutcomeFilter={setHistoryOutcomeFilter}
-            setItemTypeFilter={setItemTypeFilter}
-            setModeFilter={setModeFilter}
-            setNamespaceFilter={setNamespaceFilter}
-            setNodeFilter={setNodeFilter}
-            setPlatformFilter={setPlatformFilter}
-            setQueryFilter={setQueryFilter}
-            setScopeFilter={setScopeFilter}
-            setVerificationFilter={setVerificationFilter}
-            showClusterFilter={showClusterFilter}
-            showNamespaceFilter={showNamespaceFilter}
-            showNodeFilter={showNodeFilter}
-            showVerificationFilter={showVerificationFilter}
-            tableColumnCount={tableColumnCount}
-            tableMinWidth={tableMinWidth}
-            totalPages={totalPages}
-            verificationFilter={verificationFilter}
-          />
-        </Show>
+              <Show when={workspaceView() === 'events' && !recoveryPoints.response.error}>
+                <RecoveryHistorySection
+                  activeAdvancedFilterCount={activeAdvancedFilterCount}
+                  artifactColumnVisibility={artifactColumnVisibility}
+                  availableOutcomes={['all', 'success', 'warning', 'failed', 'running']}
+                  clusterFilter={clusterFilter}
+                  clusterOptions={clusterOptions}
+                  currentPage={currentPage}
+                  groupedByDay={groupedByDay}
+                  hasActiveArtifactFilters={hasActiveArtifactFilters}
+                  historyOutcomeFilter={historyOutcomeFilter}
+                  isMobile={isMobile()}
+                  kioskMode={kioskMode()}
+                  mobileVisibleArtifactColumns={mobileVisibleArtifactColumns}
+                  modeFilter={modeFilter}
+                  itemTypeFilter={itemTypeFilter}
+                  itemTypeOptions={itemTypeOptions}
+                  namespaceFilter={namespaceFilter}
+                  namespaceOptions={namespaceOptions}
+                  nodeFilter={nodeFilter}
+                  nodeOptions={nodeOptions}
+                  platformFilter={platformFilter}
+                  platformOptions={platformOptions}
+                  queryFilter={queryFilter}
+                  recoveryPoints={recoveryPoints}
+                  resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
+                  resetAllArtifactFilters={resetAllArtifactFilters}
+                  resourcesById={resourcesById}
+                  scopeFilter={scopeFilter}
+                  setClusterFilter={setClusterFilter}
+                  setCurrentPage={setCurrentPage}
+                  setHistoryOutcomeFilter={setHistoryOutcomeFilter}
+                  setItemTypeFilter={setItemTypeFilter}
+                  setModeFilter={setModeFilter}
+                  setNamespaceFilter={setNamespaceFilter}
+                  setNodeFilter={setNodeFilter}
+                  setPlatformFilter={setPlatformFilter}
+                  setQueryFilter={setQueryFilter}
+                  setScopeFilter={setScopeFilter}
+                  setVerificationFilter={setVerificationFilter}
+                  showClusterFilter={showClusterFilter}
+                  showNamespaceFilter={showNamespaceFilter}
+                  showNodeFilter={showNodeFilter}
+                  showVerificationFilter={showVerificationFilter}
+                  tableColumnCount={tableColumnCount}
+                  tableMinWidth={tableMinWidth}
+                  totalPages={totalPages}
+                  verificationFilter={verificationFilter}
+                  workspaceControls={workspaceControls}
+                />
+              </Show>
+            </>
+          );
+        })()}
 
         <RecoveryActivitySection
           activitySummary={activitySummary}

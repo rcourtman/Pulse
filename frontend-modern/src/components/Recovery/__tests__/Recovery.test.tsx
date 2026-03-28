@@ -210,10 +210,13 @@ describe('Recovery', () => {
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText((_, element) =>
-        (element?.textContent || '').replace(/\s+/g, ' ').includes('Sort: Latest point'),
+        (element?.textContent || '').replace(/\s+/g, ' ').includes('Latest point'),
       ).length,
     ).toBeGreaterThan(0);
-    expect(screen.queryByText('Recovery Events')).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
     await waitFor(() => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
@@ -231,7 +234,12 @@ describe('Recovery', () => {
 
     fireEvent.click(await screen.findByText('VM 123'));
 
-    expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
     expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -263,7 +271,12 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
     expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -276,7 +289,12 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
     expect(screen.getByRole('tab', { name: /protected items/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -366,7 +384,12 @@ describe('Recovery', () => {
 
       fireEvent.click(screen.getByText('tank/legacy'));
 
-      expect(await screen.findByText('Recovery Events')).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+      });
       expect(screen.getAllByText('TrueNAS').length).toBeGreaterThan(0);
     } finally {
       rollupsPayload.pop();
@@ -388,7 +411,12 @@ describe('Recovery', () => {
       expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
 
       fireEvent.click(screen.getByText('VM 123'));
-      await screen.findByText('Recovery Events');
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+      });
 
       const tables = await screen.findAllByRole('table');
       const historyTable = tables[tables.length - 1];
@@ -435,7 +463,12 @@ describe('Recovery', () => {
       const item = await screen.findByText('default/data');
       fireEvent.click(item);
 
-      await screen.findByText('Recovery Events');
+      await waitFor(() => {
+        expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        );
+      });
       const tables = await screen.findAllByRole('table');
       const historyTable = tables[tables.length - 1];
       expect(within(historyTable).getByText('default/data')).toBeInTheDocument();
@@ -1014,7 +1047,10 @@ describe('Recovery', () => {
       ).toBe(true);
     });
 
-    expect(screen.getByText('Recovery Events')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(screen.getByText(/Showing 1 - 1 of 1 recovery points/i)).toBeInTheDocument();
 
     if (!delayedPointsReady) {
@@ -1047,7 +1083,12 @@ describe('Recovery', () => {
 
     const timelineButtons = await screen.findAllByRole('button', { name: /recovery points/i });
     fireEvent.click(timelineButtons[0]);
-    await screen.findByText('Recovery Events');
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
 
     const selectedDay = '2026-02-13';
     const selectedStart = parseRecoveryDateKey(selectedDay);
@@ -1087,7 +1128,12 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText('Recovery Events');
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
 
     const selectedStart = parseRecoveryDateKey('2026-02-13');
     selectedStart.setHours(0, 0, 0, 0);
@@ -1109,7 +1155,12 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    await screen.findByText('Recovery Events');
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
 
     const selectedStart = parseRecoveryDateKey('2026-02-13');
     selectedStart.setHours(0, 0, 0, 0);

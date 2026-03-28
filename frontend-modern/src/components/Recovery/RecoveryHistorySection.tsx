@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { Accessor, Component } from 'solid-js';
+import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import {
@@ -99,6 +99,7 @@ interface RecoveryHistorySectionProps {
   tableMinWidth: Accessor<string>;
   totalPages: Accessor<number>;
   verificationFilter: Accessor<VerificationFilter>;
+  workspaceControls?: JSX.Element;
 }
 
 export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (props) => {
@@ -131,21 +132,25 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
     <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
       <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
         <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
-            <span class="font-medium text-base-content">Recovery Events</span>
-            <span>
-              {props.recoveryPoints.meta().total} event
-              {props.recoveryPoints.meta().total === 1 ? '' : 's'}
-            </span>
-            <span>
-              Page {props.currentPage()} / {props.totalPages()}
-            </span>
-            <Show when={props.groupedByDay().length > 0}>
-              <span>
-                {props.groupedByDay().length} day group
-                {props.groupedByDay().length === 1 ? '' : 's'}
-              </span>
+          <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+            <Show when={props.workspaceControls}>
+              <div class="shrink-0">{props.workspaceControls}</div>
             </Show>
+            <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
+              <span class="font-medium text-base-content">
+                {props.recoveryPoints.meta().total} event
+                {props.recoveryPoints.meta().total === 1 ? '' : 's'}
+              </span>
+              <span>
+                {props.currentPage()} / {props.totalPages()}
+              </span>
+              <Show when={props.groupedByDay().length > 0}>
+                <span>
+                  {props.groupedByDay().length} day group
+                  {props.groupedByDay().length === 1 ? '' : 's'}
+                </span>
+              </Show>
+            </div>
           </div>
         </div>
       </div>
