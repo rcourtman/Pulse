@@ -193,6 +193,10 @@ Core rules:
     must reduce `Support` to the billing escalation path only; hosted
     workspace or access failure routes and task buttons must not render
     without hosted accounts.
+28. The portal bootstrap/runtime contract must carry explicit truth for
+    whether self-hosted commercial history is relevant to the signed-in
+    account. Hosted-only accounts must not render self-hosted licenses,
+    refunds, privacy utilities, or self-hosted escalation copy by default.
 
 ## Screen Model
 

@@ -22,6 +22,7 @@ export interface PortalAccountSummary {
 export interface PortalBootstrapData {
   authenticated: boolean;
   email: string;
+  has_self_hosted_commercial: boolean;
   public_site_url: string;
   support_email: string;
   commercial_api_base_url: string;

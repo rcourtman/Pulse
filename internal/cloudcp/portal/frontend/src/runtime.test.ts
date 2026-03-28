@@ -5,6 +5,7 @@ import { createBootstrapDefaults, createPortalRuntime, readPortalRuntimeHandoff 
 describe('portal runtime', function() {
   it('derives bootstrap defaults from embedded bootstrap data', function() {
     var defaults = createBootstrapDefaults({
+      has_self_hosted_commercial: true,
       public_site_url: 'https://cloud.pulserelay.pro',
       support_email: 'help@pulserelay.pro',
       commercial_api_base_url: '/api/portal/commercial',
@@ -18,6 +19,7 @@ describe('portal runtime', function() {
     });
 
     expect(defaults.public_site_url).toBe('https://cloud.pulserelay.pro');
+    expect(defaults.has_self_hosted_commercial).toBe(true);
     expect(defaults.support_email).toBe('help@pulserelay.pro');
     expect(defaults.portal_path).toBe('/account');
     expect(defaults.bootstrap_path).toBe('/api/account/bootstrap');
@@ -27,6 +29,7 @@ describe('portal runtime', function() {
     var runtime = createPortalRuntime({
       authenticated: true,
       email: 'owner@example.com',
+      has_self_hosted_commercial: false,
       accounts: [],
       commercial_api_base_url: '/api/portal/commercial',
     });
@@ -48,6 +51,7 @@ describe('portal runtime', function() {
       {
         authenticated: false,
         email: '',
+        has_self_hosted_commercial: false,
         accounts: [],
       },
       {

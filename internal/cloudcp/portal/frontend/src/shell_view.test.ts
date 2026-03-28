@@ -13,6 +13,7 @@ function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBo
   return {
     authenticated: true,
     email: 'owner@example.com',
+    has_self_hosted_commercial: false,
     public_site_url: 'https://pulserelay.pro',
     support_email: 'support@pulserelay.pro',
     commercial_api_base_url: '/api/portal/commercial',
@@ -83,7 +84,7 @@ describe('shell view', function() {
     expect(html).toContain('Open billing');
   });
 
-  it('renders authenticated portal accounts, workspaces, and service entrypoints', function() {
+  it('renders authenticated portal accounts, workspaces, and hosted-only billing entrypoints', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
         bootstrap: createBootstrap({
@@ -204,30 +205,68 @@ describe('shell view', function() {
     expect(html).toContain('data-can-manage="true"');
     expect(html).toContain('Remove stale access');
     expect(html).toContain('data-action="workspace-action"');
-    expect(html).toContain('billing-action-row');
-    expect(html).toContain('billing-action-button');
     expect(html).toContain('Hosted billing');
+    expect(html).toContain('Hosted only');
+    expect(html).toContain('Use this billing surface only for hosted billing on your hosted workspace accounts.');
+    expect(html).toContain('Escalation only');
+    expect(html).toContain('Workspace or access path failed');
+    expect(html).toContain('Hosted billing path failed');
+    expect(html).toContain('Keep the escalation short');
+    expect(html).toContain('What to send');
+    expect(html).toContain('Open billing');
+    expect(html).not.toContain('Self-hosted tools');
+    expect(html).not.toContain('Self-hosted billing');
+    expect(html).not.toContain('Pick the self-hosted job');
+    expect(html).not.toContain('Use self-hosted billing only for self-hosted purchases.');
+    expect(html).not.toContain('id="open-retrieve-billing"');
+    expect(html).not.toContain('id="billing-detail-shell" hidden');
+    expect(html).not.toContain('data-account-billing-action="clear-billing-panel"');
+    expect(html).not.toContain('id="data-billing-panel"');
+    expect(html).not.toContain('>Licenses<');
+    expect(html).not.toContain('>Refunds<');
+    expect(html).not.toContain('>Privacy<');
+  });
+
+  it('renders mixed billing tools only when self-hosted commercial history is relevant', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          has_self_hosted_commercial: true,
+          accounts: [
+            {
+              id: 'acct_mixed',
+              name: 'Mixed Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_mixed',
+                  display_name: 'Mixed Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
     expect(html).toContain('Self-hosted tools');
     expect(html).toContain('Self-hosted billing');
     expect(html).toContain('Pick the self-hosted job');
-    expect(html).toContain('Use Support only after Billing fails');
     expect(html).toContain('Use hosted billing first when the request belongs to a hosted workspace account.');
-    expect(html).toContain('Open support');
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases.');
     expect(html).toContain('id="open-retrieve-billing"');
     expect(html).toContain('id="billing-detail-shell" hidden');
     expect(html).toContain('data-account-billing-action="clear-billing-panel"');
     expect(html).toContain('id="data-billing-panel"');
-    expect(html).toContain('>Billing<');
-    expect(html).toContain('>Licenses<');
-    expect(html).toContain('>Refunds<');
-    expect(html).toContain('>Privacy<');
-    expect(html).toContain('Escalation only');
-    expect(html).toContain('Workspace or access path failed');
     expect(html).toContain('Billing path failed');
-    expect(html).toContain('Keep the escalation short');
-    expect(html).toContain('What to send');
-    expect(html).toContain('Open billing');
+    expect(html).toContain('licenses, refunds, or privacy');
   });
 
   it('keeps top-level task navigation in the canonical section order', function() {

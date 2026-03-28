@@ -1,6 +1,7 @@
 package portal
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -662,7 +663,7 @@ func TestPortalPageTemplate_AccessManagementRendered(t *testing.T) {
 			CanManage:  true,
 			HasBilling: false,
 		},
-	}))
+	}, false))
 
 	mustContain := []string{
 		`id="portal-app-root"`,
@@ -712,7 +713,7 @@ func TestPortalPageTemplate_TeamManagementHiddenForNonManagers(t *testing.T) {
 			CanManage:  false,
 			HasBilling: false,
 		},
-	}))
+	}, false))
 
 	var payload map[string]any
 	if err := json.Unmarshal([]byte(extractPortalBootstrapJSONFromHTML(t, html)), &payload); err != nil {
@@ -746,7 +747,7 @@ func TestPortalPageTemplate_ActorRolePassedToSection(t *testing.T) {
 					Role:      role,
 					CanManage: true,
 				},
-			}))
+			}, false))
 			if !strings.Contains(html, `data-actor-role="`) {
 				t.Fatalf("expected actor-role render seam in portal shell")
 			}
@@ -777,7 +778,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 			KindLabel: "Cloud",
 			Name:      "Test Account",
 		},
-	}))
+	}, false))
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
@@ -850,7 +851,7 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 				},
 			},
 		},
-	}))
+	}, true))
 	if err != nil {
 		t.Fatalf("MarshalBootstrapJSON: %v", err)
 	}
@@ -865,6 +866,9 @@ func TestBuildPortalBootstrapJSON_Contract(t *testing.T) {
 	}
 	if got := payload["email"]; got != "owner@example.com" {
 		t.Fatalf("email = %#v, want owner@example.com", got)
+	}
+	if got := payload["has_self_hosted_commercial"]; got != true {
+		t.Fatalf("has_self_hosted_commercial = %#v, want true", got)
 	}
 	if got := payload["commercial_api_base_url"]; got != "/api/portal/commercial" {
 		t.Fatalf("commercial_api_base_url = %#v", got)
@@ -948,7 +952,7 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+	HandlePortalBootstrap(sessionSvc, reg, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
@@ -960,6 +964,9 @@ func TestHandlePortalBootstrap_Success(t *testing.T) {
 	}
 	if got := payload["email"]; got != "owner@example.com" {
 		t.Fatalf("email = %#v", got)
+	}
+	if got := payload["has_self_hosted_commercial"]; got != false {
+		t.Fatalf("has_self_hosted_commercial = %#v, want false", got)
 	}
 	if got := payload["portal_api_base_path"]; got != PortalAPIBasePath {
 		t.Fatalf("portal_api_base_path = %#v", got)
@@ -1001,7 +1008,7 @@ func TestHandlePortalBootstrap_RequiresAuth(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
 	rec := httptest.NewRecorder()
-	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+	HandlePortalBootstrap(sessionSvc, reg, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
@@ -1018,7 +1025,7 @@ func TestHandlePortalBootstrap_RevokedSessionUnauthorized(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+	HandlePortalBootstrap(sessionSvc, reg, nil).ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
@@ -1055,7 +1062,12 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/portal/bootstrap", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
-	HandlePortalBootstrap(sessionSvc, reg).ServeHTTP(rec, req)
+	HandlePortalBootstrap(sessionSvc, reg, func(_ context.Context, email string) (*CommercialIdentity, error) {
+		if email != "owner@example.com" {
+			t.Fatalf("lookup email = %q", email)
+		}
+		return &CommercialIdentity{HasCommercialIdentity: true}, nil
+	}).ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("bootstrap status = %d, want %d", rec.Code, http.StatusOK)
 	}
@@ -1070,7 +1082,7 @@ func TestPortalBootstrapHTMLAndHandlerStayInSync(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadPortalAccountsForUser: %v", err)
 	}
-	html := renderPortalHTML(t, BuildBootstrapData(true, validClaims.Email, accounts))
+	html := renderPortalHTML(t, BuildBootstrapData(true, validClaims.Email, accounts, true))
 
 	handlerJSON := strings.TrimSpace(rec.Body.String())
 	pageJSON := strings.TrimSpace(extractPortalBootstrapJSONFromHTML(t, html))

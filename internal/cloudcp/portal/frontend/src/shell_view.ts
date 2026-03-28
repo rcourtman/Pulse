@@ -72,6 +72,11 @@ function hasHostedAccounts(accounts: PortalAccountSummary[]): boolean {
   return accounts.length > 0;
 }
 
+function hasSelfHostedCommercial(bootstrap: PortalBootstrapData): boolean {
+  var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+  return bootstrap.has_self_hosted_commercial === true || !hasHostedAccounts(accounts);
+}
+
 function countWorkspaces(accounts: PortalAccountSummary[]): number {
   var total = 0;
   for (var i = 0; i < accounts.length; i += 1) {
@@ -1036,7 +1041,7 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
   );
 }
 
-function renderHostedBillingCards(accounts: PortalAccountSummary[]): string {
+function renderHostedBillingCards(accounts: PortalAccountSummary[], showSelfHostedCommercial: boolean): string {
   var hostedBillingAccounts = accounts.filter(function(account) {
     return account.has_billing;
   });
@@ -1045,7 +1050,10 @@ function renderHostedBillingCards(accounts: PortalAccountSummary[]): string {
       '<div class="billing-task-card billing-task-card-muted">' +
         '<div class="account-panel-kicker">Hosted billing</div>' +
         '<h3>No hosted billing attached</h3>' +
-        '<p>Use the self-hosted billing tools below only if you are managing a self-hosted purchase.</p>' +
+        '<p>' + escapeHTML(showSelfHostedCommercial
+          ? 'Use the self-hosted billing tools below only if you are managing a self-hosted purchase.'
+          : 'Hosted invoices, payment methods, and subscription changes are not attached to this Pulse account right now.'
+        ) + '</p>' +
       '</div>'
     );
   }
@@ -1087,12 +1095,15 @@ function renderBillingTaskPanel(title: string, copy: string, panelID: string, bo
 
 function renderSupportSection(context: ShellViewContext): string {
   var hasHostedAccounts = !!((context.bootstrap.accounts || []).length);
+  var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
   var supportEmail = context.bootstrap.support_email || '';
   var supportLead = hasHostedAccounts
-    ? 'Use support only when the Workspaces, Access, or Billing path has already stopped you.'
+    ? (showSelfHostedCommercial
+      ? 'Use support only when the Workspaces, Access, or Billing path has already stopped you.'
+      : 'Use support only when the Workspaces, Access, or hosted Billing path has already stopped you.')
     : 'Use support only when the Billing path has already stopped you.';
   var supportChips = hasHostedAccounts
-    ? ['Escalation only', 'Bring context', supportEmail ? 'Email' : 'Support']
+    ? ['Escalation only', showSelfHostedCommercial ? 'Bring context' : 'Hosted only', supportEmail ? 'Email' : 'Support']
     : ['Escalation only', 'Billing only', supportEmail ? 'Email' : 'Support'];
   var routeCards = hasHostedAccounts
     ? (
@@ -1112,11 +1123,17 @@ function renderSupportSection(context: ShellViewContext): string {
       '</div>' +
       '<div class="portal-support-route-card">' +
         '<div class="account-panel-kicker">Billing path</div>' +
-        '<h3>Billing path failed</h3>' +
-        '<p>Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly.</p>' +
+        '<h3>' + (showSelfHostedCommercial ? 'Billing path failed' : 'Hosted billing path failed') + '</h3>' +
+        '<p>' + (showSelfHostedCommercial
+          ? 'Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly.'
+          : 'Use this route only after hosted billing has failed to complete cleanly.') + '</p>' +
         '<div class="portal-support-points">' +
-          '<div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was hosted billing, licenses, refunds, or privacy.</span></div>' +
-          '<div class="portal-support-point"><strong>Keep the request intact</strong><span>Bring the same account or billing email and the failed action instead of reopening the story.</span></div>' +
+          '<div class="portal-support-point"><strong>Name the billing job</strong><span>' + (showSelfHostedCommercial
+            ? 'Say whether the failed path was hosted billing, licenses, refunds, or privacy.'
+            : 'Say whether the failed path was hosted billing.') + '</span></div>' +
+          '<div class="portal-support-point"><strong>Keep the request intact</strong><span>' + (showSelfHostedCommercial
+            ? 'Bring the same account or billing email and the failed action instead of reopening the story.'
+            : 'Bring the same hosted account and the failed billing action instead of reopening the story.') + '</span></div>' +
         '</div>' +
         '<div class="portal-support-actions">' +
           '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' +
@@ -1141,8 +1158,12 @@ function renderSupportSection(context: ShellViewContext): string {
     );
   var runbookSteps = hasHostedAccounts
     ? (
-      '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy.</span></div>' +
-      '<div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work.</span></div>' +
+      '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>' + (showSelfHostedCommercial
+        ? 'Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy.'
+        : 'Say whether the blocked path was Workspaces, Access, or hosted billing.') + '</span></div>' +
+      '<div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>' + (showSelfHostedCommercial
+        ? 'Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work.'
+        : 'Include the hosted account and workspace or hosted billing account that the failed path belongs to.') + '</span></div>' +
       '<div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>'
     )
     : (
@@ -1192,12 +1213,15 @@ export function renderAccountsHTML(context: ShellViewContext): string {
 export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
+  var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
   var activeSection = context.activeSection || 'overview';
   var hostedBillingCount = accounts.filter(function(account) {
     return account.has_billing;
   }).length;
   var billingNote = hosted
-    ? 'Use hosted billing first when the request belongs to a hosted workspace account. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
+    ? (showSelfHostedCommercial
+      ? 'Use hosted billing first when the request belongs to a hosted workspace account. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
+      : 'Use this billing surface only for hosted billing on your hosted workspace accounts.')
     : 'Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.';
   var hostedContent = accounts.length
     ? accounts.map(function(account) {
@@ -1229,13 +1253,14 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<h2>Billing</h2>' +
                 renderSectionContextChips([
                   hostedBillingCount > 0 ? 'Hosted billing' : 'No hosted billing',
-                  'Self-hosted tools',
+                  showSelfHostedCommercial ? 'Self-hosted tools' : 'Hosted only',
                 ]) +
               '</div>' +
               '<div class="billing-note">' + billingNote + '</div>' +
             '</div>' +
-            '<div class="billing-overview-grid">' + renderHostedBillingCards(accounts) + '</div>' +
-            '<div class="billing-shell billing-shell-idle">' +
+            '<div class="billing-overview-grid">' + renderHostedBillingCards(accounts, showSelfHostedCommercial) + '</div>' +
+            (showSelfHostedCommercial
+              ? ('<div class="billing-shell billing-shell-idle">' +
               '<div class="billing-shell-main">' +
                 '<div class="billing-shell-main-head">' +
                   '<div class="account-panel-kicker">Self-hosted billing</div>' +
@@ -1294,7 +1319,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   '</a>.</div>'
                 ) +
               '</div>' +
-            '</div>' +
+            '</div>')
+              : '') +
           '</section>' +
           '<section class="portal-content-panel portal-content-panel-support">' +
             renderSupportSection(context) +

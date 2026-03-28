@@ -850,6 +850,11 @@ is opened and then be revealed in-frame on narrow layouts. `Support` follows
 the same account-shape rule: self-hosted-only accounts reduce to the billing
 escalation path and billing-specific handoff packet only, and hosted
 workspace/access escalation routes must not render without hosted accounts.
+That same canonical shell/runtime boundary now also owns the bootstrap truth
+for when self-hosted commercial history is relevant. Hosted-only accounts must
+not render self-hosted license, refund, privacy, or support-escalation copy
+unless the portal bootstrap explicitly marks self-hosted commercial history as
+relevant to the signed-in account.
 Until that
 candidate lane lands, new
 commercial account work must extend the governed Pulse account shape rather

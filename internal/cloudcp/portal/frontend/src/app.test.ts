@@ -25,6 +25,7 @@ async function flushAsync() {
 }
 
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
+  has_self_hosted_commercial: false,
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
   commercial_api_base_url: '/api/portal/commercial',
@@ -161,6 +162,7 @@ describe('portal app', function() {
     app.applyBootstrap({
       authenticated: true,
       email: 'buyer@example.com',
+      has_self_hosted_commercial: true,
       accounts: [
         {
           id: 'acct_1',
@@ -228,6 +230,7 @@ describe('portal app', function() {
     var store = createPortalStore(bootstrapDefaults, {
       authenticated: true,
       email: 'owner@example.com',
+      has_self_hosted_commercial: true,
       accounts: accounts,
     });
     var fetchMock = vi.fn(async function(input: RequestInfo | URL) {
@@ -236,6 +239,7 @@ describe('portal app', function() {
         return jsonResponse({
           authenticated: true,
           email: 'owner@example.com',
+          has_self_hosted_commercial: true,
           accounts: accounts,
         });
       }

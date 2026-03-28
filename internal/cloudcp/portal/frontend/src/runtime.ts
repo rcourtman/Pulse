@@ -64,6 +64,7 @@ export function createBootstrapDefaults(
   embeddedBootstrap: Partial<PortalBootstrapData>
 ): Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> {
   return {
+    has_self_hosted_commercial: embeddedBootstrap.has_self_hosted_commercial === true,
     public_site_url: embeddedBootstrap.public_site_url || 'https://pulserelay.pro',
     support_email: embeddedBootstrap.support_email || 'support@pulserelay.pro',
     commercial_api_base_url: embeddedBootstrap.commercial_api_base_url || '',

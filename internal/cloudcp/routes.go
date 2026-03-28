@@ -1,6 +1,7 @@
 package cloudcp
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -65,6 +66,22 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 		return sessionAuth(requireAccountMembership(deps.Registry, extract, next))
 	}
 	accountMutationAuth := requireAnyAccountRole(registry.MemberRoleOwner, registry.MemberRoleAdmin)
+	rawCommercialLookup := newCommercialIdentityLookup(deps.Config)
+	portalCommercialLookup := func(ctx context.Context, email string) (*portal.CommercialIdentity, error) {
+		if rawCommercialLookup == nil {
+			return nil, nil
+		}
+		identity, err := rawCommercialLookup(ctx, email)
+		if err != nil {
+			return nil, err
+		}
+		if identity == nil {
+			return nil, nil
+		}
+		return &portal.CommercialIdentity{
+			HasCommercialIdentity: identity.HasCommercialIdentity,
+		}, nil
+	}
 
 	// Health / readiness are unauthenticated liveness/readiness probes.
 	mux.HandleFunc("/healthz", admin.HandleHealthz)
@@ -224,7 +241,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	// MSP portal API (session + account-membership authenticated)
-	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrap(deps.MagicLinks, deps.Registry))))
+	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrap(deps.MagicLinks, deps.Registry, portalCommercialLookup))))
 	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
@@ -240,5 +257,5 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
-	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry))))
+	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry, portalCommercialLookup))))
 }

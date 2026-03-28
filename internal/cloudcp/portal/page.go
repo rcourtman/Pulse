@@ -59,7 +59,7 @@ var errPortalAuthRequired = errors.New("portal auth required")
 // Route: GET /portal
 //   - No session or invalid session -> shows a magic-link login form
 //   - Valid session -> shows workspace list with management actions
-func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) http.HandlerFunc {
+func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -77,7 +77,7 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry) 
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			renderPortalPage(w, nonce, BuildBootstrapData(true, claims.Email, accounts))
+			renderPortalPage(w, nonce, BuildBootstrapData(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts)))
 		case errors.Is(err, errPortalAuthRequired):
 			renderPortalPage(w, nonce, BuildAnonymousBootstrapData())
 		default:

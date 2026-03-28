@@ -4,6 +4,7 @@ import { createAnonymousBootstrap, createPortalStore, normalizeBootstrap } from 
 import type { PortalBootstrapData } from './types';
 
 const bootstrapDefaults: Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> = {
+  has_self_hosted_commercial: false,
   public_site_url: 'https://pulserelay.pro',
   support_email: 'support@pulserelay.pro',
   commercial_api_base_url: '/api/portal/commercial',
