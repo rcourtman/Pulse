@@ -3408,21 +3408,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-portal-lane-l3",
-      "agent_id": "codex-portal",
-      "summary": "Continue Playwright-driven portal redesign from built review",
-      "target_id": "v6-rc-stabilization",
-      "claimed_at": "2026-03-28T19:12:30Z",
-      "heartbeat_at": "2026-03-28T19:12:30Z",
-      "expires_at": "2026-03-28T21:12:30Z",
-      "work_item": {
-        "kind": "lane",
-        "id": "L3"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [

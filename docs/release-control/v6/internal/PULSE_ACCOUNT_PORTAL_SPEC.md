@@ -188,7 +188,9 @@ Core rules:
     entry points, not an always-open billing dashboard. Self-hosted billing,
     license, refund, and privacy panels should appear only when that exact
     billing job is active, and opening one on phone widths must reveal the
-    active panel in-frame.
+    active panel in-frame. When no hosted account exists, `Billing` must lead
+    directly with the self-hosted job picker instead of front-loading an
+    empty hosted-billing block.
 27. `Support` must stay honest to account shape. Self-hosted-only accounts
     must reduce `Support` to the billing escalation path only; hosted
     workspace or access failure routes and task buttons must not render

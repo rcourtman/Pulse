@@ -1223,6 +1223,9 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
       ? 'Use hosted billing first when the request belongs to a hosted workspace account. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
       : 'Use this billing surface only for hosted billing on your hosted workspace accounts.')
     : 'Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.';
+  var selfHostedBillingEscalationCopy = hosted
+    ? 'Escalate with the same hosted billing action or self-hosted path and the exact failed step.'
+    : 'Escalate with the same self-hosted billing path and the exact failed step.';
   var hostedContent = accounts.length
     ? accounts.map(function(account) {
       return (
@@ -1258,7 +1261,9 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '</div>' +
               '<div class="billing-note">' + billingNote + '</div>' +
             '</div>' +
-            '<div class="billing-overview-grid">' + renderHostedBillingCards(accounts, showSelfHostedCommercial) + '</div>' +
+            (hosted
+              ? ('<div class="billing-overview-grid">' + renderHostedBillingCards(accounts, showSelfHostedCommercial) + '</div>')
+              : '') +
             (showSelfHostedCommercial
               ? ('<div class="billing-shell billing-shell-idle">' +
               '<div class="billing-shell-main">' +
@@ -1276,7 +1281,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<div class="billing-inline-support">' +
                   '<div class="account-panel-kicker">Escalation only</div>' +
                   '<h4>Use Support only after Billing fails</h4>' +
-                  '<p>Escalate with the same hosted billing action or self-hosted path and the exact failed step.</p>' +
+                  '<p>' + selfHostedBillingEscalationCopy + '</p>' +
                   '<div class="billing-inline-support-actions">' +
                     '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
                     '<a class="portal-support-link" href="mailto:' +

@@ -846,7 +846,9 @@ controls appear only when that exact access job is active. `Billing` follows
 the same task-first rule: hosted billing leads when present, the self-hosted
 billing, license, refund, and privacy paths reduce to explicit job pickers,
 and the active self-hosted billing panel must stay hidden until that exact job
-is opened and then be revealed in-frame on narrow layouts. `Support` follows
+is opened and then be revealed in-frame on narrow layouts. When no hosted
+account exists, the billing shell must skip any empty hosted-billing block and
+lead directly with the self-hosted job picker. `Support` follows
 the same account-shape rule: self-hosted-only accounts reduce to the billing
 escalation path and billing-specific handoff packet only, and hosted
 workspace/access escalation routes must not render without hosted accounts.

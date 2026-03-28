@@ -267,6 +267,7 @@ describe('shell view', function() {
     expect(html).toContain('id="data-billing-panel"');
     expect(html).toContain('Billing path failed');
     expect(html).toContain('licenses, refunds, or privacy');
+    expect(html).toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
   });
 
   it('keeps top-level task navigation in the canonical section order', function() {
@@ -401,11 +402,14 @@ describe('shell view', function() {
     expect(html).toContain('There is nothing to open or manage here yet.');
     expect(html).toContain('There are no hosted roles or invites to manage for this account right now.');
     expect(html).toContain('Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.');
-    expect(html).toContain('No hosted billing attached');
+    expect(html).toContain('Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.');
+    expect(html).toContain('Escalate with the same self-hosted billing path and the exact failed step.');
     expect(html).toContain('Billing');
     expect(html).toContain('Use support only when the Billing path has already stopped you.');
     expect(html).toContain('Self-hosted billing path failed');
     expect(html).toContain('Purchase email');
+    expect(html).not.toContain('No hosted billing attached');
+    expect(html).not.toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
     expect(html).not.toContain('Workspace or access path failed');
     expect(html).not.toContain('Open workspaces');
     expect(html).not.toContain('Open access');
