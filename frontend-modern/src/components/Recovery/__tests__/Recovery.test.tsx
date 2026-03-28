@@ -682,6 +682,24 @@ describe('Recovery', () => {
     });
   });
 
+  it('uses the shared reset action for protected item filters', async () => {
+    render(() => <Recovery />);
+
+    expect(await screen.findByText('VM 123')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
+
+    const resetButton = await screen.findByRole('button', { name: 'Reset all' });
+    fireEvent.click(resetButton);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Platform')).toHaveValue('all');
+      expect(screen.getByText('VM 123')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+    });
+  });
+
   it('keeps recovery filter surfaces on canonical platform vocabulary', async () => {
     render(() => <Recovery />);
 

@@ -779,7 +779,10 @@ That same shared page-controls contract applies to recovery search width too.
 The protected-items and recovery-events workspaces should keep the search field
 on the standard full-width shared search row, and any counts or utility cues
 should live in the toolbar actions instead of narrowing the search row through
-recovery-local grid overrides or width hacks.
+recovery-local grid overrides or width hacks. Protected-items controls should
+also use the same shared `Reset all` page-controls action pattern as storage
+and workloads when visible filters are active, instead of forcing operators to
+clear each inventory filter manually.
 That same handoff should keep recovery on the standard Pulse summary density.
 `RecoverySummary.tsx` should use the shared default `SummaryPanel` /
 `SummaryMetricCard` rhythm that infrastructure and workloads use, instead of

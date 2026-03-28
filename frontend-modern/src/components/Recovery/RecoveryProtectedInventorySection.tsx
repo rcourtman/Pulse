@@ -195,6 +195,15 @@ export const RecoveryProtectedInventorySection: Component<
     }
   });
 
+  const resetProtectedFilters = () => {
+    props.setQueryFilter('');
+    props.setPlatformFilter('all');
+    props.setItemTypeFilter('all');
+    props.setHistoryOutcomeFilter('all');
+    props.setVerificationFilter('all');
+    props.setProtectedStaleOnly(false);
+  };
+
   return (
     <div class="flex flex-col gap-3">
       <Show when={!props.kioskMode}>
@@ -219,6 +228,12 @@ export const RecoveryProtectedInventorySection: Component<
               enabled: props.isMobile,
               onToggle: () => setProtectedFiltersOpen((open) => !open),
               count: protectedActiveFilterCount(),
+            }}
+            resetAction={{
+              show: protectedActiveFilterCount() > 0,
+              onClick: resetProtectedFilters,
+              label: 'Reset all',
+              title: 'Reset protected item filters',
             }}
             showFilters={!props.isMobile || protectedFiltersOpen()}
             toolbarClass="gap-3 lg:flex-nowrap"
