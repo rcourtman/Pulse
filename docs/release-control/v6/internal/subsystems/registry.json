@@ -1538,6 +1538,7 @@
         "internal/api/licensing_",
         "internal/api/payments_",
         "internal/api/stripe_",
+        "internal/cloudcp/portal/",
         "pkg/licensing/"
       ],
       "owned_files": [
@@ -1576,6 +1577,7 @@
         "internal/cloudcp/account/tenant_handlers.go",
         "internal/cloudcp/entitlements/service.go",
         "internal/cloudcp/registry/registry.go",
+        "internal/cloudcp/routes.go",
         "internal/cloudcp/stripe/provisioner.go",
         "internal/hosted/provisioner.go"
       ],
@@ -1722,6 +1724,26 @@
             "exact_files": [
               "internal/cloudcp/account/tenant_handlers_test.go",
               "internal/cloudcp/stripe/msp_lifecycle_integration_test.go"
+            ]
+          },
+          {
+            "id": "pulse-account-portal-surface",
+            "label": "Pulse Account portal surface proof",
+            "match_prefixes": [
+              "internal/cloudcp/portal/"
+            ],
+            "match_files": [
+              "internal/cloudcp/routes.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "internal/cloudcp/portal/frontend/src/"
+            ],
+            "exact_files": [
+              "internal/cloudcp/portal/frontend_sync_test.go",
+              "internal/cloudcp/portal/handlers_test.go",
+              "internal/cloudcp/routes_auth_test.go",
+              "internal/cloudcp/routes_test.go"
             ]
           },
           {

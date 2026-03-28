@@ -1,6 +1,6 @@
 # Pulse Account Portal Spec
 
-Last updated: 2026-03-27
+Last updated: 2026-03-28
 Status: ACTIVE
 
 ## Purpose
@@ -84,34 +84,36 @@ with stronger workspace-management needs, not a completely separate portal.
 
 ## Canonical Information Architecture
 
-The future Pulse account surface should be one shell with product-aware areas,
-not separate portals for each commercial motion.
+The future Pulse account surface should be one shell with task-first areas, not
+separate portals for each commercial motion or section names derived from
+Pulse's internal product model.
 
 Primary areas:
 
 1. `Overview`
-   Account identity, current plan state, high-level service status, and next
-   actions.
-2. `Cloud`
-   Hosted tenant list, health summary, open-workspace handoff, tenant lifecycle,
-   invites, and account-scoped hosted billing actions.
-3. `Licenses`
-   Self-hosted license retrieval, activation context, entitlement status,
-   renewal state, and recovery actions.
+   A short triage surface that answers only three questions: what needs
+   attention, what is ready, and what the next obvious action is.
+2. `Workspaces`
+   Hosted workspace list, health summary, open-workspace handoff, lifecycle
+   actions, and create-workspace entry points.
+3. `Access`
+   Account roster, invites, role changes, and access removal.
 4. `Billing`
-   Subscription state, invoices, payment method, usage-facing commercial facts,
-   and Stripe billing portal handoff when still needed.
-5. `People`
-   Memberships, roles, invitations, and account access.
-6. `Recovery & Support`
-   Refund, data request, recovery-email, and commercial support actions.
+   Hosted billing state and Stripe billing handoff when relevant. Self-hosted
+   license retrieval, refunds, privacy/data actions, and related commercial
+   utilities appear here only when the account has those needs.
+5. `Support`
+   Escalation path only. It must not compete with primary account tasks in the
+   main shell.
 
-Conditional areas:
+Conditional content:
 
-1. `MSP Workspaces`
-   Only when the account kind is MSP or otherwise multi-workspace by contract.
-2. `Organization / Tenant Admin`
-   Only for hosted accounts that need browser-side workspace lifecycle actions.
+1. Hosted billing controls appear inside `Billing` only when the account has
+   hosted billing authority.
+2. Self-hosted license, refund, and privacy utilities appear inside `Billing`
+   only when the account has relevant self-hosted history or entitlements.
+3. MSP-specific fleet scale or operator context appears inside `Workspaces`;
+   it does not become a separate top-level area.
 
 ## Experience Principles
 
@@ -120,67 +122,70 @@ of utilities.
 
 Core rules:
 
-1. The first screen must explain what this account can do right now.
-2. Hosted and self-hosted users must not land on the same undifferentiated
+1. The first screen must be triage, not a dashboard essay.
+2. The overview should answer only `Needs attention`, `Ready`, and `Next
+   action`.
+3. Top-level navigation must be organized by user jobs, not by Pulse's
+   internal hosted, license, billing, or support implementation boundaries.
+4. Users must be able to complete basic tasks without learning Pulse's model
+   first.
+5. Hosted and self-hosted users must not land on the same undifferentiated
    wall of copy.
-3. A self-hosted-only user should immediately see that hosted workspaces are
+6. A self-hosted-only user should immediately see that hosted workspaces are
    absent by entitlement, not broken or missing.
-4. A hosted Cloud or MSP user should immediately see their workspace access,
-   role, and account-management surface before lower-priority self-hosted
-   utility actions.
-5. Generic overflow icons are forbidden when the only behavior behind them is
+7. A hosted Cloud or MSP user should immediately see workspace access, account
+   role, and the next obvious action before lower-priority self-hosted tools.
+8. Generic overflow icons are forbidden when the only behavior behind them is
    a destructive action.
-6. Primary actions must be labeled with the real outcome, for example
-   `Open workspace`, `Manage team`, or `Suspend workspace`.
-7. Self-hosted billing/license tools belong in the same account shell, but
-   they must present as a secondary account-services area when hosted access
-   is active.
-8. Hosted and MSP accounts must expose account-level operations separately from
-   individual workspace cards so operator actions are visible before a user
-   starts drilling into one workspace at a time.
-9. Workspace fleets must summarize health and attention state at the account
-   level, not force the user to scan badges one card at a time.
-10. Workspace lifecycle actions must open in an explicit management surface
+9. Primary actions must be labeled with the real outcome, for example
+   `Open workspace`, `Create workspace`, `Invite people`, or `Manage billing`.
+10. Self-hosted commercial tools belong in the same account shell, but they
+    must remain conditional secondary content inside `Billing` when hosted
+    access is active.
+11. Hosted and MSP accounts must expose account-level operations separately
+    from individual workspace cards so operator actions are visible before a
+    user starts drilling into one workspace at a time.
+12. Workspace fleets must summarize health and attention state at the account
+    level, not force the user to scan badges one card at a time.
+13. Workspace lifecycle actions must open in an explicit management surface
     with the selected workspace context visible, not inside a hidden overflow
     menu or a blind confirm-first interaction.
-11. Team and membership management must be treated as an account-management
-    surface with visible roster and invite context, not as a hidden table that
-    appears without orientation.
-12. The signed-in shell must expose clear top-level section navigation so
-    hosted operations, commercial account services, and support are legible as
-    deliberate product areas rather than one long scrolling document.
+14. Access management must be a visible roster and invite surface, not a table
+    or control hidden behind unrelated account copy.
+15. Support must remain an escalation path, not a peer destination competing
+    with the primary jobs a user came to do.
 
 ## Screen Model
 
 The signed-in shell should be treated as four first-class states:
 
 1. `Self-hosted account`
-   No hosted workspaces. The page should lead with account services,
-   subscription/license state, and clear messaging that no hosted workspace
-   access is attached to this account.
+   No hosted workspaces. The page should lead with the relevant billing and
+   recovery actions and clear messaging that no hosted workspace access is
+   attached to this account.
 2. `Hosted customer account`
    One or more hosted workspaces. The page should lead with workspace access,
-   hosted billing, and team/admin actions.
+   hosted billing, and account access controls.
 3. `MSP operator account`
    Multi-workspace hosted account. The page should lead with the workspace
-   fleet, management actions, and operator/team controls.
+   fleet, management actions, and operator access controls.
 4. `Mixed account`
    Hosted access plus self-hosted commercial history. The page should still
    lead with hosted access, while the self-hosted commercial tools remain
-   available in a secondary area.
+   available inside `Billing` when relevant.
 
 Each signed-in state should render:
 
-1. a concise overview band that summarizes the account posture
+1. a concise overview band that answers `Needs attention`, `Ready`, and `Next
+   action`
 2. account cards with role, account kind, workspace totals, and account-level
    fleet status
-3. an explicit `Account operations` area for billing, team, and workspace
-   management entry points
-4. a `Workspace fleet` area that makes health and lifecycle state legible
-   before the user opens a workspace
-5. explicit action groups, not anonymous menu affordances
-6. a clearly separated `Self-hosted licenses and billing` section when those
-   tools are present below hosted content
+3. an explicit `Workspaces` area for open, create, and lifecycle actions
+4. an explicit `Access` area for roster, invites, role changes, and removals
+5. an explicit `Billing` area that leads with hosted billing when applicable
+   and nests self-hosted commercial utilities only when relevant
+6. a `Support` area that is present only as an escalation path
+7. explicit action groups, not anonymous menu affordances
 
 ## Product-Specific Boundaries
 
@@ -291,7 +296,8 @@ Accepted as sufficient for RC and GA:
 
 The `customer-account-portal` lane should deliver:
 
-1. one named `Pulse Account` shell and IA
+1. one named `Pulse Account` shell and task-first IA centered on `Overview`,
+   `Workspaces`, `Access`, `Billing`, and `Support`
 2. shared identity and navigation across hosted account actions and
    self-hosted commercial actions
 3. canonical ownership boundaries for billing, licenses, hosted tenants,
@@ -304,6 +310,8 @@ The `customer-account-portal` lane should deliver:
 6. a maintained bundled frontend source tree and sync-proof path inside
    `internal/cloudcp/portal`, so the account shell does not regress into
    handwritten embedded asset drift
+7. an overview model that makes the next obvious action explicit instead of
+   teaching the user Pulse's internal account model before they can act
 
 ### Current frontend seam
 

@@ -10,6 +10,7 @@
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
+    "cloud-paid",
     "patrol-intelligence"
   ]
 }

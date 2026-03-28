@@ -91,7 +91,7 @@ agreement, and cloud-specific enforcement rules.
 2. Add or change hosted entitlement issuance through `internal/cloudcp/entitlements/service.go`
 3. Add or change control-plane plan storage through `internal/cloudcp/registry/registry.go`
 4. Add or change MSP account-scoped workspace provisioning entry handlers through `internal/cloudcp/account/tenant_handlers.go`
-5. Add or change the hosted account portal API, browser shell, or account-scoped billing handoff through `internal/cloudcp/portal/handlers.go`, `internal/cloudcp/portal/page.go`, and `internal/cloudcp/routes.go`
+5. Add or change the hosted account portal API, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/portal/` and `internal/cloudcp/routes.go`
 6. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 7. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 8. Add or change license-server transport through `pkg/licensing/license_server_client.go`
