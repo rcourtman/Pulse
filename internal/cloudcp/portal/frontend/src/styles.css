@@ -1028,9 +1028,9 @@ header .logout-btn:hover,
 
 .workspace-list-summary {
   font-size: 13px;
-  line-height: 1.55;
+  line-height: 1.45;
   color: var(--ink-soft);
-  max-width: 720px;
+  max-width: 560px;
 }
 
 .workspace-list-stats {
@@ -1228,19 +1228,19 @@ header .logout-btn:hover,
 }
 
 .workspace-management-empty {
-  margin-top: 16px;
+  margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  gap: 8px;
+  padding: 10px;
   border-radius: var(--radius-sm);
   background: #f7fafc;
   color: var(--ink-soft);
 }
 
 .workspace-management-empty-copy {
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--ink);
 }
 
@@ -1253,8 +1253,8 @@ header .logout-btn:hover,
 .workspace-management-empty-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 11px;
+  gap: 7px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
@@ -1269,8 +1269,8 @@ header .logout-btn:hover,
 
 .workspace-management-empty-card p {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 
@@ -1299,7 +1299,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 11px;
+  padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.78);
@@ -1313,7 +1313,7 @@ header .logout-btn:hover,
 
 .workspace-management-empty-check span {
   font-size: 12px;
-  line-height: 1.5;
+  line-height: 1.4;
   color: var(--ink-soft);
 }
 

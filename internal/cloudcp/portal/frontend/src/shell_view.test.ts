@@ -171,11 +171,11 @@ describe('shell view', function() {
     expect(html).toContain('data-action="select-workspace"');
     expect(html).toContain('Workspace management');
     expect(html).toContain('Workspace desk');
-    expect(html).toContain('No workspace selected yet.');
-    expect(html).toContain('Keep account-wide actions separate');
-    expect(html).toContain('When you pick a workspace');
+    expect(html).toContain('Pick a workspace from the fleet, or use the account actions here.');
+    expect(html).toContain('Account-wide actions stay here');
+    expect(html).toContain('Before you act');
     expect(html).toContain('Inspect posture');
-    expect(html).toContain('Then act deliberately');
+    expect(html).toContain('Stay deliberate');
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Workspace management'));
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Keep account-wide actions separate'));
     expect(html).toContain('data-action="clear-workspace-selection"');

@@ -533,7 +533,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div>' +
             '<div class="account-panel-kicker">Workspace management</div>' +
             '<h3>Workspace desk</h3>' +
-            '<p>Select one workspace from the fleet to inspect posture, lifecycle, and the next explicit operator action.</p>' +
+            '<p>Inspect one workspace at a time and keep account-level actions separate.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
           escapeAttr(account.id) +
@@ -544,21 +544,21 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">No workspace selected yet.</div>' +
+          '<div class="workspace-management-empty-copy">Pick a workspace from the fleet, or use the account actions here.</div>' +
           '<div class="workspace-management-empty-grid">' +
             '<div class="workspace-management-empty-card">' +
               '<div class="account-panel-kicker">Account actions</div>' +
-              '<h4>Keep account-wide actions separate</h4>' +
-              '<p>Billing, team, and workspace creation stay account-wide even when you are focused on one workspace.</p>' +
+              '<h4>Account-wide actions stay here</h4>' +
+              '<p>Create workspaces, manage billing, and change team access outside the row flow.</p>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
             '</div>' +
             '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
-              '<div class="account-panel-kicker">When you pick a workspace</div>' +
+              '<div class="account-panel-kicker">Before you act</div>' +
               '<div class="workspace-management-empty-checklist">' +
-                '<div class="workspace-management-empty-check"><strong>Inspect posture</strong><span>Load the workspace first, then decide whether it is routine work, review work, or a parked suspended system.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>Confirm lifecycle</strong><span>Check whether the workspace is active, checking, failed, or suspended before taking the next action.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>Then act deliberately</strong><span>Use the desk to manage one workspace at a time instead of mixing account-wide actions into the same flow.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Stay deliberate</strong><span>Use the desk for one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -607,7 +607,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var workspaceHTML = workspaces.length
     ? '<div class="workspace-list-wrap">' +
         '<div class="workspace-list-toolbar">' +
-          '<div class="workspace-list-summary">Review the hosted fleet, open a workspace, and keep lifecycle actions explicit.</div>' +
+          '<div class="workspace-list-summary">Open a workspace for operator work, or use the desk for account-level actions.</div>' +
           '<div class="workspace-list-stats">' +
             '<span class="workspace-list-stat"><strong>' + String(workspaces.length) + '</strong> total</span>' +
             '<span class="workspace-list-stat"><strong>' + String(readyCount) + '</strong> ready</span>' +
@@ -635,7 +635,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div>' +
             '<div class="account-panel-kicker">Workspace fleet</div>' +
             '<h3>Hosted fleet</h3>' +
-            '<p>Use the fleet view to open workspaces, watch health posture, and keep management actions explicit.</p>' +
+            '<p>Open workspaces, review posture, and keep lifecycle actions explicit.</p>' +
           '</div>' +
           '<div class="account-stage-header-actions">' + workspaceHeaderActions + '</div>' +
         '</div>' +
