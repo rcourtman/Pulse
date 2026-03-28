@@ -199,7 +199,7 @@ describe('account runtime', function() {
 
     document.body.innerHTML =
       '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
-      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner">' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
       '<div id="access-stats-acct_1"></div>' +
       '<table><tbody id="access-list-acct_1"></tbody></table>' +
       '<input id="invite-email-acct_1">' +

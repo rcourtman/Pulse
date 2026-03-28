@@ -159,6 +159,14 @@ Core rules:
 17. When `Workspaces` or `Access` are unavailable, the tab must show an
     explicit unavailable state that points to the right live task instead of
     rendering blank space.
+18. `Access` must stay action-first: roster, invite, role change, and remove
+    access are the job; view-only users may review the roster but must never
+    see live controls that imply they can mutate it.
+19. `Billing` must present one obvious billing path at a time, with hosted
+    billing first when applicable and self-hosted licenses, refunds, or
+    privacy as secondary job-specific paths rather than a billing essay.
+20. `Support` must explain only when to escalate and what to send so it reads
+    as a handoff path, not a competing task surface.
 
 ## Screen Model
 
@@ -188,9 +196,15 @@ Each signed-in state should render:
    fleet status
 3. an explicit `Workspaces` area for open, create, and lifecycle actions
 4. an explicit `Access` area for roster, invites, role changes, and removals
+   `Access` copy should stay terse and task-led; the section exists to do the
+   roster job, not to teach Pulse's internal role model at length.
 5. an explicit `Billing` area that leads with hosted billing when applicable
    and nests self-hosted commercial utilities only when relevant
+   `Billing` should default to a single obvious task picker, not a broad
+   dashboard of overlapping billing explanations.
 6. a `Support` area that is present only as an escalation path
+   `Support` should collapse to failed-path routing plus the minimum escalation
+   packet needed for handoff.
 7. explicit action groups, not anonymous menu affordances
 8. explicit unavailable-state panels for top-level tasks that are not active
    for the current account shape

@@ -187,48 +187,81 @@ describe('shell view', function() {
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Workspace management'));
     expect(html.indexOf('id="add-ws-form-acct_1"')).toBeGreaterThan(html.indexOf('Keep this section workspace-only'));
     expect(html).toContain('data-action="clear-workspace-selection"');
-    expect(html).toContain('People and roles');
-    expect(html).toContain('Invite');
-    expect(html).toContain('Roles');
+    expect(html).toContain('Manage access');
+    expect(html).toContain('Invite people');
+    expect(html).toContain('Change roles');
     expect(html).toContain('Remove access');
-    expect(html).toContain('Invite someone new');
-    expect(html).toContain('Role rules');
-    expect(html).toContain('Access review');
-    expect(html).toContain('Keep access explicit');
-    expect(html).toContain('Owners stay rare');
-    expect(html).toContain('Billing, access control, and full account control.');
-    expect(html).toContain('Workspace control plus billing for the account.');
-    expect(html).toContain('Workspace control without billing ownership.');
-    expect(html).toContain('Workspace review and verification without control-plane changes.');
+    expect(html).toContain('Pick the access job');
+    expect(html).toContain('Choose the smallest role');
+    expect(html).toContain('Full account, billing, and access control.');
+    expect(html).toContain('Workspace control, billing, and roster management.');
+    expect(html).toContain('Workspace control without billing or roster ownership.');
+    expect(html).toContain('Review access without control-plane changes.');
     expect(html).toContain('People on this account');
+    expect(html).toContain('data-can-manage="true"');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('billing-action-row');
     expect(html).toContain('billing-action-button');
     expect(html).toContain('id="billing-panel-empty"');
-    expect(html).toContain('Choose the billing task');
-    expect(html).toContain('Billing brief');
+    expect(html).toContain('Choose one billing path');
     expect(html).toContain('Hosted billing');
     expect(html).toContain('Self-hosted tools');
     expect(html).toContain('Self-hosted billing');
-    expect(html).toContain('Keep the billing request contained');
-    expect(html).toContain('Hosted billing first when present');
+    expect(html).toContain('Pick the self-hosted job');
+    expect(html).toContain('Use Support only after Billing fails');
+    expect(html).toContain('Use hosted billing first when the request belongs to a hosted workspace account.');
     expect(html).toContain('Open support');
-    expect(html).toContain('What each tool does');
-    expect(html).toContain('Before you start');
-    expect(html).toContain('Escalate quickly');
-    expect(html).toContain('Identity first');
+    expect(html).toContain('Available now');
+    expect(html).toContain('Use support last');
+    expect(html).toContain('Send the same request');
     expect(html).toContain('id="open-retrieve-billing"');
     expect(html).toContain('id="data-billing-panel"');
     expect(html).toContain('>Billing<');
     expect(html).toContain('>Licenses<');
     expect(html).toContain('>Refunds<');
     expect(html).toContain('>Privacy<');
-    expect(html).toContain('Escalation');
-    expect(html).toContain('Hosted problems');
-    expect(html).toContain('Billing and self-hosted issues');
-    expect(html).toContain('Escalation packet');
+    expect(html).toContain('Escalation only');
+    expect(html).toContain('Workspace or access path failed');
+    expect(html).toContain('Billing path failed');
+    expect(html).toContain('Keep the escalation short');
     expect(html).toContain('What to send');
     expect(html).toContain('Open billing');
+  });
+
+  it('renders a view-only access surface when the account cannot manage access', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_ro',
+              name: 'Observer Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'tech',
+              can_manage: false,
+              has_billing: false,
+              workspaces: [
+                {
+                  id: 'ws_ro',
+                  display_name: 'Observed Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Review access');
+    expect(html).toContain('Owner or admin required');
+    expect(html).toContain('This account is view-only for you');
+    expect(html).toContain('Need an access change?');
+    expect(html).toContain('data-can-manage="false"');
+    expect(html).not.toContain('data-action="invite-member"');
   });
 
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
@@ -248,7 +281,7 @@ describe('shell view', function() {
     expect(html).toContain('Billing tools are ready');
     expect(html).toContain('There is nothing to open or manage here yet.');
     expect(html).toContain('There are no hosted roles or invites to manage for this account right now.');
-    expect(html).toContain('Use this billing surface for self-hosted subscriptions, licenses, refunds, and privacy requests.');
+    expect(html).toContain('Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.');
     expect(html).toContain('No hosted billing attached');
     expect(html).toContain('Billing');
     expect(html).not.toContain('Self-hosted commercial services');

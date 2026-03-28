@@ -74,7 +74,7 @@ describe('account view', function() {
 
   it('renders team loading, error, and populated member states', function() {
     document.body.innerHTML =
-      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner">' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
       '<div id="access-stats-acct_1"></div>' +
       '<table><tbody id="access-list-acct_1"></tbody></table>' +
       '</div>';
@@ -84,7 +84,8 @@ describe('account view', function() {
       accessQuery: { status: 'loading', error: '', data: [] },
     }));
     expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Loading roster');
-    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Invites');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Mode');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Manage');
 
     renderAccessSection('acct_1', createEntry({
       accessVisible: true,
@@ -92,7 +93,7 @@ describe('account view', function() {
     }));
     expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Roster needs attention');
     expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Failed to load access roster.');
-    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Invite only');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Manage');
 
     renderAccessSection(
       'acct_1',
@@ -116,7 +117,7 @@ describe('account view', function() {
 
   it('normalizes legacy member roles into the current read-only operator model', function() {
     document.body.innerHTML =
-      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner">' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
       '<div id="access-stats-acct_1"></div>' +
       '<div id="access-list-acct_1"></div>' +
       '</div>';
@@ -141,6 +142,35 @@ describe('account view', function() {
     expect(roleSelect.value).toBe('read_only');
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Operators');
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('1');
+  });
+
+  it('renders access roster as view-only when the account is not manageable', function() {
+    document.body.innerHTML =
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="tech" data-can-manage="false">' +
+      '<div id="access-stats-acct_1"></div>' +
+      '<div id="access-list-acct_1"></div>' +
+      '</div>';
+
+    renderAccessSection(
+      'acct_1',
+      createEntry({
+        accessVisible: true,
+        accessQuery: {
+          status: 'ready',
+          error: '',
+          data: [
+            { email: 'owner@example.com', role: 'owner', user_id: 'u1' },
+            { email: 'tech@example.com', role: 'tech', user_id: 'u2' },
+          ],
+        },
+      })
+    );
+
+    expect(document.querySelector('[data-action="change-role"]')).toBeNull();
+    expect(document.querySelector('[data-action="remove-member"]')).toBeNull();
+    expect(document.querySelector('.access-role-select')).toBeNull();
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('View only');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
   });
 
   it('renders workspace management selection from account UI state', function() {
@@ -179,10 +209,10 @@ describe('account view', function() {
     document.body.innerHTML =
       '<div id="add-ws-form-acct_1" class="add-workspace-form"></div><div id="ws-spinner-acct_1"></div>' +
       '<div id="workspace-management-acct_1" class="workspace-management-panel"><button id="workspace-management-close-acct_1"></button><div id="workspace-management-empty-acct_1"></div><div id="workspace-management-content-acct_1" hidden><div id="workspace-management-meta-acct_1"></div><h4 id="workspace-management-title-acct_1"></h4><p id="workspace-management-summary-acct_1"></p><div id="workspace-management-health-acct_1"></div><div id="workspace-management-lifecycle-acct_1"></div><div id="workspace-management-created-acct_1"></div><div id="workspace-management-guidance-acct_1"></div><button id="workspace-management-action-acct_1"></button></div></div>' +
-      '<div id="access-section-acct_1" class="access-section" data-actor-role="admin"><div id="access-stats-acct_1"></div><table><tbody id="access-list-acct_1"></tbody></table></div>' +
+      '<div id="access-section-acct_1" class="access-section" data-actor-role="admin" data-can-manage="true"><div id="access-stats-acct_1"></div><table><tbody id="access-list-acct_1"></tbody></table></div>' +
       '<div id="add-ws-form-acct_2" class="add-workspace-form"></div><div id="ws-spinner-acct_2"></div>' +
       '<div id="workspace-management-acct_2" class="workspace-management-panel"><button id="workspace-management-close-acct_2"></button><div id="workspace-management-empty-acct_2"></div><div id="workspace-management-content-acct_2" hidden><div id="workspace-management-meta-acct_2"></div><h4 id="workspace-management-title-acct_2"></h4><p id="workspace-management-summary-acct_2"></p><div id="workspace-management-health-acct_2"></div><div id="workspace-management-lifecycle-acct_2"></div><div id="workspace-management-created-acct_2"></div><div id="workspace-management-guidance-acct_2"></div><button id="workspace-management-action-acct_2"></button></div></div>' +
-      '<div id="access-section-acct_2" class="access-section" data-actor-role="owner"><div id="access-stats-acct_2"></div><table><tbody id="access-list-acct_2"></tbody></table></div>';
+      '<div id="access-section-acct_2" class="access-section" data-actor-role="owner" data-can-manage="true"><div id="access-stats-acct_2"></div><table><tbody id="access-list-acct_2"></tbody></table></div>';
 
     var state: PortalAccountState = {
       byAccountID: {

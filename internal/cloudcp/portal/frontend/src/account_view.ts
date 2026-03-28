@@ -203,7 +203,7 @@ function countMembersByRole(members: PortalAccessMember[], role: string): number
   return count;
 }
 
-function renderAccessStats(accountID: string, entry: PortalAccountUIEntry): void {
+function renderAccessStats(accountID: string, entry: PortalAccountUIEntry, canManage: boolean): void {
   var stats = getElement<HTMLElement>('access-stats-' + accountID);
   if (!stats) return;
   if (!entry.accessVisible) {
@@ -213,13 +213,13 @@ function renderAccessStats(accountID: string, entry: PortalAccountUIEntry): void
   if (entry.accessQuery.status === 'loading') {
     stats.innerHTML =
       '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading…</span></div>' +
-      '<div class="access-stat-card"><span class="access-stat-label">Invites</span><span class="access-stat-value">Ready</span></div>';
+      '<div class="access-stat-card"><span class="access-stat-label">Mode</span><span class="access-stat-value">' + (canManage ? 'Manage' : 'View') + '</span></div>';
     return;
   }
   if (entry.accessQuery.status === 'error') {
     stats.innerHTML =
       '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Needs attention</span></div>' +
-      '<div class="access-stat-card"><span class="access-stat-label">Fallback</span><span class="access-stat-value">Invite only</span></div>';
+      '<div class="access-stat-card"><span class="access-stat-label">Mode</span><span class="access-stat-value">' + (canManage ? 'Manage' : 'View') + '</span></div>';
     return;
   }
 
@@ -237,9 +237,16 @@ function createAccessControlCell(className: string): HTMLDivElement {
   return cell;
 }
 
-function renderAccessRoleControl(accountID: string, member: PortalAccessMember, isOwner: boolean): HTMLElement {
+function renderAccessRoleControl(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean): HTMLElement {
   var currentRole = normalizedAccessRole(member.role);
   var group = createAccessControlCell('access-control-cell-role');
+  if (!canManage) {
+    var badge = document.createElement('span');
+    badge.className = 'access-role-badge';
+    badge.textContent = roleLabel(currentRole);
+    group.appendChild(badge);
+    return group;
+  }
   if (currentRole === 'owner' && !isOwner) {
     var locked = document.createElement('span');
     locked.className = 'access-role-badge';
@@ -265,7 +272,15 @@ function renderAccessRoleControl(accountID: string, member: PortalAccessMember, 
   return group;
 }
 
-function renderAccessMemberAction(accountID: string, member: PortalAccessMember, isOwner: boolean): HTMLElement | null {
+function renderAccessMemberAction(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean): HTMLElement | null {
+  if (!canManage) {
+    var readonly = createAccessControlCell('access-control-cell-access');
+    var readonlyText = document.createElement('span');
+    readonlyText.className = 'access-control-locked';
+    readonlyText.textContent = 'View only';
+    readonly.appendChild(readonlyText);
+    return readonly;
+  }
   if (normalizedAccessRole(member.role) === 'owner' && !isOwner) {
     var locked = createAccessControlCell('access-control-cell-access');
     var lockedText = document.createElement('span');
@@ -288,7 +303,7 @@ function renderAccessMemberAction(accountID: string, member: PortalAccessMember,
   return group;
 }
 
-function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean): HTMLElement {
+function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean): HTMLElement {
   var row = document.createElement('div');
   row.className = 'access-member-row';
 
@@ -316,8 +331,8 @@ function renderAccessMemberRow(accountID: string, member: PortalAccessMember, is
   identity.appendChild(caption);
 
   row.appendChild(identity);
-  row.appendChild(renderAccessRoleControl(accountID, member, isOwner));
-  row.appendChild(renderAccessMemberAction(accountID, member, isOwner) || createAccessControlCell('access-control-cell-access'));
+  row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage));
+  row.appendChild(renderAccessMemberAction(accountID, member, isOwner, canManage) || createAccessControlCell('access-control-cell-access'));
   return row;
 }
 
@@ -351,8 +366,9 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
 
   var actorRole = section.getAttribute('data-actor-role') || '';
   var isOwner = actorRole === 'owner';
+  var canManage = section.getAttribute('data-can-manage') === 'true';
   section.classList.toggle('visible', entry.accessVisible);
-  renderAccessStats(accountID, entry);
+  renderAccessStats(accountID, entry, canManage);
 
   if (!entry.accessVisible) {
     return;
@@ -369,7 +385,14 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   }
   if (!entry.accessQuery.data.length) {
     if (rosterPanel) rosterPanel.classList.add('state-only');
-    setContainerMessage(roster, 'No one added yet', 'Invite someone new when this account needs shared access.', false);
+    setContainerMessage(
+      roster,
+      'No one added yet',
+      canManage
+        ? 'Invite someone when this hosted account needs shared access.'
+        : 'There is no hosted roster to review yet on this account.',
+      false
+    );
     return;
   }
 
@@ -379,7 +402,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   ensureAccessRosterHead(roster);
   for (var i = 0; i < entry.accessQuery.data.length; i += 1) {
     var member = entry.accessQuery.data[i];
-    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner));
+    roster.appendChild(renderAccessMemberRow(accountID, member, isOwner, canManage));
   }
 }
 

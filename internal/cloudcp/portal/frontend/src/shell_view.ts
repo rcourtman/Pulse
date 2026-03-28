@@ -904,43 +904,60 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 }
 
 function renderAccountAccessSection(account: PortalAccountSummary): string {
+  var accessHeaderTitle = account.can_manage ? 'Manage access' : 'Review access';
+  var accessHeaderCopy = account.can_manage
+    ? 'Invite people, change roles, and remove stale access from one hosted roster.'
+    : 'Review who already has access to this hosted account. An owner or admin must make changes.';
+  var accessContextChips = account.can_manage
+    ? ['Invite people', 'Change roles', 'Remove access']
+    : ['View roster', 'Owner or admin required'];
   var accessPolicy =
     '<div class="access-policy-panel">' +
       '<div class="access-panel-heading">' +
-        '<h4>Role rules</h4>' +
-        '<p>Invite the smallest role that still lets someone do the work they actually own on this account.</p>' +
+        '<h4>' + (account.can_manage ? 'Choose the smallest role' : 'Role meanings') + '</h4>' +
+        '<p>' + (account.can_manage
+          ? 'Match each person to the narrowest role that still lets them do the job they own.'
+          : 'Use these role meanings to understand what each person on this roster can do.') + '</p>' +
       '</div>' +
       '<div class="access-policy-list">' +
-        '<div class="access-policy-row"><strong>Owner</strong><span>Billing, access control, and full account control.</span></div>' +
-        '<div class="access-policy-row"><strong>Admin</strong><span>Workspace control plus billing for the account.</span></div>' +
-        '<div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing ownership.</span></div>' +
-        '<div class="access-policy-row"><strong>Read-only</strong><span>Workspace review and verification without control-plane changes.</span></div>' +
+        '<div class="access-policy-row"><strong>Owner</strong><span>Full account, billing, and access control.</span></div>' +
+        '<div class="access-policy-row"><strong>Admin</strong><span>Workspace control, billing, and roster management.</span></div>' +
+        '<div class="access-policy-row"><strong>Tech</strong><span>Workspace control without billing or roster ownership.</span></div>' +
+        '<div class="access-policy-row"><strong>Read-only</strong><span>Review access without control-plane changes.</span></div>' +
       '</div>' +
     '</div>';
-  var reviewDesk =
-    '<div class="access-review-shell">' +
-      '<div class="access-review-strip">' +
-        '<div class="access-panel-heading access-panel-heading-tight">' +
-          '<div class="account-panel-kicker">Access review</div>' +
-          '<h4>Keep access explicit</h4>' +
-          '<p>Use the roster as a controlled access list, not a vague shared bucket.</p>' +
+  var accessActions = account.can_manage
+    ? (
+      '<div class="access-invite-panel">' +
+        '<div class="access-panel-heading">' +
+          '<h4>Invite people</h4>' +
+          '<p>Add one person with the minimum role they need on this account.</p>' +
         '</div>' +
-        '<div class="access-review-grid">' +
-            '<div class="access-review-card">' +
-              '<strong>Owners stay rare</strong>' +
-            '<span>Reserve Owner for billing, access control, and full account control. Default to Admin, Tech, or Read-only first.</span>' +
-            '</div>' +
-          '<div class="access-review-card">' +
-            '<strong>Keep access narrow</strong>' +
-            '<span>Use Tech for workspace control and Read-only for verification instead of handing out broader access.</span>' +
-          '</div>' +
-          '<div class="access-review-card">' +
-            '<strong>Remove stale access fast</strong>' +
-            '<span>If someone no longer owns the work, remove them instead of leaving dormant access attached to the account.</span>' +
-          '</div>' +
+        '<div class="access-invite">' +
+          '<div><label for="invite-email-' +
+          escapeAttr(account.id) +
+          '">Email</label><input type="email" id="invite-email-' +
+          escapeAttr(account.id) +
+          '" placeholder="user@example.com" autocomplete="off"></div>' +
+          '<div><label for="invite-role-' +
+          escapeAttr(account.id) +
+          '">Role</label><select id="invite-role-' +
+          escapeAttr(account.id) +
+          '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
+          '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
+          escapeAttr(account.id) +
+          '">Invite</button>' +
         '</div>' +
-      '</div>' +
-    '</div>';
+      '</div>'
+    )
+    : (
+      '<div class="access-invite-panel">' +
+        '<div class="access-panel-heading">' +
+          '<h4>Need an access change?</h4>' +
+          '<p>An owner or admin on this account must invite people, change roles, or remove access.</p>' +
+        '</div>' +
+      '</div>'
+    );
 
   return (
     '<section class="account-content-panel account-content-panel-access">' +
@@ -948,18 +965,15 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
       escapeAttr(account.id) +
       '" data-actor-role="' +
       escapeAttr(account.role) +
+      '" data-can-manage="' +
+      escapeAttr(account.can_manage ? 'true' : 'false') +
       '">' +
         '<div class="access-management-header">' +
           '<div>' +
             '<div class="account-panel-kicker">Access</div>' +
-            '<h3>People and roles</h3>' +
-            '<p>Invite people, change roles, and remove stale access without mixing that work into workspace operations.</p>' +
-            renderSectionContextChips([
-              account.can_manage ? 'Managed roster' : 'View only',
-              'Invite',
-              'Roles',
-              'Remove access',
-            ]) +
+            '<h3>' + accessHeaderTitle + '</h3>' +
+            '<p>' + accessHeaderCopy + '</p>' +
+            renderSectionContextChips(accessContextChips) +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Back to workspaces</button>' +
         '</div>' +
@@ -971,7 +985,7 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
             '<div class="access-roster">' +
               '<div class="access-panel-heading">' +
                 '<h4>People on this account</h4>' +
-                '<p>Every person here can reach this hosted account. Keep the list small and the role choice explicit.</p>' +
+                '<p>Review the hosted roster here before you open, change, or remove access.</p>' +
               '</div>' +
               '<div class="access-roster-list" id="access-list-' +
               escapeAttr(account.id) +
@@ -979,37 +993,18 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
                 '<div class="access-list-message">Loading…</div>' +
               '</div>' +
             '</div>' +
-            reviewDesk +
           '</div>' +
           '<div class="access-side-column">' +
             '<div class="access-operations-panel">' +
               '<div class="access-panel-heading access-panel-heading-tight">' +
-                '<div class="account-panel-kicker">Access controls</div>' +
-                '<h4>Invite, role, remove</h4>' +
-                '<p>Use this column when you need to add someone, tighten a role, or remove access that no longer belongs here.</p>' +
+                '<div class="account-panel-kicker">Next action</div>' +
+                '<h4>' + (account.can_manage ? 'Pick the access job' : 'This account is view-only for you') + '</h4>' +
+                '<p>' + (account.can_manage
+                  ? 'Use this column to invite people, tighten roles, or remove access that no longer belongs here.'
+                  : 'You can review the roster here, but access changes must be done by an owner or admin.') + '</p>' +
               '</div>' +
               '<div class="access-operations-grid">' +
-                '<div class="access-invite-panel">' +
-                  '<div class="access-panel-heading">' +
-                    '<h4>Invite someone new</h4>' +
-                    '<p>Add a person with the minimum role they need for this account.</p>' +
-                  '</div>' +
-                  '<div class="access-invite">' +
-                    '<div><label for="invite-email-' +
-                    escapeAttr(account.id) +
-                    '">Email</label><input type="email" id="invite-email-' +
-                    escapeAttr(account.id) +
-                    '" placeholder="user@example.com" autocomplete="off"></div>' +
-                    '<div><label for="invite-role-' +
-                    escapeAttr(account.id) +
-                    '">Role</label><select id="invite-role-' +
-                    escapeAttr(account.id) +
-                    '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div>' +
-                    '<button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' +
-                    escapeAttr(account.id) +
-                    '">Invite</button>' +
-                  '</div>' +
-                '</div>' +
+                accessActions +
                 accessPolicy +
               '</div>' +
             '</div>' +
@@ -1057,18 +1052,18 @@ function renderSupportSection(context: ShellViewContext): string {
   return (
     '<section class="portal-support-panel">' +
       '<div class="account-panel-kicker">Support</div>' +
-      '<h2>Escalation</h2>' +
-      '<p>Come here only after the workspace, access, or billing path has stopped you.</p>' +
+      '<h2>Escalation only</h2>' +
+      '<p>Use support only when the Workspaces, Access, or Billing path has already stopped you.</p>' +
       renderSectionContextChips(['Escalation only', 'Bring context', context.bootstrap.support_email ? 'Email' : 'Support']) +
       '<div class="portal-support-layout">' +
         '<div class="portal-support-route-grid">' +
           '<div class="portal-support-route-card">' +
-            '<div class="account-panel-kicker">Hosted account</div>' +
-            '<h3>Hosted problems</h3>' +
-            '<p>Use support for hosted issues only after you have already tried the Workspaces or Access path.</p>' +
+            '<div class="account-panel-kicker">Hosted path</div>' +
+            '<h3>Workspace or access path failed</h3>' +
+            '<p>Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.</p>' +
             '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Use after the hosted path fails</strong><span>Workspace access, lifecycle, and account access should already be narrowed before you escalate.</span></div>' +
-              '<div class="portal-support-point"><strong>Keep the account context intact</strong><span>Include the account, workspace, and action that failed so support can pick up the same issue quickly.</span></div>' +
+              '<div class="portal-support-point"><strong>Start from the same task</strong><span>Use Workspaces for lifecycle issues and Access for roster issues before you escalate.</span></div>' +
+              '<div class="portal-support-point"><strong>Keep the hosted context intact</strong><span>Include the account, workspace, and failed action so support inherits the same request.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
@@ -1077,12 +1072,12 @@ function renderSupportSection(context: ShellViewContext): string {
             '</div>' +
           '</div>' +
           '<div class="portal-support-route-card">' +
-            '<div class="account-panel-kicker">Billing</div>' +
-            '<h3>Billing and self-hosted issues</h3>' +
-            '<p>Use this route only after hosted billing or the self-hosted billing tools have failed to complete the request cleanly.</p>' +
+            '<div class="account-panel-kicker">Billing path</div>' +
+            '<h3>Billing path failed</h3>' +
+            '<p>Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly.</p>' +
             '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Start in Billing</strong><span>Hosted billing, licenses, refunds, and privacy should already be narrowed to one failed request.</span></div>' +
-              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Bring the billing tool or hosted billing action that failed instead of reopening the story from scratch.</span></div>' +
+              '<div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was hosted billing, licenses, refunds, or privacy.</span></div>' +
+              '<div class="portal-support-point"><strong>Keep the request intact</strong><span>Bring the same account or billing email and the failed action instead of reopening the story.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' +
@@ -1091,13 +1086,13 @@ function renderSupportSection(context: ShellViewContext): string {
           '</div>' +
         '</div>' +
         '<div class="portal-support-runbook">' +
-          '<div class="account-panel-kicker">Escalation packet</div>' +
-          '<h3>What to send</h3>' +
-          '<p>Keep the packet short and concrete so support can pick up the exact failed path immediately.</p>' +
+          '<div class="account-panel-kicker">What to send</div>' +
+          '<h3>Keep the escalation short</h3>' +
+          '<p>Support should inherit the same request, not reconstruct it from scratch.</p>' +
           '<div class="portal-support-runbook-list">' +
-            '<div class="portal-support-runbook-step"><strong>1. Name the path</strong><span>Say whether the failed path was Workspaces, Access, or Billing.</span></div>' +
-            '<div class="portal-support-runbook-step"><strong>2. Name the account</strong><span>Include the hosted account and workspace when relevant, or the billing email for self-hosted work.</span></div>' +
-            '<div class="portal-support-runbook-step"><strong>3. Name the action</strong><span>Include the exact button, form, or billing tool that failed and what happened next.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work.</span></div>' +
+            '<div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' +
           '</div>' +
         '</div>' +
       '</div>' +
@@ -1129,8 +1124,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
     return account.has_billing;
   }).length;
   var billingNote = hosted
-    ? 'Hosted billing lives here when it applies. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
-    : 'Use this billing surface for self-hosted subscriptions, licenses, refunds, and privacy requests.';
+    ? 'Use hosted billing first when the request belongs to a hosted workspace account. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
+    : 'Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.';
   var hostedContent = accounts.length
     ? accounts.map(function(account) {
       return (
@@ -1171,8 +1166,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<aside class="billing-shell-sidebar">' +
                 '<div class="billing-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Self-hosted billing</div>' +
-                  '<h3>Self-hosted tools</h3>' +
-                  '<p>Use these only when the job is a self-hosted purchase, license, refund, or privacy request.</p>' +
+                  '<h3>Pick the self-hosted job</h3>' +
+                  '<p>Use one path at a time for self-hosted billing, licenses, refunds, or privacy.</p>' +
                 '</div>' +
                 '<div class="billing-action-list">' +
                   renderBillingActionRow('open-manage-billing', 'Self-hosted billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
@@ -1181,41 +1176,34 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   renderBillingActionRow('open-data-billing', 'Privacy', 'Data and privacy', 'Privacy', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']) +
                 '</div>' +
                 '<div class="billing-inline-support">' +
-                  '<div class="account-panel-kicker">Escalation</div>' +
-                  '<h4>Keep the billing request contained</h4>' +
-                  '<p>Use Support only when a hosted billing or self-hosted billing request cannot complete cleanly from this section.</p>' +
-                  '<div class="billing-inline-support-points">' +
-                    '<div class="billing-inline-support-point"><strong>Hosted billing first when present</strong><span>Use the hosted billing cards above before you touch the self-hosted tools.</span></div>' +
-                    '<div class="billing-inline-support-point"><strong>Escalate with context</strong><span>Bring the billing tool or hosted billing action and the exact failed step if you need support.</span></div>' +
-                  '</div>' +
+                  '<div class="account-panel-kicker">Escalation only</div>' +
+                  '<h4>Use Support only after Billing fails</h4>' +
+                  '<p>Escalate with the same hosted billing action or self-hosted path and the exact failed step.</p>' +
                   '<div class="billing-inline-support-actions">' +
                     '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
+                    '<a class="portal-support-link" href="mailto:' +
+                    escapeAttr(context.bootstrap.support_email || '') +
+                    '">' +
+                    escapeHTML(context.bootstrap.support_email || '') +
+                    '</a>' +
                   '</div>' +
                 '</div>' +
               '</aside>' +
               '<div class="billing-shell-main">' +
                 '<div class="billing-detail-shell">' +
                   '<div class="billing-panel billing-panel-empty visible" id="billing-panel-empty">' +
-                    '<div class="account-panel-kicker">Billing brief</div>' +
-                    '<h3>Choose the billing task</h3>' +
-                    '<p>Pick one self-hosted billing request at a time. Verification happens first so billing, license, refund, or privacy work stays contained.</p>' +
+                    '<div class="account-panel-kicker">Next action</div>' +
+                    '<h3>Choose one billing path</h3>' +
+                    '<p>Open the job you need. Use hosted billing above when it applies, and use these self-hosted paths only for self-hosted purchases.</p>' +
                     '<div class="billing-empty-shell">' +
                       '<div class="billing-empty-primary">' +
                         '<div class="billing-empty-section billing-empty-section-compact">' +
-                          '<div class="billing-empty-column-title">What each tool does</div>' +
+                          '<div class="billing-empty-column-title">Available now</div>' +
                           '<div class="billing-empty-flow-list">' +
-                            '<div class="billing-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for self-hosted invoices, payment methods, and plan changes.</span></div>' +
-                            '<div class="billing-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
-                            '<div class="billing-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
-                            '<div class="billing-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
-                          '</div>' +
-                        '</div>' +
-                        '<div class="billing-empty-section billing-empty-section-compact">' +
-                          '<div class="billing-empty-column-title">Before you start</div>' +
-                          '<div class="billing-empty-points billing-empty-points-stack">' +
-                            '<div class="billing-empty-point"><strong>One request</strong><span>Keep a single billing request active instead of bouncing across sections.</span></div>' +
-                            '<div class="billing-empty-point"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div>' +
-                            '<div class="billing-empty-point"><strong>Stay focused</strong><span>Use the hosted billing cards above when the request is tied to a hosted workspace account.</span></div>' +
+                            '<div class="billing-empty-flow"><strong>Billing</strong><span>Manage self-hosted plans, invoices, and payment methods.</span></div>' +
+                            '<div class="billing-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
+                            '<div class="billing-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active self-hosted access.</span></div>' +
+                            '<div class="billing-empty-flow"><strong>Privacy</strong><span>Request export or deletion for commercial account data.</span></div>' +
                           '</div>' +
                         '</div>' +
                       '</div>' +
@@ -1223,10 +1211,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                         '<div class="billing-empty-section billing-empty-section-support">' +
                           '<div class="billing-empty-column-title">Escalation</div>' +
                           '<div class="billing-empty-checklist">' +
-                            '<div class="billing-empty-check"><strong>Escalate quickly</strong><span>If hosted billing or the self-hosted tools do not behave as expected, escalate from this section.</span></div>' +
-                            '<div class="billing-empty-check"><strong>Billing packet</strong><span>Bring the billing tool, commercial email, and the exact failed action so support starts with the same request state.</span></div>' +
+                            '<div class="billing-empty-check"><strong>Use support last</strong><span>Only after hosted billing or one self-hosted path fails.</span></div>' +
+                            '<div class="billing-empty-check"><strong>Send the same request</strong><span>Include the billing path, account or commercial email, and the failed step.</span></div>' +
                           '</div>' +
-                          '<div class="billing-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
+                          '<div class="billing-empty-support">Need escalation for billing, refund, privacy, or license work? <a class="portal-support-link" href="mailto:' +
                           escapeAttr(context.bootstrap.support_email || '') +
                           '">' +
                           escapeHTML(context.bootstrap.support_email || '') +
