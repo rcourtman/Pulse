@@ -841,7 +841,11 @@ controls appear only when that exact access job is active. `Billing` follows
 the same task-first rule: hosted billing leads when present, the self-hosted
 billing, license, refund, and privacy paths reduce to explicit job pickers,
 and the active self-hosted billing panel must stay hidden until that exact job
-is opened and then be revealed in-frame on narrow layouts. Until that
+is opened and then be revealed in-frame on narrow layouts. `Support` follows
+the same account-shape rule: self-hosted-only accounts reduce to the billing
+escalation path and billing-specific handoff packet only, and hosted
+workspace/access escalation routes must not render without hosted accounts.
+Until that
 candidate lane lands, new
 commercial account work must extend the governed Pulse account shape rather
 than spawning additional one-off recovery or billing pages.

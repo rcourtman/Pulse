@@ -364,6 +364,12 @@ describe('shell view', function() {
     expect(html).toContain('Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.');
     expect(html).toContain('No hosted billing attached');
     expect(html).toContain('Billing');
+    expect(html).toContain('Use support only when the Billing path has already stopped you.');
+    expect(html).toContain('Self-hosted billing path failed');
+    expect(html).toContain('Purchase email');
+    expect(html).not.toContain('Workspace or access path failed');
+    expect(html).not.toContain('Open workspaces');
+    expect(html).not.toContain('Open access');
     expect(html).not.toContain('Self-hosted commercial services');
   });
 

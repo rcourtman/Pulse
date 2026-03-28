@@ -1086,50 +1086,86 @@ function renderBillingTaskPanel(title: string, copy: string, panelID: string, bo
 }
 
 function renderSupportSection(context: ShellViewContext): string {
+  var hasHostedAccounts = !!((context.bootstrap.accounts || []).length);
+  var supportEmail = context.bootstrap.support_email || '';
+  var supportLead = hasHostedAccounts
+    ? 'Use support only when the Workspaces, Access, or Billing path has already stopped you.'
+    : 'Use support only when the Billing path has already stopped you.';
+  var supportChips = hasHostedAccounts
+    ? ['Escalation only', 'Bring context', supportEmail ? 'Email' : 'Support']
+    : ['Escalation only', 'Billing only', supportEmail ? 'Email' : 'Support'];
+  var routeCards = hasHostedAccounts
+    ? (
+      '<div class="portal-support-route-card">' +
+        '<div class="account-panel-kicker">Hosted path</div>' +
+        '<h3>Workspace or access path failed</h3>' +
+        '<p>Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.</p>' +
+        '<div class="portal-support-points">' +
+          '<div class="portal-support-point"><strong>Start from the same task</strong><span>Use Workspaces for lifecycle issues and Access for roster issues before you escalate.</span></div>' +
+          '<div class="portal-support-point"><strong>Keep the hosted context intact</strong><span>Include the account, workspace, and failed action so support inherits the same request.</span></div>' +
+        '</div>' +
+        '<div class="portal-support-actions">' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open access</button>' +
+          '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a>' +
+        '</div>' +
+      '</div>' +
+      '<div class="portal-support-route-card">' +
+        '<div class="account-panel-kicker">Billing path</div>' +
+        '<h3>Billing path failed</h3>' +
+        '<p>Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly.</p>' +
+        '<div class="portal-support-points">' +
+          '<div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was hosted billing, licenses, refunds, or privacy.</span></div>' +
+          '<div class="portal-support-point"><strong>Keep the request intact</strong><span>Bring the same account or billing email and the failed action instead of reopening the story.</span></div>' +
+        '</div>' +
+        '<div class="portal-support-actions">' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' +
+          '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a>' +
+        '</div>' +
+      '</div>'
+    )
+    : (
+      '<div class="portal-support-route-card">' +
+        '<div class="account-panel-kicker">Billing path</div>' +
+        '<h3>Self-hosted billing path failed</h3>' +
+        '<p>Use this route only after a self-hosted billing, license, refund, or privacy job has failed to complete cleanly.</p>' +
+        '<div class="portal-support-points">' +
+          '<div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was billing, licenses, refunds, or privacy.</span></div>' +
+          '<div class="portal-support-point"><strong>Keep the purchase context intact</strong><span>Bring the same commercial email and the failed action instead of reopening the story.</span></div>' +
+        '</div>' +
+        '<div class="portal-support-actions">' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' +
+          '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a>' +
+        '</div>' +
+      '</div>'
+    );
+  var runbookSteps = hasHostedAccounts
+    ? (
+      '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy.</span></div>' +
+      '<div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work.</span></div>' +
+      '<div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>'
+    )
+    : (
+      '<div class="portal-support-runbook-step"><strong>1. Billing job</strong><span>Say whether the blocked path was billing, licenses, refunds, or privacy.</span></div>' +
+      '<div class="portal-support-runbook-step"><strong>2. Purchase email</strong><span>Include the commercial billing email used for the self-hosted purchase.</span></div>' +
+      '<div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>'
+    );
   return (
     '<section class="portal-support-panel">' +
       '<div class="account-panel-kicker">Support</div>' +
       '<h2>Escalation only</h2>' +
-      '<p>Use support only when the Workspaces, Access, or Billing path has already stopped you.</p>' +
-      renderSectionContextChips(['Escalation only', 'Bring context', context.bootstrap.support_email ? 'Email' : 'Support']) +
+      '<p>' + escapeHTML(supportLead) + '</p>' +
+      renderSectionContextChips(supportChips) +
       '<div class="portal-support-layout">' +
         '<div class="portal-support-route-grid">' +
-          '<div class="portal-support-route-card">' +
-            '<div class="account-panel-kicker">Hosted path</div>' +
-            '<h3>Workspace or access path failed</h3>' +
-            '<p>Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.</p>' +
-            '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Start from the same task</strong><span>Use Workspaces for lifecycle issues and Access for roster issues before you escalate.</span></div>' +
-              '<div class="portal-support-point"><strong>Keep the hosted context intact</strong><span>Include the account, workspace, and failed action so support inherits the same request.</span></div>' +
-            '</div>' +
-            '<div class="portal-support-actions">' +
-              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
-              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open access</button>' +
-              '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
-            '</div>' +
-          '</div>' +
-          '<div class="portal-support-route-card">' +
-            '<div class="account-panel-kicker">Billing path</div>' +
-            '<h3>Billing path failed</h3>' +
-            '<p>Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly.</p>' +
-            '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was hosted billing, licenses, refunds, or privacy.</span></div>' +
-              '<div class="portal-support-point"><strong>Keep the request intact</strong><span>Bring the same account or billing email and the failed action instead of reopening the story.</span></div>' +
-            '</div>' +
-            '<div class="portal-support-actions">' +
-              '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' +
-              '<a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || '') + '">' + escapeHTML(context.bootstrap.support_email || '') + '</a>' +
-            '</div>' +
-          '</div>' +
+          routeCards +
         '</div>' +
         '<div class="portal-support-runbook">' +
           '<div class="account-panel-kicker">What to send</div>' +
           '<h3>Keep the escalation short</h3>' +
           '<p>Support should inherit the same request, not reconstruct it from scratch.</p>' +
           '<div class="portal-support-runbook-list">' +
-            '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy.</span></div>' +
-            '<div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work.</span></div>' +
-            '<div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' +
+            runbookSteps +
           '</div>' +
         '</div>' +
       '</div>' +

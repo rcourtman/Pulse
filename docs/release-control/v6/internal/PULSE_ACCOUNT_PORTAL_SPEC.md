@@ -189,6 +189,10 @@ Core rules:
     license, refund, and privacy panels should appear only when that exact
     billing job is active, and opening one on phone widths must reveal the
     active panel in-frame.
+27. `Support` must stay honest to account shape. Self-hosted-only accounts
+    must reduce `Support` to the billing escalation path only; hosted
+    workspace or access failure routes and task buttons must not render
+    without hosted accounts.
 
 ## Screen Model
 
@@ -227,7 +231,9 @@ Each signed-in state should render:
    task panel should stay hidden until the user opens that exact billing job.
 6. a `Support` area that is present only as an escalation path
    `Support` should collapse to failed-path routing plus the minimum escalation
-   packet needed for handoff.
+   packet needed for handoff. Self-hosted-only accounts must collapse further
+   to the self-hosted billing escalation path only and must not surface hosted
+   workspace or access routes.
 7. explicit action groups, not anonymous menu affordances
 8. explicit unavailable-state panels for top-level tasks that are not active
    for the current account shape
