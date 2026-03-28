@@ -183,7 +183,7 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
     return (
       '<div class="overview-side-card overview-side-card-stable">' +
         '<div class="account-panel-kicker">Attention</div>' +
-        '<h4>' + escapeHTML(suspendedCount > 0 ? 'Active fleet is stable' : 'Fleet is stable') + '</h4>' +
+        '<h4>' + escapeHTML(suspendedCount > 0 ? 'No active blockers' : 'Fleet is clear') + '</h4>' +
         '<p>' + escapeHTML(suspendedCount > 0
           ? 'Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.'
           : 'Every active hosted workspace currently reports a healthy posture.'
@@ -347,12 +347,12 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
   var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
   var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
   var postureTitle = unhealthyCount > 0
-    ? 'Hosted posture needs review'
+    ? 'Needs review'
     : checkingCount > 0
-      ? 'Hosted posture is still settling'
+      ? 'Still settling'
       : suspendedCount > 0
         ? 'Active fleet is stable'
-        : 'Hosted posture is stable';
+        : 'Fleet is stable';
   var postureCopy = unhealthyCount > 0
     ? 'One or more workspaces still need attention before the hosted fleet is trustworthy.'
     : checkingCount > 0
@@ -361,12 +361,12 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         ? 'Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.'
         : 'The hosted fleet is healthy and ready for routine operator work.';
   var nextStepTitle = unhealthyCount > 0
-    ? 'Start in Workspaces'
+    ? 'Start in workspaces'
     : checkingCount > 0
       ? 'Review pending checks'
       : suspendedCount > 0
-        ? 'Active fleet is clear'
-        : 'Fleet is clear';
+        ? 'Next operator step'
+        : 'Next operator step';
   var nextStepCopy = unhealthyCount > 0
     ? 'One or more workspaces need review before you treat the hosted fleet as trustworthy.'
     : checkingCount > 0
@@ -385,16 +385,16 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : checkingCount > 0
       ? (
         '<div class="overview-next-checklist">' +
-          '<div class="overview-next-check"><strong>1. Verify pending health checks</strong><span>Open the workspaces still settling and confirm they are safe to operate.</span></div>' +
-          '<div class="overview-next-check"><strong>2. Keep the roster lean</strong><span>Review Team only if a pending workspace needs a different operator mix.</span></div>' +
-          '<div class="overview-next-check"><strong>3. Leave billing as a separate action</strong><span>Use account services or billing only when the hosted fleet is already understood.</span></div>' +
+          '<div class="overview-next-check"><strong>1. Verify pending checks</strong><span>Open the workspaces still settling and confirm they are safe to operate.</span></div>' +
+          '<div class="overview-next-check"><strong>2. Keep access deliberate</strong><span>Change Team only if a pending workspace needs a different operator mix.</span></div>' +
+          '<div class="overview-next-check"><strong>3. Keep commercial work separate</strong><span>Use account services or billing only when the hosted fleet is already understood.</span></div>' +
         '</div>'
       )
       : (
         '<div class="overview-next-checklist">' +
-          '<div class="overview-next-check"><strong>1. Use Workspaces for the next operational task</strong><span>Open a client workspace directly when you are ready to do hosted work.</span></div>' +
-          '<div class="overview-next-check"><strong>2. Use Team for access changes only</strong><span>Keep roster changes explicit instead of mixing them into routine workspace work.</span></div>' +
-          '<div class="overview-next-check"><strong>3. Use account services when the task is commercial</strong><span>Licenses, refunds, privacy, and self-hosted billing stay in their own section.</span></div>' +
+          '<div class="overview-next-check"><strong>1. Open a workspace for the next operational task</strong><span>Move into Workspaces when you are ready to do hosted work.</span></div>' +
+          '<div class="overview-next-check"><strong>2. Change access in Team only</strong><span>Keep roster changes explicit instead of mixing them into routine workspace work.</span></div>' +
+          '<div class="overview-next-check"><strong>3. Keep billing and privacy separate</strong><span>Licenses, refunds, privacy, and self-hosted billing stay in their own section.</span></div>' +
         '</div>'
       );
   var nextStepActions =
@@ -409,7 +409,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
           '<h3>Hosted posture</h3>' +
-          '<p>Start here to judge fleet posture, pick the next operator action, and keep commercial account work separate from hosted operations.</p>' +
+          '<p>Review hosted posture first, then move into the next operator desk.</p>' +
         '</div>' +
       '</div>' +
       '<div class="account-command-deck">' +

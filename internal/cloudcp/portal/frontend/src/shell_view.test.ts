@@ -143,10 +143,10 @@ describe('shell view', function() {
     expect(html).toContain('Manage billing');
     expect(html).toContain('Manage team');
     expect(html).toContain('Hosted posture');
-    expect(html).toContain('Start here to judge fleet posture');
+    expect(html).toContain('Review hosted posture first');
     expect(html).toContain('Next move');
-    expect(html).toContain('Start in Workspaces');
-    expect(html).toContain('Hosted posture needs review');
+    expect(html).toContain('Start in workspaces');
+    expect(html).toContain('Needs review');
     expect(html).toContain('Fleet posture');
     expect(html).toContain('Use this console to run client workspaces, account billing, and operator access from one place.');
     expect(html).toContain('Open workspaces');
@@ -284,9 +284,9 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Suspended until you resume it');
-    expect(html).toContain('Active fleet is stable');
+    expect(html).toContain('No active blockers');
     expect(html).toContain('Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.');
-    expect(html).toContain('Active fleet is clear');
+    expect(html).toContain('Next operator step');
     expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the operator path.');
     expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Suspended stays parked');
