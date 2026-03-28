@@ -3,6 +3,7 @@ import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { HelpIcon } from '@/components/shared/HelpIcon';
 import { Toggle } from '@/components/shared/Toggle';
+import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import {
   getAIControlLevelBadgeClass,
   getAIControlLevelDescription,
@@ -226,7 +227,7 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
             <strong>Legal Disclaimer:</strong> Model-driven systems can hallucinate. You are
             responsible for any damage caused by autonomous actions. See{' '}
             <a
-              href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md"
+              href={TERMS_DOC_URL}
               target="_blank"
               rel="noopener noreferrer"
               class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 underline"

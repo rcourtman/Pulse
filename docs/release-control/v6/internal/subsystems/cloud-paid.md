@@ -238,6 +238,11 @@ activation-surface copy for `SelfHostedCommercialActivationSection.tsx`,
 including the activation field label/help text, legacy-key exchange notice,
 and self-serve trial panel labels, so that activation wording does not drift
 separately from the rest of the Pro billing surface.
+That same activation boundary also owns the linked legal surface:
+`SelfHostedCommercialActivationSection.tsx` must route its Terms-of-Service
+link through the shipped `TERMS.md` docs asset instead of sending operators to
+GitHub `main`, so the activation trust surface stays version-matched and
+available on restricted installs.
 Hosted self-serve trial leases are also part of that same contract. A redeemed
 hosted trial must carry the canonical Pro capability set and the authoritative
 `limits.max_monitored_systems` cap inside the signed lease rather than relying

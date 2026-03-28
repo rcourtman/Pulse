@@ -1,6 +1,7 @@
 import { Component, Show } from 'solid-js';
 import { formField, formHelpText, labelClass, controlClass } from '@/components/shared/Form';
 import { SELF_HOSTED_ACTIVATION_PRESENTATION } from '@/utils/licensePresentation';
+import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import { CommercialSection } from './CommercialBillingSections';
 
 interface SelfHostedCommercialActivationSectionProps {
@@ -39,7 +40,7 @@ export const SelfHostedCommercialActivationSection: Component<
       <p class={formHelpText}>
         {SELF_HOSTED_ACTIVATION_PRESENTATION.helpTextBeforeTerms}{' '}
         <a
-          href="https://github.com/rcourtman/Pulse/blob/main/TERMS.md"
+          href={TERMS_DOC_URL}
           target="_blank"
           rel="noopener noreferrer"
           class="inline-flex min-h-10 sm:min-h-9 items-center rounded px-1 text-blue-600 hover:underline"

@@ -487,6 +487,10 @@ describe('ProLicensePanel', () => {
     expect(selfHostedCommercialActivationSectionSource).toContain(
       'SELF_HOSTED_ACTIVATION_PRESENTATION',
     );
+    expect(selfHostedCommercialActivationSectionSource).toContain('TERMS_DOC_URL');
+    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+      'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
+    );
     expect(selfHostedCommercialActivationSectionSource).not.toContain('Start 14-day Pro Trial');
     expect(selfHostedCommercialActivationSectionSource).not.toContain(
       'Legacy v5 license detected',

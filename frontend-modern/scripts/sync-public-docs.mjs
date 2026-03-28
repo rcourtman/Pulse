@@ -14,6 +14,7 @@ const shippedDocs = [
   { source: path.join(repoRoot, 'docs', 'CONFIGURATION.md'), target: 'CONFIGURATION.md' },
   { source: path.join(repoRoot, 'docs', 'PROXY_AUTH.md'), target: 'PROXY_AUTH.md' },
   { source: path.join(repoRoot, 'SECURITY.md'), target: 'SECURITY.md' },
+  { source: path.join(repoRoot, 'TERMS.md'), target: 'TERMS.md' },
 ];
 
 export async function syncPublicDocs() {

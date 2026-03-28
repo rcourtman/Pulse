@@ -132,4 +132,42 @@ test.describe('Local docs links', () => {
     await expect(securityGuideLink).toHaveAttribute('href', '/docs/SECURITY.md');
     await expectPopupDoc(page, securityGuideLink, '/docs/SECURITY.md', 'Pulse Security');
   });
+
+  test('ai runtime controls open the shipped terms doc', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only local docs coverage');
+
+    await page.goto('/settings/system-ai', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings/, { timeout: 15_000 });
+
+    const permissionSelect = page
+      .locator('select')
+      .filter({ has: page.locator('option[value="autonomous"]') })
+      .first();
+    await permissionSelect.selectOption('autonomous');
+
+    const termsLink = page.getByRole('link', { name: 'Terms of Service' }).first();
+    await expect(termsLink).toHaveAttribute('href', '/docs/TERMS.md');
+    await expectPopupDoc(
+      page,
+      termsLink,
+      '/docs/TERMS.md',
+      'Pulse Pro - Terms of Service & Software License Agreement',
+    );
+  });
+
+  test('self-hosted commercial activation opens the shipped terms doc', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only local docs coverage');
+
+    await page.goto('/settings/system-pro', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings/, { timeout: 15_000 });
+
+    const termsLink = page.getByRole('link', { name: /terms of service/i }).first();
+    await expect(termsLink).toHaveAttribute('href', '/docs/TERMS.md');
+    await expectPopupDoc(
+      page,
+      termsLink,
+      '/docs/TERMS.md',
+      'Pulse Pro - Terms of Service & Software License Agreement',
+    );
+  });
 });

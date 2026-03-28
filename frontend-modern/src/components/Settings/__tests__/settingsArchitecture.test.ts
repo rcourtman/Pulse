@@ -1253,8 +1253,12 @@ describe('Settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).toContain('PRIVACY_DOC_URL');
     expect(apiAccessPanelSource).toContain('@/utils/docsLinks');
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
+    expect(aiRuntimeControlsSectionSource).toContain('@/utils/docsLinks');
+    expect(aiRuntimeControlsSectionSource).toContain('TERMS_DOC_URL');
     expect(securityOverviewPanelSource).toContain('@/utils/docsLinks');
     expect(securityOverviewPanelSource).toContain('PROXY_AUTH_DOC_URL');
+    expect(selfHostedCommercialActivationSectionSource).toContain('@/utils/docsLinks');
+    expect(selfHostedCommercialActivationSectionSource).toContain('TERMS_DOC_URL');
     expect(apiTokenManagerModelSource).toContain('@/utils/docsLinks');
     expect(apiTokenManagerModelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(recoverySettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
@@ -1276,6 +1280,7 @@ describe('Settings architecture guardrails', () => {
       "export const PROXY_AUTH_DOC_URL = getShippedDocUrl('PROXY_AUTH.md')",
     );
     expect(docsLinksSource).toContain("export const SECURITY_DOC_URL = getShippedDocUrl('SECURITY.md')");
+    expect(docsLinksSource).toContain("export const TERMS_DOC_URL = getShippedDocUrl('TERMS.md')");
   });
 
   it('routes every top-level settings surface through the canonical panel shell framing', () => {
