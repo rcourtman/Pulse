@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,10 @@ function repoRootFromEnv(env = process.env) {
 
 function hotDevBgScriptPath(env = process.env) {
   return path.join(repoRootFromEnv(env), 'scripts', 'hot-dev-bg.sh');
+}
+
+function managedVerifyLockPath(env = process.env) {
+  return trim(env.HOT_DEV_VERIFY_LOCK_FILE) || path.join(repoRootFromEnv(env), 'tmp', 'hot-dev.verify.lock');
 }
 
 function hotDevBrowserURL(env = process.env) {
@@ -61,6 +66,32 @@ async function runHotDevBg(args, env = process.env) {
 
 function statusReportsRunning(output) {
   return output.includes('[hot-dev-bg] Running');
+}
+
+export function managedVerifyLockActive(env = process.env) {
+  try {
+    const raw = fs.readFileSync(managedVerifyLockPath(env), 'utf8');
+    const ownerPid = Number.parseInt(
+      raw
+        .split('\n')
+        .find((line) => line.startsWith('pid='))?.slice(4) || '',
+      10,
+    );
+    if (!Number.isInteger(ownerPid) || ownerPid <= 0) {
+      return false;
+    }
+    process.kill(ownerPid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function shouldRestartManagedDevRuntimeForVerification({
+  env = process.env,
+  wasRunning,
+}) {
+  return Boolean(wasRunning) && managedVerifyLockActive(env);
 }
 
 async function managedRuntimeStatusOutput(env = process.env) {
@@ -231,14 +262,21 @@ export async function startManagedDevRuntime({
     throw new Error(`hot-dev-bg status failed before start: ${statusBefore.stderr || statusBefore.stdout}`);
   }
   const wasRunning = statusReportsRunning(`${statusBefore.stdout}${statusBefore.stderr}`);
+  const shouldRestartForVerification = shouldRestartManagedDevRuntimeForVerification({
+    env,
+    wasRunning,
+  });
 
-  const startArgs = ['start'];
+  const startArgs = [shouldRestartForVerification ? 'restart' : 'start'];
   if (truthy(env.PULSE_E2E_HOT_DEV_TAKEOVER)) {
     startArgs.push('--takeover');
   }
+  if (shouldRestartForVerification) {
+    logger.log('[integration] Restarting managed dev runtime before browser verification to pick up current source changes');
+  }
   const startResult = await runHotDevBg(startArgs, env);
   if (startResult.code !== 0) {
-    throw new Error(`hot-dev-bg start failed: ${startResult.stderr || startResult.stdout}`);
+    throw new Error(`hot-dev-bg ${startArgs[0]} failed: ${startResult.stderr || startResult.stdout}`);
   }
 
   await waitForStableManagedRuntime({ env });

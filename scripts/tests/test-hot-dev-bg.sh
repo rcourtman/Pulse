@@ -243,6 +243,36 @@ test_verify_bg_holds_runtime_lock_for_proof_duration() {
   assert_contains "verify clears the runtime lock after proofs finish" "${output}" "lock_after=no"
 }
 
+test_managed_dev_runtime_restarts_existing_session_for_verification() {
+  local output
+  output="$(
+    ROOT_DIR="${ROOT_DIR}" \
+    node --input-type=module <<'EOF'
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
+const rootDir = process.env.ROOT_DIR;
+const modulePath = path.join(rootDir, 'tests', 'integration', 'scripts', 'managed-dev-runtime.mjs');
+const { shouldRestartManagedDevRuntimeForVerification } = await import(`file://${modulePath}`);
+
+const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-dev-verify-'));
+const lockPath = path.join(tempDir, 'hot-dev.verify.lock');
+await fs.writeFile(lockPath, `pid=${process.pid}\ncreated_at=2026-03-28T23:00:00Z\n`, 'utf8');
+
+console.log(
+  `running=${shouldRestartManagedDevRuntimeForVerification({ env: { HOT_DEV_VERIFY_LOCK_FILE: lockPath }, wasRunning: true })}`,
+);
+console.log(
+  `stopped=${shouldRestartManagedDevRuntimeForVerification({ env: { HOT_DEV_VERIFY_LOCK_FILE: lockPath }, wasRunning: false })}`,
+);
+EOF
+  )"
+
+  assert_contains "managed dev runtime restarts existing sessions during verification" "${output}" "running=true"
+  assert_contains "managed dev runtime does not restart absent prior session" "${output}" "stopped=false"
+}
+
 test_takeover_avoids_killing_current_shell_lineage() {
   local output
   output="$(
@@ -865,6 +895,7 @@ main() {
   test_verify_command_injects_managed_runtime_env
   test_default_verify_command_runs_runtime_and_layout_proofs
   test_verify_bg_holds_runtime_lock_for_proof_duration
+  test_managed_dev_runtime_restarts_existing_session_for_verification
   test_takeover_avoids_killing_current_shell_lineage
   test_launchd_session_supervises_managed_runtime
   test_start_bg_reports_browser_entrypoint

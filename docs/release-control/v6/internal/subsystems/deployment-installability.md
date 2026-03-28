@@ -200,6 +200,11 @@ across pretest, Playwright, and posttest. `scripts/hot-dev.sh` must honor that
 lock by suppressing source-triggered rebuilds and manual `pulse` binary restart
 churn while the owning proof process is still alive. Stale verify locks must
 clear themselves automatically once the owning process exits.
+That same verification contract also applies before Playwright attaches: if a
+managed hot-dev session is already running when the verify lock is active, the
+integration launcher must restart that session instead of silently attaching to
+an old frontend process, so browser proof reflects the current branch-tip
+source rather than whatever Vite shell happened to be left alive.
 That same launcher boundary also owns its CLI contract: managed commands such
 as `start --takeover` and `restart --takeover` must preserve the takeover flag
 through the actual script entrypoint instead of silently dropping second-arg
