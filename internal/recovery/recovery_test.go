@@ -141,6 +141,35 @@ func TestDeriveIndex(t *testing.T) {
 			},
 		},
 		{
+			name: "PBS falls back to backup comment when ref name is only vmid",
+			point: RecoveryPoint{
+				ID:       "pbs-backup-legacy-140",
+				Provider: ProviderProxmoxPBS,
+				SubjectRef: &ExternalRef{
+					Type:      "proxmox-lxc",
+					Namespace: "pbs-docker",
+					Name:      "140",
+					ID:        "140",
+				},
+				Details: map[string]any{
+					"comment": "pulse-v4-prod, pi, 140",
+					"vmid":    "140",
+				},
+			},
+			expected: PointIndex{
+				SubjectLabel:    "pulse-v4-prod",
+				SubjectType:     "proxmox-lxc",
+				ItemType:        "system-container",
+				IsWorkload:      true,
+				ClusterLabel:    "pbs-docker",
+				NodeHostLabel:   "",
+				NamespaceLabel:  "root",
+				EntityIDLabel:   "140",
+				RepositoryLabel: "",
+				DetailsSummary:  "pulse-v4-prod, pi, 140",
+			},
+		},
+		{
 			name: "TrueNAS with hostname",
 			point: RecoveryPoint{
 				ID:       "truenas-snap-1",

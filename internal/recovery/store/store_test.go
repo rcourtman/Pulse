@@ -204,6 +204,89 @@ func TestStore_OpenMigratesLegacySchemaMissingItemType(t *testing.T) {
 	}
 }
 
+func TestStore_OpenBackfillsLegacyNumericPBSSubjectLabels(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	now := time.Date(2026, 3, 27, 12, 0, 0, 0, time.UTC)
+	point := recovery.RecoveryPoint{
+		ID:          "pbs-backup-legacy-140",
+		Provider:    recovery.ProviderProxmoxPBS,
+		Kind:        recovery.KindBackup,
+		Mode:        recovery.ModeRemote,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   &now,
+		CompletedAt: &now,
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "proxmox-lxc",
+			Namespace: "pbs-docker",
+			Name:      "pulse-v4-prod",
+			ID:        "140",
+		},
+		Details: map[string]any{
+			"comment":    "pulse-v4-prod, pi, 140",
+			"vmid":       "140",
+			"backupType": "ct",
+		},
+	}
+
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{point}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points
+		 SET subject_label = ?, entity_id_label = ?, details_summary = ?
+		 WHERE id = ?`,
+		"140",
+		"140",
+		"pulse-v4-prod, pi, 140",
+		point.ID,
+	); err != nil {
+		t.Fatalf("degrade legacy numeric pbs label: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	points, total, err := reopened.ListPoints(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListPoints() error = %v", err)
+	}
+	if total != 1 || len(points) != 1 {
+		t.Fatalf("ListPoints() total=%d len=%d, want 1/1", total, len(points))
+	}
+	if points[0].Display == nil || points[0].Display.SubjectLabel != "pulse-v4-prod" {
+		t.Fatalf("ListPoints() display = %#v, want backfilled subject label pulse-v4-prod", points[0].Display)
+	}
+
+	rollups, rollupTotal, err := reopened.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v", err)
+	}
+	if rollupTotal != 1 || len(rollups) != 1 {
+		t.Fatalf("ListRollups() total=%d len=%d, want 1/1", rollupTotal, len(rollups))
+	}
+	if rollups[0].Display == nil || rollups[0].Display.SubjectLabel != "pulse-v4-prod" {
+		t.Fatalf("ListRollups() display = %#v, want backfilled subject label pulse-v4-prod", rollups[0].Display)
+	}
+}
+
 func createLegacyRecoveryDBWithoutItemType(t *testing.T, dbPath string, point recovery.RecoveryPoint) {
 	t.Helper()
 

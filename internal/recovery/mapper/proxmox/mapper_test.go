@@ -249,6 +249,36 @@ func TestFromPBSBackups_Single(t *testing.T) {
 	}
 }
 
+func TestFromPBSBackups_PrefersCommentNameWhenGuestIsUnresolved(t *testing.T) {
+	backups := []models.PBSBackup{
+		{
+			ID:         "pbs-backup-legacy",
+			VMID:       "140",
+			Instance:   "pbs-docker",
+			Namespace:  "pimox",
+			Datastore:  "main",
+			BackupType: "ct",
+			BackupTime: time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC),
+			Comment:    "pulse-v4-prod, pi, 140",
+		},
+	}
+
+	result := FromPBSBackups(backups, nil)
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(result))
+	}
+	if result[0].SubjectRef == nil {
+		t.Fatal("expected SubjectRef to be set")
+	}
+	if got := result[0].SubjectRef.Name; got != "pulse-v4-prod" {
+		t.Fatalf("SubjectRef.Name = %q, want %q", got, "pulse-v4-prod")
+	}
+	if got := result[0].SubjectRef.ID; got != "140" {
+		t.Fatalf("SubjectRef.ID = %q, want %q", got, "140")
+	}
+}
+
 func TestFromPBSBackups_WithCandidates(t *testing.T) {
 	backups := []models.PBSBackup{
 		{

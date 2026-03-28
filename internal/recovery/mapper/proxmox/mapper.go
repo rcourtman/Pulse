@@ -36,6 +36,28 @@ func guestLookupKey(instanceName, nodeName string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%d", strings.TrimSpace(instanceName), strings.TrimSpace(nodeName), vmid)
 }
 
+func preferredPBSBackupSubjectName(comment, vmid string) string {
+	comment = strings.TrimSpace(comment)
+	vmid = strings.TrimSpace(vmid)
+	if comment == "" {
+		return ""
+	}
+	if vmid != "" {
+		if comment == vmid {
+			return ""
+		}
+		parts := strings.Split(comment, ",")
+		if len(parts) >= 2 {
+			last := strings.TrimSpace(parts[len(parts)-1])
+			first := strings.TrimSpace(parts[0])
+			if last == vmid && first != "" && first != vmid {
+				return first
+			}
+		}
+	}
+	return comment
+}
+
 func proxmoxSubjectRef(resourceType unifiedresources.ResourceType, info GuestInfo, instanceName, nodeName string, vmid int, sourceID string) *recovery.ExternalRef {
 	name := strings.TrimSpace(info.Name)
 	if name == "" && vmid > 0 {
@@ -344,10 +366,14 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 			} else if guestType == "ct" {
 				refType = "proxmox-lxc"
 			}
+			subjectName := preferredPBSBackupSubjectName(b.Comment, vmidStr)
+			if subjectName == "" {
+				subjectName = vmidStr
+			}
 			subjectRef = &recovery.ExternalRef{
 				Type:      refType,
 				Namespace: strings.TrimSpace(b.Instance),
-				Name:      vmidStr,
+				Name:      subjectName,
 				ID:        vmidStr,
 				Class:     "",
 			}

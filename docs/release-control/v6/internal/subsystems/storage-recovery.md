@@ -245,6 +245,12 @@ and `display.itemType` to recovery consumers, while legacy transport fields
 such as `subjectLabel` and `subjectType` remain decode-only compatibility
 aliases in the shared normalization layer instead of leaking into runtime
 presenters.
+That same canonical item-label boundary must prefer recognizable protected-item
+names over raw entity IDs. When unresolved Proxmox-backed recovery points only
+have a VMID/CTID in the subject ref but still carry a richer backup comment or
+notes label, the canonical recovery index and store backfill must promote that
+human-readable label into the persisted subject/item label instead of leaving
+protected inventory rows to lead with bare numeric IDs.
 That same shared presentation layer also owns the distinction between
 aggregate recovery-method language and single-record recovery-method language.
 Timeline legends and daily breakdowns must use aggregate labels such as

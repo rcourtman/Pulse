@@ -56,6 +56,61 @@ func detailsString(p RecoveryPoint, key string) string {
 	return trimString(p.Details[key])
 }
 
+func isNumericOnlyLabel(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func preferredProxmoxBackupCommentLabel(comment, entityID string) string {
+	comment = strings.TrimSpace(comment)
+	entityID = strings.TrimSpace(entityID)
+	if comment == "" {
+		return ""
+	}
+	if entityID != "" {
+		if comment == entityID {
+			return ""
+		}
+		parts := strings.Split(comment, ",")
+		if len(parts) >= 2 {
+			first := strings.TrimSpace(parts[0])
+			last := strings.TrimSpace(parts[len(parts)-1])
+			if last == entityID && first != "" && first != entityID {
+				return first
+			}
+		}
+	}
+	return comment
+}
+
+func preferredSubjectLabelFromDetails(p RecoveryPoint, currentLabel string) string {
+	currentLabel = strings.TrimSpace(currentLabel)
+	if !strings.HasPrefix(string(p.Provider), "proxmox-") {
+		return ""
+	}
+
+	entityID := entityIDLabel(p)
+	if currentLabel != "" && currentLabel != entityID && !isNumericOnlyLabel(currentLabel) {
+		return ""
+	}
+
+	for _, key := range []string{"comment", "notes"} {
+		if candidate := preferredProxmoxBackupCommentLabel(detailsString(p, key), entityID); candidate != "" {
+			return candidate
+		}
+	}
+
+	return ""
+}
+
 func NormalizeRecoveryItemType(value string) string {
 	t := strings.ToLower(strings.TrimSpace(value))
 	switch t {
@@ -121,8 +176,14 @@ func subjectLabel(p RecoveryPoint) string {
 			}
 		}
 
+		if candidate := preferredSubjectLabelFromDetails(p, name); candidate != "" {
+			return candidate
+		}
 		if name != "" {
 			return name
+		}
+		if candidate := preferredSubjectLabelFromDetails(p, id); candidate != "" {
+			return candidate
 		}
 		if ns != "" {
 			return ns
@@ -136,6 +197,9 @@ func subjectLabel(p RecoveryPoint) string {
 	}
 	if rid != "" {
 		return rid
+	}
+	if candidate := preferredSubjectLabelFromDetails(p, ""); candidate != "" {
+		return candidate
 	}
 	return strings.TrimSpace(p.ID)
 }
