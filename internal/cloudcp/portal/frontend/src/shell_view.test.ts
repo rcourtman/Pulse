@@ -148,13 +148,13 @@ describe('shell view', function() {
     expect(html).toContain('Add workspace');
     expect(html).toContain('Manage billing');
     expect(html).toContain('Manage team');
-    expect(html).toContain('Hosted status');
-    expect(html).toContain('Review hosted status first');
+    expect(html).toContain('Workspace status');
+    expect(html).toContain('Review workspace status first');
     expect(html).toContain('section-context-strip');
     expect(html).toContain('Next move');
     expect(html).toContain('Start in workspaces');
     expect(html).toContain('Needs review');
-    expect(html).toContain('Fleet status');
+    expect(html).toContain('Workspace summary');
     expect(html).toContain('Account scope');
     expect(html).toContain('Manage client workspaces, billing, and team access from one place.');
     expect(html).toContain('Hosted path');
@@ -162,7 +162,7 @@ describe('shell view', function() {
     expect(html).toContain('Open workspaces');
     expect(html).toContain('Review team access');
     expect(html).toContain('Needs review');
-    expect(html).toContain('Workspace fleet');
+    expect(html).toContain('Workspace overview');
     expect(html).toContain('account-stage-header-actions');
     expect(html).toContain('0 suspended');
     expect(html).toContain('Alpha Workspace');
@@ -315,7 +315,7 @@ describe('shell view', function() {
 
     expect(html).toContain('Suspended until you resume it');
     expect(html).toContain('No active blockers');
-    expect(html).toContain('Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.');
+    expect(html).toContain('Active workspaces are healthy while suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Next step');
     expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into regular use.');
     expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');

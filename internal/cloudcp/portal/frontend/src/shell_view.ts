@@ -234,7 +234,7 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
     '<div class="overview-side-card">' +
       '<div class="account-panel-kicker">Attention</div>' +
       '<h4>Needs review</h4>' +
-      '<p>These workspaces should be checked before you treat the hosted fleet as fully healthy.</p>' +
+      '<p>These workspaces should be checked before you treat the workspace list as fully healthy.</p>' +
       '<div class="overview-alert-list">' + items + '</div>' +
     '</div>'
   );
@@ -300,15 +300,15 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
       '</div>' +
       '<div class="portal-account-context-summary">' +
         '<div class="portal-account-context-stat">' +
-          '<span>Role</span>' +
+          '<span>Access</span>' +
           '<strong>' + escapeHTML(titleCase(account.role)) + '</strong>' +
         '</div>' +
         '<div class="portal-account-context-stat">' +
-          '<span>Hosted fleet</span>' +
+          '<span>Workspaces</span>' +
           '<strong>' + escapeHTML(workspaceLabel) + '</strong>' +
         '</div>' +
         '<div class="portal-account-context-stat">' +
-          '<span>Commercial</span>' +
+          '<span>Billing</span>' +
           '<strong>' + escapeHTML(billingLabel) + '</strong>' +
         '</div>' +
       '</div>' +
@@ -432,15 +432,15 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : checkingCount > 0
       ? 'Still settling'
       : suspendedCount > 0
-        ? 'Active fleet is stable'
-        : 'Fleet is stable';
+        ? 'Active workspaces are stable'
+        : 'Workspaces are stable';
   var postureCopy = unhealthyCount > 0
-    ? 'One or more workspaces still need attention before the hosted fleet is trustworthy.'
+    ? 'One or more workspaces still need attention before this account looks healthy.'
     : checkingCount > 0
-      ? 'The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check.'
+      ? 'Most workspaces look healthy, but some are still waiting on a completed health check.'
       : suspendedCount > 0
-        ? 'Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.'
-        : 'The hosted fleet is healthy and ready for routine use.';
+        ? 'Active workspaces are healthy while suspended workspaces stay parked until you resume them.'
+        : 'All workspaces are healthy and ready for routine use.';
   var nextStepTitle = unhealthyCount > 0
     ? 'Start in workspaces'
     : checkingCount > 0
@@ -449,7 +449,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         ? 'Next step'
         : 'Next step';
   var nextStepCopy = unhealthyCount > 0
-    ? 'One or more workspaces need review before you treat the hosted fleet as trustworthy.'
+    ? 'One or more workspaces need review before you treat this account as healthy.'
     : checkingCount > 0
       ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
       : suspendedCount > 0
@@ -468,7 +468,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '<div class="overview-next-checklist">' +
           '<div class="overview-next-check"><strong>1. Verify pending checks</strong><span>Open the workspaces still settling and confirm they are safe to operate.</span></div>' +
           '<div class="overview-next-check"><strong>2. Keep access deliberate</strong><span>Change Team only if a pending workspace needs a different mix of access.</span></div>' +
-          '<div class="overview-next-check"><strong>3. Keep commercial work separate</strong><span>Use account services or billing only when the hosted fleet is already understood.</span></div>' +
+          '<div class="overview-next-check"><strong>3. Keep commercial work separate</strong><span>Use account services or billing only when the workspace state is already understood.</span></div>' +
         '</div>'
       )
       : (
@@ -507,8 +507,8 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<div class="account-stage-header account-stage-header-overview">' +
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
-          '<h3>Hosted status</h3>' +
-          '<p>Review hosted status first, then move into the next section.</p>' +
+          '<h3>Workspace status</h3>' +
+          '<p>Review workspace status first, then move into the next section.</p>' +
           renderSectionContextChips([
             String(totalCount) + ' total',
             String(readyCount) + ' ready',
@@ -521,7 +521,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '<div class="account-overview-main-column">' +
           '<div class="account-overview-card account-overview-briefing-card">' +
             '<div class="account-overview-lead">' +
-              '<div class="account-panel-kicker">Fleet status</div>' +
+              '<div class="account-panel-kicker">Workspace summary</div>' +
               '<h3>' + escapeHTML(postureTitle) + '</h3>' +
               '<p>' + escapeHTML(postureCopy) + '</p>' +
               overviewBriefStrip +
@@ -708,8 +708,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
       '<div class="account-stage-header">' +
         '<div class="account-stage-header-row">' +
           '<div>' +
-            '<div class="account-panel-kicker">Workspace fleet</div>' +
-            '<h3>Hosted fleet</h3>' +
+            '<div class="account-panel-kicker">Workspace overview</div>' +
+            '<h3>Workspaces</h3>' +
             '<p>Open workspaces, review status, and keep lifecycle actions explicit.</p>' +
             renderSectionContextChips([
               String(workspaces.length) + ' total',
@@ -803,7 +803,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
             '<div class="team-roster">' +
               '<div class="team-panel-heading">' +
                 '<h4>People on this account</h4>' +
-                '<p>Keep the roster small and role assignment explicit. The people listed here are the ones who can operate the hosted fleet.</p>' +
+                '<p>Keep the roster small and role assignment explicit. The people listed here are the ones who can manage these workspaces.</p>' +
               '</div>' +
               '<div class="team-roster-list" id="team-list-' +
               escapeAttr(account.id) +
