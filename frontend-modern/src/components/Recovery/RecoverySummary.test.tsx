@@ -78,8 +78,8 @@ describe('RecoverySummary', () => {
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
   });
 
-  it('uses the shared compact summary density mode rather than local card padding forks', () => {
-    expect(recoverySummarySource).toContain('density="compact"');
+  it('uses the shared default summary density rather than a recovery-only compact override', () => {
+    expect(recoverySummarySource).not.toContain('density="compact"');
     expect(recoverySummarySource).not.toContain('!p-1.5 sm:!p-2');
   });
 });

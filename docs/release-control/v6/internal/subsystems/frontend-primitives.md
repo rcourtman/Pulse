@@ -773,6 +773,11 @@ must stay on the canonical shared subtabs control instead of reviving a
 recovery-local switcher pattern. When recovery embeds that switcher inside the
 page-controls row, the contained styling should come from the shared subtabs
 variant boundary rather than from recovery-only class overrides.
+That same shared-boundary rule applies to summary density. The shared compact
+mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
+dense monitoring surfaces, but pages that are trying to align with the normal
+Pulse monitoring scan path should stay on the default shared density instead of
+using page-local compact overrides by habit.
 That same recovery shell boundary now also owns one canonical top-level filter
 controller in
 `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`. Route-backed

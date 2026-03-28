@@ -751,6 +751,11 @@ That same workspace rule also means the protected-items versus recovery-events
 switcher should live inside the active workspace header strip, not in its own
 separate band above the cards, so the page hands off from summary directly into
 the active control surface the way infrastructure and workloads do.
+That same handoff should keep recovery on the standard Pulse summary density.
+`RecoverySummary.tsx` should use the shared default `SummaryPanel` /
+`SummaryMetricCard` rhythm that infrastructure and workloads use, instead of
+opting into a recovery-only compact density that makes the top strip harder to
+scan than the rest of the monitoring product.
 That same shell rule applies to the recovery-events workspace.
 `RecoveryHistorySection.tsx` should use the same slim status-row-plus-filter-row
 pattern as the protected inventory surface, not a separate large titled header
