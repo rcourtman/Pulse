@@ -1611,7 +1611,8 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: minmax(0, 1fr) 156px 136px;
   gap: 16px;
-  padding: 0 6px 8px;
+  padding: 0 14px 8px;
+  border-bottom: 1px solid var(--line);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -1624,7 +1625,7 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) 156px 136px;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 12px 14px 11px;
   border: none;
   border-top: 1px solid var(--line);
   background: #fff;
@@ -1632,6 +1633,10 @@ header .logout-btn:hover,
 
 .team-member-row:first-of-type {
   border-top: none;
+}
+
+.team-member-row:hover {
+  background: #fbfdff;
 }
 
 .team-member-identity {
@@ -1645,18 +1650,18 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .team-member-email {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   color: var(--ink);
 }
 
 .team-member-caption {
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.45;
   color: var(--ink-soft);
 }
@@ -1678,23 +1683,27 @@ header .logout-btn:hover,
 .team-role-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #edf3ff;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid #d7e3f4;
+  background: #f8fbff;
   color: #35507a;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .team-inline-role-badge {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--panel-muted);
-  color: var(--ink-soft);
+  min-height: 20px;
+  padding: 0 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink-muted);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1705,13 +1714,13 @@ header .logout-btn:hover,
 .team-role-select {
   width: 100%;
   min-width: 0;
-  min-height: 36px;
-  padding-inline: 12px 32px;
-  border-radius: 10px;
+  min-height: 34px;
+  padding-inline: 10px 28px;
+  border-radius: 8px;
   border: 1px solid var(--line-strong);
   background: #fff;
   color: var(--ink);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -1719,15 +1728,17 @@ header .logout-btn:hover,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 36px;
+  min-height: 34px;
   width: 100%;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 8px;
   background: var(--panel-muted);
   color: var(--ink-muted);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .team-list-message {
@@ -1769,15 +1780,17 @@ header .logout-btn:hover,
 }
 
 .btn-remove {
-  min-height: 36px;
+  min-height: 34px;
   width: 100%;
-  padding: 0 12px;
+  padding: 0 10px;
   border: 1px solid rgba(166, 27, 27, 0.16);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(166, 27, 27, 0.04);
   color: var(--danger);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
