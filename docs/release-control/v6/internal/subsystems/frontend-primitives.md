@@ -206,6 +206,11 @@ work extends shared components instead of creating new local variants.
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
+12. Keep relay settings shell copy on the shared presentation owner in
+    `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
+    `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
+    `RelaySettingsPanel.tsx` must reuse the same description and availability
+    copy instead of drifting into separate rollout or pairing wording.
 
 ## Current State
 
@@ -1412,6 +1417,12 @@ That shared shell boundary now also covers version-matched docs-link framing:
 customer-facing privacy disclosures in shared settings surfaces must route
 through `frontend-modern/src/utils/docsLinks.ts` rather than panel-local
 external URLs.
+The same shell boundary now also owns shared relay route framing copy:
+`frontend-modern/src/utils/relayPresentation.ts` is the canonical owner for
+the top-level relay settings description and availability copy used by both
+`settingsHeaderMeta.ts` and `RelaySettingsPanel.tsx`, so the route shell and
+its first `SettingsPanel` cannot drift into separate rollout or pairing
+descriptions.
 
 Single-surface settings pages that only render one canonical `SettingsPanel`
 must stay rooted directly at that panel instead of wrapping it in an extra

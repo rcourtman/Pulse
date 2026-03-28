@@ -2,7 +2,7 @@
 
 Pulse Relay provides **end-to-end encrypted remote access** foundations for Pulse instances. It allows secure remote connectivity without exposing your Pulse server to the public internet.
 
-> Mobile app status: public rollout is coming soon. Relay remains available now for early-access/beta onboarding.
+> Supported Pulse Mobile clients pair from **Settings → Relay** using a QR code or deep link and connect through Pulse Relay over end-to-end encrypted remote access.
 
 ## How It Works
 
@@ -22,7 +22,7 @@ Pulse Relay provides **end-to-end encrypted remote access** foundations for Puls
 
 1. Go to **Settings → Relay**.
 2. Toggle relay **On**.
-3. Use the **QR Code** or **Deep Link** when mobile beta access is enabled.
+3. Use the **QR Code** or **Deep Link** to pair a supported Pulse Mobile client.
 4. Your paired mobile client connects through relay.
 
 ## Requirements

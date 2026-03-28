@@ -1982,15 +1982,11 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "Relay infrastructure is at the RC floor; the remaining residual is explicitly limited to the backend-owned mobile relay capability boundary and the later public rollout posture required for GA promotion.",
+        "summary": "Relay infrastructure is at the RC floor; the remaining residual is limited to the backend-owned mobile relay capability boundary.",
         "tracking": [
           {
             "kind": "lane-followup",
             "id": "relay-mobile-capability-boundary"
-          },
-          {
-            "kind": "lane-followup",
-            "id": "relay-public-rollout-posture"
           }
         ]
       },
@@ -3146,19 +3142,6 @@
     {
       "id": "relay-mobile-capability-boundary",
       "summary": "Narrow the dedicated backend-owned mobile relay capability to the minimum supported runtime route set and require any future route expansion to land as explicit governed relay surface work rather than incidental backend reach-through.",
-      "owner": "project-owner",
-      "status": "planned",
-      "recorded_at": "2026-03-28",
-      "lane_ids": [
-        "L7"
-      ],
-      "subsystem_ids": [
-        "relay-runtime"
-      ]
-    },
-    {
-      "id": "relay-public-rollout-posture",
-      "summary": "Replace the current early-access and coming-soon relay public posture with an explicit public rollout decision only after mobile availability, onboarding language, and support expectations are intentionally promoted for normal use.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-28",

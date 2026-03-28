@@ -1,5 +1,6 @@
 import type { SettingsHeaderMetaMap } from './settingsNavigationModel';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
+import { RELAY_SETTINGS_DESCRIPTION } from '@/utils/relayPresentation';
 
 export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   proxmox: {
@@ -34,8 +35,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   },
   'system-relay': {
     title: 'Remote Access',
-    description:
-      'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
+    description: RELAY_SETTINGS_DESCRIPTION,
   },
   'system-billing': {
     title: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,

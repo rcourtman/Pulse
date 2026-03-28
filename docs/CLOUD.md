@@ -6,7 +6,7 @@ Pulse Cloud is the hosted version of Pulse — a fully managed monitoring instan
 
 1. **Sign up** at the Pulse Cloud portal.
 2. **Connect your agents** — install the Pulse agent on your infrastructure pointing to your cloud URL.
-3. **Monitor** — access your dashboard from any browser; mobile app rollout is coming soon.
+3. **Monitor** — access your dashboard from any browser or supported Pulse Mobile client.
 
 Each Cloud account gets a dedicated, isolated Pulse instance with its own subdomain (e.g., `yourname.cloud.pulserelay.pro`).
 
@@ -21,7 +21,7 @@ Pulse Cloud includes everything in the **Pro** plan, plus:
 | **Automatic backups** | Daily encrypted backups with 7-day retention |
 | **Dedicated instance** | Your data runs in an isolated container — not shared with other tenants |
 | **Wildcard TLS** | HTTPS with auto-renewing certificates |
-| **Mobile ready** | Relay is pre-configured now; mobile app rollout is coming soon |
+| **Mobile ready** | Relay is pre-configured for secure Pulse Mobile remote access |
 
 ### Cloud Enterprise (Add-On)
 

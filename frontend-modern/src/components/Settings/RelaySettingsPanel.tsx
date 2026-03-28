@@ -8,13 +8,18 @@ import { formField, labelClass, controlClass, formHelpText } from '@/components/
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import {
-  RELAY_BETA_MESSAGE_CLASS,
-  RELAY_BETA_TITLE_CLASS,
+  RELAY_ENABLE_HELP_TEXT,
+  RELAY_INFO_MESSAGE_CLASS,
+  RELAY_INFO_TITLE_CLASS,
   RELAY_INLINE_ACTION_CLASS,
   RELAY_LAST_ERROR_CLASS,
+  RELAY_LICENSE_REQUIRED_MESSAGE,
+  RELAY_PAIRING_AVAILABILITY_MESSAGE,
+  RELAY_PAIRING_AVAILABILITY_TITLE,
   RELAY_PRIMARY_BUTTON_CLASS,
   RELAY_PRIMARY_LINK_CLASS,
   RELAY_READONLY_NOTICE_CLASS,
+  RELAY_SETTINGS_DESCRIPTION,
 } from '@/utils/relayPresentation';
 import { UPGRADE_TRIAL_LABEL } from '@/utils/upgradePresentation';
 import { RelayPairingSection } from './RelayPairingSection';
@@ -31,7 +36,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
     return (
       <SettingsPanel
         title="Remote Access"
-        description="Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon)."
+        description={RELAY_SETTINGS_DESCRIPTION}
         icon={<RadioTower size={20} strokeWidth={2} />}
       >
         <Show when={!state.loading()} fallback={<div class="text-sm ">Loading...</div>}>
@@ -41,10 +46,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                 <RadioTower size={20} class="text-blue-500 mt-0.5 flex-shrink-0" strokeWidth={2} />
                 <div>
                   <p class="text-sm font-medium text-base-content">Remote Access (Relay)</p>
-                  <p class="text-sm text-muted mt-1">
-                    Remote access via Pulse Relay requires a Relay license or above. Mobile app
-                    public rollout is coming soon.
-                  </p>
+                  <p class="text-sm text-muted mt-1">{RELAY_LICENSE_REQUIRED_MESSAGE}</p>
                 </div>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
@@ -78,7 +80,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
   return (
     <SettingsPanel
       title="Remote Access"
-      description="Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon)."
+      description={RELAY_SETTINGS_DESCRIPTION}
       icon={<RadioTower size={20} strokeWidth={2} />}
     >
       <Show
@@ -96,11 +98,8 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
         </Show>
 
         <Card tone="info" padding="md">
-          <p class={RELAY_BETA_TITLE_CLASS}>Pulse Mobile rollout is coming soon</p>
-          <p class={RELAY_BETA_MESSAGE_CLASS}>
-            Relay infrastructure is available now. Pairing and remote sessions are currently
-            intended for staged beta access.
-          </p>
+          <p class={RELAY_INFO_TITLE_CLASS}>{RELAY_PAIRING_AVAILABILITY_TITLE}</p>
+          <p class={RELAY_INFO_MESSAGE_CLASS}>{RELAY_PAIRING_AVAILABILITY_MESSAGE}</p>
         </Card>
 
         {/* Connection Status */}
@@ -136,10 +135,7 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
           <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <label class={labelClass()}>Enable Remote Access</label>
-              <p class={formHelpText}>
-                Connect this Pulse instance to the relay server for secure remote access and mobile
-                beta readiness.
-              </p>
+              <p class={formHelpText}>{RELAY_ENABLE_HELP_TEXT}</p>
             </div>
             <Toggle
               checked={state.config()?.enabled ?? false}

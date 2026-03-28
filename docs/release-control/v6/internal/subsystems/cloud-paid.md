@@ -803,12 +803,17 @@ provisioning must complete under an explicit background timeout instead of
 depending on the inbound Stripe request context surviving long enough for first
 boot and health polling.
 That same paid relay onboarding boundary now also owns QR-token lifecycle on
-the staged mobile rollout surface. `RelaySettingsPanel.tsx`,
+the supported Pulse Mobile pairing surface. `RelaySettingsPanel.tsx`,
 `RelayPairingSection.tsx`, and `useRelaySettingsPanelState.ts` may revoke a
 displayed pairing token only when canonical token metadata still shows no
 `lastUsedAt`; once a token has been used by a paired device, refreshing or
 hiding the QR must preserve that credential instead of treating it as
 disposable UI state.
+That same paid relay onboarding boundary also owns the operator-facing rollout
+posture on the licensed settings surface: relay paywall and pairing copy must
+describe supported Pulse Mobile pairing as a normal-use Relay capability, and
+must not fall back to staged-beta or coming-soon messaging once the owned
+pairing/runtime path is live.
 The customer-account surface is now also an explicit cloud-paid ownership
 boundary. Pulse already has a real hosted control-plane portal in
 `internal/cloudcp/portal/`, account/workspace mutation APIs in

@@ -146,6 +146,23 @@ describe('RelaySettingsPanel runtime', () => {
     cleanup();
   });
 
+  it('shows supported Pulse Mobile pairing copy on the relay paywall', async () => {
+    hasFeatureMock.mockReturnValue(false);
+
+    render(() => <RelaySettingsPanel canManage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Remote Access (Relay)')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        'Remote access via Pulse Relay requires a Relay license or above. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/upgrade');
+  });
+
   it('loads connected relay state and generates a pairing QR payload', async () => {
     render(() => <RelaySettingsPanel canManage />);
 
@@ -153,6 +170,12 @@ describe('RelaySettingsPanel runtime', () => {
       expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
     });
 
+    expect(screen.getByText('Pair Pulse Mobile through Relay')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Supported Pulse Mobile clients connect to this Pulse instance with a QR code or deep link over end-to-end encrypted relay connectivity.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('Connected')).toBeInTheDocument();
     expect(screen.getByText('Instance: instance-local')).toBeInTheDocument();
     expect(screen.getByText('1 active channel')).toBeInTheDocument();

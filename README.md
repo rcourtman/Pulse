@@ -61,7 +61,7 @@ Power-user shortcuts:
 - **Secure by Design**: Credentials encrypted at rest, strict API scoping, agent commands disabled by default
 - **One-Click Updates**: Easy upgrades for supported deployments
 - **OIDC/SSO/SAML**: Single sign-on with multi-provider support
-- **Mobile Remote Access (Coming Soon)**: Relay protocol with end-to-end encryption is available now; public mobile app launch is in staged rollout (Relay and above)
+- **Mobile Remote Access**: Relay protocol with end-to-end encryption for supported Pulse Mobile clients (Relay and above)
 - **Privacy Focused**: Anonymous telemetry is enabled by default and [fully documented](docs/PRIVACY.md) — no hostnames, credentials, or personal data is ever sent. Disable any time in Settings or via `PULSE_TELEMETRY=false`.
 
 ## ⚡ Quick Start

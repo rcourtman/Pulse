@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '../selfHostedBillingPresentation';
+import { RELAY_SETTINGS_DESCRIPTION } from '@/utils/relayPresentation';
 import settingsSource from '../Settings.tsx?raw';
 import settingsDialogsSource from '../SettingsDialogs.tsx?raw';
 import settingsShellSource from '../SettingsPageShell.tsx?raw';
@@ -1316,6 +1317,13 @@ describe('Settings architecture guardrails', () => {
       'subscription status',
     );
     expect(SETTINGS_HEADER_META['organization-billing'].description).toContain('plan limits');
+  });
+
+  it('keeps relay shell copy on the shared relay presentation owner', () => {
+    expect(settingsHeaderMetaSource).toContain('RELAY_SETTINGS_DESCRIPTION');
+    expect(relaySettingsPanelSource).toContain('description={RELAY_SETTINGS_DESCRIPTION}');
+    expect(SETTINGS_HEADER_META['system-relay'].description).toBe(RELAY_SETTINGS_DESCRIPTION);
+    expect(SETTINGS_HEADER_META['system-relay'].description).toContain('Pulse Mobile pairing');
   });
 
   it('keeps self-hosted billing shell copy in a settings-owned presentation module', () => {

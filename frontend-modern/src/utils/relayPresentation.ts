@@ -17,8 +17,8 @@ export const RELAY_SECONDARY_BUTTON_CLASS =
   'min-h-10 sm:min-h-10 px-3 py-2 text-sm font-medium text-base-content bg-surface-hover hover:bg-surface-hover rounded-md disabled:opacity-50';
 export const RELAY_INLINE_ACTION_CLASS =
   'text-sm text-indigo-500 hover:underline disabled:opacity-50';
-export const RELAY_BETA_TITLE_CLASS = 'text-sm font-medium text-base-content';
-export const RELAY_BETA_MESSAGE_CLASS = 'text-xs text-muted mt-1';
+export const RELAY_INFO_TITLE_CLASS = 'text-sm font-medium text-base-content';
+export const RELAY_INFO_MESSAGE_CLASS = 'text-xs text-muted mt-1';
 export const RELAY_LAST_ERROR_CLASS =
   'mt-2 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900 rounded px-2 py-1';
 export const RELAY_CODE_BLOCK_CLASS =
@@ -26,6 +26,15 @@ export const RELAY_CODE_BLOCK_CLASS =
 export const RELAY_QR_IMAGE_CLASS = 'rounded-md border border-border p-2';
 export const RELAY_DIAGNOSTICS_WRAP_CLASS = 'space-y-2';
 export const RELAY_DIAGNOSTICS_TITLE_CLASS = 'text-xs font-semibold text-base-content';
+export const RELAY_SETTINGS_DESCRIPTION =
+  'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.';
+export const RELAY_LICENSE_REQUIRED_MESSAGE =
+  'Remote access via Pulse Relay requires a Relay license or above. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.';
+export const RELAY_PAIRING_AVAILABILITY_TITLE = 'Pair Pulse Mobile through Relay';
+export const RELAY_PAIRING_AVAILABILITY_MESSAGE =
+  'Supported Pulse Mobile clients connect to this Pulse instance with a QR code or deep link over end-to-end encrypted relay connectivity.';
+export const RELAY_ENABLE_HELP_TEXT =
+  'Connect this Pulse instance to the relay server for secure remote access and Pulse Mobile pairing.';
 export const RELAY_ONBOARDING_TITLE = 'Pair Your Mobile Device';
 export const RELAY_ONBOARDING_DESCRIPTION =
   'Pulse Relay lets your phone securely connect to this Pulse instance for remote monitoring.';

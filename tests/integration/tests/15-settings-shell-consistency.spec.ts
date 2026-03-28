@@ -29,7 +29,7 @@ const SETTINGS_SHELL_ROUTES = [
   {
     route: '/settings/system-relay',
     title: 'Remote Access',
-    description: 'Configure Pulse relay connectivity for secure remote access (mobile rollout coming soon).',
+    description: 'Configure Pulse relay connectivity for secure remote access and Pulse Mobile pairing.',
   },
   {
     route: '/settings/security-auth',

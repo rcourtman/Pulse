@@ -1113,7 +1113,7 @@ TrueNAS resources (pools, datasets, disks, ZFS snapshots, replication tasks, ale
 
 End-to-end encrypted relay protocol for mobile connectivity.
 
-> Mobile app status: public rollout is coming soon; current pairing endpoints are primarily used for staged beta onboarding.
+> Relay pairing endpoints generate the QR code and deep link used by supported Pulse Mobile clients.
 
 ### Relay Configuration (Admin, Relay and Above)
 - `GET /api/settings/relay` (admin, `settings:read`, Relay+) — Get current relay configuration.
