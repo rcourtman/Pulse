@@ -107,7 +107,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         class="overflow-hidden"
       >
         <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
+          <div class="flex h-full flex-col gap-2.5">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class={`text-2xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
@@ -137,7 +137,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   </For>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
                 <For each={visiblePostureSegments()}>
                   {(segment) => (
                     <div class="flex items-center justify-between gap-3">
@@ -157,7 +157,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
+          <div class="flex h-full flex-col gap-2.5">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="text-2xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">
@@ -165,7 +165,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 </div>
                 <div class="text-xs text-muted">stale items</div>
               </div>
-              <div class="space-y-1 text-right text-xs">
+              <div class="space-y-0.5 text-right text-[11px]">
                 <div>
                   <span class="font-semibold text-rose-600 dark:text-rose-400">
                     {summary().neverSucceeded}
@@ -181,7 +181,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+            <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[11px]">
               <For each={freshnessBuckets()}>
                 {(bucket) => (
                   <div class="flex items-center justify-between gap-3">
@@ -195,42 +195,40 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </For>
             </div>
 
-            <div class="grid grid-cols-2 gap-2 border-t border-border-subtle pt-2 text-[11px]">
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="text-muted">Attention</div>
-                <div class="mt-1 font-semibold text-base-content">{attentionCount()}</div>
-              </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="text-muted">Fresh &lt;24h</div>
-                <div class="mt-1 font-semibold text-base-content">
+            <div class="border-t border-border-subtle pt-2 text-[11px]">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span class="text-muted">Attention</span>
+                <span class="font-semibold text-base-content">{attentionCount()}</span>
+                <span class="text-muted">Fresh &lt;24h</span>
+                <span class="font-semibold text-base-content">
                   {freshnessBuckets()
                     .filter((bucket) => bucket.key === 'under1h' || bucket.key === 'under24h')
                     .reduce((total, bucket) => total + bucket.count, 0)}
-                </div>
+                </span>
               </div>
             </div>
           </div>
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
-            <div class="grid grid-cols-2 gap-2 text-[11px]">
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
-                <div class="text-muted">Item Types</div>
-                <div class="mt-1 text-xl font-semibold tabular-nums text-base-content">
+          <div class="flex h-full flex-col gap-2.5">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-2xl font-semibold tabular-nums text-base-content">
                   {itemCoverage().itemTypeCount}
                 </div>
+                <div class="text-xs text-muted">item types</div>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
-                <div class="text-muted">Platforms</div>
-                <div class="mt-1 text-xl font-semibold tabular-nums text-base-content">
+              <div class="text-right">
+                <div class="text-sm font-semibold tabular-nums text-base-content">
                   {platformCoverage().platformCount}
                 </div>
+                <div class="text-[11px] text-muted">platforms</div>
               </div>
             </div>
 
-            <dl class="space-y-1.5 text-xs">
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-1.5">
+            <dl class="space-y-1 text-[11px]">
+              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-1">
                 <dt class="text-muted">Primary Item</dt>
                 <dd class="font-medium text-base-content">
                   {itemCoverage().primaryItemLabel ?? 'n/a'}
@@ -244,7 +242,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
             </dl>
 
-            <div class="grid gap-2 border-t border-border-subtle pt-2">
+            <div class="grid gap-1.5 border-t border-border-subtle pt-2">
               <Show when={itemCoverage().items.length > 0}>
                 <div class="flex flex-wrap gap-1.5">
                   <For each={itemCoverage().items.slice(0, 3)}>
@@ -283,7 +281,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
-          <div class="flex h-full flex-col gap-3">
+          <div class="flex h-full flex-col gap-2.5">
             <div class="flex items-start justify-between gap-3">
               <div>
                 <div class="text-2xl font-semibold tabular-nums text-base-content">
@@ -298,24 +296,18 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </Show>
             </div>
 
-            <div class="grid grid-cols-3 gap-2 text-[11px]">
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="text-muted">Days Active</div>
-                <div class="mt-1 font-semibold text-base-content">{activity().activeDays}</div>
-              </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="text-muted">Avg / Day</div>
-                <div class="mt-1 font-semibold text-base-content">
-                  {activity().averagePerDay.toFixed(1)}
-                </div>
-              </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
-                <div class="text-muted">Peak</div>
-                <div class="mt-1 font-semibold text-base-content">{activity().busiestCount}</div>
-              </div>
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+              <span class="text-muted">Days Active</span>
+              <span class="font-semibold text-base-content">{activity().activeDays}</span>
+              <span class="text-muted">Avg / Day</span>
+              <span class="font-semibold text-base-content">
+                {activity().averagePerDay.toFixed(1)}
+              </span>
+              <span class="text-muted">Peak</span>
+              <span class="font-semibold text-base-content">{activity().busiestCount}</span>
             </div>
 
-            <dl class="space-y-1.5 border-t border-border-subtle pt-2 text-xs">
+            <dl class="space-y-1 border-t border-border-subtle pt-2 text-[11px]">
               <div class="flex items-center justify-between gap-3">
                 <dt class="text-muted">Peak Day</dt>
                 <dd class="font-medium text-base-content">{activity().busiestLabel ?? 'n/a'}</dd>

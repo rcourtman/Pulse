@@ -674,6 +674,10 @@ That same card-level scan rule should prefer one dominant metric per card with
 short supporting readouts, the same quick-scan rhythm operators already get on
 infrastructure and workloads, instead of nested sub-cards that turn recovery
 summary into a denser bespoke dashboard than the rest of Pulse.
+That same summary-card rule should also avoid inset mini-panels inside the
+cards themselves. Recovery summary cards should prefer direct metric rows,
+lists, and badge-backed counts over "cards inside cards", which make the strip
+feel heavier than the equivalent infrastructure and workloads telemetry.
 That same inventory surface should also follow the established monitoring-table
 scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform

@@ -351,10 +351,11 @@ describe('Recovery', () => {
   it('surfaces item-first recovery coverage in the unified summary', async () => {
     render(() => <Recovery />);
 
-    await screen.findByText('Protected Footprint');
-    expect(screen.getByText('Primary Item')).toBeInTheDocument();
-    expect(screen.getByText('Primary Platform')).toBeInTheDocument();
-    expect(screen.getByText('Platforms')).toBeInTheDocument();
+    const summary = await screen.findByTestId('recovery-summary');
+    expect(within(summary).getByText('Protected Footprint')).toBeInTheDocument();
+    expect(within(summary).getByText('Primary Item')).toBeInTheDocument();
+    expect(within(summary).getByText('Primary Platform')).toBeInTheDocument();
+    expect(within(summary).getAllByText(/platforms/i).length).toBeGreaterThan(0);
   });
 
   it('normalizes legacy provider-shaped recovery payloads before rendering', async () => {
