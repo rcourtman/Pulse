@@ -753,9 +753,11 @@ of those separators and local duplicate row or header borders that make the
 lines read heavier than other monitoring tables.
 That same workspace-shell rule should also avoid a dedicated recovery-only
 status strip above the control bar. Recovery should use the same handoff shape
-as storage: one canonical `Subtabs.tsx` row first, then one shared page-controls
-card, then the active data card, instead of burying the workspace switcher
-inside the filter row or table-card header.
+as storage: one canonical workspace card per active view, with the shared
+`Subtabs.tsx` row rendered at the top of that card before the workspace's
+controls and data, instead of splitting the same recovery workspace into
+stacked tabs, controls, and data cards or burying the switcher inside the
+filter row.
 That same strip should not repeat page-level counts or posture cues once the
 summary already owns those signals. The recovery workspace tabs should stay on
 plain canonical labels like `Protected items` and `Recovery events` rather than
@@ -768,10 +770,10 @@ shared `Subtabs.tsx` shell, list, and button class pattern already used by
 storage and other established Pulse tab surfaces instead of inventing a
 recovery-only variant or recovery-only class stack.
 That same workspace rule also means the protected-items versus recovery-events
-switcher should live in its own canonical subtabs row above the controls card,
-not inside the controls card and not inside a table-card header strip, so the
-page hands off from summary into tabs, then filters, then data the same way the
-storage surface does.
+switcher should live at the top of the active workspace card, ahead of the
+embedded controls and table shell, so the page hands off from summary into one
+contained workspace the same way storage does rather than stepping through
+multiple recovery-only card layers.
 That same canonical-row rule also means the subtabs row should stand on its own
 full-width shell instead of sharing a flex line with recovery-only chips or
 adjacent badges that break the storage-style border and spacing treatment.
@@ -796,9 +798,10 @@ canonical short Pulse vocabulary like `Platform` and `Status` instead of
 recovery-only variants such as `History platform` or `History status`.
 That same events-workspace rule should keep the activity strip as orientation
 for the event list rather than burying it at the bottom. The events workspace
-should move from tabs to `RecoveryActivitySection.tsx`, then shared controls,
-then the recovery history table, so the timeline frames the event list without
-turning the page back into stacked primary tables.
+should move from the subtabs row to `RecoveryActivitySection.tsx`, then shared
+controls, then the recovery history table, all inside the same workspace card,
+so the timeline frames the event list without turning the page back into
+stacked primary tables.
 That same events-shell contract should avoid repeating page-state bookkeeping
 ahead of the history grid. Recovery events should keep the toolbar utility area
 focused on actual controls like advanced filters and column visibility instead

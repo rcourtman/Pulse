@@ -473,6 +473,76 @@ const Recovery: Component = () => {
     );
   };
 
+  const workspaceControls = () => (
+    <Subtabs
+      value={workspaceView()}
+      onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+      ariaLabel="Recovery data view"
+      class="px-4 sm:px-5"
+      tabs={[
+        {
+          value: 'inventory',
+          label: 'Protected items',
+        },
+        {
+          value: 'events',
+          label: 'Recovery events',
+        },
+      ]}
+    />
+  );
+
+  const eventsActivity = () => (
+    <RecoveryActivitySection
+      activitySummary={activitySummary}
+      activeClusterLabel={activeClusterLabel}
+      activeItemTypeLabel={activeItemTypeLabel}
+      activeNamespaceLabel={activeNamespaceLabel}
+      activeNodeLabel={activeNodeLabel}
+      chartRangeDays={chartRangeDays}
+      clearClusterFilter={() => {
+        setClusterFilter('all');
+        setCurrentPage(1);
+      }}
+      clearFocusedRollup={() => setRollupId('')}
+      clearItemTypeFilter={() => {
+        setItemTypeFilter('all');
+        setCurrentPage(1);
+      }}
+      clearNamespaceFilter={() => {
+        setNamespaceFilter('all');
+        setCurrentPage(1);
+      }}
+      clearNodeFilter={() => {
+        setNodeFilter('all');
+        setCurrentPage(1);
+      }}
+      clearSelectedDate={() => {
+        setSelectedDateKey(null);
+        setCurrentPage(1);
+      }}
+      hasFocusedRollup={() => rollupId().trim().length > 0}
+      isMobile={isMobile()}
+      loading={() => recoverySeries.response.loading}
+      overallRollupsSummary={overallRollupsSummary}
+      selectedDateKey={selectedDateKey}
+      selectedDateLabel={selectedDateLabel}
+      selectedHistoryItemLabel={selectedHistoryItemLabel}
+      setChartRangeDays={(range) => {
+        setChartRangeDays(range);
+        setSelectedDateKey(null);
+        setCurrentPage(1);
+      }}
+      timeline={timeline}
+      toggleSelectedDate={(key) => {
+        setWorkspaceView('events');
+        setSelectedDateKey((previous) => (previous === key ? null : key));
+        setCurrentPage(1);
+      }}
+      embedded
+    />
+  );
+
   return (
     <div data-testid="recovery-page" class="flex flex-col gap-3">
       <RecoverySummary
@@ -488,22 +558,6 @@ const Recovery: Component = () => {
         {(() => {
           return (
             <>
-              <Subtabs
-                value={workspaceView()}
-                onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
-                ariaLabel="Recovery data view"
-                tabs={[
-                  {
-                    value: 'inventory',
-                    label: 'Protected items',
-                  },
-                  {
-                    value: 'events',
-                    label: 'Recovery events',
-                  },
-                ]}
-              />
-
               <Show when={workspaceView() === 'inventory'}>
                 <RecoveryProtectedInventorySection
                   filteredRollups={filteredRollups}
@@ -528,66 +582,23 @@ const Recovery: Component = () => {
                   setPlatformFilter={setPlatformFilter}
                   setQueryFilter={setQueryFilter}
                   setVerificationFilter={setVerificationFilter}
+                  workspaceControls={workspaceControls()}
                 />
               </Show>
 
               <Show when={workspaceView() === 'events'}>
-                <RecoveryActivitySection
-                  activitySummary={activitySummary}
-                  activeClusterLabel={activeClusterLabel}
-                  activeItemTypeLabel={activeItemTypeLabel}
-                  activeNamespaceLabel={activeNamespaceLabel}
-                  activeNodeLabel={activeNodeLabel}
-                  chartRangeDays={chartRangeDays}
-                  clearClusterFilter={() => {
-                    setClusterFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearFocusedRollup={() => setRollupId('')}
-                  clearItemTypeFilter={() => {
-                    setItemTypeFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearNamespaceFilter={() => {
-                    setNamespaceFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearNodeFilter={() => {
-                    setNodeFilter('all');
-                    setCurrentPage(1);
-                  }}
-                  clearSelectedDate={() => {
-                    setSelectedDateKey(null);
-                    setCurrentPage(1);
-                  }}
-                  hasFocusedRollup={() => rollupId().trim().length > 0}
-                  isMobile={isMobile()}
-                  loading={() => recoverySeries.response.loading}
-                  overallRollupsSummary={overallRollupsSummary}
-                  selectedDateKey={selectedDateKey}
-                  selectedDateLabel={selectedDateLabel}
-                  selectedHistoryItemLabel={selectedHistoryItemLabel}
-                  setChartRangeDays={(range) => {
-                    setChartRangeDays(range);
-                    setSelectedDateKey(null);
-                    setCurrentPage(1);
-                  }}
-                  timeline={timeline}
-                  toggleSelectedDate={(key) => {
-                    setWorkspaceView('events');
-                    setSelectedDateKey((previous) => (previous === key ? null : key));
-                    setCurrentPage(1);
-                  }}
-                />
-
                 <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
-                  <Card padding="sm">
-                    <EmptyState
-                      title={getRecoveryPointsFailureState().title}
-                      description={String(
-                        (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
-                      )}
-                    />
+                  <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+                    {workspaceControls()}
+                    <div class="border-b border-border-subtle">{eventsActivity()}</div>
+                    <div class="p-6">
+                      <EmptyState
+                        title={getRecoveryPointsFailureState().title}
+                        description={String(
+                          (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
+                        )}
+                      />
+                    </div>
                   </Card>
                 </Show>
 
@@ -639,6 +650,8 @@ const Recovery: Component = () => {
                     tableMinWidth={tableMinWidth}
                     totalPages={totalPages}
                     verificationFilter={verificationFilter}
+                    workspaceControls={workspaceControls()}
+                    workspaceIntro={eventsActivity()}
                   />
                 </Show>
               </Show>

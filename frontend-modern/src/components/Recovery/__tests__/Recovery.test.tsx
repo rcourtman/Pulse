@@ -238,7 +238,12 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const inventoryTable = screen.getAllByRole('table')[0];
+    const inventoryWorkspaceCard = workspaceTablist.closest('.overflow-hidden');
     const inventoryBody = inventoryTable.querySelector('tbody');
+    expect(inventoryWorkspaceCard).not.toBeNull();
+    expect(inventoryWorkspaceCard).toContainElement(workspaceTablist);
+    expect(inventoryWorkspaceCard).toContainElement(inventoryControls);
+    expect(inventoryWorkspaceCard).toContainElement(inventoryTable);
     expect(
       workspaceTablist.compareDocumentPosition(inventoryControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -280,10 +285,16 @@ describe('Recovery', () => {
     const historyTable = screen.getAllByRole('table')[0];
     const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
     const historyTablist = screen.getByRole('tablist', { name: /recovery data view/i });
+    const eventsWorkspaceCard = historyTablist.closest('.overflow-hidden');
+    expect(eventsWorkspaceCard).not.toBeNull();
+    expect(eventsWorkspaceCard).toContainElement(historyTablist);
     expect(
       historyTablist.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     const activityHeading = screen.getByText('Recovery Activity');
+    expect(eventsWorkspaceCard).toContainElement(activityHeading);
+    expect(eventsWorkspaceCard).toContainElement(historyControls);
+    expect(eventsWorkspaceCard).toContainElement(historyTable);
     expect(
       activityHeading.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);

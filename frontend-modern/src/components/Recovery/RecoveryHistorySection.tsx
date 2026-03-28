@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { Accessor, Component } from 'solid-js';
+import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import {
@@ -99,6 +99,8 @@ interface RecoveryHistorySectionProps {
   tableMinWidth: Accessor<string>;
   totalPages: Accessor<number>;
   verificationFilter: Accessor<VerificationFilter>;
+  workspaceControls?: JSX.Element;
+  workspaceIntro?: JSX.Element;
 }
 
 export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (props) => {
@@ -128,9 +130,15 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
   });
 
   return (
-    <div class="flex flex-col gap-3">
+    <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+      <Show when={props.workspaceControls}>{props.workspaceControls}</Show>
+
+      <Show when={props.workspaceIntro}>
+        <div class="border-b border-border-subtle">{props.workspaceIntro}</div>
+      </Show>
+
       <Show when={!props.kioskMode}>
-        <Card padding="sm" tone="card" class="border-border-subtle bg-surface">
+        <div class="border-b border-border-subtle px-4 py-3 sm:px-5">
           <PageControls
             role="group"
             aria-label="Recovery events controls"
@@ -410,26 +418,25 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               </For>
             </LabeledFilterSelect>
           </PageControls>
-        </Card>
+        </div>
       </Show>
-      <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
-        <RecoveryHistoryTable
-          clearSelectedPoint={clearSelectedPoint}
-          currentPage={props.currentPage}
-          groupedByDay={props.groupedByDay}
-          hasActiveArtifactFilters={props.hasActiveArtifactFilters}
-          mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
-          recoveryPoints={props.recoveryPoints}
-          resetAllArtifactFilters={props.resetAllArtifactFilters}
-          resourcesById={props.resourcesById}
-          selectedPoint={selectedPoint}
-          setCurrentPage={props.setCurrentPage}
-          tableColumnCount={props.tableColumnCount}
-          tableMinWidth={props.tableMinWidth}
-          toggleSelectedPoint={toggleSelectedPoint}
-          totalPages={props.totalPages}
-        />
-      </Card>
-    </div>
+
+      <RecoveryHistoryTable
+        clearSelectedPoint={clearSelectedPoint}
+        currentPage={props.currentPage}
+        groupedByDay={props.groupedByDay}
+        hasActiveArtifactFilters={props.hasActiveArtifactFilters}
+        mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
+        recoveryPoints={props.recoveryPoints}
+        resetAllArtifactFilters={props.resetAllArtifactFilters}
+        resourcesById={props.resourcesById}
+        selectedPoint={selectedPoint}
+        setCurrentPage={props.setCurrentPage}
+        tableColumnCount={props.tableColumnCount}
+        tableMinWidth={props.tableMinWidth}
+        toggleSelectedPoint={toggleSelectedPoint}
+        totalPages={props.totalPages}
+      />
+    </Card>
   );
 };

@@ -40,9 +40,10 @@ vi.mock('@/components/Recovery/RecoveryActivitySection', () => ({
 }));
 
 vi.mock('@/components/Recovery/RecoveryHistorySection', () => ({
-  RecoveryHistorySection: (props: { workspaceControls?: any }) => (
+  RecoveryHistorySection: (props: { workspaceControls?: any; workspaceIntro?: any }) => (
     <div>
       {props.workspaceControls}
+      {props.workspaceIntro}
       <div data-testid="history-section" />
     </div>
   ),
