@@ -3,6 +3,7 @@ import type { Accessor, Component } from 'solid-js';
 
 import { RecoveryPointDetails } from '@/components/Recovery/RecoveryPointDetails';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { StatusDot } from '@/components/shared/StatusDot';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import {
   Table,
@@ -20,7 +21,10 @@ import {
   getRecoveryHistoryEmptyState,
   getRecoveryPointsLoadingState,
 } from '@/utils/recoveryEmptyStatePresentation';
-import { getRecoveryOutcomeBadgeClass } from '@/utils/recoveryOutcomePresentation';
+import {
+  getRecoveryOutcomeBadgeClass,
+  getRecoveryOutcomeLabel,
+} from '@/utils/recoveryOutcomePresentation';
 import {
   getRecoveryPointDetailsSummary,
   getRecoveryPointItemLabel,
@@ -176,6 +180,18 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                     const outcome =
                       (String(point.outcome || 'unknown').toLowerCase() as RecoveryOutcome) ||
                       'unknown';
+                    const outcomeVariant = (() => {
+                      switch (outcome) {
+                        case 'success':
+                          return 'success' as const;
+                        case 'warning':
+                          return 'warning' as const;
+                        case 'failed':
+                          return 'danger' as const;
+                        default:
+                          return 'muted' as const;
+                      }
+                    })();
                     const repoLabel = getRecoveryPointRepositoryLabel(point);
                     const detailsSummary = getRecoveryPointDetailsSummary(point);
                     const entityId = String(point.entityId || '').trim();
@@ -231,6 +247,13 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                       title={item}
                                     >
                                       <div class="flex min-w-0 max-w-full items-center gap-2">
+                                        <StatusDot
+                                          variant={outcomeVariant}
+                                          size="xs"
+                                          pulse={outcome === 'running'}
+                                          title={getRecoveryOutcomeLabel(outcome)}
+                                          ariaLabel={getRecoveryOutcomeLabel(outcome)}
+                                        />
                                         <span class="min-w-0 flex-1 truncate text-[12px] font-medium">
                                           {item}
                                         </span>

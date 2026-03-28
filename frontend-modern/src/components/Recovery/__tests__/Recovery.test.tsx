@@ -253,6 +253,9 @@ describe('Recovery', () => {
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
     expect(within(historyTable).queryByText('Target')).not.toBeInTheDocument();
     expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
+    const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');
+    expect(historyRow).not.toBeNull();
+    expect(within(historyRow!).getByLabelText('Healthy')).toBeInTheDocument();
     expect(screen.getByText('Recovery Activity')).toBeInTheDocument();
   });
 

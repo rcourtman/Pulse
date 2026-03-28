@@ -733,6 +733,11 @@ should default to the concise columns operators need to triage quickly, while
 secondary fields such as verification, size, target, and details remain
 available through the shared column picker instead of crowding the baseline
 grid.
+That same event-row scan rule should mirror the protected-items table in the
+primary identity cell. `RecoveryHistoryTable.tsx` should lead each event row
+with a compact outcome status cue plus the canonical item name, so operators
+can scan event health by row without relying only on the far-right outcome
+column.
 That shared unified-resource dependency now also includes policy-governed
 resource metadata on the frontend decode path: storage and recovery surfaces
 that route through `frontend-modern/src/hooks/useUnifiedResources.ts` must
