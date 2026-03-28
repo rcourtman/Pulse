@@ -107,6 +107,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   ]);
   const platformMixPreview = createMemo(() => platformCoverage().items.slice(0, 2));
   const itemMixPreview = createMemo(() => itemCoverage().items.slice(0, 2));
+  const freshWithin24hCount = createMemo(
+    () =>
+      (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
+      (freshnessBuckets().find((bucket) => bucket.key === 'under24h')?.count ?? 0),
+  );
 
   const MetricRows = (rowProps: {
     rows: Array<{ label: string; value: string | number; valueClass?: string }>;
@@ -182,16 +187,16 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           <div class="flex h-full flex-col gap-2">
             <div class="flex items-end justify-between gap-3">
               <div>
-                <div class="text-xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                  {summary().stale}
+                <div class="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {freshWithin24hCount()}
                 </div>
-                <div class="text-[11px] text-muted">stale items</div>
+                <div class="text-[11px] text-muted">fresh in 24h</div>
               </div>
               <div class="text-right text-[11px]">
-                <div class="font-semibold tabular-nums text-base-content">
-                  {freshnessRows()[0]?.value ?? 0}
+                <div class="font-semibold tabular-nums text-amber-600 dark:text-amber-400">
+                  {summary().stale}
                 </div>
-                <div class="text-muted">fresh in 24h</div>
+                <div class="text-muted">stale items</div>
               </div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">

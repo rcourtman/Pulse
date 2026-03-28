@@ -68,13 +68,14 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('Failed')).toBeInTheDocument();
     expect(screen.getByText('<24h')).toBeInTheDocument();
     expect(screen.getByText('<7d')).toBeInTheDocument();
+    expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
+    expect(screen.getByText('stale items')).toBeInTheDocument();
     expect(screen.getByText('Peak Throughput')).toBeInTheDocument();
     expect(screen.getByText('Latest Activity')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
     expect(screen.getByText('1 attention')).toBeInTheDocument();
     expect(screen.getAllByText(/Never Succeeded/i).length).toBeGreaterThan(0);
     expect(screen.getByText('need attention')).toBeInTheDocument();
-    expect(screen.getByText('stale items')).toBeInTheDocument();
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
   });
 

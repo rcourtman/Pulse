@@ -689,6 +689,10 @@ expressed as short metric rows. Recovery summary cards should stay on the
 shared monitoring-card rhythm of one dominant metric plus compact supporting
 rows rather than reviving bespoke visual telemetry that makes the strip read
 heavier than the rest of Pulse.
+That same differentiation rule applies across cards too. `Recovery Posture`
+and `Freshness` should not lead with the same stale/attention headline; the
+freshness card should emphasize recent successful coverage such as fresh-in-24h
+reach, while posture owns the attention-state headline.
 That same density rule should route through the shared summary primitives
 instead of feature-local spacing overrides. Recovery may select the shared
 compact `SummaryPanel` / `SummaryMetricCard` density mode, but it should not
