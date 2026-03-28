@@ -137,14 +137,14 @@ function renderServiceActionRow(
   return (
     '<article class="service-action-row">' +
       '<div class="service-action-main">' +
-        '<div class="service-action-tags">' +
+        '<div class="service-action-tags service-action-tags-tight">' +
           '<span class="service-card-kicker">' + kicker + '</span>' +
+          '<span class="service-action-meta-chip">' + escapeHTML(meta) + '</span>' +
         '</div>' +
         '<div class="service-action-copy">' +
           '<h3>' + title + '</h3>' +
           '<p>' + description + '</p>' +
         '</div>' +
-        '<div class="service-action-meta">' + escapeHTML(meta) + '</div>' +
       '</div>' +
       '<div class="service-action-cta">' +
         '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">' + escapeHTML(actionLabel) + '</button>' +
@@ -959,8 +959,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<aside class="service-shell-sidebar">' +
                 '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Service navigator</div>' +
-                  '<h3>Commercial desks</h3>' +
-                  '<p>Choose one billing, license, refund, or privacy request and keep it contained here.</p>' +
+                  '<h3>Self-hosted desks</h3>' +
+                  '<p>Pick one commercial workflow and keep it isolated from hosted workspace and team operations.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
                   renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing desk', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
@@ -972,13 +972,18 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div class="service-shell-main">' +
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
-                    '<div class="account-panel-kicker">Active service desk</div>' +
-                    '<h3>Choose a desk</h3>' +
-                    '<p>Open one commercial request from the navigator and keep it in this desk until it is finished.</p>' +
+                    '<div class="account-panel-kicker">Desk brief</div>' +
+                    '<h3>Choose a desk to begin</h3>' +
+                    '<p>Use one self-hosted desk at a time. Each desk verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
                     '<div class="service-empty-shell">' +
+                      '<div class="service-empty-intro">' +
+                        '<div class="service-empty-intro-item"><strong>One request</strong><span>Keep a single commercial task active instead of bouncing across desks.</span></div>' +
+                        '<div class="service-empty-intro-item"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div>' +
+                        '<div class="service-empty-intro-item"><strong>Escalate fast</strong><span>Route unusual billing, refund, privacy, or license failures to support from this desk.</span></div>' +
+                      '</div>' +
                       '<div class="service-empty-primary">' +
                         '<div class="service-empty-section service-empty-section-compact">' +
-                          '<div class="service-empty-column-title">Desk coverage</div>' +
+                          '<div class="service-empty-column-title">Workflow map</div>' +
                           '<div class="service-empty-flow-list">' +
                             '<div class="service-empty-flow"><strong>Billing desk</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
                             '<div class="service-empty-flow"><strong>License desk</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
@@ -987,7 +992,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                           '</div>' +
                         '</div>' +
                         '<div class="service-empty-section service-empty-section-compact">' +
-                          '<div class="service-empty-column-title">Desk rules</div>' +
+                          '<div class="service-empty-column-title">Before you start</div>' +
                           '<div class="service-empty-points service-empty-points-stack">' +
                             '<div class="service-empty-point"><strong>Verify first</strong><span>Each desk confirms the commercial email before opening sensitive actions.</span></div>' +
                             '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +

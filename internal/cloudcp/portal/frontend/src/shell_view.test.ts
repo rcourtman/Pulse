@@ -201,11 +201,13 @@ describe('shell view', function() {
     expect(html).toContain('service-action-row');
     expect(html).toContain('service-action-button');
     expect(html).toContain('id="service-panel-empty"');
-    expect(html).toContain('Choose a desk');
-    expect(html).toContain('Active service desk');
+    expect(html).toContain('Choose a desk to begin');
+    expect(html).toContain('Desk brief');
     expect(html).toContain('Self-hosted only');
-    expect(html).toContain('Desk coverage');
+    expect(html).toContain('Workflow map');
+    expect(html).toContain('Before you start');
     expect(html).toContain('Escalate quickly');
+    expect(html).toContain('Identity first');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
     expect(html).toContain('Billing desk');
@@ -230,7 +232,7 @@ describe('shell view', function() {
     expect(html).toContain('Summary');
     expect(html).toContain('None');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
-    expect(html).toContain('Choose one billing, license, refund, or privacy request and keep it contained here.');
+    expect(html).toContain('Pick one commercial workflow and keep it isolated from hosted workspace and team operations.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted commercial desk');
   });
