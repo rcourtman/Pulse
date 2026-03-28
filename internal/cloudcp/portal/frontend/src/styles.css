@@ -504,7 +504,7 @@ header .logout-btn:hover,
 }
 
 .portal-content-panel {
-  padding: 18px 24px 0;
+  padding: 14px 18px 0;
 }
 
 .portal-top-section,
@@ -637,8 +637,8 @@ header .logout-btn:hover,
 .account-stat-card:hover,
 .workspace-row:hover,
 .service-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  transform: none;
+  box-shadow: var(--shadow-sm);
 }
 
 .account-overview-card,
@@ -930,9 +930,9 @@ header .logout-btn:hover,
 .portal-support-panel {
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  padding: 18px 20px;
-  background: var(--panel);
-  box-shadow: var(--shadow-sm);
+  padding: 16px 18px;
+  background: #fff;
+  box-shadow: none;
 }
 
 .portal-support-panel h2 {
@@ -958,10 +958,10 @@ header .logout-btn:hover,
 }
 
 .portal-support-card {
-  padding: 18px;
+  padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: var(--panel-muted);
+  background: #fbfcfd;
 }
 
 .portal-support-card h3 {
@@ -1022,12 +1022,12 @@ header .logout-btn:hover,
 .workspace-list-wrap {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px;
+  gap: 8px;
+  padding: 10px 12px 12px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: #fff;
-  box-shadow: var(--shadow-sm);
+  border-radius: 12px;
+  background: #fbfcfd;
+  box-shadow: none;
 }
 
 .workspace-list-toolbar {
@@ -1035,7 +1035,7 @@ header .logout-btn:hover,
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 2px 0 12px;
+  padding: 0 2px 10px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1077,7 +1077,7 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: minmax(0, 1.8fr) 132px 132px 176px;
   gap: 14px;
-  padding: 2px 16px 6px;
+  padding: 2px 14px 4px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -1090,7 +1090,7 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 0;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
   overflow: hidden;
 }
@@ -1100,10 +1100,10 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1.8fr) 132px 132px 176px;
   gap: 14px;
   align-items: center;
-  padding: 14px 16px;
+  padding: 11px 14px;
   background: #fff;
   border-top: 1px solid var(--line);
-  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
 .workspace-row:first-child {
@@ -1111,7 +1111,7 @@ header .logout-btn:hover,
 }
 
 .workspace-row:hover {
-  background: #fbfcfe;
+  background: #f8fbfd;
 }
 
 .workspace-row.selected {
@@ -1132,14 +1132,14 @@ header .logout-btn:hover,
 .workspace-row-primary {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
   min-width: 0;
 }
 
 .workspace-row-heading {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .workspace-name,
@@ -1160,8 +1160,8 @@ header .logout-btn:hover,
 .workspace-meta-item {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
+  min-height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
   background: #f1f5f8;
   font-size: 11px;
@@ -1171,8 +1171,8 @@ header .logout-btn:hover,
 .workspace-row-note,
 .workspace-management-summary {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 11px;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 
@@ -1245,9 +1245,9 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 14px;
+  padding: 12px;
   border-radius: var(--radius-sm);
-  background: var(--panel-muted);
+  background: #f7fafc;
   color: var(--ink-soft);
 }
 
@@ -1267,9 +1267,9 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 12px;
+  padding: 11px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
 }
 
@@ -1288,7 +1288,7 @@ header .logout-btn:hover,
 }
 
 .workspace-management-empty-card-muted {
-  background: var(--panel-muted);
+  background: #fbfcfd;
 }
 
 .workspace-management-empty-list {
@@ -1836,26 +1836,26 @@ header .logout-btn:hover,
 .service-shell {
   display: grid;
   grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
-  gap: 16px;
+  gap: 12px;
   align-items: start;
-  padding: 16px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: #eef3f7;
+  background: #f7fafc;
 }
 
 .service-shell-main,
 .service-shell-sidebar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .service-shell-sidebar-head,
 .service-inline-support {
-  padding: 14px 16px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: #fff;
 }
 
@@ -1878,7 +1878,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #fff;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -1937,11 +1937,11 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: none;
   border-top: 1px solid var(--line);
   background: #fff;
-  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+  transition: border-color 140ms ease, background 140ms ease;
 }
 
 .service-action-row:first-child {
@@ -1951,7 +1951,7 @@ header .logout-btn:hover,
 .service-action-row:hover,
 .service-action-row.active {
   border-color: rgba(15, 109, 115, 0.28);
-  box-shadow: 0 10px 24px rgba(10, 25, 41, 0.08);
+  background: #f8fbfd;
 }
 
 .service-action-main {
@@ -2031,7 +2031,7 @@ header .logout-btn:hover,
 }
 
 .service-panel {
-  padding: 18px;
+  padding: 16px;
   border-radius: var(--radius-md);
   background: #fff;
 }
