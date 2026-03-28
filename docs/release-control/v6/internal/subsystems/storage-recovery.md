@@ -672,11 +672,11 @@ That same row contract should avoid duplicating context that already has a
 dedicated column. When `Item Type` and `Platform` columns are visible, the
 primary item cell should not restate those same badges on desktop; duplicate
 context belongs only as a small-screen fallback when those columns collapse.
-That same inventory surface should use structural grouping to surface posture,
-not just local row styling. When the protected-item page mixes healthy and
-problematic coverage, the table body should section attention items ahead of
-healthy coverage so operators can scan the recovery estate the way they scan
-other grouped monitoring tables in Pulse.
+That same inventory surface should stay on the flat monitoring-table pattern
+already used elsewhere in Pulse. Protected items should surface posture through
+row-level status cues, outcome pills, and filters rather than inserting extra
+`Needs Attention` / `Healthy Coverage` section rows that add height and turn
+the primary table into a recovery-only grouped report.
 That same table-shell contract must avoid duplicate framing once the view tabs
 already establish the active workspace. `RecoveryProtectedInventorySection.tsx`
 should keep page/count/sort orientation inside a slim table-shell status row

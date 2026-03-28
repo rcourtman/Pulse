@@ -103,30 +103,31 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         timeRanges={RECOVERY_SUMMARY_TIME_RANGES}
         timeRangeLabels={RECOVERY_SUMMARY_TIME_RANGE_LABELS}
         testId="recovery-summary"
+        class="overflow-hidden"
       >
         <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
-            <div class="grid grid-cols-3 gap-2 border-b border-border-subtle pb-2.5 text-sm">
+          <div class="flex h-full flex-col gap-2.5">
+            <div class="grid grid-cols-3 gap-2 text-sm">
               <div>
                 <div class="text-[11px] uppercase tracking-wide text-muted">Healthy</div>
-                <div class="mt-1 text-xl font-semibold text-emerald-600 dark:text-emerald-400">
+                <div class="mt-1 text-lg font-semibold text-emerald-600 dark:text-emerald-400">
                   {healthyCount()}
                 </div>
               </div>
               <div>
                 <div class="text-[11px] uppercase tracking-wide text-muted">Attention</div>
-                <div class="mt-1 text-xl font-semibold text-amber-600 dark:text-amber-400">
+                <div class="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">
                   {attentionCount()}
                 </div>
               </div>
               <div>
                 <div class="text-[11px] uppercase tracking-wide text-muted">Protected</div>
-                <div class="mt-1 text-xl font-semibold text-base-content">{summary().total}</div>
+                <div class="mt-1 text-lg font-semibold text-base-content">{summary().total}</div>
               </div>
             </div>
 
-            <div class="space-y-2">
-              <div class="h-2 overflow-hidden rounded-full bg-surface-alt">
+            <div class="space-y-1.5">
+              <div class="h-1.5 overflow-hidden rounded-full bg-surface-alt">
                 <div class="flex h-full">
                   <For each={postureSegments()}>
                     {(segment) => (
@@ -139,10 +140,10 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   </For>
                 </div>
               </div>
-              <div class="grid grid-cols-2 gap-x-3 gap-y-1.5">
+              <div class="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <For each={postureSegments()}>
                   {(segment) => (
-                    <div class="flex items-center justify-between gap-3 text-sm">
+                    <div class="flex items-center justify-between gap-3">
                       <div class="flex items-center gap-2 text-base-content">
                         <span class={`h-2 w-2 rounded-full ${segment.color}`} />
                         <span>{segment.label}</span>
@@ -159,79 +160,64 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-3">
-            <dl class="space-y-2 text-sm">
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Stale</dt>
-                <dd class="font-semibold text-amber-600 dark:text-amber-400">{summary().stale}</dd>
+          <div class="flex h-full flex-col gap-2.5">
+            <div class="grid grid-cols-2 gap-2">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
+                <div class="text-[10px] uppercase tracking-wide text-muted">Stale</div>
+                <div class="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">
+                  {summary().stale}
+                </div>
               </div>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Never succeeded</dt>
-                <dd class="font-semibold text-rose-600 dark:text-rose-400">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
+                <div class="text-[10px] uppercase tracking-wide text-muted">Never succeeded</div>
+                <div class="mt-1 text-lg font-semibold text-rose-600 dark:text-rose-400">
                   {summary().neverSucceeded}
-                </dd>
+                </div>
               </div>
-              <div class="flex items-center justify-between gap-3">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Running</dt>
-                <dd class="font-semibold text-blue-600 dark:text-blue-400">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
+                <div class="text-[10px] uppercase tracking-wide text-muted">Running</div>
+                <div class="mt-1 text-lg font-semibold text-blue-600 dark:text-blue-400">
                   {postureSummary().running}
-                </dd>
+                </div>
               </div>
-            </dl>
-
-            <div>
-              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-                Attention Queue
-              </div>
-              <div class="space-y-1.5">
-                <For each={attentionItems()}>
-                  {(item) => (
-                    <div class="flex items-center justify-between gap-3 text-sm">
-                      <div class="flex items-center gap-2 text-base-content">
-                        <span
-                          class={`h-2.5 w-2.5 rounded-full ${getRecoveryAttentionDotClass(item.tone)}`}
-                        />
-                        <span>{item.label}</span>
-                      </div>
-                      <span
-                        class={`font-semibold tabular-nums ${
-                          item.tone === 'rose'
-                            ? 'text-rose-600 dark:text-rose-400'
-                            : item.tone === 'blue'
-                              ? 'text-blue-600 dark:text-blue-400'
-                              : 'text-amber-600 dark:text-amber-400'
-                        }`}
-                      >
-                        {item.count}
-                      </span>
-                    </div>
-                  )}
-                </For>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-2">
+                <div class="text-[10px] uppercase tracking-wide text-muted">Attention</div>
+                <div class="mt-1 text-lg font-semibold text-amber-600 dark:text-amber-400">
+                  {attentionCount()}
+                </div>
               </div>
             </div>
 
-            <div class="border-t border-border-subtle pt-2.5">
-              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-                Freshness Bands
-              </div>
-              <div class="flex flex-wrap gap-1.5">
-                <For each={freshnessBuckets()}>
-                  {(bucket) => (
-                    <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface-alt/35 px-2 py-1 text-xs">
-                      <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
-                      <span class="text-base-content">{bucket.label}</span>
-                      <span class="tabular-nums text-base-content">{bucket.count}</span>
+            <div class="flex flex-wrap gap-1.5 border-t border-border-subtle pt-2">
+              <For each={freshnessBuckets()}>
+                {(bucket) => (
+                  <div class="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface-alt/35 px-2 py-1 text-[11px]">
+                    <span class={`h-2 w-2 rounded-full ${bucket.color}`} />
+                    <span class="text-base-content">{bucket.label}</span>
+                    <span class="tabular-nums text-base-content">{bucket.count}</span>
+                  </div>
+                )}
+              </For>
+              <For each={attentionItems()}>
+                {(item) => (
+                  <Show when={item.label === 'Never succeeded' || item.label === 'Running'}>
+                    <div class="inline-flex items-center gap-1.5 rounded-md border border-border-subtle bg-surface-alt/35 px-2 py-1 text-[11px]">
+                      <span
+                        class={`h-2 w-2 rounded-full ${getRecoveryAttentionDotClass(item.tone)}`}
+                      />
+                      <span class="text-base-content">{item.label}</span>
+                      <span class="tabular-nums text-base-content">{item.count}</span>
                     </div>
-                  )}
-                </For>
-              </div>
+                  </Show>
+                )}
+              </For>
             </div>
           </div>
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2.5">
-            <dl class="space-y-2 text-sm">
+          <div class="flex h-full flex-col gap-2">
+            <dl class="space-y-1.5 text-sm">
               <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
                 <dt class="text-[11px] uppercase tracking-wide text-muted">Item Types</dt>
                 <dd class="font-semibold text-base-content">{itemCoverage().itemTypeCount}</dd>
@@ -255,30 +241,25 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
             </dl>
 
             <Show when={itemCoverage().items.length > 0}>
-              <div>
-                <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
-                  Item Types
-                </div>
-                <div class="flex flex-wrap gap-1.5">
+              <div class="flex flex-wrap gap-1.5 pt-1">
                   <For each={itemCoverage().items.slice(0, 6)}>
                     {(item) => (
-                      <div class="inline-flex items-center gap-2 text-[10px]">
+                      <div class="inline-flex items-center gap-2 text-[11px]">
                         <span class={item.toneClass}>{item.label}</span>
                         <span class="tabular-nums text-base-content">{item.count}</span>
                         <span class="text-muted">{item.percent}%</span>
                       </div>
                     )}
                   </For>
-                </div>
               </div>
             </Show>
 
-            <div>
-              <div class="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted">
+            <div class="border-t border-border-subtle pt-2">
+              <div class="mb-1.5 text-[11px] font-medium uppercase tracking-wide text-muted">
                 Platform Mix
               </div>
               <Show when={platformCoverage().multiPlatformCount > 0}>
-                <div class="mb-2 text-xs text-muted">
+                <div class="mb-1.5 text-xs text-muted">
                   {platformCoverage().multiPlatformCount} multi-platform item
                   {platformCoverage().multiPlatformCount === 1 ? '' : 's'}
                 </div>
@@ -288,7 +269,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                   {(item) => {
                     const badge = getSourcePlatformBadge(item.key);
                     return (
-                      <div class="inline-flex items-center gap-2 text-[10px]">
+                      <div class="inline-flex items-center gap-2 text-[11px]">
                         <span class={badge?.classes || 'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-surface-alt text-base-content'}>
                           {badge?.label || item.label}
                         </span>
@@ -309,8 +290,8 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
-          <div class="flex h-full flex-col gap-2.5">
-            <dl class="space-y-2 text-sm">
+          <div class="flex h-full flex-col gap-2">
+            <dl class="space-y-1.5 text-sm">
               <Show when={recentWindowLabel()}>
                 <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
                   <dt class="text-[11px] uppercase tracking-wide text-muted">Window</dt>
@@ -320,10 +301,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
                 <dt class="text-[11px] uppercase tracking-wide text-muted">Recovery Points</dt>
                 <dd class="font-semibold text-base-content">{activity().totalEvents}</dd>
-              </div>
-              <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
-                <dt class="text-[11px] uppercase tracking-wide text-muted">Avg / Day</dt>
-                <dd class="font-semibold text-base-content">{activity().averagePerDay.toFixed(1)}</dd>
               </div>
               <div class="flex items-center justify-between gap-3 border-b border-border-subtle pb-2">
                 <dt class="text-[11px] uppercase tracking-wide text-muted">Days Active</dt>
@@ -338,14 +315,20 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
                 <dd class="font-semibold text-base-content">{activity().latestLabel ?? 'n/a'}</dd>
               </div>
             </dl>
-            <div class="flex flex-wrap gap-2 border-t border-border-subtle pt-3 text-xs">
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1">
-                <span class="text-muted">Peak Throughput</span>
-                <span class="ml-2 font-semibold text-base-content">{activity().busiestCount}</span>
+            <div class="grid grid-cols-3 gap-2 border-t border-border-subtle pt-2 text-[11px]">
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
+                <div class="uppercase tracking-wide text-muted">Avg / Day</div>
+                <div class="mt-1 font-semibold text-base-content">
+                  {activity().averagePerDay.toFixed(1)}
+                </div>
               </div>
-              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1">
-                <span class="text-muted">Latest Throughput</span>
-                <span class="ml-2 font-semibold text-base-content">{activity().latestCount}</span>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
+                <div class="uppercase tracking-wide text-muted">Peak</div>
+                <div class="mt-1 font-semibold text-base-content">{activity().busiestCount}</div>
+              </div>
+              <div class="rounded-md border border-border-subtle bg-surface-alt/35 px-2.5 py-1.5">
+                <div class="uppercase tracking-wide text-muted">Latest</div>
+                <div class="mt-1 font-semibold text-base-content">{activity().latestCount}</div>
               </div>
             </div>
           </div>

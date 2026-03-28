@@ -205,8 +205,8 @@ describe('Recovery', () => {
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     expect(await screen.findByRole('tab', { name: /protected items/i })).toBeInTheDocument();
     await screen.findByText('VM 123');
-    expect(screen.getByText('Needs Attention')).toBeInTheDocument();
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
+    expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
     expect(
       screen.getAllByText((_, element) =>

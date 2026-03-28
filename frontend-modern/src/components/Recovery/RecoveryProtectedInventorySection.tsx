@@ -32,7 +32,6 @@ import {
 import {
   getRecoveryArtifactColumnLabel,
   getRecoveryRollupAgeTextClass,
-  getRecoveryRollupIssueTone,
   getRecoveryProtectedSearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   isRecoveryRollupStale,
@@ -50,19 +49,12 @@ import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
 type ProtectedSortCol = 'item' | 'type' | 'platform' | 'lastBackup' | 'outcome';
 type SortDir = 'asc' | 'desc';
-type ProtectedInventoryGroupKey = 'attention' | 'healthy';
 
 interface RecoveryRollupSummary {
   total: number;
   counts: Record<RecoveryOutcome, number>;
   stale: number;
   neverSucceeded: number;
-}
-
-interface ProtectedInventoryGroup {
-  key: ProtectedInventoryGroupKey;
-  label: string;
-  items: ProtectionRollup[];
 }
 
 interface RecoveryProtectedInventorySectionProps {
@@ -175,38 +167,6 @@ export const RecoveryProtectedInventorySection: Component<
   const visibleRollups = createMemo<ProtectionRollup[]>(() => {
     const start = (protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE;
     return sortedRollups().slice(start, start + PROTECTED_ITEMS_PAGE_SIZE);
-  });
-
-  const isAttentionRollup = (rollup: ProtectionRollup): boolean => {
-    const nowMs = Date.now();
-    const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
-    if (outcome === 'failed' || outcome === 'warning' || outcome === 'unknown') return true;
-    if (isRecoveryRollupStale(rollup, nowMs)) return true;
-    const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
-    const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
-    return successMs <= 0 && attemptMs > 0;
-  };
-
-  const visibleGroupedRollups = createMemo<ProtectedInventoryGroup[]>(() => {
-    const attention: ProtectionRollup[] = [];
-    const healthy: ProtectionRollup[] = [];
-
-    for (const rollup of visibleRollups()) {
-      if (isAttentionRollup(rollup)) {
-        attention.push(rollup);
-      } else {
-        healthy.push(rollup);
-      }
-    }
-
-    const groups: ProtectedInventoryGroup[] = [];
-    if (attention.length > 0) {
-      groups.push({ key: 'attention', label: 'Needs Attention', items: attention });
-    }
-    if (healthy.length > 0) {
-      groups.push({ key: 'healthy', label: 'Healthy Coverage', items: healthy });
-    }
-    return groups;
   });
 
   const pageStart = createMemo(() =>
@@ -457,24 +417,8 @@ export const RecoveryProtectedInventorySection: Component<
               </TableRow>
             </TableHeader>
             <TableBody class="divide-y divide-border">
-              <For each={visibleGroupedRollups()}>
-                {(group) => (
-                  <>
-                    <TableRow class="bg-surface-alt/75">
-                      <TableCell
-                        colspan={5}
-                        class="py-1 pr-3 pl-3 text-[12px] sm:text-sm font-semibold text-base-content"
-                      >
-                        <div class="flex items-center gap-2">
-                          <span>{group.label}</span>
-                          <span class="text-[10px] font-normal uppercase tracking-wide text-muted">
-                            {group.items.length} item{group.items.length === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                    <For each={group.items}>
-                      {(rollup) => {
+              <For each={visibleRollups()}>
+                {(rollup) => {
                   const resourceIndex = props.resourcesById();
                   const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
                   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
@@ -618,10 +562,7 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
                     </TableRow>
                   );
-                      }}
-                    </For>
-                  </>
-                )}
+                }}
               </For>
             </TableBody>
           </Table>
