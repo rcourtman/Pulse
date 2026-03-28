@@ -3,9 +3,15 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
+
+
+INTERNAL_DIR = Path(__file__).resolve().parent
+if str(INTERNAL_DIR) not in sys.path:
+    sys.path.insert(0, str(INTERNAL_DIR))
 
 import commercial_cancellation_reactivation_proof as proof
 
@@ -18,6 +24,13 @@ def run_main(argv: list[str]) -> tuple[int, str]:
 
 
 class CommercialCancellationReactivationProofTest(unittest.TestCase):
+    def test_default_paths_resolve_from_internal_script_location(self) -> None:
+        self.assertEqual(proof.default_pulse_dir(), Path(proof.__file__).resolve().parents[3])
+        self.assertEqual(
+            proof.default_pulse_pro_license_server_dir(),
+            proof.default_pulse_dir().parent / "pulse-pro" / "license-server",
+        )
+
     def test_build_command_specs_uses_expected_directories(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             pulse_dir = Path(tmp) / "pulse"

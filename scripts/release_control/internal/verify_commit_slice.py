@@ -12,7 +12,7 @@ import tempfile
 from typing import Iterable
 
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 HOOK_PATH = REPO_ROOT / ".husky" / "pre-commit"
 
 

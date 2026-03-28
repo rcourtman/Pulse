@@ -28,7 +28,7 @@ class CommandResult:
 
 
 def default_pulse_dir() -> Path:
-    return Path(__file__).resolve().parents[2]
+    return Path(__file__).resolve().parents[3]
 
 
 def default_pulse_mobile_dir() -> Path:

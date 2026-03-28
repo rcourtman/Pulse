@@ -3,15 +3,28 @@
 
 from __future__ import annotations
 
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
+
+INTERNAL_DIR = Path(__file__).resolve().parent
+if str(INTERNAL_DIR) not in sys.path:
+    sys.path.insert(0, str(INTERNAL_DIR))
+
 import commercial_cancellation_reactivation_rehearsal as rehearsal
 
 
 class BuildCommandTests(unittest.TestCase):
+    def test_default_paths_resolve_from_internal_script_location(self) -> None:
+        self.assertEqual(rehearsal.default_pulse_dir(), Path(rehearsal.__file__).resolve().parents[3])
+        self.assertEqual(
+            rehearsal.default_integration_dir(),
+            rehearsal.default_pulse_dir() / "tests" / "integration",
+        )
+
     def test_run_rehearsal_uses_expected_commands(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

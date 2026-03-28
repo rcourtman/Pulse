@@ -1,9 +1,15 @@
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+
+INTERNAL_DIR = Path(__file__).resolve().parent
+if str(INTERNAL_DIR) not in sys.path:
+    sys.path.insert(0, str(INTERNAL_DIR))
 
 from verify_commit_slice import main, repo_relative_path
 
