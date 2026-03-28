@@ -179,9 +179,8 @@ describe('shell view', function() {
     expect(html).toContain('data-action="select-workspace"');
     expect(html).toContain('Workspace management');
     expect(html).toContain('Lifecycle desk');
-    expect(html).toContain('Choose a workspace for lifecycle review, or use the account desk for hosted billing, team, and create actions.');
-    expect(html).toContain('Account desk');
-    expect(html).toContain('Before you act');
+    expect(html).toContain('Pick one workspace for lifecycle review. Keep hosted billing, team changes, and new workspace creation in the account desk.');
+    expect(html).toContain('Keep account-wide actions separate');
     expect(html).toContain('Inspect posture');
     expect(html).toContain('Stay deliberate');
     expect(html).toContain('Lifecycle desk');

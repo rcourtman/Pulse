@@ -592,22 +592,21 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Choose a workspace for lifecycle review, or use the account desk for hosted billing, team, and create actions.</div>' +
-          '<div class="workspace-management-empty-grid">' +
-            '<div class="workspace-management-empty-card">' +
-              '<div class="account-panel-kicker">Account actions</div>' +
-              '<h4>Account desk</h4>' +
-              '<p>Create workspaces, manage billing, and change team access here instead of mixing them into row actions.</p>' +
+          '<div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep hosted billing, team changes, and new workspace creation in the account desk.</div>' +
+          '<div class="workspace-management-empty-shell">' +
+            '<div class="workspace-management-empty-actions-card">' +
+              '<div class="workspace-management-empty-actions-copy">' +
+                '<div class="account-panel-kicker">Account desk</div>' +
+                '<h4>Keep account-wide actions separate</h4>' +
+                '<p>Use this desk for new workspaces, hosted billing, and team changes. Keep row actions focused on a single workspace.</p>' +
+              '</div>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
             '</div>' +
-            '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
-              '<div class="account-panel-kicker">Before you act</div>' +
-              '<div class="workspace-management-empty-checklist">' +
-                '<div class="workspace-management-empty-check"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>Stay deliberate</strong><span>Use the desk for one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
-              '</div>' +
+            '<div class="workspace-management-empty-rules">' +
+              '<div class="workspace-management-empty-rule"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
+              '<div class="workspace-management-empty-rule"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div>' +
+              '<div class="workspace-management-empty-rule"><strong>Stay deliberate</strong><span>Use the desk for one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
