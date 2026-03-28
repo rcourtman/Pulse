@@ -285,6 +285,7 @@ describe('Recovery', () => {
     const historyTable = screen.getAllByRole('table')[0];
     const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
     const historyTablist = screen.getByRole('tablist', { name: /recovery data view/i });
+    const activityBars = screen.getByTestId('recovery-activity-bars');
     const eventsWorkspaceCard = historyTablist.closest('.overflow-hidden');
     expect(eventsWorkspaceCard).not.toBeNull();
     expect(eventsWorkspaceCard).toContainElement(historyTablist);
@@ -292,6 +293,7 @@ describe('Recovery', () => {
       historyTablist.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     const activityHeading = screen.getByText('Recovery Activity');
+    expect(activityBars.parentElement?.className).toContain('h-24');
     expect(eventsWorkspaceCard).toContainElement(activityHeading);
     expect(eventsWorkspaceCard).toContainElement(historyControls);
     expect(eventsWorkspaceCard).toContainElement(historyTable);

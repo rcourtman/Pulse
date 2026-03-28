@@ -43,6 +43,7 @@ describe('RecoveryActivitySection', () => {
 
     const bars = screen.getByTestId('recovery-activity-bars');
     expect(bars.className).toContain('items-stretch');
+    expect(bars.parentElement?.className).toContain('h-24');
     expect(screen.getAllByRole('button', { name: /recovery points/i })).toHaveLength(2);
   });
 });
