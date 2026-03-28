@@ -460,46 +460,51 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '</div>' +
       '</div>' +
       '<div class="account-command-deck">' +
-        '<div class="account-overview-card">' +
-          '<div class="account-overview-lead">' +
-            '<div class="account-panel-kicker">Fleet posture</div>' +
-            '<h3>' + escapeHTML(postureTitle) + '</h3>' +
-            '<p>' + escapeHTML(postureCopy) + '</p>' +
-            '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
-              ? 'Use this console to run client workspaces, account billing, and operator access from one place.'
-              : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
-            ) + '</div>' +
-          '</div>' +
-          '<div class="account-metric-strip">' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Total</span>' +
-              '<span class="account-stat-value">' + String(totalCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Ready now</span>' +
-              '<span class="account-stat-value account-stat-healthy">' + String(readyCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Checking</span>' +
-              '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Needs attention</span>' +
-              '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
-            '</div>' +
-            '<div class="account-stat-card account-stat-card-inline">' +
-              '<span class="account-stat-label">Suspended</span>' +
-              '<span class="account-stat-value">' + String(suspendedCount) + '</span>' +
+        '<div class="account-overview-main-column">' +
+          '<div class="account-overview-card">' +
+            '<div class="account-overview-lead">' +
+              '<div class="account-panel-kicker">Fleet posture</div>' +
+              '<h3>' + escapeHTML(postureTitle) + '</h3>' +
+              '<p>' + escapeHTML(postureCopy) + '</p>' +
+              '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
+                ? 'Use this console to run client workspaces, account billing, and operator access from one place.'
+                : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
+              ) + '</div>' +
             '</div>' +
           '</div>' +
-        '</div>' +
-        '<div class="account-overview-secondary">' +
           '<div class="overview-side-card overview-side-card-primary">' +
             '<div class="account-panel-kicker">Next move</div>' +
             '<h4>' + escapeHTML(nextStepTitle) + '</h4>' +
             '<p>' + escapeHTML(nextStepCopy) + '</p>' +
             nextStepChecklist +
             nextStepActions +
+          '</div>' +
+        '</div>' +
+        '<div class="account-overview-side-column">' +
+          '<div class="account-overview-metrics">' +
+            '<div class="account-panel-kicker">Live posture</div>' +
+            '<div class="account-metric-strip">' +
+              '<div class="account-stat-card account-stat-card-inline">' +
+                '<span class="account-stat-label">Total</span>' +
+                '<span class="account-stat-value">' + String(totalCount) + '</span>' +
+              '</div>' +
+              '<div class="account-stat-card account-stat-card-inline">' +
+                '<span class="account-stat-label">Ready now</span>' +
+                '<span class="account-stat-value account-stat-healthy">' + String(readyCount) + '</span>' +
+              '</div>' +
+              '<div class="account-stat-card account-stat-card-inline">' +
+                '<span class="account-stat-label">Checking</span>' +
+                '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
+              '</div>' +
+              '<div class="account-stat-card account-stat-card-inline">' +
+                '<span class="account-stat-label">Needs attention</span>' +
+                '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
+              '</div>' +
+              '<div class="account-stat-card account-stat-card-inline">' +
+                '<span class="account-stat-label">Suspended</span>' +
+                '<span class="account-stat-value">' + String(suspendedCount) + '</span>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
           renderAttentionPanel(workspaces) +
         '</div>' +
