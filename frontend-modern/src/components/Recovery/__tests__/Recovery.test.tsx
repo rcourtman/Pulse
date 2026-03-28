@@ -204,8 +204,10 @@ describe('Recovery', () => {
     expect(await screen.findByTestId('recovery-summary')).toBeInTheDocument();
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
-    expect(within(workspaceTablist).getByRole('tab', { name: /protected items 2/i })).toBeInTheDocument();
-    expect(within(workspaceTablist).getByRole('tab', { name: /recovery events 0/i })).toBeInTheDocument();
+    expect(within(workspaceTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
+    expect(within(workspaceTablist).getByRole('tab', { name: 'Recovery events' })).toBeInTheDocument();
+    expect(within(workspaceTablist).queryByRole('tab', { name: /protected items \d/i })).not.toBeInTheDocument();
+    expect(within(workspaceTablist).queryByRole('tab', { name: /recovery events \d/i })).not.toBeInTheDocument();
     expect(screen.queryByText('Focused drill-in')).not.toBeInTheDocument();
     await screen.findByText('VM 123');
     const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
@@ -216,12 +218,12 @@ describe('Recovery', () => {
     expect(within(inventoryControls).queryByText(/never succeeded/i)).not.toBeInTheDocument();
     expect(
       within(workspaceTablist)
-        .getByRole('tab', { name: /protected items 2/i })
+        .getByRole('tab', { name: 'Protected items' })
         .className,
     ).toContain('border-b-2');
     expect(
       within(workspaceTablist)
-        .getByRole('tab', { name: /protected items 2/i })
+        .getByRole('tab', { name: 'Protected items' })
         .className,
     ).not.toContain('rounded-md');
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
@@ -291,8 +293,8 @@ describe('Recovery', () => {
     const historySearch = within(historyControls).getByPlaceholderText('Search recovery history...');
     expect(historySearch).toBeInTheDocument();
     expect(historySearch.closest('div.relative')?.className).toContain('w-full');
-    expect(within(historyTablist).getByRole('tab', { name: /protected items 2/i })).toBeInTheDocument();
-    expect(within(historyTablist).getByRole('tab', { name: /recovery events 1/i })).toBeInTheDocument();
+    expect(within(historyTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
+    expect(within(historyTablist).getByRole('tab', { name: 'Recovery events' })).toBeInTheDocument();
     expect(within(historyControls).getByText(/^1 day group$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
     expect(screen.getAllByText(/^1 day group$/i)).toHaveLength(1);

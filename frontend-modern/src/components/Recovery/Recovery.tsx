@@ -489,18 +489,17 @@ const Recovery: Component = () => {
           return (
             <>
               <Subtabs
-                class="w-full"
                 value={workspaceView()}
                 onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
                 ariaLabel="Recovery data view"
                 tabs={[
                   {
                     value: 'inventory',
-                    label: `Protected items ${filteredRollups().length}`,
+                    label: 'Protected items',
                   },
                   {
                     value: 'events',
-                    label: `Recovery events ${recoveryPoints.meta().total}`,
+                    label: 'Recovery events',
                   },
                 ]}
               />

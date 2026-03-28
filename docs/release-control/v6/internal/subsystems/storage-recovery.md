@@ -756,10 +756,12 @@ status strip above the control bar. Recovery should use the same handoff shape
 as storage: one canonical `Subtabs.tsx` row first, then one shared page-controls
 card, then the active data card, instead of burying the workspace switcher
 inside the filter row or table-card header.
-That same strip should not repeat the broad stale or never-succeeded posture
-counts once the summary already owns those signals. The protected-items control
-row should stay focused on workspace navigation, drill-in context, and active
-filters instead of echoing page-wide posture pills above the same table.
+That same strip should not repeat page-level counts or posture cues once the
+summary already owns those signals. The recovery workspace tabs should stay on
+plain canonical labels like `Protected items` and `Recovery events` rather than
+embedding per-view totals in the tab text, and the protected-items control row
+should stay focused on navigation, drill-in context, and active filters instead
+of echoing page-wide posture pills above the same table.
 That same workspace handoff should stay on shared primitive styling too. When
 recovery renders its workspace tabs, the switcher should use the same canonical
 shared `Subtabs.tsx` shell, list, and button class pattern already used by
