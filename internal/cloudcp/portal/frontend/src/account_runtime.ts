@@ -32,6 +32,31 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
     return deps.store.getBootstrap().portal_path;
   };
 
+  var revealElementIfNeeded = function(element: HTMLElement | null): void {
+    if (!element) return;
+    var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    if (!viewportHeight) return;
+    var rect = element.getBoundingClientRect();
+    if (rect.top >= 0 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
+      return;
+    }
+    if (typeof element.scrollIntoView === 'function') {
+      element.scrollIntoView({ block: 'start', inline: 'nearest' });
+    }
+  };
+
+  var revealElementWhenReady = function(elementID: string, callback?: () => void): void {
+    var reveal = function(): void {
+      revealElementIfNeeded(getElement<HTMLElement>(elementID));
+      if (callback) callback();
+    };
+    if (typeof window.requestAnimationFrame === 'function') {
+      window.requestAnimationFrame(reveal);
+      return;
+    }
+    reveal();
+  };
+
   var refreshOrRedirect = async function(): Promise<boolean> {
     if (!await deps.refreshBootstrap()) {
       window.location.href = getPortalPath();
@@ -94,11 +119,14 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
       shouldFocus = entry.addWorkspaceOpen;
     });
     if (shouldFocus) {
-      focusElement('ws-name-' + accountID);
+      revealElementWhenReady('workspace-management-' + accountID, function() {
+        focusElement('ws-name-' + accountID);
+      });
     }
   };
 
   var selectWorkspace = function(accountID: string, workspaceID: string): void {
+    var selectedWorkspaceID = '';
     deps.store.updateAccountState(function(accountState) {
       var entry = ensurePortalAccountUIEntry(accountState, accountID);
       entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? '' : workspaceID;
@@ -106,7 +134,11 @@ export function installAccountRuntime(deps: AccountRuntimeDeps): AccountRuntime 
         entry.accessVisible = false;
         entry.addWorkspaceOpen = false;
       }
+      selectedWorkspaceID = entry.selectedWorkspaceID;
     });
+    if (selectedWorkspaceID) {
+      revealElementWhenReady('workspace-management-' + accountID);
+    }
   };
 
   var clearWorkspaceSelection = function(accountID: string): void {

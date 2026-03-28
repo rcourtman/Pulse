@@ -123,6 +123,7 @@
     if (shell) {
       shell.classList.toggle("workspace-operations-shell-selected", hasSelection);
       shell.classList.toggle("workspace-operations-shell-idle", !hasSelection);
+      shell.classList.toggle("workspace-operations-shell-form-open", entry.addWorkspaceOpen);
     }
     if (detail) {
       detail.classList.toggle("workspace-operations-detail-selected", hasSelection);
@@ -783,6 +784,29 @@
     var getPortalPath = function() {
       return deps.store.getBootstrap().portal_path;
     };
+    var revealElementIfNeeded = function(element) {
+      if (!element) return;
+      var viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+      if (!viewportHeight) return;
+      var rect = element.getBoundingClientRect();
+      if (rect.top >= 0 && rect.top <= viewportHeight - 72 && rect.bottom > 0) {
+        return;
+      }
+      if (typeof element.scrollIntoView === "function") {
+        element.scrollIntoView({ block: "start", inline: "nearest" });
+      }
+    };
+    var revealElementWhenReady = function(elementID, callback) {
+      var reveal = function() {
+        revealElementIfNeeded(getElement(elementID));
+        if (callback) callback();
+      };
+      if (typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(reveal);
+        return;
+      }
+      reveal();
+    };
     var refreshOrRedirect = async function() {
       if (!await deps.refreshBootstrap()) {
         window.location.href = getPortalPath();
@@ -841,10 +865,13 @@
         shouldFocus = entry.addWorkspaceOpen;
       });
       if (shouldFocus) {
-        focusElement("ws-name-" + accountID);
+        revealElementWhenReady("workspace-management-" + accountID, function() {
+          focusElement("ws-name-" + accountID);
+        });
       }
     };
     var selectWorkspace = function(accountID, workspaceID) {
+      var selectedWorkspaceID = "";
       deps.store.updateAccountState(function(accountState) {
         var entry = ensurePortalAccountUIEntry(accountState, accountID);
         entry.selectedWorkspaceID = entry.selectedWorkspaceID === workspaceID ? "" : workspaceID;
@@ -852,7 +879,11 @@
           entry.accessVisible = false;
           entry.addWorkspaceOpen = false;
         }
+        selectedWorkspaceID = entry.selectedWorkspaceID;
       });
+      if (selectedWorkspaceID) {
+        revealElementWhenReady("workspace-management-" + accountID);
+      }
     };
     var clearWorkspaceSelection = function(accountID) {
       deps.store.updateAccountState(function(accountState) {

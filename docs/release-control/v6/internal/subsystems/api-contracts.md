@@ -274,7 +274,10 @@ task strip, not a second mobile-only route or DOM contract, and the runtime
 must keep the active task visibly in-frame when that strip scrolls. That same
 shared bootstrap shell must also compress account identity into a compact
 mobile summary strip rather than introducing a second narrow-screen
-account-context payload or task-specific DOM contract.
+account-context payload or task-specific DOM contract. When that shared shell
+opens a lower workspace job surface such as lifecycle review or the
+create-workspace form, the runtime must reveal the opened surface instead of
+leaving the user at the top of the list.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

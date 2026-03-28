@@ -188,6 +188,144 @@ describe('account runtime', function() {
     expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('');
   });
 
+  it('reveals the lifecycle panel when a workspace job opens below the viewport', function() {
+    deps.store.setBootstrap({
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [{
+        id: 'acct_1',
+        name: 'Acme MSP',
+        kind: 'msp',
+        kind_label: 'MSP',
+        role: 'owner',
+        can_manage: true,
+        has_billing: true,
+        workspaces: [{
+          id: 'ws_2',
+          display_name: 'Alpha Workspace',
+          state: 'active',
+          healthy: true,
+          health_status: 'healthy',
+        }],
+      }],
+    });
+
+    document.body.innerHTML =
+      '<div id="workspace-operations-shell-acct_1" class="workspace-operations-shell workspace-operations-shell-idle">' +
+      '<div id="workspace-operations-detail-acct_1" class="workspace-operations-detail workspace-operations-detail-idle">' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
+      '<button id="workspace-management-close-acct_1"></button>' +
+      '<div id="workspace-management-empty-acct_1"></div>' +
+      '<div id="workspace-management-content-acct_1" hidden>' +
+      '<div id="workspace-management-meta-acct_1"></div>' +
+      '<h4 id="workspace-management-title-acct_1"></h4>' +
+      '<p id="workspace-management-summary-acct_1"></p>' +
+      '<div id="workspace-management-health-acct_1"></div>' +
+      '<div id="workspace-management-lifecycle-acct_1"></div>' +
+      '<div id="workspace-management-created-acct_1"></div>' +
+      '<div id="workspace-management-guidance-acct_1"></div>' +
+      '<button id="workspace-management-action-acct_1"></button>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+
+    var panel = document.getElementById('workspace-management-acct_1') as HTMLElement | null;
+    expect(panel).not.toBeNull();
+    if (!panel) return;
+    var scrollIntoView = vi.fn();
+    var requestAnimationFrame = vi.fn(function(callback: FrameRequestCallback) {
+      callback(0);
+      return 1;
+    });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 664 });
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestAnimationFrame });
+    Object.defineProperty(panel, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    Object.defineProperty(panel, 'getBoundingClientRect', {
+      configurable: true,
+      value: function() {
+        return {
+          top: 764,
+          bottom: 1433,
+          left: 0,
+          right: 320,
+          width: 320,
+          height: 669,
+          x: 0,
+          y: 764,
+          toJSON: function() { return {}; },
+        };
+      },
+    });
+
+    runtime.selectWorkspace('acct_1', 'ws_2');
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest' });
+    expect(deps.store.getAccountState().byAccountID.acct_1.selectedWorkspaceID).toBe('ws_2');
+  });
+
+  it('reveals the create workspace form when it opens below the viewport', function() {
+    document.body.innerHTML =
+      '<div id="workspace-operations-shell-acct_1" class="workspace-operations-shell workspace-operations-shell-idle">' +
+      '<div id="workspace-operations-detail-acct_1" class="workspace-operations-detail workspace-operations-detail-idle">' +
+      '<div id="workspace-management-acct_1" class="workspace-management-panel">' +
+      '<button id="workspace-management-close-acct_1"></button>' +
+      '<div id="workspace-management-empty-acct_1">' +
+      '<div id="add-ws-form-acct_1" class="add-workspace-form">' +
+      '<input id="ws-name-acct_1" value="">' +
+      '</div>' +
+      '</div>' +
+      '<div id="workspace-management-content-acct_1" hidden>' +
+      '<div id="workspace-management-meta-acct_1"></div>' +
+      '<h4 id="workspace-management-title-acct_1"></h4>' +
+      '<p id="workspace-management-summary-acct_1"></p>' +
+      '<div id="workspace-management-health-acct_1"></div>' +
+      '<div id="workspace-management-lifecycle-acct_1"></div>' +
+      '<div id="workspace-management-created-acct_1"></div>' +
+      '<div id="workspace-management-guidance-acct_1"></div>' +
+      '<button id="workspace-management-action-acct_1"></button>' +
+      '</div>' +
+      '</div>' +
+      '</div>' +
+      '</div>';
+
+    var panel = document.getElementById('workspace-management-acct_1') as HTMLElement | null;
+    var shell = document.getElementById('workspace-operations-shell-acct_1') as HTMLElement | null;
+    expect(panel).not.toBeNull();
+    if (!panel || !shell) return;
+    var scrollIntoView = vi.fn();
+    var requestAnimationFrame = vi.fn(function(callback: FrameRequestCallback) {
+      callback(0);
+      return 1;
+    });
+    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 664 });
+    Object.defineProperty(window, 'requestAnimationFrame', { configurable: true, value: requestAnimationFrame });
+    Object.defineProperty(panel, 'scrollIntoView', { configurable: true, value: scrollIntoView });
+    Object.defineProperty(panel, 'getBoundingClientRect', {
+      configurable: true,
+      value: function() {
+        return {
+          top: 1324,
+          bottom: 1517,
+          left: 0,
+          right: 320,
+          width: 320,
+          height: 193,
+          x: 0,
+          y: 1324,
+          toJSON: function() { return {}; },
+        };
+      },
+    });
+
+    runtime.toggleAddWorkspace('acct_1');
+
+    expect(requestAnimationFrame).toHaveBeenCalledTimes(1);
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start', inline: 'nearest' });
+    expect(deps.store.getAccountState().byAccountID.acct_1.addWorkspaceOpen).toBe(true);
+  });
+
   it('loads and updates team membership from runtime actions', async function() {
     vi.stubGlobal(
       'fetch',

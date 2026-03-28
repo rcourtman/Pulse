@@ -145,6 +145,7 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
   if (shell) {
     shell.classList.toggle('workspace-operations-shell-selected', hasSelection);
     shell.classList.toggle('workspace-operations-shell-idle', !hasSelection);
+    shell.classList.toggle('workspace-operations-shell-form-open', entry.addWorkspaceOpen);
   }
   if (detail) {
     detail.classList.toggle('workspace-operations-detail-selected', hasSelection);

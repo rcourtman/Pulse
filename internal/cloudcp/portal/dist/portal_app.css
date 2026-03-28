@@ -3008,6 +3008,14 @@ header .logout-btn:hover,
   .portal-account-context-stat strong {
     font-size: 11px;
   }
+  .workspace-operations-shell-selected .workspace-operations-detail,
+  .workspace-operations-shell-form-open .workspace-operations-detail {
+    order: 1;
+  }
+  .workspace-operations-shell-selected .workspace-operations-main,
+  .workspace-operations-shell-form-open .workspace-operations-main {
+    order: 2;
+  }
   .workspace-management-header,
   .access-management-header,
   .billing-header,

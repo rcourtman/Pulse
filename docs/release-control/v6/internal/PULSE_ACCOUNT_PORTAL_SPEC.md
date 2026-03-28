@@ -149,7 +149,8 @@ Core rules:
     level, not force the user to scan badges one card at a time.
 13. Workspace lifecycle actions must open in an explicit management surface
     with the selected workspace context visible, not inside a hidden overflow
-    menu or a blind confirm-first interaction.
+    menu or a blind confirm-first interaction. When that management surface or
+    the create-workspace form opens below the fold, the shell must reveal it.
 14. Access management must be a visible roster and invite surface, not a table
     or control hidden behind unrelated account copy.
 15. Support must remain an escalation path, not a peer destination competing
@@ -174,6 +175,9 @@ Core rules:
 22. On phone-width layouts, account identity context must collapse into a
     compact summary strip ahead of the active task instead of repeating a
     large desktop intro block before every section.
+23. On phone-width layouts, opening a lower workspace job such as
+    `Lifecycle` or `Create workspace` must reveal that job surface instead of
+    leaving the user at the top of the workspace list.
 
 ## Screen Model
 
