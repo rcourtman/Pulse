@@ -215,7 +215,7 @@ describe('shell view', function() {
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Account console');
     expect(html).toContain('Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.');
-    expect(html).toContain('Use this desk for self-hosted commercial work only.');
+    expect(html).toContain('Pick one billing, license, refund, or privacy task and keep it contained here.');
     expect(html).toContain('Account services');
     expect(html).not.toContain('Self-hosted licenses and billing');
   });

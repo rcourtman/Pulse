@@ -1840,24 +1840,24 @@ header .logout-btn:hover,
 
 .service-shell-sidebar-head,
 .service-inline-support {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
 }
 
 .service-shell-sidebar-head h3 {
-  margin: 8px 0 0;
-  font-size: 18px;
+  margin: 6px 0 0;
+  font-size: 17px;
   line-height: 1.08;
   letter-spacing: -0.03em;
 }
 
 .service-shell-sidebar-head p,
 .service-inline-support p {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.55;
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
   color: var(--ink-soft);
 }
 
@@ -1897,15 +1897,15 @@ header .logout-btn:hover,
 .service-empty-command-grid {
   display: grid;
   grid-template-columns: minmax(220px, 0.82fr) minmax(0, 1.18fr);
-  gap: 14px;
-  margin-top: 18px;
+  gap: 12px;
+  margin-top: 14px;
 }
 
 .service-empty-command-card {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px;
+  gap: 10px;
+  padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-muted);
@@ -1924,7 +1924,7 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 9px 12px;
   border: none;
   border-top: 1px solid var(--line);
   background: #fff;
@@ -1944,7 +1944,7 @@ header .logout-btn:hover,
 .service-action-main {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 5px;
   min-width: 0;
 }
 
@@ -1952,27 +1952,13 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 8px;
-}
-
-.service-action-tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 9px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ink-muted);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  gap: 6px;
 }
 
 .service-action-copy {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .service-action-copy h3 {
@@ -1985,27 +1971,15 @@ header .logout-btn:hover,
 .service-action-copy p {
   margin: 0;
   font-size: 12px;
-  line-height: 1.45;
+  line-height: 1.35;
   color: var(--ink-soft);
-  max-width: 760px;
+  max-width: 520px;
 }
 
-.service-action-highlights {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.service-action-highlight {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: #fff;
-  color: var(--ink-soft);
-  font-size: 9px;
-  font-weight: 600;
+.service-action-meta {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ink-muted);
 }
 
 .service-action-cta {
@@ -2064,8 +2038,8 @@ header .logout-btn:hover,
 .service-empty-point {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
+  gap: 5px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-muted);
@@ -2094,7 +2068,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 5px;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-muted);
@@ -2120,8 +2094,8 @@ header .logout-btn:hover,
 .service-empty-flow {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px;
+  gap: 5px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-muted);

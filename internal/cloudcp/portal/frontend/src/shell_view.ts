@@ -122,21 +122,18 @@ function renderServiceActionRow(
   focusID: string,
   highlights: string[]
 ): string {
-  var highlightHTML = highlights.map(function(item) {
-    return '<span class="service-action-highlight">' + escapeHTML(item) + '</span>';
-  }).join('');
+  var meta = highlights.join(' • ');
   return (
     '<article class="service-action-row">' +
       '<div class="service-action-main">' +
         '<div class="service-action-tags">' +
           '<span class="service-card-kicker">' + kicker + '</span>' +
-          '<span class="service-action-tag">Self-hosted</span>' +
         '</div>' +
         '<div class="service-action-copy">' +
           '<h3>' + title + '</h3>' +
           '<p>' + description + '</p>' +
         '</div>' +
-        '<div class="service-action-highlights">' + highlightHTML + '</div>' +
+        '<div class="service-action-meta">' + escapeHTML(meta) + '</div>' +
       '</div>' +
       '<div class="service-action-cta">' +
         '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">' + escapeHTML(actionLabel) + '</button>' +
@@ -822,7 +819,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var activeSection = context.activeSection || 'overview';
   var serviceHeading = hosted ? 'Self-hosted licenses and billing' : 'Account services';
   var serviceNote = hosted
-    ? 'Hosted operations live above. Use these commercial tools for self-hosted licenses, billing, refunds, and privacy actions.'
+    ? 'Hosted operations stay in Workspaces and Team. Use this area only for self-hosted commercial tasks.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
     return (
@@ -857,14 +854,14 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<aside class="service-shell-sidebar">' +
                 '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Service navigator</div>' +
-                  '<h3>Self-hosted billing, recovery, and privacy</h3>' +
-                  '<p>Use this desk for self-hosted commercial work only. Hosted workspace operations stay in Workspaces and Team.</p>' +
+                  '<h3>Self-hosted service desk</h3>' +
+                  '<p>Pick one billing, license, refund, or privacy task and keep it contained here.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
-                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing desk', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
-                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'License desk', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refund desk', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
-                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy desk', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
+                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing desk', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'License desk', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refund desk', 'Request a self-serve refund when the purchase is still eligible.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
+                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy desk', 'Request export or deletion for commercial account data.', 'data-service-panel', 'data-export-email', ['Export', 'Deletion']) +
                 '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +
@@ -872,7 +869,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
                     '<div class="account-panel-kicker">Active service desk</div>' +
                     '<h3>Open one commercial flow at a time</h3>' +
-                    '<p>Pick a billing, license, refund, or privacy flow from the navigator. The active request stays here so this area behaves like one self-hosted service desk.</p>' +
+                    '<p>Open one task from the navigator and keep the active request in this desk until it is finished.</p>' +
                     '<div class="service-empty-command-grid">' +
                       '<div class="service-empty-command-card">' +
                         '<div class="service-empty-column-title">Start here</div>' +
@@ -893,7 +890,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                       '<div class="service-empty-command-card service-empty-command-card-support">' +
                         '<div class="service-empty-column-title">Support</div>' +
                         '<div class="service-empty-checklist">' +
-                          '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, licenses, refunds, or privacy behave unexpectedly, escalate from this surface.</span></div>' +
+                          '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If a billing, license, refund, or privacy task does not behave as expected, escalate from this desk.</span></div>' +
                         '</div>' +
                         '<div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' +
                         escapeAttr(context.bootstrap.support_email || '') +
