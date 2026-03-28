@@ -535,8 +535,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-header">' +
           '<div>' +
             '<div class="account-panel-kicker">Workspace management</div>' +
-            '<h3>Review one workspace at a time</h3>' +
-            '<p>Select a workspace from the fleet to review its lifecycle state and run explicit management actions.</p>' +
+            '<h3>Workspace desk</h3>' +
+            '<p>Select one workspace from the fleet to inspect posture, lifecycle, and the next explicit operator action.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
           escapeAttr(account.id) +
@@ -547,21 +547,21 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Pick a workspace to open its operator desk.</div>' +
+          '<div class="workspace-management-empty-copy">No workspace selected yet.</div>' +
           '<div class="workspace-management-empty-grid">' +
             '<div class="workspace-management-empty-card">' +
-              '<div class="account-panel-kicker">Account desk</div>' +
-              '<h4>Keep account actions close</h4>' +
-              '<p>Workspace review happens here while billing, team, and create-workspace actions stay within reach.</p>' +
+              '<div class="account-panel-kicker">Account actions</div>' +
+              '<h4>Keep account-wide actions separate</h4>' +
+              '<p>Billing, team, and workspace creation stay account-wide even when you are focused on one workspace.</p>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
             '</div>' +
             '<div class="workspace-management-empty-card workspace-management-empty-card-muted">' +
-              '<div class="account-panel-kicker">Desk flow</div>' +
+              '<div class="account-panel-kicker">When you pick a workspace</div>' +
               '<div class="workspace-management-empty-checklist">' +
-                '<div class="workspace-management-empty-check"><strong>Pick the workspace</strong><span>Select a fleet row to load its health, lifecycle, and next management action.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>Read posture first</strong><span>Treat checking or needs-attention workspaces as review work, not routine operations.</span></div>' +
-                '<div class="workspace-management-empty-check"><strong>Escalate account changes separately</strong><span>Billing and team changes stay account-wide even when you are focused on one workspace.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Inspect posture</strong><span>Load the workspace first, then decide whether it is routine work, review work, or a parked suspended system.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Confirm lifecycle</strong><span>Check whether the workspace is active, checking, failed, or suspended before taking the next action.</span></div>' +
+                '<div class="workspace-management-empty-check"><strong>Then act deliberately</strong><span>Use the desk to manage one workspace at a time instead of mixing account-wide actions into the same flow.</span></div>' +
               '</div>' +
             '</div>' +
           '</div>' +
