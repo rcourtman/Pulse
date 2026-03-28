@@ -417,6 +417,40 @@ describe('shell view', function() {
     expect(html).not.toContain('Workspace or access path failed');
   });
 
+  it('renders read-only account roles without leaking internal identifiers', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_view',
+              name: 'Viewer Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'read_only',
+              can_manage: false,
+              has_billing: true,
+              workspaces: [
+                {
+                  id: 'ws_view',
+                  display_name: 'Viewer Workspace',
+                  state: 'active',
+                  healthy: true,
+                  health_status: 'healthy',
+                },
+              ],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('Read-only role');
+    expect(html).toContain('Read-only');
+    expect(html).not.toContain('Read_only role');
+    expect(html).not.toContain('READ_ONLY');
+  });
+
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({

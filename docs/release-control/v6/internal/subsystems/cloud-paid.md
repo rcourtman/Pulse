@@ -886,6 +886,10 @@ authority.
 The same rule applies to the compact account-context strip: it must describe
 the current user's effective hosted tasks, not restate full access-control and
 billing capability when those actions are blocked behind owner/admin roles.
+That same owned shell must also keep role labels on product vocabulary:
+customer-facing copy may say `Owner`, `Admin`, `Tech`, or `Read-only`, but it
+must not leak internal identifiers such as `read_only` or legacy aliases such
+as `member`.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

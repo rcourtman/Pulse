@@ -232,6 +232,10 @@ Core rules:
     Hosted-only accounts may not mention self-hosted billing utilities by
     default, and hosted view-only roles must say when owner/admin authority is
     still required to open hosted billing.
+33. User-facing role labels must stay on product vocabulary. The portal may
+    describe account role as `Owner`, `Admin`, `Tech`, or `Read-only`, but it
+    must not leak internal identifiers such as `read_only` or legacy aliases
+    such as `member`.
 
 ## Screen Model
 

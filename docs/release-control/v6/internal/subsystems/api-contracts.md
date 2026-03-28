@@ -325,6 +325,10 @@ billing still needs owner/admin authority.
 The same permission contract must also drive the compact account-context
 summary: the strip may not describe full hosted access-control or billing
 ownership when the current role can only review workspaces or roster state.
+That same typed runtime contract must also normalize account-role labels before
+render: customer-facing copy may say `Owner`, `Admin`, `Tech`, or `Read-only`,
+but it must not surface raw runtime identifiers such as `read_only` or legacy
+aliases such as `member`.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

@@ -6,47 +6,9 @@ import type {
   PortalAccessMember,
   PortalWorkspaceSummary,
 } from './types';
+import { normalizePortalRole, portalRoleCapabilityCopy, portalRoleLabel } from './account_roles';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
-
-function normalizedAccessRole(role: string): string {
-  if (role === 'member') return 'read_only';
-  return role || 'read_only';
-}
-
-function roleLabel(role: string): string {
-  switch (normalizedAccessRole(role)) {
-    case 'owner':
-      return 'Owner';
-    case 'admin':
-      return 'Admin';
-    case 'tech':
-      return 'Tech';
-    case 'read_only':
-      return 'Read-only';
-    case 'member':
-      return 'Member';
-    default:
-      return role || 'Member';
-  }
-}
-
-function roleCapabilityCopy(role: string): string {
-  switch (normalizedAccessRole(role)) {
-    case 'owner':
-      return 'Full account control, including billing, access control, and workspace control.';
-    case 'admin':
-      return 'Can manage workspaces and billing for this account.';
-    case 'tech':
-      return 'Can manage workspaces without billing ownership.';
-    case 'read_only':
-      return 'Can review workspace status without making control-plane changes.';
-    case 'member':
-      return 'Has access through the account roster.';
-    default:
-      return 'Has access through the account roster.';
-  }
-}
 
 export function getElement<T extends HTMLElement = HTMLElement>(id: string): T | null {
   return document.getElementById(id) as T | null;
@@ -203,7 +165,7 @@ function setContainerMessage(container: HTMLElement, title: string, msg: string,
 function countMembersByRole(members: PortalAccessMember[], role: string): number {
   var count = 0;
   for (var i = 0; i < members.length; i += 1) {
-    if (normalizedAccessRole(members[i].role) === role) count += 1;
+    if (normalizePortalRole(members[i].role) === role) count += 1;
   }
   return count;
 }
@@ -269,19 +231,19 @@ function createAccessControlCell(className: string): HTMLDivElement {
 }
 
 function renderAccessRoleControl(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob): HTMLElement {
-  var currentRole = normalizedAccessRole(member.role);
+  var currentRole = normalizePortalRole(member.role);
   var group = createAccessControlCell('access-control-cell-role');
   if (!canManage || activeJob !== 'change_role') {
     var badge = document.createElement('span');
     badge.className = 'access-role-badge';
-    badge.textContent = roleLabel(currentRole);
+    badge.textContent = portalRoleLabel(currentRole);
     group.appendChild(badge);
     return group;
   }
   if (currentRole === 'owner' && !isOwner) {
     var locked = document.createElement('span');
     locked.className = 'access-role-badge';
-    locked.textContent = roleLabel(currentRole);
+    locked.textContent = portalRoleLabel(currentRole);
     group.appendChild(locked);
     return group;
   }
@@ -292,7 +254,7 @@ function renderAccessRoleControl(accountID: string, member: PortalAccessMember, 
   for (var j = 0; j < roles.length; j += 1) {
     var opt = document.createElement('option');
     opt.value = roles[j];
-    opt.textContent = roleLabel(roles[j]);
+    opt.textContent = portalRoleLabel(roles[j]);
     if (currentRole === roles[j]) opt.selected = true;
     sel.appendChild(opt);
   }
@@ -315,7 +277,7 @@ function renderAccessMemberAction(accountID: string, member: PortalAccessMember,
     group.appendChild(idleText);
     return group;
   }
-  if (normalizedAccessRole(member.role) === 'owner' && !isOwner) {
+  if (normalizePortalRole(member.role) === 'owner' && !isOwner) {
     var lockedText = document.createElement('span');
     lockedText.className = 'access-control-locked';
     lockedText.textContent = 'Locked';
@@ -352,14 +314,14 @@ function renderAccessMemberRow(accountID: string, member: PortalAccessMember, is
 
   var roleBadge = document.createElement('span');
   roleBadge.className = 'access-inline-role-badge';
-  roleBadge.textContent = roleLabel(member.role);
+  roleBadge.textContent = portalRoleLabel(member.role);
   topline.appendChild(roleBadge);
 
   identity.appendChild(topline);
 
   var caption = document.createElement('div');
   caption.className = 'access-member-caption';
-  caption.textContent = roleCapabilityCopy(member.role);
+  caption.textContent = portalRoleCapabilityCopy(member.role);
   identity.appendChild(caption);
 
   row.appendChild(identity);

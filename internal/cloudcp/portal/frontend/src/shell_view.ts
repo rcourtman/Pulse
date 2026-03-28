@@ -5,6 +5,7 @@ import type {
   PortalShellSection,
   PortalWorkspaceSummary,
 } from './types';
+import { portalRoleLabel } from './account_roles';
 
 export interface ShellViewContext {
   bootstrap: PortalBootstrapData;
@@ -301,7 +302,7 @@ function renderOverviewMetricStrip(
 }
 
 function accountContextRoleMeta(account: PortalAccountSummary): string {
-  return titleCase(account.role) + (account.can_manage ? ' access' : ' role');
+  return portalRoleLabel(account.role) + (account.can_manage ? ' access' : ' role');
 }
 
 function accountContextLeadCopy(account: PortalAccountSummary): string {
@@ -317,7 +318,7 @@ function accountContextLeadCopy(account: PortalAccountSummary): string {
 }
 
 function accountContextAccessSummary(account: PortalAccountSummary): string {
-  return account.can_manage ? titleCase(account.role) : 'View only';
+  return account.can_manage ? portalRoleLabel(account.role) : 'View only';
 }
 
 function accountContextBillingSummary(account: PortalAccountSummary): string {
@@ -341,7 +342,7 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
           '<h2>' + escapeHTML(account.name) + '</h2>' +
           '<div class="portal-account-context-chips">' +
             '<span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span>' +
-            '<span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span>' +
+            '<span class="account-context-chip">' + escapeHTML(portalRoleLabel(account.role)) + '</span>' +
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +

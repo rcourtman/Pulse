@@ -1,11 +1,11 @@
 (() => {
-  // src/account_view.ts
-  function normalizedAccessRole(role) {
+  // src/account_roles.ts
+  function normalizePortalRole(role) {
     if (role === "member") return "read_only";
     return role || "read_only";
   }
-  function roleLabel(role) {
-    switch (normalizedAccessRole(role)) {
+  function portalRoleLabel(role) {
+    switch (normalizePortalRole(role)) {
       case "owner":
         return "Owner";
       case "admin":
@@ -20,8 +20,8 @@
         return role || "Member";
     }
   }
-  function roleCapabilityCopy(role) {
-    switch (normalizedAccessRole(role)) {
+  function portalRoleCapabilityCopy(role) {
+    switch (normalizePortalRole(role)) {
       case "owner":
         return "Full account control, including billing, access control, and workspace control.";
       case "admin":
@@ -36,6 +36,8 @@
         return "Has access through the account roster.";
     }
   }
+
+  // src/account_view.ts
   function getElement(id) {
     return document.getElementById(id);
   }
@@ -176,7 +178,7 @@
   function countMembersByRole(members, role) {
     var count = 0;
     for (var i = 0; i < members.length; i += 1) {
-      if (normalizedAccessRole(members[i].role) === role) count += 1;
+      if (normalizePortalRole(members[i].role) === role) count += 1;
     }
     return count;
   }
@@ -228,19 +230,19 @@
     return cell;
   }
   function renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob) {
-    var currentRole = normalizedAccessRole(member.role);
+    var currentRole = normalizePortalRole(member.role);
     var group = createAccessControlCell("access-control-cell-role");
     if (!canManage || activeJob !== "change_role") {
       var badge = document.createElement("span");
       badge.className = "access-role-badge";
-      badge.textContent = roleLabel(currentRole);
+      badge.textContent = portalRoleLabel(currentRole);
       group.appendChild(badge);
       return group;
     }
     if (currentRole === "owner" && !isOwner) {
       var locked = document.createElement("span");
       locked.className = "access-role-badge";
-      locked.textContent = roleLabel(currentRole);
+      locked.textContent = portalRoleLabel(currentRole);
       group.appendChild(locked);
       return group;
     }
@@ -250,7 +252,7 @@
     for (var j = 0; j < roles.length; j += 1) {
       var opt = document.createElement("option");
       opt.value = roles[j];
-      opt.textContent = roleLabel(roles[j]);
+      opt.textContent = portalRoleLabel(roles[j]);
       if (currentRole === roles[j]) opt.selected = true;
       sel.appendChild(opt);
     }
@@ -272,7 +274,7 @@
       group.appendChild(idleText);
       return group;
     }
-    if (normalizedAccessRole(member.role) === "owner" && !isOwner) {
+    if (normalizePortalRole(member.role) === "owner" && !isOwner) {
       var lockedText = document.createElement("span");
       lockedText.className = "access-control-locked";
       lockedText.textContent = "Locked";
@@ -303,12 +305,12 @@
     topline.appendChild(email);
     var roleBadge = document.createElement("span");
     roleBadge.className = "access-inline-role-badge";
-    roleBadge.textContent = roleLabel(member.role);
+    roleBadge.textContent = portalRoleLabel(member.role);
     topline.appendChild(roleBadge);
     identity.appendChild(topline);
     var caption = document.createElement("div");
     caption.className = "access-member-caption";
-    caption.textContent = roleCapabilityCopy(member.role);
+    caption.textContent = portalRoleCapabilityCopy(member.role);
     identity.appendChild(caption);
     row.appendChild(identity);
     row.appendChild(renderAccessRoleControl(accountID, member, isOwner, canManage, activeJob));
@@ -2027,7 +2029,7 @@
     return results;
   }
   function accountContextRoleMeta(account) {
-    return titleCase(account.role) + (account.can_manage ? " access" : " role");
+    return portalRoleLabel(account.role) + (account.can_manage ? " access" : " role");
   }
   function accountContextLeadCopy(account) {
     var accountPrefix = account.kind === "msp" ? "Hosted workspace account" : "Hosted account";
@@ -2037,7 +2039,7 @@
     return accountPrefix + (account.has_billing ? " where you can open workspaces and review who already has access. An owner or admin handles access changes and billing." : " where you can open workspaces and review who already has access. An owner or admin handles account changes.");
   }
   function accountContextAccessSummary(account) {
-    return account.can_manage ? titleCase(account.role) : "View only";
+    return account.can_manage ? portalRoleLabel(account.role) : "View only";
   }
   function accountContextBillingSummary(account) {
     if (!account.has_billing) return "Not attached";
@@ -2046,7 +2048,7 @@
   function renderAccountContextStrip(account) {
     var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
     var billingLabel = accountContextBillingSummary(account);
-    return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span><span class="portal-account-context-separator">/</span><span class="portal-account-context-access">' + escapeHTML(accountContextRoleMeta(account)) + '</span></div><div class="portal-account-context-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-context-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(accountContextLeadCopy(account)) + '</p></div><div class="portal-account-context-summary"><div class="portal-account-context-stat"><span>Access</span><strong>' + escapeHTML(accountContextAccessSummary(account)) + '</strong></div><div class="portal-account-context-stat"><span>Workspaces</span><strong>' + escapeHTML(workspaceLabel) + '</strong></div><div class="portal-account-context-stat"><span>Billing</span><strong>' + escapeHTML(billingLabel) + "</strong></div></div></section>";
+    return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span><span class="portal-account-context-separator">/</span><span class="portal-account-context-access">' + escapeHTML(accountContextRoleMeta(account)) + '</span></div><div class="portal-account-context-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-context-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(portalRoleLabel(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(accountContextLeadCopy(account)) + '</p></div><div class="portal-account-context-summary"><div class="portal-account-context-stat"><span>Access</span><strong>' + escapeHTML(accountContextAccessSummary(account)) + '</strong></div><div class="portal-account-context-stat"><span>Workspaces</span><strong>' + escapeHTML(workspaceLabel) + '</strong></div><div class="portal-account-context-stat"><span>Billing</span><strong>' + escapeHTML(billingLabel) + "</strong></div></div></section>";
   }
   function shellSectionButton(section, activeSection, index, title, copy, badge) {
     var badgeHTML = badge ? '<span class="portal-shell-nav-badge">' + escapeHTML(badge) + "</span>" : "";
