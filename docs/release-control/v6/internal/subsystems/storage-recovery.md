@@ -801,7 +801,10 @@ That same shell rule applies to the recovery-events workspace.
 pattern as the protected inventory surface, not a separate large titled header
 bar plus another full toolbar slab. Event filter labels should also stay on the
 canonical short Pulse vocabulary like `Platform` and `Status` instead of
-recovery-only variants such as `History platform` or `History status`.
+recovery-only variants such as `History platform` or `History status`. Both
+recovery toolbars should also stay on compact shared select sizing instead of
+inflating the row with recovery-local min-width overrides that make the
+controls denser and wider than storage for the same amount of operator input.
 That same events-workspace rule should keep the activity strip as orientation
 for the event list rather than burying it at the bottom. The events workspace
 should move from the subtabs row to `RecoveryActivitySection.tsx`, then shared

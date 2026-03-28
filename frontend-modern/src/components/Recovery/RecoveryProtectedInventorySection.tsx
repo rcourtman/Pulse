@@ -255,7 +255,7 @@ export const RecoveryProtectedInventorySection: Component<
                 )
               }
               groupClass="gap-1.5 px-1.5 py-0.5"
-              selectClass="min-w-[10rem] max-w-[14rem] py-1.5 text-sm"
+              selectClass="py-1 text-xs"
             >
               <For each={props.itemTypeOptions()}>
                 {(itemType) => (
@@ -278,7 +278,7 @@ export const RecoveryProtectedInventorySection: Component<
                 )
               }
               groupClass="gap-1.5 px-1.5 py-0.5"
-              selectClass="min-w-[10rem] max-w-[14rem] py-1.5 text-sm"
+              selectClass="py-1 text-xs"
             >
               <For each={props.platformOptions()}>
                 {(platform) => (
@@ -299,7 +299,7 @@ export const RecoveryProtectedInventorySection: Component<
                 if (value !== 'all') props.setVerificationFilter('all');
               }}
               groupClass="gap-1.5 px-1.5 py-0.5"
-              selectClass="min-w-[9rem] py-1.5 text-sm"
+              selectClass="py-1 text-xs"
             >
               <For each={availableOutcomes}>
                 {(outcome) => (
@@ -314,7 +314,7 @@ export const RecoveryProtectedInventorySection: Component<
               type="button"
               aria-pressed={props.protectedStaleOnly()}
               onClick={() => props.setProtectedStaleOnly((value) => !value)}
-              class={`rounded-md border px-3 py-1.5 text-sm font-medium transition-colors ${getRecoveryProtectedToggleClass(
+              class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(
                 props.protectedStaleOnly(),
               )}`}
             >

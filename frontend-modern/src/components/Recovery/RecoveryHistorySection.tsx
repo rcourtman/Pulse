@@ -363,7 +363,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 );
                 props.setCurrentPage(1);
               }}
-              selectClass="min-w-[10rem] max-w-[14rem]"
+              selectClass="py-1 text-xs"
             >
               <For each={props.itemTypeOptions()}>
                 {(itemType) => (
@@ -386,7 +386,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 );
                 props.setCurrentPage(1);
               }}
-              selectClass="min-w-[10rem] max-w-[14rem]"
+              selectClass="py-1 text-xs"
             >
               <For each={props.platformOptions()}>
                 {(platform) => (
@@ -407,7 +407,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                 if (value !== 'all') props.setVerificationFilter('all');
                 props.setCurrentPage(1);
               }}
-              selectClass="min-w-[7rem]"
+              selectClass="py-1 text-xs"
             >
               <For each={props.availableOutcomes}>
                 {(outcome) => (
