@@ -25,27 +25,29 @@ token-management visibility, and privacy controls to operators.
 
 1. `SECURITY.md`
 2. `docs/PRIVACY.md`
-3. `frontend-modern/src/api/security.ts`
-4. `frontend-modern/src/components/Settings/APITokenManager.tsx`
-5. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
-6. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-7. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-8. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-9. `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`
-10. `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`
-11. `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`
-12. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
-13. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
-14. `frontend-modern/src/utils/apiTokenPresentation.ts`
-15. `frontend-modern/src/utils/auditLogPresentation.ts`
-16. `frontend-modern/src/utils/auditWebhookPresentation.ts`
-17. `frontend-modern/src/utils/securityAuthPresentation.ts`
-18. `frontend-modern/src/utils/securityScorePresentation.ts`
-19. `internal/api/security.go`
-20. `internal/api/security_tokens.go`
-21. `internal/api/system_settings.go`
-22. `internal/telemetry/telemetry.go`
-23. `internal/api/router_routes_auth_security.go`
+3. `frontend-modern/public/docs/PRIVACY.md`
+4. `frontend-modern/src/utils/docsLinks.ts`
+5. `frontend-modern/src/api/security.ts`
+6. `frontend-modern/src/components/Settings/APITokenManager.tsx`
+7. `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`
+8. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+9. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+10. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+11. `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`
+12. `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`
+13. `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`
+14. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+15. `frontend-modern/src/components/Settings/useSystemSettingsState.ts`
+16. `frontend-modern/src/utils/apiTokenPresentation.ts`
+17. `frontend-modern/src/utils/auditLogPresentation.ts`
+18. `frontend-modern/src/utils/auditWebhookPresentation.ts`
+19. `frontend-modern/src/utils/securityAuthPresentation.ts`
+20. `frontend-modern/src/utils/securityScorePresentation.ts`
+21. `internal/api/security.go`
+22. `internal/api/security_tokens.go`
+23. `internal/api/system_settings.go`
+24. `internal/telemetry/telemetry.go`
+25. `internal/api/router_routes_auth_security.go`
 
 ## Shared Boundaries
 
@@ -117,6 +119,12 @@ That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path
 instead of drifting back into hook-local notification strings.
+Telemetry/privacy disclosures now also route through the shipped frontend docs
+boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
+owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`
+is the version-matched asset served by the running build. Privacy disclosures
+must not drift back to GitHub `main` links that can describe a different
+revision than the installed runtime.
 That same governed settings trust boundary now also includes
 `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,
 `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`,

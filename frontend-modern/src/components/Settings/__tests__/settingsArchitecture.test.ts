@@ -58,6 +58,7 @@ import billingAdminOrganizationsTableSource from '../BillingAdminOrganizationsTa
 import billingAdminPanelSource from '../BillingAdminPanel.tsx?raw';
 import billingAdminPanelStateSource from '../useBillingAdminPanelState.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
+import docsLinksSource from '@/utils/docsLinks.ts?raw';
 import aiSettingsPanelSource from '../AISettings.tsx?raw';
 import aiChatMaintenanceSectionSource from '../AIChatMaintenanceSection.tsx?raw';
 import aiProviderConfigurationSectionSource from '../AIProviderConfigurationSection.tsx?raw';
@@ -1247,6 +1248,8 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps shared system settings presentation extracted from panel and state owners', () => {
     expect(generalSettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
+    expect(generalSettingsPanelSource).toContain('@/utils/docsLinks');
+    expect(generalSettingsPanelSource).toContain('PRIVACY_DOC_URL');
     expect(recoverySettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
     expect(networkDiscoverySectionSource).toContain('@/utils/systemSettingsPresentation');
     expect(systemSettingsStateSource).toContain('@/utils/systemSettingsPresentation');
@@ -1257,6 +1260,8 @@ describe('Settings architecture guardrails', () => {
     expect(systemSettingsPresentationSource).toContain(
       'export function getStartUpdateErrorMessage',
     );
+    expect(docsLinksSource).toContain("export const SHIPPED_DOCS_ROOT = '/docs'");
+    expect(docsLinksSource).toContain("export const PRIVACY_DOC_URL = getShippedDocUrl('PRIVACY.md')");
   });
 
   it('routes every top-level settings surface through the canonical panel shell framing', () => {

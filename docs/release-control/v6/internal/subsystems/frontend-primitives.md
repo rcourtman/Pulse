@@ -125,6 +125,7 @@ work extends shared components instead of creating new local variants.
 94. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
 95. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
 96. `frontend-modern/src/utils/environmentLockPresentation.ts`
+97. `frontend-modern/src/utils/docsLinks.ts`
 
 ## Shared Boundaries
 
@@ -680,6 +681,10 @@ product copy, or external links back into the shared shell. Internal product
 navigation from that shell should still route through canonical shared helpers
 such as `frontend-modern/src/routing/resourceLinks.ts` rather than freezing raw
 `/recovery?...` route strings into the modal itself.
+Canonical customer disclosures inside those shared shells now route through
+`frontend-modern/src/utils/docsLinks.ts`, so settings and what's-new privacy
+links resolve to shipped `/docs/...` assets instead of hard-coded GitHub
+`main` URLs that can drift from the running build.
 The shared summary strip primitives now follow that same owner split.
 `frontend-modern/src/components/shared/SummaryPanel.tsx` and
 `frontend-modern/src/components/shared/SummaryMetricCard.tsx` stay the render
@@ -1403,6 +1408,10 @@ The security-facing settings panels within that shell now also follow an
 explicit shared boundary with `security-privacy` so shell framing stays here
 while auth posture, token controls, and privacy semantics remain governed as a
 trust surface instead of generic UX copy.
+That shared shell boundary now also covers version-matched docs-link framing:
+customer-facing privacy disclosures in shared settings surfaces must route
+through `frontend-modern/src/utils/docsLinks.ts` rather than panel-local
+external URLs.
 
 Single-surface settings pages that only render one canonical `SettingsPanel`
 must stay rooted directly at that panel instead of wrapping it in an extra

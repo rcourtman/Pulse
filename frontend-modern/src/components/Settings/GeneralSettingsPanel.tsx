@@ -17,6 +17,7 @@ import {
   PVE_POLLING_MIN_SECONDS,
   PVE_POLLING_PRESETS,
 } from '@/utils/systemSettingsPresentation';
+import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 
 import Laptop from 'lucide-solid/icons/laptop';
 
@@ -214,7 +215,7 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
               platform, resource counts, and feature flags. No hostnames, credentials, or personal
               information is ever sent.{' '}
               <a
-                href="https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md"
+                href={PRIVACY_DOC_URL}
                 target="_blank"
                 rel="noopener noreferrer"
                 class="underline hover:text-base-content"

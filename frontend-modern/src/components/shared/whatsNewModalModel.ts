@@ -1,3 +1,5 @@
+import { PRIVACY_DOC_URL, README_DOC_URL } from '@/utils/docsLinks';
+
 export interface WhatsNewFeatureCard {
   accent: string;
   description: string;
@@ -5,9 +7,8 @@ export interface WhatsNewFeatureCard {
   title: string;
 }
 
-export const WHATS_NEW_DOCS_URL = 'https://github.com/rcourtman/Pulse/blob/main/docs/README.md';
-export const WHATS_NEW_PRIVACY_URL =
-  'https://github.com/rcourtman/Pulse/blob/main/docs/PRIVACY.md';
+export const WHATS_NEW_DOCS_URL = README_DOC_URL;
+export const WHATS_NEW_PRIVACY_URL = PRIVACY_DOC_URL;
 
 export const WHATS_NEW_FEATURE_CARDS: WhatsNewFeatureCard[] = [
   {
