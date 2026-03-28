@@ -154,6 +154,11 @@ Core rules:
     or control hidden behind unrelated account copy.
 15. Support must remain an escalation path, not a peer destination competing
     with the primary jobs a user came to do.
+16. The signed-in `Overview` must be one shell-level triage surface across the
+    current account set, not a repeated per-account dashboard.
+17. When `Workspaces` or `Access` are unavailable, the tab must show an
+    explicit unavailable state that points to the right live task instead of
+    rendering blank space.
 
 ## Screen Model
 
@@ -178,6 +183,7 @@ Each signed-in state should render:
 
 1. a concise overview band that answers `Needs attention`, `Ready`, and `Next
    action`
+   The overview band is shell-level triage, not one repeated card per account.
 2. account cards with role, account kind, workspace totals, and account-level
    fleet status
 3. an explicit `Workspaces` area for open, create, and lifecycle actions
@@ -186,6 +192,8 @@ Each signed-in state should render:
    and nests self-hosted commercial utilities only when relevant
 6. a `Support` area that is present only as an escalation path
 7. explicit action groups, not anonymous menu affordances
+8. explicit unavailable-state panels for top-level tasks that are not active
+   for the current account shape
 
 ## Product-Specific Boundaries
 

@@ -818,6 +818,10 @@ not yet form one coherent Pulse account product. The canonical future shape is
 `docs/release-control/v6/internal/PULSE_ACCOUNT_PORTAL_SPEC.md`: one
 authenticated Pulse account shell that unifies Cloud tenants, self-hosted
 licenses, billing, recovery, and MSP admin surfaces without creating a
-standalone Relay portal. Until that candidate lane lands, new commercial
+standalone Relay portal. That shell now also owns two product rules
+explicitly: `Overview` is one shell-level triage surface across the current
+account set rather than a repeated per-account dashboard, and unavailable
+top-level `Workspaces` or `Access` tasks must render an explicit unavailable
+state instead of blank space. Until that candidate lane lands, new commercial
 account work must extend the governed Pulse account shape rather than spawning
 additional one-off recovery or billing pages.

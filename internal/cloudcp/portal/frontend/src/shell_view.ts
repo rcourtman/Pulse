@@ -14,6 +14,11 @@ export interface ShellViewContext {
   activeSection?: PortalShellSection;
 }
 
+interface OverviewWorkspaceEntry {
+  account: PortalAccountSummary;
+  workspace: PortalWorkspaceSummary;
+}
+
 function escapeHTML(value: unknown): string {
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -81,6 +86,20 @@ function collectWorkspaces(accounts: PortalAccountSummary[]): PortalWorkspaceSum
     var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
     for (var j = 0; j < workspaces.length; j += 1) {
       results.push(workspaces[j]);
+    }
+  }
+  return results;
+}
+
+function collectOverviewWorkspaceEntries(accounts: PortalAccountSummary[]): OverviewWorkspaceEntry[] {
+  var results: OverviewWorkspaceEntry[] = [];
+  for (var i = 0; i < accounts.length; i += 1) {
+    var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
+    for (var j = 0; j < workspaces.length; j += 1) {
+      results.push({
+        account: accounts[i],
+        workspace: workspaces[j],
+      });
     }
   }
   return results;
@@ -446,17 +465,56 @@ function renderWorkspaceHandoffForm(accountID: string, workspaceID: string, acco
   );
 }
 
-function renderOverviewAttentionCard(workspaces: PortalWorkspaceSummary[]): string {
-  var attention = attentionWorkspaces(workspaces);
+function attentionOverviewEntries(entries: OverviewWorkspaceEntry[]): OverviewWorkspaceEntry[] {
+  var results: OverviewWorkspaceEntry[] = [];
+  for (var i = 0; i < entries.length; i += 1) {
+    var status = workspaceHealthState(entries[i].workspace);
+    if (status === 'unhealthy' || status === 'checking') {
+      results.push(entries[i]);
+    }
+  }
+  return results;
+}
+
+function readyOverviewEntries(entries: OverviewWorkspaceEntry[]): OverviewWorkspaceEntry[] {
+  var results: OverviewWorkspaceEntry[] = [];
+  for (var i = 0; i < entries.length; i += 1) {
+    if (String(entries[i].workspace.state || '') === 'active' && workspaceHealthState(entries[i].workspace) === 'healthy') {
+      results.push(entries[i]);
+    }
+  }
+  return results;
+}
+
+function overviewWorkspaceContext(entry: OverviewWorkspaceEntry, includeAccountName: boolean, note: string): string {
+  if (!includeAccountName) return note;
+  return entry.account.name + ' · ' + note;
+}
+
+function renderOverviewAttentionCard(entries: OverviewWorkspaceEntry[], accountCount: number): string {
+  var attention = attentionOverviewEntries(entries);
+  var includeAccountName = accountCount > 1;
+  var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
+    return entry.workspace;
+  }), 'suspended');
   if (!attention.length) {
     return (
       '<article class="overview-task-card">' +
         '<div class="account-panel-kicker">Needs attention</div>' +
         '<h4>Nothing urgent</h4>' +
-        '<p>No active workspace is currently asking for review.</p>' +
+        '<p>' + escapeHTML(entries.length > 0
+          ? 'No active workspace is currently asking for review.'
+          : 'No hosted workspace is currently asking for review.'
+        ) + '</p>' +
         '<div class="overview-task-list">' +
-          '<div class="overview-task-item"><strong>Healthy now</strong><span>Active workspaces look clear for routine use.</span></div>' +
-          '<div class="overview-task-item"><strong>Suspended stays parked</strong><span>Suspended workspaces stay out of the way until you deliberately resume them.</span></div>' +
+          '<div class="overview-task-item"><strong>Healthy now</strong><span>' + escapeHTML(entries.length > 0
+            ? 'Active workspaces look clear for routine use.'
+            : 'There is no hosted workspace waiting for review yet.'
+          ) + '</span></div>' +
+          '<div class="overview-task-item"><strong>' + escapeHTML(suspendedCount > 0 ? 'Suspended stays parked' : 'Billing stays separate') + '</strong><span>' + escapeHTML(suspendedCount > 0
+            ? String(suspendedCount) + ' suspended workspace' + (suspendedCount === 1 ? ' stays' : 's stay') + ' out of the way until you deliberately resume it.'
+            : 'Self-hosted billing, licenses, refunds, and privacy stay in Billing.'
+          ) + '</span></div>' +
         '</div>' +
       '</article>'
     );
@@ -468,11 +526,11 @@ function renderOverviewAttentionCard(workspaces: PortalWorkspaceSummary[]): stri
       '<h4>Review these first</h4>' +
       '<p>These workspaces still need a human check before you treat the account as settled.</p>' +
       '<div class="overview-task-list">' +
-        attention.slice(0, 3).map(function(workspace) {
+        attention.slice(0, 3).map(function(entry) {
           return (
             '<div class="overview-task-item">' +
-              '<strong>' + escapeHTML(workspace.display_name) + '</strong>' +
-              '<span>' + escapeHTML(workspaceStatusCopy(workspace)) + '</span>' +
+              '<strong>' + escapeHTML(entry.workspace.display_name) + '</strong>' +
+              '<span>' + escapeHTML(overviewWorkspaceContext(entry, includeAccountName, workspaceStatusCopy(entry.workspace))) + '</span>' +
             '</div>'
           );
         }).join('') +
@@ -481,14 +539,22 @@ function renderOverviewAttentionCard(workspaces: PortalWorkspaceSummary[]): stri
   );
 }
 
-function renderOverviewReadyCard(account: PortalAccountSummary, workspaces: PortalWorkspaceSummary[], accountAPIBasePath: string): string {
-  var ready = readyWorkspaces(workspaces);
+function renderOverviewReadyCard(
+  accounts: PortalAccountSummary[],
+  entries: OverviewWorkspaceEntry[],
+  accountAPIBasePath: string
+): string {
+  var ready = readyOverviewEntries(entries);
+  var includeAccountName = accounts.length > 1;
   if (!ready.length) {
     return (
       '<article class="overview-task-card">' +
         '<div class="account-panel-kicker">Ready</div>' +
-        '<h4>No workspace is ready yet</h4>' +
-        '<p>Use Workspaces to review current state before you start routine work.</p>' +
+        '<h4>' + escapeHTML(accounts.length > 0 ? 'No workspace is ready yet' : 'Billing tools are ready') + '</h4>' +
+        '<p>' + escapeHTML(accounts.length > 0
+          ? 'Use Workspaces to review current state before you start routine work.'
+          : 'Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.'
+        ) + '</p>' +
       '</article>'
     );
   }
@@ -499,14 +565,14 @@ function renderOverviewReadyCard(account: PortalAccountSummary, workspaces: Port
       '<h4>Open and work</h4>' +
       '<p>These workspaces are active and healthy right now.</p>' +
       '<div class="overview-task-list">' +
-        ready.slice(0, 3).map(function(workspace) {
+        ready.slice(0, 3).map(function(entry) {
           return (
             '<div class="overview-task-item overview-task-item-action">' +
               '<div class="overview-task-copy">' +
-                '<strong>' + escapeHTML(workspace.display_name) + '</strong>' +
-                '<span>' + escapeHTML(workspaceRowNote(workspace)) + '</span>' +
+                '<strong>' + escapeHTML(entry.workspace.display_name) + '</strong>' +
+                '<span>' + escapeHTML(overviewWorkspaceContext(entry, includeAccountName, workspaceRowNote(entry.workspace))) + '</span>' +
               '</div>' +
-              renderWorkspaceHandoffForm(account.id, workspace.id, accountAPIBasePath, 'Open workspace') +
+              renderWorkspaceHandoffForm(entry.account.id, entry.workspace.id, accountAPIBasePath, 'Open workspace') +
             '</div>'
           );
         }).join('') +
@@ -515,42 +581,66 @@ function renderOverviewReadyCard(account: PortalAccountSummary, workspaces: Port
   );
 }
 
-function renderOverviewNextActionCard(account: PortalAccountSummary, workspaces: PortalWorkspaceSummary[], accountAPIBasePath: string): string {
-  var attention = attentionWorkspaces(workspaces);
-  var ready = readyWorkspaces(workspaces);
+function renderOverviewNextActionCard(accounts: PortalAccountSummary[], entries: OverviewWorkspaceEntry[], accountAPIBasePath: string): string {
+  var attention = attentionOverviewEntries(entries);
+  var ready = readyOverviewEntries(entries);
   var primaryAction = '';
   var secondaryAction = '';
   var title = '';
   var description = '';
+  var creatableAccount = accounts.find(function(account) {
+    return account.kind === 'msp' && account.can_manage;
+  }) || null;
+  var billingAccount = accounts.find(function(account) {
+    return account.has_billing && account.can_manage;
+  }) || null;
+  var accessAccount = accounts.find(function(account) {
+    return account.can_manage;
+  }) || null;
 
   if (attention.length) {
     title = 'Review workspace health';
-    description = 'Open Workspaces and resolve the pending health or lifecycle questions before you do anything else.';
+    description = attention.length > 1
+      ? 'Open Workspaces and resolve the pending health or lifecycle questions before you do anything else.'
+      : 'Start in Workspaces with ' + attention[0].workspace.display_name + ' before you do anything else.';
     primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
-    secondaryAction = account.can_manage
+    secondaryAction = accessAccount
       ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>'
       : '';
   } else if (ready.length) {
     title = 'Open the next workspace';
-    description = 'The most obvious next step is to open a ready workspace and continue the actual work there.';
-    primaryAction = renderWorkspaceHandoffForm(account.id, ready[0].id, accountAPIBasePath, 'Open ' + ready[0].display_name, 'btn-primary btn-compact');
+    description = accounts.length > 1
+      ? 'The clearest next step is to open ' + ready[0].workspace.display_name + ' in ' + ready[0].account.name + ' and continue the actual work there.'
+      : 'The most obvious next step is to open a ready workspace and continue the actual work there.';
+    primaryAction = renderWorkspaceHandoffForm(ready[0].account.id, ready[0].workspace.id, accountAPIBasePath, 'Open ' + ready[0].workspace.display_name, 'btn-primary btn-compact');
     secondaryAction = ready.length > 1
       ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">See all workspaces</button>'
       : '';
-  } else if (account.kind === 'msp' && account.can_manage) {
+  } else if (creatableAccount) {
     title = 'Create the next workspace';
-    description = 'There is no ready workspace yet, so the next clear action is to create one from the Workspaces section.';
-    primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button>';
+    description = 'There is no ready workspace yet, so the next clear action is to create one in ' + creatableAccount.name + '.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(creatableAccount.id) + '">Create workspace</button>';
     secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Manage access</button>';
-  } else if (account.has_billing && account.can_manage) {
+  } else if (billingAccount) {
     title = 'Handle billing in its own place';
     description = 'Operational work is clear, so the next separate task is billing if that is what you came here to change.';
     primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
-    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+    secondaryAction = accessAccount
+      ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>'
+      : '';
+  } else if (!accounts.length) {
+    title = 'Open billing';
+    description = 'No hosted workspace is attached, so the next obvious action is Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
+  } else if (accessAccount) {
+    title = 'Handle access in its own place';
+    description = 'If the next task is people or roles, keep it in Access instead of mixing it into routine workspace work.';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open access</button>';
+    secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
   } else {
     title = 'Choose the right task path';
     description = 'If this is an access change, go to Access. If it is a billing or license issue, go to Billing. Support is only for escalation.';
-    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'access' : 'billing') + '">' + (account.can_manage ? 'Open access' : 'Open billing') + '</button>';
+    primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
     secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="support">Escalate</button>';
   }
 
@@ -567,40 +657,75 @@ function renderOverviewNextActionCard(account: PortalAccountSummary, workspaces:
   );
 }
 
-function renderAccountOverviewSection(account: PortalAccountSummary, accountAPIBasePath: string): string {
-  var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
-  var totalCount = workspaces.length;
-  var readyCount = countReadyWorkspaces(workspaces);
-  var checkingCount = countWorkspacesByHealth(workspaces, 'checking');
-  var unhealthyCount = countWorkspacesByHealth(workspaces, 'unhealthy');
-  var suspendedCount = countWorkspacesByState(workspaces, 'suspended');
-  var attentionCount = attentionWorkspaces(workspaces).length;
+function renderShellOverviewSection(context: ShellViewContext): string {
+  var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
+  var entries = collectOverviewWorkspaceEntries(accounts);
+  var totalCount = entries.length;
+  var readyCount = readyOverviewEntries(entries).length;
+  var attentionCount = attentionOverviewEntries(entries).length;
+  var suspendedCount = countWorkspacesByState(collectWorkspaces(accounts), 'suspended');
+  var chips = accounts.length
+    ? [
+      accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts',
+      workspaceCountLabel(totalCount),
+      String(readyCount) + ' ready',
+      attentionCount > 0 ? String(attentionCount) + ' attention' : 'Nothing urgent',
+      suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'No suspended',
+    ]
+    : ['No hosted account', 'Billing available', 'Support only on escalation'];
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
       '<div class="account-stage-header account-stage-header-overview overview-stage-header">' +
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
-          '<h3>Account brief</h3>' +
-          '<p>Start with the immediate question, not the platform model.</p>' +
-          renderSectionContextChips([
-            String(attentionCount) + ' attention',
-            String(readyCount) + ' ready',
-            String(totalCount) + ' total',
-            suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'No suspended',
-          ]) +
+          '<h3>Account triage</h3>' +
+          '<p>Only three questions matter here.</p>' +
+          renderSectionContextChips(chips) +
         '</div>' +
       '</div>' +
       '<div class="overview-task-grid">' +
-        renderOverviewAttentionCard(workspaces) +
-        renderOverviewReadyCard(account, workspaces, accountAPIBasePath) +
-        renderOverviewNextActionCard(account, workspaces, accountAPIBasePath) +
+        renderOverviewAttentionCard(entries, accounts.length) +
+        renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) +
+        renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath) +
       '</div>' +
-      '<div class="overview-task-summary-bar">' +
-        '<div class="overview-task-summary-pill"><strong>Healthy</strong><span>' + String(countWorkspacesByHealth(workspaces, 'healthy')) + '</span></div>' +
-        '<div class="overview-task-summary-pill"><strong>Checking</strong><span>' + String(checkingCount) + '</span></div>' +
-        '<div class="overview-task-summary-pill"><strong>Needs attention</strong><span>' + String(unhealthyCount) + '</span></div>' +
-        '<div class="overview-task-summary-pill"><strong>Suspended</strong><span>' + String(suspendedCount) + '</span></div>' +
+    '</section>'
+  );
+}
+
+function renderNoHostedWorkspacesSection(): string {
+  return (
+    '<section class="account-content-panel account-content-panel-workspaces">' +
+      '<div class="account-stage-header">' +
+        '<div>' +
+          '<div class="account-panel-kicker">Workspaces</div>' +
+          '<h3>Workspaces</h3>' +
+          '<p>No hosted workspace is attached to this account.</p>' +
+          renderSectionContextChips(['None attached', 'Billing instead']) +
+        '</div>' +
+      '</div>' +
+      '<div class="empty-state empty-state-spaced">' +
+        '<p>There is nothing to open or manage here yet.</p>' +
+        '<p class="support-copy">Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.</p>' +
+      '</div>' +
+    '</section>'
+  );
+}
+
+function renderNoHostedAccessSection(): string {
+  return (
+    '<section class="account-content-panel account-content-panel-access">' +
+      '<div class="account-stage-header">' +
+        '<div>' +
+          '<div class="account-panel-kicker">Access</div>' +
+          '<h3>Access</h3>' +
+          '<p>No hosted account roster is attached here.</p>' +
+          renderSectionContextChips(['No hosted roster', 'Billing instead']) +
+        '</div>' +
+      '</div>' +
+      '<div class="empty-state empty-state-spaced">' +
+        '<p>There are no hosted roles or invites to manage for this account right now.</p>' +
+        '<p class="support-copy">If the task is commercial access to licenses, refunds, or privacy, stay in Billing.</p>' +
       '</div>' +
     '</section>'
   );
@@ -993,23 +1118,7 @@ export function renderHeaderHTML(context: ShellViewContext): string {
 }
 
 export function renderAccountsHTML(context: ShellViewContext): string {
-  var safeAccounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
-  if (safeAccounts.length === 0) {
-    return (
-      '<div class="empty-state empty-state-spaced">' +
-        '<p>No hosted workspaces are attached to this account.</p>' +
-        '<p class="support-copy">You can still use the self-hosted licensing and billing tools below.</p>' +
-        '<p class="support-copy">Need help? Contact <a href="mailto:' +
-        escapeAttr(context.bootstrap.support_email || '') +
-        '" class="support-link">' +
-        escapeHTML(context.bootstrap.support_email || '') +
-        '</a></p>' +
-      '</div>'
-    );
-  }
-  return safeAccounts.map(function(account) {
-    return renderAccountOverviewSection(account, context.accountAPIBasePath);
-  }).join('');
+  return renderShellOverviewSection(context);
 }
 
 export function renderAuthenticatedPortalHTML(context: ShellViewContext): string {
@@ -1022,17 +1131,18 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var billingNote = hosted
     ? 'Hosted billing lives here when it applies. Self-hosted licenses, refunds, and privacy stay separate underneath it.'
     : 'Use this billing surface for self-hosted subscriptions, licenses, refunds, and privacy requests.';
-  var hostedContent = accounts.map(function(account) {
-    return (
-      '<section class="account-surface">' +
-        '<div class="account-surface-body">' +
-          renderAccountOverviewSection(account, context.accountAPIBasePath) +
-          renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
-          renderAccountAccessSection(account) +
-        '</div>' +
-      '</section>'
-    );
-  }).join('');
+  var hostedContent = accounts.length
+    ? accounts.map(function(account) {
+      return (
+        '<section class="account-surface">' +
+          '<div class="account-surface-body">' +
+            renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
+            renderAccountAccessSection(account) +
+          '</div>' +
+        '</section>'
+      );
+    }).join('')
+    : renderNoHostedWorkspacesSection() + renderNoHostedAccessSection();
 
   return (
     '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
@@ -1041,6 +1151,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
         '<div class="portal-shell-main">' +
           (accounts.length === 1 ? renderAccountContextStrip(accounts[0]) : '') +
           '<section class="portal-content-panel portal-content-panel-overview">' +
+            renderShellOverviewSection(context) +
             '<div id="accounts-root">' + hostedContent + '</div>' +
           '</section>' +
           '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +

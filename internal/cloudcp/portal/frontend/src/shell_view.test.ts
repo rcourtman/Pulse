@@ -75,10 +75,12 @@ describe('shell view', function() {
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 
-    expect(html).toContain('No hosted workspaces are attached to this account.');
-    expect(html).toContain('self-hosted licensing and billing tools below');
-    expect(html).toContain('mailto:support@pulserelay.pro');
-    expect(html).toContain('support@pulserelay.pro');
+    expect(html).toContain('Account triage');
+    expect(html).toContain('No hosted account');
+    expect(html).toContain('Billing available');
+    expect(html).toContain('Nothing urgent');
+    expect(html).toContain('Billing tools are ready');
+    expect(html).toContain('Open billing');
   });
 
   it('renders authenticated portal accounts, workspaces, and service entrypoints', function() {
@@ -132,8 +134,10 @@ describe('shell view', function() {
     expect(html).toContain('Support');
     expect(html).toContain('Account tasks');
     expect(html).toContain('What needs attention, what is ready, and the next obvious action.');
-    expect(html).toContain('3 total');
+    expect(html).toContain('1 account');
+    expect(html).toContain('3 workspaces');
     expect(html).toContain('1 ready');
+    expect(html).toContain('2 attention');
     expect(html).toContain('Manage');
     expect(html).toContain('id="billing-section"');
     expect(html).toContain('portal-account-context');
@@ -148,8 +152,8 @@ describe('shell view', function() {
     expect(html).toContain('Add workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
-    expect(html).toContain('Account brief');
-    expect(html).toContain('Start with the immediate question, not the platform model.');
+    expect(html).toContain('Account triage');
+    expect(html).toContain('Only three questions matter here.');
     expect(html).toContain('section-context-strip');
     expect(html).toContain('Needs attention');
     expect(html).toContain('Ready');
@@ -159,11 +163,10 @@ describe('shell view', function() {
     expect(html).toContain('Review workspaces');
     expect(html).toContain('Review access');
     expect(html).toContain('account-stage-header-actions');
-    expect(html).toContain('0 suspended');
+    expect(html).toContain('No suspended');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
-    expect(html).toContain('Suspended');
     expect(html).toContain('Needs attention');
     expect(html).toContain('ready</span>');
     expect(html).toContain('Needs attention</span>');
@@ -240,6 +243,11 @@ describe('shell view', function() {
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Account tasks');
     expect(html).toContain('Self-hosted');
+    expect(html).toContain('Account triage');
+    expect(html).toContain('No hosted account');
+    expect(html).toContain('Billing tools are ready');
+    expect(html).toContain('There is nothing to open or manage here yet.');
+    expect(html).toContain('There are no hosted roles or invites to manage for this account right now.');
     expect(html).toContain('Use this billing surface for self-hosted subscriptions, licenses, refunds, and privacy requests.');
     expect(html).toContain('No hosted billing attached');
     expect(html).toContain('Billing');
