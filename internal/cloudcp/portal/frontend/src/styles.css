@@ -405,7 +405,6 @@ header .logout-btn:hover,
 
 .portal-shell-main {
   min-width: 0;
-  min-height: 820px;
   padding: 0 0 28px;
   background: #f7f9fb;
 }
@@ -1216,10 +1215,7 @@ header .logout-btn:hover,
   min-width: 0;
 }
 
-.workspace-management-panel {
-  min-height: 100%;
-  box-shadow: var(--shadow-sm);
-}
+.workspace-management-panel { box-shadow: var(--shadow-sm); }
 
 .workspace-management-panel.visible,
 .team-section.visible .team-management-panel {
@@ -1801,7 +1797,6 @@ header .logout-btn:hover,
 }
 
 .service-detail-shell {
-  min-height: 100%;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   background: #fff;
@@ -1961,7 +1956,6 @@ header .logout-btn:hover,
   padding: 18px;
   border-radius: var(--radius-md);
   background: #fff;
-  min-height: 100%;
 }
 
 .service-panel.visible.auth-panel {
