@@ -1601,12 +1601,12 @@ header .logout-btn:hover,
 .service-shell {
   display: grid;
   grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
-  gap: 12px;
+  gap: 14px;
   align-items: start;
-  padding: 12px;
+  padding: 14px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  background: #f7fafc;
+  background: #fff;
 }
 .service-shell-main,
 .service-shell-sidebar {
@@ -1616,10 +1616,10 @@ header .logout-btn:hover,
 }
 .service-shell-sidebar-head,
 .service-inline-support {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: #fff;
+  background: var(--panel-muted);
 }
 .service-shell-sidebar-head h3 {
   margin: 6px 0 0;
@@ -1637,7 +1637,7 @@ header .logout-btn:hover,
 .service-detail-shell {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: #fff;
+  background: #fbfcfd;
   box-shadow: none;
   overflow: hidden;
 }
@@ -1675,7 +1675,7 @@ header .logout-btn:hover,
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: var(--panel-muted);
+  background: #fff;
 }
 .service-empty-column-title {
   font-size: 12px;
@@ -1689,11 +1689,14 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 9px 12px;
+  padding: 11px 12px;
   border: none;
   border-top: 1px solid var(--line);
   background: #fff;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
 }
 .service-action-row:first-child {
   border-top: none;
@@ -1702,6 +1705,7 @@ header .logout-btn:hover,
 .service-action-row.active {
   border-color: rgba(15, 109, 115, 0.28);
   background: #f8fbfd;
+  box-shadow: inset 3px 0 0 rgba(15, 109, 115, 0.62);
 }
 .service-action-main {
   display: flex;
@@ -1737,13 +1741,14 @@ header .logout-btn:hover,
   font-size: 11px;
   line-height: 1.35;
   color: var(--ink-muted);
+  margin-top: 2px;
 }
 .service-action-cta {
   display: flex;
   align-items: center;
 }
 .service-action-button {
-  min-width: 86px;
+  min-width: 98px;
 }
 .service-panel {
   padding: 16px;

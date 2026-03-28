@@ -815,7 +815,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var activeSection = context.activeSection || 'overview';
   var serviceHeading = hosted ? 'Self-hosted licenses and billing' : 'Account services';
   var serviceNote = hosted
-    ? 'Hosted operations stay in Workspaces and Team. Use this area only for self-hosted commercial tasks.'
+    ? 'Hosted operations stay in Workspaces and Team. Use this area only for self-hosted commercial requests.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
     return (
@@ -850,8 +850,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<aside class="service-shell-sidebar">' +
                 '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Service navigator</div>' +
-                  '<h3>Self-hosted service desk</h3>' +
-                  '<p>Pick one billing, license, refund, or privacy task and keep it contained here.</p>' +
+                  '<h3>Commercial desks</h3>' +
+                  '<p>Choose one billing, license, refund, or privacy request and keep it contained here.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
                   renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing desk', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
@@ -864,31 +864,31 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
                     '<div class="account-panel-kicker">Active service desk</div>' +
-                    '<h3>Open one commercial flow at a time</h3>' +
-                    '<p>Open one task from the navigator and keep the active request in this desk until it is finished.</p>' +
+                    '<h3>Choose a commercial desk</h3>' +
+                    '<p>Open one commercial request from the navigator and keep it in this desk until it is finished.</p>' +
                     '<div class="service-empty-command-grid">' +
                       '<div class="service-empty-command-card">' +
-                        '<div class="service-empty-column-title">Start here</div>' +
+                        '<div class="service-empty-column-title">Request rules</div>' +
                         '<div class="service-empty-points service-empty-points-stack">' +
-                          '<div class="service-empty-point"><strong>Verify first</strong><span>Each flow confirms the commercial email before opening sensitive actions.</span></div>' +
-                          '<div class="service-empty-point"><strong>One task at a time</strong><span>Keep the active request in this desk until you finish or switch tools.</span></div>' +
+                          '<div class="service-empty-point"><strong>Verify first</strong><span>Each desk confirms the commercial email before opening sensitive actions.</span></div>' +
+                          '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +
                         '</div>' +
                       '</div>' +
                       '<div class="service-empty-command-card service-empty-command-card-wide">' +
-                        '<div class="service-empty-column-title">Available desks</div>' +
+                        '<div class="service-empty-column-title">Desk coverage</div>' +
                         '<div class="service-empty-flow-list">' +
-                          '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access after verification.</span></div>' +
-                          '<div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and invoice link.</span></div>' +
-                          '<div class="service-empty-flow"><strong>Refunds</strong><span>Confirm eligibility before revoking active commercial access.</span></div>' +
-                          '<div class="service-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                          '<div class="service-empty-flow"><strong>Billing desk</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
+                          '<div class="service-empty-flow"><strong>License desk</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
+                          '<div class="service-empty-flow"><strong>Refund desk</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
+                          '<div class="service-empty-flow"><strong>Privacy desk</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
                         '</div>' +
                       '</div>' +
                       '<div class="service-empty-command-card service-empty-command-card-support">' +
-                        '<div class="service-empty-column-title">Support</div>' +
+                        '<div class="service-empty-column-title">Escalation</div>' +
                         '<div class="service-empty-checklist">' +
-                          '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If a billing, license, refund, or privacy task does not behave as expected, escalate from this desk.</span></div>' +
+                          '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, license, refund, or privacy work does not behave as expected, escalate from this desk.</span></div>' +
                         '</div>' +
-                        '<div class="service-empty-support">Need help with billing, refund, privacy, or license actions? <a class="portal-support-link" href="mailto:' +
+                        '<div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
                         escapeAttr(context.bootstrap.support_email || '') +
                         '">' +
                         escapeHTML(context.bootstrap.support_email || '') +
