@@ -155,7 +155,10 @@ describe('shell view', function() {
     expect(html).toContain('Start in workspaces');
     expect(html).toContain('Needs review');
     expect(html).toContain('Fleet posture');
-    expect(html).toContain('Use this console to run client workspaces, account billing, and operator access from one place.');
+    expect(html).toContain('Console role');
+    expect(html).toContain('Run client workspaces, account billing, and operator access from one place.');
+    expect(html).toContain('Hosted path');
+    expect(html).toContain('Commercial path');
     expect(html).toContain('Open workspaces');
     expect(html).toContain('Review team access');
     expect(html).toContain('Needs review');

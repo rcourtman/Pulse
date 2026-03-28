@@ -483,6 +483,24 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
       '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open workspaces</button>' +
       '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="' + (account.can_manage ? 'team' : 'services') + '">' + (account.can_manage ? 'Review team access' : 'Open account services') + '</button>' +
     '</div>';
+  var consoleScopeCopy = account.kind === 'msp'
+    ? 'Run client workspaces, account billing, and operator access from one place.'
+    : 'Run hosted workspaces, account billing, and operator access from one place.';
+  var overviewBriefStrip =
+    '<div class="account-overview-brief-strip">' +
+      '<div class="account-overview-brief-point">' +
+        '<strong>Console role</strong>' +
+        '<span>' + escapeHTML(consoleScopeCopy) + '</span>' +
+      '</div>' +
+      '<div class="account-overview-brief-point">' +
+        '<strong>Hosted path</strong>' +
+        '<span>Use Workspaces for tenant operations and Team only when the operator roster needs to change.</span>' +
+      '</div>' +
+      '<div class="account-overview-brief-point">' +
+        '<strong>Commercial path</strong>' +
+        '<span>Keep licenses, refunds, privacy, and self-hosted billing in Account services instead of mixing them into hosted work.</span>' +
+      '</div>' +
+    '</div>';
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
@@ -506,10 +524,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
               '<div class="account-panel-kicker">Fleet posture</div>' +
               '<h3>' + escapeHTML(postureTitle) + '</h3>' +
               '<p>' + escapeHTML(postureCopy) + '</p>' +
-              '<div class="account-overview-callout">' + escapeHTML(account.kind === 'msp'
-                ? 'Use this console to run client workspaces, account billing, and operator access from one place.'
-                : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
-              ) + '</div>' +
+              overviewBriefStrip +
             '</div>' +
             '<div class="account-overview-next-block">' +
               '<div class="account-panel-kicker">Next move</div>' +
