@@ -1245,13 +1245,66 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 
+.portal-support-runbook-brief {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.portal-support-runbook-brief-card {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9fb 100%);
+}
+
+.portal-support-runbook-brief-card strong {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-strong);
+}
+
+.portal-support-runbook-brief-card span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.portal-support-runbook-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(220px, 0.9fr);
+  gap: 12px;
+}
+
+.portal-support-runbook-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 100%;
+}
+
+.portal-support-runbook-section-title {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
 .portal-support-handoff-note {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 12px 0 0 12px;
-  border-top: 1px solid var(--line);
+  min-height: 100%;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid var(--line);
   border-left: 2px solid rgba(15, 118, 110, 0.18);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fbfc 100%);
 }
 
 .portal-support-handoff-note strong {
@@ -2934,12 +2987,14 @@ header .logout-btn:hover,
 
   .portal-shell-layout,
   .portal-support-brief-strip,
+  .portal-support-runbook-brief,
   .portal-support-route-grid,
   .portal-shell-nav-group {
     grid-template-columns: 1fr;
   }
 
-  .portal-support-layout {
+  .portal-support-layout,
+  .portal-support-runbook-grid {
     grid-template-columns: 1fr;
   }
 

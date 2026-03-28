@@ -224,6 +224,9 @@ describe('shell view', function() {
     expect(html).toContain('Route the issue cleanly');
     expect(html).toContain('Hosted path');
     expect(html).toContain('Commercial path');
+    expect(html).toContain('Route checklist');
+    expect(html).toContain('Escalation packet');
+    expect(html).toContain('Escalate with facts');
     expect(html).toContain('Include in the escalation');
     expect(html).toContain('Open account services');
   });

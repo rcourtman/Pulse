@@ -904,14 +904,27 @@ function renderSupportSection(context: ShellViewContext): string {
           '<div class="account-panel-kicker">Escalation desk</div>' +
           '<h3>Route the issue cleanly</h3>' +
           '<p>Keep hosted operations, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
-          '<div class="portal-support-runbook-list">' +
-            '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
-            '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own desks. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
-            '<div class="portal-support-runbook-step"><strong>3. Escalate with context</strong><span>Include the account, workspace, and exact failed action so the escalation path starts with the same facts you saw.</span></div>' +
+          '<div class="portal-support-runbook-brief">' +
+            '<div class="portal-support-runbook-brief-card"><strong>Confirm scope</strong><span>Decide first whether the issue is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
+            '<div class="portal-support-runbook-brief-card"><strong>Keep paths separate</strong><span>Workspace and team problems stay out of billing, refund, privacy, and license work.</span></div>' +
+            '<div class="portal-support-runbook-brief-card"><strong>Escalate with facts</strong><span>Bring the exact account, workspace, desk, and failed action so support starts with the same state you saw.</span></div>' +
           '</div>' +
-          '<div class="portal-support-handoff-note">' +
-            '<strong>Include in the escalation</strong>' +
-            '<span>Account name, workspace name if relevant, the desk you were in, the exact button or request that failed, and whether the issue was hosted or commercial.</span>' +
+          '<div class="portal-support-runbook-grid">' +
+            '<div class="portal-support-runbook-section">' +
+              '<div class="portal-support-runbook-section-title">Route checklist</div>' +
+              '<div class="portal-support-runbook-list">' +
+                '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
+                '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own desks. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
+                '<div class="portal-support-runbook-step"><strong>3. Escalate with context</strong><span>Include the account, workspace, and exact failed action so the escalation path starts with the same facts you saw.</span></div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="portal-support-runbook-section">' +
+              '<div class="portal-support-runbook-section-title">Escalation packet</div>' +
+              '<div class="portal-support-handoff-note">' +
+                '<strong>Include in the escalation</strong>' +
+                '<span>Account name, workspace name if relevant, the desk you were in, the exact button or request that failed, and whether the issue was hosted or commercial.</span>' +
+              '</div>' +
+            '</div>' +
           '</div>' +
         '</div>' +
       '</div>' +
