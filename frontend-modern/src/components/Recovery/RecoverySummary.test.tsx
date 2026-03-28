@@ -68,5 +68,6 @@ describe('RecoverySummary', () => {
     expect(screen.getAllByText(/Never Succeeded/i).length).toBeGreaterThan(0);
     expect(screen.getByText('need attention')).toBeInTheDocument();
     expect(screen.getByText('stale items')).toBeInTheDocument();
+    expect(screen.queryByText('protected items')).not.toBeInTheDocument();
   });
 });

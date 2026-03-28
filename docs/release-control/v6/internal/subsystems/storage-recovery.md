@@ -678,6 +678,11 @@ That same summary-card rule should also avoid inset mini-panels inside the
 cards themselves. Recovery summary cards should prefer direct metric rows,
 lists, and badge-backed counts over "cards inside cards", which make the strip
 feel heavier than the equivalent infrastructure and workloads telemetry.
+That same compact-summary rule should also avoid repeating the same attention,
+stale, and footprint telemetry in multiple stacked readouts inside one card.
+Recovery summary cards should keep one dominant metric with one short support
+band so the strip scans at the same speed as infrastructure and workloads
+instead of behaving like a recovery-only executive summary.
 That same inventory surface should also follow the established monitoring-table
 scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
@@ -707,6 +712,11 @@ The protected-items status row should surface the active workspace, protected
 item count, and issue cues, but page-number and sort-direction bookkeeping
 belongs in the table chrome itself rather than competing with the primary scan
 path before operators even reach the rows.
+That same table density rule also applies to recovery table chrome and filter
+rows. Recovery inventory and event tables should use the same restrained
+title-case header typography, compact control heights, and thin row density as
+the established Pulse monitoring tables instead of drifting into report-style
+uppercase headers or oversized filter chrome.
 That same workspace rule also means the protected-items versus recovery-events
 switcher should live inside the active workspace header strip, not in its own
 separate band above the cards, so the page hands off from summary directly into

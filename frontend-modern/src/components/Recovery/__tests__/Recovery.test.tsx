@@ -220,6 +220,8 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(inventoryTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
+    expect(within(inventoryTable).queryByText('PLATFORM')).not.toBeInTheDocument();
     expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
     const vmRow = screen.getByText('VM 123').closest('tr');
     expect(vmRow).not.toBeNull();
@@ -251,6 +253,8 @@ describe('Recovery', () => {
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(historyTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
+    expect(within(historyTable).queryByText('PLATFORM')).not.toBeInTheDocument();
     expect(within(historyTable).queryByText('Target')).not.toBeInTheDocument();
     expect(within(historyTable).queryByText('Details')).not.toBeInTheDocument();
     const historyRow = within(historyTable).getByLabelText('Healthy').closest('tr');

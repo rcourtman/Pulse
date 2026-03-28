@@ -129,7 +129,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
             <For each={props.mobileVisibleArtifactColumns()}>
               {(column) => (
                 <TableHead
-                  class={`px-3 py-1.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
+                  class={`px-3 py-1.5 text-left text-[11px] font-medium whitespace-nowrap ${getRecoveryArtifactColumnHeaderClass(
                     column.id,
                   )}`}
                 >
