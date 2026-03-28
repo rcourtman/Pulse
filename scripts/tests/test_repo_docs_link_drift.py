@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Guard runtime code against GitHub main docs-link drift."""
+"""Guard runtime code against branch-tip docs-link drift."""
 
 from __future__ import annotations
 
@@ -11,7 +11,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 FORBIDDEN_SNIPPETS = (
     "https://github.com/rcourtman/Pulse/blob/main/",
+    "https://github.com/rcourtman/Pulse/blob/master/",
+    "https://github.com/rcourtman/Pulse/tree/main/docs/",
+    "https://github.com/rcourtman/Pulse/tree/master/docs/",
     "https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/",
+    "https://raw.githubusercontent.com/rcourtman/Pulse/master/docs/",
 )
 
 SKIP_DIR_NAMES = {
@@ -61,7 +65,7 @@ def should_skip(rel_path: str) -> bool:
 
 
 class RepoDocsLinkDriftTest(unittest.TestCase):
-    def test_runtime_files_do_not_reference_github_main_docs(self) -> None:
+    def test_runtime_files_do_not_reference_branch_tip_docs(self) -> None:
         offenders: list[str] = []
 
         for path in REPO_ROOT.rglob("*"):
@@ -84,7 +88,7 @@ class RepoDocsLinkDriftTest(unittest.TestCase):
         self.assertEqual(
             offenders,
             [],
-            msg="runtime files still reference GitHub main docs:\n- " + "\n- ".join(offenders),
+            msg="runtime files still reference branch-tip docs:\n- " + "\n- ".join(offenders),
         )
 
 
