@@ -1043,12 +1043,14 @@ header .logout-btn:hover,
 .workspace-list-stat {
   display: inline-flex;
   align-items: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: var(--panel-muted);
-  color: var(--ink-soft);
-  font-size: 12px;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .workspace-list-stat strong {
@@ -1064,7 +1066,8 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: minmax(0, 2.25fr) 116px 116px 154px;
   gap: 12px;
-  padding: 2px 14px 4px;
+  padding: 0 14px 6px;
+  border-bottom: 1px solid var(--line);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
@@ -1077,7 +1080,7 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 0;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 12px;
   background: #fff;
   overflow: hidden;
 }
@@ -1085,9 +1088,9 @@ header .logout-btn:hover,
 .workspace-row {
   display: grid;
   grid-template-columns: minmax(0, 2.25fr) 116px 116px 154px;
-  gap: 12px;
+  gap: 10px;
   align-items: center;
-  padding: 11px 14px;
+  padding: 12px 14px;
   background: #fff;
   border-top: 1px solid var(--line);
   transition: border-color 140ms ease, background 140ms ease;
@@ -1098,7 +1101,7 @@ header .logout-btn:hover,
 }
 
 .workspace-row:hover {
-  background: #f8fbfd;
+  background: #fbfdff;
 }
 
 .workspace-row.selected {
@@ -1119,14 +1122,14 @@ header .logout-btn:hover,
 .workspace-row-primary {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .workspace-row-heading {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 .workspace-name,
@@ -1140,7 +1143,7 @@ header .logout-btn:hover,
 
 .workspace-meta {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -1151,12 +1154,18 @@ header .logout-btn:hover,
 .workspace-meta-item {
   display: inline-flex;
   align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: #f1f5f8;
+  min-height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   font-size: 11px;
-  color: var(--ink-soft);
+  color: var(--ink-muted);
+}
+
+.workspace-meta-item + .workspace-meta-item::before {
+  content: '•';
+  margin-right: 10px;
+  color: #c0cad6;
 }
 
 .workspace-row-note,
@@ -1174,8 +1183,14 @@ header .logout-btn:hover,
 }
 
 .workspace-row-status-cell-badge .badge {
-  width: 100%;
+  min-height: 24px;
+  width: auto;
+  min-width: 92px;
   justify-content: center;
+  border-radius: 7px;
+  padding: 0 9px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
 }
 
 .account-management-grid {
