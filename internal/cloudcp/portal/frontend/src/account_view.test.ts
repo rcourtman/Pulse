@@ -137,6 +137,7 @@ describe('account view', function() {
 
     var roleSelect = document.querySelector('.team-role-select') as HTMLSelectElement;
     expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Read-only');
+    expect(document.getElementById('team-list-acct_1')?.textContent).toContain('Role');
     expect(roleSelect.value).toBe('read_only');
     expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('Operators');
     expect(document.getElementById('team-stats-acct_1')?.textContent).toContain('1');

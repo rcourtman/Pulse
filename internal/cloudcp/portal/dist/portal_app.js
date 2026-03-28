@@ -182,13 +182,24 @@
     var members = entry.teamQuery.data;
     stats.innerHTML = '<div class="team-stat-card"><span class="team-stat-label">Members</span><span class="team-stat-value">' + String(members.length) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Owners</span><span class="team-stat-value">' + String(countMembersByRole(members, "owner")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Admins</span><span class="team-stat-value">' + String(countMembersByRole(members, "admin")) + '</span></div><div class="team-stat-card"><span class="team-stat-label">Operators</span><span class="team-stat-value">' + String(countMembersByRole(members, "tech") + countMembersByRole(members, "read_only")) + "</span></div>";
   }
+  function createTeamControlGroup(labelText) {
+    var group = document.createElement("div");
+    group.className = "team-control-group";
+    var label = document.createElement("span");
+    label.className = "team-control-label";
+    label.textContent = labelText;
+    group.appendChild(label);
+    return group;
+  }
   function renderTeamRoleControl(accountID, member, isOwner) {
     var currentRole = normalizedTeamRole(member.role);
+    var group = createTeamControlGroup("Role");
     if (currentRole === "owner" && !isOwner) {
       var locked = document.createElement("span");
       locked.className = "team-role-badge";
       locked.textContent = roleLabel(currentRole);
-      return locked;
+      group.appendChild(locked);
+      return group;
     }
     var sel = document.createElement("select");
     sel.className = "team-role-select";
@@ -203,7 +214,8 @@
     sel.setAttribute("data-action", "change-role");
     sel.setAttribute("data-account-id", accountID);
     sel.setAttribute("data-user-id", member.user_id);
-    return sel;
+    group.appendChild(sel);
+    return group;
   }
   function renderTeamMemberAction(accountID, member, isOwner) {
     if (normalizedTeamRole(member.role) === "owner" && !isOwner) {
@@ -212,12 +224,15 @@
     var btn = document.createElement("button");
     btn.type = "button";
     btn.className = "btn-remove";
-    btn.textContent = "Remove";
+    btn.textContent = "Remove access";
     btn.setAttribute("data-action", "remove-member");
     btn.setAttribute("data-account-id", accountID);
     btn.setAttribute("data-user-id", member.user_id);
     btn.setAttribute("data-member-email", member.email);
-    return btn;
+    var group = createTeamControlGroup("Access");
+    group.classList.add("team-control-group-danger");
+    group.appendChild(btn);
+    return group;
   }
   function renderTeamMemberRow(accountID, member, isOwner) {
     var row = document.createElement("div");

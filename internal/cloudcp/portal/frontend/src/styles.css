@@ -1669,6 +1669,26 @@ header .logout-btn:hover,
   min-width: 0;
 }
 
+.team-control-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.team-control-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+
+.team-control-group-danger {
+  align-items: flex-end;
+}
+
 .team-role-badge {
   display: inline-flex;
   align-items: center;
@@ -1698,6 +1718,14 @@ header .logout-btn:hover,
 
 .team-role-select {
   min-width: 124px;
+  min-height: 36px;
+  padding-inline: 12px 32px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .team-list-message {
@@ -1739,14 +1767,19 @@ header .logout-btn:hover,
 }
 
 .btn-remove {
-  padding: 0;
-  background: none;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid rgba(166, 27, 27, 0.16);
+  border-radius: 10px;
+  background: rgba(166, 27, 27, 0.04);
   color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
   cursor: pointer;
 }
 
 .btn-remove:hover {
-  text-decoration: underline;
+  background: rgba(166, 27, 27, 0.08);
 }
 
 .team-invite {
