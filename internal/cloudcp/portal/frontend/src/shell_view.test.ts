@@ -283,6 +283,9 @@ describe('shell view', function() {
 
     expect(html).toContain('Suspended until you resume it');
     expect(html).toContain('Active fleet is stable');
+    expect(html).toContain('Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.');
+    expect(html).toContain('Active fleet is clear');
+    expect(html).toContain('Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the operator path.');
     expect(html).toContain('Active hosted workspaces are healthy. Suspended workspaces stay parked until you resume them.');
     expect(html).toContain('Suspended stays parked');
   });

@@ -350,22 +350,30 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     ? 'Hosted posture needs review'
     : checkingCount > 0
       ? 'Hosted posture is still settling'
-      : 'Hosted posture is stable';
+      : suspendedCount > 0
+        ? 'Active fleet is stable'
+        : 'Hosted posture is stable';
   var postureCopy = unhealthyCount > 0
     ? 'One or more workspaces still need attention before the hosted fleet is trustworthy.'
     : checkingCount > 0
       ? 'The hosted fleet is mostly healthy, but some workspaces are still waiting on a completed health check.'
-      : 'The hosted fleet is healthy and ready for routine operator work.';
+      : suspendedCount > 0
+        ? 'Active hosted workspaces are healthy while suspended workspaces stay parked until you resume them.'
+        : 'The hosted fleet is healthy and ready for routine operator work.';
   var nextStepTitle = unhealthyCount > 0
     ? 'Start in Workspaces'
     : checkingCount > 0
       ? 'Review pending checks'
-      : 'Fleet is clear';
+      : suspendedCount > 0
+        ? 'Active fleet is clear'
+        : 'Fleet is clear';
   var nextStepCopy = unhealthyCount > 0
     ? 'One or more workspaces need review before you treat the hosted fleet as trustworthy.'
     : checkingCount > 0
       ? 'The fleet is mostly healthy, but there are still workspaces waiting on a completed health check.'
-      : 'Hosted posture looks stable. Move into team or account services only if you need to change access or billing.';
+      : suspendedCount > 0
+        ? 'Active hosted workspaces look stable. Resume a suspended workspace only when you are ready to bring it back into the operator path.'
+        : 'Hosted posture looks stable. Move into team or account services only if you need to change access or billing.';
   var nextStepChecklist = unhealthyCount > 0
     ? (
       '<div class="overview-next-checklist">' +
