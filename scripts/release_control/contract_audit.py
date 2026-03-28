@@ -66,6 +66,7 @@ PATH_SUFFIXES = (
     ".yaml",
     ".yml",
 )
+WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
 
 
 def sorted_casefold(values: list[str]) -> list[str]:
@@ -107,17 +108,61 @@ def looks_like_repo_path(token: str) -> bool:
     return "/" in candidate or candidate.endswith(PATH_SUFFIXES)
 
 
-def validate_repo_path_token(token: str, *, rel: str, heading: str, errors: list[str]) -> None:
+def repo_roots_for_status(status_payload: dict[str, Any]) -> dict[str, Path]:
+    active_repos = [
+        repo_id
+        for repo_id in status_payload.get("scope", {}).get("active_repos", [])
+        if isinstance(repo_id, str) and repo_id.strip()
+    ]
+    repo_roots = {REPO_ROOT.name: REPO_ROOT}
+    for repo_id in active_repos:
+        if repo_id == REPO_ROOT.name:
+            continue
+        repo_roots[repo_id] = WORKSPACE_REPOS_ROOT / repo_id
+    return repo_roots
+
+
+def resolve_repo_path_token(token: str, *, repo_roots: dict[str, Path]) -> Path | None:
     raw = token.rstrip("/") if token.endswith("/") else token
     if not raw:
-        errors.append(f"{rel} {heading} contains non-clean repo-relative path {token!r}")
-        return
+        return None
+    repo_id = REPO_ROOT.name
+    repo_rel = raw
+    if ":" in raw:
+        repo_id, repo_rel = raw.split(":", 1)
+        if not repo_id:
+            return None
     candidate = Path(raw)
     normalized = candidate.as_posix()
     if candidate.is_absolute() or raw.startswith("../") or "/../" in raw or normalized != raw:
+        return None
+    repo_candidate = Path(repo_rel)
+    repo_normalized = repo_candidate.as_posix()
+    if (
+        repo_candidate.is_absolute()
+        or repo_rel.startswith("../")
+        or "/../" in repo_rel
+        or repo_normalized != repo_rel
+    ):
+        return None
+    repo_root = repo_roots.get(repo_id)
+    if repo_root is None:
+        return None
+    return repo_root / repo_rel
+
+
+def validate_repo_path_token(
+    token: str,
+    *,
+    rel: str,
+    heading: str,
+    errors: list[str],
+    repo_roots: dict[str, Path],
+) -> None:
+    resolved = resolve_repo_path_token(token, repo_roots=repo_roots)
+    if resolved is None:
         errors.append(f"{rel} {heading} contains non-clean repo-relative path {token!r}")
         return
-    resolved = REPO_ROOT / raw
     if not resolved.exists():
         errors.append(f"{rel} {heading} references missing path {token!r}")
         return
@@ -151,7 +196,12 @@ def parse_contract_metadata(body_lines: list[str]) -> tuple[dict[str, Any] | Non
     return payload, errors
 
 
-def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[str]]:
+def audit_contract_text(
+    rel: str,
+    content: str,
+    *,
+    repo_roots: dict[str, Path],
+) -> tuple[dict[str, Any], list[str]]:
     errors: list[str] = []
     path_references: list[dict[str, str]] = []
     section_items: dict[str, list[str]] = {}
@@ -200,13 +250,25 @@ def audit_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
                         errors.append(f"{rel} section {heading!r} entries must include at least one repo path")
                         continue
                     for token in path_tokens:
-                        validate_repo_path_token(token, rel=rel, heading=heading, errors=errors)
+                        validate_repo_path_token(
+                            token,
+                            rel=rel,
+                            heading=heading,
+                            errors=errors,
+                            repo_roots=repo_roots,
+                        )
                         path_references.append({"heading": heading, "path": token})
             if heading == "## Extension Points":
                 for _, item in items:
                     for token in re.findall(r"`([^`]+)`", item):
                         if looks_like_repo_path(token):
-                            validate_repo_path_token(token, rel=rel, heading=heading, errors=errors)
+                            validate_repo_path_token(
+                                token,
+                                rel=rel,
+                                heading=heading,
+                                errors=errors,
+                                repo_roots=repo_roots,
+                            )
                             path_references.append({"heading": heading, "path": token})
 
     return {
@@ -284,6 +346,7 @@ def audit_contract_payload(
         for subsystem in registry_subsystems
         if isinstance(subsystem, dict) and isinstance(subsystem.get("contract"), str)
     }
+    repo_roots = repo_roots_for_status(status_payload)
     expected_subsystem_ids = {
         str(subsystem.get("id", "")).strip()
         for subsystem in registry_subsystems
@@ -302,7 +365,7 @@ def audit_contract_payload(
     seen_subsystem_ids: set[str] = set()
 
     for rel in sorted(actual_contracts):
-        parsed, parse_errors = audit_contract_text(rel, contract_texts[rel])
+        parsed, parse_errors = audit_contract_text(rel, contract_texts[rel], repo_roots=repo_roots)
         errors.extend(parse_errors)
         metadata = parsed.get("metadata")
         subsystem = expected_contracts.get(rel)
@@ -420,7 +483,13 @@ def audit_contract_payload(
                     )
                     continue
                 shared_path = path_tokens[0]
-                validate_repo_path_token(shared_path, rel=rel, heading="## Shared Boundaries", errors=errors)
+                validate_repo_path_token(
+                    shared_path,
+                    rel=rel,
+                    heading="## Shared Boundaries",
+                    errors=errors,
+                    repo_roots=repo_roots,
+                )
                 actual_shared_paths.append(shared_path)
                 if shared_path in seen_shared_paths:
                     errors.append(

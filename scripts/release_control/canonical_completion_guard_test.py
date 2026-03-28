@@ -18,41 +18,65 @@ from canonical_completion_guard import (
     subsystem_matches_path,
 )
 
+WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
+
+
+def split_workspace_path(path: str) -> tuple[Path, str]:
+    if ":" not in path:
+        return REPO_ROOT, path
+    repo_id, rel = path.split(":", 1)
+    return WORKSPACE_REPOS_ROOT / repo_id, rel
+
+
+def qualify_workspace_path(repo_root: Path, rel: str) -> str:
+    if repo_root == REPO_ROOT:
+        return rel
+    return f"{repo_root.name}:{rel}"
+
 
 def owned_runtime_files(rule: dict) -> list[str]:
     owned: set[str] = set()
     search_roots: set[Path] = set()
 
     for prefix in rule.get("owned_prefixes", []):
-        root = REPO_ROOT / prefix
+        repo_root, rel_prefix = split_workspace_path(prefix.rstrip("/"))
+        root = repo_root / rel_prefix
         if root.exists():
             search_roots.add(root if root.is_dir() else root.parent)
             continue
 
         parent = root.parent
-        while parent != REPO_ROOT and not parent.exists():
+        while parent != repo_root and not parent.exists():
             parent = parent.parent
         if parent.exists():
             search_roots.add(parent)
 
     for root in search_roots:
+        repo_root = root
+        while repo_root != WORKSPACE_REPOS_ROOT and repo_root.parent != WORKSPACE_REPOS_ROOT:
+            repo_root = repo_root.parent
+        if repo_root.parent != WORKSPACE_REPOS_ROOT:
+            repo_root = REPO_ROOT
         for path in root.rglob("*"):
             if not path.is_file():
                 continue
-            rel = path.relative_to(REPO_ROOT).as_posix()
-            if is_test_or_fixture(rel) or is_ignored_runtime_file(rel):
+            rel = path.relative_to(repo_root).as_posix()
+            candidate = qualify_workspace_path(repo_root, rel)
+            if is_test_or_fixture(candidate) or is_ignored_runtime_file(candidate):
                 continue
-            if subsystem_matches_path(rule, rel):
-                owned.add(rel)
+            if subsystem_matches_path(rule, candidate):
+                owned.add(candidate)
 
     for rel in rule.get("owned_files", []):
-        path = REPO_ROOT / rel
+        repo_root, repo_rel = split_workspace_path(rel)
+        path = repo_root / repo_rel
         if not path.exists() or not path.is_file():
             continue
-        if is_test_or_fixture(rel) or is_ignored_runtime_file(rel):
+        candidate = qualify_workspace_path(repo_root, repo_rel)
+        if is_test_or_fixture(candidate) or is_ignored_runtime_file(candidate):
             continue
-        if subsystem_matches_path(rule, rel):
-            owned.add(rel)
+        if subsystem_matches_path(rule, candidate):
+            owned.add(candidate)
 
     return sorted(owned)
 
@@ -215,6 +239,42 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                     "test_prefixes": [],
                     "exact_files": [
                         "scripts/installtests/install_sh_test.go",
+                    ],
+                }
+            ],
+        )
+
+    def test_mobile_relay_runtime_change_requires_relay_contract(self):
+        required = infer_impacted_subsystems(["pulse-mobile:src/relay/client.ts"])
+        self.assertEqual(set(required), {"relay-runtime"})
+
+        relay = required["relay-runtime"]
+        self.assertEqual(
+            relay["contract"],
+            "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+        )
+        self.assertEqual(
+            relay["touched_runtime_files"],
+            ["pulse-mobile:src/relay/client.ts"],
+        )
+        self.assertEqual(
+            relay["verification_requirements"],
+            [
+                {
+                    "id": "mobile-relay-runtime",
+                    "label": "mobile relay runtime proof",
+                    "touched_runtime_files": ["pulse-mobile:src/relay/client.ts"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "pulse-mobile:src/relay/__tests__/channel.test.ts",
+                        "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
+                        "pulse-mobile:src/relay/__tests__/client.test.ts",
+                        "pulse-mobile:src/relay/__tests__/encryption.test.ts",
+                        "pulse-mobile:src/relay/__tests__/identity.test.ts",
+                        "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
+                        "pulse-mobile:src/relay/__tests__/protocol.test.ts",
+                        "pulse-mobile:src/relay/__tests__/proxy.test.ts",
                     ],
                 }
             ],

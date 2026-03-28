@@ -62,6 +62,24 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["README.md"])
         self.assertEqual(result["unowned_runtime_files"], ["README.md"])
 
+    def test_lookup_paths_normalizes_cross_repo_absolute_runtime_paths(self) -> None:
+        result = lookup_paths([str(REPO_ROOT.parent / "pulse-mobile" / "src/relay/client.ts")])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"relay-runtime"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["path"], "pulse-mobile:src/relay/client.ts")
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"relay-runtime"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["lane_context"]["lane_id"], "L7")
+        self.assertEqual(match["verification_requirement"]["id"], "mobile-relay-runtime")
+
     def test_lookup_paths_assigns_shared_tag_badges_to_frontend_primitives(self) -> None:
         result = lookup_paths(["frontend-modern/src/components/shared/TagBadges.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])

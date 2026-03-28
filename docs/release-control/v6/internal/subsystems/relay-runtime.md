@@ -15,15 +15,19 @@
 
 ## Purpose
 
-Own the desktop relay runtime, its persisted client configuration, and the
-canonical reconnect, encryption, and relay-trust behavior for Pulse instance
-bridging.
+Own the desktop and mobile relay runtimes, their persisted relay state
+boundaries, and the canonical reconnect, encryption, protocol, proxy, and
+relay-trust behavior for Pulse instance bridging.
 
 ## Canonical Files
 
 1. `internal/relay/client.go`
 2. `internal/relay/protocol.go`
 3. `internal/config/persistence_relay.go`
+4. `pulse-mobile:src/relay/client.ts`
+5. `pulse-mobile:src/relay/protocol.ts`
+6. `pulse-mobile:src/relay/proxy.ts`
+7. `pulse-mobile:src/relay/encryption.ts`
 
 ## Shared Boundaries
 
@@ -34,7 +38,8 @@ bridging.
 1. Add or change desktop relay reconnect, registration, drain, proxy-stream, or encrypted channel behavior through `internal/relay/`
 2. Add or change relay control payload schemas, including mobile-visible push notification metadata, through `internal/relay/protocol.go`
 3. Add or change persisted relay enablement, server URL, or reconnect-safe default loading through `internal/config/persistence_relay.go`
-4. Keep desktop relay changes aligned with the governed mobile and server relay surfaces represented by the L7 lane evidence
+4. Add or change mobile relay reconnect, drain, channel, encryption, proxy, or identity behavior through `pulse-mobile:src/relay/`
+5. Keep desktop and mobile relay changes aligned with the governed server relay surfaces represented by the L7 lane evidence
 
 ## Forbidden Paths
 
@@ -47,12 +52,14 @@ bridging.
 1. Update this contract when new desktop relay runtime or persistence entry points become canonical
 2. Keep relay client changes tied to explicit runtime proof in `internal/relay/client_test.go`
 3. Keep persisted relay config loading tied to explicit proof in `internal/config/persistence_relay_test.go`
+4. Keep mobile relay runtime changes tied to explicit proof in `pulse-mobile:src/relay/__tests__/`
 
 ## Current State
 
-The desktop relay client had been carrying real runtime behavior without any
-explicit subsystem ownership even though L7 already treats relay readiness as a
-governed release lane. This contract makes that desktop boundary explicit.
+The relay lane had been carrying real desktop and mobile runtime behavior
+without fully explicit subsystem ownership even though L7 already treats relay
+readiness as a governed release lane. This contract makes both relay-runtime
+boundaries explicit.
 The canonical relay runtime now includes local CA-bundle trust via
 `SSL_CERT_FILE`, so self-hosted relay deployments can use a private CA without
 forking the dial path or disabling TLS verification globally.
@@ -86,3 +93,7 @@ the runtime can read legacy plaintext relay settings, it must rewrite
 canonical encrypted storage immediately on load instead of leaving
 `instance_secret` or the relay identity private key on disk as a normal
 runtime path.
+The mobile relay runtime is part of the same owned surface: reconnect drain
+failover hints are one-shot recovery instructions, not permanent relay URL
+overrides, so a successful failover reconnect must return future reconnects to
+the instance's canonical relay URL unless the server sends a fresh drain hint.

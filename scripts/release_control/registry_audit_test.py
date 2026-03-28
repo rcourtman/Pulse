@@ -53,6 +53,52 @@ class RegistryAuditTest(unittest.TestCase):
         self.assertEqual(report["summary"]["shared_ownership_count"], 0)
         self.assertEqual(report["subsystems"][0]["default_fallback_count"], 0)
 
+    def test_audit_registry_payload_accepts_cross_repo_owned_prefixes(self) -> None:
+        payload = {
+            "version": 12,
+            "shared_ownerships": [],
+            "subsystems": [
+                {
+                    "id": "relay-runtime",
+                    "lane": "L7",
+                    "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+                    "owned_prefixes": ["pulse-mobile:src/relay/"],
+                    "owned_files": [],
+                    "verification": {
+                        "allow_same_subsystem_tests": True,
+                        "test_prefixes": [],
+                        "exact_files": [
+                            "pulse-mobile:src/relay/__tests__/client.test.ts",
+                        ],
+                        "require_explicit_path_policy_coverage": True,
+                        "path_policies": [
+                            {
+                                "id": "mobile-relay-runtime",
+                                "label": "mobile relay runtime proof",
+                                "match_prefixes": ["pulse-mobile:src/relay/"],
+                                "match_files": [],
+                                "allow_same_subsystem_tests": False,
+                                "test_prefixes": [],
+                                "exact_files": [
+                                    "pulse-mobile:src/relay/__tests__/client.test.ts",
+                                ],
+                            }
+                        ],
+                    },
+                }
+            ],
+        }
+        tracked_files = {
+            "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+            "pulse-mobile:src/relay/__tests__/client.test.ts",
+            "pulse-mobile:src/relay/client.ts",
+        }
+
+        report = audit_registry_payload(payload, tracked_files=tracked_files, status_lane_ids={"L7"})
+
+        self.assertEqual(report["errors"], [])
+        self.assertEqual(report["subsystems"][0]["owned_runtime_file_count"], 1)
+
     def test_audit_registry_payload_flags_unknown_lane_and_missing_contract(self) -> None:
         payload = {
             "version": 12,

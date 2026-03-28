@@ -23,13 +23,27 @@ from canonical_completion_guard import (
 from status_audit import audit_status_payload, load_status_payload
 from registry_audit import load_registry_payload
 
+WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
+
 
 def normalize_input_path(raw: str) -> str:
     candidate = Path(raw.strip())
     if candidate.is_absolute():
+        candidate = candidate.resolve()
         try:
-            candidate = candidate.resolve().relative_to(REPO_ROOT)
+            candidate = candidate.relative_to(REPO_ROOT)
         except ValueError:
+            try:
+                repo_relative = candidate.relative_to(WORKSPACE_REPOS_ROOT)
+            except ValueError:
+                return candidate.as_posix()
+            parts = repo_relative.parts
+            if len(parts) >= 2:
+                repo_id = parts[0]
+                rel = Path(*parts[1:]).as_posix()
+                if repo_id == REPO_ROOT.name:
+                    return rel
+                return f"{repo_id}:{rel}"
             return candidate.as_posix()
     return candidate.as_posix()
 

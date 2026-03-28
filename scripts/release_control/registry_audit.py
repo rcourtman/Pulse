@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -61,20 +62,35 @@ def sorted_casefold(values: list[str]) -> list[str]:
 
 
 def tracked_repo_files() -> set[str]:
-    result = subprocess.run(
-        ["git", "ls-files", "-z"],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=False,
-    )
-    files = {
-        entry.decode("utf-8")
-        for entry in result.stdout.split(b"\x00")
-        if entry
-    }
+    return tracked_workspace_files(active_repos=[REPO_ROOT.name], local_repo=REPO_ROOT.name)
+
+
+def tracked_workspace_files(*, active_repos: list[str], local_repo: str) -> set[str]:
+    files: set[str] = set()
+    repos_root = REPO_ROOT.parent
+    for repo_id in active_repos:
+        repo_root = REPO_ROOT if repo_id == local_repo else repos_root / repo_id
+        if not repo_root.exists():
+            continue
+        env = os.environ.copy()
+        if repo_root != REPO_ROOT:
+            env.pop("GIT_INDEX_FILE", None)
+        result = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=repo_root,
+            check=True,
+            capture_output=True,
+            text=False,
+            env=env,
+        )
+        for entry in result.stdout.split(b"\x00"):
+            if not entry:
+                continue
+            rel = entry.decode("utf-8")
+            files.add(rel if repo_id == local_repo else f"{repo_id}:{rel}")
+
     # Governance files are filesystem-only (gitignored). Supplement with any
-    # files that exist on disk under the subsystems/contracts directory so that
+    # files that exist on disk under the control-plane contracts directory so
     # contract path references in the registry resolve correctly.
     contracts_dir = Path(DEFAULT_CONTROL_PLANE["subsystems_dir_path"])
     if contracts_dir.exists():
@@ -612,6 +628,12 @@ def render_pretty(report: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(list(argv or []))
     status_payload = load_status_payload(staged=args.staged)
+    scope = status_payload.get("scope", {})
+    active_repos = [
+        repo_id
+        for repo_id in scope.get("active_repos", [])
+        if isinstance(repo_id, str) and repo_id.strip()
+    ] or [REPO_ROOT.name]
     lane_ids = {
         lane.get("id")
         for lane in status_payload.get("lanes", [])
@@ -619,7 +641,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     report = audit_registry_payload(
         load_registry_payload(staged=args.staged),
-        tracked_files=tracked_repo_files(),
+        tracked_files=tracked_workspace_files(active_repos=active_repos, local_repo=REPO_ROOT.name),
         status_lane_ids=lane_ids,
         schema_contract=registry_schema_contract(staged=args.staged),
     )

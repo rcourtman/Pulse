@@ -3558,7 +3558,8 @@
       "lane": "L7",
       "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
       "owned_prefixes": [
-        "internal/relay/"
+        "internal/relay/",
+        "pulse-mobile:src/relay/"
       ],
       "owned_files": [
         "internal/config/persistence_relay.go"
@@ -3568,7 +3569,15 @@
         "test_prefixes": [],
         "exact_files": [
           "internal/config/persistence_relay_test.go",
-          "internal/relay/client_test.go"
+          "internal/relay/client_test.go",
+          "pulse-mobile:src/relay/__tests__/channel.test.ts",
+          "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
+          "pulse-mobile:src/relay/__tests__/client.test.ts",
+          "pulse-mobile:src/relay/__tests__/encryption.test.ts",
+          "pulse-mobile:src/relay/__tests__/identity.test.ts",
+          "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
+          "pulse-mobile:src/relay/__tests__/protocol.test.ts",
+          "pulse-mobile:src/relay/__tests__/proxy.test.ts"
         ],
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
@@ -3596,6 +3605,26 @@
             "test_prefixes": [],
             "exact_files": [
               "internal/config/persistence_relay_test.go"
+            ]
+          },
+          {
+            "id": "mobile-relay-runtime",
+            "label": "mobile relay runtime proof",
+            "match_prefixes": [
+              "pulse-mobile:src/relay/"
+            ],
+            "match_files": [],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pulse-mobile:src/relay/__tests__/channel.test.ts",
+              "pulse-mobile:src/relay/__tests__/client-hardening.test.ts",
+              "pulse-mobile:src/relay/__tests__/client.test.ts",
+              "pulse-mobile:src/relay/__tests__/encryption.test.ts",
+              "pulse-mobile:src/relay/__tests__/identity.test.ts",
+              "pulse-mobile:src/relay/__tests__/protocol-contract.test.ts",
+              "pulse-mobile:src/relay/__tests__/protocol.test.ts",
+              "pulse-mobile:src/relay/__tests__/proxy.test.ts"
             ]
           }
         ]

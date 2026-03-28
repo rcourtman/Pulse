@@ -295,6 +295,76 @@ Canonical alert identity is live runtime truth.
             "\n".join(report["errors"]),
         )
 
+    def test_audit_contract_payload_accepts_cross_repo_contract_paths(self) -> None:
+        registry_payload = {
+            "subsystems": [
+                {
+                    "id": "relay-runtime",
+                    "lane": "L7",
+                    "contract": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+                }
+            ]
+        }
+        status_payload = {
+            "scope": {
+                "active_repos": ["pulse", "pulse-mobile"],
+            },
+            "lanes": [{"id": "L7"}],
+        }
+        contract_texts = {
+            "docs/release-control/v6/internal/subsystems/relay-runtime.md": """# Relay Runtime Contract
+
+## Contract Metadata
+
+```json
+{
+  "subsystem_id": "relay-runtime",
+  "lane": "L7",
+  "contract_file": "docs/release-control/v6/internal/subsystems/relay-runtime.md",
+  "status_file": "docs/release-control/v6/internal/status.json",
+  "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
+  "dependency_subsystem_ids": []
+}
+```
+
+## Purpose
+
+Own relay runtime truth.
+
+## Canonical Files
+
+1. `pulse-mobile:src/relay/client.ts`
+
+## Shared Boundaries
+
+1. None.
+
+## Extension Points
+
+1. Add mobile relay reconnect behavior through `pulse-mobile:src/relay/`
+
+## Forbidden Paths
+
+1. Ad hoc mobile relay reconnect state.
+
+## Completion Obligations
+
+1. Keep mobile relay runtime changes tied to tests.
+
+## Current State
+
+Cross-repo relay ownership is explicit.
+""",
+        }
+
+        report = audit_contract_payload(
+            registry_payload=registry_payload,
+            status_payload=status_payload,
+            contract_texts=contract_texts,
+        )
+
+        self.assertEqual(report["errors"], [])
+
     def test_audit_contract_payload_rejects_missing_extension_point_reference(self) -> None:
         registry_payload = {
             "subsystems": [
