@@ -683,6 +683,12 @@ stale, and footprint telemetry in multiple stacked readouts inside one card.
 Recovery summary cards should keep one dominant metric with one short support
 band so the strip scans at the same speed as infrastructure and workloads
 instead of behaving like a recovery-only executive summary.
+That same summary-card rule should also avoid inline distribution bars or
+dashboard-style subvisualizations inside the cards when the same signal can be
+expressed as short metric rows. Recovery summary cards should stay on the
+shared monitoring-card rhythm of one dominant metric plus compact supporting
+rows rather than reviving bespoke visual telemetry that makes the strip read
+heavier than the rest of Pulse.
 That same density rule should route through the shared summary primitives
 instead of feature-local spacing overrides. Recovery may select the shared
 compact `SummaryPanel` / `SummaryMetricCard` density mode, but it should not
