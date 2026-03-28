@@ -206,6 +206,7 @@ describe('Recovery', () => {
     const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
     expect(within(workspaceTablist).getByRole('tab', { name: /protected items 2/i })).toBeInTheDocument();
     expect(within(workspaceTablist).getByRole('tab', { name: /recovery events 0/i })).toBeInTheDocument();
+    expect(screen.queryByText('Focused drill-in')).not.toBeInTheDocument();
     await screen.findByText('VM 123');
     const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
     expect(

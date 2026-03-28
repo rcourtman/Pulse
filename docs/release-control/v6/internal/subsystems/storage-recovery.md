@@ -765,6 +765,9 @@ switcher should live in its own canonical subtabs row above the controls card,
 not inside the controls card and not inside a table-card header strip, so the
 page hands off from summary into tabs, then filters, then data the same way the
 storage surface does.
+That same canonical-row rule also means the subtabs row should stand on its own
+full-width shell instead of sharing a flex line with recovery-only chips or
+adjacent badges that break the storage-style border and spacing treatment.
 That same handoff should keep recovery on the standard Pulse summary density.
 `RecoverySummary.tsx` should use the shared default `SummaryPanel` /
 `SummaryMetricCard` rhythm that infrastructure and workloads use, instead of

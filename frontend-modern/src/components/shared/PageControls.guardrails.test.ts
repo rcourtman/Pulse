@@ -107,5 +107,7 @@ describe('page controls guardrails', () => {
     expect(recoveryPageSource).not.toContain('variant="control"');
     expect(recoveryPageSource).not.toContain('listClass=');
     expect(recoveryPageSource).not.toContain('tabClass=');
+    expect(recoveryPageSource).toContain('class="w-full"');
+    expect(recoveryPageSource).not.toContain('Focused drill-in');
   });
 });

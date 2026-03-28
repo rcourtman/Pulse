@@ -775,7 +775,8 @@ page shell, it should follow the same ordering already used by storage: shared
 subtabs row first, shared controls card second, and data card after that. The
 contained styling should come from the same canonical subtabs shell, list, and
 button class treatment already used by established Pulse surfaces rather than
-from a recovery-only variant boundary or recovery-local filter-row embedding.
+from a recovery-only variant boundary, adjacent chip row, or recovery-local
+filter-row embedding.
 That same shared-boundary rule applies to summary density. The shared compact
 mode on `SummaryPanel.tsx` and `SummaryMetricCard.tsx` exists for genuinely
 dense monitoring surfaces, but pages that are trying to align with the normal

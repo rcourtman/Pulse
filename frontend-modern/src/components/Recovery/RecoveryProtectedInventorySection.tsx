@@ -379,7 +379,7 @@ export const RecoveryProtectedInventorySection: Component<
                 ))}
               </TableRow>
             </TableHeader>
-            <TableBody class="divide-y divide-border">
+            <TableBody class="divide-y divide-border-subtle/60">
               <For each={visibleRollups()}>
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();
@@ -416,7 +416,7 @@ export const RecoveryProtectedInventorySection: Component<
 
                   return (
                     <TableRow
-                      class="cursor-pointer border-b border-border-subtle/70 odd:bg-surface even:bg-surface-alt/35 transition-colors hover:bg-surface-hover/95"
+                      class="cursor-pointer odd:bg-surface even:bg-surface-alt/35 transition-colors hover:bg-surface-hover/95"
                       onClick={() => props.onSelectRollup(rollup.rollupId)}
                     >
                       <TableCell

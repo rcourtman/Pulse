@@ -488,28 +488,22 @@ const Recovery: Component = () => {
         {(() => {
           return (
             <>
-              <div class="flex flex-wrap items-center gap-3">
-                <Subtabs
-                  value={workspaceView()}
-                  onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
-                  ariaLabel="Recovery data view"
-                  tabs={[
-                    {
-                      value: 'inventory',
-                      label: `Protected items ${filteredRollups().length}`,
-                    },
-                    {
-                      value: 'events',
-                      label: `Recovery events ${recoveryPoints.meta().total}`,
-                    },
-                  ]}
-                />
-                <Show when={rollupId().trim().length > 0}>
-                  <span class="inline-flex w-fit items-center rounded-md border border-border-subtle bg-surface-alt px-2 py-0.5 text-[11px] font-medium text-muted">
-                    Focused drill-in
-                  </span>
-                </Show>
-              </div>
+              <Subtabs
+                class="w-full"
+                value={workspaceView()}
+                onChange={(value) => setWorkspaceView(value as RecoveryWorkspaceView)}
+                ariaLabel="Recovery data view"
+                tabs={[
+                  {
+                    value: 'inventory',
+                    label: `Protected items ${filteredRollups().length}`,
+                  },
+                  {
+                    value: 'events',
+                    label: `Recovery events ${recoveryPoints.meta().total}`,
+                  },
+                ]}
+              />
 
               <Show when={workspaceView() === 'inventory'}>
                 <RecoveryProtectedInventorySection
