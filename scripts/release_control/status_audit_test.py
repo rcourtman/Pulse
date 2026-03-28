@@ -153,6 +153,21 @@ def work_claim(
     }
 
 
+def non_completed_target_id(*preferred_ids: str) -> str:
+    candidate_ids = preferred_ids or ("v6-ga-promotion", "v6-product-lane-expansion")
+    for target_id in candidate_ids:
+        target = status_audit.DEFAULT_CONTROL_PLANE["targets_by_id"].get(target_id)
+        if target and str(target.get("status", "")).strip() != "completed":
+            return target_id
+    for target_id, target in status_audit.DEFAULT_CONTROL_PLANE["targets_by_id"].items():
+        if (
+            str(target.get("profile_id", "")).strip() == status_audit.ACTIVE_PROFILE_ID
+            and str(target.get("status", "")).strip() != "completed"
+        ):
+            return target_id
+    raise AssertionError("expected at least one non-completed control-plane target for test fixtures")
+
+
 def base_payload(
     *,
     lane_status: str = "target-met",
@@ -1174,6 +1189,21 @@ class StatusAuditTest(unittest.TestCase):
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
                 return_value=[],
+            ), mock.patch(
+                "status_audit.active_target_blocking_levels",
+                return_value=["repo-ready", "rc-ready", "release-ready"],
+            ), mock.patch.object(
+                status_audit,
+                "ACTIVE_TARGET",
+                {
+                    **status_audit.ACTIVE_TARGET,
+                    "id": non_completed_target_id("v6-product-lane-expansion", "v6-ga-promotion"),
+                    "kind": "feature",
+                    "summary": "Exercise work-claim expiry without coupling the unit test to the live release target.",
+                    "completion_rule": "manual",
+                    "proof_scope": "none",
+                    "blocking_levels": ["repo-ready", "rc-ready", "release-ready"],
+                },
             ):
                 report = audit_status_payload(
                     payload,
@@ -1194,13 +1224,14 @@ class StatusAuditTest(unittest.TestCase):
             write_file(pulse, "docs/lane-proof.md")
             write_file(pulse, "docs/proof_test.go")
             write_file(pulse, "docs/hybrid_test.go")
+            target_id = non_completed_target_id("v6-ga-promotion", "v6-product-lane-expansion")
 
             payload = base_payload(
                 work_claims=[
                     work_claim(
                         claim_id="claim-lane-broad",
                         agent_id="agent-1",
-                        target_id="v6-rc-stabilization",
+                        target_id=target_id,
                         work_kind="lane",
                         work_id="L1",
                         claimed_at="2026-03-13T09:00:00Z",
@@ -1210,7 +1241,7 @@ class StatusAuditTest(unittest.TestCase):
                     work_claim(
                         claim_id="claim-gate-narrow",
                         agent_id="agent-2",
-                        target_id="v6-rc-stabilization",
+                        target_id=target_id,
                         work_kind="release-gate",
                         work_id="g1",
                         claimed_at="2026-03-13T09:20:00Z",
@@ -1220,7 +1251,7 @@ class StatusAuditTest(unittest.TestCase):
                     work_claim(
                         claim_id="claim-gate-duplicate",
                         agent_id="agent-3",
-                        target_id="v6-rc-stabilization",
+                        target_id=target_id,
                         work_kind="release-gate",
                         work_id="g1",
                         claimed_at="2026-03-13T09:40:00Z",

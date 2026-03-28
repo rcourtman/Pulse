@@ -238,7 +238,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn(promotion_metadata_envelope(), normalize_ws(runbook))
 
     def test_blocked_record_tracks_current_target_and_candidate_version(self) -> None:
-        blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-26.md")
+        blocked = read("docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-28.md")
         self.assertIn("origin/pulse/v6-release", blocked)
         self.assertIn("VERSION=6.0.0-rc.1", blocked)
         self.assertIn("artifact-owned candidate stable tag", blocked)
@@ -247,9 +247,10 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         self.assertIn("artifact-owned rollback target", blocked)
         self.assertIn("Materialize the final rehearsal record from that artifact without", blocked)
         self.assertIn("hand-repairing any missing candidate tag, promoted prerelease tag, rollback", blocked)
+        self.assertIn("The active control-plane target is `v6-ga-promotion`", blocked)
         matrix = read("docs/release-control/v6/internal/HIGH_RISK_RELEASE_VERIFICATION_MATRIX.md")
         self.assertIn(promotion_metadata_envelope(), normalize_ws(matrix))
-        expected = blocked_record.build_blocked_record(record_date="2026-03-26")
+        expected = blocked_record.build_blocked_record(record_date="2026-03-28")
         self.assertEqual(blocked, expected)
 
 

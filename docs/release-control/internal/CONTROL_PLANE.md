@@ -222,24 +222,24 @@ user language should update the control plane.
 ## Current State
 
 1. v6 is the current active release profile.
-2. `v6-rc-stabilization` is the current active engineering target.
-   It is an intentionally human-held stabilization target with `proof_scope:
-   none`, and default slice selection should stay centered on the monitoring
-   floor unless the user explicitly overrides it or the governed target
-   changes again.
+2. `v6-ga-promotion` is the current active engineering target.
+   It is a release target, so default slice selection should stay centered on
+   exercised prerelease lineage, release-pipeline proof, rollback metadata,
+   and the remaining GA-blocking documentation inputs until `release_ready`
+   is actually met.
 3. `v6-product-lane-expansion` remains planned and is still blocked on the
    broader surfaced product case being proven.
    Its candidate-lane surface remains available in `available_candidate_lane_queue`
    plus the linked `candidate_lanes` and `coverage_gaps`.
-4. `v6-ga-promotion` remains planned and is still blocked on exercised
-   promotion proof when that target is resumed.
+4. `v6-rc-stabilization` is complete and remains the predecessor
+   stabilization target for the current v6 line.
 5. `v6-rc-cut` is complete and remains the predecessor release-cut target.
 6. Its files remain under `docs/release-control/v6/`.
 7. The existing v6 control surfaces are still live, but they now sit underneath
    an evergreen Pulse control plane rather than pretending to be the whole
    long-term system.
 8. Until the explicit post-GA branch cutover happens, both prerelease and
-   stable v6 promotions resolve to `pulse/v6` via `control_plane.json`.
+   stable v6 promotions resolve to `pulse/v6-release` via `control_plane.json`.
 9. `AGENT_VALUES.md` is the evergreen values-only entry point; prompts should
    stay close to that layer and delegate detailed behavior to the governed
    control-plane and profile-specific files.

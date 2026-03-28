@@ -618,6 +618,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-28.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-blocked-2026-03-26.md",
           "kind": "file"
         },
@@ -2942,6 +2947,12 @@
         {
           "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-26.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-03-28.md",
           "kind": "file",
           "evidence_tier": "local-rehearsal"
         },
