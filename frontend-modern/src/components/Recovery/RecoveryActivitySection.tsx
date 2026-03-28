@@ -94,7 +94,6 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
               {props.activitySummary().totalPoints} recovery points
             </span>
             <span>{props.activitySummary().activeDays} active days</span>
-            <span>{props.activitySummary().averagePerDay.toFixed(1)} / day</span>
             <Show when={props.overallRollupsSummary().stale > 0}>
               <span class="font-medium text-amber-600 dark:text-amber-400">
                 {props.overallRollupsSummary().stale} stale
@@ -131,7 +130,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
           props.activeNamespaceLabel()
         }
       >
-        <div class="mb-1.5 flex flex-wrap items-center gap-1.5">
+        <div class="mb-1 flex flex-wrap items-center gap-1.5">
           <Show when={props.selectedDateKey()}>
             {(() => {
               const chip = getRecoveryFilterChipPresentation('day');
@@ -223,9 +222,9 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
         </div>
       </Show>
 
-      <div class="rounded-lg border border-border-subtle bg-surface-alt/25 p-2">
+      <div class="rounded-lg border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
         <div
-          class={`mb-1.5 flex flex-wrap items-center justify-between gap-3 ${RECOVERY_TIMELINE_RANGE_GROUP_CLASS}`}
+          class={`mb-1 flex flex-wrap items-center justify-between gap-2 ${RECOVERY_TIMELINE_RANGE_GROUP_CLASS}`}
         >
           <div class={RECOVERY_TIMELINE_RANGE_GROUP_CLASS}>
             <For each={rangeOptions}>
@@ -240,7 +239,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
               )}
             </For>
           </div>
-          <div class="flex flex-wrap items-center gap-2 text-[9px] text-muted">
+          <div class="flex flex-wrap items-center gap-1.5 text-[9px] text-muted">
             <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
               <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`} />
               {getRecoveryArtifactModePresentation('snapshot').aggregateLabel}
@@ -267,8 +266,8 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
           }
         >
           <div class="relative">
-            <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-3">
-              <div class="flex h-20 flex-col justify-between text-[10px] text-muted">
+            <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2.5">
+              <div class="flex h-16 flex-col justify-between text-[10px] text-muted">
                 <For each={[0, 1, 2, 3, 4]}>
                   {(step) => {
                     const value = Math.round((props.timeline().axisMax * (4 - step)) / 4);
@@ -277,7 +276,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                 </For>
               </div>
 
-              <div class="relative h-24">
+              <div class="relative h-20">
                 <div
                   data-testid="recovery-activity-bars"
                   class="absolute inset-x-0 bottom-4 top-0 flex items-stretch gap-[3px]"
