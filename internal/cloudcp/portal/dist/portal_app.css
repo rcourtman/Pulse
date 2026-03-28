@@ -732,7 +732,7 @@ header .logout-btn:hover,
 }
 .account-command-deck {
   display: grid;
-  grid-template-columns: minmax(0, 1.28fr) minmax(320px, 0.82fr);
+  grid-template-columns: minmax(0, 1.36fr) minmax(320px, 0.78fr);
   gap: 14px;
   align-items: start;
   padding: 0;
@@ -752,10 +752,43 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 12px;
 }
+.account-overview-briefing-card {
+  gap: 16px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(250, 252, 253, 0.98),
+      rgba(245, 248, 251, 0.98));
+}
 .account-overview-lead {
   display: flex;
   flex-direction: column;
   min-width: 0;
+}
+.account-overview-next-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.account-overview-next-block h4 {
+  margin: 6px 0 0;
+  font-family:
+    "Iowan Old Style",
+    "Palatino Linotype",
+    "Book Antiqua",
+    Georgia,
+    serif;
+  font-size: 18px;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+.account-overview-next-block > p {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-soft);
 }
 .account-overview-metrics {
   display: flex;
@@ -765,6 +798,15 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fbfcfd;
+}
+.account-overview-metrics-header {
+  margin-top: 12px;
+  padding: 12px;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(250, 252, 253, 0.98),
+      rgba(244, 248, 251, 0.98));
 }
 .account-metric-strip {
   display: grid;
@@ -863,10 +905,6 @@ header .logout-btn:hover,
   font-size: 13px;
   line-height: 1.55;
   color: var(--ink-soft);
-}
-.overview-side-card-primary {
-  background: #f8fbfd;
-  border-color: #d7e6ea;
 }
 .overview-side-card-stable {
   display: flex;
@@ -1148,7 +1186,7 @@ header .logout-btn:hover,
   color: var(--ink-soft);
 }
 .account-stage-header-overview {
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .workspace-list-wrap {
   display: flex;

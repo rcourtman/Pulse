@@ -240,6 +240,42 @@ function renderAttentionPanel(workspaces: PortalWorkspaceSummary[]): string {
   );
 }
 
+function renderOverviewMetricStrip(
+  totalCount: number,
+  readyCount: number,
+  checkingCount: number,
+  unhealthyCount: number,
+  suspendedCount: number
+): string {
+  return (
+    '<div class="account-overview-metrics account-overview-metrics-header">' +
+      '<div class="account-panel-kicker">Live posture</div>' +
+      '<div class="account-metric-strip">' +
+        '<div class="account-stat-card account-stat-card-inline">' +
+          '<span class="account-stat-label">Total</span>' +
+          '<span class="account-stat-value">' + String(totalCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card account-stat-card-inline">' +
+          '<span class="account-stat-label">Ready now</span>' +
+          '<span class="account-stat-value account-stat-healthy">' + String(readyCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card account-stat-card-inline">' +
+          '<span class="account-stat-label">Checking</span>' +
+          '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card account-stat-card-inline">' +
+          '<span class="account-stat-label">Needs attention</span>' +
+          '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
+        '</div>' +
+        '<div class="account-stat-card account-stat-card-inline">' +
+          '<span class="account-stat-label">Suspended</span>' +
+          '<span class="account-stat-value">' + String(suspendedCount) + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>'
+  );
+}
+
 function renderAccountContextStrip(account: PortalAccountSummary): string {
   var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
   var billingLabel = account.has_billing ? 'Billing enabled' : 'Billing offline';
@@ -460,11 +496,12 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
             String(readyCount) + ' ready',
             suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'Active fleet',
           ]) +
+          renderOverviewMetricStrip(totalCount, readyCount, checkingCount, unhealthyCount, suspendedCount) +
         '</div>' +
       '</div>' +
       '<div class="account-command-deck">' +
         '<div class="account-overview-main-column">' +
-          '<div class="account-overview-card">' +
+          '<div class="account-overview-card account-overview-briefing-card">' +
             '<div class="account-overview-lead">' +
               '<div class="account-panel-kicker">Fleet posture</div>' +
               '<h3>' + escapeHTML(postureTitle) + '</h3>' +
@@ -474,41 +511,16 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
                 : 'Use this console to run hosted workspaces, account billing, and operator access from one place.'
               ) + '</div>' +
             '</div>' +
-          '</div>' +
-          '<div class="overview-side-card overview-side-card-primary">' +
-            '<div class="account-panel-kicker">Next move</div>' +
-            '<h4>' + escapeHTML(nextStepTitle) + '</h4>' +
-            '<p>' + escapeHTML(nextStepCopy) + '</p>' +
-            nextStepChecklist +
-            nextStepActions +
+            '<div class="account-overview-next-block">' +
+              '<div class="account-panel-kicker">Next move</div>' +
+              '<h4>' + escapeHTML(nextStepTitle) + '</h4>' +
+              '<p>' + escapeHTML(nextStepCopy) + '</p>' +
+              nextStepChecklist +
+              nextStepActions +
+            '</div>' +
           '</div>' +
         '</div>' +
         '<div class="account-overview-side-column">' +
-          '<div class="account-overview-metrics">' +
-            '<div class="account-panel-kicker">Live posture</div>' +
-            '<div class="account-metric-strip">' +
-              '<div class="account-stat-card account-stat-card-inline">' +
-                '<span class="account-stat-label">Total</span>' +
-                '<span class="account-stat-value">' + String(totalCount) + '</span>' +
-              '</div>' +
-              '<div class="account-stat-card account-stat-card-inline">' +
-                '<span class="account-stat-label">Ready now</span>' +
-                '<span class="account-stat-value account-stat-healthy">' + String(readyCount) + '</span>' +
-              '</div>' +
-              '<div class="account-stat-card account-stat-card-inline">' +
-                '<span class="account-stat-label">Checking</span>' +
-                '<span class="account-stat-value account-stat-checking">' + String(checkingCount) + '</span>' +
-              '</div>' +
-              '<div class="account-stat-card account-stat-card-inline">' +
-                '<span class="account-stat-label">Needs attention</span>' +
-                '<span class="account-stat-value account-stat-unhealthy">' + String(unhealthyCount) + '</span>' +
-              '</div>' +
-              '<div class="account-stat-card account-stat-card-inline">' +
-                '<span class="account-stat-label">Suspended</span>' +
-                '<span class="account-stat-value">' + String(suspendedCount) + '</span>' +
-              '</div>' +
-            '</div>' +
-          '</div>' +
           renderAttentionPanel(workspaces) +
         '</div>' +
       '</div>' +
