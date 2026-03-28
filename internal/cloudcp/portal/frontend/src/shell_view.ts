@@ -744,10 +744,10 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
         '<p>Assign the smallest role that still lets someone do the work they own on this account.</p>' +
       '</div>' +
       '<div class="team-policy-list">' +
-        '<div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full hosted control.</span></div>' +
-        '<div class="team-policy-row"><strong>Admin</strong><span>Hosted workspace control plus billing for the account.</span></div>' +
+        '<div class="team-policy-row"><strong>Owner</strong><span>Billing, team access, and full account control.</span></div>' +
+        '<div class="team-policy-row"><strong>Admin</strong><span>Workspace control plus billing for the account.</span></div>' +
         '<div class="team-policy-row"><strong>Tech</strong><span>Workspace control without billing ownership.</span></div>' +
-        '<div class="team-policy-row"><strong>Read-only</strong><span>State review and verification without control-plane changes.</span></div>' +
+        '<div class="team-policy-row"><strong>Read-only</strong><span>Workspace review and verification without control-plane changes.</span></div>' +
       '</div>' +
     '</div>';
   var reviewDesk =

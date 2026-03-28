@@ -198,7 +198,10 @@ describe('shell view', function() {
     expect(html).toContain('Access review');
     expect(html).toContain('Keep access disciplined');
     expect(html).toContain('Owners stay rare');
+    expect(html).toContain('Billing, team access, and full account control.');
+    expect(html).toContain('Workspace control plus billing for the account.');
     expect(html).toContain('Workspace control without billing ownership.');
+    expect(html).toContain('Workspace review and verification without control-plane changes.');
     expect(html).toContain('People on this account');
     expect(html).toContain('data-action="workspace-action"');
     expect(html).toContain('service-action-row');
