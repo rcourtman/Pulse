@@ -143,7 +143,7 @@ describe('shell view', function() {
     expect(html).toContain('id="accounts-root"');
     expect(html).toContain('MSP account');
     expect(html).toContain('Acme MSP');
-    expect(html).toContain('Operator workspace account');
+    expect(html).toContain('Hosted workspace account');
     expect(html).toContain('3 workspaces');
     expect(html).toContain('Add workspace');
     expect(html).toContain('Manage billing');

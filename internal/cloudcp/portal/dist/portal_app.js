@@ -67,7 +67,7 @@
   }
   function workspaceGuidance(workspace) {
     if (workspace.state === "active" && workspace.health_status === "healthy") {
-      return "This workspace looks ready for normal operator work. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.";
+      return "This workspace looks ready for normal use. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.";
     }
     if (workspace.state === "active" && workspace.health_status === "checking") {
       return "This workspace is active but still waiting on a completed health check. Review it before you treat the hosted posture as settled.";
@@ -312,7 +312,7 @@
     }
     if (!entry.teamQuery.data.length) {
       if (rosterPanel) rosterPanel.classList.add("state-only");
-      setContainerMessage(roster, "No operators yet", "Invite someone new when this hosted account needs shared access.", false);
+      setContainerMessage(roster, "No one added yet", "Invite someone new when this hosted account needs shared access.", false);
       return;
     }
     roster.textContent = "";
@@ -1835,7 +1835,7 @@
   function renderAccountContextStrip(account) {
     var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
     var billingLabel = account.has_billing ? "Billing enabled" : "Billing offline";
-    return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span><span class="portal-account-context-separator">/</span><span class="portal-account-context-access">' + escapeHTML(titleCase(account.role)) + ' access</span></div><div class="portal-account-context-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-context-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(account.kind === "msp" ? "Operator workspace account for hosted fleet, team control, and account billing." : "Hosted account operations for workspace access, team control, and billing.") + '</p></div><div class="portal-account-context-summary"><div class="portal-account-context-stat"><span>Role</span><strong>' + escapeHTML(titleCase(account.role)) + '</strong></div><div class="portal-account-context-stat"><span>Hosted fleet</span><strong>' + escapeHTML(workspaceLabel) + '</strong></div><div class="portal-account-context-stat"><span>Commercial</span><strong>' + escapeHTML(billingLabel) + "</strong></div></div></section>";
+    return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span><span class="portal-account-context-separator">/</span><span class="portal-account-context-access">' + escapeHTML(titleCase(account.role)) + ' access</span></div><div class="portal-account-context-row"><h2>' + escapeHTML(account.name) + '</h2><div class="portal-account-context-chips"><span class="account-context-chip">' + escapeHTML(account.kind_label) + '</span><span class="account-context-chip">' + escapeHTML(titleCase(account.role)) + '</span><span class="account-context-chip">' + escapeHTML(workspaceLabel) + "</span></div></div><p>" + escapeHTML(account.kind === "msp" ? "Hosted workspace account for fleet access, team control, and account billing." : "Hosted account access for workspaces, team control, and billing.") + '</p></div><div class="portal-account-context-summary"><div class="portal-account-context-stat"><span>Role</span><strong>' + escapeHTML(titleCase(account.role)) + '</strong></div><div class="portal-account-context-stat"><span>Hosted fleet</span><strong>' + escapeHTML(workspaceLabel) + '</strong></div><div class="portal-account-context-stat"><span>Commercial</span><strong>' + escapeHTML(billingLabel) + "</strong></div></div></section>";
   }
   function shellSectionButton(section, activeSection, index, title, copy, badge) {
     var badgeHTML = badge ? '<span class="portal-shell-nav-badge">' + escapeHTML(badge) + "</span>" : "";

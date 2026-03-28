@@ -85,7 +85,7 @@ function workspaceCreatedLabel(workspace: PortalWorkspaceSummary): string {
 
 function workspaceGuidance(workspace: PortalWorkspaceSummary): string {
   if (workspace.state === 'active' && workspace.health_status === 'healthy') {
-    return 'This workspace looks ready for normal operator work. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.';
+    return 'This workspace looks ready for normal use. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.';
   }
   if (workspace.state === 'active' && workspace.health_status === 'checking') {
     return 'This workspace is active but still waiting on a completed health check. Review it before you treat the hosted posture as settled.';
@@ -369,7 +369,7 @@ export function renderTeamSection(accountID: string, entry: PortalAccountUIEntry
   }
   if (!entry.teamQuery.data.length) {
     if (rosterPanel) rosterPanel.classList.add('state-only');
-    setContainerMessage(roster, 'No operators yet', 'Invite someone new when this hosted account needs shared access.', false);
+    setContainerMessage(roster, 'No one added yet', 'Invite someone new when this hosted account needs shared access.', false);
     return;
   }
 

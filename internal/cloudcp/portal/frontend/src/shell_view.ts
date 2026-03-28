@@ -296,7 +296,7 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
             '<span class="account-context-chip">' + escapeHTML(workspaceLabel) + '</span>' +
           '</div>' +
         '</div>' +
-        '<p>' + escapeHTML(account.kind === 'msp' ? 'Operator workspace account for hosted fleet, team control, and account billing.' : 'Hosted account operations for workspace access, team control, and billing.') + '</p>' +
+        '<p>' + escapeHTML(account.kind === 'msp' ? 'Hosted workspace account for fleet access, team control, and account billing.' : 'Hosted account access for workspaces, team control, and billing.') + '</p>' +
       '</div>' +
       '<div class="portal-account-context-summary">' +
         '<div class="portal-account-context-stat">' +
