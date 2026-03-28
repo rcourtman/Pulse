@@ -223,6 +223,10 @@ That same runtime-helper contract should prefer `item` terminology in shared
 recovery presenters too. Helper exports that resolve labels or item-type badges
 should expose canonical item-facing names, while any retained `subject` aliases
 remain compatibility wrappers instead of the primary runtime boundary.
+That same shared badge contract applies to table rendering too. Recovery item
+type cells should use the same compact monitoring-table badge base that
+workloads uses for `VM` and `Container`, rather than copying only the colors
+and drifting on padding or visual weight.
 The same rule applies inside recovery-owned helpers and selectors. Shared
 summary helpers and platform filter renderers should use canonical `item` and
 `platform` naming internally once compatibility boundaries already exist,

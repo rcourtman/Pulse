@@ -7,12 +7,16 @@ export interface RecoveryItemTypePresentation {
   key: string;
   label: string;
   badgeClasses: string;
+  tableBadgeClasses: string;
 }
 
 const BADGE_BASE_CLASSES =
   'inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap';
+const TABLE_BADGE_BASE_CLASSES =
+  'inline-flex items-center px-1 py-0.5 text-[10px] font-medium rounded whitespace-nowrap';
 const DEFAULT_BADGE_TONE_CLASSES = 'bg-surface-alt text-base-content';
 const DEFAULT_BADGE_CLASSES = `${BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;
+const DEFAULT_TABLE_BADGE_CLASSES = `${TABLE_BADGE_BASE_CLASSES} ${DEFAULT_BADGE_TONE_CLASSES}`;
 
 interface RecoveryItemTypeLike {
   display?: {
@@ -94,6 +98,7 @@ export const getRecoveryItemTypePresentation = (
         key,
         label: presentation.label,
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.className}`,
       };
     }
     case 'system-container': {
@@ -102,6 +107,7 @@ export const getRecoveryItemTypePresentation = (
         key,
         label: presentation.label,
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.className}`,
       };
     }
     case 'app-container': {
@@ -113,6 +119,7 @@ export const getRecoveryItemTypePresentation = (
         key,
         label: presentation.label,
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.className}`,
       };
     }
     case 'oci-container': {
@@ -121,6 +128,7 @@ export const getRecoveryItemTypePresentation = (
         key,
         label: presentation.label,
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.className}`,
       };
     }
     case 'pod': {
@@ -129,6 +137,7 @@ export const getRecoveryItemTypePresentation = (
         key,
         label: presentation.label,
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.className}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.className}`,
       };
     }
     case 'pvc': {
@@ -137,6 +146,7 @@ export const getRecoveryItemTypePresentation = (
         key,
         label: presentation?.label || 'PVC',
         badgeClasses: `${BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
+        tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation?.badgeClasses || DEFAULT_BADGE_TONE_CLASSES}`,
       };
     }
     default: {
@@ -153,6 +163,7 @@ export const getRecoveryItemTypePresentation = (
           key,
           label,
           badgeClasses: `${BADGE_BASE_CLASSES} ${presentation.badgeClasses}`,
+          tableBadgeClasses: `${TABLE_BADGE_BASE_CLASSES} ${presentation.badgeClasses}`,
         };
       }
       return {
@@ -162,6 +173,7 @@ export const getRecoveryItemTypePresentation = (
           preserveShortAllCaps: true,
         }),
         badgeClasses: DEFAULT_BADGE_CLASSES,
+        tableBadgeClasses: DEFAULT_TABLE_BADGE_CLASSES,
       };
     }
   }
@@ -171,7 +183,7 @@ export const getRecoveryItemTypeLabel = (value: string | null | undefined): stri
   getRecoveryItemTypePresentation(value)?.label || '';
 
 export const getRecoveryItemTypeBadgeClass = (value: string | null | undefined): string =>
-  getRecoveryItemTypePresentation(value)?.badgeClasses || DEFAULT_BADGE_CLASSES;
+  getRecoveryItemTypePresentation(value)?.tableBadgeClasses || DEFAULT_TABLE_BADGE_CLASSES;
 
 export const getRecoveryRollupItemTypeKey = (
   rollup: RecoveryItemTypeLike | null | undefined,

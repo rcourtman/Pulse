@@ -471,7 +471,7 @@ export const RecoveryProtectedInventorySection: Component<
                           </div>
                           <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
                             <Show when={itemTypePresentation?.label}>
-                              <span class={itemTypePresentation?.badgeClasses}>
+                              <span class={itemTypePresentation?.tableBadgeClasses}>
                                 {itemTypePresentation?.label}
                               </span>
                             </Show>
@@ -496,7 +496,7 @@ export const RecoveryProtectedInventorySection: Component<
                           when={itemTypePresentation}
                           fallback={<span class="text-muted">—</span>}
                         >
-                          <span class={itemTypePresentation?.badgeClasses}>
+                          <span class={itemTypePresentation?.tableBadgeClasses}>
                             {itemTypePresentation?.label}
                           </span>
                         </Show>

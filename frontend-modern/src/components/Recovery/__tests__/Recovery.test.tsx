@@ -270,6 +270,7 @@ describe('Recovery', () => {
     );
     expect(within(vmRow!).getAllByText('VM')[0].className).toContain('bg-');
     expect(within(vmRow!).getAllByText('VM')[0].className).toContain('rounded');
+    expect(within(vmRow!).getAllByText('VM')[0].className).toContain('px-1 py-0.5');
     expect(within(vmRow!).getByText('Success').className).not.toContain('rounded');
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
     expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
@@ -351,6 +352,7 @@ describe('Recovery', () => {
     );
     expect(within(historyRow!).getByText('VM').className).toContain('bg-');
     expect(within(historyRow!).getByText('VM').className).toContain('rounded');
+    expect(within(historyRow!).getByText('VM').className).toContain('px-1 py-0.5');
     expect(within(historyRow!).getByText('Local Copy').className).not.toContain('rounded');
     expect(within(historyRow!).getByText('Success').className).not.toContain('rounded');
     expect(activityHeading).toBeInTheDocument();

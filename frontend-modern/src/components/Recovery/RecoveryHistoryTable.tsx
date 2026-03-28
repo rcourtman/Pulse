@@ -231,7 +231,7 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                                         when={itemTypePresentation}
                                         fallback={<span class="text-muted">—</span>}
                                       >
-                                        <span class={itemTypePresentation?.badgeClasses}>
+                                        <span class={itemTypePresentation?.tableBadgeClasses}>
                                           {itemTypePresentation?.label}
                                         </span>
                                       </Show>

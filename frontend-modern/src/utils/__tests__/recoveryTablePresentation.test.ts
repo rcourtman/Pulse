@@ -80,6 +80,7 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryPointItemTypeLabel(point)).toBe('VM');
     expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('bg-blue-100');
     expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('text-blue-700');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('px-1 py-0.5');
   });
 
   it('normalizes proxmox lxc subjects to the canonical container badge', () => {
@@ -91,6 +92,7 @@ describe('recoveryTablePresentation', () => {
     expect(getRecoveryPointItemTypeLabel(point)).toBe('Container');
     expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('bg-green-100');
     expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('text-green-700');
+    expect(getRecoveryPointItemTypeBadgeClass(point)).toContain('px-1 py-0.5');
   });
 
   it('falls back cleanly for unknown subject types', () => {
