@@ -4,7 +4,7 @@ description: Helm chart for deploying the Pulse hub and optional Docker monitori
 type: application
 version: 5.1.7
 appVersion: "5.1.7"
-icon: https://raw.githubusercontent.com/rcourtman/Pulse/main/docs/images/pulse-logo.svg
+icon: https://raw.githubusercontent.com/rcourtman/Pulse/v5.1.7/docs/images/pulse-logo.svg
 keywords:
   - monitoring
   - proxmox
@@ -32,7 +32,7 @@ annotations:
       description: Smoke tests with kind cluster deployment
   artifacthub.io/links: |
     - name: Documentation
-      url: https://github.com/rcourtman/Pulse/blob/main/docs/KUBERNETES.md
+      url: https://github.com/rcourtman/Pulse/blob/v5.1.7/docs/KUBERNETES.md
     - name: Support
       url: https://github.com/rcourtman/Pulse/discussions
   artifacthub.io/maintainers: |

@@ -92,6 +92,13 @@ jobs:
 
           echo "[OK] ${RELEASE_TAG} validated against release line ${REQUIRED_BRANCH}"
 
+      - name: Align chart metadata links
+        run: |
+          python3 scripts/sync_chart_release_metadata.py \
+            --chart deploy/helm/pulse/Chart.yaml \
+            --version "${{ steps.versions.outputs.chart_version }}" \
+            --repo "${{ github.repository }}"
+
       - name: Helm lint (strict)
         run: helm lint deploy/helm/pulse --strict
 

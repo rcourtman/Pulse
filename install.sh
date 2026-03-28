@@ -88,22 +88,8 @@ resolve_install_script_download_url() {
         return 0
     fi
 
-    local releases_json=""
-    if command -v timeout >/dev/null 2>&1; then
-        releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    else
-        releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
-    fi
-
     local rc_release=""
-    if [[ -n "$releases_json" ]]; then
-        if command -v jq >/dev/null 2>&1; then
-            rc_release=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
-        else
-            rc_release=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
-        fi
-    fi
-
+    rc_release=$(resolve_latest_release_tag_for_channel rc 2>/dev/null || true)
     if [[ -z "$rc_release" || "$rc_release" == "null" ]]; then
         return 1
     fi
@@ -521,8 +507,93 @@ repo_web_url() {
     printf 'https://github.com/%s\n' "$GITHUB_REPO"
 }
 
+resolve_latest_release_tag_for_channel() {
+    local channel="${1:-stable}"
+
+    if [[ "$channel" != "rc" ]]; then
+        local stable_release=""
+        stable_release=$(get_latest_release_from_redirect 2>/dev/null || true)
+        if [[ -n "$stable_release" ]]; then
+            printf '%s\n' "$stable_release"
+            return 0
+        fi
+
+        local latest_json=""
+        if command -v timeout >/dev/null 2>&1; then
+            latest_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null || true)
+        else
+            latest_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases/latest" 2>/dev/null || true)
+        fi
+
+        local latest_release=""
+        if [[ -n "$latest_json" ]]; then
+            if command -v jq >/dev/null 2>&1; then
+                latest_release=$(echo "$latest_json" | jq -r '.tag_name' 2>/dev/null || true)
+            else
+                latest_release=$(echo "$latest_json" | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+            fi
+        fi
+
+        if [[ -n "$latest_release" && "$latest_release" != "null" ]]; then
+            printf '%s\n' "$latest_release"
+            return 0
+        fi
+
+        return 1
+    fi
+
+    local releases_json=""
+    if command -v timeout >/dev/null 2>&1; then
+        releases_json=$(timeout 15 curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
+    else
+        releases_json=$(curl -fsSL --connect-timeout 10 --max-time 30 "https://api.github.com/repos/$GITHUB_REPO/releases" 2>/dev/null || true)
+    fi
+
+    local rc_release=""
+    if [[ -n "$releases_json" ]]; then
+        if command -v jq >/dev/null 2>&1; then
+            rc_release=$(echo "$releases_json" | jq -r '[.[] | select(.draft == false)][0].tag_name' 2>/dev/null || true)
+        else
+            rc_release=$(echo "$releases_json" | grep -v '"draft": true' | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/' || true)
+        fi
+    fi
+
+    if [[ -z "$rc_release" || "$rc_release" == "null" ]]; then
+        return 1
+    fi
+
+    printf '%s\n' "$rc_release"
+}
+
+repo_release_docs_ref() {
+    if [[ -n "${FORCE_VERSION:-}" ]]; then
+        printf '%s\n' "$FORCE_VERSION"
+        return 0
+    fi
+
+    if [[ -n "${LATEST_RELEASE:-}" ]]; then
+        printf '%s\n' "$LATEST_RELEASE"
+        return 0
+    fi
+
+    local channel="${FORCE_CHANNEL:-${UPDATE_CHANNEL:-stable}}"
+    resolve_latest_release_tag_for_channel "$channel"
+}
+
+repo_docs_url_for_path() {
+    local docs_path="$1"
+    local ref=""
+    ref=$(repo_release_docs_ref 2>/dev/null || true)
+    if [[ -n "$ref" ]]; then
+        printf '%s/blob/%s/%s\n' "$(repo_web_url)" "$ref" "$docs_path"
+        return 0
+    fi
+
+    printf '%s/releases/latest\n' "$(repo_web_url)"
+}
+
 repo_docker_docs_url() {
-    printf '%s/blob/main/docs/DOCKER.md\n' "$(repo_web_url)"
+    repo_docs_url_for_path "docs/DOCKER.md"
 }
 
 repo_docker_image_ref() {

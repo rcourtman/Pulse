@@ -1507,7 +1507,11 @@ func TestPulseAutoUpdateResolveInstallScriptURLUsesConfiguredRepo(t *testing.T) 
 func TestRepoDockerDocsURLUsesConfiguredRepo(t *testing.T) {
 	script := `
 		GITHUB_REPO="example/pulse-fork"
+		LATEST_RELEASE="v9.9.9"
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
+` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
+` + extractRootInstallShellFunction(t, "repo_docs_url_for_path") + `
 ` + extractRootInstallShellFunction(t, "repo_docker_docs_url") + `
 		repo_docker_docs_url
 	`
@@ -1516,8 +1520,31 @@ func TestRepoDockerDocsURLUsesConfiguredRepo(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bash: %v\n%s", err, out)
 	}
-	if got := strings.TrimSpace(string(out)); got != "https://github.com/example/pulse-fork/blob/main/docs/DOCKER.md" {
+	if got := strings.TrimSpace(string(out)); got != "https://github.com/example/pulse-fork/blob/v9.9.9/docs/DOCKER.md" {
 		t.Fatalf("repo_docker_docs_url = %q", got)
+	}
+}
+
+func TestRepoDockerDocsURLFallsBackToReleaseLandingPageWhenVersionUnknown(t *testing.T) {
+	script := `
+		GITHUB_REPO="example/pulse-fork"
+		get_latest_release_from_redirect() { return 1; }
+		curl() { return 1; }
+		timeout() { return 1; }
+` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
+` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
+` + extractRootInstallShellFunction(t, "repo_docs_url_for_path") + `
+` + extractRootInstallShellFunction(t, "repo_docker_docs_url") + `
+		repo_docker_docs_url
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+	if got := strings.TrimSpace(string(out)); got != "https://github.com/example/pulse-fork/releases/latest" {
+		t.Fatalf("repo_docker_docs_url fallback = %q", got)
 	}
 }
 
@@ -1540,10 +1567,14 @@ func TestRepoDockerImageRefUsesConfiguredImageRepo(t *testing.T) {
 func TestCheckDockerEnvironmentUsesConfiguredImageAndDocs(t *testing.T) {
 	script := `
 		GITHUB_REPO="example/pulse-fork"
+		LATEST_RELEASE="v9.9.9"
 		DOCKER_IMAGE_REPO="example/pulse-enterprise"
 		print_error() { printf 'ERR:%s\n' "$1"; }
 		grep() { return 1; }
 ` + extractRootInstallShellFunction(t, "repo_web_url") + `
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
+` + extractRootInstallShellFunction(t, "repo_release_docs_ref") + `
+` + extractRootInstallShellFunction(t, "repo_docs_url_for_path") + `
 ` + extractRootInstallShellFunction(t, "repo_docker_docs_url") + `
 ` + extractRootInstallShellFunction(t, "repo_docker_image_ref") + `
 ` + extractRootInstallShellFunction(t, "check_docker_environment") + `
@@ -1559,7 +1590,7 @@ func TestCheckDockerEnvironmentUsesConfiguredImageAndDocs(t *testing.T) {
 	if !strings.Contains(got, "docker run -d -p 7655:7655 example/pulse-enterprise:latest") {
 		t.Fatalf("docker guidance missing configured image repo:\n%s", got)
 	}
-	if !strings.Contains(got, "https://github.com/example/pulse-fork/blob/main/docs/DOCKER.md") {
+	if !strings.Contains(got, "https://github.com/example/pulse-fork/blob/v9.9.9/docs/DOCKER.md") {
 		t.Fatalf("docker guidance missing configured docs url:\n%s", got)
 	}
 }
