@@ -125,6 +125,10 @@ owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`
 is the version-matched asset served by the running build. Privacy disclosures
 must not drift back to GitHub `main` links that can describe a different
 revision than the installed runtime.
+That same rule also applies inside shipped security guidance itself:
+`SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
+not bounce the operator back to GitHub `main` for section references that the
+running build already owns locally.
 That same governed settings trust boundary now also includes
 `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,
 `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`,

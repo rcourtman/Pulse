@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 import {
   areSystemSettingsLoaded,
   markSystemSettingsLoadedWithDefaults,
@@ -49,6 +50,10 @@ describe('systemSettings store', () => {
     expect(shouldHideDockerUpdateActions()).toBe(false);
     expect(shouldReduceProUpsellNoise()).toBe(false);
     expect(shouldDisableLocalUpgradeMetrics()).toBe(false);
+  });
+
+  it('keeps the telemetry disclosure on the shipped local privacy doc', () => {
+    expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY.md');
   });
 
 });

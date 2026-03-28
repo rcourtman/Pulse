@@ -47,6 +47,7 @@ describe('docsLinks', () => {
       const rootDoc = readFileSync(source, 'utf8');
       const publicDoc = readFileSync(path.join(frontendRoot, 'public', 'docs', target), 'utf8');
       expect(publicDoc).toBe(rootDoc);
+      expect(publicDoc).not.toContain('https://github.com/rcourtman/Pulse/blob/main/');
     }
   });
 

@@ -111,7 +111,7 @@ Verify temperature collection is agent-based:
   journalctl -u pulse-agent -n 200 --no-pager
   ```
 
-**Documentation:** <https://github.com/rcourtman/Pulse/blob/main/SECURITY.md#critical-security-notice-for-container-deployments>
+**Documentation:** [Critical security notice for container deployments](#critical-security-notice-for-container-deployments)
 **Issues:** <https://github.com/rcourtman/pulse/issues>
 **Private disclosures:** <security@pulseapp.io>
 
