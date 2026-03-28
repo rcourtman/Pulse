@@ -704,6 +704,10 @@ instead of feature-local spacing overrides. Recovery may select the shared
 default `SummaryPanel` / `SummaryMetricCard` density mode, and it should not
 reintroduce one-off padding hacks or right-side duplicate KPI blocks inside
 `RecoverySummary.tsx`.
+That same one-headline rule applies to the footprint card too. `Protected
+Footprint` should lead with one dominant item-type count and carry platform
+coverage as a support row instead of presenting dual headline counts plus mix
+chips inside the same card.
 That same scan-first rule applies to the workspace strip. Recovery should not
 show tab labels and then repeat the same workspace count as standalone text in
 the same strip; the workspace tabs should carry their own counts, while the

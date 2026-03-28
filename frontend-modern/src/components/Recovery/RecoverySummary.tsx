@@ -93,8 +93,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       value: summary().neverSucceeded,
     },
   ]);
-  const platformMixPreview = createMemo(() => platformCoverage().items.slice(0, 2));
-  const itemMixPreview = createMemo(() => itemCoverage().items.slice(0, 2));
   const freshWithin24hCount = createMemo(
     () =>
       (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
@@ -169,43 +167,20 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
 
         <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
           <div class="flex h-full flex-col gap-2">
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <div class="text-xl font-semibold tabular-nums text-base-content">
-                  {itemCoverage().itemTypeCount}
-                </div>
-                <div class="text-[11px] text-muted">item types</div>
+            <div>
+              <div class="text-xl font-semibold tabular-nums text-base-content">
+                {itemCoverage().itemTypeCount}
               </div>
-              <div class="text-right">
-                <div class="text-xl font-semibold tabular-nums text-base-content">
-                  {platformCoverage().platformCount}
-                </div>
-                <div class="text-[11px] text-muted">platforms</div>
-              </div>
+              <div class="text-[11px] text-muted">item types</div>
             </div>
             <div class="border-t border-border-subtle pt-1.5">
               <MetricRows
                 rows={[
+                  { label: 'Platforms', value: platformCoverage().platformCount },
                   { label: 'Primary Item', value: itemCoverage().primaryItemLabel ?? 'n/a' },
                   { label: 'Primary Platform', value: platformCoverage().primaryPlatformLabel ?? 'n/a' },
                 ]}
               />
-            </div>
-            <div class="flex flex-wrap items-center gap-1 pt-0.5">
-              <For each={itemMixPreview()}>
-                {(item) => (
-                  <span class={`inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium ${item.toneClass}`}>
-                    {item.label} {item.count}
-                  </span>
-                )}
-              </For>
-              <For each={platformMixPreview()}>
-                {(platform) => (
-                  <span class={`inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium ${platform.toneClass}`}>
-                    {platform.label} {platform.count}
-                  </span>
-                )}
-              </For>
             </div>
           </div>
         </SummaryMetricCard>

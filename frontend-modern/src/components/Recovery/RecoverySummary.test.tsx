@@ -61,6 +61,7 @@ describe('RecoverySummary', () => {
     expect(screen.getAllByText(/attention/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/recovery points/i)).toBeInTheDocument();
     expect(screen.getByText(/item types/i)).toBeInTheDocument();
+    expect(screen.getByText('Platforms')).toBeInTheDocument();
     expect(screen.getByText('Primary Item')).toBeInTheDocument();
     expect(screen.getByText('Primary Platform')).toBeInTheDocument();
     expect(screen.getByText('Avg / Day')).toBeInTheDocument();
