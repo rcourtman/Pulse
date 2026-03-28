@@ -12,14 +12,19 @@ const flushAsync = async () => {
 describe('useSystemSettingsState', () => {
   let useSystemSettingsState: UseSystemSettingsStateModule['useSystemSettingsState'];
   let getSystemSettingsMock: ReturnType<typeof vi.fn>;
+  let getTelemetryPreviewMock: ReturnType<typeof vi.fn>;
+  let resetTelemetryInstallIDMock: ReturnType<typeof vi.fn>;
   let getVersionMock: ReturnType<typeof vi.fn>;
   let updateSystemSettingsMock: ReturnType<typeof vi.fn>;
   let updateStoreVersionInfoMock: ReturnType<typeof vi.fn>;
+  let copyToClipboardMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
 
     getSystemSettingsMock = vi.fn();
+    getTelemetryPreviewMock = vi.fn();
+    resetTelemetryInstallIDMock = vi.fn();
     getVersionMock = vi.fn().mockResolvedValue({
       version: '1.0.0',
       build: 'test',
@@ -32,10 +37,13 @@ describe('useSystemSettingsState', () => {
     });
     updateSystemSettingsMock = vi.fn().mockResolvedValue(undefined);
     updateStoreVersionInfoMock = vi.fn().mockReturnValue(null);
+    copyToClipboardMock = vi.fn().mockResolvedValue(true);
 
     vi.doMock('@/api/settings', () => ({
       SettingsAPI: {
         getSystemSettings: getSystemSettingsMock,
+        getTelemetryPreview: getTelemetryPreviewMock,
+        resetTelemetryInstallID: resetTelemetryInstallIDMock,
         updateSystemSettings: updateSystemSettingsMock,
       },
     }));
@@ -63,6 +71,10 @@ describe('useSystemSettingsState', () => {
         info: vi.fn(),
         debug: vi.fn(),
       },
+    }));
+
+    vi.doMock('@/utils/clipboard', () => ({
+      copyToClipboard: copyToClipboardMock,
     }));
 
     vi.doMock('@/utils/apiClient', () => ({
@@ -287,6 +299,129 @@ describe('useSystemSettingsState', () => {
         autoUpdateEnabled: false,
       }),
     );
+    dispose();
+  });
+
+  it('loads the telemetry preview payload on demand', async () => {
+    getTelemetryPreviewMock.mockResolvedValue({
+      enabled: true,
+      payload: {
+        install_id: 'preview-install-id',
+        version: '6.0.0',
+        platform: 'docker',
+        os: 'linux',
+        arch: 'amd64',
+        event: 'heartbeat',
+        pve_nodes: 1,
+        pbs_instances: 0,
+        pmg_instances: 0,
+        vms: 2,
+        containers: 3,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+        ai_enabled: false,
+        active_alerts: 0,
+        relay_enabled: false,
+        sso_enabled: false,
+        multi_tenant: false,
+        paid_license: false,
+        has_api_tokens: true,
+      },
+    });
+
+    const { hookState, dispose } = mountHookWithTab('system-general');
+
+    await hookState.handleLoadTelemetryPreview();
+    await flushAsync();
+
+    expect(getTelemetryPreviewMock).toHaveBeenCalledOnce();
+    expect(hookState.telemetryPreviewPayload()).toContain('"install_id": "preview-install-id"');
+    expect(hookState.telemetryPreviewEnabled()).toBe(true);
+    dispose();
+  });
+
+  it('copies the loaded telemetry preview payload', async () => {
+    getTelemetryPreviewMock.mockResolvedValue({
+      enabled: false,
+      payload: {
+        install_id: 'preview-install-id',
+        version: '6.0.0',
+        platform: 'docker',
+        os: 'linux',
+        arch: 'amd64',
+        event: 'heartbeat',
+        pve_nodes: 1,
+        pbs_instances: 0,
+        pmg_instances: 0,
+        vms: 2,
+        containers: 3,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+        ai_enabled: false,
+        active_alerts: 0,
+        relay_enabled: false,
+        sso_enabled: false,
+        multi_tenant: false,
+        paid_license: false,
+        has_api_tokens: true,
+      },
+    });
+
+    const { hookState, dispose } = mountHookWithTab('system-general');
+    const { notificationStore } = await import('@/stores/notifications');
+
+    await hookState.handleLoadTelemetryPreview();
+    await hookState.handleCopyTelemetryPreview();
+    await flushAsync();
+
+    expect(copyToClipboardMock).toHaveBeenCalledWith(expect.stringContaining('"event": "heartbeat"'));
+    expect(notificationStore.success).toHaveBeenCalledWith(
+      'Telemetry payload copied to clipboard',
+      2000,
+    );
+    dispose();
+  });
+
+  it('resets the telemetry install ID after confirmation', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    resetTelemetryInstallIDMock.mockResolvedValue({
+      enabled: true,
+      payload: {
+        install_id: 'rotated-install-id',
+        version: '6.0.0',
+        platform: 'binary',
+        os: 'linux',
+        arch: 'amd64',
+        event: 'heartbeat',
+        pve_nodes: 0,
+        pbs_instances: 0,
+        pmg_instances: 0,
+        vms: 0,
+        containers: 0,
+        docker_hosts: 0,
+        kubernetes_clusters: 0,
+        ai_enabled: false,
+        active_alerts: 0,
+        relay_enabled: false,
+        sso_enabled: false,
+        multi_tenant: false,
+        paid_license: false,
+        has_api_tokens: true,
+      },
+    });
+
+    const { hookState, dispose } = mountHookWithTab('system-general');
+    const { notificationStore } = await import('@/stores/notifications');
+
+    await hookState.handleResetTelemetryInstallID();
+    await flushAsync();
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(resetTelemetryInstallIDMock).toHaveBeenCalledOnce();
+    expect(hookState.telemetryPreviewPayload()).toContain('"install_id": "rotated-install-id"');
+    expect(notificationStore.success).toHaveBeenCalledWith('Telemetry install ID reset', 3000);
+
+    confirmSpy.mockRestore();
     dispose();
   });
 });

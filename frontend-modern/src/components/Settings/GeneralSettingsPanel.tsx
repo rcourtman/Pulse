@@ -3,6 +3,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Toggle } from '@/components/shared/Toggle';
 import { EnvironmentLockBadge } from '@/components/shared/EnvironmentLockBadge';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import type { TelemetryPreviewResponse } from '@/api/settings';
 import { DockerRuntimeSettingsCard } from './DockerRuntimeSettingsCard';
 import Sliders from 'lucide-solid/icons/sliders-horizontal';
 import Activity from 'lucide-solid/icons/activity';
@@ -62,6 +63,14 @@ export interface GeneralSettingsPanelProps {
   telemetryEnabledLocked: () => boolean;
   savingTelemetry: Accessor<boolean>;
   handleTelemetryEnabledChange: (enabled: boolean) => Promise<void>;
+  telemetryPreview: Accessor<TelemetryPreviewResponse | null>;
+  telemetryPreviewEnabled: Accessor<boolean>;
+  telemetryPreviewPayload: Accessor<string>;
+  loadingTelemetryPreview: Accessor<boolean>;
+  resettingTelemetryInstallID: Accessor<boolean>;
+  handleLoadTelemetryPreview: () => Promise<void>;
+  handleCopyTelemetryPreview: () => Promise<void>;
+  handleResetTelemetryInstallID: () => Promise<void>;
 
   disableDockerUpdateActions: Accessor<boolean>;
   disableDockerUpdateActionsLocked: () => boolean;
@@ -200,36 +209,88 @@ export const GeneralSettingsPanel: Component<GeneralSettingsPanelProps> = (props
           />
         </div>
 
-        <div class="flex items-center justify-between gap-4 p-4 sm:p-6">
-          <div class="flex-1 min-w-0 space-y-1">
-            <div class="flex items-center gap-2">
-              <span class="text-sm font-medium text-base-content truncate">
-                Anonymous telemetry
-              </span>
-              <Show when={props.telemetryEnabledLocked()}>
-                <EnvironmentLockBadge envVar="PULSE_TELEMETRY" />
-              </Show>
+        <div class="p-4 sm:p-6 space-y-4">
+          <div class="flex items-center justify-between gap-4">
+            <div class="flex-1 min-w-0 space-y-1">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-medium text-base-content truncate">
+                  Anonymous telemetry
+                </span>
+                <Show when={props.telemetryEnabledLocked()}>
+                  <EnvironmentLockBadge envVar="PULSE_TELEMETRY" />
+                </Show>
+              </div>
+              <p class="text-xs text-muted leading-relaxed">
+                Help improve Pulse by sharing anonymous usage data: a rotating install ID,
+                version, platform, resource counts, and feature flags. No hostnames,
+                credentials, or personal information is ever sent.{' '}
+                <a
+                  href={PRIVACY_DOC_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline hover:text-base-content"
+                >
+                  Full details
+                </a>
+              </p>
             </div>
-            <p class="text-xs text-muted line-clamp-3">
-              Help improve Pulse by sharing anonymous usage data: a random install ID, version,
-              platform, resource counts, and feature flags. No hostnames, credentials, or personal
-              information is ever sent.{' '}
-              <a
-                href={PRIVACY_DOC_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="underline hover:text-base-content"
-              >
-                Full details
-              </a>
-            </p>
+            <Toggle
+              checked={props.telemetryEnabled()}
+              class="shrink-0"
+              disabled={props.telemetryEnabledLocked() || props.savingTelemetry()}
+              onChange={() => props.handleTelemetryEnabledChange(!props.telemetryEnabled())}
+            />
           </div>
-          <Toggle
-            checked={props.telemetryEnabled()}
-            class="shrink-0"
-            disabled={props.telemetryEnabledLocked() || props.savingTelemetry()}
-            onChange={() => props.handleTelemetryEnabledChange(!props.telemetryEnabled())}
-          />
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              type="button"
+              class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={props.loadingTelemetryPreview()}
+              onClick={() => void props.handleLoadTelemetryPreview()}
+            >
+              {props.telemetryPreview() ? 'Refresh payload' : 'Preview payload'}
+            </button>
+            <button
+              type="button"
+              class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={props.resettingTelemetryInstallID()}
+              onClick={() => void props.handleResetTelemetryInstallID()}
+            >
+              Reset ID
+            </button>
+            <Show when={props.telemetryPreviewPayload()}>
+              <button
+                type="button"
+                class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-base-content transition hover:bg-surface-hover"
+                onClick={() => void props.handleCopyTelemetryPreview()}
+              >
+                Copy JSON
+              </button>
+            </Show>
+          </div>
+
+          <Show when={props.telemetryPreviewPayload()}>
+            <div class="rounded-md border border-border bg-surface-alt">
+              <div class="flex flex-col gap-1 border-b border-border px-4 py-3">
+                <p class="text-xs font-semibold uppercase tracking-wide text-muted">
+                  Current heartbeat payload
+                </p>
+                <Show when={!props.telemetryPreviewEnabled()}>
+                  <p class="text-xs text-muted leading-relaxed">
+                    Telemetry is currently disabled. This preview shows the payload Pulse would
+                    send if you enable it.
+                  </p>
+                </Show>
+              </div>
+              <pre
+                aria-label="Telemetry payload preview"
+                class="overflow-x-auto px-4 py-3 text-xs leading-relaxed text-base-content"
+              >
+                {props.telemetryPreviewPayload()}
+              </pre>
+            </div>
+          </Show>
         </div>
       </SettingsPanel>
 

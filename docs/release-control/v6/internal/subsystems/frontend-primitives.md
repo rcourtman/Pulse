@@ -216,6 +216,12 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/utils/docsLinks.ts`. Shared settings surfaces such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
     privacy, security, proxy-auth, scope-reference, or Terms-of-Service links.
+14. Keep shared settings-shell telemetry transparency controls on the governed
+    general settings panel. Preview/reset affordances for anonymous telemetry
+    must stay rendered inside
+    `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+    instead of drifting into route-local modals, hidden dev tools, or shell
+    chrome that operators would not naturally inspect.
 
 ## Current State
 

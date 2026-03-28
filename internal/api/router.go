@@ -47,6 +47,7 @@ import (
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
 	"github.com/rcourtman/pulse-go-rewrite/internal/servicediscovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
@@ -3082,6 +3083,22 @@ func (r *Router) StopGrantRefresh() {
 func (r *Router) SetTelemetryToggleFunc(fn func(enabled bool)) {
 	if r.systemSettingsHandler != nil {
 		r.systemSettingsHandler.SetTelemetryToggleFunc(fn)
+	}
+}
+
+// SetTelemetryPreviewFunc wires the exact runtime telemetry preview callback
+// into the system settings handler.
+func (r *Router) SetTelemetryPreviewFunc(fn func() (telemetry.Ping, error)) {
+	if r.systemSettingsHandler != nil {
+		r.systemSettingsHandler.SetTelemetryPreviewFunc(fn)
+	}
+}
+
+// SetTelemetryResetFunc wires the telemetry install-ID reset callback into the
+// system settings handler.
+func (r *Router) SetTelemetryResetFunc(fn func() (telemetry.Ping, error)) {
+	if r.systemSettingsHandler != nil {
+		r.systemSettingsHandler.SetTelemetryResetFunc(fn)
 	}
 }
 

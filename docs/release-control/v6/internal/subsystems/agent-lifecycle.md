@@ -213,6 +213,12 @@ magic-link path. Lifecycle-adjacent control-plane redirects through
 handoff token long enough for the tenant runtime to repair org membership
 before it lands in protected hosted routes, rather than letting direct opens
 diverge from the newer portal exchange path.
+That same shared `internal/api/` dependency also assumes telemetry
+transparency remains explicitly system-settings-owned. When lifecycle-adjacent
+setup or router work touches shared `internal/api/` files, telemetry preview
+and install-ID reset routes must keep reusing the canonical system-settings
+trust boundary and server-owned telemetry runtime instead of borrowing agent
+lifecycle proof or state ownership just because the same router surface moved.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

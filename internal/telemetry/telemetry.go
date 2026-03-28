@@ -44,6 +44,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"math/rand"
 	"net/http"
 	"os"
@@ -59,6 +60,8 @@ import (
 // pingEndpoint is the URL that receives anonymous telemetry pings.
 // It is a var (not const) so that tests can redirect it to a local server.
 var pingEndpoint = "https://license.pulserelay.pro/v1/telemetry/ping"
+
+var errInstallIDUnavailable = errors.New("telemetry install id unavailable")
 
 const (
 	// heartbeatInterval is the base interval between daily pings.
@@ -181,18 +184,7 @@ func Start(ctx context.Context, cfg Config) {
 		return
 	}
 
-	platform := "binary"
-	if cfg.IsDocker {
-		platform = "docker"
-	}
-
-	base := Ping{
-		InstallID: installID,
-		Version:   cfg.Version,
-		Platform:  platform,
-		OS:        runtime.GOOS,
-		Arch:      runtime.GOARCH,
-	}
+	base := basePing(cfg, installID)
 
 	ctx, cancel := context.WithCancel(ctx)
 	r := &runner{cancel: cancel}
@@ -205,7 +197,7 @@ func Start(ctx context.Context, cfg Config) {
 	mu.Unlock()
 
 	log.Info().
-		Str("platform", platform).
+		Str("platform", base.Platform).
 		Msg("Anonymous telemetry enabled — sends a rotating install ID, version, platform, OS/arch, resource counts, and feature flags (nothing else)")
 
 	r.wg.Add(1)
@@ -255,6 +247,24 @@ func Stop() {
 	}
 }
 
+// BuildPreview returns the current heartbeat payload without sending it.
+func BuildPreview(cfg Config) (Ping, error) {
+	installID := getOrCreateInstallID(cfg.DataDir)
+	if installID == "" {
+		return Ping{}, errInstallIDUnavailable
+	}
+
+	ping := applySnapshot(basePing(cfg, installID), cfg.GetSnapshot)
+	ping.Event = "heartbeat"
+	return ping, nil
+}
+
+// ResetInstallID rotates the locally stored telemetry install ID immediately
+// and returns the new pseudonymous identifier.
+func ResetInstallID(dataDir string) (string, error) {
+	return resetInstallIDAt(dataDir, time.Now().UTC())
+}
+
 // IsEnabled reports whether telemetry is enabled.
 // Telemetry is on by default; set PULSE_TELEMETRY=false to disable.
 func IsEnabled() bool {
@@ -269,6 +279,23 @@ func IsEnabled() bool {
 func jitteredHeartbeat() time.Duration {
 	jitter := time.Duration(rand.Int63n(int64(2*maxHeartbeatJitter)+1)) - maxHeartbeatJitter
 	return heartbeatInterval + jitter
+}
+
+func basePing(cfg Config, installID string) Ping {
+	return Ping{
+		InstallID: installID,
+		Version:   cfg.Version,
+		Platform:  platformName(cfg.IsDocker),
+		OS:        runtime.GOOS,
+		Arch:      runtime.GOARCH,
+	}
+}
+
+func platformName(isDocker bool) string {
+	if isDocker {
+		return "docker"
+	}
+	return "binary"
 }
 
 // applySnapshot merges dynamic state into the base ping.
@@ -316,16 +343,33 @@ func getOrCreateInstallIDAt(dataDir string, now time.Time) string {
 		InstallID: uuid.New().String(),
 		IssuedAt:  now,
 	}
-	encoded, err := json.Marshal(record)
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to encode rotating install ID")
-		return record.InstallID
-	}
-	if err := os.WriteFile(p, append(encoded, '\n'), 0600); err != nil {
+	if err := writeInstallIDRecordAt(dataDir, record); err != nil {
 		log.Warn().Err(err).Str("path", p).Msg("Failed to persist install ID")
 		// Still use the generated ID for this session.
 	}
 	return record.InstallID
+}
+
+func resetInstallIDAt(dataDir string, now time.Time) (string, error) {
+	record := installIDRecord{
+		InstallID: uuid.New().String(),
+		IssuedAt:  now.UTC(),
+	}
+	if err := writeInstallIDRecordAt(dataDir, record); err != nil {
+		return "", err
+	}
+	return record.InstallID, nil
+}
+
+func writeInstallIDRecordAt(dataDir string, record installIDRecord) error {
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		return err
+	}
+	encoded, err := json.Marshal(record)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(dataDir, installIDFile), append(encoded, '\n'), 0600)
 }
 
 func parseInstallIDRecord(data []byte) (installIDRecord, bool) {

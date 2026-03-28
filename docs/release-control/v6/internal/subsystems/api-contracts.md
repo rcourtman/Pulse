@@ -185,6 +185,7 @@ Own canonical runtime payload shapes between backend and frontend.
 18. Monitoring command-trigger clients open-coding `parseOptionalAPIResponse(response, { success: true }, ...)` success-envelope fallbacks instead of using a canonical shared success-envelope helper
 19. Governed frontend API clients open-coding `try/catch` wrappers around `apiFetchJSON(...)` just to map `402` or `404` into `[]`, `{ plans: [] }`, or `null` instead of using canonical shared API-error-status fallback helpers
 20. Backend config/settings handlers pointing operator guidance at GitHub `main` docs when the running build already ships that guidance locally under `/docs/`
+21. Telemetry preview or reset endpoints drifting from the exact server-owned telemetry runtime contract instead of reusing the same source-of-truth snapshot and install-ID state the background sender uses
 21. Telemetry preview or reset endpoints returning payloads that drift from the exact server-owned telemetry runtime contract instead of reusing the same source-of-truth snapshot and install-ID state the background sender uses
 
 ## Completion Obligations

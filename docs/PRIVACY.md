@@ -13,6 +13,12 @@ No hostnames, credentials, IP addresses, or personally identifiable information 
 - **Settings → System → General → Anonymous telemetry** (toggle off), or
 - Set the environment variable `PULSE_TELEMETRY=false`
 
+### How to inspect or rotate it
+
+- **Settings → System → General → Preview payload** shows the exact heartbeat JSON Pulse would send with the current runtime state.
+- **Settings → System → General → Reset ID** immediately rotates the local telemetry install ID and refreshes the previewed payload.
+- If telemetry is currently disabled, the preview still shows the payload Pulse would send if you enable it.
+
 ### Exactly what is sent
 
 Every field is listed below — nothing else leaves your server:
@@ -53,6 +59,7 @@ Every field is listed below — nothing else leaves your server:
 The telemetry install ID is pseudonymous and rotates automatically every 30 days.
 Pulse keeps it only to avoid treating every startup ping as a brand-new install
 while still limiting long-term linkage from one heartbeat window to the next.
+Operators can also rotate it immediately from **Settings → System → General → Reset ID**.
 
 ### Source code
 

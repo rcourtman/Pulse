@@ -19,6 +19,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/discovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rs/zerolog/log"
@@ -43,6 +44,8 @@ type SystemSettingsHandler struct {
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
 	reloadMonitorFunc        func() error
 	telemetryToggleFunc      func(enabled bool) // Called when telemetry is toggled at runtime
+	telemetryPreviewFunc     func() (telemetry.Ping, error)
+	telemetryResetFunc       func() (telemetry.Ping, error)
 	mtMonitor                interface {
 		GetMonitor(string) (*monitoring.Monitor, error)
 	}
@@ -52,6 +55,11 @@ type SystemSettingsHandler struct {
 type SystemSettingsResponse struct {
 	config.SystemSettings
 	EnvOverrides map[string]bool `json:"envOverrides"`
+}
+
+type TelemetryPreviewResponse struct {
+	Enabled bool           `json:"enabled"`
+	Payload telemetry.Ping `json:"payload"`
 }
 
 func EmptySystemSettingsResponse() SystemSettingsResponse {
@@ -88,6 +96,18 @@ func NewSystemSettingsHandler(cfg *config.Config, persistence *config.ConfigPers
 // at runtime (true = start, false = stop).
 func (h *SystemSettingsHandler) SetTelemetryToggleFunc(fn func(enabled bool)) {
 	h.telemetryToggleFunc = fn
+}
+
+// SetTelemetryPreviewFunc sets the callback used to build the exact telemetry
+// payload preview exposed through the system settings API.
+func (h *SystemSettingsHandler) SetTelemetryPreviewFunc(fn func() (telemetry.Ping, error)) {
+	h.telemetryPreviewFunc = fn
+}
+
+// SetTelemetryResetFunc sets the callback used to rotate the telemetry install
+// identifier and rebuild the current preview payload.
+func (h *SystemSettingsHandler) SetTelemetryResetFunc(fn func() (telemetry.Ping, error)) {
+	h.telemetryResetFunc = fn
 }
 
 // SetMonitor updates the monitor reference used by the handler at runtime.
@@ -135,6 +155,41 @@ func (h *SystemSettingsHandler) SetConfig(cfg *config.Config) {
 		return
 	}
 	h.config = cfg
+}
+
+func (h *SystemSettingsHandler) ensureWriteAccess(w http.ResponseWriter, r *http.Request) bool {
+	// Require authentication
+	if !CheckAuth(h.config, w, r) {
+		// CheckAuth handles explicit failures (rate limits, invalid tokens)
+		// but returns false silently for missing credentials.
+		// We ensure a 401 is returned nicely even if we risk a double-write warning in rare cases.
+		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", "Unauthorized", nil)
+		return false
+	}
+
+	// Check if using proxy auth and if so, verify admin status
+	if h.config.ProxyAuthSecret != "" {
+		if valid, username, isAdmin := CheckProxyAuth(h.config, r); valid {
+			if !isAdmin {
+				log.Warn().
+					Str("ip", r.RemoteAddr).
+					Str("path", r.URL.Path).
+					Str("method", r.Method).
+					Str("username", username).
+					Msg("Non-admin user attempted to update system settings")
+
+				writeErrorResponse(w, http.StatusForbidden, "forbidden", "Admin privileges required", nil)
+				return false
+			}
+		}
+	}
+
+	// SECURITY: Session users must match configured admin identity for settings writes.
+	if !ensureSettingsWriteScope(h.config, w, r) {
+		return false
+	}
+
+	return true
 }
 
 func discoveryConfigMap(raw map[string]interface{}) (map[string]interface{}, bool) {
@@ -598,6 +653,72 @@ func (h *SystemSettingsHandler) HandleGetSystemSettings(w http.ResponseWriter, r
 	}
 }
 
+// HandleGetTelemetryPreview returns the exact heartbeat payload Pulse would send
+// using the current runtime telemetry configuration.
+func (h *SystemSettingsHandler) HandleGetTelemetryPreview(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
+		return
+	}
+
+	if !ensureSettingsReadScope(h.config, w, r) {
+		return
+	}
+
+	if h.telemetryPreviewFunc == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "telemetry_unavailable", "Telemetry preview is unavailable", nil)
+		return
+	}
+
+	payload, err := h.telemetryPreviewFunc()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to build telemetry preview")
+		writeErrorResponse(w, http.StatusInternalServerError, "telemetry_preview_failed", "Failed to build telemetry preview", nil)
+		return
+	}
+
+	if err := utils.WriteJSONResponse(w, TelemetryPreviewResponse{
+		Enabled: h.config.TelemetryEnabled,
+		Payload: payload,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write telemetry preview response")
+	}
+}
+
+// HandleResetTelemetryID rotates the local telemetry install ID immediately and
+// returns the refreshed preview payload.
+func (h *SystemSettingsHandler) HandleResetTelemetryID(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
+		return
+	}
+
+	if !h.ensureWriteAccess(w, r) {
+		return
+	}
+
+	if h.telemetryResetFunc == nil {
+		writeErrorResponse(w, http.StatusServiceUnavailable, "telemetry_unavailable", "Telemetry reset is unavailable", nil)
+		return
+	}
+
+	payload, err := h.telemetryResetFunc()
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to reset telemetry install ID")
+		writeErrorResponse(w, http.StatusInternalServerError, "telemetry_reset_failed", "Failed to reset telemetry install ID", nil)
+		return
+	}
+
+	log.Info().Msg("Telemetry install ID reset")
+
+	if err := utils.WriteJSONResponse(w, TelemetryPreviewResponse{
+		Enabled: h.config.TelemetryEnabled,
+		Payload: payload,
+	}); err != nil {
+		log.Error().Err(err).Msg("Failed to write telemetry reset response")
+	}
+}
+
 // HandleUpdateSystemSettings updates the system settings
 func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -605,36 +726,7 @@ func (h *SystemSettingsHandler) HandleUpdateSystemSettings(w http.ResponseWriter
 		return
 	}
 
-	// Require authentication
-	if !CheckAuth(h.config, w, r) {
-		// CheckAuth handles explicit failures (rate limits, invalid tokens)
-		// but returns false silently for missing credentials.
-		// We ensure a 401 is returned nicely even if we risk a double-write warning in rare cases.
-		writeErrorResponse(w, http.StatusUnauthorized, "unauthorized", "Unauthorized", nil)
-		return
-	}
-
-	// Check if using proxy auth and if so, verify admin status
-	if h.config.ProxyAuthSecret != "" {
-		if valid, username, isAdmin := CheckProxyAuth(h.config, r); valid {
-			if !isAdmin {
-				// User is authenticated but not an admin
-				log.Warn().
-					Str("ip", r.RemoteAddr).
-					Str("path", r.URL.Path).
-					Str("method", r.Method).
-					Str("username", username).
-					Msg("Non-admin user attempted to update system settings")
-
-				// Return forbidden error
-				writeErrorResponse(w, http.StatusForbidden, "forbidden", "Admin privileges required", nil)
-				return
-			}
-		}
-	}
-
-	// SECURITY: Session users must match configured admin identity for settings writes.
-	if !ensureSettingsWriteScope(h.config, w, r) {
+	if !h.ensureWriteAccess(w, r) {
 		return
 	}
 

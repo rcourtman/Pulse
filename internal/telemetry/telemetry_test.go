@@ -93,6 +93,32 @@ func TestGetOrCreateInstallID_RotatesLegacyPlaintextID(t *testing.T) {
 	}
 }
 
+func TestResetInstallID_RewritesRecordImmediately(t *testing.T) {
+	dir := t.TempDir()
+	start := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+	original := getOrCreateInstallIDAt(dir, start)
+
+	resetAt := start.Add(12 * time.Hour)
+	rotated, err := resetInstallIDAt(dir, resetAt)
+	if err != nil {
+		t.Fatalf("resetInstallIDAt: %v", err)
+	}
+	if rotated == "" {
+		t.Fatal("expected non-empty rotated install ID")
+	}
+	if rotated == original {
+		t.Fatalf("expected reset to rotate install ID, got same value %q", rotated)
+	}
+
+	record := decodeInstallIDRecordFile(t, filepath.Join(dir, installIDFile))
+	if record.InstallID != rotated {
+		t.Fatalf("persisted install ID = %q, want %q", record.InstallID, rotated)
+	}
+	if !record.IssuedAt.Equal(resetAt) {
+		t.Fatalf("persisted issued_at = %v, want %v", record.IssuedAt, resetAt)
+	}
+}
+
 func TestIsEnabled(t *testing.T) {
 	tests := []struct {
 		value string
@@ -166,6 +192,45 @@ func TestApplySnapshot_NilFunc(t *testing.T) {
 	}
 	if ping.PVENodes != 0 {
 		t.Fatal("snapshot fields should be zero when func is nil")
+	}
+}
+
+func TestBuildPreview_UsesCurrentHeartbeatPayload(t *testing.T) {
+	dir := t.TempDir()
+
+	preview, err := BuildPreview(Config{
+		Version:  "6.0.0",
+		DataDir:  dir,
+		IsDocker: true,
+		GetSnapshot: func() Snapshot {
+			return Snapshot{
+				PVENodes:     3,
+				VMs:          10,
+				ActiveAlerts: 2,
+				AIEnabled:    true,
+			}
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildPreview: %v", err)
+	}
+
+	if preview.Event != "heartbeat" {
+		t.Fatalf("preview event = %q, want heartbeat", preview.Event)
+	}
+	if preview.Platform != "docker" {
+		t.Fatalf("preview platform = %q, want docker", preview.Platform)
+	}
+	if preview.PVENodes != 3 || preview.VMs != 10 || preview.ActiveAlerts != 2 {
+		t.Fatalf("preview snapshot = %#v", preview)
+	}
+	if preview.InstallID == "" {
+		t.Fatal("expected preview install ID")
+	}
+
+	record := decodeInstallIDRecordFile(t, filepath.Join(dir, installIDFile))
+	if record.InstallID != preview.InstallID {
+		t.Fatalf("persisted install ID = %q, want %q", record.InstallID, preview.InstallID)
 	}
 }
 

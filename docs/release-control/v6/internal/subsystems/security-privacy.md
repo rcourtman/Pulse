@@ -136,6 +136,10 @@ pseudonymous identifier, not a lifetime install handle. The runtime may keep a
 local rotating UUID so startup and heartbeat pings can still represent an
 active installation window, but it may not preserve one stable install
 identifier indefinitely or echo that identifier back into routine logs.
+That same telemetry trust boundary must remain operator-inspectable in-product:
+the shared system settings surface may preview only the exact runtime payload
+Pulse would send, and it must allow an operator to rotate the local telemetry
+install ID immediately without waiting for the scheduled 30-day window.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the

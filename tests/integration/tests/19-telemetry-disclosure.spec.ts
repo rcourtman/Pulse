@@ -50,6 +50,15 @@ async function expectPopupDoc(
   await popup.close();
 }
 
+async function readTelemetryPreview(page: Page) {
+  const preview = page.locator('pre[aria-label="Telemetry payload preview"]');
+  await expect(preview).toBeVisible();
+  return JSON.parse(await preview.textContent() ?? '{}') as {
+    install_id: string;
+    event: string;
+  };
+}
+
 test.describe('Telemetry disclosure', () => {
   test.setTimeout(180_000);
 
@@ -67,6 +76,31 @@ test.describe('Telemetry disclosure', () => {
       '/docs/PRIVACY.md',
       'Pulse includes anonymous telemetry',
     );
+  });
+
+  test('general settings lets operators preview and rotate the telemetry payload', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only telemetry disclosure coverage');
+
+    await page.goto('/settings/system-general', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(/\/settings/, { timeout: 15_000 });
+
+    await page.getByRole('button', { name: 'Preview payload' }).click();
+
+    const initialPreview = await readTelemetryPreview(page);
+    expect(initialPreview.event).toBe('heartbeat');
+    expect(initialPreview.install_id).toBeTruthy();
+
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Reset ID' }).click();
+
+    await expect
+      .poll(async () => {
+        const refreshedPreview = await readTelemetryPreview(page);
+        return refreshedPreview.install_id;
+      })
+      .not.toBe(initialPreview.install_id);
   });
 
   test('whats-new modal opens shipped privacy and documentation pages', async ({ page }, testInfo) => {

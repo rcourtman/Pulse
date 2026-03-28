@@ -497,9 +497,22 @@ func Run(ctx context.Context, version string) error {
 			telemetry.Start(ctx, telemetryCfg)
 			log.Info().Msg("Telemetry re-enabled via settings (live toggle)")
 		} else {
+			telemetryCfg.Enabled = false
 			telemetry.Stop()
 			log.Info().Msg("Telemetry disabled via settings (live toggle)")
 		}
+	})
+	router.SetTelemetryPreviewFunc(func() (telemetry.Ping, error) {
+		return telemetry.BuildPreview(telemetryCfg)
+	})
+	router.SetTelemetryResetFunc(func() (telemetry.Ping, error) {
+		if _, err := telemetry.ResetInstallID(baseDataDir); err != nil {
+			return telemetry.Ping{}, err
+		}
+		if telemetryCfg.Enabled {
+			telemetry.Start(ctx, telemetryCfg)
+		}
+		return telemetry.BuildPreview(telemetryCfg)
 	})
 
 	// Create HTTP server with unified configuration

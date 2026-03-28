@@ -153,6 +153,12 @@ websocket upgrades trust the cloud proxy only through explicit tenant
 `PULSE_TRUSTED_PROXY_CIDRS` wiring, so storage- and recovery-adjacent live
 status surfaces do not fall into reconnect loops after a hosted workspace
 handoff.
+That same shared `internal/api/` dependency also assumes telemetry
+transparency stays on its governed system-settings trust surface. When shared
+router or config-system files move under storage- or recovery-adjacent work,
+telemetry preview and install-ID reset routes must keep reusing the canonical
+system-settings boundary and the server-owned telemetry runtime instead of
+being treated as generic storage/recovery transport fallout.
 That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 storage- and recovery-adjacent transport work cannot accidentally widen that

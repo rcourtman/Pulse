@@ -1,10 +1,11 @@
 import { Accessor, Setter, createSignal } from 'solid-js';
-import { SettingsAPI } from '@/api/settings';
+import { SettingsAPI, type TelemetryPreviewResponse } from '@/api/settings';
 import { UpdatesAPI } from '@/api/updates';
 import type { UpdateInfo, UpdatePlan, VersionInfo } from '@/api/updates';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import { updateStore } from '@/stores/updates';
+import { copyToClipboard } from '@/utils/clipboard';
 import {
   updateDisableLocalUpgradeMetricsSetting,
   updateDockerUpdateActionsSetting,
@@ -69,6 +70,11 @@ export function useSystemSettingsState({
   const [savingUpgradeMetrics, setSavingUpgradeMetrics] = createSignal(false);
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
   const [savingTelemetry, setSavingTelemetry] = createSignal(false);
+  const [telemetryPreview, setTelemetryPreview] = createSignal<TelemetryPreviewResponse | null>(
+    null,
+  );
+  const [loadingTelemetryPreview, setLoadingTelemetryPreview] = createSignal(false);
+  const [resettingTelemetryInstallID, setResettingTelemetryInstallID] = createSignal(false);
   const [versionInfo, setVersionInfo] = createSignal<VersionInfo | null>(null);
   const [updateInfo, setUpdateInfo] = createSignal<UpdateInfo | null>(null);
   const [checkingForUpdates, setCheckingForUpdates] = createSignal(false);
@@ -113,6 +119,9 @@ export function useSystemSettingsState({
 
   const backupIntervalSummary = () =>
     getBackupIntervalSummary(backupPollingEnabled(), backupPollingInterval());
+  const telemetryPreviewPayload = () =>
+    telemetryPreview() ? JSON.stringify(telemetryPreview()!.payload, null, 2) : '';
+  const telemetryPreviewEnabled = () => telemetryPreview()?.enabled ?? telemetryEnabled();
 
   const initializeSystemSettingsState = async () => {
     try {
@@ -397,6 +406,63 @@ export function useSystemSettingsState({
     }
   };
 
+  const handleLoadTelemetryPreview = async (): Promise<void> => {
+    if (loadingTelemetryPreview()) {
+      return;
+    }
+
+    setLoadingTelemetryPreview(true);
+    try {
+      const preview = await SettingsAPI.getTelemetryPreview();
+      setTelemetryPreview(preview);
+    } catch (error) {
+      logger.error('Failed to load telemetry preview', error);
+      notificationStore.error('Failed to load telemetry preview');
+    } finally {
+      setLoadingTelemetryPreview(false);
+    }
+  };
+
+  const handleCopyTelemetryPreview = async (): Promise<void> => {
+    const payload = telemetryPreviewPayload();
+    if (!payload) {
+      return;
+    }
+
+    const copied = await copyToClipboard(payload);
+    if (copied) {
+      notificationStore.success('Telemetry payload copied to clipboard', 2000);
+      return;
+    }
+    notificationStore.error('Failed to copy telemetry payload');
+  };
+
+  const handleResetTelemetryInstallID = async (): Promise<void> => {
+    if (resettingTelemetryInstallID()) {
+      return;
+    }
+
+    if (
+      !confirm(
+        'Reset the rotating telemetry install ID now? This immediately replaces the local identifier used for anonymous telemetry.',
+      )
+    ) {
+      return;
+    }
+
+    setResettingTelemetryInstallID(true);
+    try {
+      const preview = await SettingsAPI.resetTelemetryInstallID();
+      setTelemetryPreview(preview);
+      notificationStore.success('Telemetry install ID reset', 3000);
+    } catch (error) {
+      logger.error('Failed to reset telemetry install ID', error);
+      notificationStore.error('Failed to reset telemetry install ID');
+    } finally {
+      setResettingTelemetryInstallID(false);
+    }
+  };
+
   const handleTemperatureMonitoringChange = async (enabled: boolean): Promise<void> => {
     if (temperatureMonitoringLocked() || savingTemperatureSetting()) {
       return;
@@ -528,6 +594,14 @@ export function useSystemSettingsState({
     telemetryEnabledLocked,
     savingTelemetry,
     handleTelemetryEnabledChange,
+    telemetryPreview,
+    telemetryPreviewEnabled,
+    telemetryPreviewPayload,
+    loadingTelemetryPreview,
+    resettingTelemetryInstallID,
+    handleLoadTelemetryPreview,
+    handleCopyTelemetryPreview,
+    handleResetTelemetryInstallID,
     versionInfo,
     updateInfo,
     checkingForUpdates,

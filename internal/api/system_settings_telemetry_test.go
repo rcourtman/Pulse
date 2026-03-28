@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/telemetry"
 	internalauth "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 )
 
@@ -193,6 +194,92 @@ func TestTelemetryUpdate_GetReturnsEffectiveValue(t *testing.T) {
 	}
 	if !*response.TelemetryEnabled {
 		t.Error("GET should return effective runtime value (true), not stale disk value (false)")
+	}
+}
+
+func TestTelemetryPreview_ReturnsCurrentPayload(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:         tempDir,
+		ConfigPath:       tempDir,
+		TelemetryEnabled: false,
+		EnvOverrides:     make(map[string]bool),
+	}
+	handler, _, _ := setupTelemetryTest(t, cfg)
+	handler.SetTelemetryPreviewFunc(func() (telemetry.Ping, error) {
+		return telemetry.Ping{
+			InstallID: "preview-install-id",
+			Version:   "6.0.0",
+			Event:     "heartbeat",
+			Platform:  "docker",
+			OS:        "linux",
+			Arch:      "amd64",
+		}, nil
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/system/settings/telemetry-preview", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetTelemetryPreview(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response TelemetryPreviewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if response.Enabled {
+		t.Fatal("expected telemetry preview to reflect disabled runtime state")
+	}
+	if response.Payload.InstallID != "preview-install-id" {
+		t.Fatalf("install_id = %q, want preview-install-id", response.Payload.InstallID)
+	}
+	if response.Payload.Event != "heartbeat" {
+		t.Fatalf("event = %q, want heartbeat", response.Payload.Event)
+	}
+}
+
+func TestTelemetryReset_ReturnsUpdatedPayload(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		DataPath:         tempDir,
+		ConfigPath:       tempDir,
+		TelemetryEnabled: true,
+		EnvOverrides:     make(map[string]bool),
+	}
+	handler, _, token := setupTelemetryTest(t, cfg)
+	handler.SetTelemetryResetFunc(func() (telemetry.Ping, error) {
+		return telemetry.Ping{
+			InstallID: "rotated-install-id",
+			Version:   "6.0.0",
+			Event:     "heartbeat",
+			Platform:  "binary",
+			OS:        "linux",
+			Arch:      "amd64",
+		}, nil
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/system/settings/telemetry-reset-id", nil)
+	req.Header.Set("X-API-Token", token)
+	rec := httptest.NewRecorder()
+
+	handler.HandleResetTelemetryID(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var response TelemetryPreviewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !response.Enabled {
+		t.Fatal("expected telemetry reset response to reflect enabled runtime state")
+	}
+	if response.Payload.InstallID != "rotated-install-id" {
+		t.Fatalf("install_id = %q, want rotated-install-id", response.Payload.InstallID)
 	}
 }
 

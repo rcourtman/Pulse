@@ -1251,6 +1251,9 @@ describe('Settings architecture guardrails', () => {
     expect(generalSettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
     expect(generalSettingsPanelSource).toContain('@/utils/docsLinks');
     expect(generalSettingsPanelSource).toContain('PRIVACY_DOC_URL');
+    expect(generalSettingsPanelSource).toContain('Preview payload');
+    expect(generalSettingsPanelSource).toContain('Reset ID');
+    expect(generalSettingsPanelSource).toContain('Telemetry payload preview');
     expect(apiAccessPanelSource).toContain('@/utils/docsLinks');
     expect(apiAccessPanelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(aiRuntimeControlsSectionSource).toContain('@/utils/docsLinks');
@@ -1264,6 +1267,8 @@ describe('Settings architecture guardrails', () => {
     expect(recoverySettingsPanelSource).toContain('@/utils/systemSettingsPresentation');
     expect(networkDiscoverySectionSource).toContain('@/utils/systemSettingsPresentation');
     expect(systemSettingsStateSource).toContain('@/utils/systemSettingsPresentation');
+    expect(systemSettingsStateSource).toContain('handleLoadTelemetryPreview');
+    expect(systemSettingsStateSource).toContain('handleResetTelemetryInstallID');
     expect(systemSettingsPresentationSource).toContain('export const PVE_POLLING_PRESETS');
     expect(systemSettingsPresentationSource).toContain(
       'export function getSystemSettingsSaveErrorMessage',
