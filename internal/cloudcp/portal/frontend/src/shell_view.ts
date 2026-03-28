@@ -811,6 +811,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
                 '<div class="team-list-message">Loading…</div>' +
               '</div>' +
             '</div>' +
+            reviewDesk +
           '</div>' +
           '<div class="team-side-column">' +
             '<div class="team-operations-panel">' +
@@ -845,7 +846,6 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
               '</div>' +
             '</div>' +
           '</div>' +
-          reviewDesk +
         '</div>' +
       '</section>' +
     '</section>'

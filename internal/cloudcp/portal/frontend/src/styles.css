@@ -1987,7 +1987,6 @@ header .logout-btn:hover,
 }
 
 .team-review-shell {
-  grid-column: 1 / -1;
   padding: 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -1996,7 +1995,7 @@ header .logout-btn:hover,
 
 .team-review-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
