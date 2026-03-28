@@ -443,6 +443,47 @@ func TestUniversalRateLimitMiddleware_InitializesIfNeeded(t *testing.T) {
 	}
 }
 
+func TestUniversalRateLimitMiddlewareWithConfig_UsesIndependentState(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	firstConfig := newEndpointRateLimitConfig()
+	secondConfig := newEndpointRateLimitConfig()
+
+	first := UniversalRateLimitMiddlewareWithConfig(firstConfig, handler)
+	second := UniversalRateLimitMiddlewareWithConfig(secondConfig, handler)
+
+	firstLimiter := getRateLimiterForEndpoint(firstConfig, "/api/login", http.MethodPost)
+	testIP := "203.0.113.199"
+
+	makeRequest := func() *http.Request {
+		req := httptest.NewRequest(http.MethodPost, "/api/login", nil)
+		req.RemoteAddr = testIP + ":12345"
+		return req
+	}
+
+	for i := 0; i < firstLimiter.limit; i++ {
+		rr := httptest.NewRecorder()
+		first.ServeHTTP(rr, makeRequest())
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected first middleware OK while under limit, got %d on request %d", rr.Code, i+1)
+		}
+	}
+
+	rr := httptest.NewRecorder()
+	first.ServeHTTP(rr, makeRequest())
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("expected first middleware to hit rate limit, got %d", rr.Code)
+	}
+
+	rr = httptest.NewRecorder()
+	second.ServeHTTP(rr, makeRequest())
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected second middleware to start with fresh state, got %d", rr.Code)
+	}
+}
+
 func TestUniversalRateLimitMiddleware_StaticAssetBypass(t *testing.T) {
 	InitializeRateLimiters()
 

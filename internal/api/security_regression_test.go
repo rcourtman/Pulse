@@ -2697,23 +2697,7 @@ func TestAITestConnectionRouteWithValidScope(t *testing.T) {
 	}))
 	defer ollama.Close()
 
-	rawToken := "ai-test-conn-valid-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = ollama.URL
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	router.aiSettingsHandler.defaultAIService = newLegacyAIServiceForTest(persistence)
+	router, rawToken := setupTestConnectionRouter(t, ollama.URL)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -2749,23 +2733,7 @@ func TestAITestProviderRouteWithValidScope(t *testing.T) {
 	}))
 	defer ollama.Close()
 
-	rawToken := "ai-test-prov-valid-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = ollama.URL
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	router.aiSettingsHandler.defaultAIService = newLegacyAIServiceForTest(persistence)
+	router, rawToken := setupTestProviderRouter(t, ollama.URL)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/ollama", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -2791,11 +2759,7 @@ func TestAITestProviderRouteWithValidScope(t *testing.T) {
 func TestAITestConnectionRouteRejectsWrongScope(t *testing.T) {
 	t.Parallel()
 
-	// Token with monitoring:read scope — NOT settings:write
-	rawToken := "ai-test-wrong-scope-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router, rawToken := setupAIRouteRouter(t, newAIRouteTestOptions([]string{config.ScopeMonitoringRead}, "http://192.0.2.1:11434"))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", strings.NewReader(`{}`))
 	req.Header.Set("X-API-Token", rawToken)
@@ -2813,11 +2777,7 @@ func TestAITestConnectionRouteRejectsWrongScope(t *testing.T) {
 func TestAITestProviderRouteRejectsWrongScope(t *testing.T) {
 	t.Parallel()
 
-	// Token with monitoring:read scope — NOT settings:write
-	rawToken := "ai-test-prov-wrong-scope-token-123.12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeMonitoringRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	router, rawToken := setupTestProviderRouterForScopes(t, "http://192.0.2.1:11434", []string{config.ScopeMonitoringRead})
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test/openai", strings.NewReader(`{}`))
 	req.Header.Set("X-API-Token", rawToken)

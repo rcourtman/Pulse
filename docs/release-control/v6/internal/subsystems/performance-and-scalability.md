@@ -207,9 +207,13 @@ or swap the protected hot path into a false disconnected shell.
 The same performance ownership now applies to the downsampled
 `pkg/metrics/store.go` batched query path. `QueryAllBatch` may drop the global
 SQLite `ORDER BY resource_id, metric_type, bucket_ts` sort from the grouped
-query only if the runtime preserves ascending timestamps within every returned
-resource/metric series and the hot-path proof keeps both latency and ordering
-guarded together in the explicit metrics SLO surface.
+query only if the runtime preserves ascending timestamps plus correct
+avg/min/max bucket aggregates within every returned resource/metric series, and
+the hot-path proof keeps latency, ordering, and aggregate correctness guarded
+together in the explicit metrics SLO surface. That protected surface should
+stay on one ordered index scan plus Go-side bucket aggregation rather than
+forcing SQLite to `GROUP BY` computed buckets through a temp B-tree on the
+fleet-scale dashboard path.
 That runtime is now intentionally split by concern:
 `frontend-modern/src/components/Dashboard/useDashboardState.ts` owns
 top-level dashboard orchestration, workload loading, and composition across

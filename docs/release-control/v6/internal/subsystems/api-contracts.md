@@ -260,6 +260,12 @@ the cloud proxy, the runtime must derive the effective same-origin
 `https://<tenant-host>` boundary from trusted forwarded host/proto headers
 only after the hosted container contract has injected explicit proxy CIDRs, so
 live updates stay connected without weakening cross-site websocket checks.
+Commercial self-service actions in that shell must stay same-origin as well:
+the frontend may only call the portal-owned `/api/portal/commercial/*` routes,
+and `internal/cloudcp/portal/commercial_proxy.go` plus `internal/cloudcp/routes.go`
+own the server-side proxy boundary to the shared license/commercial APIs so
+the browser runtime does not widen control-plane CSP with direct cross-origin
+commercial fetches.
 `/portal` is now one bootstrap-driven shell for both anonymous and
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate

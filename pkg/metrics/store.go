@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -872,8 +871,8 @@ func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string,
 	var sqlQuery string
 
 	if stepSecs > 1 {
-		params = make([]interface{}, 0, len(resourceIDs)+7)
-		params = append(params, stepSecs, stepSecs, stepSecs, resourceType)
+		params = make([]interface{}, 0, len(resourceIDs)+4)
+		params = append(params, resourceType)
 		for _, id := range resourceIDs {
 			params = append(params, id)
 		}
@@ -883,14 +882,14 @@ func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string,
 			SELECT
 				resource_id,
 				metric_type,
-				(timestamp / ?) * ? + (? / 2) as bucket_ts,
-				AVG(value),
-				MIN(COALESCE(min_value, value)),
-				MAX(COALESCE(max_value, value))
+				timestamp,
+				value,
+				COALESCE(min_value, value),
+				COALESCE(max_value, value)
 			FROM metrics
 			WHERE resource_type = ? AND resource_id IN (%s) AND tier = ?
 			AND timestamp >= ? AND timestamp <= ?
-			GROUP BY resource_id, metric_type, bucket_ts
+			ORDER BY resource_id, metric_type, timestamp ASC
 		`, inClause)
 	} else {
 		params = make([]interface{}, 0, len(resourceIDs)+4)
@@ -927,6 +926,98 @@ func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string,
 
 	result := make(map[string]map[string][]MetricPoint, len(resourceIDs))
 	seriesCapacity := estimateQueryAllBatchSeriesCapacity(start, end, stepSecs)
+	if stepSecs > 1 {
+		type bucketAggregate struct {
+			active      bool
+			resourceID  string
+			metricType  string
+			bucketStart int64
+			sum         float64
+			min         float64
+			max         float64
+			count       int
+		}
+
+		appendBucketPoint := func(resourceID, metricType string, point MetricPoint) {
+			if _, exists := result[resourceID]; !exists {
+				result[resourceID] = make(map[string][]MetricPoint, 8)
+			}
+			if _, exists := result[resourceID][metricType]; !exists {
+				result[resourceID][metricType] = make([]MetricPoint, 0, seriesCapacity)
+			}
+			result[resourceID][metricType] = append(result[resourceID][metricType], point)
+		}
+
+		var aggregate bucketAggregate
+		flushAggregate := func() {
+			if !aggregate.active || aggregate.count == 0 {
+				return
+			}
+			appendBucketPoint(aggregate.resourceID, aggregate.metricType, MetricPoint{
+				Timestamp: time.Unix(aggregate.bucketStart+(stepSecs/2), 0),
+				Value:     aggregate.sum / float64(aggregate.count),
+				Min:       aggregate.min,
+				Max:       aggregate.max,
+			})
+			aggregate = bucketAggregate{}
+		}
+
+		for rows.Next() {
+			var resourceID, metricType string
+			var ts int64
+			var value, minVal, maxVal float64
+			if err := rows.Scan(&resourceID, &metricType, &ts, &value, &minVal, &maxVal); err != nil {
+				log.Warn().Err(err).Msg("Failed to scan batch metric row")
+				continue
+			}
+
+			bucketStart := (ts / stepSecs) * stepSecs
+			if !aggregate.active {
+				aggregate = bucketAggregate{
+					active:      true,
+					resourceID:  resourceID,
+					metricType:  metricType,
+					bucketStart: bucketStart,
+					sum:         value,
+					min:         minVal,
+					max:         maxVal,
+					count:       1,
+				}
+				continue
+			}
+
+			if aggregate.resourceID != resourceID || aggregate.metricType != metricType || aggregate.bucketStart != bucketStart {
+				flushAggregate()
+				aggregate = bucketAggregate{
+					active:      true,
+					resourceID:  resourceID,
+					metricType:  metricType,
+					bucketStart: bucketStart,
+					sum:         value,
+					min:         minVal,
+					max:         maxVal,
+					count:       1,
+				}
+				continue
+			}
+
+			aggregate.sum += value
+			if minVal < aggregate.min {
+				aggregate.min = minVal
+			}
+			if maxVal > aggregate.max {
+				aggregate.max = maxVal
+			}
+			aggregate.count++
+		}
+
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+		flushAggregate()
+		return result, nil
+	}
+
 	for rows.Next() {
 		var resourceID, metricType string
 		var ts int64
@@ -949,9 +1040,6 @@ func (s *Store) queryAllBatchWithTier(resourceType string, resourceIDs []string,
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	if stepSecs > 1 {
-		sortMetricSeriesPoints(result)
-	}
 
 	return result, nil
 }
@@ -970,20 +1058,6 @@ func estimateQueryAllBatchSeriesCapacity(start, end time.Time, stepSecs int64) i
 		return 1
 	}
 	return buckets
-}
-
-func sortMetricSeriesPoints(result map[string]map[string][]MetricPoint) {
-	for _, metricMap := range result {
-		for metricType, points := range metricMap {
-			if len(points) < 2 {
-				continue
-			}
-			sort.Slice(points, func(i, j int) bool {
-				return points[i].Timestamp.Before(points[j].Timestamp)
-			})
-			metricMap[metricType] = points
-		}
-	}
 }
 
 // selectTier chooses the appropriate data tier based on time range

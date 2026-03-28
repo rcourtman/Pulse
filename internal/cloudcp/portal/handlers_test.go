@@ -1180,6 +1180,7 @@ func TestCommercialProxy_Success(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, PortalCommercialProxyPath+"v1/manage/request", strings.NewReader(`{"email":"owner@example.com"}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.SetPathValue("commercial_path", "v1/manage/request")
 
 	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL})(rec, req)
 
@@ -1194,6 +1195,7 @@ func TestCommercialProxy_Success(t *testing.T) {
 func TestCommercialProxy_RejectsUnsupportedRoute(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, PortalCommercialProxyPath+"v1/not-allowed", strings.NewReader(`{}`))
+	req.SetPathValue("commercial_path", "v1/not-allowed")
 
 	HandleCommercialProxy(CommercialProxyConfig{BaseURL: "https://license.pulserelay.pro"})(rec, req)
 
@@ -1211,6 +1213,7 @@ func TestCommercialProxy_UpstreamFailureReturnsBadGateway(t *testing.T) {
 
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, PortalCommercialProxyPath+"v1/manage/request", strings.NewReader(`{"email":"owner@example.com"}`))
+	req.SetPathValue("commercial_path", "v1/manage/request")
 
 	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL})(rec, req)
 

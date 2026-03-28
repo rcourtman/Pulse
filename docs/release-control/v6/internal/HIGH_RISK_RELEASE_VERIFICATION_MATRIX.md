@@ -360,7 +360,7 @@ Companion drill:
   `go test ./internal/relay -run 'TestClient_E2E_MultiMobileClientRelay|TestClient_AbruptDisconnectCancelsInFlightHandlers|TestClient_AbruptDisconnectMultipleChannelCleanup|TestClient_DrainDuringInFlightData|TestClient_DrainWithMultipleInFlightChannels|TestClientRegister_SessionResumeRejectionClearsCachedSession|TestRunLoop_SessionResumeRejectionFallsBackToFreshRegister' -count=1`
   `go test ./internal/api -run 'TestRelayEndpointsRequireLicenseFeature|TestRelayOnboardingEndpointsRequireLicenseFeature|TestRelayLicenseGatingResponseFormat|TestOnboardingQRPayloadStructure|TestOnboardingValidateSuccessAndFailure|TestOnboardingDeepLinkFormat' -count=1`
   `cd frontend-modern && npx vitest run src/components/Dashboard/__tests__/RelayOnboardingCard.test.tsx src/components/Settings/__tests__/RelaySettingsPanel.runtime.test.tsx src/components/Settings/__tests__/settingsReadOnlyPanels.test.tsx`
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npx jest --runInBand --detectOpenHandles --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
 - Manual scenario:
   1. Register a fresh relay client.
   2. Force reconnect after a normal disconnect.
@@ -442,10 +442,10 @@ Companion drill:
   `pulse-mobile/src/hooks/useRelay.ts`
   `pulse-mobile/src/api/client.ts`
 - Automated proof:
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npx jest --runInBand --detectOpenHandles --runTestsByPath src/__tests__/mobileRelayAuthApprovals.rehearsal.test.ts src/utils/__tests__/secureStorage.test.ts src/hooks/__tests__/useRelayLifecycle.test.ts src/hooks/__tests__/approvalActionPolicy.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts src/stores/__tests__/approvalStore.test.ts`
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npx jest --runInBand --detectOpenHandles --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npx jest --runInBand --detectOpenHandles --runTestsByPath src/api/__tests__/client.test.ts`
-  `cd /Volumes/Development/pulse/repos/pulse-mobile && npx jest --runInBand --detectOpenHandles --runTestsByPath src/hooks/__tests__/useRelay.test.ts src/hooks/__tests__/relayPushRefresh.test.ts src/notifications/__tests__/notificationRouting.test.ts src/stores/__tests__/mobileAccessState.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/__tests__/mobileRelayAuthApprovals.rehearsal.test.ts src/utils/__tests__/secureStorage.test.ts src/hooks/__tests__/useRelayLifecycle.test.ts src/hooks/__tests__/approvalActionPolicy.test.ts src/stores/__tests__/instanceStore.test.ts src/stores/__tests__/authStore.test.ts src/stores/__tests__/approvalStore.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/relay/__tests__/client.test.ts src/relay/__tests__/client-hardening.test.ts src/relay/__tests__/protocol-contract.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/api/__tests__/client.test.ts`
+  `cd /Volumes/Development/pulse/repos/pulse-mobile && npm test -- --runTestsByPath src/hooks/__tests__/useRelay.test.ts src/hooks/__tests__/relayPushRefresh.test.ts src/notifications/__tests__/notificationRouting.test.ts src/stores/__tests__/mobileAccessState.test.ts`
   `cd /Volumes/Development/pulse/repos/pulse-enterprise && go test ./internal/aiautofix -run 'TestHandleListApprovals|TestHandleApproveAndExecuteInvestigationFix|TestHandleApprove' -count=1`
 - Manual scenario:
   1. Pair the mobile app to a real instance through the relay onboarding path.

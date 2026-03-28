@@ -22,10 +22,23 @@ var (
 
 // handoffPayload is the JSON structure inside a handoff token.
 type handoffPayload struct {
-	Email    string `json:"e"`
-	TenantID string `json:"t"`
-	Expiry   int64  `json:"x"`
-	Nonce    string `json:"n"`
+	Email     string `json:"e"`
+	TenantID  string `json:"t"`
+	AccountID string `json:"a,omitempty"`
+	UserID    string `json:"u,omitempty"`
+	Role      string `json:"r,omitempty"`
+	Expiry    int64  `json:"x"`
+	Nonce     string `json:"n"`
+}
+
+// Claims describes the control-plane identity metadata encoded in a handoff token.
+type Claims struct {
+	Email     string
+	TenantID  string
+	AccountID string
+	UserID    string
+	Role      string
+	ExpiresAt time.Time
 }
 
 // GenerateHandoffKey returns 32 cryptographically random bytes suitable for HMAC-SHA256 signing.
@@ -40,10 +53,20 @@ func GenerateHandoffKey() ([]byte, error) {
 // Sign creates an HMAC-SHA256-signed handoff token encoding the given email, tenant ID, and TTL.
 // The returned string is base64url-encoded: payload + "." + signature.
 func Sign(key []byte, email, tenantID string, ttl time.Duration) (string, error) {
+	return SignWithClaims(key, Claims{
+		Email:    email,
+		TenantID: tenantID,
+	}, ttl)
+}
+
+// SignWithClaims creates an HMAC-SHA256-signed handoff token encoding the given
+// handoff claims and TTL. Role/account/user metadata is optional and preserved
+// for hosted runtime membership repair.
+func SignWithClaims(key []byte, claims Claims, ttl time.Duration) (string, error) {
 	if len(key) == 0 {
 		return "", fmt.Errorf("handoff key is empty")
 	}
-	if email == "" || tenantID == "" {
+	if claims.Email == "" || claims.TenantID == "" {
 		return "", fmt.Errorf("email and tenantID are required")
 	}
 
@@ -53,10 +76,13 @@ func Sign(key []byte, email, tenantID string, ttl time.Duration) (string, error)
 	}
 
 	payload := handoffPayload{
-		Email:    email,
-		TenantID: tenantID,
-		Expiry:   time.Now().UTC().Add(ttl).Unix(),
-		Nonce:    base64.RawURLEncoding.EncodeToString(nonce),
+		Email:     claims.Email,
+		TenantID:  claims.TenantID,
+		AccountID: claims.AccountID,
+		UserID:    claims.UserID,
+		Role:      claims.Role,
+		Expiry:    time.Now().UTC().Add(ttl).Unix(),
+		Nonce:     base64.RawURLEncoding.EncodeToString(nonce),
 	}
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
@@ -78,8 +104,18 @@ func Verify(key []byte, tokenStr string) (email, tenantID string, err error) {
 
 // VerifyWithExpiry decodes and validates a handoff token and also returns its expiry.
 func VerifyWithExpiry(key []byte, tokenStr string) (email, tenantID string, expiresAt time.Time, err error) {
+	claims, err := VerifyClaimsWithExpiry(key, tokenStr)
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	return claims.Email, claims.TenantID, claims.ExpiresAt, nil
+}
+
+// VerifyClaimsWithExpiry decodes and validates a handoff token and returns the
+// full preserved control-plane claims plus expiry.
+func VerifyClaimsWithExpiry(key []byte, tokenStr string) (Claims, error) {
 	if len(key) == 0 || tokenStr == "" {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 
 	// Split into payload.signature
@@ -91,7 +127,7 @@ func VerifyWithExpiry(key []byte, tokenStr string) (email, tenantID string, expi
 		}
 	}
 	if dotIdx < 1 || dotIdx >= len(tokenStr)-1 {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 
 	payloadB64 := tokenStr[:dotIdx]
@@ -99,35 +135,42 @@ func VerifyWithExpiry(key []byte, tokenStr string) (email, tenantID string, expi
 
 	payloadBytes, err := base64.RawURLEncoding.DecodeString(payloadB64)
 	if err != nil {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 	sigBytes, err := base64.RawURLEncoding.DecodeString(sigB64)
 	if err != nil {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 
 	// Verify HMAC
 	expected := computeHMAC(key, payloadBytes)
 	if !hmac.Equal(sigBytes, expected) {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 
 	// Decode payload
 	var p handoffPayload
 	if err := json.Unmarshal(payloadBytes, &p); err != nil {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 
 	// Check expiry
 	if time.Now().UTC().Unix() > p.Expiry {
-		return "", "", time.Time{}, ErrHandoffExpired
+		return Claims{}, ErrHandoffExpired
 	}
 
 	if p.Email == "" || p.TenantID == "" {
-		return "", "", time.Time{}, ErrHandoffInvalid
+		return Claims{}, ErrHandoffInvalid
 	}
 
-	return p.Email, p.TenantID, time.Unix(p.Expiry, 0).UTC(), nil
+	return Claims{
+		Email:     p.Email,
+		TenantID:  p.TenantID,
+		AccountID: p.AccountID,
+		UserID:    p.UserID,
+		Role:      p.Role,
+		ExpiresAt: time.Unix(p.Expiry, 0).UTC(),
+	}, nil
 }
 
 func computeHMAC(key, data []byte) []byte {

@@ -151,8 +151,25 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 			return
 		}
 
+		userID, identityErr := ensureAccountUserAndMembership(reg, tenant, token.Email)
+		if identityErr != nil {
+			log.Warn().
+				Err(identityErr).
+				Str("tenant_id", tenant.ID).
+				Str("email", token.Email).
+				Msg("Failed to establish control-plane session identity")
+		}
+
+		claims := cloudauth.Claims{
+			Email:     token.Email,
+			TenantID:  tenant.ID,
+			AccountID: strings.TrimSpace(tenant.AccountID),
+			UserID:    strings.TrimSpace(userID),
+			Role:      string(registry.MemberRoleOwner),
+		}
+
 		// Sign a short-lived handoff token.
-		handoffToken, err := cloudauth.Sign(handoffKey, token.Email, tenant.ID, handoffTTL)
+		handoffToken, err := cloudauth.SignWithClaims(handoffKey, claims, handoffTTL)
 		if err != nil {
 			auditEvent(r, "cp_magic_link_verify", "failure").
 				Err(err).
@@ -167,35 +184,31 @@ func HandleMagicLinkVerify(svc *Service, reg *registry.TenantRegistry, tenantsDi
 		redirectURL := fmt.Sprintf("https://%s.%s/auth/cloud-handoff?token=%s",
 			tenant.ID, baseDomain, handoffToken)
 
-		if userID, err := ensureAccountUserAndMembership(reg, tenant, token.Email); err != nil {
-			log.Warn().
-				Err(err).
-				Str("tenant_id", tenant.ID).
-				Str("email", token.Email).
-				Msg("Failed to establish control-plane session identity")
-		} else if sessionVersion, err := reg.GetUserSessionVersion(userID); err != nil {
-			log.Warn().
-				Err(err).
-				Str("tenant_id", tenant.ID).
-				Str("email", token.Email).
-				Str("user_id", userID).
-				Msg("Failed to read user session version")
-		} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
-			log.Warn().
-				Err(err).
-				Str("tenant_id", tenant.ID).
-				Str("email", token.Email).
-				Msg("Failed to issue control-plane session")
-		} else {
-			http.SetCookie(w, &http.Cookie{
-				Name:     SessionCookieName,
-				Value:    sessionToken,
-				Path:     "/",
-				HttpOnly: true,
-				Secure:   true,
-				SameSite: http.SameSiteLaxMode,
-				MaxAge:   int(SessionTTL.Seconds()),
-			})
+		if identityErr == nil {
+			if sessionVersion, err := reg.GetUserSessionVersion(userID); err != nil {
+				log.Warn().
+					Err(err).
+					Str("tenant_id", tenant.ID).
+					Str("email", token.Email).
+					Str("user_id", userID).
+					Msg("Failed to read user session version")
+			} else if sessionToken, err := svc.GenerateSessionTokenWithVersion(userID, token.Email, sessionVersion, SessionTTL); err != nil {
+				log.Warn().
+					Err(err).
+					Str("tenant_id", tenant.ID).
+					Str("email", token.Email).
+					Msg("Failed to issue control-plane session")
+			} else {
+				http.SetCookie(w, &http.Cookie{
+					Name:     SessionCookieName,
+					Value:    sessionToken,
+					Path:     "/",
+					HttpOnly: true,
+					Secure:   true,
+					SameSite: http.SameSiteLaxMode,
+					MaxAge:   int(SessionTTL.Seconds()),
+				})
+			}
 		}
 
 		auditEvent(r, "cp_magic_link_verify", "success").

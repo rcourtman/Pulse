@@ -99,16 +99,20 @@ var (
 
 // InitCSRFStore initializes the persistent CSRF token store
 func InitCSRFStore(dataPath string) {
+	_ = ensureCSRFStore(dataPath)
+}
+
+func ensureCSRFStore(dataPath string) *CSRFTokenStore {
 	newDataPath := strings.TrimSpace(dataPath)
 	if newDataPath == "" {
-		return
+		return nil
 	}
 
 	csrfStoreMu.Lock()
 	defer csrfStoreMu.Unlock()
 
 	if csrfStore != nil && csrfStoreDataPath == newDataPath {
-		return
+		return csrfStore
 	}
 
 	oldStore := csrfStore
@@ -130,6 +134,7 @@ func InitCSRFStore(dataPath string) {
 	if oldStore != nil {
 		oldStore.Shutdown()
 	}
+	return csrfStore
 }
 
 // GetCSRFStore returns the global CSRF token store
@@ -151,9 +156,8 @@ func (c *CSRFTokenStore) Shutdown() {
 		if c.saveTicker != nil {
 			c.saveTicker.Stop()
 		}
-		select {
-		case c.stopChan <- true:
-		default:
+		if c.stopChan != nil {
+			close(c.stopChan)
 		}
 	})
 	if c.workerDone != nil {

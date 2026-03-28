@@ -32,6 +32,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
@@ -1547,6 +1548,107 @@ func TestContract_HostedSessionAuthPrecedesAnonymousFallback(t *testing.T) {
 	}
 }
 
+func TestContract_UniversalRateLimitStateIsScopedPerRouterConfig(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	first := UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
+	second := UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
+
+	makeRequest := func(target http.Handler) *httptest.ResponseRecorder {
+		t.Helper()
+		req := httptest.NewRequest(http.MethodPost, "/api/auth/login", nil)
+		req.RemoteAddr = "198.51.100.25:12345"
+		rec := httptest.NewRecorder()
+		target.ServeHTTP(rec, req)
+		return rec
+	}
+
+	for i := 0; i < 10; i++ {
+		if rec := makeRequest(first); rec.Code != http.StatusOK {
+			t.Fatalf("first router request %d status = %d, want %d", i+1, rec.Code, http.StatusOK)
+		}
+	}
+
+	if rec := makeRequest(first); rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("first router overflow status = %d, want %d", rec.Code, http.StatusTooManyRequests)
+	}
+
+	if rec := makeRequest(second); rec.Code != http.StatusOK {
+		t.Fatalf("second router first request status = %d, want %d", rec.Code, http.StatusOK)
+	}
+}
+
+func TestContract_RouterShutdownClosesOwnedPersistentAuthStoresAfterGlobalRebind(t *testing.T) {
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	routerOne := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
+	routerTwo := NewRouter(&config.Config{DataPath: t.TempDir()}, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(routerTwo.shutdownBackgroundWorkers)
+
+	if routerOne.sessionStore == nil || routerOne.csrfStore == nil {
+		t.Fatal("routerOne should capture initialized persistent auth stores")
+	}
+	if routerOne.recoveryTokenStore == nil {
+		t.Fatal("routerOne should capture initialized recovery token store")
+	}
+	if routerTwo.sessionStore == nil || routerTwo.csrfStore == nil {
+		t.Fatal("routerTwo should capture initialized persistent auth stores")
+	}
+	if routerTwo.recoveryTokenStore == nil {
+		t.Fatal("routerTwo should capture initialized recovery token store")
+	}
+	if routerOne.sessionStore == routerTwo.sessionStore {
+		t.Fatal("router instances should not share the same session store after rebind")
+	}
+	if routerOne.csrfStore == routerTwo.csrfStore {
+		t.Fatal("router instances should not share the same csrf store after rebind")
+	}
+	if routerOne.recoveryTokenStore == routerTwo.recoveryTokenStore {
+		t.Fatal("router instances should not share the same recovery token store after rebind")
+	}
+
+	routerOne.shutdownBackgroundWorkers()
+
+	select {
+	case <-routerOne.sessionStore.workerDone:
+	default:
+		t.Fatal("routerOne session store worker should be closed after router shutdown")
+	}
+
+	select {
+	case <-routerOne.csrfStore.workerDone:
+	default:
+		t.Fatal("routerOne csrf store worker should be closed after router shutdown")
+	}
+
+	select {
+	case <-routerTwo.sessionStore.workerDone:
+		t.Fatal("routerTwo session store should remain active when routerOne shuts down")
+	default:
+	}
+
+	select {
+	case <-routerTwo.csrfStore.workerDone:
+		t.Fatal("routerTwo csrf store should remain active when routerOne shuts down")
+	default:
+	}
+
+	select {
+	case <-routerOne.recoveryTokenStore.stopCleanup:
+	default:
+		t.Fatal("routerOne recovery token store should be closed after router shutdown")
+	}
+
+	select {
+	case <-routerTwo.recoveryTokenStore.stopCleanup:
+		t.Fatal("routerTwo recovery token store should remain active when routerOne shuts down")
+	default:
+	}
+}
+
 func TestContract_HostedOrgManagerSessionCanMintRelayMobileToken(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 	SetMultiTenantEnabled(true)
@@ -2696,6 +2798,140 @@ func TestContract_TenantAIServiceAvoidsSnapshotProviderBridge(t *testing.T) {
 	}
 	if svc.GetPatrolService() == nil {
 		t.Fatal("expected tenant patrol service to initialize from canonical providers")
+	}
+}
+
+func TestContract_HostedCloudHandoffEnsuresTenantOrganizationMembership(t *testing.T) {
+	key := []byte("test-handoff-key")
+	configDir := t.TempDir()
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+	resetCSRFStoreForTests()
+	t.Cleanup(resetCSRFStoreForTests)
+	InitSessionStore(configDir)
+	InitCSRFStore(configDir)
+
+	secretsDir := filepath.Join(configDir, "secrets")
+	if err := os.MkdirAll(secretsDir, 0o755); err != nil {
+		t.Fatalf("mkdir secrets dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(secretsDir, "handoff.key"), key, 0o600); err != nil {
+		t.Fatalf("write handoff key: %v", err)
+	}
+
+	tenantID := "tenant-contract-membership"
+	mtp := config.NewMultiTenantPersistence(configDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          tenantID,
+		DisplayName: "Contract Membership",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	token := signHandoffToken(t, key, cloudHandoffClaims{
+		AccountID: "acct-contract-membership",
+		Email:     "courtmanr@gmail.com",
+		Role:      "owner",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        "jti-contract-membership",
+			Subject:   "user-contract-membership",
+			Issuer:    cloudHandoffIssuer,
+			Audience:  jwt.ClaimStrings{tenantID},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour)),
+		},
+	})
+
+	form := url.Values{}
+	form.Set("token", token)
+	t.Setenv("PULSE_HOSTED_MODE", "true")
+	t.Setenv("PULSE_TENANT_ID", "")
+	t.Setenv("PULSE_PUBLIC_URL", "")
+	req := httptest.NewRequest(http.MethodPost, "/api/cloud/handoff/exchange?format=json", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Host = tenantID + ".cloud.pulserelay.pro"
+	req.RemoteAddr = "198.51.100.20:1234"
+	rec := httptest.NewRecorder()
+
+	HandleHandoffExchange(configDir).ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("load organization: %v", err)
+	}
+	if org.OwnerUserID != "legacy-owner@example.com" {
+		t.Fatalf("ownerUserID=%q, want %q", org.OwnerUserID, "legacy-owner@example.com")
+	}
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+		t.Fatalf("member role=%q, want %q", got, models.OrgRoleOwner)
+	}
+}
+
+func TestContract_HostedDirectCloudHandoffPreservesMembershipClaims(t *testing.T) {
+	key := []byte("test-direct-handoff-key")
+	configDir := t.TempDir()
+	resetPersistentAuthStoresForTests()
+	t.Cleanup(resetPersistentAuthStoresForTests)
+
+	if err := os.WriteFile(filepath.Join(configDir, cloudauth.HandoffKeyFile), key, 0o600); err != nil {
+		t.Fatalf("write direct handoff key: %v", err)
+	}
+
+	tenantID := "tenant-direct-contract"
+	mtp := config.NewMultiTenantPersistence(configDir)
+	if err := mtp.SaveOrganization(&models.Organization{
+		ID:          tenantID,
+		DisplayName: "Direct Contract Membership",
+		Status:      models.OrgStatusActive,
+		CreatedAt:   time.Now().UTC(),
+		OwnerUserID: "legacy-owner@example.com",
+		Members: []models.OrganizationMember{
+			{UserID: "legacy-owner@example.com", Role: models.OrgRoleOwner, AddedAt: time.Now().UTC()},
+		},
+	}); err != nil {
+		t.Fatalf("save organization: %v", err)
+	}
+
+	token, err := cloudauth.SignWithClaims(key, cloudauth.Claims{
+		Email:     "courtmanr@gmail.com",
+		TenantID:  tenantID,
+		AccountID: "acct-direct-contract",
+		UserID:    "user-direct-contract",
+		Role:      "owner",
+	}, time.Hour)
+	if err != nil {
+		t.Fatalf("sign direct handoff claims: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/auth/cloud-handoff?token="+url.QueryEscape(token), nil)
+	rec := httptest.NewRecorder()
+
+	HandleCloudHandoff(configDir).ServeHTTP(rec, req)
+	if rec.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusTemporaryRedirect, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/" {
+		t.Fatalf("redirect=%q, want %q", got, "/")
+	}
+
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		t.Fatalf("load organization: %v", err)
+	}
+	if org.OwnerUserID != "legacy-owner@example.com" {
+		t.Fatalf("ownerUserID=%q, want %q", org.OwnerUserID, "legacy-owner@example.com")
+	}
+	if got := org.GetMemberRole("courtmanr@gmail.com"); got != models.OrgRoleOwner {
+		t.Fatalf("member role=%q, want %q", got, models.OrgRoleOwner)
 	}
 }
 

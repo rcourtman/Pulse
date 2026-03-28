@@ -34,6 +34,7 @@ type BootstrapData struct {
 	PublicSiteURL           string             `json:"public_site_url"`
 	SupportEmail            string             `json:"support_email"`
 	CommercialAPIBaseURL    string             `json:"commercial_api_base_url"`
+	CommercialAPIBasePath   string             `json:"commercial_api_base_path"`
 	PortalPath              string             `json:"portal_path"`
 	BootstrapPath           string             `json:"bootstrap_path"`
 	MagicLinkRequestPath    string             `json:"magic_link_request_path"`
@@ -90,6 +91,7 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 		PublicSiteURL:           defaultPublicSiteURL,
 		SupportEmail:            defaultSupportEmail,
 		CommercialAPIBaseURL:    defaultCommercialAPIBaseURL,
+		CommercialAPIBasePath:   PortalCommercialAPIBasePath,
 		PortalPath:              defaultPortalPath,
 		BootstrapPath:           PortalBootstrapPath,
 		MagicLinkRequestPath:    PortalMagicLinkRequestPath,

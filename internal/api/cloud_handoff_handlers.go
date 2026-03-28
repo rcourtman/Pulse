@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 
 	_ "modernc.org/sqlite"
 )
@@ -40,6 +42,10 @@ type jtiReplayStore struct {
 	configDir string
 	initErr   error
 }
+
+const deleteExpiredHandoffJTIQuery = `
+DELETE FROM handoff_jti INDEXED BY idx_handoff_jti_expires_at
+WHERE expires_at <= ?`
 
 func (s *jtiReplayStore) init() {
 	s.once.Do(func() {
@@ -132,7 +138,7 @@ func (s *jtiReplayStore) checkAndStore(jti string, expiresAt time.Time) (stored 
 	defer s.mu.Unlock()
 
 	now := time.Now().UTC().Unix()
-	if _, err := s.db.Exec(`DELETE FROM handoff_jti WHERE expires_at <= ?`, now); err != nil {
+	if _, err := s.db.Exec(deleteExpiredHandoffJTIQuery, now); err != nil {
 		return false, fmt.Errorf("cleanup handoff jti: %w", err)
 	}
 
@@ -351,6 +357,11 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 			return
 		}
 
+		if err := ensureHandoffOrganizationMembership(configDir, tenantID, claims.Email, claims.Role); err != nil {
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+
 		// Invalidate any pre-existing session to prevent session fixation attacks.
 		InvalidateOldSessionFromRequest(r)
 
@@ -415,4 +426,74 @@ func HandleHandoffExchange(configDir string) http.HandlerFunc {
 
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 	}
+}
+
+func ensureHandoffOrganizationMembership(configDir, tenantID, email, role string) error {
+	mtp := config.NewMultiTenantPersistence(configDir)
+	org, err := mtp.LoadOrganization(tenantID)
+	if err != nil {
+		return fmt.Errorf("load tenant organization %s: %w", tenantID, err)
+	}
+
+	now := time.Now().UTC()
+	if org == nil {
+		org = &models.Organization{}
+	}
+	if strings.TrimSpace(org.ID) == "" {
+		org.ID = tenantID
+	}
+	if strings.TrimSpace(org.DisplayName) == "" {
+		org.DisplayName = tenantID
+	}
+	if models.NormalizeOrgStatus(org.Status) == "" {
+		org.Status = models.OrgStatusActive
+	} else {
+		org.Status = models.NormalizeOrgStatus(org.Status)
+	}
+	if org.CreatedAt.IsZero() {
+		org.CreatedAt = now
+	}
+
+	desiredRole := models.OrganizationRoleFromAccountRole(role)
+	memberFound := false
+	for i := range org.Members {
+		if !strings.EqualFold(strings.TrimSpace(org.Members[i].UserID), email) {
+			continue
+		}
+		memberFound = true
+		org.Members[i].UserID = email
+		if !models.OrganizationRoleAtLeast(org.Members[i].Role, desiredRole) {
+			org.Members[i].Role = desiredRole
+		}
+		if org.Members[i].AddedAt.IsZero() {
+			org.Members[i].AddedAt = now
+		}
+		if strings.TrimSpace(org.Members[i].AddedBy) == "" {
+			addedBy := strings.TrimSpace(org.OwnerUserID)
+			if addedBy == "" {
+				addedBy = email
+			}
+			org.Members[i].AddedBy = addedBy
+		}
+		break
+	}
+
+	if !memberFound {
+		addedBy := strings.TrimSpace(org.OwnerUserID)
+		if addedBy == "" {
+			addedBy = email
+		}
+		org.Members = append(org.Members, models.OrganizationMember{
+			UserID:  email,
+			Role:    desiredRole,
+			AddedAt: now,
+			AddedBy: addedBy,
+		})
+	}
+
+	if desiredRole == models.OrgRoleOwner && strings.TrimSpace(org.OwnerUserID) == "" {
+		org.OwnerUserID = email
+	}
+
+	return mtp.SaveOrganization(org)
 }

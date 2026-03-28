@@ -768,6 +768,39 @@ func TestSessionStore_InitReconfiguresDataPath(t *testing.T) {
 	}
 }
 
+func TestEnsureSessionStoreReturnsOwnedStoreForPath(t *testing.T) {
+	resetSessionStoreForTests()
+	t.Cleanup(resetSessionStoreForTests)
+
+	dirOne := t.TempDir()
+	dirTwo := t.TempDir()
+
+	storeOne := ensureSessionStore(dirOne)
+	if storeOne == nil {
+		t.Fatal("ensureSessionStore should initialize a store for a valid data path")
+	}
+	if storeOne != GetSessionStore() {
+		t.Fatal("ensureSessionStore should return the active store for the configured data path")
+	}
+
+	storeTwo := ensureSessionStore(dirTwo)
+	if storeTwo == nil {
+		t.Fatal("ensureSessionStore should initialize a reconfigured store")
+	}
+	if storeTwo != GetSessionStore() {
+		t.Fatal("ensureSessionStore should return the reconfigured active store")
+	}
+	if storeOne == storeTwo {
+		t.Fatal("ensureSessionStore should return a distinct store after data-path reconfiguration")
+	}
+
+	select {
+	case <-storeOne.workerDone:
+	default:
+		t.Fatal("reconfigured session store should shut down the previous worker")
+	}
+}
+
 func TestSessionStore_SaveUnsafe_DropsRefreshTokenWithoutCrypto(t *testing.T) {
 	tmpDir := t.TempDir()
 	store := &SessionStore{
@@ -831,5 +864,22 @@ func TestSessionStore_LoadHashedSessions_DropsRefreshTokenWithoutCrypto(t *testi
 	}
 	if session.OIDCRefreshToken != "" {
 		t.Fatalf("expected refresh token to be dropped without crypto, got %q", session.OIDCRefreshToken)
+	}
+}
+
+func TestSessionStore_ShutdownReturnsWithoutWaitingForWorkerReceive(t *testing.T) {
+	dir := t.TempDir()
+	store := NewSessionStore(dir)
+
+	done := make(chan struct{})
+	go func() {
+		store.Shutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("Shutdown should not block waiting for the background worker to receive a stop signal")
 	}
 }

@@ -93,8 +93,15 @@ func NewMultiTenantChecker(hostedMode bool) *DefaultMultiTenantChecker {
 }
 
 // SetMultiTenantEnabled allows programmatic control of the feature flag (for testing).
+// It also keeps the env-backed dev-mode entitlement path aligned so tests exercise
+// the same multi-tenant state through both middleware and license-service checks.
 func SetMultiTenantEnabled(enabled bool) {
 	multiTenantEnabled = enabled
+	if enabled {
+		_ = os.Setenv("PULSE_MULTI_TENANT_ENABLED", "true")
+		return
+	}
+	_ = os.Unsetenv("PULSE_MULTI_TENANT_ENABLED")
 }
 
 // LicenseServiceProvider provides license service for a given context.

@@ -200,6 +200,19 @@ relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup
 surfaces do not observe a tenant-org Pulse Assistant state that disagrees
 with the machine-owned hosted entitlement already backing the same instance.
+That same shared dependency now also assumes hosted cloud handoff makes tenant
+org access real before browser lifecycle continues. Lifecycle-adjacent opens
+into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,
+but the canonical contract is that a successful handoff exchange must reconcile
+tenant organization membership for the handed-off account member before the
+browser follows the new session into protected routes, rather than landing on a
+fresh `access_denied` immediately after session minting.
+That same hosted continuity contract also applies to the older direct tenant
+magic-link path. Lifecycle-adjacent control-plane redirects through
+`/auth/cloud-handoff` must preserve canonical account/user/role identity in the
+handoff token long enough for the tenant runtime to repair org membership
+before it lands in protected hosted routes, rather than letting direct opens
+diverge from the newer portal exchange path.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.
@@ -717,6 +730,14 @@ stay owned by the configured router data path: session, CSRF, and
 recovery-token runtime state may not silently bind themselves to hidden
 `/etc/pulse` fallback initialization or retain old-path state after a
 reconfiguration.
+That same shared `internal/api/` dependency also assumes those auth stores
+tear down synchronously when lifecycle-adjacent routers or hosted runtimes are
+reconfigured: session and CSRF workers may not rely on best-effort background
+signals that can wedge teardown, block temp-path cleanup, or leave first-
+session and hosted handoff validation hanging behind a stale auth worker, and
+each router must retain the exact session, CSRF, and recovery-token workers it
+initialized so later global rebinds cannot orphan a live test or hosted-runtime
+data path.
 That same path-ownership rule also applies to bootstrap-token recovery and
 adjacent hosted billing side effects that share the `internal/api/` boundary:
 CLI/bootstrap retrieval, webhook dedupe state, and customer-index persistence

@@ -411,8 +411,12 @@ func TestSLO_QueryAllBatch(t *testing.T) {
 	}
 }
 
-// TestSLO_QueryAllBatchDownsampled validates the grouped QueryAllBatch path
-// used for longer-range dashboard windows where bucketed SQL is required.
+// TestSLO_QueryAllBatchDownsampled validates the downsampled QueryAllBatch path
+// used for longer-range dashboard windows.
+// The API contract is ordered timestamps within each resource/metric series,
+// but the hot path now owns bucket aggregation through one ordered scan plus
+// Go-side accumulation instead of forcing SQLite to GROUP BY computed buckets
+// across the whole result set.
 func TestSLO_QueryAllBatchDownsampled(t *testing.T) {
 	skipUnderRace(t)
 	suppressTestLogs(t)

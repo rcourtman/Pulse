@@ -176,9 +176,8 @@ func (s *SessionStore) Shutdown() {
 		if s.saveTicker != nil {
 			s.saveTicker.Stop()
 		}
-		select {
-		case s.stopChan <- true:
-		default:
+		if s.stopChan != nil {
+			close(s.stopChan)
 		}
 	})
 	if s.workerDone != nil {

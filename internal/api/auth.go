@@ -186,16 +186,20 @@ const (
 
 // InitSessionStore initializes the persistent session store
 func InitSessionStore(dataPath string) {
+	_ = ensureSessionStore(dataPath)
+}
+
+func ensureSessionStore(dataPath string) *SessionStore {
 	newDataPath := strings.TrimSpace(dataPath)
 	if newDataPath == "" {
-		return
+		return nil
 	}
 
 	sessionStoreMu.Lock()
 	defer sessionStoreMu.Unlock()
 
 	if sessionStore != nil && sessionStoreDataPath == newDataPath {
-		return
+		return sessionStore
 	}
 
 	oldStore := sessionStore
@@ -204,6 +208,7 @@ func InitSessionStore(dataPath string) {
 	if oldStore != nil {
 		oldStore.Shutdown()
 	}
+	return sessionStore
 }
 
 func InitPersistentAuthStores(dataPath string) {

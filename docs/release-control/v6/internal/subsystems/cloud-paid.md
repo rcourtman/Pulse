@@ -276,6 +276,14 @@ actual remaining backoff through `Retry-After` and
 `details.retry_after_seconds` rather than a coarse full-window guess. Shared
 trial-start presentation must treat that backoff as canonical and surface it
 consistently instead of flattening every `429` into generic copy.
+Hosted tenant organization seeding and hosted handoff role mapping now belong
+to the same cloud-paid truth too. `internal/cloudcp/stripe/provisioner.go`
+must seed tenant org members from the shared account-role-to-organization-role
+mapping, and hosted handoff/runtime consumers must preserve that same mapping
+when older workspaces need membership continuity repaired at open time. Cloud,
+MSP, and commercial account roles therefore have one canonical translation into
+tenant org permissions instead of drifting between provisioning-time seeds and
+handoff-time access repair.
 For the hosted self-serve flow, that also means the public trial pages and form
 posts must render the owned Pulse trial experience with preserved instance/form
 state when rate limited, rather than dropping users onto a generic control-plane

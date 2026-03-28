@@ -110,6 +110,9 @@ type Router struct {
 	oidcManager                *OIDCServiceManager
 	samlManager                *SAMLServiceManager
 	ssoConfig                  *config.SSOConfig
+	sessionStore               *SessionStore
+	csrfStore                  *CSRFTokenStore
+	recoveryTokenStore         *RecoveryTokenStore
 	authorizer                 auth.Authorizer
 	wrapped                    http.Handler
 	serverVersion              string
@@ -173,9 +176,9 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		store = conversionStores[0]
 	}
 
-	// Initialize persistent session and CSRF stores
-	InitSessionStore(cfg.DataPath)
-	InitCSRFStore(cfg.DataPath)
+	// Initialize persistent auth stores and capture the exact workers this router owns.
+	sessionStore := ensureSessionStore(cfg.DataPath)
+	csrfStore := ensureCSRFStore(cfg.DataPath)
 
 	updateHistory, err := updates.NewUpdateHistory(cfg.DataPath)
 	if err != nil {
@@ -206,6 +209,8 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 		handoffExchangeRateLimiter: NewRateLimiter(20, 1*time.Minute), // cloud handoff token exchange per minute per IP
 		persistence:                config.NewConfigPersistence(cfg.DataPath),
 		multiTenant:                config.NewMultiTenantPersistence(cfg.DataPath),
+		sessionStore:               sessionStore,
+		csrfStore:                  csrfStore,
 		authorizer:                 auth.GetAuthorizer(),
 		serverVersion:              strings.TrimSpace(serverVersion),
 		projectRoot:                projectRoot,
@@ -297,7 +302,7 @@ func NewRouter(cfg *config.Config, monitor *monitoring.Monitor, mtMonitor *monit
 	// Auth context middleware extracts user/token info BEFORE tenant middleware
 	handler = AuthContextMiddleware(cfg, r.mtMonitor, handler)
 
-	handler = UniversalRateLimitMiddleware(handler)
+	handler = UniversalRateLimitMiddlewareWithConfig(newEndpointRateLimitConfig(), handler)
 	r.wrapped = handler
 	return r
 }
@@ -580,8 +585,8 @@ func (r *Router) setupRoutes() {
 		}
 	}
 
-	// Initialize recovery token store
-	InitRecoveryTokenStore(r.config.DataPath)
+	// Initialize recovery token store and capture the exact worker this router owns.
+	r.recoveryTokenStore = ensureRecoveryTokenStore(r.config.DataPath)
 
 	r.registerPublicAndAuthRoutes()
 	r.registerMonitoringRoutes(guestMetadataHandler, dockerMetadataHandler, hostMetadataHandler, infraUpdateHandlers)
@@ -2081,6 +2086,15 @@ func (r *Router) ShutdownAIIntelligence() {
 func (r *Router) shutdownBackgroundWorkers() {
 	if r.lifecycleCancel != nil {
 		r.lifecycleCancel()
+	}
+	if r.sessionStore != nil {
+		r.sessionStore.Shutdown()
+	}
+	if r.csrfStore != nil {
+		r.csrfStore.Shutdown()
+	}
+	if r.recoveryTokenStore != nil {
+		r.recoveryTokenStore.Shutdown()
 	}
 	if r.trueNASPoller != nil {
 		r.trueNASPoller.Stop()
@@ -7545,13 +7559,41 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		}
 		return apiPoints
 	}
-	mockModeEnabled := mock.IsMockEnabled()
-	vms := monitor.VMsSnapshot()
-	containers := monitor.ContainersSnapshot()
-	nodes := monitor.NodesSnapshot()
-	storagePools := monitor.StorageSnapshot()
-	dockerHosts := monitor.DockerHostsSnapshot()
-	hosts := monitor.HostsSnapshot()
+	// Most requests are served from the metrics store. Keep the fallback/read-state
+	// snapshots lazy so store-backed history does not pay an O(fleet-size) copy cost.
+	var (
+		fallbackStateOnce sync.Once
+		vms               []models.VM
+		containers        []models.Container
+		nodes             []models.Node
+		storagePools      []models.Storage
+		dockerHosts       []models.DockerHost
+		hosts             []models.Host
+
+		diskFallbackOnce sync.Once
+		physicalDisks    []unifiedresources.Resource
+	)
+
+	loadFallbackState := func() {
+		fallbackStateOnce.Do(func() {
+			vms = monitor.VMsSnapshot()
+			containers = monitor.ContainersSnapshot()
+			nodes = monitor.NodesSnapshot()
+			storagePools = monitor.StorageSnapshot()
+			dockerHosts = monitor.DockerHostsSnapshot()
+			hosts = monitor.HostsSnapshot()
+		})
+	}
+
+	loadPhysicalDisks := func() {
+		diskFallbackOnce.Do(func() {
+			for _, resource := range monitor.GetUnifiedResources() {
+				if resource.Type == unifiedresources.ResourceTypePhysicalDisk && resource.PhysicalDisk != nil {
+					physicalDisks = append(physicalDisks, resource)
+				}
+			}
+		})
+	}
 
 	parseGuestID := func(id string) (string, string, int, bool) {
 		parts := strings.Split(id, ":")
@@ -7566,6 +7608,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findVM := func(id string) *models.VM {
+		loadFallbackState()
 		for i := range vms {
 			if vms[i].ID == id {
 				return &vms[i]
@@ -7583,6 +7626,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findContainer := func(id string) *models.Container {
+		loadFallbackState()
 		for i := range containers {
 			if containers[i].ID == id {
 				return &containers[i]
@@ -7600,6 +7644,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findNode := func(id string) *models.Node {
+		loadFallbackState()
 		for i := range nodes {
 			if nodes[i].ID == id {
 				return &nodes[i]
@@ -7609,6 +7654,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findStorage := func(id string) *models.Storage {
+		loadFallbackState()
 		for i := range storagePools {
 			if storagePools[i].ID == id {
 				return &storagePools[i]
@@ -7618,6 +7664,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findDockerHost := func(id string) *models.DockerHost {
+		loadFallbackState()
 		for i := range dockerHosts {
 			if dockerHosts[i].ID == id {
 				return &dockerHosts[i]
@@ -7627,6 +7674,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findHost := func(id string) *models.Host {
+		loadFallbackState()
 		for i := range hosts {
 			if hosts[i].ID == id {
 				return &hosts[i]
@@ -7636,6 +7684,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	}
 
 	findDockerContainer := func(id string) *models.DockerContainer {
+		loadFallbackState()
 		for i := range dockerHosts {
 			host := &dockerHosts[i]
 			for j := range host.Containers {
@@ -7647,14 +7696,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 		return nil
 	}
 
-	physicalDisks := make([]unifiedresources.Resource, 0)
-	for _, resource := range monitor.GetUnifiedResources() {
-		if resource.Type == unifiedresources.ResourceTypePhysicalDisk && resource.PhysicalDisk != nil {
-			physicalDisks = append(physicalDisks, resource)
-		}
-	}
-
 	findDisk := func(id string) *unifiedresources.Resource {
+		loadPhysicalDisks()
 		target := strings.TrimSpace(id)
 		if target == "" {
 			return nil
@@ -7829,7 +7872,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, "", false
 		}
 
-		if mockModeEnabled && runtimeResourceType == "disk" && metricType == "smart_temp" {
+		if mock.IsMockEnabled() && runtimeResourceType == "disk" && metricType == "smart_temp" {
 			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
 				series := buildSyntheticMetricHistorySeries(
 					end,
@@ -8103,7 +8146,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
-		if response == nil && mockModeEnabled && runtimeResourceType == "disk" && metricType == "smart_temp" {
+		if response == nil && mock.IsMockEnabled() && runtimeResourceType == "disk" && metricType == "smart_temp" {
 			targetPoints := targetMockSeriesPoints(duration, historyMaxPoints)
 			if len(points) > 0 && len(points) < targetPoints {
 				current := points[len(points)-1].Value

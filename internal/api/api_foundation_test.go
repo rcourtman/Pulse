@@ -83,6 +83,21 @@ func TestTenantMiddleware_FullChain(t *testing.T) {
 	}
 }
 
+func TestSetMultiTenantEnabled_SyncsDevModeFeatureGate(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	defer SetMultiTenantEnabled(false)
+
+	SetMultiTenantEnabled(false)
+	if newLicenseService().HasFeature(featureMultiTenantKey) {
+		t.Fatalf("expected dev-mode service to deny %q when helper disables multi-tenant", featureMultiTenantKey)
+	}
+
+	SetMultiTenantEnabled(true)
+	if !newLicenseService().HasFeature(featureMultiTenantKey) {
+		t.Fatalf("expected dev-mode service to allow %q when helper enables multi-tenant", featureMultiTenantKey)
+	}
+}
+
 func TestRequireMultiTenant_Middleware(t *testing.T) {
 	defer SetMultiTenantEnabled(false)
 

@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,31 +16,13 @@ import (
 // setupExecuteRouter creates a Router with an Ollama mock server and a valid
 // ai:execute API token for route-level /api/ai/execute tests.
 func setupExecuteRouter(t *testing.T, ollamaURL string) (*Router, string) {
-	t.Helper()
+	return setupExecuteRouterForScopes(t, ollamaURL, []string{config.ScopeAIExecute}, true)
+}
 
-	rawToken := "ai-execute-route-token-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = ollamaURL
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
-
-	return router, rawToken
+func setupExecuteRouterForScopes(t *testing.T, ollamaURL string, scopes []string, aiEnabled bool) (*Router, string) {
+	opts := newAIRouteTestOptions(scopes, ollamaURL)
+	opts.aiEnabled = aiEnabled
+	return setupAIRouteRouter(t, opts)
 }
 
 // mockOllamaForExecute returns an HTTP handler that mocks the Ollama API
@@ -140,27 +121,7 @@ func TestRouteExecute_NoAuth(t *testing.T) {
 func TestRouteExecute_WrongScope(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-execute-wrong-scope-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = "http://192.0.2.1:11434"
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
+	router, rawToken := setupExecuteRouterForScopes(t, "http://192.0.2.1:11434", []string{config.ScopeSettingsRead}, true)
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))
@@ -231,26 +192,7 @@ func TestRouteExecute_InvalidJSON(t *testing.T) {
 func TestRouteExecute_AIDisabled(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-execute-disabled-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeAIExecute}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	// Save default AI config with Enabled = false (default)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = false
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
+	router, rawToken := setupExecuteRouterForScopes(t, "http://192.0.2.1:11434", []string{config.ScopeAIExecute}, false)
 
 	body := `{"prompt":"hi"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/execute", strings.NewReader(body))

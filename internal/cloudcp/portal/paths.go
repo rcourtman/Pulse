@@ -1,15 +1,17 @@
 package portal
 
 const (
-	PortalPagePath             = "/portal"
-	PortalBootstrapPath        = "/api/portal/bootstrap"
-	PortalDashboardPath        = "/api/portal/dashboard"
-	PortalWorkspacePath        = "/api/portal/workspaces/{tenant_id}"
-	PortalBillingPath          = "/api/portal/billing"
-	PortalCommercialProxyPath  = "/api/portal/commercial/"
-	PortalLogoutPath           = "/auth/logout"
-	PortalMagicLinkRequestPath = "/api/public/magic-link/request"
-	PortalSignupPath           = "/signup"
-	PortalAccountAPIBasePath   = "/api/accounts"
-	PortalAPIBasePath          = "/api/portal"
+	PortalPagePath              = "/portal"
+	PortalBootstrapPath         = "/api/portal/bootstrap"
+	PortalDashboardPath         = "/api/portal/dashboard"
+	PortalWorkspacePath         = "/api/portal/workspaces/{tenant_id}"
+	PortalBillingPath           = "/api/portal/billing"
+	PortalCommercialAPIBasePath = "/api/portal/commercial"
+	PortalCommercialAPIPath     = "/api/portal/commercial/{commercial_path...}"
+	PortalCommercialProxyPath   = PortalCommercialAPIBasePath + "/"
+	PortalLogoutPath            = "/auth/logout"
+	PortalMagicLinkRequestPath  = "/api/public/magic-link/request"
+	PortalSignupPath            = "/signup"
+	PortalAccountAPIBasePath    = "/api/accounts"
+	PortalAPIBasePath           = "/api/portal"
 )

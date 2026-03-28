@@ -124,6 +124,48 @@ func TestVerifyWithExpiryReturnsTokenExpiry(t *testing.T) {
 	}
 }
 
+func TestSignVerifyClaimsRoundTrip(t *testing.T) {
+	key, _ := GenerateHandoffKey()
+	ttl := 90 * time.Second
+	before := time.Now().UTC()
+	token, err := SignWithClaims(key, Claims{
+		Email:     "owner@example.com",
+		TenantID:  "t-claims",
+		AccountID: "acct-claims",
+		UserID:    "user-claims",
+		Role:      "owner",
+	}, ttl)
+	if err != nil {
+		t.Fatalf("SignWithClaims: %v", err)
+	}
+
+	claims, err := VerifyClaimsWithExpiry(key, token)
+	if err != nil {
+		t.Fatalf("VerifyClaimsWithExpiry: %v", err)
+	}
+	if claims.Email != "owner@example.com" {
+		t.Fatalf("claims.Email = %q, want %q", claims.Email, "owner@example.com")
+	}
+	if claims.TenantID != "t-claims" {
+		t.Fatalf("claims.TenantID = %q, want %q", claims.TenantID, "t-claims")
+	}
+	if claims.AccountID != "acct-claims" {
+		t.Fatalf("claims.AccountID = %q, want %q", claims.AccountID, "acct-claims")
+	}
+	if claims.UserID != "user-claims" {
+		t.Fatalf("claims.UserID = %q, want %q", claims.UserID, "user-claims")
+	}
+	if claims.Role != "owner" {
+		t.Fatalf("claims.Role = %q, want %q", claims.Role, "owner")
+	}
+
+	lowerBound := before.Add(ttl - 5*time.Second)
+	upperBound := before.Add(ttl + 5*time.Second)
+	if claims.ExpiresAt.Before(lowerBound) || claims.ExpiresAt.After(upperBound) {
+		t.Fatalf("claims.ExpiresAt = %s, expected between %s and %s", claims.ExpiresAt, lowerBound, upperBound)
+	}
+}
+
 func TestVerifyEmptyInputs(t *testing.T) {
 	key, _ := GenerateHandoffKey()
 

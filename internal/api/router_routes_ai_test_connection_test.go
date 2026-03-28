@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -15,31 +14,7 @@ import (
 // setupTestConnectionRouter creates a Router with an Ollama mock server and a
 // valid settings:write API token for route-level /api/ai/test tests.
 func setupTestConnectionRouter(t *testing.T, ollamaURL string) (*Router, string) {
-	t.Helper()
-
-	rawToken := "ai-test-conn-route-token-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = ollamaURL
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
-
-	return router, rawToken
+	return setupAIRouteRouter(t, newAIRouteTestOptions([]string{config.ScopeSettingsWrite}, ollamaURL))
 }
 
 // TestRouteTestConnection_Success verifies that POST /api/ai/test dispatches
@@ -145,27 +120,7 @@ func TestRouteTestConnection_NoAuth(t *testing.T) {
 func TestRouteTestConnection_WrongScope(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-test-conn-wrong-scope-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsRead}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	aiCfg := config.NewDefaultAIConfig()
-	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
-	aiCfg.OllamaBaseURL = "http://192.0.2.1:11434"
-	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
-		t.Fatalf("SaveAIConfig: %v", err)
-	}
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
+	router, rawToken := setupAIRouteRouter(t, newAIRouteTestOptions([]string{config.ScopeSettingsRead}, "http://192.0.2.1:11434"))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
 	req.Header.Set("X-API-Token", rawToken)
@@ -181,21 +136,9 @@ func TestRouteTestConnection_WrongScope(t *testing.T) {
 func TestRouteTestConnection_NoConfig(t *testing.T) {
 	t.Parallel()
 
-	rawToken := "ai-test-conn-no-config-" + t.Name() + ".12345678"
-	record := newTokenRecord(t, rawToken, []string{config.ScopeSettingsWrite}, nil)
-	cfg := newTestConfigWithTokens(t, record)
-
-	persistence := config.NewConfigPersistence(cfg.DataPath)
-	// Don't save any AI config — service will have no configured provider
-
-	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
-	router.aiSettingsHandler.defaultConfig = cfg
-	router.aiSettingsHandler.defaultPersistence = persistence
-	svc := ai.NewService(persistence, nil)
-	if err := svc.LoadConfig(); err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	router.aiSettingsHandler.defaultAIService = svc
+	opts := newAIRouteTestOptions([]string{config.ScopeSettingsWrite}, "")
+	opts.configureAI = false
+	router, rawToken := setupAIRouteRouter(t, opts)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/ai/test", nil)
 	req.Header.Set("X-API-Token", rawToken)

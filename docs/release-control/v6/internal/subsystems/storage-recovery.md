@@ -127,6 +127,21 @@ The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
 query filtering, and recovery-point indexing for the `/api/recovery/*`
 surfaces.
+That same shared `internal/api/` dependency also assumes auth-persistence
+teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
+CSRF, and recovery-token workers may not leave stale background goroutines or
+half-shutdown path ownership behind, because hosted handoff, recovery
+inspection, and adjacent temp-path tests all depend on the same canonical
+runtime data-dir authority being replaceable without hangs or leaked state,
+and router teardown must close the exact session, CSRF, and recovery-token
+workers that router initialized instead of assuming a later global auth-store
+binding will clean them up.
+That same hosted handoff dependency also assumes the exchange path repairs
+tenant org access before redirecting the browser into protected routes.
+Recovery- and storage-adjacent hosted pages that open immediately after
+control-plane handoff must see a real tenant member session, not a freshly
+minted browser cookie that still fails tenant authorization because the org
+metadata lagged behind control-plane account membership.
 That shared `internal/api/` dependency now also assumes hosted tenant AI
 bootstrap and chat-runtime reads resolve through one effective hosted billing
 lease before storage- or recovery-adjacent runtime consumers inspect
@@ -1381,6 +1396,11 @@ recovery-adjacent hosted flows that reuse settings-bound helpers must allow
 the current org owner/admin membership to continue through privileged tenant
 routes after cloud handoff instead of requiring a separate configured local
 admin identity that hosted tenants do not carry.
+That same hosted continuity assumption also applies when operators arrive via
+the older direct tenant magic-link path. Recovery- and storage-adjacent hosted
+opens that still redirect through `/auth/cloud-handoff` must carry enough
+canonical account/role identity for the tenant runtime to repair membership
+before protected routes load, not just the newer portal exchange path.
 That same adjacent onboarding boundary must also keep the dedicated
 relay-mobile bootstrap credential sufficient for QR, deep-link, and
 connection-validation reads, so hosted recovery/support flows that hand a

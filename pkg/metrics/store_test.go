@@ -598,6 +598,59 @@ func TestQueryAllBatch(t *testing.T) {
 		}
 	})
 
+	t.Run("downsampled results preserve bucket aggregates", func(t *testing.T) {
+		downsampledStoreDir := t.TempDir()
+		downsampledCfg := DefaultConfig(downsampledStoreDir)
+		downsampledCfg.DBPath = filepath.Join(downsampledStoreDir, "metrics-batch-downsampled-aggregates.db")
+		downsampledCfg.FlushInterval = time.Hour
+
+		downsampledStore, err := NewStore(downsampledCfg)
+		if err != nil {
+			t.Fatalf("NewStore(downsampled aggregates): %v", err)
+		}
+		defer downsampledStore.Close()
+
+		base := time.Unix(20_000, 0)
+		downsampledStore.writeBatch([]bufferedMetric{
+			{resourceType: "disk", resourceID: "disk-agg", metricType: "smart_temp", value: 10, timestamp: base.Add(5 * time.Second), tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-agg", metricType: "smart_temp", value: 16, timestamp: base.Add(25 * time.Second), tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-agg", metricType: "smart_temp", value: 22, timestamp: base.Add(65 * time.Second), tier: TierRaw},
+			{resourceType: "disk", resourceID: "disk-agg", metricType: "smart_temp", value: 28, timestamp: base.Add(95 * time.Second), tier: TierRaw},
+		})
+
+		batch, err := downsampledStore.QueryAllBatch("disk", []string{"disk-agg"}, base, base.Add(2*time.Minute), 60)
+		if err != nil {
+			t.Fatalf("QueryAllBatch(downsampled aggregates): %v", err)
+		}
+
+		points := batch["disk-agg"]["smart_temp"]
+		if len(points) != 2 {
+			t.Fatalf("expected 2 bucketed points, got %d", len(points))
+		}
+
+		firstBucketCenter := time.Unix(((base.Add(5*time.Second).Unix()/60)*60)+(60/2), 0)
+		if points[0].Timestamp != firstBucketCenter {
+			t.Fatalf("first bucket timestamp = %v, want %v", points[0].Timestamp, firstBucketCenter)
+		}
+		if points[0].Value != 13 {
+			t.Fatalf("first bucket avg = %v, want 13", points[0].Value)
+		}
+		if points[0].Min != 10 || points[0].Max != 16 {
+			t.Fatalf("first bucket min/max = %v/%v, want 10/16", points[0].Min, points[0].Max)
+		}
+
+		secondBucketCenter := time.Unix(((base.Add(65*time.Second).Unix()/60)*60)+(60/2), 0)
+		if points[1].Timestamp != secondBucketCenter {
+			t.Fatalf("second bucket timestamp = %v, want %v", points[1].Timestamp, secondBucketCenter)
+		}
+		if points[1].Value != 25 {
+			t.Fatalf("second bucket avg = %v, want 25", points[1].Value)
+		}
+		if points[1].Min != 22 || points[1].Max != 28 {
+			t.Fatalf("second bucket min/max = %v/%v, want 22/28", points[1].Min, points[1].Max)
+		}
+	})
+
 	t.Run("chunked resource lists return complete results beyond sqlite parameter threshold", func(t *testing.T) {
 		chunkedStoreDir := t.TempDir()
 		chunkedCfg := DefaultConfig(chunkedStoreDir)
