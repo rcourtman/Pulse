@@ -106,6 +106,7 @@ function renderServiceActionRow(
   id: string,
   kicker: string,
   title: string,
+  actionLabel: string,
   description: string,
   panelID: string,
   focusID: string,
@@ -128,7 +129,7 @@ function renderServiceActionRow(
         '<div class="service-action-highlights">' + highlightHTML + '</div>' +
       '</div>' +
       '<div class="service-action-cta">' +
-        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">Open</button>' +
+        '<button class="btn-secondary service-action-button" type="button" id="' + id + '" data-account-service-action="open-service-panel" data-account-service-panel="' + panelID + '" data-account-service-focus="' + focusID + '" data-shell-target="services">' + escapeHTML(actionLabel) + '</button>' +
       '</div>' +
     '</article>'
   );
@@ -799,10 +800,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                   '<p>Keep self-hosted commercial work here. Hosted workspace operations stay in Workspaces and Team.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
-                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
-                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
-                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
+                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Open billing', 'Open Stripe billing access for existing self-hosted subscriptions without leaving the Pulse Account shell.', 'manage-service-panel', 'manage-inline-email', ['Invoices and plan changes', 'Subscription self-service']) +
+                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Open license recovery', 'Recover the latest active self-hosted license and invoice link for a commercial email address.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Open refunds', 'Request an immediate self-serve refund for eligible self-hosted purchases with explicit revocation confirmation.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Explicit revocation']) +
+                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Open privacy tools', 'Request commercial data export or deletion without leaving the account shell.', 'data-service-panel', 'data-export-email', ['Export or deletion', 'Support escalation path']) +
                 '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +

@@ -190,6 +190,10 @@ describe('shell view', function() {
     expect(html).toContain('Escalate quickly');
     expect(html).toContain('id="open-retrieve-service"');
     expect(html).toContain('id="data-service-panel"');
+    expect(html).toContain('Open billing');
+    expect(html).toContain('Open license recovery');
+    expect(html).toContain('Open refunds');
+    expect(html).toContain('Open privacy tools');
   });
 
   it('renders self-hosted overview copy when no hosted accounts are attached', function() {
