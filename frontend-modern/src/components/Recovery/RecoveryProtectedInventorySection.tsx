@@ -202,43 +202,38 @@ export const RecoveryProtectedInventorySection: Component<
       tone="card"
       class="overflow-hidden border-border-subtle bg-surface"
     >
-      <div class="border-b border-border-subtle/80 bg-surface px-4 py-1.5">
-        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <Show when={props.workspaceControls}>
-              <div class="shrink-0">{props.workspaceControls}</div>
-            </Show>
-            <div class="flex flex-wrap items-center gap-2.5 text-[11px] text-muted">
-              <span class="font-medium text-base-content">
-                {sortedRollups().length}{' '}
-                {sortedRollups().length === 1 ? 'protected item' : 'protected items'}
-              </span>
-            </div>
-          </div>
-          <div class="flex flex-wrap items-center gap-2 text-xs">
-            <Show when={props.rollupsSummary().stale > 0}>
-              <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2 py-0.5`}>
-                {props.rollupsSummary().stale} stale
-              </span>
-            </Show>
-            <Show when={props.rollupsSummary().neverSucceeded > 0}>
-              <span class={`${getRecoveryRollupStatusPillClass('never-succeeded')} px-2 py-0.5`}>
-                {props.rollupsSummary().neverSucceeded} never succeeded
-              </span>
-            </Show>
-          </div>
-        </div>
-      </div>
-
       <Show when={!props.kioskMode}>
         <div class="border-b border-border-subtle/80 bg-surface px-4 py-2">
           <PageControls
+            role="group"
+            aria-label="Protected items controls"
+            searchLeading={
+              <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
+                <Show when={props.workspaceControls}>
+                  <div class="shrink-0">{props.workspaceControls}</div>
+                </Show>
+                <span class="font-medium text-base-content">
+                  {sortedRollups().length}{' '}
+                  {sortedRollups().length === 1 ? 'protected item' : 'protected items'}
+                </span>
+                <Show when={props.rollupsSummary().stale > 0}>
+                  <span class={`${getRecoveryRollupStatusPillClass('stale')} px-2 py-0.5`}>
+                    {props.rollupsSummary().stale} stale
+                  </span>
+                </Show>
+                <Show when={props.rollupsSummary().neverSucceeded > 0}>
+                  <span class={`${getRecoveryRollupStatusPillClass('never-succeeded')} px-2 py-0.5`}>
+                    {props.rollupsSummary().neverSucceeded} never succeeded
+                  </span>
+                </Show>
+              </div>
+            }
             search={
               <SearchInput
                 value={props.queryFilter}
                 onChange={(value) => props.setQueryFilter(value)}
                 placeholder={getRecoveryProtectedSearchPlaceholder()}
-                class="w-full"
+                class="min-w-[16rem] flex-1 !w-auto"
                 inputClass="py-1.5 text-sm"
                 clearOnEscape
                 history={{
@@ -252,9 +247,9 @@ export const RecoveryProtectedInventorySection: Component<
               onToggle: () => setProtectedFiltersOpen((open) => !open),
               count: protectedActiveFilterCount(),
             }}
-              showFilters={!props.isMobile || protectedFiltersOpen()}
-              searchRowClass="flex w-full items-center gap-3"
-              toolbarClass="gap-3 lg:flex-nowrap"
+            showFilters={!props.isMobile || protectedFiltersOpen()}
+            searchRowClass="flex w-full flex-wrap items-center gap-3 sm:grid sm:grid-cols-[auto,minmax(16rem,1fr)] sm:items-center"
+            toolbarClass="gap-3 lg:flex-nowrap"
           >
             <LabeledFilterSelect
               id="recovery-item-type-filter"

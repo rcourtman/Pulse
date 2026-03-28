@@ -130,30 +130,28 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
 
   return (
     <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
-      <div class="border-b border-border-subtle/80 bg-surface px-4 py-2">
-        <div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
-            <Show when={props.workspaceControls}>
-              <div class="shrink-0">{props.workspaceControls}</div>
-            </Show>
-            <div class="flex flex-wrap items-center gap-3 text-[11px] text-muted">
-              <span class="font-medium text-base-content">
-                {props.recoveryPoints.meta().total} event
-                {props.recoveryPoints.meta().total === 1 ? '' : 's'}
-              </span>
-              <Show when={props.groupedByDay().length > 0}>
-                <span>
-                  {props.groupedByDay().length} day group
-                  {props.groupedByDay().length === 1 ? '' : 's'}
-                </span>
-              </Show>
-            </div>
-          </div>
-        </div>
-      </div>
       <Show when={!props.kioskMode}>
         <div class="border-b border-border-subtle/80 bg-surface px-4 py-2.5">
           <PageControls
+            role="group"
+            aria-label="Recovery events controls"
+            searchLeading={
+              <div class="flex min-w-0 flex-wrap items-center gap-2 text-[11px] text-muted">
+                <Show when={props.workspaceControls}>
+                  <div class="shrink-0">{props.workspaceControls}</div>
+                </Show>
+                <span class="font-medium text-base-content">
+                  {props.recoveryPoints.meta().total} event
+                  {props.recoveryPoints.meta().total === 1 ? '' : 's'}
+                </span>
+                <Show when={props.groupedByDay().length > 0}>
+                  <span>
+                    {props.groupedByDay().length} day group
+                    {props.groupedByDay().length === 1 ? '' : 's'}
+                  </span>
+                </Show>
+              </div>
+            }
             search={
               <SearchInput
                 value={props.queryFilter}
@@ -162,7 +160,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                   props.setCurrentPage(1);
                 }}
                 placeholder={getRecoveryHistorySearchPlaceholder()}
-                class="w-full"
+                class="min-w-[16rem] flex-1 !w-auto"
                 inputClass="py-2 text-sm"
                 clearOnEscape
                 history={{
@@ -364,6 +362,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               label: 'Reset all',
             }}
             showFilters={!props.isMobile || historyFiltersOpen()}
+            searchRowClass="flex w-full flex-wrap items-center gap-3 sm:grid sm:grid-cols-[auto,minmax(16rem,1fr)] sm:items-center"
             toolbarClass="lg:flex-nowrap"
           >
             <LabeledFilterSelect

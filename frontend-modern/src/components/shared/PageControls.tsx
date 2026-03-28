@@ -1,4 +1,4 @@
-import { Component, JSX, Show } from 'solid-js';
+import { Component, JSX, Show, splitProps } from 'solid-js';
 import { ColumnPicker } from '@/components/shared/ColumnPicker';
 import {
   FilterActionButton,
@@ -31,6 +31,7 @@ interface PageControlsMobileFilters {
 }
 
 interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
+  searchLeading?: JSX.Element;
   search: JSX.Element;
   showFilters: boolean;
   children: JSX.Element;
@@ -47,56 +48,75 @@ interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
 }
 
 export const PageControls: Component<PageControlsProps> = (props) => {
+  const [local, divProps] = splitProps(props, [
+    'searchLeading',
+    'search',
+    'showFilters',
+    'children',
+    'contentClass',
+    'searchRowClass',
+    'toolbarClass',
+    'mobileRowClass',
+    'mobileLeading',
+    'mobileTrailing',
+    'utilityActions',
+    'columnVisibility',
+    'resetAction',
+    'mobileFilters',
+    'class',
+  ]);
   const mobileSearchAccessory = () => (
-    <Show when={props.mobileFilters?.enabled}>
+    <Show when={local.mobileFilters?.enabled}>
       <FilterMobileToggleButton
-        onClick={() => props.mobileFilters?.onToggle()}
-        count={props.mobileFilters?.count ?? 0}
+        onClick={() => local.mobileFilters?.onToggle()}
+        count={local.mobileFilters?.count ?? 0}
       />
     </Show>
   );
 
   return (
     <FilterHeader
-      search={props.search}
-      searchAccessory={mobileSearchAccessory()}
-      showFilters={props.showFilters}
-      contentClass={props.contentClass}
-      searchRowClass={props.searchRowClass}
-      toolbarClass={props.toolbarClass}
-      mobileRowClass={props.mobileRowClass}
-      mobileLeading={props.mobileLeading}
-      mobileTrailing={props.mobileTrailing}
-      class={props.class}
+      {...divProps}
+      searchLeading={local.searchLeading}
+      search={local.search}
+        searchAccessory={mobileSearchAccessory()}
+      showFilters={local.showFilters}
+      contentClass={local.contentClass}
+      searchRowClass={local.searchRowClass}
+      toolbarClass={local.toolbarClass}
+      mobileRowClass={local.mobileRowClass}
+      mobileLeading={local.mobileLeading}
+      mobileTrailing={local.mobileTrailing}
+      class={local.class}
     >
-      {props.children}
+      {local.children}
 
-      <Show when={props.utilityActions}>
+      <Show when={local.utilityActions}>
         <FilterDivider />
-        {props.utilityActions}
+        {local.utilityActions}
       </Show>
 
       <Show
-        when={props.columnVisibility && props.columnVisibility.availableToggles().length > 0}
+        when={local.columnVisibility && local.columnVisibility.availableToggles().length > 0}
       >
         <FilterDivider />
         <ColumnPicker
-          columns={props.columnVisibility!.availableToggles()}
-          isHidden={props.columnVisibility!.isHiddenByUser}
-          onToggle={props.columnVisibility!.toggle}
-          onReset={props.columnVisibility!.resetToDefaults}
+          columns={local.columnVisibility!.availableToggles()}
+          isHidden={local.columnVisibility!.isHiddenByUser}
+          onToggle={local.columnVisibility!.toggle}
+          onReset={local.columnVisibility!.resetToDefaults}
         />
       </Show>
 
-      <Show when={props.resetAction?.show}>
+      <Show when={local.resetAction?.show}>
         <FilterDivider />
         <FilterActionButton
-          onClick={() => props.resetAction?.onClick()}
-          title={props.resetAction?.title}
-          class={props.resetAction?.class}
+          onClick={() => local.resetAction?.onClick()}
+          title={local.resetAction?.title}
+          class={local.resetAction?.class}
         >
-          {props.resetAction?.icon}
-          {props.resetAction?.label ?? 'Reset'}
+          {local.resetAction?.icon}
+          {local.resetAction?.label ?? 'Reset'}
         </FilterActionButton>
       </Show>
     </FilterHeader>

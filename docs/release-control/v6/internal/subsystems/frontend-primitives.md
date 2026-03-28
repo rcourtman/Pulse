@@ -639,6 +639,14 @@ and `frontend-modern/src/components/shared/searchInputModel.ts` owns the shared
 search-input contract plus shortcut-hint and trailing-control policy. Future
 search-input work should extend those owners instead of pushing type-to-search
 or enhancement wiring back into the shared shell.
+The shared page-controls bar now follows that same owner split.
+`frontend-modern/src/components/shared/PageControls.tsx` stays the render shell
+for canonical page-level control composition, while
+`frontend-modern/src/components/shared/FilterToolbar.tsx` owns the shared
+search-row, filter-row, and inline-leading-slot layout surface. Monitoring
+pages that need workspace tabs or count chips next to search should route that
+through the shared `searchLeading` slot instead of recreating a second local
+header strip above the control bar.
 The search-input enhancement surfaces now follow that same owner split.
 `frontend-modern/src/components/shared/SearchInputEnhancements.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useSearchInputEnhancements.ts`

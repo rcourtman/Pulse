@@ -41,6 +41,7 @@ export const FilterToolbarShell: Component<FilterToolbarShellProps> = (props) =>
 };
 
 interface FilterHeaderProps extends JSX.HTMLAttributes<HTMLDivElement> {
+  searchLeading?: JSX.Element;
   search: JSX.Element;
   showFilters: boolean;
   children: JSX.Element;
@@ -56,6 +57,7 @@ interface FilterHeaderProps extends JSX.HTMLAttributes<HTMLDivElement> {
 
 export const FilterHeader: Component<FilterHeaderProps> = (props) => {
   const [local, divProps] = splitProps(props, [
+    'searchLeading',
     'search',
     'showFilters',
     'children',
@@ -91,6 +93,7 @@ export const FilterHeader: Component<FilterHeaderProps> = (props) => {
       ) : (
         <FilterToolbarContent class={local.contentClass}>
           <FilterToolbarSearchRow class={local.searchRowClass}>
+            {local.searchLeading}
             {local.search}
             {local.searchAccessory}
           </FilterToolbarSearchRow>

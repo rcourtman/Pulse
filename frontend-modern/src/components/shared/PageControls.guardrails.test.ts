@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import pageControlsSource from '@/components/shared/PageControls.tsx?raw';
 import dashboardFilterSource from '@/components/Dashboard/DashboardFilter.tsx?raw';
-import recoverySource from '@/components/Recovery/Recovery.tsx?raw';
-import infrastructureSource from '@/pages/Infrastructure.tsx?raw';
+import recoveryHistorySectionSource from '@/components/Recovery/RecoveryHistorySection.tsx?raw';
+import recoveryProtectedInventorySectionSource from '@/components/Recovery/RecoveryProtectedInventorySection.tsx?raw';
+import infrastructurePageSurfaceSource from '@/features/infrastructure/InfrastructurePageSurface.tsx?raw';
 
 const tsxSources = import.meta.glob('../../**/*.tsx', {
   query: '?raw',
@@ -15,17 +16,25 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('FilterHeader');
     expect(pageControlsSource).toContain('FilterMobileToggleButton');
     expect(pageControlsSource).toContain('ColumnPicker');
+    expect(pageControlsSource).toContain('searchLeading');
+    expect(pageControlsSource).toContain('splitProps');
+    expect(pageControlsSource).toContain('<FilterHeader');
+    expect(pageControlsSource).toContain('{...divProps}');
 
     expect(dashboardFilterSource).toContain('PageControls');
     expect(dashboardFilterSource).not.toContain('<FilterHeader');
     expect(dashboardFilterSource).not.toContain('<ColumnPicker');
 
-    expect(recoverySource).toContain('PageControls');
-    expect(recoverySource).not.toContain('<FilterHeader');
-    expect(recoverySource).not.toContain('<ColumnPicker');
+    expect(recoveryProtectedInventorySectionSource).toContain('PageControls');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('<ColumnPicker');
 
-    expect(infrastructureSource).toContain('PageControls');
-    expect(infrastructureSource).not.toContain('<FilterHeader');
+    expect(recoveryHistorySectionSource).toContain('PageControls');
+    expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
+    expect(recoveryHistorySectionSource).not.toContain('<ColumnPicker');
+
+    expect(infrastructurePageSurfaceSource).toContain('PageControls');
+    expect(infrastructurePageSurfaceSource).not.toContain('<FilterHeader');
   });
 
   it('limits raw FilterHeader and ColumnPicker usage to the known allowlist', () => {
@@ -81,5 +90,13 @@ describe('page controls guardrails', () => {
     expect(mobileToggleUsers).toEqual([
       './PageControls.tsx',
     ]);
+  });
+
+  it('keeps search-row leading content routed through PageControls rather than local FilterHeader forks', () => {
+    expect(pageControlsSource).toContain('searchLeading?: JSX.Element');
+    expect(pageControlsSource).toContain('searchLeading={local.searchLeading}');
+    expect(pageControlsSource).toContain('{...divProps}');
+    expect(recoveryProtectedInventorySectionSource).not.toContain('<FilterHeader');
+    expect(recoveryHistorySectionSource).not.toContain('<FilterHeader');
   });
 });

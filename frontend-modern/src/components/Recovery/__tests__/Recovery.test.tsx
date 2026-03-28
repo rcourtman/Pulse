@@ -205,10 +205,21 @@ describe('Recovery', () => {
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     expect(await screen.findByRole('tab', { name: /protected items/i })).toBeInTheDocument();
     await screen.findByText('VM 123');
+    const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
+    expect(
+      within(inventoryControls).getByPlaceholderText('Search protected items...'),
+    ).toBeInTheDocument();
+    expect(
+      within(inventoryControls).getByRole('tab', { name: /protected items/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(inventoryControls).getByRole('tab', { name: /recovery events/i }),
+    ).toBeInTheDocument();
+    expect(within(inventoryControls).getByText(/^2 protected items$/i)).toBeInTheDocument();
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
-    expect(screen.getAllByText(/2 protected items/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^2 protected items$/i)).toHaveLength(1);
     expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -248,8 +259,20 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const historyTable = screen.getAllByRole('table')[0];
+    const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
+    expect(
+      within(historyControls).getByPlaceholderText('Search recovery history...'),
+    ).toBeInTheDocument();
+    expect(
+      within(historyControls).getByRole('tab', { name: /protected items/i }),
+    ).toBeInTheDocument();
+    expect(
+      within(historyControls).getByRole('tab', { name: /recovery events/i }),
+    ).toBeInTheDocument();
+    expect(within(historyControls).getByText(/1 event/i)).toBeInTheDocument();
+    expect(within(historyControls).getByText(/^1 day group$/i)).toBeInTheDocument();
     expect(screen.getAllByText(/1 event/i).length).toBeGreaterThan(0);
-    expect(screen.getByText(/1 day group/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/^1 day group$/i)).toHaveLength(1);
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
