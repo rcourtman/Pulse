@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Simple harness to execute shell-based smoke tests under scripts/tests/.
+# Simple harness to execute smoke tests under scripts/tests/.
 
 set -euo pipefail
 
@@ -11,13 +11,17 @@ usage() {
   cat <<'EOF'
 Usage: scripts/tests/run.sh [test-script ...]
 
-Run all scripts/tests/test-*.sh tests or a subset when specified.
+Run all scripts/tests/test-*.sh and scripts/tests/test_*.py tests or a subset
+when specified.
 EOF
 }
 
 discover_tests() {
   local -n ref=$1
-  mapfile -t ref < <(find "${TEST_DIR}" -maxdepth 1 -type f -name 'test-*.sh' | sort)
+  mapfile -t ref < <(
+    find "${TEST_DIR}" -maxdepth 1 -type f \
+      \( -name 'test-*.sh' -o -name 'test_*.py' \) | sort
+  )
 }
 
 resolve_test_path() {
@@ -50,7 +54,15 @@ run_tests() {
     ((total += 1))
     local display="${test#${ROOT_DIR}/}"
     printf '==> %s\n' "${display}"
-    if (cd "${ROOT_DIR}" && "${test}"); then
+    if [[ "${test}" == *.py ]]; then
+      if (cd "${ROOT_DIR}" && python3 "${test}"); then
+        echo "PASS"
+        ((passed += 1))
+      else
+        echo "FAIL"
+        ((failed += 1))
+      fi
+    elif (cd "${ROOT_DIR}" && "${test}"); then
       echo "PASS"
       ((passed += 1))
     else
