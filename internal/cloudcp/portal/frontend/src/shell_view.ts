@@ -351,13 +351,13 @@ function renderShellNavigation(accounts: PortalAccountSummary[], supportEmail: s
       '<div class="portal-shell-nav-header">' +
         '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
         '<div class="portal-shell-nav-title">' + (hosted ? 'Operator console' : 'Account console') + '</div>' +
-        '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted operations, account access, and commercial desks' : 'Commercial account services and support') + '</div>' +
+        '<div class="portal-shell-nav-support">' + (hosted ? 'Hosted operations, account access, and commercial services' : 'Commercial account services and support') + '</div>' +
       '</div>' +
       '<div class="portal-shell-nav-group">' +
         shellSectionButton('overview', activeSection, '01', 'Overview', hosted ? 'Posture, account status, and next actions' : 'Account summary and access state', hosted ? String(totalWorkspaces) + ' total' : 'Summary') +
         shellSectionButton('workspaces', activeSection, '02', hosted ? 'Workspaces' : 'Hosted access', hosted ? 'Hosted fleet and lifecycle actions' : 'No hosted workspaces are attached yet', hosted ? String(readyWorkspaces) + ' ready' : 'None') +
         shellSectionButton('team', activeSection, '03', 'Team', hosted ? 'Access and operator roster' : 'Account membership', canManage ? 'Manage' : 'View') +
-        shellSectionButton('services', activeSection, '04', 'Account services', 'Licenses, billing, refunds, and privacy', '4 desks') +
+        shellSectionButton('services', activeSection, '04', 'Account services', 'Licenses, billing, refunds, and privacy', '4 tools') +
         shellSectionButton('support', activeSection, '05', 'Support', hosted ? 'Escalation and account support' : (supportEmail || 'Support contact'), supportEmail ? 'Email' : 'Help') +
       '</div>' +
     '</aside>'
@@ -393,7 +393,7 @@ function renderWorkspaceCard(account: PortalAccountSummary, workspace: PortalWor
       escapeAttr(account.id) +
       '" data-workspace-id="' +
       escapeAttr(workspace.id) +
-      '">Lifecycle desk</button>';
+      '">Lifecycle</button>';
   }
 
   return (
@@ -488,7 +488,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
     : 'Run hosted workspaces, account billing, and operator access from one place.';
   var overviewBriefStrip =
     '<div class="account-overview-brief-strip">' +
-      '<div class="account-overview-brief-point">' +
+      '<div class="account-overview-brief-point account-overview-brief-point-wide">' +
         '<strong>Console role</strong>' +
         '<span>' + escapeHTML(consoleScopeCopy) + '</span>' +
       '</div>' +
@@ -508,7 +508,7 @@ function renderAccountOverviewSection(account: PortalAccountSummary): string {
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
           '<h3>Hosted posture</h3>' +
-          '<p>Review hosted posture first, then move into the next operator desk.</p>' +
+          '<p>Review hosted posture first, then move into the next section.</p>' +
           renderSectionContextChips([
             String(totalCount) + ' total',
             String(readyCount) + ' ready',
@@ -615,25 +615,25 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
         '<div class="workspace-management-header">' +
           '<div>' +
             '<div class="account-panel-kicker">Workspace management</div>' +
-            '<h3>Lifecycle desk</h3>' +
+            '<h3>Lifecycle</h3>' +
             '<p>Inspect one workspace at a time and keep account-level actions separate.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
           escapeAttr(account.id) +
           '" data-action="clear-workspace-selection" data-account-id="' +
           escapeAttr(account.id) +
-          '">Close desk</button>' +
+          '">Close panel</button>' +
         '</div>' +
         '<div class="workspace-management-empty" id="workspace-management-empty-' +
         escapeAttr(account.id) +
         '">' +
-          '<div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep hosted billing, team changes, and new workspace creation in the account desk.</div>' +
+          '<div class="workspace-management-empty-copy">Pick one workspace for lifecycle review. Keep hosted billing, team changes, and new workspace creation in account actions.</div>' +
           '<div class="workspace-management-empty-shell">' +
             '<div class="workspace-management-empty-actions-card">' +
               '<div class="workspace-management-empty-actions-copy">' +
-                '<div class="account-panel-kicker">Account desk</div>' +
+                '<div class="account-panel-kicker">Account actions</div>' +
                 '<h4>Keep account-wide actions separate</h4>' +
-                '<p>Use this desk for new workspaces, hosted billing, and team changes. Keep row actions focused on a single workspace.</p>' +
+                '<p>Use this area for new workspaces, hosted billing, and team changes. Keep row actions focused on a single workspace.</p>' +
               '</div>' +
               '<div class="workspace-management-empty-actions">' + workspaceDeskActions + '</div>' +
               addWorkspaceForm +
@@ -641,7 +641,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             '<div class="workspace-management-empty-rules">' +
               '<div class="workspace-management-empty-rule"><strong>Inspect posture</strong><span>Open the workspace first and confirm whether it is routine work, review work, or a parked suspended system.</span></div>' +
               '<div class="workspace-management-empty-rule"><strong>Confirm lifecycle</strong><span>Check active, checking, failed, or suspended state before you take the next step.</span></div>' +
-              '<div class="workspace-management-empty-rule"><strong>Stay deliberate</strong><span>Use the desk for one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
+              '<div class="workspace-management-empty-rule"><strong>Stay deliberate</strong><span>Review one workspace at a time instead of mixing fleet and account actions together.</span></div>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -689,7 +689,7 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
   var workspaceHTML = workspaces.length
     ? '<div class="workspace-list-wrap">' +
           '<div class="workspace-list-toolbar">' +
-            '<div class="workspace-list-summary">Open a workspace for operator work. Use the lifecycle desk only when you are reviewing state or making account-level changes.</div>' +
+            '<div class="workspace-list-summary">Open a workspace for operator work. Use the lifecycle view only when you are reviewing state or making account-level changes.</div>' +
         '</div>' +
         '<div class="workspace-list-head">' +
           '<span>Workspace</span>' +
@@ -754,7 +754,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
     '<div class="team-review-shell">' +
       '<div class="team-review-strip">' +
         '<div class="team-panel-heading team-panel-heading-tight">' +
-          '<div class="account-panel-kicker">Review desk</div>' +
+          '<div class="account-panel-kicker">Access review</div>' +
           '<h4>Keep access disciplined</h4>' +
           '<p>Use the roster as a controlled operator surface, not a dumping ground for vague shared access.</p>' +
         '</div>' +
@@ -793,7 +793,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
               'Hosted access',
             ]) +
           '</div>' +
-          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Close team desk</button>' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Close team view</button>' +
         '</div>' +
         '<div class="team-management-stats" id="team-stats-' +
         escapeAttr(account.id) +
@@ -816,7 +816,7 @@ function renderAccountTeamSection(account: PortalAccountSummary): string {
           '<div class="team-side-column">' +
             '<div class="team-operations-panel">' +
               '<div class="team-panel-heading team-panel-heading-tight">' +
-                '<div class="account-panel-kicker">Access desk</div>' +
+                '<div class="account-panel-kicker">Access controls</div>' +
                 '<h4>Invite and role policy</h4>' +
                 '<p>Keep the roster deliberate. Invite the smallest role first, then tighten access as responsibilities become clearer.</p>' +
               '</div>' +
@@ -856,8 +856,8 @@ function renderSupportSection(context: ShellViewContext): string {
   return (
     '<section class="portal-support-panel">' +
       '<div class="account-panel-kicker">Support</div>' +
-      '<h2>Support desk</h2>' +
-      '<p>Use this desk when hosted access looks wrong, billing behaves unexpectedly, or you need help with commercial requests.</p>' +
+      '<h2>Support</h2>' +
+      '<p>Use this section when hosted access looks wrong, billing behaves unexpectedly, or you need help with commercial requests.</p>' +
       renderSectionContextChips(['Hosted issues', 'Commercial requests', context.bootstrap.support_email ? 'Email' : 'Support']) +
       '<div class="portal-support-brief-strip">' +
         '<div class="portal-support-brief-card">' +
@@ -870,7 +870,7 @@ function renderSupportSection(context: ShellViewContext): string {
         '</div>' +
         '<div class="portal-support-brief-card">' +
           '<strong>Escalate with context</strong>' +
-          '<span>Include the exact account, workspace, desk, and failed action so support can continue the same path immediately.</span>' +
+          '<span>Include the exact account, workspace, section, and failed action so support can continue the same path immediately.</span>' +
         '</div>' +
       '</div>' +
       '<div class="portal-support-layout">' +
@@ -890,10 +890,10 @@ function renderSupportSection(context: ShellViewContext): string {
           '<div class="portal-support-route-card">' +
             '<div class="account-panel-kicker">Commercial</div>' +
             '<h3>Commercial services</h3>' +
-            '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through the account services desk first.</p>' +
+            '<p>Self-hosted subscriptions, license recovery, refunds, and privacy requests all route through Account services first.</p>' +
             '<div class="portal-support-points">' +
-              '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use the billing, license, refund, or privacy desk before escalating a commercial issue.</span></div>' +
-              '<div class="portal-support-point"><strong>Escalate from the same desk</strong><span>Keep the request in one place instead of splitting it between billing and operator surfaces.</span></div>' +
+              '<div class="portal-support-point"><strong>Start in Account services</strong><span>Use Billing, Licenses, Refunds, or Privacy before escalating a commercial issue.</span></div>' +
+              '<div class="portal-support-point"><strong>Escalate from the same path</strong><span>Keep the request in one place instead of splitting it between billing and operator surfaces.</span></div>' +
             '</div>' +
             '<div class="portal-support-actions">' +
               '<button type="button" class="btn-secondary" data-shell-action="activate-section" data-shell-section="services">Open account services</button>' +
@@ -901,20 +901,20 @@ function renderSupportSection(context: ShellViewContext): string {
           '</div>' +
         '</div>' +
         '<div class="portal-support-runbook">' +
-          '<div class="account-panel-kicker">Escalation desk</div>' +
+          '<div class="account-panel-kicker">Escalation guide</div>' +
           '<h3>Route the issue cleanly</h3>' +
           '<p>Keep hosted operations, commercial requests, and pure support escalation on their own paths so the next person does not have to reconstruct the account state.</p>' +
           '<div class="portal-support-runbook-brief">' +
             '<div class="portal-support-runbook-brief-card"><strong>Confirm scope</strong><span>Decide first whether the issue is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
             '<div class="portal-support-runbook-brief-card"><strong>Keep paths separate</strong><span>Workspace and team problems stay out of billing, refund, privacy, and license work.</span></div>' +
-            '<div class="portal-support-runbook-brief-card"><strong>Escalate with facts</strong><span>Bring the exact account, workspace, desk, and failed action so support starts with the same state you saw.</span></div>' +
+            '<div class="portal-support-runbook-brief-card"><strong>Escalate with facts</strong><span>Bring the exact account, workspace, section, and failed action so support starts with the same state you saw.</span></div>' +
           '</div>' +
           '<div class="portal-support-runbook-grid">' +
             '<div class="portal-support-runbook-section">' +
               '<div class="portal-support-runbook-section-title">Route checklist</div>' +
               '<div class="portal-support-runbook-list">' +
                 '<div class="portal-support-runbook-step"><strong>1. Confirm the scope</strong><span>Decide whether the problem is hosted operations, commercial self-service, or direct support escalation.</span></div>' +
-                '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own desks. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
+                '<div class="portal-support-runbook-step"><strong>2. Keep hosted and commercial separate</strong><span>Workspace and team problems stay in their own sections. Billing, license, refund, and privacy work stay in Account services.</span></div>' +
                 '<div class="portal-support-runbook-step"><strong>3. Escalate with context</strong><span>Include the account, workspace, and exact failed action so the escalation path starts with the same facts you saw.</span></div>' +
               '</div>' +
             '</div>' +
@@ -922,7 +922,7 @@ function renderSupportSection(context: ShellViewContext): string {
               '<div class="portal-support-runbook-section-title">Escalation packet</div>' +
               '<div class="portal-support-handoff-note">' +
                 '<strong>Include in the escalation</strong>' +
-                '<span>Account name, workspace name if relevant, the desk you were in, the exact button or request that failed, and whether the issue was hosted or commercial.</span>' +
+                '<span>Account name, workspace name if relevant, the section you were in, the exact button or request that failed, and whether the issue was hosted or commercial.</span>' +
               '</div>' +
             '</div>' +
           '</div>' +
@@ -968,9 +968,9 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var activeSection = context.activeSection || 'overview';
-  var serviceHeading = hosted ? 'Self-hosted commercial desk' : 'Account services';
+  var serviceHeading = hosted ? 'Self-hosted commercial services' : 'Account services';
   var serviceNote = hosted
-    ? 'Hosted operations stay in Workspaces and Team. Use this desk only for self-hosted commercial requests.'
+    ? 'Hosted operations stay in Workspaces and Team. Use this area only for self-hosted commercial requests.'
     : 'Use these account tools for self-hosted licenses, billing, refunds, and privacy actions.';
   var hostedContent = accounts.map(function(account) {
     return (
@@ -1000,7 +1000,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '<h2>' + serviceHeading + '</h2>' +
                 renderSectionContextChips([
                   hosted ? 'Self-hosted only' : 'Commercial',
-                  '4 desks',
+                  '4 tools',
                 ]) +
               '</div>' +
               '<div class="service-note">' + serviceNote + '</div>' +
@@ -1009,51 +1009,51 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<aside class="service-shell-sidebar">' +
                 '<div class="service-shell-sidebar-head">' +
                   '<div class="account-panel-kicker">Service navigator</div>' +
-                  '<h3>Self-hosted desks</h3>' +
+                  '<h3>Self-hosted tools</h3>' +
                   '<p>Pick one commercial workflow and keep it isolated from hosted workspace and team operations.</p>' +
                 '</div>' +
                 '<div class="service-action-list">' +
-                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing desk', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
-                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'License desk', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refund desk', 'Request a self-serve refund when the purchase is still eligible.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
-                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy desk', 'Request export or deletion for commercial account data.', 'data-service-panel', 'data-export-email', ['Export', 'Deletion']) +
+                  renderServiceActionRow('open-manage-service', 'Billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-service-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+                  renderServiceActionRow('open-retrieve-service', 'Licenses', 'Retrieve licenses', 'Licenses', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-service-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                  renderServiceActionRow('open-refund-service', 'Refunds', 'Refund requests', 'Refunds', 'Request a self-serve refund when the purchase is still eligible.', 'refund-service-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
+                  renderServiceActionRow('open-data-service', 'Privacy', 'Data and privacy', 'Privacy', 'Request export or deletion for commercial account data.', 'data-service-panel', 'data-export-email', ['Export', 'Deletion']) +
                 '</div>' +
                 '<div class="service-inline-support">' +
                   '<div class="account-panel-kicker">Commercial routing</div>' +
-                  '<h4>Keep this desk isolated</h4>' +
-                  '<p>Hosted workspace work stays in Workspaces and Team. Use Support only when a self-hosted billing, license, refund, or privacy desk cannot complete the request cleanly.</p>' +
+                  '<h4>Keep this workflow isolated</h4>' +
+                  '<p>Hosted workspace work stays in Workspaces and Team. Use Support only when a self-hosted billing, license, refund, or privacy workflow cannot complete the request cleanly.</p>' +
                   '<div class="service-inline-support-points">' +
-                    '<div class="service-inline-support-point"><strong>Hosted stays hosted</strong><span>Tenant handoff, team access, and hosted billing do not belong in this commercial desk.</span></div>' +
-                    '<div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the desk name and exact failed action if a commercial request needs support.</span></div>' +
+                    '<div class="service-inline-support-point"><strong>Hosted stays hosted</strong><span>Tenant handoff, team access, and hosted billing do not belong in this commercial section.</span></div>' +
+                    '<div class="service-inline-support-point"><strong>Escalate with context</strong><span>Bring the service name and exact failed action if a commercial request needs support.</span></div>' +
                   '</div>' +
                   '<div class="service-inline-support-actions">' +
-                    '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support desk</button>' +
+                    '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
                   '</div>' +
                 '</div>' +
               '</aside>' +
               '<div class="service-shell-main">' +
                 '<div class="service-detail-shell">' +
                   '<div class="service-panel service-panel-empty visible" id="service-panel-empty">' +
-                    '<div class="account-panel-kicker">Desk brief</div>' +
-                    '<h3>Choose a desk to begin</h3>' +
-                    '<p>Use one self-hosted desk at a time. Each desk verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
+                    '<div class="account-panel-kicker">Service brief</div>' +
+                    '<h3>Choose a service to begin</h3>' +
+                    '<p>Use one self-hosted workflow at a time. Each service verifies commercial identity first, then keeps billing, license, refund, or privacy work contained in one place.</p>' +
                     '<div class="service-empty-shell">' +
                       '<div class="service-empty-primary">' +
                         '<div class="service-empty-section service-empty-section-compact">' +
                           '<div class="service-empty-column-title">Workflow map</div>' +
                           '<div class="service-empty-flow-list">' +
-                            '<div class="service-empty-flow"><strong>Billing desk</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
-                            '<div class="service-empty-flow"><strong>License desk</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
-                            '<div class="service-empty-flow"><strong>Refund desk</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
-                            '<div class="service-empty-flow"><strong>Privacy desk</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Billing</strong><span>Stripe customer portal access for invoices, payment methods, and plan changes.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Licenses</strong><span>Recover the latest active self-hosted license and the matching invoice link.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Refunds</strong><span>Check eligibility before revoking active commercial access.</span></div>' +
+                            '<div class="service-empty-flow"><strong>Privacy</strong><span>Request export or deletion without leaving Pulse Account.</span></div>' +
                           '</div>' +
                         '</div>' +
                         '<div class="service-empty-section service-empty-section-compact">' +
                           '<div class="service-empty-column-title">Before you start</div>' +
                           '<div class="service-empty-points service-empty-points-stack">' +
-                            '<div class="service-empty-point"><strong>One request</strong><span>Keep a single commercial task active instead of bouncing across desks.</span></div>' +
+                            '<div class="service-empty-point"><strong>One request</strong><span>Keep a single commercial task active instead of bouncing across sections.</span></div>' +
                             '<div class="service-empty-point"><strong>Identity first</strong><span>Verification happens before any sensitive account action opens.</span></div>' +
-                            '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between desks.</span></div>' +
+                            '<div class="service-empty-point"><strong>Stay focused</strong><span>Keep one commercial request in flight instead of bouncing between services.</span></div>' +
                           '</div>' +
                         '</div>' +
                       '</div>' +
@@ -1061,8 +1061,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                         '<div class="service-empty-section service-empty-section-support">' +
                           '<div class="service-empty-column-title">Escalation</div>' +
                           '<div class="service-empty-checklist">' +
-                            '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, license, refund, or privacy work does not behave as expected, escalate from this desk.</span></div>' +
-                            '<div class="service-empty-check"><strong>Commercial packet</strong><span>Bring the desk name, commercial email, and the exact failed action so support starts with the same request state.</span></div>' +
+                            '<div class="service-empty-check"><strong>Escalate quickly</strong><span>If billing, licenses, refunds, or privacy do not behave as expected, escalate from this section.</span></div>' +
+                            '<div class="service-empty-check"><strong>Commercial packet</strong><span>Bring the service name, commercial email, and the exact failed action so support starts with the same request state.</span></div>' +
                           '</div>' +
                           '<div class="service-empty-support">Need help with billing, refund, privacy, or license requests? <a class="portal-support-link" href="mailto:' +
                           escapeAttr(context.bootstrap.support_email || '') +
@@ -1070,7 +1070,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                           escapeHTML(context.bootstrap.support_email || '') +
                           '</a></div>' +
                           '<div class="service-empty-actions">' +
-                            '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support desk</button>' +
+                            '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
                           '</div>' +
                         '</div>' +
                       '</div>' +

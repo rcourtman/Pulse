@@ -784,8 +784,8 @@ header .logout-btn:hover,
 }
 .account-overview-briefing-card {
   display: grid;
-  grid-template-columns: minmax(0, 1.06fr) minmax(320px, 0.94fr);
-  gap: 18px;
+  grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.88fr);
+  gap: 14px;
   align-items: start;
   background:
     linear-gradient(
@@ -801,7 +801,7 @@ header .logout-btn:hover,
 }
 .account-overview-brief-strip {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 14px;
 }
@@ -814,6 +814,9 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: 10px;
   background: rgba(252, 253, 254, 0.96);
+}
+.account-overview-brief-point-wide {
+  grid-column: 1 / -1;
 }
 .account-overview-brief-point strong {
   font-size: 12px;
@@ -831,7 +834,7 @@ header .logout-btn:hover,
   flex-direction: column;
   gap: 0;
   min-width: 0;
-  padding-left: 18px;
+  padding-left: 14px;
   border-left: 1px solid var(--line);
 }
 .account-overview-next-block h4 {
@@ -974,21 +977,23 @@ header .logout-btn:hover,
   background: #fbfcfe;
 }
 .overview-stable-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 .overview-stable-item {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 11px 0 11px 14px;
-  border-top: 1px solid var(--line);
+  min-height: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
   border-left: 3px solid #dbe5ee;
+  border-radius: 10px;
+  background: #fff;
 }
 .overview-stable-item:first-child {
-  padding-top: 0;
-  border-top: none;
+  padding-top: 11px;
 }
 .overview-stable-item strong {
   font-size: 12px;
