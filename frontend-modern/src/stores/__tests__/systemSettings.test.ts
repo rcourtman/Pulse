@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { PRIVACY_DOC_URL } from '@/utils/docsLinks';
 import {
@@ -8,6 +11,11 @@ import {
   shouldReduceProUpsellNoise,
   updateSystemSettingsFromResponse,
 } from '@/stores/systemSettings';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const frontendRoot = path.resolve(__dirname, '..', '..', '..');
+const repoRoot = path.resolve(frontendRoot, '..');
 
 describe('systemSettings store', () => {
   beforeEach(() => {
@@ -56,4 +64,12 @@ describe('systemSettings store', () => {
     expect(PRIVACY_DOC_URL).toBe('/docs/PRIVACY.md');
   });
 
+  it('documents telemetry retention and field-level rationale in the privacy doc', () => {
+    const privacyDoc = readFileSync(path.join(repoRoot, 'docs', 'PRIVACY.md'), 'utf8');
+
+    expect(privacyDoc).toContain('Every field is listed below with the reason it exists');
+    expect(privacyDoc).toContain('rows older than **90 days** are purged automatically');
+    expect(privacyDoc).toContain('uses client IP addresses transiently for abuse/rate limiting');
+    expect(privacyDoc).toContain('Reset ID');
+  });
 });

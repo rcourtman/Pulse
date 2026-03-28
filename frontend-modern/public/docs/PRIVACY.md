@@ -21,34 +21,40 @@ No hostnames, credentials, IP addresses, or personally identifiable information 
 
 ### Exactly what is sent
 
-Every field is listed below — nothing else leaves your server:
+Every field is listed below with the reason it exists — nothing else leaves your server:
 
 | Field | Example | Purpose |
 |-------|---------|---------|
-| Install ID | `a1b2c3d4-...` | Rotating UUID generated locally, not tied to any account |
-| Version | `6.0.0` | Pulse version |
-| Platform | `docker` or `binary` | Deployment method |
-| OS | `linux` | Operating system |
-| Arch | `amd64` | CPU architecture |
-| Event | `startup` or `heartbeat` | Whether this is a startup or daily ping |
-| PVE nodes | `3` | Number of Proxmox VE nodes connected |
-| PBS instances | `1` | Number of Proxmox Backup Server instances |
-| PMG instances | `0` | Number of Proxmox Mail Gateway instances |
-| VMs | `25` | Total VM count |
-| Containers | `12` | Total LXC container count |
-| Docker hosts | `2` | Number of Docker hosts monitored |
-| Kubernetes clusters | `0` | Number of Kubernetes clusters |
-| AI enabled | `true`/`false` | Whether AI features are turned on |
-| Active alerts | `4` | Number of active alerts |
-| Relay enabled | `true`/`false` | Whether remote access is enabled |
-| SSO enabled | `true`/`false` | Whether OIDC/SSO is configured |
-| Multi-tenant | `true`/`false` | Whether multi-tenant mode is on |
-| Paid license | `true`/`false` | Whether a paid license is active |
-| Has API tokens | `true`/`false` | Whether any API tokens are configured |
+| Install ID | `a1b2c3d4-...` | Distinguish active installations within one rotation window without tying telemetry to an account or person |
+| Version | `6.0.0` | See which releases are actually deployed so compatibility and upgrade issues can be prioritized |
+| Platform | `docker` or `binary` | Understand whether runtime behavior differs between container and non-container installs |
+| OS | `linux` | See whether operating-system-specific issues exist |
+| Arch | `amd64` | See whether CPU-architecture-specific issues exist |
+| Event | `startup` or `heartbeat` | Distinguish first-run/session starts from daily active-install heartbeats |
+| PVE nodes | `3` | Understand Proxmox VE deployment size in aggregate |
+| PBS instances | `1` | Understand Proxmox Backup Server adoption in aggregate |
+| PMG instances | `0` | Understand Proxmox Mail Gateway adoption in aggregate |
+| VMs | `25` | Understand approximate infrastructure scale in aggregate |
+| Containers | `12` | Understand approximate LXC usage in aggregate |
+| Docker hosts | `2` | Understand Docker monitoring adoption in aggregate |
+| Kubernetes clusters | `0` | Understand Kubernetes monitoring adoption in aggregate |
+| AI enabled | `true`/`false` | See whether AI features are actually used before expanding or removing them |
+| Active alerts | `4` | Understand how noisy or quiet installations are in aggregate |
+| Relay enabled | `true`/`false` | See whether remote-access features are being used |
+| SSO enabled | `true`/`false` | See whether single-sign-on support is being used |
+| Multi-tenant | `true`/`false` | See whether multi-tenant/runtime-org features are being used |
+| Paid license | `true`/`false` | Distinguish free from paid posture without sending the exact commercial tier |
+| Has API tokens | `true`/`false` | See whether token-based automation/integration is being used without sending token counts |
+
+### Server-side handling and retention
+
+- Telemetry pings are stored on the Pulse license server only for aggregate install/use analysis.
+- Telemetry rows older than **90 days** are purged automatically.
+- The license server uses client IP addresses transiently for abuse/rate limiting, but it does **not** store IP addresses in telemetry rows.
 
 ### What is NOT sent
 
-- No IP addresses are stored server-side
+- No IP addresses are stored in telemetry rows
 - No hostnames, node names, VM names, or any infrastructure identifiers
 - No Proxmox credentials, API tokens, or passwords
 - No alert content, AI prompts, or chat messages

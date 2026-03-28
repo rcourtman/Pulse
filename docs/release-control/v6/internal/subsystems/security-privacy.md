@@ -140,6 +140,12 @@ That same telemetry trust boundary must remain operator-inspectable in-product:
 the shared system settings surface may preview only the exact runtime payload
 Pulse would send, and it must allow an operator to rotate the local telemetry
 install ID immediately without waiting for the scheduled 30-day window.
+That same governed privacy disclosure must also state the current server-side
+telemetry retention and handling rules plainly. If the license-server path
+retains telemetry rows for a fixed window or uses client IPs transiently for
+abuse controls, `docs/PRIVACY.md` and the shipped
+`frontend-modern/public/docs/PRIVACY.md` copy must say so explicitly rather
+than implying the server stores nothing at all.
 That same rule also applies inside shipped security guidance itself:
 `SECURITY.md` and the synced `frontend-modern/public/docs/SECURITY.md` copy may
 not bounce the operator back to GitHub `main` for section references that the
