@@ -298,7 +298,7 @@ func TestNewIncidentStore_LoadsFromDisk(t *testing.T) {
 
 func TestNewIncidentStore_LoadError(t *testing.T) {
 	tmpDir := t.TempDir()
-	path := filepath.Join(tmpDir, incidentFileName)
+	path := filepath.Join(tmpDir, incidentHistoryFileName)
 	if err := os.WriteFile(path, []byte("{"), 0600); err != nil {
 		t.Fatalf("write file: %v", err)
 	}
@@ -306,6 +306,27 @@ func TestNewIncidentStore_LoadError(t *testing.T) {
 	store := NewIncidentStore(IncidentStoreConfig{DataDir: tmpDir})
 	if len(store.incidents) != 0 {
 		t.Fatalf("expected no incidents after load error")
+	}
+}
+
+func TestMemoryPersistencePathCanonicalizesDataDir(t *testing.T) {
+	baseDir := t.TempDir()
+	inputDir := "  " + filepath.Join(baseDir, "nested", "..", "memory") + string(os.PathSeparator) + ".  "
+
+	path, err := memoryPersistencePath(inputDir, incidentHistoryFileName)
+	if err != nil {
+		t.Fatalf("memoryPersistencePath() error = %v", err)
+	}
+
+	wantDir := filepath.Clean(filepath.Join(baseDir, "nested", "..", "memory") + string(os.PathSeparator) + ".")
+	if path != filepath.Join(wantDir, incidentHistoryFileName) {
+		t.Fatalf("memoryPersistencePath() = %q, want %q", path, filepath.Join(wantDir, incidentHistoryFileName))
+	}
+}
+
+func TestMemoryPersistencePathRejectsBlankDir(t *testing.T) {
+	if _, err := memoryPersistencePath(" \t ", incidentHistoryFileName); err == nil {
+		t.Fatal("expected blank memory data dir to be rejected")
 	}
 }
 

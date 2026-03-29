@@ -174,6 +174,10 @@ history, and chat sessions must not keep legacy plaintext files on the runtime
 primary path once the process can read them. Plaintext AI persistence files may
 only serve as migration input and must be rewritten immediately into
 encrypted-at-rest storage on load.
+That same persistence boundary also governs AI memory package storage roots:
+fixed store files such as change history, incident memory, and remediation
+history must resolve through normalized owned data directories and fixed
+storage-leaf joins instead of raw `filepath.Join(dataDir, ...)` paths.
 The same migration-only rule applies to guest knowledge under
 `internal/ai/knowledge/`: legacy `.json` knowledge files and plaintext `.enc`
 knowledge files may only serve as migration input, and the knowledge store

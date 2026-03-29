@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -284,7 +283,6 @@ const (
 	defaultIncidentMaxIncidents  = 500
 	defaultIncidentMaxEvents     = 120
 	defaultIncidentMaxAgeDays    = 90
-	incidentFileName             = "ai_incidents.json"
 	maxIncidentFileSize          = 20 * 1024 * 1024 // 20MB
 	incidentStartMatchTolerance  = 10 * time.Minute
 	projectedIncidentChangeLimit = 256
@@ -316,11 +314,15 @@ func NewIncidentStore(cfg IncidentStoreConfig) *IncidentStore {
 		maxIncidents: maxIncidents,
 		maxEvents:    maxEvents,
 		maxAge:       time.Duration(maxAgeDays) * 24 * time.Hour,
-		dataDir:      cfg.DataDir,
+		dataDir:      normalizeOptionalMemoryDataDir(cfg.DataDir),
 	}
 
 	if store.dataDir != "" {
-		store.filePath = filepath.Join(store.dataDir, incidentFileName)
+		filePath, err := memoryPersistencePath(store.dataDir, incidentHistoryFileName)
+		if err != nil {
+			panic(fmt.Sprintf("invalid AI incident persistence path for %q: %v", store.dataDir, err))
+		}
+		store.filePath = filePath
 		if err := store.loadFromDisk(); err != nil {
 			log.Warn().Err(err).Msg("failed to load incident history from disk")
 		} else if len(store.incidents) > 0 {

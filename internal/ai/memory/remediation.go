@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -80,7 +79,7 @@ func NewRemediationLog(cfg RemediationLogConfig) *RemediationLog {
 	r := &RemediationLog{
 		records:    make([]RemediationRecord, 0),
 		maxRecords: cfg.MaxRecords,
-		dataDir:    cfg.DataDir,
+		dataDir:    normalizeOptionalMemoryDataDir(cfg.DataDir),
 	}
 
 	// Load existing records from disk
@@ -346,7 +345,10 @@ func (r *RemediationLog) saveToDisk() error {
 	copy(records, r.records)
 	r.mu.RUnlock()
 
-	path := filepath.Join(r.dataDir, "ai_remediations.json")
+	path, err := memoryPersistencePath(r.dataDir, remediationHistoryFileName)
+	if err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(records, "", "  ")
 	if err != nil {
 		return err
@@ -366,7 +368,10 @@ func (r *RemediationLog) loadFromDisk() error {
 		return nil
 	}
 
-	path := filepath.Join(r.dataDir, "ai_remediations.json")
+	path, err := memoryPersistencePath(r.dataDir, remediationHistoryFileName)
+	if err != nil {
+		return err
+	}
 	if st, err := os.Stat(path); err == nil {
 		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
 		if st.Size() > maxOnDiskBytes {

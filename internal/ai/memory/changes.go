@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -88,7 +87,7 @@ func NewChangeDetector(cfg ChangeDetectorConfig) *ChangeDetector {
 		previousState: make(map[string]ResourceSnapshot),
 		changes:       make([]Change, 0),
 		maxChanges:    cfg.MaxChanges,
-		dataDir:       cfg.DataDir,
+		dataDir:       normalizeOptionalMemoryDataDir(cfg.DataDir),
 	}
 
 	// Load existing changes from disk
@@ -355,7 +354,10 @@ func (d *ChangeDetector) saveToDisk() error {
 	copy(changes, d.changes)
 	d.mu.RUnlock()
 
-	path := filepath.Join(d.dataDir, "ai_changes.json")
+	path, err := memoryPersistencePath(d.dataDir, changeHistoryFileName)
+	if err != nil {
+		return err
+	}
 	data, err := json.MarshalIndent(changes, "", "  ")
 	if err != nil {
 		return err
@@ -375,7 +377,10 @@ func (d *ChangeDetector) loadFromDisk() error {
 		return nil
 	}
 
-	path := filepath.Join(d.dataDir, "ai_changes.json")
+	path, err := memoryPersistencePath(d.dataDir, changeHistoryFileName)
+	if err != nil {
+		return err
+	}
 	if st, err := os.Stat(path); err == nil {
 		const maxOnDiskBytes = 10 << 20 // 10 MiB safety cap
 		if st.Size() > maxOnDiskBytes {
