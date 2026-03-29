@@ -94,7 +94,7 @@ header .brand {
   gap: 10px;
   border: 1px solid var(--line);
   background: #fff;
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 3px 6px 3px 10px;
 }
 
@@ -267,7 +267,7 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 24px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 4px;
   background: #edf5f7;
   color: var(--accent-strong);
   font-size: 10px;
@@ -289,9 +289,9 @@ header .logout-btn:hover,
   gap: 6px;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   font-size: 12px;
   color: var(--ink-soft);
 }
@@ -430,7 +430,7 @@ header .logout-btn:hover,
   color: var(--ink);
 }
 
-.portal-shell-nav-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-muted); white-space: nowrap; }
+.portal-shell-nav-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: 4px; background: transparent; border: none; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-muted); white-space: nowrap; }
 
 .portal-shell-nav-copy {
   display: block;
@@ -650,11 +650,11 @@ header .logout-btn:hover,
 .account-context-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: auto;
   padding: 0 8px;
-  border: 1px solid var(--line);
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--panel-muted);
+  background: transparent;
   color: var(--ink-soft);
   font-size: 12px;
   font-weight: 500;
@@ -906,9 +906,9 @@ header .logout-btn:hover,
   gap: 8px;
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   font-size: 12px;
   color: var(--ink-soft);
 }
@@ -1515,9 +1515,9 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 24px;
   padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fff;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 800;
@@ -1995,7 +1995,7 @@ header .logout-btn:hover,
   min-height: 32px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 4px;
   background: #fff;
   color: var(--ink-muted);
   font-size: 11px;
@@ -2698,7 +2698,7 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 4px;
   background: #eef4f8;
   color: var(--ink-muted);
   font-size: 10px;
@@ -2962,7 +2962,7 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -3251,7 +3251,7 @@ header .logout-btn:hover,
   }
 
   .account-context-chip {
-    min-height: 20px;
+    min-height: auto;
     padding: 0 7px;
     font-size: 10px;
   }
@@ -3360,3 +3360,12 @@ header .logout-btn:hover,
     justify-content: start;
   }
 }
+
+.account-context-chip + .account-context-chip::before { content: '•'; margin-right: 8px; color: var(--line-strong); }
+
+.portal-shell-summary-pill + .portal-shell-summary-pill::before { content: '·'; margin-right: 12px; font-size: 16px; color: var(--line-strong); }
+.portal-shell-summary-pill { padding: 0; min-height: auto; font-size: 13px; color: var(--ink-soft); }
+
+.overview-task-summary-pill + .overview-task-summary-pill::before { content: '•'; margin-right: 12px; color: var(--line-strong); }
+
+.section-context-chip + .section-context-chip::before { content: '•'; margin-right: 8px; color: var(--line-strong); }
