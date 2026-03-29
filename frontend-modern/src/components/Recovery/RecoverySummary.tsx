@@ -1,4 +1,4 @@
-import { Component, For, Show, createMemo } from 'solid-js';
+import { Component, Show, createMemo } from 'solid-js';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPointsSeriesBucket } from '@/types/recovery';
@@ -101,6 +101,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       return rows.slice(0, 2);
     },
   );
+  const postureSupportLine = createMemo(() =>
+    postureRows()
+      .map((row) => `${row.label} ${row.value}`)
+      .join(' · '),
+  );
   const freshWithin24hCount = createMemo(
     () =>
       (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
@@ -131,35 +136,18 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       return rows.slice(0, 2);
     },
   );
+  const freshnessSupportLine = createMemo(() =>
+    freshnessRows()
+      .map((row) => `${row.label} ${row.value}`)
+      .join(' · '),
+  );
 
-  const footprintRows = createMemo(() => {
-    return [
-      { label: 'Platforms', value: platformCoverage().platformCount },
-    ];
-  });
+  const footprintSupportLine = createMemo(() => `Platforms ${platformCoverage().platformCount}`);
 
-  const historyRows = createMemo(() => {
-    if (activity().latestLabel) {
-      return [{ label: 'Latest Activity', value: activity().latestLabel }];
-    }
-    return [{ label: 'Days Active', value: activity().activeDays }];
-  });
-
-  const MetricRows = (rowProps: {
-    rows: Array<{ label: string; value: string | number; valueClass?: string }>;
-  }) => (
-    <dl class="space-y-1 text-[11px]">
-      <For each={rowProps.rows}>
-        {(row) => (
-          <div class="flex items-center justify-between gap-3">
-            <dt class="text-muted">{row.label}</dt>
-            <dd class={`font-semibold tabular-nums text-base-content ${row.valueClass ?? ''}`.trim()}>
-              {row.value}
-            </dd>
-          </div>
-        )}
-      </For>
-    </dl>
+  const historySupportLine = createMemo(() =>
+    activity().latestLabel
+      ? `Latest Activity ${activity().latestLabel}`
+      : `Days Active ${activity().activeDays}`,
   );
 
   return (
@@ -176,44 +164,42 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         class="overflow-hidden"
       >
         <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2">
+          <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class={`text-xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
                 {primaryPostureMetric().value}
               </div>
               <div class="text-[11px] text-muted">{primaryPostureMetric().label}</div>
             </div>
-            <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows rows={postureRows()} />
-            </div>
+            <Show when={postureSupportLine()}>
+              <div class="text-[11px] text-muted">{postureSupportLine()}</div>
+            </Show>
           </div>
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2">
+          <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
                 {freshWithin24hCount()}
               </div>
               <div class="text-[11px] text-muted">fresh in 24h</div>
             </div>
-            <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows rows={freshnessRows()} />
-            </div>
+            <Show when={freshnessSupportLine()}>
+              <div class="text-[11px] text-muted">{freshnessSupportLine()}</div>
+            </Show>
           </div>
         </SummaryMetricCard>
 
         <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
-          <div class="flex h-full flex-col gap-2">
+          <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class="text-xl font-semibold tabular-nums text-base-content">
                 {itemCoverage().itemTypeCount}
               </div>
               <div class="text-[11px] text-muted">item types</div>
             </div>
-            <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows rows={footprintRows()} />
-            </div>
+            <div class="text-[11px] text-muted">{footprintSupportLine()}</div>
           </div>
         </SummaryMetricCard>
 
@@ -223,16 +209,14 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
         >
-          <div class="flex h-full flex-col gap-2">
+          <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class="text-xl font-semibold tabular-nums text-base-content">
                 {activity().totalEvents}
               </div>
               <div class="text-[11px] text-muted">recovery points</div>
             </div>
-            <div class="border-t border-border-subtle pt-1.5">
-              <MetricRows rows={historyRows()} />
-            </div>
+            <div class="text-[11px] text-muted">{historySupportLine()}</div>
           </div>
         </SummaryMetricCard>
       </SummaryPanel>

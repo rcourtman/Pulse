@@ -730,11 +730,11 @@ stale, and footprint telemetry in multiple stacked readouts inside one card.
 Recovery summary cards should keep one dominant metric with one short support
 band so the strip scans at the same speed as infrastructure and workloads
 instead of behaving like a recovery-only executive summary.
-That support band should stay genuinely short, usually one or two compact
-rows rather than four-item micro reports, so the operator can scan the summary
-as orientation instead of reading each card like a dense checklist.
-When a second support row does not materially change triage, recovery should
-prefer a single support row over filling the card just because there is room.
+That support band should stay genuinely short, ideally one compact support line
+and only occasionally two, so the operator can scan the summary as orientation
+instead of reading each card like a dense checklist.
+When a second support line does not materially change triage, recovery should
+prefer a single support line over filling the card just because there is room.
 Those support rows should also stay signal-driven. Recovery summary cards
 should omit zero-value or low-value support rows like `Primary Item` or `Peak
 Day` when they do not materially improve operator triage, so the top strip

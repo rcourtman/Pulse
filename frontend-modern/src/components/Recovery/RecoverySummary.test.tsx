@@ -61,14 +61,12 @@ describe('RecoverySummary', () => {
     expect(screen.getAllByText(/attention/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/recovery points/i)).toBeInTheDocument();
     expect(screen.getByText(/item types/i)).toBeInTheDocument();
-    expect(screen.getByText('Platforms')).toBeInTheDocument();
-    expect(screen.getByText('Healthy')).toBeInTheDocument();
-    expect(screen.getByText('Failed')).toBeInTheDocument();
-    expect(screen.getByText('>7d')).toBeInTheDocument();
+    expect(screen.getByText('Platforms 2')).toBeInTheDocument();
+    expect(screen.getByText('Healthy 1 · Failed 1')).toBeInTheDocument();
+    expect(screen.getByText('>7d 1 · Never Succeeded 1')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
-    expect(screen.getByText('Latest Activity')).toBeInTheDocument();
+    expect(screen.getByText('Latest Activity Mar 9')).toBeInTheDocument();
     expect(screen.getByText('2 protected')).toBeInTheDocument();
-    expect(screen.getAllByText(/Never Succeeded/i).length).toBeGreaterThan(0);
     expect(screen.getByText('need attention')).toBeInTheDocument();
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
     expect(screen.queryByText('Running')).not.toBeInTheDocument();
@@ -83,6 +81,9 @@ describe('RecoverySummary', () => {
     expect(screen.queryByText('Peak Throughput')).not.toBeInTheDocument();
     expect(screen.queryByText('Peak Day')).not.toBeInTheDocument();
     expect(screen.queryByText('stale items')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Platforms$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Healthy$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Failed$/)).not.toBeInTheDocument();
   });
 
   it('uses the shared default summary density rather than a recovery-only compact override', () => {
