@@ -928,6 +928,10 @@ of spending a disproportionate slice of the screen on chart chrome. The range
 picker and legend should share one compact control row, and the activity strip
 should not burn a separate descriptive subtitle row once the headline metrics
 already explain the chart context.
+That same timeline contract must keep long-range activity fully constrained to
+the card width. Extended ranges such as `365d` should compress their day
+columns to fit the available plot width instead of carrying per-column minimum
+widths that make the chart overflow its containing card.
 That telemetry header should also avoid derivative pace rows once the chart
 already carries the rhythm. Total points, active days, and issue cues can
 stay, but average-per-day style readouts should not re-expand the strip into a

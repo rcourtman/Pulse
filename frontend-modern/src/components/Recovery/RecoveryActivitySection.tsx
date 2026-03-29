@@ -19,8 +19,7 @@ import {
 } from '@/utils/recoveryDatePresentation';
 import {
   getRecoveryTimelineAxisLabelClass,
-  getRecoveryTimelineBarMinWidthClass,
-  getRecoveryTimelineLabelEvery,
+  getRecoveryTimelineAxisTicks,
   RECOVERY_TIMELINE_LEGEND_ITEM_CLASS,
   RECOVERY_TIMELINE_RANGE_GROUP_CLASS,
 } from '@/utils/recoveryTimelineChartPresentation';
@@ -81,6 +80,8 @@ interface RecoveryActivitySectionProps {
 const rangeOptions: Array<7 | 30 | 90 | 365> = [7, 30, 90, 365];
 
 function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JSX.Element {
+  const timelineAxisTicks = () => getRecoveryTimelineAxisTicks(props.timeline().points.length);
+
   return (
     <>
       <div class="mb-2 flex flex-col gap-1.5">
@@ -372,33 +373,29 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
                   </For>
                 </div>
 
-                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4 flex items-end gap-[3px]">
-                  <For each={props.timeline().points}>
-                    {(point, index) => {
-                      const showLabel =
-                        index() % getRecoveryTimelineLabelEvery(props.timeline().points.length) === 0 ||
-                        index() === props.timeline().points.length - 1;
+                <div class="pointer-events-none absolute inset-x-0 bottom-0 h-4">
+                  <For each={timelineAxisTicks()}>
+                    {(tick) => {
+                      const point = props.timeline().points[tick.index];
                       const isSelected = props.selectedDateKey() === point.key;
-                      const barMinWidth = getRecoveryTimelineBarMinWidthClass(
-                        props.isMobile,
-                        props.chartRangeDays(),
-                      );
+                      const alignmentClass =
+                        tick.align === 'start'
+                          ? 'left-0 text-left'
+                          : tick.align === 'end'
+                            ? 'left-full -translate-x-full text-right'
+                            : '-translate-x-1/2 text-center';
+
                       return (
-                        <div
-                          class={`relative flex-1 ${props.isMobile ? '' : 'shrink-0'} ${barMinWidth}`}
+                        <span
+                          class={`absolute bottom-0 whitespace-nowrap text-[9px] ${
+                            isSelected
+                              ? getRecoveryTimelineAxisLabelClass(true)
+                              : getRecoveryTimelineAxisLabelClass(false)
+                          } ${alignmentClass}`}
+                          style={{ left: `${tick.positionPct}%` }}
                         >
-                          <Show when={showLabel}>
-                            <span
-                              class={`absolute bottom-0 left-1/2 -translate-x-1/2 whitespace-nowrap text-[9px] ${
-                                isSelected
-                                  ? getRecoveryTimelineAxisLabelClass(true)
-                                  : getRecoveryTimelineAxisLabelClass(false)
-                              }`}
-                            >
-                              {getRecoveryCompactAxisLabel(point.key, props.chartRangeDays())}
-                            </span>
-                          </Show>
-                        </div>
+                          {getRecoveryCompactAxisLabel(point.key, props.chartRangeDays())}
+                        </span>
                       );
                     }}
                   </For>

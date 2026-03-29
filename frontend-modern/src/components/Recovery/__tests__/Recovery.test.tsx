@@ -177,6 +177,30 @@ describe('Recovery', () => {
         };
       }
       if (u.pathname === '/api/recovery/series') {
+        const from = u.searchParams.get('from');
+        const to = u.searchParams.get('to');
+        if (from && to) {
+          const fromDate = new Date(from);
+          const toDate = new Date(to);
+          const daySpan = Math.round((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
+          if (daySpan >= 300) {
+            return {
+              data: Array.from({ length: 365 }, (_, index) => {
+                const pointDate = new Date(fromDate);
+                pointDate.setDate(pointDate.getDate() + index);
+                const isoDay = pointDate.toISOString().slice(0, 10);
+                const recent = index > 320 ? 1 : 0;
+                return {
+                  day: isoDay,
+                  total: recent,
+                  snapshot: 0,
+                  local: 0,
+                  remote: recent,
+                };
+              }),
+            };
+          }
+        }
         return {
           data: [
             { day: '2026-02-13', total: 1, snapshot: 1, local: 0, remote: 0 },
@@ -1403,6 +1427,32 @@ describe('Recovery', () => {
       expect(latestSeriesUrl).toContain(`from=${encodeURIComponent(start.toISOString())}`);
       expect(latestSeriesUrl).toContain(`to=${encodeURIComponent(end.toISOString())}`);
     });
+  });
+
+  it('renders sparse 365d timeline ticks instead of one label slot per day', async () => {
+    mockLocationSearch = '?view=events&range=365';
+
+    const { container } = render(() => <Recovery />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
+    });
+
+    const labels = await waitFor(() => {
+      const labelsRow = container
+        .querySelector('[data-testid="recovery-activity-bars"]')
+        ?.parentElement?.querySelector('.pointer-events-none.absolute.inset-x-0.bottom-0.h-4');
+      const renderedLabels = Array.from(labelsRow?.querySelectorAll('span') || []);
+      expect(renderedLabels.length).toBeGreaterThan(0);
+      return renderedLabels;
+    });
+
+    expect(labels.length).toBeLessThan(50);
+    expect(labels[0]?.textContent).toBeTruthy();
+    expect(labels.at(-1)?.textContent).toBeTruthy();
   });
 
   it('clears the shared recovery search query on Escape', async () => {
