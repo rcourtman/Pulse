@@ -137,3 +137,29 @@ func TestManagerCopyDirSafe(t *testing.T) {
 		t.Fatal("expected symlink to be skipped")
 	}
 }
+
+func TestManagerCopyDirSafe_SkipsInvalidLeafNames(t *testing.T) {
+	manager := &Manager{}
+	srcDir := filepath.Join(t.TempDir(), "src")
+	destDir := filepath.Join(t.TempDir(), "dest")
+
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, "ok.txt"), []byte("ok"), 0600); err != nil {
+		t.Fatalf("write ok: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(srcDir, `bad\name.txt`), []byte("skip"), 0600); err != nil {
+		t.Fatalf("write bad leaf: %v", err)
+	}
+
+	if err := manager.copyDirSafe(srcDir, destDir); err != nil {
+		t.Fatalf("copyDirSafe error: %v", err)
+	}
+	if _, err := os.ReadFile(filepath.Join(destDir, "ok.txt")); err != nil {
+		t.Fatalf("expected ok.txt copied: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(destDir, `bad\name.txt`)); err == nil {
+		t.Fatal("expected invalid leaf to be skipped")
+	}
+}

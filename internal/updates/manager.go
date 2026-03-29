@@ -1681,8 +1681,16 @@ func (m *Manager) applyUpdateFiles(extractDir string) error {
 					}
 					// Copy agent binaries
 					if strings.HasPrefix(name, "pulse-agent-") {
-						srcPath := filepath.Join(binDir, name)
-						destPath := filepath.Join(destBinDir, name)
+						srcPath, err := securityutil.JoinStorageLeaf(binDir, name)
+						if err != nil {
+							log.Warn().Err(err).Str("binary", name).Msg("Skipping invalid agent binary path")
+							continue
+						}
+						destPath, err := securityutil.JoinStorageLeaf(destBinDir, name)
+						if err != nil {
+							log.Warn().Err(err).Str("binary", name).Msg("Skipping invalid destination binary path")
+							continue
+						}
 						cmd = exec.Command("cp", "-a", srcPath, destPath)
 						if err := cmd.Run(); err != nil {
 							log.Warn().Err(err).Str("binary", name).Msg("Failed to copy agent binary")
@@ -1855,7 +1863,11 @@ func (m *Manager) cleanupOldTempDirs() {
 				continue
 			}
 
-			fullPath := filepath.Join(dir, entry.Name())
+			fullPath, err := securityutil.JoinStorageLeaf(dir, entry.Name())
+			if err != nil {
+				log.Debug().Err(err).Str("dir", dir).Str("entry", entry.Name()).Msg("Skipping invalid temp directory leaf")
+				continue
+			}
 			info, err := os.Stat(fullPath)
 			if err != nil {
 				continue
@@ -1937,8 +1949,16 @@ func (m *Manager) copyDirSafe(src, dest string) error {
 	}
 
 	for _, entry := range entries {
-		srcPath := filepath.Join(src, entry.Name())
-		destPath := filepath.Join(dest, entry.Name())
+		srcPath, err := securityutil.JoinStorageLeaf(src, entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("dir", src).Str("entry", entry.Name()).Msg("Skipping invalid source path during backup/restore")
+			continue
+		}
+		destPath, err := securityutil.JoinStorageLeaf(dest, entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("dir", dest).Str("entry", entry.Name()).Msg("Skipping invalid destination path during backup/restore")
+			continue
+		}
 
 		// Get file info (using Lstat to detect symlinks)
 		info, err := os.Lstat(srcPath)

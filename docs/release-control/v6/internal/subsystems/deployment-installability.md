@@ -151,6 +151,11 @@ update server bases must normalize to absolute HTTP(S) URLs without userinfo,
 and release API, feed, download, and checksum requests must resolve from
 validated URL objects instead of raw string concatenation or request creation
 from unchecked inputs.
+That same boundary also governs owned filesystem scans inside the update
+manager: when `internal/updates/manager.go` enumerates already-owned extract,
+temp, backup, or restore directories, it must rejoin discovered entry names
+through the shared storage-path helper instead of rebuilding raw
+`filepath.Join(dir, entry.Name())` paths.
 That same boundary also governs install.sh rollback restore targets:
 `adapter_installsh.go` may not hardcode `/etc/pulse` for rollback safety
 backups or config restore, and must derive the rollback config directory
