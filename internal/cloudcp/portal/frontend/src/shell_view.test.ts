@@ -131,45 +131,31 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('portal-shell-nav');
-    expect(html).toContain('Overview');
+    expect(html).toContain('Summary');
     expect(html).toContain('Access');
     expect(html).toContain('Billing');
     expect(html).toContain('Support');
-    expect(html).toContain('1 account');
-    expect(html).toContain('3 workspaces');
-    expect(html).toContain('1 ready workspace');
+    expect(html).toContain('Accounts');
+    expect(html).toContain('Workspaces');
+    expect(html).toContain('Ready');
     expect(html).toContain('2 workspaces to review');
     expect(html).toContain('id="billing-section"');
     expect(html).toContain('portal-account-context');
     expect(html).toContain('Owner role');
-    expect(html).toContain('Hosted billing attached');
     expect(html).toContain('MSP account');
     expect(html).toContain('Acme MSP');
-    expect(html).toContain('Manage workspaces, access, and billing for this account.');
     expect(html).toContain('3 workspaces');
     expect(html).toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
-    expect(html).toContain('Current state');
-    expect(html).toContain('Hosted workspace counts, current state, and the next step.');
-    expect(html).toContain('section-context-strip');
-    expect(html).toContain('Needs attention');
-    expect(html).toContain('Ready');
-    expect(html).toContain('Next action');
-    expect(html).toContain('2 workspaces need review');
-    expect(html).toContain('1 workspace is ready to use');
-    expect(html).toContain('Open Workspaces');
-    expect(html).toContain('Open Access');
-    expect(html).toContain('account-stage-header-actions');
+    expect(html).toContain('portal-summary-strip');
     expect(html).toContain('0 suspended workspaces');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
-    expect(html).toContain('Needs attention');
     expect(html).toContain('1 workspace ready to use');
     expect(html).toContain('Unhealthy</span>');
     expect(html).toContain('Checking</span>');
-    expect(html).toContain('Ready');
     expect(html).toContain('This workspace is in a failed state.');
     expect(html).toContain('Latest health check is still pending.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
@@ -189,7 +175,7 @@ describe('shell view', function() {
     expect(html).toContain('Invite people');
     expect(html).toContain('Change roles');
     expect(html).toContain('Remove access');
-    expect(html).toContain('Review the hosted roster, then open one access job at a time.');
+    expect(html).toContain('Open one access task at a time, then use the roster below.');
     expect(html).toContain('data-action="set-access-job"');
     expect(html).toContain('Access task');
     expect(html).toContain('id="access-detail-acct_1" hidden');
@@ -202,20 +188,17 @@ describe('shell view', function() {
     expect(html).toContain('data-can-manage="true"');
     expect(html).toContain('Remove stale access');
     expect(html).toContain('data-action="workspace-action"');
-    expect(html).toContain('Hosted billing attached');
-    expect(html).toContain('Hosted billing only');
-    expect(html).toContain('Use this billing surface only for hosted billing on your hosted workspace accounts.');
+    expect(html).toContain('Hosted billing');
+    expect(html).toContain('Not attached');
+    expect(html).toContain('Hosted billing by account.');
     expect(html).toContain('Escalation only');
     expect(html).toContain('Open Workspaces, Access, or Billing first');
     expect(html).toContain('Email support');
-    expect(html).toContain('Workspaces or Access');
-    expect(html).toContain('Workspace or access failed');
-    expect(html).toContain('Open Workspaces');
-    expect(html).toContain('Open Access');
-    expect(html).toContain('Hosted billing failed');
-    expect(html).toContain('Send these details');
-    expect(html).toContain('What to send');
-    expect(html).toContain('Open billing');
+    expect(html).toContain('Try first');
+    expect(html).toContain('Path');
+    expect(html).toContain('Account or email');
+    expect(html).toContain('Failed action');
+    expect(html).toContain('Billing');
     expect(html).not.toContain('Hosted only');
     expect(html).not.toContain('Self-hosted tools');
     expect(html).not.toContain('Self-hosted billing');
@@ -284,16 +267,17 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Self-hosted billing available');
+    expect(html).toContain('Self-hosted tasks');
+    expect(html).toContain('Available');
     expect(html).toContain('Self-hosted billing');
     expect(html).toContain('Pick the self-hosted job');
-    expect(html).toContain('Use hosted billing first when the request belongs to a hosted workspace account.');
+    expect(html).toContain('Hosted billing by account. Self-hosted purchases stay separate below.');
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases.');
     expect(html).toContain('id="open-retrieve-billing"');
     expect(html).toContain('id="billing-detail-shell" hidden');
     expect(html).toContain('data-account-billing-action="clear-billing-panel"');
     expect(html).toContain('id="data-billing-panel"');
-    expect(html).toContain('Billing failed');
+    expect(html).toContain('Use Support only after Workspaces, Access, or Billing fails.');
     expect(html).toContain('licenses, refunds, or privacy');
     expect(html).toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
   });
@@ -340,7 +324,6 @@ describe('shell view', function() {
       })
     );
 
-    var overviewIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="overview"');
     var workspacesIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="workspaces"');
     var accessIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="access"');
     var billingIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="billing"');
@@ -350,7 +333,6 @@ describe('shell view', function() {
     expect(accessIndex).toBeGreaterThan(workspacesIndex);
     expect(billingIndex).toBeGreaterThan(accessIndex);
     expect(supportIndex).toBeGreaterThan(billingIndex);
-    expect(overviewIndex).toBeGreaterThan(supportIndex);
     expect(html).not.toContain('Services');
   });
 
@@ -387,7 +369,8 @@ describe('shell view', function() {
     expect((html.match(/portal-account-context-stat/g) || []).length).toBe(0);
     expect((html.match(/account-context-chip\"/g) || []).length).toBe(0);
     expect(html).toContain('Admin role');
-    expect(html).toContain('Manage workspaces, access, and billing for this account.');
+    expect(html).toContain('Cloud account');
+    expect(html).not.toContain('Manage workspaces, access, and billing for this account.');
     expect(html).not.toContain('portal-account-context-summary');
   });
 
@@ -420,38 +403,24 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Open a workspace and review current state here. An owner or admin must create or change hosted workspaces.');
     expect(html).toContain('Tech role');
-    expect(html).toContain('Open workspaces and review access here. Billing and account changes require an owner or admin.');
-    expect(html).toContain('0 workspaces need review');
     expect(html).toContain('1 workspace is ready to use');
     expect(html).toContain('Owner or admin required');
-    expect(html).toContain('Review who already has access to this hosted account. An owner or admin must make changes.');
+    expect(html).toContain('Review who can act on this account. An owner or admin must make changes.');
     expect(html).toContain('Review the hosted roster here. An owner or admin must make changes.');
     expect(html).toContain('An owner or admin on this account needs to open hosted billing.');
     expect(html).toContain('Escalation only');
     expect(html).toContain('Use Support only after Workspaces review, Access review, owner/admin handoff, or hosted Billing fails.');
     expect(html).toContain('Review Workspaces or Access, or contact owner/admin first');
     expect(html).toContain('Email support');
-    expect(html).toContain('Workspaces or Access');
-    expect(html).toContain('Review or owner/admin handoff failed');
-    expect(html).toContain('Recheck the same workspace or roster first. Escalate only if the required owner or admin change still cannot complete.');
-    expect(html).toContain('Task');
-    expect(html).toContain('Use Workspaces for workspace state or Access for roster state before you escalate.');
-    expect(html).toContain('Owner/admin handoff');
-    expect(html).toContain('Include the account, workspace, and the change that still needs owner or admin action.');
-    expect(html).toContain('Open Workspaces');
-    expect(html).toContain('Open Access');
-    expect(html).toContain('Hosted billing or owner/admin handoff failed');
-    expect(html).toContain('Escalate only if hosted billing still needs owner/admin action or still fails.');
-    expect(html).toContain('Hosted billing. Say if it still needed owner/admin action.');
-    expect(html).toContain('Include the hosted account that still needed owner/admin billing action.');
+    expect(html).toContain('Try first');
+    expect(html).toContain('Review Workspaces or Access first. If billing is involved, hand it to an owner or admin before you escalate.');
+    expect(html).toContain('Path');
     expect(html).toContain('Workspaces review, Access review, owner/admin handoff, or hosted billing.');
+    expect(html).toContain('Account or email');
     expect(html).toContain('Hosted account and workspace, or hosted billing account.');
     expect(html).toContain('data-can-manage="false"');
     expect(html).not.toContain('Invite people, change roles, and remove account access.');
-    expect(html).not.toContain('Open a workspace, review lifecycle state, or create one.');
-    expect(html).not.toContain('Open a workspace, review lifecycle state, or create a new one without mixing in access or billing work.');
     expect(html).not.toContain('data-action="invite-member"');
     expect(html).not.toContain('data-action="set-access-job"');
     expect(html).not.toContain('Self-hosted billing, licenses, refunds, and privacy stay in Billing.');
@@ -494,7 +463,7 @@ describe('shell view', function() {
     expect(html).not.toContain('READ_ONLY');
   });
 
-  it('keeps next action permission-honest for hosted view-only accounts with no workspace ready', function() {
+  it('keeps hosted view-only empty accounts on plain review surfaces', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
         bootstrap: createBootstrap({
@@ -515,14 +484,12 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Review who can act');
-    expect(html).toContain('Review Access to see who can create or manage the first workspace on this account.');
-    expect(html).toContain('Open Access');
-    expect(html).not.toContain('Choose the right task path');
-    expect(html).not.toContain('If this is an access change, go to Access. If it is a billing or license issue, go to Billing. Support is only for escalation.');
+    expect(html).toContain('No hosted workspaces are attached yet. An owner or admin must create the first one.');
+    expect(html).toContain('Review who can act on this account. An owner or admin must make changes.');
+    expect(html).toContain('Owner or admin required');
   });
 
-  it('keeps ready state honest for hosted view-only accounts with no workspace yet', function() {
+  it('keeps workspaces empty state honest for hosted view-only accounts with no workspace yet', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
         bootstrap: createBootstrap({
@@ -543,12 +510,12 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('0 workspaces are ready to use');
+    expect(html).toContain('0 workspaces ready to use');
     expect(html).toContain('No hosted workspace exists yet. An owner or admin must create the first one.');
     expect(html).not.toContain('Open Workspaces to see the current state of each hosted workspace.');
   });
 
-  it('keeps ready state honest for managed hosted accounts with no workspace yet', function() {
+  it('keeps workspaces empty state honest for managed hosted accounts with no workspace yet', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
         bootstrap: createBootstrap({
@@ -569,12 +536,12 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('0 workspaces are ready to use');
+    expect(html).toContain('0 workspaces ready to use');
     expect(html).toContain('No hosted workspace exists yet. Create the first one in Workspaces.');
     expect(html).not.toContain('Open Workspaces to see the current state of each hosted workspace.');
   });
 
-  it('keeps next action on review surfaces for suspended hosted view-only accounts', function() {
+  it('keeps suspended hosted view-only accounts on review surfaces', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
         bootstrap: createBootstrap({
@@ -603,14 +570,12 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Review workspace state');
-    expect(html).toContain('Open Workspaces to review current state, then hand off changes to an owner or admin.');
-    expect(html).toContain('Open Workspaces');
-    expect(html).toContain('Open Access');
-    expect(html).not.toContain('Choose the right task path');
+    expect(html).toContain('Paused Workspace');
+    expect(html).toContain('1 workspace suspended');
+    expect(html).toContain('Owner or admin required');
   });
 
-  it('keeps overview attention copy honest when only suspended workspaces remain', function() {
+  it('keeps workspace facts honest when only suspended workspaces remain', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
         bootstrap: createBootstrap({
@@ -639,8 +604,8 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('0 workspaces are ready to use');
-    expect(html).toContain('1 workspace is suspended. Resume it before opening it again.');
+    expect(html).toContain('0 workspaces ready to use');
+    expect(html).toContain('1 workspace suspended');
     expect(html).not.toContain('Active workspaces look clear for routine use.');
   });
 
@@ -658,17 +623,18 @@ describe('shell view', function() {
     expect(html).not.toContain('Current state');
     expect(html).not.toContain('data-shell-section="workspaces"');
     expect(html).not.toContain('data-shell-section="access"');
-    expect(html).toContain('Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.');
+    expect(html).toContain('Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.');
+    expect(html).toContain('Self-hosted subscriptions, licenses, refunds, and privacy requests.');
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.');
     expect(html).toContain('Escalate with the same self-hosted billing path and the exact failed step.');
     expect(html).toContain('Billing');
-    expect(html).toContain('Self-hosted billing available');
+    expect(html).toContain('Self-hosted tasks');
+    expect(html).toContain('Available');
     expect(html).toContain('Open Billing first');
     expect(html).toContain('Email support');
     expect(html).toContain('Use Support only after Billing fails.');
-    expect(html).toContain('Self-hosted billing failed');
     expect(html).toContain('Account or email');
-    expect(html).toContain('No hosted billing attached');
+    expect(html).toContain('Commercial billing email used for the self-hosted purchase.');
     expect(html).not.toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
     expect(html).not.toContain('Workspace or access path failed');
     expect(html).not.toContain('Hosted workspace or access');
@@ -744,11 +710,10 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Suspended');
-    expect(html).toContain('0 workspaces need review');
-    expect(html).toContain('0 workspaces are ready to use');
-    expect(html).toContain('Every hosted workspace is suspended right now.');
+    expect(html).toContain('0 workspaces to review');
+    expect(html).toContain('0 workspaces ready to use');
     expect(html).toContain('Create workspace');
-    expect(html).toContain('1 workspace is suspended. Resume it before opening it again.');
+    expect(html).toContain('1 workspace suspended');
   });
 
   it('preserves the simplified top-tab shell hooks in the rendered shell', function() {

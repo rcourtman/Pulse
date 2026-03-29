@@ -869,12 +869,12 @@ not yet form one coherent Pulse account product. The canonical future shape is
 authenticated Pulse account shell that unifies Cloud tenants, self-hosted
 licenses, billing, recovery, and MSP admin surfaces without creating a
 standalone Relay portal. That shell now also owns two product rules
-explicitly: `Overview` is one shell-level triage surface across the current
-account set rather than a repeated per-account dashboard, and the top-level
-task row must stay honest to account shape by removing irrelevant hosted-only
-tasks instead of pretending they are live. Any shared fallback that still
-lands on a non-live task must render an explicit unavailable state instead of
-blank space. The same shell also owns action-first task
+explicitly: signed-in workspace counts stay inline at the top of
+`Workspaces` instead of as a separate `Overview` or `Summary` tab, and the
+top-level task row must stay honest to account shape by removing irrelevant
+hosted-only tasks instead of pretending they are live. Any shared fallback
+that still lands on a non-live task must render an explicit unavailable state
+instead of blank space. The same shell also owns action-first task
 surfaces for `Access`, `Billing`, and `Support`: access mutations must be
 permission-honest and roster-led, billing must reduce to one obvious job at a
 time with hosted billing first when relevant, support must stay a failed-path
@@ -917,10 +917,10 @@ list-first task presentation instead of dark ornamental rails, sidebars, or
 nested explanatory cards. The signed-in shell should orient the user with one
 quiet account-context header and one flat top task row, not a second summary
 deck competing with the task itself.
-That same owned shell must also open on the first live job instead of the
+That same owned shell must also open on the first live job instead of a
 summary layer: hosted accounts should land in `Workspaces`, and self-hosted-
-only accounts should land in `Billing`. `Overview` remains part of the shell,
-but it is triage, not the default authenticated landing surface.
+only accounts should land in `Billing`. The signed-in shell must not expose a
+separate `Overview` or `Summary` tab ahead of the real task surfaces.
 That same owned shell also owns the signed-out visual posture: the unauthenticated
 `/portal` page must read like the same product boundary, not a leftover
 marketing block plus a generic login card. The auth surface should present one
@@ -936,10 +936,10 @@ sent back to `Workspaces`, `Access`, or `Billing` only as review and
 owner/admin handoff paths, not as though the user can perform hosted
 lifecycle, access-mutation, or hosted-billing changes directly before
 escalation.
-`Overview` follows the same account-shape and permission rule: hosted-only
-accounts must not mention self-hosted billing utilities by default, and hosted
-view-only roles must say when hosted billing still needs owner/admin
-authority.
+Inline workspace counts and shell copy follow the same account-shape and
+permission rule: hosted-only accounts must not mention self-hosted billing
+utilities by default, and hosted view-only roles must say when hosted billing
+still needs owner/admin authority.
 The same rule applies to the compact account-context strip: it must describe
 the current user's effective hosted tasks, not restate full access-control and
 billing capability when those actions are blocked behind owner/admin roles.
@@ -947,7 +947,7 @@ That same owned shell must also keep role labels on product vocabulary:
 customer-facing copy may say `Owner`, `Admin`, `Tech`, or `Read-only`, but it
 must not leak internal identifiers such as `read_only` or legacy aliases such
 as `member`.
-That same owned `Overview` surface must also keep `Next action`
+That same owned signed-in shell must also keep the first available action
 permission-honest for hosted view-only users: when no workspace is ready, the
 primary route must stay on reviewable `Workspaces` or `Access` surfaces before
 any blocked hosted billing or owner/admin-only mutation path.
@@ -955,17 +955,13 @@ That same owned task surface must also keep failure copy on the user job
 instead of leaking raw transport wording: `Access`, `Workspaces`, and
 `Billing` failures must render the task-specific action that could not
 complete, not generic copy such as `Network error.`.
-That same owned `Overview` surface must also keep `Ready` honest when no
-hosted workspace exists yet: hosted accounts with zero workspaces may not tell
-the user to review current workspace state, and must instead say that nothing
-is ready yet until the first hosted workspace exists.
-That same owned `Overview` surface must also keep `Needs attention` honest
-when only suspended workspaces remain: a suspended-only account may not imply
-that active work is ready simply because hosted workspace history exists.
-That same owned `Overview` surface must also stay fact-first: it may not
-invent urgency or health verdicts such as `Nothing urgent` or `Healthy now`,
-and must instead report concrete counts, explicit workspace state, and the
-next action directly from runtime-backed account truth.
+That same owned inline workspace counts and workspace-state copy must also
+keep `Ready` honest when no hosted workspace exists yet: hosted accounts with
+zero workspaces may not tell the user to review current workspace state, and
+must instead say that nothing is ready yet until the first hosted workspace
+exists. The same counts and copy must keep suspended-only states honest, and
+must stay fact-first rather than inventing urgency or health verdicts such as
+`Nothing urgent` or `Healthy now`.
 That same portal shell/runtime boundary must also keep task and status copy
 literal across the account surface: customer-facing wording may not lean on
 commentary such as `obvious`, `actual work`, `trustworthy`, or `settled` when

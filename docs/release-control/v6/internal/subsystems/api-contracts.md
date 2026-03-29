@@ -326,13 +326,15 @@ self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
 That same typed bootstrap/runtime contract must also derive the default signed-
 in shell section from account shape: hosted accounts open on `Workspaces`,
-self-hosted-only accounts open on `Billing`, and `Overview` remains available
-as triage instead of acting as the default authenticated landing layer.
+self-hosted-only accounts open on `Billing`, and the signed-in shell keeps
+precise workspace counts inline on `Workspaces` instead of exposing a separate
+`Summary` tab as a primary or default destination.
 The same account-shape runtime contract must also keep the shell navigation
-honest: self-hosted-only accounts must drop hosted-only `Workspaces`,
-`Access`, and `Overview` tabs from the primary task row rather than implying
-live hosted work, and any shared fallback surface that still resolves there
-must render an explicit unavailable state. `Support` follows the same
+honest: the task row is `Workspaces`, `Access`, `Billing`, and `Support`.
+Self-hosted-only accounts must drop hosted-only `Workspaces` and `Access`
+surfaces rather than implying live hosted work, and any shared fallback
+surface that still resolves there must render an explicit unavailable state. `Support`
+follows the same
 account-shape runtime contract: self-hosted-only accounts expose only the
 billing escalation path and billing-specific handoff packet, and hosted
 workspace/access escalation controls must not render when no hosted account
@@ -350,10 +352,10 @@ The same permission contract must also drive hosted `Support`: when
 `can_manage` is false, the support shell may route the user back to
 `Workspaces`, `Access`, or `Billing` only as review and owner/admin handoff
 paths, not as live hosted mutation paths the current role can execute.
-The same typed bootstrap/runtime contract must also keep `Overview` billing
-copy honest to account shape: hosted-only accounts may not mention self-hosted
-billing utilities by default, and hosted view-only roles must say when hosted
-billing still needs owner/admin authority.
+The same typed bootstrap/runtime contract must also keep inline workspace
+counts and shell copy honest to account shape: hosted-only accounts may not
+mention self-hosted billing utilities by default, and hosted view-only roles
+must say when hosted billing still needs owner/admin authority.
 The same permission contract must also drive the compact account-context
 summary: the strip may not describe full hosted access-control or billing
 ownership when the current role can only review workspaces or roster state.
@@ -361,7 +363,7 @@ That same typed runtime contract must also normalize account-role labels before
 render: customer-facing copy may say `Owner`, `Admin`, `Tech`, or `Read-only`,
 but it must not surface raw runtime identifiers such as `read_only` or legacy
 aliases such as `member`.
-That same runtime contract must also keep `Overview` next-action routing
+That same runtime contract must also keep the first available action
 permission-honest for hosted view-only accounts: when no ready workspace
 exists, the primary route must stay on reviewable `Workspaces` or `Access`
 surfaces before any blocked hosted billing or owner/admin-only mutation path.
@@ -369,14 +371,14 @@ That same shared request/runtime boundary must also preserve task-specific
 failure copy on transport errors: portal job surfaces may not leak raw strings
 such as `Network error.`, and must instead surface the owned fallback for the
 exact action that failed.
-That same typed overview contract must also keep `Ready` honest when no hosted
+That same typed summary contract must also keep `Ready` honest when no hosted
 workspace exists yet: hosted accounts with zero workspaces may not route the
 user into current workspace review, and must instead render that nothing is
 ready until the first hosted workspace exists.
-That same typed overview contract must also keep `Needs attention` honest when
+That same typed summary contract must also keep `Needs attention` honest when
 only suspended workspaces remain: hosted workspace history alone may not make
 the shell imply that active work is ready.
-That same typed overview contract must also stay fact-first: overview copy may
+That same typed summary contract must also stay fact-first: summary copy may
 not synthesize urgency or health verdicts such as `Nothing urgent` or
 `Healthy now`, and must instead render concrete counts, explicit workspace
 state, and next-action routing from the owned runtime payload.

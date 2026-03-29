@@ -4101,13 +4101,16 @@ header .logout-btn,
   }
 }
 .portal-shell-main {
+  width: min(1080px, calc(100vw - 48px));
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 0 0 32px;
+  gap: 18px;
+  padding: 10px 0 40px;
 }
 .portal-shell-main > .portal-content-panel {
   display: none !important;
+  width: 100%;
 }
 .portal-shell[data-shell-section=workspaces] .portal-content-panel-workspaces,
 .portal-shell[data-shell-section=access] .portal-content-panel-access,
@@ -4118,7 +4121,7 @@ header .logout-btn,
 }
 .portal-account-context {
   display: block;
-  padding: 0 0 12px;
+  padding: 0 0 14px;
   border: none;
   border-bottom: 1px solid var(--line);
   border-radius: 0;
@@ -4135,14 +4138,14 @@ header .logout-btn,
   color: var(--line-strong);
 }
 .portal-account-context-row-title h2 {
-  font-size: 30px;
-  line-height: 1.04;
-  letter-spacing: -0.04em;
+  font-size: 32px;
+  line-height: 1.02;
+  letter-spacing: -0.045em;
 }
 .portal-account-context-copy p {
-  max-width: 820px;
-  font-size: 15px;
-  line-height: 1.55;
+  max-width: 760px;
+  font-size: 14px;
+  line-height: 1.5;
 }
 .portal-account-context-summary {
   display: none !important;
@@ -4150,6 +4153,10 @@ header .logout-btn,
 .portal-shell-nav {
   position: static;
   top: auto;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
   border: none;
   border-bottom: 1px solid var(--line);
   background: transparent;
@@ -4160,14 +4167,22 @@ header .logout-btn,
 .portal-shell-nav-group {
   display: flex;
   flex-direction: row;
-  gap: 12px;
-  padding: 0 0 4px;
+  gap: 10px;
+  padding: 0 0 6px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 .portal-shell-nav-group::-webkit-scrollbar {
   display: none;
+}
+.portal-shell-nav-group-primary {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.portal-shell-nav-group-utility {
+  flex: 0 0 auto;
+  justify-content: flex-end;
 }
 .portal-shell-nav-link {
   min-width: 0;
@@ -4188,6 +4203,12 @@ header .logout-btn,
   background: transparent;
   color: var(--ink);
 }
+.portal-shell-nav-link-utility {
+  color: var(--ink-soft);
+}
+.portal-shell-nav-link-utility.active {
+  border-bottom-color: var(--line-strong);
+}
 .portal-shell-nav-row {
   justify-content: flex-start;
   gap: 0;
@@ -4195,6 +4216,10 @@ header .logout-btn,
 .portal-shell-nav-label {
   font-size: 14px;
   font-weight: 600;
+}
+.portal-shell-nav-link-utility .portal-shell-nav-label {
+  font-size: 13px;
+  font-weight: 500;
 }
 .portal-shell-nav-badge {
   display: none !important;
@@ -4211,29 +4236,29 @@ header .logout-btn,
   box-shadow: none;
 }
 .account-surface + .account-surface {
-  margin-top: 24px;
+  margin-top: 28px;
 }
 .account-stage-header,
 .billing-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
-  margin-bottom: 18px;
+  gap: 10px;
+  margin-bottom: 14px;
 }
 .account-stage-header h3,
 .billing-header h2,
 .portal-support-panel h2 {
-  font-size: 24px;
-  line-height: 1.12;
-  letter-spacing: -0.03em;
+  font-size: 26px;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
 }
 .account-stage-header p,
 .billing-header p,
 .billing-note,
-.portal-support-panel > p {
+.portal-support-panel p {
   max-width: 760px;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 .section-context-strip {
   gap: 0;
@@ -4245,14 +4270,25 @@ header .logout-btn,
 .section-context-chip + .section-context-chip::before {
   margin-right: 8px;
 }
-.overview-task-grid {
-  grid-template-columns: 1fr;
-  gap: 12px;
+.overview-task-grid-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
 }
-.overview-task-card,
-.billing-task-card,
-.portal-support-route-card,
-.portal-support-runbook,
+.overview-task-grid-compact .overview-task-card {
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 18px;
+}
+.overview-task-grid-compact .overview-task-card:first-child {
+  border-top: none;
+}
 .workspace-list-wrap,
 .workspace-management-panel,
 .access-roster,
@@ -4260,117 +4296,558 @@ header .logout-btn,
 .access-invite-panel,
 .access-job-note-panel,
 .access-policy-panel,
+.billing-surface-block,
 .billing-shell-main,
 .billing-shell-detail,
-.billing-panel {
+.billing-panel,
+.portal-support-simple-card {
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: 14px;
   background: #fff;
-}
-.overview-task-card,
-.billing-task-card,
-.portal-support-route-card,
-.portal-support-runbook,
-.billing-shell-main,
-.billing-shell-detail,
-.billing-panel {
-  padding: 18px;
 }
 .workspace-operations-shell,
 .access-shell,
-.billing-shell,
-.portal-support-layout {
-  grid-template-columns: 1fr;
+.billing-shell {
+  grid-template-columns: minmax(0, 1fr);
   gap: 14px;
+}
+.workspace-list-wrap,
+.access-roster,
+.billing-surface-block,
+.portal-support-simple-card {
+  overflow: hidden;
 }
 .workspace-list-toolbar,
 .access-panel-heading {
-  padding: 16px 18px 10px;
+  padding: 14px 18px 8px;
 }
 .workspace-list-head {
-  grid-template-columns: minmax(0, 1.6fr) 120px 120px 160px;
+  grid-template-columns: minmax(0, 1.7fr) 116px 116px 168px;
   gap: 12px;
-  padding: 8px 18px;
+  padding: 9px 18px;
 }
 .workspace-row {
-  grid-template-columns: minmax(0, 1.6fr) 120px 120px 160px;
+  grid-template-columns: minmax(0, 1.7fr) 116px 116px 168px;
   gap: 12px;
   padding: 14px 18px;
 }
 .workspace-actions {
   flex-wrap: wrap;
+  justify-content: flex-start !important;
+}
+.access-management-header {
+  margin-bottom: 12px;
 }
 .access-management-stats {
   display: block;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 .access-stat-summary {
-  padding: 0 0 8px;
-  font-size: 12px;
+  padding: 0 0 10px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--ink-muted);
 }
 .access-stat-summary-error {
   color: var(--danger);
 }
+.access-shell-main,
+.access-roster-column,
+.access-roster {
+  width: 100%;
+}
 .access-task-strip {
-  gap: 6px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
 }
 .access-task-button {
   border-radius: 10px;
 }
-.access-task-button.active {
+.access-task-button.active,
+.access-task-button.is-active {
   border-color: var(--accent);
+  background: #edf3fe;
+  color: var(--accent);
 }
 .access-roster-list {
-  padding: 0 18px 8px;
+  padding: 0 18px 10px;
 }
 .access-roster-head {
-  padding: 8px 18px;
+  padding: 9px 18px;
 }
 .access-member-row {
   padding: 12px 0;
 }
-.billing-overview-grid {
-  grid-template-columns: 1fr;
-  gap: 12px;
+.billing-header {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
 }
 .billing-note {
   padding: 0;
   border: none;
 }
+.billing-surface-block {
+  padding: 0;
+}
+.billing-surface-block + .billing-surface-block {
+  margin-top: 14px;
+}
+.billing-surface-block-empty {
+  padding: 18px;
+}
+.billing-surface-header {
+  padding: 18px 18px 10px;
+}
+.billing-action-list-surface {
+  display: flex;
+  flex-direction: column;
+}
+.billing-action-row-surface {
+  padding: 16px 18px;
+}
 .billing-action-row {
   padding: 14px 0;
 }
-.portal-support-route-grid {
-  gap: 12px;
+.portal-support-simple {
+  max-width: 880px;
+}
+.portal-support-simple-card {
+  padding: 0;
+}
+.portal-support-simple-list {
+  display: flex;
+  flex-direction: column;
+}
+.portal-support-simple-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+}
+.portal-support-simple-row:first-child {
+  border-top: none;
+}
+.portal-support-simple-row strong {
+  font-size: 13px;
+  color: var(--ink);
+}
+.portal-support-simple-row span {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.portal-support-simple-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 18px;
+  border-top: 1px solid var(--line);
+  background: #fafbfc;
 }
 @media (max-width: 960px) {
   .portal-shell-main {
+    width: min(100%, calc(100vw - 32px));
     gap: 16px;
+  }
+  .portal-shell-nav {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
   }
   .portal-shell-nav-group {
     gap: 8px;
   }
+  .portal-shell-nav-group-utility {
+    justify-content: flex-start;
+  }
   .portal-account-context {
-    padding-bottom: 10px;
+    padding-bottom: 12px;
   }
   .portal-account-context-row-title h2,
   .account-stage-header h3,
   .billing-header h2,
   .portal-support-panel h2 {
-    font-size: 22px;
+    font-size: 24px;
+  }
+  .portal-support-simple-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
 @media (max-width: 640px) {
+  .portal-shell-main {
+    width: min(100%, calc(100vw - 20px));
+  }
   .portal-shell-nav-link {
     padding: 0 6px 8px;
   }
+  .portal-shell-nav-link-utility {
+    padding-bottom: 6px;
+  }
   .portal-account-context-row-title h2 {
-    font-size: 24px;
+    font-size: 26px;
   }
   .access-management-stats {
     grid-template-columns: 1fr;
+  }
+}
+.portal-shell-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  width: min(100%, calc(100vw - 48px));
+  padding: 0 0 56px;
+  gap: 20px;
+}
+.portal-account-context {
+  padding: 28px 0 8px;
+  border-bottom: none;
+  background: transparent;
+}
+.portal-account-context-copy {
+  gap: 4px;
+}
+.portal-account-context-meta {
+  font-size: 12px;
+}
+.portal-account-context-row-title h2 {
+  font-size: 32px;
+  line-height: 1.04;
+  letter-spacing: -0.04em;
+}
+.portal-account-context-copy p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.portal-shell-nav {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+}
+.portal-shell-nav-group {
+  padding-bottom: 0;
+  gap: 20px;
+}
+.portal-shell-nav-group-primary {
+  flex: 0 0 auto;
+}
+.portal-shell-nav-group-utility {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+.portal-shell-nav-link {
+  padding: 0 0 12px;
+  width: auto;
+  min-width: max-content;
+  flex: 0 0 auto;
+  display: inline-flex;
+  white-space: nowrap;
+}
+.portal-shell-nav-link-utility {
+  color: var(--ink-muted);
+}
+.portal-page-header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.portal-page-header h2 {
+  font-size: 28px;
+  line-height: 1.06;
+  letter-spacing: -0.04em;
+}
+.portal-page-header p {
+  max-width: 640px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+.portal-page-facts,
+.portal-account-block-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.portal-fact-separator {
+  margin: 0 10px;
+  color: var(--line-strong, var(--line));
+}
+.portal-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+}
+.portal-summary-item {
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+}
+.portal-summary-item span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+}
+.portal-summary-item strong {
+  display: block;
+  font-size: 18px;
+  line-height: 1.2;
+  color: var(--ink);
+}
+.account-surface + .account-surface {
+  margin-top: 18px;
+}
+.portal-account-block-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.portal-account-block-copy h3 {
+  font-size: 20px;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+}
+.portal-account-block-copy p {
+  margin: 10px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-muted);
+}
+.portal-account-block-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.access-section-shell .portal-account-block-header,
+.billing-section .portal-page-header,
+.portal-support-panel .portal-page-header {
+  align-items: flex-start;
+}
+.access-section-shell .portal-account-block-header {
+  flex-direction: column;
+}
+.access-section-shell .portal-account-block-actions {
+  width: 100%;
+}
+.workspace-list-wrap,
+.workspace-management-panel,
+.access-roster,
+.access-task-panel,
+.billing-surface-block,
+.billing-shell-main,
+.billing-shell-detail,
+.billing-panel,
+.portal-support-panel {
+  border-radius: 14px;
+}
+.workspace-list-toolbar {
+  padding: 14px 18px 8px;
+}
+.workspace-list-summary {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.workspace-list-head {
+  grid-template-columns: minmax(0, 1.8fr) 110px 120px 180px;
+  gap: 12px;
+  padding: 8px 18px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-muted);
+}
+.workspace-row {
+  grid-template-columns: minmax(0, 1.8fr) 110px 120px 180px;
+  gap: 12px;
+  padding: 16px 18px;
+}
+.workspace-row-note {
+  font-size: 13px;
+}
+.workspace-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.workspace-operations-shell,
+.access-shell,
+.billing-shell {
+  gap: 12px;
+}
+.access-management-stats {
+  margin-bottom: 10px;
+}
+.access-task-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.access-task-button {
+  border-radius: 999px;
+  background: #fff;
+}
+.access-roster-list {
+  padding: 0 18px 4px;
+}
+.billing-surface-block {
+  padding: 18px;
+}
+.billing-surface-header {
+  margin-bottom: 8px;
+}
+.billing-action-list-surface {
+  gap: 0;
+}
+.billing-action-row-surface {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+}
+.billing-action-row-surface:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.billing-action-row-surface:last-child {
+  padding-bottom: 0;
+}
+.billing-action-row-surface .billing-action-copy h3 {
+  font-size: 18px;
+}
+.billing-action-row-surface .billing-action-meta {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-muted);
+}
+.portal-support-panel {
+  border: 1px solid var(--line);
+  background: #fff;
+  padding: 18px;
+}
+.portal-support-simple-card {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.portal-support-simple-row {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 16px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.portal-support-simple-row:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.portal-support-simple-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+@media (max-width: 960px) {
+  .portal-shell-main {
+    width: min(100%, calc(100vw - 40px));
+    padding-bottom: 40px;
+  }
+  .portal-shell-nav {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  .portal-shell-nav-group {
+    gap: 12px;
+  }
+  .portal-shell-nav-group-utility {
+    margin-left: 0;
+  }
+  .portal-account-block-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .portal-summary-strip {
+    width: 100%;
+    min-width: 0;
+  }
+  .billing-action-row-surface {
+    grid-template-columns: 1fr;
+    align-items: flex-start;
+  }
+}
+@media (max-width: 720px) {
+  .workspace-list-head {
+    display: none;
+  }
+  .workspace-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .workspace-row-status-cell {
+    justify-content: flex-start;
+  }
+  .workspace-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .workspace-actions form,
+  .workspace-actions button {
+    max-width: none;
+  }
+  .portal-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .access-task-strip {
+    overflow-x: auto;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+  .access-task-strip::-webkit-scrollbar {
+    display: none;
+  }
+  .portal-support-simple-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+@media (max-width: 640px) {
+  .portal-shell-main {
+    width: min(100%, calc(100vw - 24px));
+    padding-bottom: 32px;
+  }
+  .portal-account-context {
+    padding-top: 20px;
+  }
+  .portal-account-context-row-title h2 {
+    font-size: 28px;
+  }
+  .portal-page-header h2 {
+    font-size: 24px;
+  }
+  .portal-summary-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }

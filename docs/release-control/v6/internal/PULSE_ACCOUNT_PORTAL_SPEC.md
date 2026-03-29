@@ -103,21 +103,26 @@ Pulse's internal product model.
 
 Primary areas:
 
-1. `Overview`
-   A short triage surface that answers only three questions: what needs
-   attention, what is ready, and what the next obvious action is.
-2. `Workspaces`
+1. `Workspaces`
    Hosted workspace list, health summary, open-workspace handoff, lifecycle
    actions, and create-workspace entry points.
-3. `Access`
+2. `Access`
    Account roster, invites, role changes, and access removal.
-4. `Billing`
+3. `Billing`
    Hosted billing state and Stripe billing handoff when relevant. Self-hosted
    license retrieval, refunds, privacy/data actions, and related commercial
    utilities appear here only when the account has those needs.
-5. `Support`
+
+Secondary utilities:
+
+1. `Support`
    Escalation path only. It must not compete with primary account tasks in the
    main shell.
+2. Precise workspace counts
+   Signed-in workspace counts stay inline at the top of `Workspaces`. They
+   report account count, workspace count, ready count, review count, and
+   suspended count directly from runtime truth instead of as a separate
+   `Summary` or `Overview` tab.
 
 Conditional content:
 
@@ -135,8 +140,9 @@ of utilities.
 
 Core rules:
 
-1. The first screen must be triage, not a dashboard essay.
-2. The overview should answer only `Needs attention`, `Ready`, and `Next
+1. The first screen must be the first live task, not a dashboard essay or a
+   summary-first landing layer.
+2. The summary should answer only `Needs attention`, `Ready`, and `Next
    action`.
 3. Top-level navigation must be organized by user jobs, not by Pulse's
    internal hosted, license, billing, or support implementation boundaries.
@@ -166,10 +172,12 @@ Core rules:
     the create-workspace form opens below the fold, the shell must reveal it.
 14. Access management must be a visible roster and invite surface, not a table
     or control hidden behind unrelated account copy.
-15. Support must remain an escalation path, not a peer destination competing
-    with the primary jobs a user came to do.
-16. The signed-in `Overview` must be one shell-level triage surface across the
-    current account set, not a repeated per-account dashboard.
+15. Support must remain an escalation utility, not a peer destination
+    competing with the primary jobs a user came to do.
+16. The signed-in shell may not expose a separate `Summary` or `Overview` tab
+    ahead of the real task surfaces. Workspace counts and state belong inline
+    at the top of `Workspaces`, not as a repeated per-account dashboard or a
+    competing first-class destination.
 17. Top-level navigation must stay honest to account shape. Hosted-only tasks
     that are irrelevant to the current account should be removed from the
     primary task row instead of rendered as fake live tabs, and any shared
@@ -233,35 +241,35 @@ Core rules:
     and owner/admin handoff paths; `Support` must not imply they can perform
     hosted lifecycle, access-mutation, or hosted-billing changes themselves
     before escalation.
-33. `Overview` must keep billing cues honest to account shape and permission.
-    Hosted-only accounts may not mention self-hosted billing utilities by
-    default, and hosted view-only roles must say when owner/admin authority is
-    still required to open hosted billing.
+33. Inline workspace counts and shell copy must keep billing cues honest to
+    account shape and permission. Hosted-only accounts may not mention self-
+    hosted billing utilities by default, and hosted view-only roles must say
+    when owner/admin authority is still required to open hosted billing.
 34. User-facing role labels must stay on product vocabulary. The portal may
     describe account role as `Owner`, `Admin`, `Tech`, or `Read-only`, but it
     must not leak internal identifiers such as `read_only` or legacy aliases
     such as `member`.
-35. `Overview` must also keep `Next action` permission-honest for hosted
-    view-only accounts. When no workspace is ready, the primary route must
-    stay on reviewable `Workspaces` or `Access` surfaces before any blocked
-    hosted billing or owner/admin-only mutation path.
+35. The signed-in shell must keep the first available action permission-
+    honest for hosted view-only accounts. When no workspace is ready, the
+    primary route must stay on reviewable `Workspaces` or `Access` surfaces
+    before any blocked hosted billing or owner/admin-only mutation path.
 36. Task surfaces must keep failure copy on owned user jobs. The portal may
     not leak raw transport strings such as `Network error.` into `Access`,
     `Workspaces`, or `Billing`; each failure must stay on the task-specific
     action the user was trying to complete.
-37. `Overview` must keep `Ready` honest when no hosted workspace exists yet.
-    Hosted accounts with zero workspaces may not tell the user to review
-    current workspace state; they must say that nothing is ready yet and that
-    the first hosted workspace still needs owner/admin creation before routine
-    work can start.
-38. `Overview` must keep `Needs attention` honest when only suspended
-    workspaces remain. The shell may not imply active work is ready merely
-    because a suspended workspace exists; suspended-only states must say that
-    no active workspace is ready for routine use right now.
-39. `Overview` must stay fact-first. It may not synthesize urgency or health
-    verdicts such as `Nothing urgent` or `Healthy now`; it must report
-    concrete counts, explicit workspace state, and the next action directly
-    from the owned runtime truth.
+37. Inline workspace counts and workspace-state copy must keep `Ready` honest
+    when no hosted workspace exists yet. Hosted accounts with zero workspaces
+    may not tell the user to review current workspace state; they must say
+    that nothing is ready yet and that the first hosted workspace still needs
+    owner/admin creation before routine work can start.
+38. Inline workspace counts and workspace-state copy must keep suspended-only
+    states honest. The shell may not imply active work is ready merely because
+    a suspended workspace exists; suspended-only states must say that no
+    active workspace is ready for routine use right now.
+39. Inline workspace counts and shell status copy must stay fact-first. They
+    may not synthesize urgency or health verdicts such as `Nothing urgent` or
+    `Healthy now`; they must report concrete counts and explicit workspace
+    state directly from the owned runtime truth.
 40. Portal task and status copy must stay literal. Customer-facing copy may
     not rely on commentary such as `obvious`, `actual work`, `trustworthy`,
     or `settled` when the runtime already knows the concrete state, action,
@@ -279,11 +287,11 @@ Core rules:
     presentation, and hierarchy driven by spacing, typography, and dividers
     instead of dashboard chrome, decorative dark rails, nested card stacks,
     or dense pill collections competing with the active job.
-42. The signed-in shell must also open on the first live task, not the
-    summary layer. Hosted accounts should land in `Workspaces`; self-hosted-
-    only accounts should land in `Billing`. `Overview` remains available as a
-    precise triage surface, but it must not be the default first impression
-    for authenticated users.
+42. The signed-in shell must also open on the first live task, not a summary
+    layer. Hosted accounts should land in `Workspaces`; self-hosted-only
+    accounts should land in `Billing`. The shell must not expose a separate
+    `Overview` or `Summary` tab as the first impression for authenticated
+    users.
 43. The signed-in shell must orient the user with one quiet account-context
     header and one flat top task row. It must not add a second summary box,
     sidebar shell, or badge-heavy frame that competes with the active task.
@@ -312,12 +320,12 @@ The signed-in shell should be treated as four first-class states:
 
 Each signed-in state should render:
 
-1. a concise overview band that answers `Needs attention`, `Ready`, and `Next
-   action`
-   The overview band is shell-level triage, not one repeated card per account.
-   The overview band remains available from navigation, but authenticated
-   users should open on the first live task for the current account shape
-   rather than landing here by default.
+1. a concise workspace counts strip at the top of `Workspaces`
+   It reports account count, workspace count, ready count, review count, and
+   suspended count directly from runtime truth. It is not a separate
+   `Summary` or `Overview` tab, and authenticated users should open on the
+   first live task for the current account shape rather than landing on a
+   separate triage page.
 2. one quiet account-context header with account kind, role, current account
    title, and one short orienting sentence
 3. an explicit `Workspaces` area for open, create, and lifecycle actions
@@ -455,8 +463,9 @@ Accepted as sufficient for RC and GA:
 
 The `customer-account-portal` lane should deliver:
 
-1. one named `Pulse Account` shell and task-first IA centered on `Overview`,
-   `Workspaces`, `Access`, `Billing`, and `Support`
+1. one named `Pulse Account` shell and task-first IA centered on
+   `Workspaces`, `Access`, `Billing`, and `Support`, with precise workspace
+   counts inline at the top of `Workspaces`
 2. shared identity and navigation across hosted account actions and
    self-hosted commercial actions
 3. canonical ownership boundaries for billing, licenses, hosted tenants,
