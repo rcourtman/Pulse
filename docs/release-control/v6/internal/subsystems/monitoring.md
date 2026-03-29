@@ -228,9 +228,11 @@ live provider instance instead of keeping stale connection state in memory
 until the process restarts.
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
-`disk.temperatures` from the TrueNAS API and project those readings into the
-canonical physical-disk model and risk path instead of leaving temperature
-telemetry agent-only or adding a TrueNAS-local presentation shim.
+`disk.temperatures` from the TrueNAS API, fall back to modern
+`reporting.get_data` `disktemp` when the dedicated endpoint is unavailable, and
+project those readings into the canonical physical-disk model and risk path
+instead of leaving temperature telemetry agent-only or adding a TrueNAS-local
+presentation shim.
 That same boundary now also owns the canonical disk-history write path for
 API-backed disks. `internal/monitoring/monitor.go` must sync non-native
 physical-disk resources such as TrueNAS disks into the shared `disk`

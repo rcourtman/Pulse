@@ -562,6 +562,119 @@ func TestGetDisksToleratesUnavailableTemperatureEndpoint(t *testing.T) {
 	}
 }
 
+func TestGetDiskTemperaturesFallsBackToReportingRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/disk": {
+			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
+		},
+		"/api/v2.0/disk/temperatures": {
+			status: http.StatusNotFound,
+			body:   `{"error":"not found"}`,
+		},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		temperatureReq := readRPCRequest(t, conn)
+		if temperatureReq.Method != "reporting.get_data" {
+			t.Fatalf("expected reporting.get_data, got %q", temperatureReq.Method)
+		}
+		params, ok := temperatureReq.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("unexpected reporting params: %#v", temperatureReq.Params)
+		}
+		graphs, ok := params[0].([]any)
+		if !ok || len(graphs) != 1 {
+			t.Fatalf("unexpected reporting graphs: %#v", params[0])
+		}
+		graph, ok := graphs[0].(map[string]any)
+		if !ok {
+			t.Fatalf("unexpected reporting graph entry: %#v", graphs[0])
+		}
+		if got := readStringAny(graph, "name"); got != "disktemp" {
+			t.Fatalf("expected disktemp graph, got %q", got)
+		}
+		if got := readStringAny(graph, "identifier"); got != "sda" {
+			t.Fatalf("expected sda identifier, got %q", got)
+		}
+		writeRPCResult(t, conn, temperatureReq.ID, []map[string]any{{
+			"name":       "disktemp",
+			"identifier": "sda",
+			"legend":     []string{"temperature"},
+			"aggregations": map[string]any{
+				"mean": map[string]any{
+					"temperature": 41.8,
+				},
+			},
+			"data":  []any{},
+			"start": time.Now().Add(-5 * time.Minute).Unix(),
+			"end":   time.Now().Unix(),
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	temperatures, err := client.GetDiskTemperatures(context.Background())
+	if err != nil {
+		t.Fatalf("GetDiskTemperatures() error = %v", err)
+	}
+	if got := temperatures["sda"]; got != 42 {
+		t.Fatalf("expected sda reporting fallback temperature 42, got %d", got)
+	}
+}
+
+func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/disk": {
+			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
+		},
+		"/api/v2.0/disk/temperatures": {
+			status: http.StatusNotFound,
+			body:   `{"error":"not found"}`,
+		},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		temperatureReq := readRPCRequest(t, conn)
+		if temperatureReq.Method != "reporting.get_data" {
+			t.Fatalf("expected reporting.get_data, got %q", temperatureReq.Method)
+		}
+		writeRPCResult(t, conn, temperatureReq.ID, []map[string]any{{
+			"name":       "disktemp",
+			"identifier": "sda",
+			"legend":     []string{"temperature"},
+			"aggregations": map[string]any{
+				"mean": map[string]any{
+					"temperature": 43.2,
+				},
+			},
+			"data":  []any{},
+			"start": time.Now().Add(-5 * time.Minute).Unix(),
+			"end":   time.Now().Unix(),
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	disks, err := client.GetDisks(context.Background())
+	if err != nil {
+		t.Fatalf("GetDisks() error = %v", err)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+	if got := disks[0].Temperature; got != 43 {
+		t.Fatalf("expected reporting fallback temperature 43, got %+v", disks[0])
+	}
+}
+
 func TestClientHandlesHTTPAndDecodeErrors(t *testing.T) {
 	t.Run("non-2xx response", func(t *testing.T) {
 		server := newMockServer(t, map[string]apiResponse{

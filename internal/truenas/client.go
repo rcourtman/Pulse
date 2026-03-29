@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -294,7 +295,7 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
 	}
-	temperatures, err := c.GetDiskTemperatures(ctx)
+	temperatures, err := c.getDiskTemperaturesWithFallback(ctx, diskReportingIdentifiers(response))
 	if err != nil {
 		temperatures = nil
 	}
@@ -336,11 +337,80 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 
 // GetDiskTemperatures returns the current temperature by TrueNAS disk name.
 func (c *Client) GetDiskTemperatures(ctx context.Context) (map[string]int, error) {
+	return c.getDiskTemperaturesWithFallback(ctx, nil)
+}
+
+func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifiers []string) (map[string]int, error) {
 	var response any
-	if err := c.getJSON(ctx, http.MethodGet, "/disk/temperatures", &response); err != nil {
+	restErr := c.getJSON(ctx, http.MethodGet, "/disk/temperatures", &response)
+	if restErr == nil {
+		temperatures := parseDiskTemperatures(response)
+		if len(temperatures) > 0 {
+			return temperatures, nil
+		}
+	}
+
+	if len(identifiers) == 0 {
+		reportingIdentifiers, err := c.listDiskReportingIdentifiers(ctx)
+		if err == nil {
+			identifiers = reportingIdentifiers
+		}
+	}
+
+	reportingTemperatures, reportingErr := c.getDiskTemperaturesFromReporting(ctx, identifiers)
+	if reportingErr == nil && len(reportingTemperatures) > 0 {
+		return reportingTemperatures, nil
+	}
+
+	if restErr != nil {
+		if reportingErr != nil {
+			return nil, fmt.Errorf("fetch truenas disk temperatures via rest and reporting: rest=%w reporting=%v", restErr, reportingErr)
+		}
+		return nil, restErr
+	}
+
+	return parseDiskTemperatures(response), nil
+}
+
+func (c *Client) listDiskReportingIdentifiers(ctx context.Context) ([]string, error) {
+	var response []diskResponse
+	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
 	}
-	return parseDiskTemperatures(response), nil
+	return diskReportingIdentifiers(response), nil
+}
+
+func diskReportingIdentifiers(disks []diskResponse) []string {
+	identifiers := make([]string, 0, len(disks))
+	for _, disk := range disks {
+		if name := strings.TrimSpace(disk.Name); name != "" {
+			identifiers = append(identifiers, name)
+			continue
+		}
+		if identifier := strings.TrimSpace(disk.Identifier); identifier != "" {
+			identifiers = append(identifiers, identifier)
+		}
+	}
+	return dedupeStrings(identifiers)
+}
+
+func (c *Client) getDiskTemperaturesFromReporting(ctx context.Context, identifiers []string) (map[string]int, error) {
+	identifiers = dedupeStrings(identifiers)
+	if len(identifiers) == 0 {
+		return nil, fmt.Errorf("truenas reporting disk temperature fallback requires disk identifiers")
+	}
+
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+	return rpc.getDiskTemperatures(ctx, identifiers)
 }
 
 // GetAlerts returns active and dismissed TrueNAS alerts.
@@ -1206,6 +1276,50 @@ func (c *trueNASRPCClient) getSystemTemperatures(ctx context.Context) (map[strin
 		return nil, fmt.Errorf("truenas rpc connection is nil")
 	}
 
+	response, err := c.getReportingData(ctx, []map[string]any{{
+		"name":       "cputemp",
+		"identifier": nil,
+	}})
+	if err != nil {
+		return nil, err
+	}
+	return parseSystemTemperatures(response), nil
+}
+
+func (c *trueNASRPCClient) getDiskTemperatures(ctx context.Context, identifiers []string) (map[string]int, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+
+	graphs := make([]map[string]any, 0, len(identifiers))
+	for _, identifier := range dedupeStrings(identifiers) {
+		if identifier == "" {
+			continue
+		}
+		graphs = append(graphs, map[string]any{
+			"name":       "disktemp",
+			"identifier": identifier,
+		})
+	}
+	if len(graphs) == 0 {
+		return nil, fmt.Errorf("truenas rpc disk temperature query requires at least one identifier")
+	}
+
+	response, err := c.getReportingData(ctx, graphs)
+	if err != nil {
+		return nil, err
+	}
+	return parseReportingDiskTemperatures(response), nil
+}
+
+func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[string]any) ([]trueNASReportingGetDataResponse, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+	if len(graphs) == 0 {
+		return nil, fmt.Errorf("truenas reporting query requires at least one graph")
+	}
+
 	end := time.Now().Unix()
 	start := end - 300
 	if start <= 0 {
@@ -1214,10 +1328,7 @@ func (c *trueNASRPCClient) getSystemTemperatures(ctx context.Context) (map[strin
 
 	var response []trueNASReportingGetDataResponse
 	params := []any{
-		[]map[string]any{{
-			"name":       "cputemp",
-			"identifier": nil,
-		}},
+		graphs,
 		map[string]any{
 			"aggregate": true,
 			"start":     start,
@@ -1227,7 +1338,7 @@ func (c *trueNASRPCClient) getSystemTemperatures(ctx context.Context) (map[strin
 	if err := c.call(ctx, "reporting.get_data", params, &response); err != nil {
 		return nil, err
 	}
-	return parseSystemTemperatures(response), nil
+	return response, nil
 }
 
 func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, intervalSeconds int) (*SystemInfo, error) {
@@ -1410,6 +1521,34 @@ func parseSystemTemperatures(responses []trueNASReportingGetDataResponse) map[st
 	return temperatures
 }
 
+func parseReportingDiskTemperatures(responses []trueNASReportingGetDataResponse) map[string]int {
+	if len(responses) == 0 {
+		return nil
+	}
+
+	temperatures := make(map[string]int)
+	for _, response := range responses {
+		if strings.TrimSpace(strings.ToLower(response.Name)) != "disktemp" {
+			continue
+		}
+
+		identifier := readStringAny(map[string]any{"identifier": response.Identifier}, "identifier")
+		if identifier == "" {
+			continue
+		}
+
+		value, ok := extractSingleReportingFloatValue(response)
+		if !ok || value <= 0 {
+			continue
+		}
+		temperatures[identifier] = int(math.Round(value))
+	}
+	if len(temperatures) == 0 {
+		return nil
+	}
+	return temperatures
+}
+
 func extractReportingLegendFloatValues(raw any, legends []string) map[string]float64 {
 	if raw == nil || len(legends) == 0 {
 		return nil
@@ -1452,6 +1591,60 @@ func extractReportingLegendFloatValues(raw any, legends []string) map[string]flo
 		return nil
 	}
 	return values
+}
+
+func extractSingleReportingFloatValue(response trueNASReportingGetDataResponse) (float64, bool) {
+	values := extractReportingLegendFloatValues(response.Aggregations.Mean, response.Legend)
+	if len(values) == 0 && len(response.Data) > 0 {
+		values = extractReportingLegendFloatValues(response.Data[len(response.Data)-1], response.Legend)
+	}
+
+	for _, legend := range response.Legend {
+		value, ok := values[legend]
+		if ok && value > 0 {
+			return value, true
+		}
+	}
+	for _, value := range values {
+		if value > 0 {
+			return value, true
+		}
+	}
+
+	for _, raw := range []any{response.Aggregations.Mean, response.Data} {
+		if value, ok := extractFirstReportingFloatValue(raw); ok && value > 0 {
+			return value, true
+		}
+	}
+
+	return 0, false
+}
+
+func extractFirstReportingFloatValue(raw any) (float64, bool) {
+	switch typed := raw.(type) {
+	case nil:
+		return 0, false
+	case []any:
+		for _, item := range typed {
+			if value, ok := extractFirstReportingFloatValue(item); ok {
+				return value, true
+			}
+		}
+	case map[string]any:
+		for _, value := range typed {
+			if parsed, ok := parseFloat64Any(value); ok {
+				return parsed, true
+			}
+			if parsed, ok := extractFirstReportingFloatValue(value); ok {
+				return parsed, true
+			}
+		}
+	default:
+		if parsed, ok := parseFloat64Any(raw); ok {
+			return parsed, true
+		}
+	}
+	return 0, false
 }
 
 func reportingLegendLookupKeys(legend string, index int) []string {
