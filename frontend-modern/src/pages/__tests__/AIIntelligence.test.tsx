@@ -1029,6 +1029,142 @@ describe('AIIntelligence entitlement gating', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('surfaces the recent activity mix in the verification summary when scoped runs are creating noise', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(defaultPatrolStatus({ license_required: false }));
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-scoped-alert',
+        started_at: '2026-03-12T10:00:00Z',
+        completed_at: '2026-03-12T10:01:00Z',
+        duration_ms: 60000,
+        type: 'scoped',
+        trigger_reason: 'alert_fired',
+        scope_resource_ids: [],
+        effective_scope_resource_ids: [],
+        scope_resource_types: [],
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: '',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+      {
+        id: 'run-scoped-anomaly',
+        started_at: '2026-03-12T09:58:00Z',
+        completed_at: '2026-03-12T09:59:00Z',
+        duration_ms: 60000,
+        type: 'scoped',
+        trigger_reason: 'anomaly',
+        scope_resource_ids: [],
+        effective_scope_resource_ids: [],
+        scope_resource_types: [],
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: '',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+      {
+        id: 'run-full',
+        started_at: '2026-03-12T09:50:00Z',
+        completed_at: '2026-03-12T09:57:00Z',
+        duration_ms: 420000,
+        type: 'patrol',
+        trigger_reason: 'scheduled',
+        scope_resource_ids: [],
+        effective_scope_resource_ids: [],
+        scope_resource_types: [],
+        resources_checked: 58,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'No active findings',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:05:00Z',
+      overall_health: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('treats a selected zero-finding run as an empty snapshot and uses effective scope ids', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });

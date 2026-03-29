@@ -227,6 +227,10 @@ operator whether Patrol recently completed a successful full patrol, only ran
 scoped alert-triggered checks, or ended its most recent full patrol with
 errors, so the page does not leave trust and coverage as implicit background
 knowledge.
+When same-day run history shows both a recent full patrol and a burst of
+scoped follow-up activity, that same verification surface should expose the
+recent activity mix explicitly instead of leaving operators to reconcile a
+`Recently verified` headline with a busy Patrol strip elsewhere on the page.
 Fix-verification checks belong to that same explanation layer as targeted
 activity, not as evidence of a fresh full-estate sweep.
 The same hierarchy applies to investigation context. Correlations, recent

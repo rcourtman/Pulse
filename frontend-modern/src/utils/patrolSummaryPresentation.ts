@@ -2,6 +2,10 @@ import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
 import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import type { IntelligenceHealthScore } from '@/types/aiIntelligence';
 import { isPatrolRuntimeFinding } from '@/utils/aiFindingPresentation';
+import {
+  formatPatrolActivityBreakdown,
+  getPatrolActivityBreakdown,
+} from '@/utils/patrolRunPresentation';
 import type { SemanticTone } from '@/utils/semanticTonePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 
@@ -50,6 +54,7 @@ export interface PatrolVerificationPresentation {
   compactLabel: string;
   tone: SemanticTone;
   lastFullRunAt?: string;
+  activityMixLabel?: string;
 }
 
 export interface PatrolRecencyPresentation {
@@ -312,6 +317,28 @@ function isVerificationPatrolRun(run: PatrolRunRecord): boolean {
   return normalizeRunType(run.type) === 'verification';
 }
 
+function getVerificationActivityMixLabel(runs: PatrolRunRecord[]): string | undefined {
+  const latestCompletedRun = runs.find((run) => isCompletedPatrolRun(run));
+  const referenceTimestamp = latestCompletedRun?.completed_at || latestCompletedRun?.started_at;
+  if (!referenceTimestamp) {
+    return undefined;
+  }
+
+  const breakdown = getPatrolActivityBreakdown(runs, new Date(referenceTimestamp));
+  const scopedRuns =
+    breakdown.alertTriggeredRuns +
+    breakdown.anomalyTriggeredRuns +
+    breakdown.alertClearedRuns +
+    breakdown.verificationChecks +
+    breakdown.otherScopedRuns;
+  if (breakdown.totalRuns <= 1 || scopedRuns <= 0) {
+    return undefined;
+  }
+
+  const label = formatPatrolActivityBreakdown(breakdown);
+  return label || undefined;
+}
+
 function isCompletedPatrolRun(run: PatrolRunRecord): boolean {
   return Boolean(run.completed_at?.trim());
 }
@@ -442,6 +469,7 @@ export function getPatrolVerificationPresentation(args: {
   }
 
   const completedRuns = (args.runs ?? []).filter((run) => isCompletedPatrolRun(run));
+  const activityMixLabel = getVerificationActivityMixLabel(completedRuns);
   const recentFullRun = completedRuns.find((run) => isFullPatrolRun(run));
 
   if (recentFullRun) {
@@ -456,6 +484,7 @@ export function getPatrolVerificationPresentation(args: {
         compactLabel: 'Verification limited',
         tone: 'warning',
         lastFullRunAt: recentFullRun.completed_at,
+        activityMixLabel,
       };
     }
 
@@ -468,6 +497,7 @@ export function getPatrolVerificationPresentation(args: {
       compactLabel: 'Recently verified',
       tone: 'success',
       lastFullRunAt: recentFullRun.completed_at,
+      activityMixLabel,
     };
   }
 
@@ -496,6 +526,7 @@ export function getPatrolVerificationPresentation(args: {
       description,
       compactLabel: 'Partial verification',
       tone: 'warning',
+      activityMixLabel,
     };
   }
 

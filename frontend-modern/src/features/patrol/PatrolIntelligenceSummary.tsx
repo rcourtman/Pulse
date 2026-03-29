@@ -205,6 +205,11 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                         </Show>
                       </p>
                       <p class="mt-1 text-sm text-muted">{verification().description}</p>
+                      <Show when={verification().activityMixLabel}>
+                        <p class="mt-2 text-xs font-medium text-base-content">
+                          Recent activity mix: {verification().activityMixLabel}
+                        </p>
+                      </Show>
                     </div>
                   </div>
                 </div>

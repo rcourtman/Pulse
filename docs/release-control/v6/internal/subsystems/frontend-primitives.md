@@ -1076,6 +1076,10 @@ When the same governed run-history contract shows a recent full patrol plus
 same-day scoped follow-up work, that summary shell should also carry a compact
 activity-mix explanation rather than forcing operators to infer why Patrol
 looked busy from a separate activity strip alone.
+That explanation belongs on the verification surface itself when operators are
+reconciling `Recently verified` copy against same-day scoped Patrol bursts; the
+status strip may support the readout, but it is not sufficient as the only
+explanation path.
 That same shell rule also owns Patrol recency labels. Shared Patrol header and
 status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
 transport fact and use `Last activity` for scoped or verification work instead

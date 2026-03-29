@@ -517,6 +517,11 @@ test.describe("Patrol runtime-state browser contract", () => {
       ),
     ).toBeVisible();
     await expect(
+      page.getByText(
+        "Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered",
+      ),
+    ).toBeVisible();
+    await expect(
       page.getByText("Scoped triggers: 4 queued · busy mode · anomalies off"),
     ).toBeVisible();
 
