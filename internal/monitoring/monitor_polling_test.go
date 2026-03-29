@@ -540,6 +540,64 @@ func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedAgentMetricsRecordsTrueNASHostHistory(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	records := truenas.NewProvider(truenas.DefaultFixtures()).Records()
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: records,
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+
+	var systemResourceID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Name == "truenas-main" {
+			systemResourceID = resource.ID
+			break
+		}
+	}
+	if systemResourceID == "" {
+		t.Fatal("expected TrueNAS system resource in unified store")
+	}
+
+	target := resourceStore.MetricsTargetForResource(systemResourceID)
+	if target == nil || target.ResourceType != "agent" || target.ResourceID != "truenas-main" {
+		t.Fatalf("unexpected agent metrics target %+v", target)
+	}
+
+	inMemory := monitor.GetGuestMetrics("agent:truenas-main", time.Hour)
+	if got := len(inMemory["cpu"]); got == 0 {
+		t.Fatalf("expected in-memory cpu history for truenas-main")
+	}
+	if got := len(inMemory["netin"]); got == 0 {
+		t.Fatalf("expected in-memory network history for truenas-main")
+	}
+
+	storeBacked := monitor.GetGuestMetricsForChart("agent:truenas-main", "agent", "truenas-main", 7*24*time.Hour)
+	if got := len(storeBacked["cpu"]); got == 0 {
+		t.Fatalf("expected persisted cpu history for truenas-main")
+	}
+}
+
 func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t *testing.T) {
 	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
 	defer alertManager.Stop()

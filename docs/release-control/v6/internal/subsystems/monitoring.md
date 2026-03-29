@@ -239,3 +239,12 @@ canonical `app-container` metrics contract, and sync them into the existing
 guest metrics-history/store path. Pulse must not add a TrueNAS-only charts
 path or treat API-backed app workloads as second-class compared with native
 Docker reports.
+That same monitoring boundary now also owns API-backed TrueNAS system
+telemetry for the top-level NAS host. `internal/truenas/client.go` must ingest
+`reporting.realtime` through the official `/api/current` JSON-RPC websocket
+transport, `internal/truenas/provider.go` must project those readings onto the
+canonical host `AgentData` and shared `ResourceMetrics` contract, and
+`internal/monitoring/monitor.go` must sync them into the existing `agent`
+metrics-history/store path. Pulse must not add a TrueNAS-only top-level
+system charts path or leave TrueNAS host telemetry outside the canonical host
+history contract.

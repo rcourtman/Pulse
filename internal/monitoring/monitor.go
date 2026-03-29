@@ -4136,6 +4136,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	recordsBySource := m.collectSupplementalRecordsBySource()
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+		m.syncUnifiedAgentMetrics(store)
 		m.syncUnifiedStorageMetrics(store)
 		m.syncUnifiedAppContainerMetrics(store)
 		for source, records := range recordsBySource {
@@ -4167,9 +4168,114 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		}
 	}
 
+	m.syncUnifiedAgentMetrics(store)
 	m.syncUnifiedStorageMetrics(store)
 	m.syncUnifiedAppContainerMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
+}
+
+func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
+	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
+		return
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	seenTargets := make(map[string]struct{})
+	for _, resource := range store.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Metrics == nil {
+			continue
+		}
+		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) ||
+			monitorHasSource(resource.Sources, unifiedresources.SourceProxmox) ||
+			monitorHasSource(resource.Sources, unifiedresources.SourceDocker) {
+			continue
+		}
+
+		target := resolver.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "agent" || strings.TrimSpace(target.ResourceID) == "" {
+			continue
+		}
+		targetID := strings.TrimSpace(target.ResourceID)
+		if _, ok := seenTargets[targetID]; ok {
+			continue
+		}
+		seenTargets[targetID] = struct{}{}
+		metricKey := fmt.Sprintf("agent:%s", targetID)
+
+		if metric := resource.Metrics.CPU; metric != nil {
+			value := metric.Percent
+			if value == 0 {
+				value = metric.Value
+			}
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "cpu", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
+			value := metric.Percent
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "memory", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
+			value := metric.Percent
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "disk", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.NetIn; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "netin", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.NetOut; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "netout", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.DiskRead; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "diskread", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.DiskWrite; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("agent", targetID, "diskwrite", metric.Value, now)
+			}
+		}
+	}
 }
 
 func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {

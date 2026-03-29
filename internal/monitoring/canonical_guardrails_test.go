@@ -168,6 +168,26 @@ func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
 	}
 }
 
+func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"m.syncUnifiedAgentMetrics(store)",
+		`if target == nil || target.ResourceType != "agent" || strings.TrimSpace(target.ResourceID) == "" {`,
+		`metricKey := fmt.Sprintf("agent:%s", targetID)`,
+		`m.metricsStore.Write("agent", targetID, "cpu", value, now)`,
+		`m.metricsStore.Write("agent", targetID, "diskwrite", metric.Value, now)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	data, err := os.ReadFile("monitor_agents.go")
 	if err != nil {

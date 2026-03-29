@@ -26,6 +26,11 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		if st, ok := bySource[SourceAgent]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
+		if st, ok := bySource[SourceTrueNAS]; ok {
+			if resourceID := canonicalAgentMetricID(st.SourceID); resourceID != "" {
+				return &MetricsTarget{ResourceType: "agent", ResourceID: resourceID}
+			}
+		}
 		if st, ok := bySource[SourceDocker]; ok {
 			return &MetricsTarget{ResourceType: "docker-host", ResourceID: st.SourceID}
 		}
@@ -107,5 +112,12 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 func canonicalAppContainerMetricID(sourceID string) string {
 	trimmed := strings.TrimSpace(sourceID)
 	trimmed = strings.TrimPrefix(trimmed, "app:")
+	return strings.TrimSpace(trimmed)
+}
+
+func canonicalAgentMetricID(sourceID string) string {
+	trimmed := strings.TrimSpace(sourceID)
+	trimmed = strings.TrimPrefix(trimmed, "system:")
+	trimmed = strings.TrimPrefix(trimmed, "agent:")
 	return strings.TrimSpace(trimmed)
 }

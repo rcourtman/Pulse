@@ -191,9 +191,8 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			Status:    systemStatus(snapshot.System, systemRisk, systemIncidents),
 			LastSeen:  collectedAt,
 			UpdatedAt: collectedAt,
-			Metrics: &unifiedresources.ResourceMetrics{
-				Disk: diskMetric(totalCapacity, totalUsed),
-			},
+			Metrics:   metricsFromTrueNASSystem(snapshot.System, totalCapacity, totalUsed),
+			Agent:     agentDataFromTrueNASSystem(snapshot.System, systemRisk, protectionReduced, protectionSummary, rebuildInProgress, rebuildSummary),
 			TrueNAS: &unifiedresources.TrueNASData{
 				Hostname:              strings.TrimSpace(snapshot.System.Hostname),
 				Version:               snapshot.System.Version,
@@ -436,6 +435,107 @@ func metricsFromTrueNASApp(app App) *unifiedresources.ResourceMetrics {
 		Source: unifiedresources.SourceTrueNAS,
 	}
 	return metrics
+}
+
+func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64) *unifiedresources.ResourceMetrics {
+	hasRealtimeTelemetry := !system.CollectedAt.IsZero() || system.IntervalSeconds > 0
+	metrics := &unifiedresources.ResourceMetrics{
+		Disk: diskMetric(totalCapacity, totalUsed),
+	}
+
+	if hasRealtimeTelemetry {
+		metrics.CPU = &unifiedresources.MetricValue{
+			Value:   system.CPUPercent,
+			Percent: system.CPUPercent,
+			Unit:    "percent",
+			Source:  unifiedresources.SourceTrueNAS,
+		}
+	}
+
+	if system.MemoryTotalBytes > 0 {
+		used := system.MemoryTotalBytes - system.MemoryAvailableBytes
+		if used < 0 {
+			used = 0
+		}
+		memory := &unifiedresources.MetricValue{
+			Used:   &used,
+			Total:  &system.MemoryTotalBytes,
+			Unit:   "bytes",
+			Source: unifiedresources.SourceTrueNAS,
+		}
+		if system.MemoryTotalBytes > 0 {
+			memory.Percent = (float64(used) / float64(system.MemoryTotalBytes)) * 100
+			memory.Value = memory.Percent
+		}
+		metrics.Memory = memory
+	}
+
+	if hasRealtimeTelemetry {
+		metrics.NetIn = &unifiedresources.MetricValue{
+			Value:  system.NetInRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		}
+		metrics.NetOut = &unifiedresources.MetricValue{
+			Value:  system.NetOutRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		}
+		metrics.DiskRead = &unifiedresources.MetricValue{
+			Value:  system.DiskReadRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		}
+		metrics.DiskWrite = &unifiedresources.MetricValue{
+			Value:  system.DiskWriteRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		}
+	}
+
+	return metrics
+}
+
+func agentDataFromTrueNASSystem(system SystemInfo, storageRisk *unifiedresources.StorageRisk, protectionReduced bool, protectionSummary string, rebuildInProgress bool, rebuildSummary string) *unifiedresources.AgentData {
+	agent := &unifiedresources.AgentData{
+		Hostname:              strings.TrimSpace(system.Hostname),
+		MachineID:             strings.TrimSpace(system.MachineID),
+		Platform:              "truenas",
+		OSName:                "TrueNAS",
+		OSVersion:             strings.TrimSpace(system.Version),
+		CPUCount:              system.CPUCount,
+		UptimeSeconds:         system.UptimeSeconds,
+		IntervalSeconds:       system.IntervalSeconds,
+		StorageRisk:           storageRisk,
+		StorageRiskSummary:    unifiedresources.StorageRiskSummary(storageRisk),
+		StoragePostureSummary: unifiedresources.StorageRiskSummary(storageRisk),
+		ProtectionReduced:     protectionReduced,
+		ProtectionSummary:     protectionSummary,
+		RebuildInProgress:     rebuildInProgress,
+		RebuildSummary:        rebuildSummary,
+		NetInRate:             system.NetInRate,
+		NetOutRate:            system.NetOutRate,
+		DiskReadRate:          system.DiskReadRate,
+		DiskWriteRate:         system.DiskWriteRate,
+	}
+
+	if system.MemoryTotalBytes > 0 {
+		used := system.MemoryTotalBytes - system.MemoryAvailableBytes
+		if used < 0 {
+			used = 0
+		}
+		free := system.MemoryAvailableBytes
+		if free < 0 {
+			free = 0
+		}
+		agent.Memory = &unifiedresources.AgentMemoryMeta{
+			Total: system.MemoryTotalBytes,
+			Used:  used,
+			Free:  free,
+		}
+	}
+
+	return agent
 }
 
 func enrichAppStatsFromPreviousSnapshot(current *FixtureSnapshot, previous *FixtureSnapshot) {

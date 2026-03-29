@@ -7,12 +7,22 @@ func DefaultFixtures() FixtureSnapshot {
 	return FixtureSnapshot{
 		CollectedAt: time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC),
 		System: SystemInfo{
-			Hostname:      "truenas-main",
-			Version:       "TrueNAS-SCALE-24.10.2",
-			Build:         "24.10.2.1",
-			UptimeSeconds: 42 * 24 * 60 * 60,
-			Healthy:       true,
-			MachineID:     "truenas-1-machine-id",
+			Hostname:             "truenas-main",
+			Version:              "TrueNAS-SCALE-24.10.2",
+			Build:                "24.10.2.1",
+			UptimeSeconds:        42 * 24 * 60 * 60,
+			Healthy:              true,
+			MachineID:            "truenas-1-machine-id",
+			CPUCount:             16,
+			MemoryTotalBytes:     64 * 1024 * 1024 * 1024,
+			MemoryAvailableBytes: 22 * 1024 * 1024 * 1024,
+			CPUPercent:           38,
+			NetInRate:            48_000_000,
+			NetOutRate:           19_500_000,
+			DiskReadRate:         7_200_000,
+			DiskWriteRate:        3_400_000,
+			IntervalSeconds:      2,
+			CollectedAt:          time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC),
 		},
 		Pools: []Pool{
 			{

@@ -24,7 +24,9 @@ const defaultHTTPTimeout = 30 * time.Second
 
 const maxResponseBodyBytes int64 = 4 * 1024 * 1024
 
-const defaultAppStatsIntervalSeconds = 2
+const defaultRealtimeIntervalSeconds = 2
+
+const defaultAppStatsIntervalSeconds = defaultRealtimeIntervalSeconds
 
 // ClientConfig configures the TrueNAS REST API client.
 type ClientConfig struct {
@@ -151,15 +153,48 @@ func (c *Client) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 	if build == "" {
 		build = strings.TrimSpace(response.Version)
 	}
+	cpuCount := response.PhysicalCores
+	if cpuCount <= 0 {
+		cpuCount = response.Cores
+	}
 
 	return &SystemInfo{
-		Hostname:      strings.TrimSpace(response.Hostname),
-		Version:       strings.TrimSpace(response.Version),
-		Build:         build,
-		UptimeSeconds: response.UptimeSeconds,
-		Healthy:       true,
-		MachineID:     machineID,
+		Hostname:         strings.TrimSpace(response.Hostname),
+		Version:          strings.TrimSpace(response.Version),
+		Build:            build,
+		UptimeSeconds:    response.UptimeSeconds,
+		Healthy:          true,
+		MachineID:        machineID,
+		CPUCount:         cpuCount,
+		MemoryTotalBytes: response.Physmem,
 	}, nil
+}
+
+// GetSystemTelemetry retrieves live system telemetry from the modern TrueNAS
+// JSON-RPC websocket API. This path is best-effort; callers should treat any
+// transport or endpoint failure as "telemetry unavailable" rather than a
+// system identity failure.
+func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+
+	subscriptionName := fmt.Sprintf("reporting.realtime:{\"interval\":%d}", defaultRealtimeIntervalSeconds)
+	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
+		return nil, err
+	}
+
+	return rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
 }
 
 // GetPools returns storage pools.
@@ -538,6 +573,9 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	if err != nil {
 		return nil, fmt.Errorf("fetch truenas system info: %w", err)
 	}
+	if telemetry, err := c.GetSystemTelemetry(ctx); err == nil && telemetry != nil {
+		mergeSystemTelemetry(system, telemetry)
+	}
 
 	pools, err := c.GetPools(ctx)
 	if err != nil {
@@ -575,6 +613,32 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		ZFSSnapshots:     zfsSnapshots,
 		ReplicationTasks: replicationTasks,
 	}, nil
+}
+
+func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
+	if system == nil || telemetry == nil {
+		return
+	}
+	if telemetry.CPUCount > 0 {
+		system.CPUCount = telemetry.CPUCount
+	}
+	if telemetry.MemoryTotalBytes > 0 {
+		system.MemoryTotalBytes = telemetry.MemoryTotalBytes
+	}
+	if telemetry.MemoryAvailableBytes > 0 {
+		system.MemoryAvailableBytes = telemetry.MemoryAvailableBytes
+	}
+	system.CPUPercent = telemetry.CPUPercent
+	system.NetInRate = telemetry.NetInRate
+	system.NetOutRate = telemetry.NetOutRate
+	system.DiskReadRate = telemetry.DiskReadRate
+	system.DiskWriteRate = telemetry.DiskWriteRate
+	if telemetry.IntervalSeconds > 0 {
+		system.IntervalSeconds = telemetry.IntervalSeconds
+	}
+	if !telemetry.CollectedAt.IsZero() {
+		system.CollectedAt = telemetry.CollectedAt
+	}
 }
 
 func temperatureForTrueNASDisk(temperatures map[string]int, item diskResponse) int {
@@ -712,6 +776,11 @@ type trueNASAppNetworkStats struct {
 type trueNASAppBlkIOStats struct {
 	Read  int64 `json:"read"`
 	Write int64 `json:"write"`
+}
+
+type trueNASRealtimeNotification struct {
+	Collection string         `json:"collection"`
+	Fields     map[string]any `json:"fields"`
 }
 
 func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
@@ -870,8 +939,147 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 	}
 }
 
+func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, intervalSeconds int) (*SystemInfo, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+
+	for {
+		if deadline, ok := ctx.Deadline(); ok {
+			_ = c.conn.SetReadDeadline(deadline)
+		}
+
+		var message trueNASRPCResponse
+		if err := c.conn.ReadJSON(&message); err != nil {
+			return nil, fmt.Errorf("read truenas rpc reporting.realtime notification: %w", err)
+		}
+		if message.Method == "" {
+			if message.Error != nil {
+				return nil, fmt.Errorf("truenas rpc reporting.realtime failed: code=%d message=%q", message.Error.Code, strings.TrimSpace(message.Error.Message))
+			}
+			continue
+		}
+
+		fields, ok, err := parseRealtimeFields(message, "reporting.realtime")
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+
+		return parseSystemTelemetry(fields, intervalSeconds, time.Now().UTC()), nil
+	}
+}
+
 func normalizeAppStatsKey(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+func parseRealtimeFields(message trueNASRPCResponse, collectionPrefix string) (map[string]any, bool, error) {
+	method := strings.TrimSpace(message.Method)
+	switch method {
+	case "collection_update":
+		var notification trueNASRealtimeNotification
+		if err := json.Unmarshal(message.Params, &notification); err != nil {
+			return nil, false, fmt.Errorf("decode truenas %s notification: %w", collectionPrefix, err)
+		}
+		if !strings.HasPrefix(strings.TrimSpace(notification.Collection), collectionPrefix) {
+			return nil, false, nil
+		}
+		if len(notification.Fields) == 0 {
+			return nil, false, nil
+		}
+		return notification.Fields, true, nil
+	default:
+		if !strings.HasPrefix(method, collectionPrefix) {
+			return nil, false, nil
+		}
+		var payload map[string]any
+		if len(message.Params) == 0 {
+			return nil, false, nil
+		}
+		if err := json.Unmarshal(message.Params, &payload); err != nil {
+			return nil, false, fmt.Errorf("decode truenas %s notification: %w", collectionPrefix, err)
+		}
+		if fields := readMapAny(payload, "fields"); len(fields) > 0 {
+			return fields, true, nil
+		}
+		return payload, true, nil
+	}
+}
+
+func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedAt time.Time) *SystemInfo {
+	if len(fields) == 0 {
+		return &SystemInfo{
+			IntervalSeconds: intervalSeconds,
+			CollectedAt:     collectedAt,
+		}
+	}
+
+	telemetry := &SystemInfo{
+		IntervalSeconds: intervalSeconds,
+		CollectedAt:     collectedAt,
+	}
+
+	cpu := readMapAny(fields, "cpu")
+	cpuPercent := readFloatAny(cpu,
+		"usage",
+		"percent",
+		"usage_percent",
+		"cpu_usage",
+		"cpu_percent",
+		"total",
+		"overall",
+	)
+	if cpuPercent == 0 {
+		if usage := readMapAny(cpu, "usage", "total"); len(usage) > 0 {
+			cpuPercent = readFloatAny(usage, "percent", "value", "usage")
+		}
+	}
+	telemetry.CPUPercent = cpuPercent
+
+	memory := readMapAny(fields, "memory")
+	total := readInt64Any(memory, "physical_memory_total", "total", "memory_total", "total_bytes")
+	available := readInt64Any(memory, "physical_memory_available", "available", "free", "available_bytes", "free_bytes")
+	telemetry.MemoryTotalBytes = total
+	telemetry.MemoryAvailableBytes = available
+
+	interfaces := readMapAny(fields, "interfaces")
+	for _, raw := range interfaces {
+		record, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		telemetry.NetInRate += readFloatAny(record,
+			"rx_bytes",
+			"received_bytes",
+			"received_bytes_rate",
+			"rx_bytes_rate",
+			"bytes_recv",
+			"bytes_received",
+		)
+		telemetry.NetOutRate += readFloatAny(record,
+			"tx_bytes",
+			"sent_bytes",
+			"sent_bytes_rate",
+			"tx_bytes_rate",
+			"bytes_sent",
+			"bytes_transmitted",
+		)
+	}
+
+	disks := readMapAny(fields, "disks", "disls")
+	for _, raw := range disks {
+		record, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		telemetry.DiskReadRate += readFloatAny(record, "read_bytes", "read_bytes_rate", "bytes_read")
+		telemetry.DiskWriteRate += readFloatAny(record, "write_bytes", "write_bytes_rate", "bytes_written")
+	}
+
+	return telemetry
 }
 
 func firstAny(record map[string]any, keys ...string) (any, bool) {
@@ -970,6 +1178,38 @@ func readIntAny(record map[string]any, keys ...string) int {
 		}
 		if parsed, ok := parseInt64Any(value); ok {
 			return int(parsed)
+		}
+	}
+	return 0
+}
+
+func readInt64Any(record map[string]any, keys ...string) int64 {
+	if record == nil {
+		return 0
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if parsed, ok := parseInt64Any(value); ok {
+			return parsed
+		}
+	}
+	return 0
+}
+
+func readFloatAny(record map[string]any, keys ...string) float64 {
+	if record == nil {
+		return 0
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if parsed, ok := parseFloat64Any(value); ok {
+			return parsed
 		}
 	}
 	return 0
@@ -1438,6 +1678,9 @@ type systemInfoResponse struct {
 	UptimeSeconds int64  `json:"uptime_seconds"`
 	SystemSerial  string `json:"system_serial"`
 	SystemVendor  string `json:"system_manufacturer"`
+	Cores         int    `json:"cores"`
+	PhysicalCores int    `json:"physical_cores"`
+	Physmem       int64  `json:"physmem"`
 }
 
 type poolResponse struct {
@@ -1724,6 +1967,36 @@ func parseInt64Any(value any) (int64, bool) {
 		}
 		if v, err := strconv.ParseInt(s, 10, 64); err == nil {
 			return v, true
+		}
+	}
+	return 0, false
+}
+
+func parseFloat64Any(value any) (float64, bool) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, true
+	case float32:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
+	case int:
+		return float64(typed), true
+	case json.Number:
+		if v, err := typed.Float64(); err == nil {
+			return v, true
+		}
+	case string:
+		s := strings.TrimSpace(typed)
+		if s == "" {
+			return 0, false
+		}
+		if v, err := strconv.ParseFloat(s, 64); err == nil {
+			return v, true
+		}
+	case map[string]any:
+		if parsed, ok := firstAny(typed, "parsed", "value", "rawvalue"); ok {
+			return parseFloat64Any(parsed)
 		}
 	}
 	return 0, false

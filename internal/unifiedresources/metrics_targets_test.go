@@ -204,3 +204,24 @@ func TestBuildMetricsTarget_UsesCanonicalAppMetricIDForTrueNAS(t *testing.T) {
 		t.Fatalf("ResourceID = %q, want nextcloud", target.ResourceID)
 	}
 }
+
+func TestBuildMetricsTarget_UsesCanonicalAgentMetricIDForTrueNAS(t *testing.T) {
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypeAgent,
+		},
+		[]SourceTarget{{
+			Source:   SourceTrueNAS,
+			SourceID: " system:truenas-main ",
+		}},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "agent" {
+		t.Fatalf("ResourceType = %q, want agent", target.ResourceType)
+	}
+	if target.ResourceID != "truenas-main" {
+		t.Fatalf("ResourceID = %q, want truenas-main", target.ResourceID)
+	}
+}

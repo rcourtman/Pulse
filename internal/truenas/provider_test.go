@@ -215,6 +215,24 @@ func TestSystemRecordPopulatesTrueNASMetadata(t *testing.T) {
 	if system.Resource.TrueNAS.Hostname != "truenas-main" {
 		t.Fatalf("expected hostname %q, got %q", "truenas-main", system.Resource.TrueNAS.Hostname)
 	}
+	if system.Resource.Agent == nil {
+		t.Fatal("expected canonical agent payload on TrueNAS system record")
+	}
+	if system.Resource.Agent.Platform != "truenas" || system.Resource.Agent.OSName != "TrueNAS" {
+		t.Fatalf("expected canonical TrueNAS agent metadata, got %+v", system.Resource.Agent)
+	}
+	if system.Resource.Agent.CPUCount != 16 || system.Resource.Agent.UptimeSeconds != int64(42*24*60*60) {
+		t.Fatalf("expected canonical host telemetry metadata, got %+v", system.Resource.Agent)
+	}
+	if system.Resource.Metrics == nil || system.Resource.Metrics.CPU == nil || system.Resource.Metrics.Memory == nil {
+		t.Fatalf("expected canonical system metrics on TrueNAS host record, got %+v", system.Resource.Metrics)
+	}
+	if system.Resource.Metrics.CPU.Percent != 38 {
+		t.Fatalf("expected cpu percent 38, got %+v", system.Resource.Metrics.CPU)
+	}
+	if system.Resource.Metrics.NetIn == nil || system.Resource.Metrics.NetIn.Value != 48_000_000 {
+		t.Fatalf("expected network telemetry metrics, got %+v", system.Resource.Metrics)
+	}
 }
 
 func TestRecordsProjectTrueNASAppStatsIntoCanonicalMetrics(t *testing.T) {

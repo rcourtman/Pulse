@@ -172,6 +172,14 @@ lane-local workload UI. API-backed `app.stats` telemetry must now project onto
 that same canonical `app-container` contract as live metrics and metrics
 targets, using the shared `docker:<id>` in-memory key and `dockerContainer`
 history store path instead of adding a TrueNAS-local workload history lane.
+TrueNAS top-level systems now follow the same canonical host rule. One
+TrueNAS appliance must project as one canonical `agent` resource under
+`SourceTrueNAS`, carrying host-facing `AgentData` plus provider-specific
+`TrueNASData` instead of inventing a `truenas-system` resource type or a
+provider-local host surface. API-backed `reporting.realtime` telemetry must
+project onto that same canonical `agent` contract as live metrics and metrics
+targets, using the shared `agent:<id>` in-memory key and `agent` history store
+path instead of adding a TrueNAS-only host history lane.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

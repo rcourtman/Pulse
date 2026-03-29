@@ -17,12 +17,22 @@ type FixtureSnapshot struct {
 
 // SystemInfo mirrors high-level TrueNAS system identity/status data.
 type SystemInfo struct {
-	Hostname      string
-	Version       string
-	Build         string
-	UptimeSeconds int64
-	Healthy       bool
-	MachineID     string
+	Hostname             string
+	Version              string
+	Build                string
+	UptimeSeconds        int64
+	Healthy              bool
+	MachineID            string
+	CPUCount             int
+	MemoryTotalBytes     int64
+	MemoryAvailableBytes int64
+	CPUPercent           float64
+	NetInRate            float64
+	NetOutRate           float64
+	DiskReadRate         float64
+	DiskWriteRate        float64
+	IntervalSeconds      int
+	CollectedAt          time.Time
 }
 
 // Pool mirrors the subset of TrueNAS pool fields needed for unified mapping.

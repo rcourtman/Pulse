@@ -55,6 +55,9 @@ func TestClientGetters(t *testing.T) {
 	if !system.Healthy || system.MachineID != "SER123" {
 		t.Fatalf("unexpected system health/identity: %+v", system)
 	}
+	if system.CPUCount != 16 || system.MemoryTotalBytes != 68719476736 {
+		t.Fatalf("unexpected system capacity mapping: %+v", system)
+	}
 
 	pools, err := client.GetPools(ctx)
 	if err != nil {
@@ -274,6 +277,67 @@ func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
 	}
 	if len(apps[0].Stats.Interfaces) != 2 {
 		t.Fatalf("expected two interface stats, got %+v", apps[0].Stats.Interfaces)
+	}
+}
+
+func TestGetSystemTelemetryFromRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		subscribeReq := readRPCRequest(t, conn)
+		if subscribeReq.Method != "core.subscribe" {
+			t.Fatalf("expected core.subscribe, got %q", subscribeReq.Method)
+		}
+		writeRPCResult(t, conn, subscribeReq.ID, "sub-1")
+		writeRPCNotification(t, conn, "collection_update", map[string]any{
+			"collection": "reporting.realtime:{\"interval\":2}",
+			"fields": map[string]any{
+				"cpu": map[string]any{
+					"usage": 41,
+				},
+				"memory": map[string]any{
+					"physical_memory_total":     68719476736,
+					"physical_memory_available": 21474836480,
+				},
+				"interfaces": map[string]any{
+					"enp1s0": map[string]any{"rx_bytes": 4096, "tx_bytes": 2048},
+					"enp2s0": map[string]any{"received_bytes": 1024, "sent_bytes": 512},
+				},
+				"disks": map[string]any{
+					"sda":     map[string]any{"read_bytes": 2048, "write_bytes": 1024},
+					"nvme0n1": map[string]any{"read_bytes": 4096, "write_bytes": 3072},
+				},
+			},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	system, err := client.GetSystemTelemetry(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemTelemetry() error = %v", err)
+	}
+	if system == nil {
+		t.Fatal("expected system telemetry")
+	}
+	if system.CPUPercent != 41 {
+		t.Fatalf("expected cpu percent 41, got %+v", system)
+	}
+	if system.MemoryTotalBytes != 68719476736 || system.MemoryAvailableBytes != 21474836480 {
+		t.Fatalf("unexpected memory telemetry: %+v", system)
+	}
+	if system.NetInRate != 5120 || system.NetOutRate != 2560 {
+		t.Fatalf("unexpected network telemetry: %+v", system)
+	}
+	if system.DiskReadRate != 6144 || system.DiskWriteRate != 4096 {
+		t.Fatalf("unexpected disk telemetry: %+v", system)
+	}
+	if system.IntervalSeconds != 2 || system.CollectedAt.IsZero() {
+		t.Fatalf("expected interval/collectedAt metadata, got %+v", system)
 	}
 }
 
@@ -502,7 +566,7 @@ func TestClientCloseNilSafe(t *testing.T) {
 func defaultAPIResponses() map[string]apiResponse {
 	return map[string]apiResponse{
 		"/api/v2.0/system/info": {
-			body: `{"hostname":"truenas-main","version":"TrueNAS-SCALE-24.10.2","buildtime":"24.10.2.1","uptime_seconds":86400,"system_serial":"SER123","system_manufacturer":"iXsystems"}`,
+			body: `{"hostname":"truenas-main","version":"TrueNAS-SCALE-24.10.2","buildtime":"24.10.2.1","uptime_seconds":86400,"system_serial":"SER123","system_manufacturer":"iXsystems","physical_cores":16,"physmem":68719476736}`,
 		},
 		"/api/v2.0/pool": {
 			body: `[{"id":1,"name":"tank","status":"ONLINE","size":1000,"allocated":400,"free":600}]`,

@@ -3000,6 +3000,58 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesTrueNASSystemAsCanonicalHost(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
+	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+		records:      truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+		ownedSources: []unified.DataSource{unified.SourceTrueNAS},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=agent&source=truenas", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) == 0 {
+		t.Fatal("expected TrueNAS system resources")
+	}
+
+	var system *unified.Resource
+	for i := range resp.Data {
+		if resp.Data[i].Name == "truenas-main" {
+			system = &resp.Data[i]
+			break
+		}
+	}
+	if system == nil {
+		t.Fatalf("expected truenas-main in response, got %+v", resp.Data)
+	}
+	if system.Agent == nil || system.Agent.Platform != "truenas" {
+		t.Fatalf("expected canonical host payload on TrueNAS system resource, got %+v", system)
+	}
+	if system.Metrics == nil || system.Metrics.CPU == nil || system.Metrics.Memory == nil {
+		t.Fatalf("expected canonical host metrics on TrueNAS system resource, got %+v", system)
+	}
+	if system.MetricsTarget == nil || system.MetricsTarget.ResourceType != "agent" || system.MetricsTarget.ResourceID != "truenas-main" {
+		t.Fatalf("expected canonical TrueNAS host metrics target truenas-main, got %+v", system.MetricsTarget)
+	}
+}
+
 func TestResourceStorageIncidentsGroupsCanonicalSections(t *testing.T) {
 	now := time.Now().UTC()
 	cfg := &config.Config{DataPath: t.TempDir()}
