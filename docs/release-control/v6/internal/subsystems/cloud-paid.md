@@ -267,6 +267,10 @@ serving scenario-backed local portal APIs without requiring a live cloud deploy
 for every iteration. Final verification still belongs on a real control-plane
 instance, but local portal design work must not depend on redeploying
 `cloud.pulserelay.pro` just to see each frontend change.
+That same preview/runtime boundary also owns shared browser chrome such as the
+portal favicon: the local preview must serve the same `/favicon.svg` asset as
+the real control-plane route so icon changes can be reviewed locally before
+deployment instead of appearing only after a live push.
 That same frontend delivery boundary must keep the account portal visual language sharp and high-density, avoiding gradients, heavy shadows, and decorative SaaS styling in favor of a clean, restrained, Cloudflare/GCP-grade baseline with flat inline workspace action rows and text-driven unboxed metadata instead of pills and absolutely inline row actions.
 That same portal delivery boundary also owns the checked-in embedded bundle in
 `internal/cloudcp/portal/dist/`. Visual or interaction changes are not

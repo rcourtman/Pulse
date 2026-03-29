@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import { context } from 'esbuild';
@@ -8,6 +9,7 @@ const scenarioCookieName = 'pulse_portal_preview_scenario';
 const previewHost = process.env.PULSE_PORTAL_PREVIEW_HOST || '127.0.0.1';
 const previewPort = Number(process.env.PULSE_PORTAL_PREVIEW_PORT || '8765');
 const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty'];
+const previewFaviconSVG = fs.readFileSync(path.join(frontendRoot, '..', '..', 'favicon.svg'), 'utf8');
 
 function iso(value) {
   return new Date(value).toISOString();
@@ -251,6 +253,7 @@ function buildPreviewHTML(assets, bootstrap, previewToast) {
         '<meta charset="utf-8">' +
         '<meta name="viewport" content="width=device-width, initial-scale=1">' +
         '<title>Pulse Account Preview</title>' +
+        '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
         '<style>' + assets.css + '</style>' +
       '</head>' +
       '<body>' +
@@ -543,6 +546,21 @@ const server = http.createServer(function(request, response) {
 
   if (url.pathname === '/healthz') {
     sendText(response, 200, 'ok');
+    return;
+  }
+
+  if (url.pathname === '/favicon.svg') {
+    response.writeHead(200, {
+      'Content-Type': 'image/svg+xml',
+      'Cache-Control': 'no-store',
+    });
+    response.end(previewFaviconSVG);
+    return;
+  }
+
+  if (url.pathname === '/favicon.ico') {
+    response.writeHead(301, { Location: '/favicon.svg' });
+    response.end();
     return;
   }
 
