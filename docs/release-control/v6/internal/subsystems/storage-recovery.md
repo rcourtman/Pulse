@@ -788,6 +788,11 @@ That same differentiation rule applies across cards too. `Posture` and
 `Freshness` should not lead with the same stale/attention headline; the
 freshness card should emphasize recent successful coverage such as fresh-in-24h
 reach, while posture owns the attention-state headline.
+That same page-level ownership applies to the recovery time window. Recovery
+should use the shared summary-panel range control as the canonical time-range
+selector, the same way infrastructure and workloads do, instead of hiding a
+separate range selector inside the activity strip and making operators manage
+two competing range affordances for one page.
 That same density rule should route through the shared summary primitives
 instead of feature-local spacing overrides. Recovery may select the shared
 default `SummaryPanel` / `SummaryMetricCard` density mode, and it should not

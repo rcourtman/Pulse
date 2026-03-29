@@ -3,7 +3,6 @@ import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
-import { segmentedButtonClass } from '@/utils/segmentedButton';
 import {
   getRecoveryBreadcrumbLinkClass,
 } from '@/utils/recoveryActionPresentation';
@@ -21,7 +20,6 @@ import {
   getRecoveryTimelineAxisLabelClass,
   getRecoveryTimelineAxisTicks,
   RECOVERY_TIMELINE_LEGEND_ITEM_CLASS,
-  RECOVERY_TIMELINE_RANGE_GROUP_CLASS,
 } from '@/utils/recoveryTimelineChartPresentation';
 import { getRecoveryTimelineColumnButtonClass } from '@/utils/recoveryTimelinePresentation';
 
@@ -72,12 +70,9 @@ interface RecoveryActivitySectionProps {
   selectedDateKey: Accessor<string | null>;
   selectedDateLabel: Accessor<string>;
   selectedHistoryItemLabel: Accessor<string | null>;
-  setChartRangeDays: (value: 7 | 30 | 90 | 365) => void;
   toggleSelectedDate: (key: string) => void;
   timeline: Accessor<TimelineModel>;
 }
-
-const rangeOptions: Array<7 | 30 | 90 | 365> = [7, 30, 90, 365];
 
 function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JSX.Element {
   const timelineAxisTicks = () => getRecoveryTimelineAxisTicks(props.timeline().points.length);
@@ -223,22 +218,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
       </Show>
 
       <div class="rounded-lg border border-border-subtle bg-surface-alt/25 px-2 py-1.5">
-        <div
-          class={`mb-1 flex flex-wrap items-center justify-between gap-2 ${RECOVERY_TIMELINE_RANGE_GROUP_CLASS}`}
-        >
-          <div class={RECOVERY_TIMELINE_RANGE_GROUP_CLASS}>
-            <For each={rangeOptions}>
-              {(range) => (
-                <button
-                  type="button"
-                  onClick={() => props.setChartRangeDays(range)}
-                  class={`px-2 py-1 ${segmentedButtonClass(props.chartRangeDays() === range, false, 'accent')}`}
-                >
-                  {range}d
-                </button>
-              )}
-            </For>
-          </div>
+        <div class="mb-1 flex flex-wrap items-center justify-end gap-1.5 text-[9px] text-muted">
           <div class="flex flex-wrap items-center gap-1.5 text-[9px] text-muted">
             <div class={RECOVERY_TIMELINE_LEGEND_ITEM_CLASS}>
               <span class={`h-2.5 w-2.5 rounded ${getRecoveryArtifactModePresentation('snapshot').segmentClassName}`} />

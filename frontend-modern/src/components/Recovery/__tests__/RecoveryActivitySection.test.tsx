@@ -35,7 +35,6 @@ describe('RecoveryActivitySection', () => {
         selectedDateKey={() => null}
         selectedDateLabel={() => ''}
         selectedHistoryItemLabel={() => null}
-        setChartRangeDays={() => undefined}
         timeline={timeline}
         toggleSelectedDate={() => undefined}
       />

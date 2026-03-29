@@ -409,6 +409,12 @@ const Recovery: Component = () => {
     if (range === 365) return '365d';
     return '30d';
   });
+  const setSummaryRange = (range: RecoverySummaryRange) => {
+    const nextRange = range === '7d' ? 7 : range === '90d' ? 90 : range === '365d' ? 365 : 30;
+    setChartRangeDays(nextRange);
+    setSelectedDateKey(null);
+    setCurrentPage(1);
+  };
 
   const hasActiveArtifactFilters = createMemo(
     () =>
@@ -528,11 +534,6 @@ const Recovery: Component = () => {
       selectedDateKey={selectedDateKey}
       selectedDateLabel={selectedDateLabel}
       selectedHistoryItemLabel={selectedHistoryItemLabel}
-      setChartRangeDays={(range) => {
-        setChartRangeDays(range);
-        setSelectedDateKey(null);
-        setCurrentPage(1);
-      }}
       timeline={timeline}
       toggleSelectedDate={(key) => {
         setWorkspaceView('events');
@@ -551,6 +552,7 @@ const Recovery: Component = () => {
         seriesFailed={() => Boolean(recoverySeries.response.error)}
         summary={overallRollupsSummary}
         timeRange={summaryRange}
+        onTimeRangeChange={setSummaryRange}
       />
 
       {workspaceControls()}

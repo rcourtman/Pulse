@@ -378,6 +378,13 @@ describe('Recovery', () => {
     expect(within(historyControls).getByLabelText('Item type').className).not.toContain('min-w-[');
     expect(within(historyControls).getByLabelText('Platform').className).not.toContain('min-w-[');
     expect(within(historyControls).getByLabelText('Status').className).not.toContain('min-w-[');
+    const recoverySummaryPanel = screen.getByTestId('recovery-summary');
+    expect(within(recoverySummaryPanel).getByRole('button', { name: '7d' })).toBeInTheDocument();
+    expect(within(recoverySummaryPanel).getByRole('button', { name: '30d' })).toBeInTheDocument();
+    expect(within(recoverySummaryPanel).getByRole('button', { name: '90d' })).toBeInTheDocument();
+    expect(within(recoverySummaryPanel).getByRole('button', { name: '365d' })).toBeInTheDocument();
+    expect(within(historyControls).queryByRole('button', { name: '7d' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: '7d' })).toHaveLength(1);
     expect(within(historyTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(historyTable).getByText('Item')).toBeInTheDocument();
     expect(within(historyTable).getByText('Platform')).toBeInTheDocument();
