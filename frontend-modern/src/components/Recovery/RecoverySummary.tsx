@@ -142,13 +142,21 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
       .join(' · '),
   );
 
-  const footprintSupportLine = createMemo(() => `Platforms ${platformCoverage().platformCount}`);
+  const coverageSecondaryLabel = createMemo(() => {
+    const platformCount = platformCoverage().platformCount;
+    if (platformCount <= 0) return undefined;
+    return (
+      <span class="ml-auto truncate text-xs text-muted">
+        {platformCount} {platformCount === 1 ? 'platform' : 'platforms'}
+      </span>
+    );
+  });
 
-  const historySupportLine = createMemo(() =>
-    activity().latestLabel
-      ? `Latest Activity ${activity().latestLabel}`
-      : `Days Active ${activity().activeDays}`,
-  );
+  const activitySecondaryLabel = createMemo(() => {
+    const latestLabel = activity().latestLabel;
+    if (!latestLabel) return undefined;
+    return <span class="ml-auto truncate text-xs text-muted">{latestLabel}</span>;
+  });
 
   return (
     <Show when={hasRollups()}>
@@ -191,7 +199,12 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           </div>
         </SummaryMetricCard>
 
-        <SummaryMetricCard label="Coverage" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard
+          label="Coverage"
+          secondaryLabel={coverageSecondaryLabel()}
+          loaded={true}
+          hasData={hasRollups()}
+        >
           <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class="text-xl font-semibold tabular-nums text-base-content">
@@ -199,12 +212,12 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">item types</div>
             </div>
-            <div class="text-[11px] text-muted">{footprintSupportLine()}</div>
           </div>
         </SummaryMetricCard>
 
         <SummaryMetricCard
           label="Activity"
+          secondaryLabel={activitySecondaryLabel()}
           loaded={props.seriesLoaded()}
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}
@@ -216,7 +229,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">recovery points</div>
             </div>
-            <div class="text-[11px] text-muted">{historySupportLine()}</div>
           </div>
         </SummaryMetricCard>
       </SummaryPanel>
