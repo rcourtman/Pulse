@@ -349,6 +349,7 @@ ready until the first hosted workspace exists.
 That same typed overview contract must also keep `Needs attention` honest when
 only suspended workspaces remain: hosted workspace history alone may not make
 the shell imply that active work is ready.
+That same typed overview contract must also preserve a flat, 2D Material design aesthetic across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, noise-free visual language.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

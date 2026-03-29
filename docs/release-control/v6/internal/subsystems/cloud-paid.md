@@ -259,6 +259,7 @@ serving scenario-backed local portal APIs without requiring a live cloud deploy
 for every iteration. Final verification still belongs on a real control-plane
 instance, but local portal design work must not depend on redeploying
 `cloud.pulserelay.pro` just to see each frontend change.
+That same frontend delivery boundary must keep the account portal visual language flat and 2D, avoiding gradients, heavy shadows, and decorative SaaS styling in favor of a clean, restrained Material baseline.
 That same shell framing also owns user-facing prerelease labeling for
 rc-channel builds. `frontend-modern/src/AppLayout.tsx` may still key off the
 canonical `rc` channel metadata internally, but the visible badge must frame

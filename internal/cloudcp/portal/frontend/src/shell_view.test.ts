@@ -714,4 +714,9 @@ describe('shell view', function() {
     expect(html).toContain('Create the next workspace');
     expect(html).toContain('Suspended stays parked');
   });
+
+  it('preserves the flat design class hooks in the rendered shell', function() {
+    var html = renderAuthenticatedPortalHTML(createContext());
+    expect(html).toContain('portal-shell-layout');
+  });
 });

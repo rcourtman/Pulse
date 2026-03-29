@@ -20,7 +20,7 @@
   color-scheme: light;
   --font-ui: "Roboto", "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
   --font-display: "Roboto", "Segoe UI Variable Display", "Segoe UI Variable Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --bg: #edf2f6;
+  --bg: #f8f9fa;
   --panel: #ffffff;
   --panel-strong: #f7fafc;
   --panel-muted: #eff4f8;
@@ -38,17 +38,17 @@
   --danger-soft: #fee2e2;
   --success: #166534;
   --success-soft: #dcfce7;
-  --nav-bg: #0b1120;
-  --nav-line: #1e293b;
-  --nav-copy: #94a3b8;
-  --nav-ink: #f8fafc;
-  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.04);
-  --shadow-md: 0 10px 24px rgba(15, 23, 42, 0.05);
-  --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.06);
-  --shadow-hover: 0 12px 24px rgba(15, 23, 42, 0.06);
-  --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --nav-bg: #f8f9fa;
+  --nav-line: #e2e8f0;
+  --nav-copy: #64748b;
+  --nav-ink: #0f172a;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+  --shadow-hover: none;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 }
 
 * { box-sizing: border-box; }
@@ -132,7 +132,7 @@ header .logout-btn:hover,
 .link-button:hover {
   border-color: var(--line-strong);
   background: #ffffff;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .btn-primary {
@@ -141,14 +141,14 @@ header .logout-btn:hover,
   background: var(--accent);
   color: #fff;
   font-weight: 600;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   cursor: pointer;
   transition: background 140ms ease, box-shadow 140ms ease;
 }
 
 .btn-primary:hover {
   background: var(--accent-strong);
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .btn-danger {
@@ -163,7 +163,7 @@ header .logout-btn:hover,
 
 .btn-danger:hover {
   background: #fecaca;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .btn-compact {
@@ -181,11 +181,7 @@ header .logout-btn:hover,
   display: block;
 }
 
-.portal-shell-head {
-  padding: 16px 22px 14px;
-  border-bottom: 1px solid var(--line);
-  background: rgba(246, 248, 251, 0.96);
-}
+.portal-shell-head { padding: 24px 32px; border-bottom: 1px solid var(--line); background: var(--bg); }
 
 .portal-shell-head-main {
   display: flex;
@@ -304,7 +300,7 @@ header .logout-btn:hover,
   background: #fff;
   box-shadow: none;
   transition: border-color 140ms ease, background 140ms ease;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
 }
 
 .portal-shell-layout {
@@ -314,10 +310,10 @@ header .logout-btn:hover,
   align-items: start;
   border: 1px solid var(--line);
   border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(251, 253, 255, 0.98), rgba(242, 246, 250, 0.98)),
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 34%);
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.065);
+  background: #ffffff;
+  box-shadow: none;
+border-radius: 0;
+border: none;
   overflow: hidden;
 }
 
@@ -328,7 +324,7 @@ header .logout-btn:hover,
   border-right: 1px solid var(--nav-line);
   border-radius: 0;
   background: var(--nav-bg);
-  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04);
+  box-shadow: none;
   overflow: hidden;
 }
 
@@ -390,17 +386,15 @@ header .logout-btn:hover,
 }
 
 .portal-shell-nav-link:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(143, 184, 191, 0.12);
-  transform: translateX(1px);
+  background: var(--panel-muted);
+  border-color: var(--line);
+  transform: none;
 }
 
 .portal-shell-nav-link.active {
-  background:
-    linear-gradient(180deg, rgba(120, 182, 192, 0.22), rgba(120, 182, 192, 0.12)),
-    rgba(255, 255, 255, 0.02);
-  border-color: rgba(120, 182, 192, 0.28);
-  box-shadow: inset 3px 0 0 #78b6c0, 0 8px 18px rgba(3, 8, 18, 0.14);
+  background: var(--panel-muted);
+  border-color: var(--line);
+  box-shadow: none;
   transform: translateX(2px);
 }
 
@@ -440,21 +434,7 @@ header .logout-btn:hover,
   color: var(--nav-ink);
 }
 
-.portal-shell-nav-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  padding: 0 7px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(225, 232, 240, 0.92);
-  white-space: nowrap;
-}
+.portal-shell-nav-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; }
 
 .portal-shell-nav-copy {
   display: block;
@@ -463,41 +443,17 @@ header .logout-btn:hover,
   color: var(--nav-copy);
 }
 
-.portal-shell-nav-link.active .portal-shell-nav-badge {
-  border-color: rgba(120, 182, 192, 0.28);
-  background: rgba(120, 182, 192, 0.16);
-  color: #dff6fa;
-}
+.portal-shell-nav-link.active .portal-shell-nav-badge { background: #e0f2fe; color: #0284c7; border-color: transparent; }
 
-.portal-shell-nav-link.active .portal-shell-nav-index {
-  background: rgba(120, 182, 192, 0.22);
-  color: #e7fbff;
-}
+.portal-shell-nav-link.active .portal-shell-nav-index { background: transparent; color: var(--ink); }
 
-.portal-shell-main {
-  min-width: 0;
-  padding: 0 0 24px;
-  background:
-    linear-gradient(180deg, #fafcfe 0%, #f3f7fa 44%, #f6f9fb 100%),
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.06), transparent 32%);
-}
+.portal-shell-main { min-width: 0; padding: 0 0 32px; background: var(--bg); }
 
 .portal-shell-main > .portal-content-panel {
   display: none !important;
 }
 
-.portal-account-context {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 16px;
-  align-items: start;
-  padding: 16px 18px 15px;
-  border-bottom: 1px solid var(--line);
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 253, 0.88)),
-    radial-gradient(circle at top right, rgba(15, 118, 110, 0.08), transparent 32%);
-  backdrop-filter: blur(8px);
-}
+.portal-account-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 24px 32px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
 
 .portal-account-context-copy {
   display: flex;
@@ -560,9 +516,9 @@ header .logout-btn:hover,
   flex-wrap: wrap;
   padding: 4px;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.74);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  box-shadow: none;
 }
 
 .portal-account-context-stat {
@@ -759,7 +715,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   background: var(--panel);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -768,7 +724,7 @@ header .logout-btn:hover,
 .workspace-row:hover,
 .billing-card:hover {
   transform: none;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .account-overview-card,
@@ -779,7 +735,7 @@ header .logout-btn:hover,
 .billing-panel,
 .access-roster,
 .access-invite-panel {
-  padding: 14px;
+  padding: 24px;
 }
 
 .account-overview-card h3,
@@ -847,7 +803,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   background: var(--panel);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .overview-task-card h4,
@@ -871,11 +827,11 @@ header .logout-btn:hover,
 }
 
 .overview-task-card-attention {
-  background: linear-gradient(180deg, #fff7ed, #ffffff 62%);
+  background: var(--panel);
 }
 
 .overview-task-card-next {
-  background: linear-gradient(180deg, #ecfeff, #ffffff 62%);
+  background: var(--panel);
 }
 
 .billing-task-card-muted {
@@ -989,7 +945,7 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1.12fr) minmax(300px, 0.88fr);
   gap: 14px;
   align-items: start;
-  background: linear-gradient(180deg, rgba(250, 252, 253, 0.98), rgba(245, 248, 251, 0.98));
+  background: var(--panel);
 }
 
 .account-overview-lead {
@@ -1066,7 +1022,7 @@ header .logout-btn:hover,
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(252, 253, 254, 0.98), rgba(246, 249, 252, 0.98));
+  background: var(--panel);
 }
 
 .account-overview-metrics-header {
@@ -1133,7 +1089,7 @@ header .logout-btn:hover,
   justify-content: space-between;
   gap: 18px;
   grid-column: 1 / -1;
-  padding: 14px;
+  padding: 24px;
   background: var(--panel);
   border-radius: var(--radius-lg);
   box-shadow: none;
@@ -1158,7 +1114,7 @@ header .logout-btn:hover,
 }
 
 .overview-side-card {
-  padding: 14px;
+  padding: 24px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fcfcfd;
@@ -1348,8 +1304,8 @@ header .logout-btn:hover,
   gap: 5px;
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-radius: 14px;
-  background: linear-gradient(180deg, #fdfefe 0%, #f5f9fa 100%);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
 }
 
 .portal-support-brief-card strong {
@@ -1385,7 +1341,7 @@ header .logout-btn:hover,
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  background: linear-gradient(180deg, #fcfdfd 0%, #f7fafb 100%);
+  background: var(--panel);
 }
 
 .portal-support-route-card h3 {
@@ -1438,7 +1394,7 @@ header .logout-btn:hover,
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f6f9fb 100%);
+  background: var(--panel);
 }
 
 .portal-support-runbook-brief-card strong {
@@ -1483,7 +1439,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-left: 2px solid rgba(15, 118, 110, 0.18);
   border-radius: 12px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fbfc 100%);
+  background: var(--panel);
 }
 
 .portal-support-handoff-note strong {
@@ -1616,7 +1572,7 @@ header .logout-btn:hover,
   padding: 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(180deg, #fafcfd 0%, #f5f8fb 100%);
+  background: var(--panel);
   box-shadow: none;
 }
 
@@ -1682,7 +1638,7 @@ header .logout-btn:hover,
   position: relative;
   border-color: rgba(11, 106, 114, 0.34);
   background: #eef8fa;
-  box-shadow: inset 4px 0 0 var(--accent), 0 0 0 1px rgba(11, 106, 114, 0.12);
+  box-shadow: none;
 }
 
 .workspace-row.selected .workspace-name {
@@ -1810,11 +1766,11 @@ header .logout-btn:hover,
   position: static;
 }
 
-.workspace-management-panel { box-shadow: var(--shadow-sm); }
+.workspace-management-panel { box-shadow: none; }
 
 .workspace-management-panel.visible,
 .access-section.visible .access-management-panel {
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .workspace-management-panel {
@@ -1944,7 +1900,7 @@ header .logout-btn:hover,
 }
 
 .workspace-management-guidance {
-  padding: 14px;
+  padding: 24px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
@@ -2099,7 +2055,7 @@ header .logout-btn:hover,
 }
 
 .access-management-panel {
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .access-roster,
@@ -2129,7 +2085,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px;
+  padding: 24px;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
@@ -2149,7 +2105,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel-muted);
-  padding: 14px;
+  padding: 24px;
 }
 
 .access-review-strip {
@@ -2160,7 +2116,7 @@ header .logout-btn:hover,
 }
 
 .access-review-shell {
-  padding: 14px;
+  padding: 24px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #fff;
@@ -2373,7 +2329,7 @@ header .logout-btn:hover,
   border: 1px solid var(--line);
   border-radius: 12px;
   background: #f8fbfd;
-  box-shadow: inset 0 0 0 1px rgba(11, 106, 114, 0.04);
+  box-shadow: none;
 }
 
 .access-list-message-title {
@@ -2392,7 +2348,7 @@ header .logout-btn:hover,
 .access-list-message.error {
   border-color: rgba(166, 27, 27, 0.18);
   background: var(--danger-soft);
-  box-shadow: inset 4px 0 0 rgba(166, 27, 27, 0.26);
+  box-shadow: none;
 }
 
 .access-list-message.error .access-list-message-title,
@@ -2676,7 +2632,7 @@ header .logout-btn:hover,
   padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: linear-gradient(180deg, #fbfdfd 0%, #f5faf9 100%);
+  background: var(--panel);
 }
 
 .billing-empty-intro-item strong {
@@ -2742,7 +2698,7 @@ header .logout-btn:hover,
 .billing-action-row.active {
   border-color: rgba(15, 109, 115, 0.28);
   background: #f8fbfd;
-  box-shadow: inset 3px 0 0 rgba(15, 109, 115, 0.62);
+  box-shadow: none;
 }
 
 .billing-action-main {
@@ -2964,7 +2920,7 @@ header .logout-btn:hover,
 
 .billing-panel .warning {
   margin-bottom: 14px;
-  padding: 14px;
+  padding: 24px;
   border-radius: var(--radius-sm);
   background: var(--warn-soft);
   color: var(--warn);
@@ -2986,7 +2942,7 @@ header .logout-btn:hover,
 .billing-status {
   display: none;
   margin-top: 14px;
-  padding: 14px;
+  padding: 24px;
   border-radius: var(--radius-sm);
   font-size: 14px;
   line-height: 1.6;
@@ -3104,10 +3060,10 @@ header .logout-btn:hover,
   display: none;
   max-width: 340px;
   padding: 14px 18px;
-  border-radius: 14px;
+  border-radius: var(--radius-lg);
   background: #15242c;
   color: #fff;
-  box-shadow: var(--shadow-md);
+  box-shadow: none;
 }
 
 .toast.visible { display: block; }
@@ -3169,9 +3125,7 @@ header .logout-btn:hover,
     grid-template-columns: 1fr;
   }
 
-  .portal-account-context {
-    grid-template-columns: 1fr;
-  }
+  .portal-account-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 24px 32px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
 
   .portal-account-context-summary {
     grid-template-columns: 1fr;
@@ -3286,7 +3240,7 @@ header .logout-btn:hover,
   }
 
   .portal-shell-nav-link.active {
-    box-shadow: inset 0 -2px 0 #78b6c0, 0 8px 18px rgba(3, 8, 18, 0.14);
+    box-shadow: none;
   }
 
   .intro-card,
@@ -3301,11 +3255,7 @@ header .logout-btn:hover,
     padding-right: 16px;
   }
 
-  .portal-account-context {
-    gap: 10px;
-    padding-top: 10px;
-    padding-bottom: 10px;
-  }
+  .portal-account-context { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 24px 32px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
 
   .portal-account-context-copy {
     gap: 4px;
