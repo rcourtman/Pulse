@@ -264,7 +264,11 @@ Core rules:
 40. Portal task and status copy must stay literal. Customer-facing copy may
     not rely on commentary such as `obvious`, `actual work`, `trustworthy`,
     or `settled` when the runtime already knows the concrete state, action,
-    or failure being shown.
+    or failure being shown. The same rule applies to shell badges, section
+    labels, and error headings: they must say the exact state or action (for
+    example `Manage access`, `Hosted billing attached`, or `Failed to load
+    roster`) instead of shorthand such as `Manage`, `Hosted`, `Email`, or
+    generic alert labels.
 
 ## Screen Model
 

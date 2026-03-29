@@ -104,7 +104,7 @@ describe('account view', function() {
     expect(document.getElementById('add-ws-form-acct_1')?.classList.contains('visible')).toBe(false);
   });
 
-  it('renders team loading, error, and populated member states', function() {
+  it('renders access loading, error, and populated member states', function() {
     document.body.innerHTML =
       '<div id="access-section-acct_1" class="access-section" data-actor-role="owner" data-can-manage="true">' +
       '<div id="access-stats-acct_1"></div>' +
@@ -116,16 +116,17 @@ describe('account view', function() {
       accessQuery: { status: 'loading', error: '', data: [] },
     }));
     expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Loading roster');
-    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Mode');
-    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Manage');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Access');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Manage access');
 
     renderAccessSection('acct_1', createEntry({
       accessVisible: true,
       accessQuery: { status: 'error', error: 'Failed to load access roster.', data: [] },
     }));
-    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Roster needs attention');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Failed to load roster');
     expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Failed to load access roster.');
-    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Manage');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Load failed');
+    expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Manage access');
 
     renderAccessSection(
       'acct_1',

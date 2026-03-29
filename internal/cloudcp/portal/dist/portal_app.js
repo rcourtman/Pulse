@@ -240,11 +240,11 @@
       return;
     }
     if (entry.accessQuery.status === "loading") {
-      stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading\u2026</span></div><div class="access-stat-card"><span class="access-stat-label">Mode</span><span class="access-stat-value">' + (canManage ? "Manage" : "View") + "</span></div>";
+      stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading\u2026</span></div><div class="access-stat-card"><span class="access-stat-label">Access</span><span class="access-stat-value">' + (canManage ? "Manage access" : "View roster") + "</span></div>";
       return;
     }
     if (entry.accessQuery.status === "error") {
-      stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Needs attention</span></div><div class="access-stat-card"><span class="access-stat-label">Mode</span><span class="access-stat-value">' + (canManage ? "Manage" : "View") + "</span></div>";
+      stats.innerHTML = '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Load failed</span></div><div class="access-stat-card"><span class="access-stat-label">Access</span><span class="access-stat-value">' + (canManage ? "Manage access" : "View roster") + "</span></div>";
       return;
     }
     var members = entry.accessQuery.data;
@@ -411,7 +411,7 @@
     }
     if (entry.accessQuery.status === "error") {
       if (rosterPanel) rosterPanel.classList.add("state-only");
-      setContainerMessage(roster, "Roster needs attention", entry.accessQuery.error, true);
+      setContainerMessage(roster, "Failed to load roster", entry.accessQuery.error, true);
       return;
     }
     if (!entry.accessQuery.data.length) {
@@ -1988,6 +1988,25 @@
   function suspendedWorkspaceChipLabel(count) {
     return count === 1 ? "1 suspended workspace" : String(count) + " suspended workspaces";
   }
+  function overviewNavBadgeLabel(hosted, attentionCount, readyCount) {
+    if (!hosted) return "Billing available";
+    if (attentionCount > 0) return reviewWorkspaceChipLabel(attentionCount);
+    return readyWorkspaceChipLabel(readyCount);
+  }
+  function workspacesNavBadgeLabel(hosted, totalWorkspaces) {
+    if (!hosted) return "Unavailable";
+    return workspaceCountLabel(totalWorkspaces);
+  }
+  function accessNavBadgeLabel(hosted, canManage) {
+    if (!hosted) return "Unavailable";
+    return canManage ? "Manage access" : "View roster";
+  }
+  function billingNavBadgeLabel(hostedBillingCount) {
+    return hostedBillingCount > 0 ? "Hosted billing" : "Self-hosted billing";
+  }
+  function supportNavBadgeLabel() {
+    return "Escalation only";
+  }
   function hasHostedAccounts(accounts) {
     return accounts.length > 0;
   }
@@ -2072,7 +2091,7 @@
     return results;
   }
   function accountContextRoleMeta(account) {
-    return portalRoleLabel(account.role) + (account.can_manage ? " access" : " role");
+    return portalRoleLabel(account.role) + " role";
   }
   function accountContextLeadCopy(account) {
     var accountPrefix = account.kind === "msp" ? "Hosted workspace account" : "Hosted account";
@@ -2082,11 +2101,11 @@
     return accountPrefix + (account.has_billing ? " where you can open workspaces and review who already has access. An owner or admin handles access changes and billing." : " where you can open workspaces and review who already has access. An owner or admin handles account changes.");
   }
   function accountContextAccessSummary(account) {
-    return account.can_manage ? portalRoleLabel(account.role) : "View only";
+    return account.can_manage ? "Manage access" : "View roster";
   }
   function accountContextBillingSummary(account) {
     if (!account.has_billing) return "Not attached";
-    return account.can_manage ? "Billing enabled" : "Owner/admin required";
+    return account.can_manage ? "Hosted billing attached" : "Owner/admin required";
   }
   function renderAccountContextStrip(account) {
     var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
@@ -2153,7 +2172,7 @@
         }
       }
     }
-    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Workspaces, Access, Billing, then Support." : "Billing first. Support only after the billing path fails.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "Review status, ready workspaces, and the next action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", supportNavCopy(hosted, canManage), supportEmail ? "Email" : "Help") + "</div></aside>";
+    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Use Workspaces, then Access, then Billing. Use Support only if those paths fail." : "Use Billing first. Use Support only if that path fails.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "Review workspace counts, current state, and the current action.", overviewNavBadgeLabel(hosted, attentionCount, readyWorkspaces)) + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), workspacesNavBadgeLabel(hosted, totalWorkspaces)) + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), accessNavBadgeLabel(hosted, canManage)) + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), billingNavBadgeLabel(hostedBillingCount)) + shellSectionButton("support", activeSection, "05", "Support", supportNavCopy(hosted, canManage), supportNavBadgeLabel()) + "</div></aside>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
@@ -2218,7 +2237,7 @@
       ) + '</p><div class="overview-task-list"><div class="overview-task-item"><strong>Ready</strong><span>' + escapeHTML(
         entries.length > 0 ? readyWorkspaceHeadline(ready.length) : accounts.length > 0 ? readyWorkspaceHeadline(0) : "0 hosted workspaces are ready to use"
       ) + '</span></div><div class="overview-task-item"><strong>Suspended</strong><span>' + escapeHTML(
-        suspendedCount > 0 ? suspendedCount === 1 ? "1 workspace is suspended and excluded from routine use until you resume it." : String(suspendedCount) + " workspaces are suspended and excluded from routine use until you resume them." : "0 suspended workspaces."
+        suspendedCount > 0 ? suspendedCount === 1 ? "1 workspace is suspended. Resume it before opening it again." : String(suspendedCount) + " workspaces are suspended. Resume them before opening them again." : "0 suspended workspaces."
       ) + "</span></div></div></article>";
     }
     return '<article class="overview-task-card overview-task-card-attention"><div class="account-panel-kicker">Needs attention</div><h4>' + escapeHTML(reviewWorkspaceHeadline(attention.length)) + '</h4><p>Each listed workspace is failed or still waiting on a completed health check.</p><div class="overview-task-list">' + attention.slice(0, 3).map(function(entry) {
@@ -2239,7 +2258,7 @@
       return '<article class="overview-task-card"><div class="account-panel-kicker">Ready</div><h4>' + escapeHTML(
         !accounts.length ? "Billing is available" : readyWorkspaceHeadline(0)
       ) + "</h4><p>" + escapeHTML(
-        !accounts.length ? "Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests." : totalWorkspaces > 0 ? suspendedCount === totalWorkspaces ? "Every hosted workspace is suspended right now." : "Open Workspaces for the current workspace state before routine use." : canManageHosted ? "The first hosted workspace still needs to be created before routine work can start." : "An owner or admin still needs to create the first hosted workspace before routine work can start."
+        !accounts.length ? "Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests." : totalWorkspaces > 0 ? suspendedCount === totalWorkspaces ? "Every hosted workspace is suspended right now." : "Open Workspaces to see the current state of each hosted workspace." : canManageHosted ? "No hosted workspace exists yet. Create the first one in Workspaces." : "No hosted workspace exists yet. An owner or admin must create the first one."
       ) + "</p></article>";
     }
     return '<article class="overview-task-card"><div class="account-panel-kicker">Ready</div><h4>' + escapeHTML(readyWorkspaceHeadline(ready.length)) + '</h4><p>Each listed workspace is active and passed its latest health check.</p><div class="overview-task-list">' + ready.slice(0, 3).map(function(entry) {
@@ -2265,10 +2284,10 @@
     }) || null;
     var hostedViewOnly = accounts.length > 0 && !accessAccount;
     if (attention.length) {
-      title = "Review workspace health";
-      description = attention.length > 1 ? "Open Workspaces. Review each failed or pending workspace before taking another account action." : "Open Workspaces. Review " + attention[0].workspace.display_name + " before taking another account action.";
-      primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
-      secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>' : "";
+      title = "Open Workspaces";
+      description = attention.length > 1 ? "Open Workspaces to review each failed or pending workspace." : "Open Workspaces to review " + attention[0].workspace.display_name + ".";
+      primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open Workspaces</button>';
+      secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>' : "";
     } else if (ready.length) {
       title = "Open workspace";
       description = accounts.length > 1 ? "Open " + ready[0].workspace.display_name + " in " + ready[0].account.name + "." : "Open the ready workspace.";
@@ -2278,12 +2297,12 @@
       title = "Create workspace";
       description = "No workspace is ready. Create a workspace in " + creatableAccount.name + ".";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(creatableAccount.id) + '">Create workspace</button>';
-      secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Manage access</button>';
+      secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
     } else if (billingAccount) {
       title = "Open billing";
       description = "Use Billing for invoices, payment methods, or subscription changes.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
-      secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>' : "";
+      secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>' : "";
     } else if (!accounts.length) {
       title = "Open billing";
       description = "Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.";
@@ -2292,12 +2311,12 @@
       if (totalWorkspaces > 0) {
         title = "Review workspace state";
         description = "No workspace is ready. Open Workspaces to review current state, then hand off changes to an owner or admin.";
-        primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
-        secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+        primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Open Workspaces</button>';
+        secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
       } else {
         title = "Review who can act";
         description = showSelfHostedCommercial ? "No hosted workspace is attached. Review Access to see who can manage this hosted account, or use Billing for self-hosted tasks." : "No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.";
-        primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
+        primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open Access</button>';
         secondaryAction = showSelfHostedCommercial ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' : "";
       }
     } else if (accessAccount) {
@@ -2328,7 +2347,7 @@
       reviewWorkspaceChipLabel(attentionCount),
       suspendedWorkspaceChipLabel(suspendedCount)
     ] : ["No hosted account", "0 hosted workspaces", "Billing available", "Support only on escalation"];
-    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Overview</div><h3>Account state</h3><p>Current hosted workspace state, readiness, and next action.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + "</div></section>";
+    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Overview</div><h3>Account state</h3><p>Hosted workspace counts, current state, and current action.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + "</div></section>";
   }
   function renderNoHostedWorkspacesSection() {
     return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div><div class="account-panel-kicker">Workspaces</div><h3>Workspaces</h3><p>No hosted workspace is attached to this account.</p>' + renderSectionContextChips(["None attached", "Billing instead"]) + '</div></div><div class="empty-state empty-state-spaced"><p>There is nothing to open or manage here yet.</p><p class="support-copy">Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.</p></div></section>';

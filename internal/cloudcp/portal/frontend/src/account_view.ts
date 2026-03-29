@@ -179,13 +179,13 @@ function renderAccessStats(accountID: string, entry: PortalAccountUIEntry, canMa
   if (entry.accessQuery.status === 'loading') {
     stats.innerHTML =
       '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading…</span></div>' +
-      '<div class="access-stat-card"><span class="access-stat-label">Mode</span><span class="access-stat-value">' + (canManage ? 'Manage' : 'View') + '</span></div>';
+      '<div class="access-stat-card"><span class="access-stat-label">Access</span><span class="access-stat-value">' + (canManage ? 'Manage access' : 'View roster') + '</span></div>';
     return;
   }
   if (entry.accessQuery.status === 'error') {
     stats.innerHTML =
-      '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Needs attention</span></div>' +
-      '<div class="access-stat-card"><span class="access-stat-label">Mode</span><span class="access-stat-value">' + (canManage ? 'Manage' : 'View') + '</span></div>';
+      '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Load failed</span></div>' +
+      '<div class="access-stat-card"><span class="access-stat-label">Access</span><span class="access-stat-value">' + (canManage ? 'Manage access' : 'View roster') + '</span></div>';
     return;
   }
 
@@ -384,7 +384,7 @@ export function renderAccessSection(accountID: string, entry: PortalAccountUIEnt
   }
   if (entry.accessQuery.status === 'error') {
     if (rosterPanel) rosterPanel.classList.add('state-only');
-    setContainerMessage(roster, 'Roster needs attention', entry.accessQuery.error, true);
+    setContainerMessage(roster, 'Failed to load roster', entry.accessQuery.error, true);
     return;
   }
   if (!entry.accessQuery.data.length) {

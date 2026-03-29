@@ -374,7 +374,10 @@ That same typed portal runtime contract must also keep task and status copy
 literal across the account surface: customer-facing wording may not use
 commentary such as `obvious`, `actual work`, `trustworthy`, or `settled` when
 the runtime already knows the concrete state, action, or failure being
-rendered.
+rendered. The same typed contract applies to shell badges, section labels,
+and error headings: they must render the exact action or state (`Manage
+access`, `Hosted billing attached`, `Failed to load roster`) instead of
+shorthand such as `Manage`, `Hosted`, or generic alert labels.
 That same typed overview contract must also preserve a sharp, high-density enterprise visual aesthetic (e.g. Cloudflare/GCP density standards) across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, rigorous visual language with standard 256px sidebars, Inter-grade typography, clean text-transform rules, and cleanly unboxed typography without excessive pills or stacked metrics.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime

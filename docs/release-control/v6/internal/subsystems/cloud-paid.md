@@ -942,6 +942,10 @@ That same portal shell/runtime boundary must also keep task and status copy
 literal across the account surface: customer-facing wording may not lean on
 commentary such as `obvious`, `actual work`, `trustworthy`, or `settled` when
 the runtime already knows the concrete state, action, or failure being shown.
+That includes shell badges, section labels, and error headings: they must use
+the exact action or state (`Manage access`, `Hosted billing attached`,
+`Failed to load roster`) instead of shorthand such as `Manage`, `Hosted`, or
+generic alert labels.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy
