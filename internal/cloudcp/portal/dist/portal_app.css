@@ -3070,3 +3070,817 @@ header .logout-btn:hover,
   white-space: nowrap !important;
   width: auto !important;
 }
+:root {
+  --font-ui:
+    "Roboto",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    sans-serif,
+    "Apple Color Emoji",
+    "Segoe UI Emoji",
+    "Segoe UI Symbol";
+  --font-display:
+    "Roboto",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Helvetica,
+    Arial,
+    sans-serif;
+  --bg: #f3f5f7;
+  --panel: #ffffff;
+  --panel-strong: #f7f9fc;
+  --panel-muted: #eef2f6;
+  --ink: #171a1f;
+  --ink-soft: #4c5663;
+  --ink-muted: #6b7480;
+  --line: #dbe2ea;
+  --line-strong: #c5cfda;
+  --accent: #0b57d0;
+  --accent-strong: #0842a0;
+  --accent-soft: #e8f0fe;
+  --warn: #9a3412;
+  --warn-soft: #ffedd5;
+  --danger: #b3261e;
+  --danger-soft: #f9dedc;
+  --success: #146c2e;
+  --success-soft: #e6f4ea;
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+}
+body {
+  background: var(--bg);
+}
+header {
+  padding: 10px 20px;
+  border-bottom-color: var(--line);
+  background: rgba(252, 253, 255, 0.96);
+  backdrop-filter: blur(10px);
+}
+header .brand {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.header-account-chip {
+  gap: 8px;
+  padding: 3px 4px 3px 12px;
+  border-color: var(--line);
+  border-radius: 999px;
+}
+.header-account-email {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.main {
+  max-width: 1360px;
+  padding: 24px 24px 48px;
+}
+header .logout-btn,
+.btn-secondary,
+.link-button {
+  border-color: var(--line-strong);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-primary,
+.btn-danger,
+.btn-remove {
+  border-radius: 999px;
+  padding: 9px 15px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.btn-primary {
+  background: var(--accent);
+}
+.btn-primary:hover {
+  background: var(--accent-strong);
+}
+.btn-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.portal-shell-layout {
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  background: transparent;
+  min-height: auto;
+}
+.portal-shell-nav {
+  position: sticky;
+  top: 72px;
+  align-self: start;
+  height: auto;
+  border: none;
+  background: transparent;
+}
+.portal-shell-nav-header {
+  gap: 4px;
+  padding: 4px 0 12px;
+  border-bottom: none;
+}
+.portal-shell-nav-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--ink-muted);
+}
+.portal-shell-nav-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.portal-shell-nav-support,
+.portal-shell-nav-copy,
+.portal-shell-nav-index,
+.portal-account-context-chips {
+  display: none !important;
+}
+.portal-shell-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  overflow: visible;
+  scroll-snap-type: none;
+}
+.portal-shell-nav-link {
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--ink-soft);
+}
+.portal-shell-nav-link:hover {
+  background: #eceff3;
+  border-color: transparent;
+}
+.portal-shell-nav-link.active {
+  background: #fff;
+  border-color: var(--line);
+  color: var(--ink);
+}
+.portal-shell-nav-row {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.portal-shell-nav-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+.portal-shell-nav-badge {
+  min-height: auto;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.portal-shell-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.portal-account-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 24px;
+  align-items: start;
+  padding: 22px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.portal-account-context-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.portal-account-context-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.portal-account-context-separator {
+  color: var(--line-strong);
+}
+.portal-account-context-row-title h2 {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+  font-weight: 700;
+}
+.portal-account-context-copy p {
+  margin: 0;
+  max-width: 760px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.portal-account-context-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+  min-width: 0;
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+.portal-account-context-stat {
+  gap: 4px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+}
+.portal-account-context-stat span {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.portal-account-context-stat strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.portal-content-panel,
+.account-content-panel,
+.account-content-panel-overview,
+.account-content-panel-workspaces,
+.account-content-panel-access,
+.portal-support-panel {
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+}
+.account-panel-kicker,
+.billing-card-kicker,
+.portal-shell-head-kicker {
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.account-stage-header,
+.billing-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.account-stage-header h3,
+.billing-header h2,
+.portal-support-panel h2 {
+  margin: 4px 0 0;
+  font-size: 28px;
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  font-weight: 700;
+}
+.account-stage-header p,
+.billing-header p,
+.billing-note,
+.portal-support-panel > p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.section-context-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+.section-context-chip {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink-muted);
+}
+.section-context-chip + .section-context-chip::before {
+  content: "\2022";
+  margin-right: 10px;
+  color: var(--line-strong);
+}
+.overview-task-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.overview-task-card,
+.billing-task-card,
+.portal-support-route-card,
+.portal-support-runbook,
+.workspace-list-wrap,
+.workspace-management-panel,
+.access-roster,
+.access-task-panel,
+.access-invite-panel,
+.access-job-note-panel,
+.access-policy-panel,
+.billing-shell-main,
+.billing-shell-detail,
+.billing-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+  box-shadow: none;
+}
+.overview-task-card,
+.billing-task-card,
+.portal-support-route-card,
+.portal-support-runbook,
+.billing-shell-main,
+.billing-shell-detail,
+.billing-panel {
+  padding: 20px;
+}
+.overview-task-card h4,
+.billing-task-card h3,
+.portal-support-route-card h3,
+.portal-support-runbook h3,
+.billing-panel h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 650;
+}
+.overview-task-card p,
+.billing-task-card p,
+.billing-task-note,
+.billing-task-meta,
+.portal-support-route-card p,
+.portal-support-runbook p,
+.billing-action-copy p,
+.billing-action-meta {
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+.overview-task-list,
+.billing-task-points,
+.portal-support-points,
+.portal-support-runbook-list {
+  gap: 0;
+}
+.overview-task-item,
+.billing-task-point,
+.portal-support-point,
+.portal-support-runbook-step {
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.overview-task-item:first-child,
+.billing-task-point:first-child,
+.portal-support-point:first-child,
+.portal-support-runbook-step:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.overview-task-actions,
+.billing-task-actions,
+.portal-support-actions,
+.billing-inline-support-actions {
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.billing-task-meta {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.workspace-operations-shell,
+.access-shell,
+.billing-shell,
+.portal-support-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 16px;
+}
+.workspace-list-wrap,
+.access-roster {
+  overflow: hidden;
+}
+.workspace-list-toolbar,
+.access-panel-heading {
+  padding: 18px 20px 12px;
+}
+.workspace-list-head,
+.access-roster-head {
+  background: var(--panel-strong);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+}
+.workspace-list-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) 140px 140px 180px;
+  gap: 16px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.workspace-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) 140px 140px 180px;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 20px;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--panel);
+}
+.workspace-row:first-child {
+  border-top: none;
+}
+.workspace-row-primary {
+  min-width: 0;
+}
+.workspace-row-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.workspace-name {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.workspace-meta,
+.workspace-row-note {
+  color: var(--ink-soft);
+}
+.workspace-meta {
+  font-size: 12px;
+}
+.workspace-row-note {
+  font-size: 13px;
+  line-height: 1.5;
+}
+.workspace-actions {
+  justify-content: flex-start !important;
+  gap: 8px !important;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-strong);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.badge-healthy {
+  border-color: #cbe6d0;
+  background: #edf7ef;
+  color: #24693d;
+}
+.badge-unhealthy,
+.badge-failed {
+  border-color: #f0c2bf;
+  background: #fce8e6;
+  color: #8b1f1f;
+}
+.badge-checking,
+.badge-provisioning,
+.badge-suspended {
+  border-color: #d7dce2;
+  background: #f2f4f7;
+  color: #5e6773;
+}
+.workspace-management-panel,
+.access-task-panel {
+  align-self: start;
+}
+.workspace-management-header,
+.access-task-header,
+.billing-task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.workspace-management-content,
+.access-task-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.access-management-panel {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+.access-management-header {
+  padding: 0;
+  margin-bottom: 16px;
+}
+.access-management-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.access-stat-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--panel);
+}
+.access-stat-label {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.access-stat-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.access-task-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+.access-task-button {
+  appearance: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+}
+.access-task-button.active {
+  border-color: #bfd3ff;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+.access-roster {
+  padding: 0;
+}
+.access-roster-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px 160px;
+  gap: 16px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.access-roster-head-readonly {
+  grid-template-columns: minmax(0, 1fr) 180px;
+}
+.access-roster-list {
+  padding: 0 20px 16px;
+}
+.access-member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px 160px;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line);
+}
+.access-member-row-readonly {
+  grid-template-columns: minmax(0, 1fr) 180px;
+}
+.access-member-row:last-child {
+  border-bottom: none;
+}
+.access-inline-role-badge {
+  display: none;
+}
+.access-member-email {
+  font-size: 14px;
+  font-weight: 500;
+}
+.access-member-caption {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.access-control-cell {
+  justify-content: flex-start;
+}
+.access-role-badge,
+.access-control-locked {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 500;
+}
+.access-role-select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+}
+.billing-header {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: end;
+}
+.billing-overview-grid {
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.billing-shell-main-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.billing-action-list {
+  display: flex;
+  flex-direction: column;
+}
+.billing-action-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.billing-action-row:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+.billing-action-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.billing-action-copy h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+.billing-action-copy p {
+  margin: 4px 0 0;
+}
+.billing-action-meta {
+  font-size: 12px;
+  color: var(--ink-muted);
+}
+.billing-action-cta,
+.billing-action-button {
+  width: auto;
+  justify-content: center;
+}
+.billing-inline-support {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.portal-support-panel > .section-context-strip {
+  margin-bottom: 16px;
+}
+.portal-support-route-grid {
+  display: grid;
+  gap: 16px;
+}
+.portal-support-link {
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+}
+.portal-support-link:hover {
+  text-decoration: underline;
+}
+@media (max-width: 960px) {
+  .main {
+    padding: 16px 16px 40px;
+  }
+  .portal-shell-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .portal-shell-nav {
+    position: static;
+  }
+  .portal-shell-nav-header {
+    padding-bottom: 8px;
+  }
+  .portal-shell-nav-group {
+    flex-direction: row;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  .portal-shell-nav-group::-webkit-scrollbar {
+    display: none;
+  }
+  .portal-shell-nav-link {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+  .portal-account-context,
+  .billing-header,
+  .workspace-operations-shell,
+  .access-shell,
+  .billing-shell,
+  .portal-support-layout {
+    grid-template-columns: 1fr;
+  }
+  .portal-account-context {
+    gap: 16px;
+    padding: 18px 18px 20px;
+  }
+  .portal-account-context-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    padding-left: 0;
+    padding-top: 12px;
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+  .portal-account-context-row-title h2,
+  .account-stage-header h3,
+  .billing-header h2,
+  .portal-support-panel h2 {
+    font-size: 24px;
+  }
+  .overview-task-grid,
+  .billing-overview-grid {
+    grid-template-columns: 1fr;
+  }
+  .access-management-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .workspace-list-head {
+    display: none;
+  }
+  .workspace-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .workspace-row-status-cell {
+    display: flex;
+    justify-content: flex-start;
+  }
+  .access-roster-head,
+  .access-member-row,
+  .access-member-row-readonly {
+    grid-template-columns: 1fr;
+  }
+  .billing-action-row {
+    grid-template-columns: 1fr;
+  }
+  .billing-action-cta,
+  .billing-action-button {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+@media (max-width: 640px) {
+  header {
+    padding: 8px 12px;
+  }
+  .main {
+    padding: 12px 12px 32px;
+  }
+  .header-account-email {
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .portal-account-context-summary {
+    grid-template-columns: 1fr;
+  }
+}

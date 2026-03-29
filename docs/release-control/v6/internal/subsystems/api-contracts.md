@@ -385,7 +385,12 @@ That same typed portal page contract also owns favicon cache-busting: the
 rendered `<link rel="icon">` must point at the shared `/favicon.svg` asset
 through a versioned href so new portal icon revisions bypass browser cache on
 deploy instead of waiting for asset expiry.
-That same typed overview contract must also preserve a sharp, high-density enterprise visual aesthetic (e.g. Cloudflare/GCP density standards) across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, rigorous visual language with standard 256px sidebars, Inter-grade typography, clean text-transform rules, and cleanly unboxed typography without excessive pills or stacked metrics.
+That same typed overview contract must also preserve a calm, flat account-tool
+visual posture across all portal scenarios: no gradients, heavy shadows, or
+decorative dashboard chrome; lighter shell framing; list/detail and row-based
+task presentation; restrained accent use; and hierarchy driven by spacing,
+typography, and dividers rather than dense pills, stacked metrics, or
+ornamental side rails competing with the active task.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

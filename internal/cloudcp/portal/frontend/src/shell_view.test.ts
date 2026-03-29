@@ -76,7 +76,7 @@ describe('shell view', function() {
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 
-    expect(html).toContain('Account state');
+    expect(html).toContain('Current state');
     expect(html).toContain('No hosted account');
     expect(html).toContain('0 hosted workspaces');
     expect(html).toContain('Billing available');
@@ -135,8 +135,7 @@ describe('shell view', function() {
     expect(html).toContain('Access');
     expect(html).toContain('Billing');
     expect(html).toContain('Support');
-    expect(html).toContain('Account tasks');
-    expect(html).toContain('Review workspace counts, current state, and the current action.');
+    expect(html).toContain('portal-shell-nav-title">Account<');
     expect(html).toContain('1 account');
     expect(html).toContain('3 workspaces');
     expect(html).toContain('1 ready workspace');
@@ -155,8 +154,8 @@ describe('shell view', function() {
     expect(html).toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
-    expect(html).toContain('Account state');
-    expect(html).toContain('Hosted workspace counts, current state, and current action.');
+    expect(html).toContain('Current state');
+    expect(html).toContain('Hosted workspace counts and the next available action.');
     expect(html).toContain('section-context-strip');
     expect(html).toContain('Needs attention');
     expect(html).toContain('Ready');
@@ -353,7 +352,7 @@ describe('shell view', function() {
 
     expect((html.match(/portal-account-context\"/g) || []).length).toBe(1);
     expect((html.match(/portal-account-context-stat/g) || []).length).toBe(3);
-    expect((html.match(/account-context-chip\"/g) || []).length).toBe(3);
+    expect((html.match(/account-context-chip\"/g) || []).length).toBe(0);
     expect(html).toContain('Admin role');
     expect(html).toContain('Hosted account for workspace access, access control, and billing.');
     expect(html).toContain('Manage access');
@@ -389,7 +388,6 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Open a workspace and review current state. An owner or admin must create or change hosted workspaces.');
     expect(html).toContain('Open a workspace and review current state here. An owner or admin must create or change hosted workspaces.');
     expect(html).toContain('Tech role');
     expect(html).toContain('Hosted account where you can open workspaces and review who already has access. An owner or admin handles access changes and billing.');
@@ -401,8 +399,8 @@ describe('shell view', function() {
     expect(html).toContain('Owner or admin required');
     expect(html).toContain('Review who already has access to this hosted account. An owner or admin must make changes.');
     expect(html).toContain('Review the hosted roster here. An owner or admin must make changes.');
-    expect(html).toContain('Hosted billing is attached here, but an owner or admin must open it.');
-    expect(html).toContain('Escalation only after the review, owner/admin, or billing path is exhausted.');
+    expect(html).toContain('An owner or admin on this account needs to open hosted billing.');
+    expect(html).toContain('Escalation only');
     expect(html).toContain('Use Support only after Workspaces review, Access review, owner/admin handoff, or hosted Billing fails.');
     expect(html).toContain('Review Workspaces or Access, or contact owner/admin first');
     expect(html).toContain('Email support');
@@ -627,14 +625,12 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Pulse Account');
-    expect(html).toContain('Account tasks');
-    expect(html).toContain('Self-hosted');
-    expect(html).toContain('Account state');
-    expect(html).toMatch(/Workspaces[\s\S]*Unavailable on this account\. Hosted workspaces are not attached here\./);
-    expect(html).toContain('Unavailable on this account. Hosted workspaces are not attached here.');
-    expect(html).toMatch(/Access[\s\S]*Unavailable on this account\. Hosted roster and role controls live only on hosted workspace accounts\./);
-    expect(html).toContain('Unavailable on this account. Hosted roster and role controls live only on hosted workspace accounts.');
-    expect(html).toMatch(/Support[\s\S]*Escalation only after the billing path is exhausted\./);
+    expect(html).toContain('Billing account');
+    expect(html).toContain('Current state');
+    expect(html).toContain('Workspaces');
+    expect(html).toContain('Unavailable');
+    expect(html).toContain('Access');
+    expect(html).toContain('Support');
     expect(html).toContain('No hosted account');
     expect(html).toContain('0 hosted workspaces need review');
     expect(html).toContain('Billing is available');

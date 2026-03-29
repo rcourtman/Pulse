@@ -272,6 +272,12 @@ Core rules:
     Support copy follows the same rule: escalation surfaces must name the
     exact task path, account/email, and failed step in short literal wording,
     not long procedural prose.
+41. The signed-in shell must stay visually subordinate to the task itself.
+    Presentation should read like a calm account-operations surface: flat
+    light surfaces, restrained accent use, list/detail or row-based task
+    presentation, and hierarchy driven by spacing, typography, and dividers
+    instead of dashboard chrome, decorative dark rails, nested card stacks,
+    or dense pill collections competing with the active job.
 
 ## Screen Model
 

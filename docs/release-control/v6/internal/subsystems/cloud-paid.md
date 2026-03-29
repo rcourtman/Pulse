@@ -274,7 +274,7 @@ deployment instead of appearing only after a live push. The portal page itself
 must also reference that shared favicon through a versioned href so updated
 icon revisions bypass browser cache on deploy instead of waiting for asset
 expiry.
-That same frontend delivery boundary must keep the account portal visual language sharp and high-density, avoiding gradients, heavy shadows, and decorative SaaS styling in favor of a clean, restrained, Cloudflare/GCP-grade baseline with flat inline workspace action rows and text-driven unboxed metadata instead of pills and absolutely inline row actions.
+That same frontend delivery boundary must keep the account portal visual language sharp and restrained, avoiding gradients, heavy shadows, decorative SaaS styling, and shell chrome that dominates the active task. The canonical target is a calm, flat account-operations surface: lighter shell framing, list/detail and row-based task presentation, spacing/typography/divider hierarchy, and only limited badge or pill use where the runtime truth genuinely needs it.
 That same portal delivery boundary also owns the checked-in embedded bundle in
 `internal/cloudcp/portal/dist/`. Visual or interaction changes are not
 complete when they exist only in the local preview runtime or in hand-edited
@@ -905,6 +905,12 @@ lead directly with the self-hosted job picker. `Support` follows
 the same account-shape rule: self-hosted-only accounts reduce to the billing
 escalation path and billing-specific handoff packet only, and hosted
 workspace/access escalation routes must not render without hosted accounts.
+That same owned shell also owns the signed-in visual posture: the portal
+should read like a serious settings/account tool rather than a dashboard.
+Navigation chrome, account framing, and overview panels must stay visually
+quieter than the active task surface, with flatter light treatment and
+list-first task presentation instead of dark ornamental rails or nested
+explanatory cards.
 The same shell/runtime boundary must also stay honest to hosted-account
 permissions: when the current role is view-only, `Workspaces`, `Access`, and
 hosted `Billing` copy must not advertise create, roster-mutation, or hosted
