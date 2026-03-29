@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -22,10 +23,49 @@ type MultiTenantPersistence struct {
 	tenants     map[string]*ConfigPersistence
 }
 
+func resolveMultiTenantBaseDataDir(baseDataDir string) (string, error) {
+	normalized, err := securityutil.NormalizeStorageDir(ResolveRuntimeDataDir(baseDataDir))
+	if err != nil {
+		return "", fmt.Errorf("resolve multi-tenant base data directory: %w", err)
+	}
+	return normalized, nil
+}
+
+func resolveTenantOrgDir(baseDataDir, orgID string) (string, error) {
+	normalizedBaseDir, err := resolveMultiTenantBaseDataDir(baseDataDir)
+	if err != nil {
+		return "", err
+	}
+
+	if orgID == "default" {
+		return normalizedBaseDir, nil
+	}
+	if !isValidOrgID(orgID) {
+		return "", fmt.Errorf("invalid organization ID: %s", orgID)
+	}
+
+	orgsDir, err := securityutil.JoinStorageLeaf(normalizedBaseDir, "orgs")
+	if err != nil {
+		return "", fmt.Errorf("resolve orgs directory: %w", err)
+	}
+	orgDir, err := securityutil.JoinStorageLeaf(orgsDir, orgID)
+	if err != nil {
+		return "", fmt.Errorf("resolve organization directory: %w", err)
+	}
+	return orgDir, nil
+}
+
 // NewMultiTenantPersistence creates a new multi-tenant persistence manager.
 func NewMultiTenantPersistence(baseDataDir string) *MultiTenantPersistence {
+	resolvedBaseDir, err := resolveMultiTenantBaseDataDir(baseDataDir)
+	if err != nil {
+		log.Fatal().
+			Str("baseDataDir", baseDataDir).
+			Err(err).
+			Msg("Failed to initialize multi-tenant persistence")
+	}
 	return &MultiTenantPersistence{
-		baseDataDir: baseDataDir,
+		baseDataDir: resolvedBaseDir,
 		tenants:     make(map[string]*ConfigPersistence),
 	}
 }
@@ -69,16 +109,9 @@ func (mtp *MultiTenantPersistence) GetPersistence(orgID string) (*ConfigPersiste
 		return nil, fmt.Errorf("invalid organization ID: %s", orgID)
 	}
 
-	// Determine org data directory
-	// Global/Default org uses the root data dir (legacy compatibility)
-	// New orgs use /data/orgs/<org-id>
-	var orgDir string
-	if orgID == "default" {
-		// IMPORTANT: Default org uses root data dir for backward compatibility
-		// This ensures existing users' configs (nodes.enc, ai.enc, etc.) continue to work
-		orgDir = mtp.baseDataDir
-	} else {
-		orgDir = filepath.Join(mtp.baseDataDir, "orgs", orgID)
+	orgDir, err := resolveTenantOrgDir(mtp.baseDataDir, orgID)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Info().Str("org_id", orgID).Str("dir", orgDir).Msg("Initializing tenant persistence")
@@ -108,7 +141,10 @@ func (mtp *MultiTenantPersistence) OrgExists(orgID string) bool {
 		return false
 	}
 
-	orgDir := filepath.Join(mtp.baseDataDir, "orgs", orgID)
+	orgDir, err := resolveTenantOrgDir(mtp.baseDataDir, orgID)
+	if err != nil {
+		return false
+	}
 	stat, err := os.Stat(orgDir)
 	return err == nil && stat.IsDir()
 }

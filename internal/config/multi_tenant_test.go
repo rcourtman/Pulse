@@ -71,3 +71,50 @@ func TestMultiTenantPersistence_GetPersistence_CreatesOrgDir(t *testing.T) {
 		t.Fatalf("expected org dir to be a directory")
 	}
 }
+
+func TestMultiTenantPersistence_CanonicalizesBaseDataDir(t *testing.T) {
+	root := t.TempDir()
+	rawBaseDir := filepath.Join(root, "tenants", "..", "tenants")
+
+	mtp := NewMultiTenantPersistence("  " + rawBaseDir + "  ")
+
+	expectedBaseDir := filepath.Clean(rawBaseDir)
+	if mtp.BaseDataDir() != expectedBaseDir {
+		t.Fatalf("BaseDataDir() = %q, want %q", mtp.BaseDataDir(), expectedBaseDir)
+	}
+
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("GetPersistence(default) failed: %v", err)
+	}
+	if _, err := mtp.GetPersistence("acme"); err != nil {
+		t.Fatalf("GetPersistence(acme) failed: %v", err)
+	}
+
+	defaultInfo, err := os.Stat(expectedBaseDir)
+	if err != nil {
+		t.Fatalf("expected canonical base dir to exist: %v", err)
+	}
+	if !defaultInfo.IsDir() {
+		t.Fatalf("expected canonical base dir to be a directory")
+	}
+
+	orgDir := filepath.Join(expectedBaseDir, "orgs", "acme")
+	orgInfo, err := os.Stat(orgDir)
+	if err != nil {
+		t.Fatalf("expected canonical org dir to exist: %v", err)
+	}
+	if !orgInfo.IsDir() {
+		t.Fatalf("expected canonical org dir to be a directory")
+	}
+}
+
+func TestResolveTenantOrgDirRejectsBlankBaseDir(t *testing.T) {
+	originalDefaultDataDir := defaultDataDir
+	defaultDataDir = " \t "
+	t.Cleanup(func() { defaultDataDir = originalDefaultDataDir })
+	t.Setenv("PULSE_DATA_DIR", " \t ")
+
+	if _, err := resolveTenantOrgDir(" \t ", "default"); err == nil {
+		t.Fatal("expected blank base dir to be rejected")
+	}
+}
