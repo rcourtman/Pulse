@@ -179,6 +179,11 @@ The governed default remains inventory-first so Proxmox-oriented operators land
 on the familiar protected-items view, but drill-in actions such as selecting a
 subject or a timeline day must switch the primary workspace to recovery events
 instead of leaving two competing table surfaces visible at once.
+That same operator-facing workspace must lead with current protection status
+rather than only the latest backup outcome. Protected items should surface
+stale, never-succeeded, failed, warning, and running rollups as the primary
+monitoring status so an item with an old successful point does not scan as
+healthy when it still needs operator attention.
 That same workspace contract also keeps Pulse's provider-neutral recovery model
 explicit in the page language: recovery sections should talk about protected
 items, recovery events, and latest points so PBS backups, TrueNAS snapshots,

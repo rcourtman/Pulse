@@ -15,8 +15,9 @@ import type { ProtectionRollup, RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import {
   getRecoveryProtectedToggleClass,
-  getRecoveryRollupStatusPillClass,
-  getRecoveryRollupStatusPillLabel,
+  getRecoveryRollupInventoryStatusLabel,
+  getRecoveryRollupInventoryStatusTextClass,
+  getRecoveryRollupInventoryStatusVariant,
   getRecoverySpecialOutcomeTextClass,
 } from '@/utils/recoveryStatusPresentation';
 import {
@@ -31,17 +32,14 @@ import {
 } from '@/utils/recoveryItemTypePresentation';
 import {
   getRecoveryArtifactColumnLabel,
-  getRecoveryArtifactMetadataTextClass,
+  getRecoveryRollupInventoryStatus,
   getRecoveryRollupInventoryPriority,
   getRecoveryRollupAgeTextClass,
   getRecoveryProtectedSearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
   getRecoveryRollupTimestampMs,
-  isRecoveryRollupStale,
 } from '@/utils/recoveryTablePresentation';
 import {
-  getRecoveryOutcomeTextClass,
-  getRecoveryOutcomeLabel,
   normalizeRecoveryOutcome,
 } from '@/utils/recoveryOutcomePresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
@@ -380,7 +378,7 @@ export const RecoveryProtectedInventorySection: Component<
                     ['type', 'Item Type'],
                     ['platform', getRecoveryArtifactColumnLabel('platform', 'Platform')],
                     ['lastBackup', 'Latest Point'],
-                    ['outcome', 'Outcome'],
+                    ['outcome', 'Status'],
                   ] as const
                 ).map(([column, label]) => (
                   <TableHead
@@ -421,7 +419,8 @@ export const RecoveryProtectedInventorySection: Component<
                   const secondaryLabel = getRecoveryRollupItemSecondaryLabel(rollup);
                   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
                   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
-                  const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
+                  const inventoryStatus = getRecoveryRollupInventoryStatus(rollup);
+                  const inventoryStatusLabel = getRecoveryRollupInventoryStatusLabel(inventoryStatus);
                   const platforms = getRecoveryRollupPlatforms(rollup)
                     .map((platform) => String(platform || '').trim())
                     .filter(Boolean)
@@ -431,23 +430,7 @@ export const RecoveryProtectedInventorySection: Component<
                   const itemTypePresentation =
                     getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup)) || null;
                   const nowMs = Date.now();
-                  const stale = isRecoveryRollupStale(rollup, nowMs);
-                  const neverSucceeded =
-                    (!Number.isFinite(successMs) || successMs <= 0) &&
-                    Number.isFinite(attemptMs) &&
-                    attemptMs > 0;
-                  const outcomeVariant = (() => {
-                    switch (outcome) {
-                      case 'success':
-                        return 'success' as const;
-                      case 'warning':
-                        return 'warning' as const;
-                      case 'failed':
-                        return 'danger' as const;
-                      default:
-                        return 'muted' as const;
-                    }
-                  })();
+                  const neverSucceeded = inventoryStatus === 'never-succeeded';
 
                   return (
                     <TableRow
@@ -461,11 +444,11 @@ export const RecoveryProtectedInventorySection: Component<
                         <div class="flex min-w-0 flex-col gap-1">
                           <div class="flex min-w-0 items-center gap-2">
                             <StatusDot
-                              variant={outcomeVariant}
+                              variant={getRecoveryRollupInventoryStatusVariant(inventoryStatus)}
                               size="xs"
-                              pulse={outcome === 'running'}
-                              title={getRecoveryOutcomeLabel(outcome)}
-                              ariaLabel={getRecoveryOutcomeLabel(outcome)}
+                              pulse={inventoryStatus === 'running'}
+                              title={inventoryStatusLabel}
+                              ariaLabel={inventoryStatusLabel}
                             />
                             <div class="flex min-w-0 items-baseline gap-1.5">
                               <span class="truncate text-[13px] font-medium">{label}</span>
@@ -475,16 +458,6 @@ export const RecoveryProtectedInventorySection: Component<
                                 </span>
                               </Show>
                             </div>
-                            <Show when={neverSucceeded}>
-                              <span class={getRecoveryRollupStatusPillClass('never-succeeded')}>
-                                {getRecoveryRollupStatusPillLabel('never-succeeded')}
-                              </span>
-                            </Show>
-                            <Show when={!neverSucceeded && stale}>
-                              <span class={getRecoveryRollupStatusPillClass('stale')}>
-                                {getRecoveryRollupStatusPillLabel('stale')}
-                              </span>
-                            </Show>
                           </div>
                           <div class="flex flex-wrap items-center gap-1.5 text-[10px] md:hidden">
                             <Show when={itemTypePresentation?.label}>
@@ -557,8 +530,12 @@ export const RecoveryProtectedInventorySection: Component<
                       </TableCell>
 
                       <TableCell class="whitespace-nowrap px-3 py-1.5">
-                        <span class={`text-[11px] font-medium ${getRecoveryOutcomeTextClass(outcome)}`}>
-                          {titleCaseDelimitedLabel(outcome)}
+                        <span
+                          class={`text-[11px] font-medium ${getRecoveryRollupInventoryStatusTextClass(
+                            inventoryStatus,
+                          )}`}
+                        >
+                          {inventoryStatusLabel}
                         </span>
                       </TableCell>
                     </TableRow>

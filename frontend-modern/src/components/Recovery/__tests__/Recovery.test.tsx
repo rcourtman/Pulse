@@ -263,6 +263,7 @@ describe('Recovery', () => {
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
+    expect(within(inventoryTable).getByText('Status')).toBeInTheDocument();
     expect(within(inventoryTable).queryByText('ITEM TYPE')).not.toBeInTheDocument();
     expect(within(inventoryTable).queryByText('PLATFORM')).not.toBeInTheDocument();
     expect(inventoryBody?.className).toContain('divide-y');
@@ -270,11 +271,11 @@ describe('Recovery', () => {
     const inventoryRows = inventoryBody ? Array.from(inventoryBody.querySelectorAll('tr')) : [];
     expect(inventoryRows.length).toBeGreaterThan(1);
     expect(within(inventoryRows[0]!).getByText('tank/apps')).toBeInTheDocument();
-    expect(within(inventoryRows[0]!).getByText('Failed')).toBeInTheDocument();
+    expect(within(inventoryRows[0]!).getByText('Never succeeded')).toBeInTheDocument();
     expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
     const vmRow = screen.getByText('VM 123').closest('tr');
     expect(vmRow).not.toBeNull();
-    expect(within(vmRow!).getByLabelText('Healthy')).toBeInTheDocument();
+    expect(within(vmRow!).getByLabelText('Stale')).toBeInTheDocument();
     expect(within(vmRow!).getAllByText('PVE').length).toBeGreaterThan(0);
     expect(within(vmRow!).getAllByText('VM').length).toBeGreaterThan(0);
     expect(within(vmRow!).getByText('VMID 123')).toBeInTheDocument();
@@ -284,7 +285,7 @@ describe('Recovery', () => {
     expect(within(vmRow!).getAllByText('VM')[0].className).toContain('bg-');
     expect(within(vmRow!).getAllByText('VM')[0].className).toContain('rounded');
     expect(within(vmRow!).getAllByText('VM')[0].className).toContain('px-1 py-0.5');
-    expect(within(vmRow!).getByText('Success').className).not.toContain('rounded');
+    expect(within(vmRow!).getByText('Stale').className).not.toContain('rounded');
     expect(screen.queryByText('Backups By Date')).not.toBeInTheDocument();
     expect(screen.queryByText('Recovery Activity')).not.toBeInTheDocument();
 
@@ -516,6 +517,30 @@ describe('Recovery', () => {
     } finally {
       rollupsPayload.pop();
       delete pointsByRollupId['ext:legacy-provider-rollup'];
+    }
+  });
+
+  it('surfaces stale protected inventory health even when the latest outcome was successful', async () => {
+    rollupsPayload.push({
+      rollupId: 'res:vm-stale',
+      itemResourceId: 'vm-stale',
+      display: { itemLabel: 'Stale VM', itemType: 'vm', entityIdLabel: '999' },
+      lastAttemptAt: '2026-02-01T10:00:00.000Z',
+      lastSuccessAt: '2026-02-01T10:00:00.000Z',
+      lastOutcome: 'success',
+      platforms: ['proxmox-pve'],
+    });
+
+    try {
+      render(() => <Recovery />);
+
+      const staleRow = (await screen.findByText('Stale VM')).closest('tr');
+      expect(staleRow).not.toBeNull();
+      expect(within(staleRow!).getByLabelText('Stale')).toBeInTheDocument();
+      expect(within(staleRow!).getByText('Stale')).toBeInTheDocument();
+      expect(within(staleRow!).queryByText('Success')).not.toBeInTheDocument();
+    } finally {
+      rollupsPayload.pop();
     }
   });
 

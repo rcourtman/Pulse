@@ -12,6 +12,7 @@ import {
   getRecoveryPointItemTypeLabel,
   getRecoveryProtectedSearchPlaceholder,
   getRecoveryRollupAgeTextClass,
+  getRecoveryRollupInventoryStatus,
   getRecoveryRollupIssueTone,
   getRecoverySearchHistoryEmptyMessage,
   isRecoveryRollupStale,
@@ -147,6 +148,9 @@ describe('recoveryTablePresentation', () => {
 
     expect(getRecoveryRollupIssueTone(failed, now)).toBe('rose');
     expect(getRecoveryRollupIssueTone(stale, now)).toBe('amber');
+    expect(getRecoveryRollupInventoryStatus(failed, now)).toBe('failed');
+    expect(getRecoveryRollupInventoryStatus(stale, now)).toBe('stale');
+    expect(getRecoveryRollupInventoryStatus(aging, now)).toBe('healthy');
     expect(isRecoveryRollupStale(stale, now)).toBe(true);
     expect(getRecoveryRollupAgeTextClass(stale, now)).toContain('text-rose-700');
     expect(getRecoveryRollupAgeTextClass(aging, now)).toContain('text-amber-700');

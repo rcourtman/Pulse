@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   getRecoveryProtectedToggleClass,
+  getRecoveryRollupInventoryStatusLabel,
+  getRecoveryRollupInventoryStatusTextClass,
+  getRecoveryRollupInventoryStatusVariant,
   getRecoveryRollupStatusPillClass,
   getRecoveryRollupStatusPillLabel,
   getRecoverySpecialOutcomeTextClass,
@@ -19,6 +22,18 @@ describe('recoveryStatusPresentation', () => {
     expect(getRecoveryRollupStatusPillClass('stale')).toContain('text-amber-700');
     expect(getRecoveryRollupStatusPillLabel('never-succeeded')).toBe('never succeeded');
     expect(getRecoveryRollupStatusPillClass('never-succeeded')).toContain('text-rose-700');
+  });
+
+  it('derives inventory status labels, tones, and dot variants', () => {
+    expect(getRecoveryRollupInventoryStatusLabel('healthy')).toBe('Healthy');
+    expect(getRecoveryRollupInventoryStatusLabel('stale')).toBe('Stale');
+    expect(getRecoveryRollupInventoryStatusLabel('never-succeeded')).toBe('Never succeeded');
+    expect(getRecoveryRollupInventoryStatusTextClass('stale')).toContain('text-amber-600');
+    expect(getRecoveryRollupInventoryStatusTextClass('failed')).toContain('text-red-600');
+    expect(getRecoveryRollupInventoryStatusTextClass('running')).toContain('text-blue-600');
+    expect(getRecoveryRollupInventoryStatusVariant('healthy')).toBe('success');
+    expect(getRecoveryRollupInventoryStatusVariant('stale')).toBe('warning');
+    expect(getRecoveryRollupInventoryStatusVariant('never-succeeded')).toBe('danger');
   });
 
   it('derives special outcome text classes', () => {

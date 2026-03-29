@@ -35,6 +35,15 @@ export const RECOVERY_ARTIFACT_COLUMN_LABELS: Record<string, string> = {
   platform: 'Platform',
 };
 
+export type RecoveryRollupInventoryStatus =
+  | 'healthy'
+  | 'warning'
+  | 'failed'
+  | 'running'
+  | 'stale'
+  | 'never-succeeded'
+  | 'unknown';
+
 const RECOVERY_ARTIFACT_COLUMN_SPECS: Record<string, { headerClass: string; minWidthPx: number }> = {
   time: { headerClass: 'w-[76px] text-right', minWidthPx: 76 },
   type: { headerClass: 'w-[96px] text-center', minWidthPx: 96 },
@@ -150,32 +159,54 @@ export function getRecoveryRollupIssueTone(
   rollup: ProtectionRollup,
   nowMs: number,
 ): RecoveryIssueTone {
-  const outcome: RecoveryOutcome = normalizeRecoveryOutcome(rollup.lastOutcome);
-  if (outcome === 'failed') return 'rose';
-  if (outcome === 'running') return 'blue';
-  if (outcome === 'warning' || isRecoveryRollupStale(rollup, nowMs)) return 'amber';
+  const status = getRecoveryRollupInventoryStatus(rollup, nowMs);
+  if (status === 'failed' || status === 'never-succeeded') return 'rose';
+  if (status === 'running') return 'blue';
+  if (status === 'warning' || status === 'stale') return 'amber';
   return 'none';
 }
 
-export function getRecoveryRollupInventoryPriority(
+export function getRecoveryRollupInventoryStatus(
   rollup: ProtectionRollup,
   nowMs: number = Date.now(),
-): number {
+): RecoveryRollupInventoryStatus {
   const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
   const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
   const neverSucceeded =
     (!Number.isFinite(successMs) || successMs <= 0) &&
     Number.isFinite(attemptMs) &&
     attemptMs > 0;
-  const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
+  const outcome: RecoveryOutcome = normalizeRecoveryOutcome(rollup.lastOutcome);
 
-  if (neverSucceeded) return 6;
-  if (outcome === 'failed') return 5;
-  if (isRecoveryRollupStale(rollup, nowMs)) return 4;
-  if (outcome === 'warning') return 3;
-  if (outcome === 'running') return 2;
-  if (outcome === 'success') return 1;
-  return 0;
+  if (neverSucceeded) return 'never-succeeded';
+  if (outcome === 'failed') return 'failed';
+  if (isRecoveryRollupStale(rollup, nowMs)) return 'stale';
+  if (outcome === 'warning') return 'warning';
+  if (outcome === 'running') return 'running';
+  if (outcome === 'success') return 'healthy';
+  return 'unknown';
+}
+
+export function getRecoveryRollupInventoryPriority(
+  rollup: ProtectionRollup,
+  nowMs: number = Date.now(),
+): number {
+  switch (getRecoveryRollupInventoryStatus(rollup, nowMs)) {
+    case 'never-succeeded':
+      return 6;
+    case 'failed':
+      return 5;
+    case 'stale':
+      return 4;
+    case 'warning':
+      return 3;
+    case 'running':
+      return 2;
+    case 'healthy':
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 export function getRecoveryRollupAgeTextClass(
