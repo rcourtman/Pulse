@@ -87,13 +87,10 @@ interface RecoveryProtectedInventorySectionProps {
 }
 
 const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
-const PROTECTED_ITEMS_PAGE_SIZE = 24;
-
 export const RecoveryProtectedInventorySection: Component<
   RecoveryProtectedInventorySectionProps
 > = (props) => {
   const [protectedFiltersOpen, setProtectedFiltersOpen] = createSignal(false);
-  const [protectedPage, setProtectedPage] = createSignal(1);
   const [protectedSortCol, setProtectedSortCol] = createSignal<ProtectedSortCol>('outcome');
   const [protectedSortDir, setProtectedSortDir] = createSignal<SortDir>('desc');
 
@@ -183,23 +180,6 @@ export const RecoveryProtectedInventorySection: Component<
     return items;
   });
 
-  const protectedTotalPages = createMemo(() =>
-    Math.max(1, Math.ceil(sortedRollups().length / PROTECTED_ITEMS_PAGE_SIZE)),
-  );
-
-  const visibleRollups = createMemo<ProtectionRollup[]>(() => {
-    const start = (protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE;
-    return sortedRollups().slice(start, start + PROTECTED_ITEMS_PAGE_SIZE);
-  });
-
-  const pageStart = createMemo(() =>
-    sortedRollups().length === 0 ? 0 : (protectedPage() - 1) * PROTECTED_ITEMS_PAGE_SIZE + 1,
-  );
-
-  const pageEnd = createMemo(() =>
-    Math.min(protectedPage() * PROTECTED_ITEMS_PAGE_SIZE, sortedRollups().length),
-  );
-
   createEffect(() => {
     props.queryFilter();
     props.platformFilter();
@@ -208,14 +188,6 @@ export const RecoveryProtectedInventorySection: Component<
     props.protectedStaleOnly();
     protectedSortCol();
     protectedSortDir();
-    setProtectedPage(1);
-  });
-
-  createEffect(() => {
-    const totalPages = protectedTotalPages();
-    if (protectedPage() > totalPages) {
-      setProtectedPage(totalPages);
-    }
   });
 
   const resetProtectedFilters = () => {
@@ -318,7 +290,7 @@ export const RecoveryProtectedInventorySection: Component<
                 groupClass="gap-1.5 px-1.5 py-0.5"
                 selectClass="py-1 text-xs"
               >
-                <For each={availableOutcomes}>
+              <For each={availableOutcomes}>
                   {(outcome) => (
                     <option value={outcome}>
                       {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
@@ -412,7 +384,7 @@ export const RecoveryProtectedInventorySection: Component<
               </TableRow>
             </TableHeader>
             <TableBody>
-              <For each={visibleRollups()}>
+              <For each={sortedRollups()}>
                 {(rollup) => {
                   const resourceIndex = props.resourcesById();
                   const label = getRecoveryRollupItemLabel(rollup, resourceIndex);
@@ -551,33 +523,8 @@ export const RecoveryProtectedInventorySection: Component<
               when={sortedRollups().length > 0}
               fallback={<span>Showing 0 of 0 protected items</span>}
             >
-              <span>
-                Showing {pageStart()} - {pageEnd()} of {sortedRollups().length} protected items
-              </span>
+              <span>Showing {sortedRollups().length} protected items</span>
             </Show>
-          </div>
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              disabled={protectedPage() <= 1}
-              onClick={() => setProtectedPage(Math.max(1, protectedPage() - 1))}
-              class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
-            >
-              Prev
-            </button>
-            <span>
-              Page {protectedPage()} / {protectedTotalPages()}
-            </span>
-            <button
-              type="button"
-              disabled={protectedPage() >= protectedTotalPages()}
-              onClick={() =>
-                setProtectedPage(Math.min(protectedTotalPages(), protectedPage() + 1))
-              }
-              class="rounded-md border border-border bg-surface px-2 py-1 text-xs font-medium text-base-content disabled:opacity-50"
-            >
-              Next
-            </button>
           </div>
         </div>
         </Show>

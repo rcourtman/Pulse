@@ -233,8 +233,9 @@ describe('Recovery', () => {
     ).not.toContain('rounded-md');
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
-    expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/^2 protected items$/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prev' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -953,15 +954,9 @@ describe('Recovery', () => {
 
     render(() => <Recovery />);
 
-    expect(await screen.findByText('Showing 1 - 24 of 26 protected items')).toBeInTheDocument();
-    expect(screen.getAllByText('Page 1 / 2').length).toBeGreaterThan(0);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Showing 25 - 26 of 26 protected items')).toBeInTheDocument();
-      expect(screen.getAllByText('Page 2 / 2').length).toBeGreaterThan(0);
-    });
+    expect(await screen.findByText('Showing 26 protected items')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Prev' })).not.toBeInTheDocument();
   });
 
   it('persists and restores the protected stale-only filter through the canonical recovery URL', async () => {

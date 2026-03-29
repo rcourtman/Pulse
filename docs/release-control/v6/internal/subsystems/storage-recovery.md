@@ -829,6 +829,11 @@ already used elsewhere in Pulse. Protected items should surface posture through
 row-level status cues, outcome pills, and filters rather than inserting extra
 `Needs Attention` / `Healthy Coverage` section rows that add height and turn
 the primary table into a recovery-only grouped report.
+That same protected-items table should also avoid recovery-local pagination
+chrome. The workspace already holds the filtered rollups client-side, so it
+should read as one continuous monitoring table with a simple protected-item
+count instead of introducing `Prev` / `Next` buttons and page counters that do
+not match the canonical Pulse scan pattern.
 That same table-shell contract must avoid duplicate framing once the view tabs
 already establish the active workspace. `RecoveryProtectedInventorySection.tsx`
 should keep page/count/sort orientation inside a slim table-shell status row
