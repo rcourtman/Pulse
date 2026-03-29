@@ -159,3 +159,27 @@ func TestBuildMetricsTarget_RejectsEmptyCanonicalSourceID(t *testing.T) {
 		})
 	}
 }
+
+func TestBuildMetricsTarget_UsesCanonicalPhysicalDiskMetricIDForTrueNAS(t *testing.T) {
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypePhysicalDisk,
+			PhysicalDisk: &PhysicalDiskMeta{
+				Serial: "SER-TRUE-1",
+			},
+		},
+		[]SourceTarget{{
+			Source:   SourceTrueNAS,
+			SourceID: "disk:sda",
+		}},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "disk" {
+		t.Fatalf("ResourceType = %q, want disk", target.ResourceType)
+	}
+	if target.ResourceID != "SER-TRUE-1" {
+		t.Fatalf("ResourceID = %q, want SER-TRUE-1", target.ResourceID)
+	}
+}

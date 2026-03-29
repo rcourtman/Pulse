@@ -316,19 +316,20 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			Resource: unifiedresources.Resource{
 				Type:      unifiedresources.ResourceTypePhysicalDisk,
 				Name:      disk.Name,
-				Status:    unifiedresources.IncidentsStatus(statusFromDisk(disk), incidents),
+				Status:    unifiedresources.IncidentsStatus(unifiedresources.PhysicalDiskStatus(disk.Model, healthFromDisk(disk), assessment), incidents),
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
-					DevPath:   "/dev/" + disk.Name,
-					Model:     disk.Model,
-					Serial:    disk.Serial,
-					DiskType:  disk.Transport,
-					SizeBytes: disk.SizeBytes,
-					Health:    healthFromDisk(disk),
-					Wearout:   -1,
-					RPM:       rpmFromDisk(disk),
-					Risk:      unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
+					DevPath:     "/dev/" + disk.Name,
+					Model:       disk.Model,
+					Serial:      disk.Serial,
+					DiskType:    disk.Transport,
+					SizeBytes:   disk.SizeBytes,
+					Health:      healthFromDisk(disk),
+					Temperature: disk.Temperature,
+					Wearout:     -1,
+					RPM:         rpmFromDisk(disk),
+					Risk:        unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
 				},
 				Tags:      []string{"truenas", "disk", disk.Transport},
 				Incidents: incidents,
@@ -493,9 +494,10 @@ func assessPool(pool Pool) storagehealth.Assessment {
 
 func assessDisk(disk Disk) storagehealth.Assessment {
 	sampleAssessment := storagehealth.AssessSample(storagehealth.Sample{
-		Model:   strings.TrimSpace(disk.Model),
-		Health:  healthFromDisk(disk),
-		Wearout: -1,
+		Model:       strings.TrimSpace(disk.Model),
+		Health:      healthFromDisk(disk),
+		Temperature: disk.Temperature,
+		Wearout:     -1,
 	})
 
 	stateUpper := strings.ToUpper(strings.TrimSpace(disk.Status))

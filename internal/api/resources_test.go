@@ -13,6 +13,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -2876,6 +2877,61 @@ func TestResourceStorageSummaryRollsUpIncidents(t *testing.T) {
 	}
 	if resp.TopIncidents[2].ResourceID != "disk:serial-1" {
 		t.Fatalf("expected disk incident third, got %+v", resp.TopIncidents[2])
+	}
+}
+
+func TestResourceListIncludesTrueNASPhysicalDiskTemperature(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	now := time.Now().UTC()
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: now}})
+	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+		records:      truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+		ownedSources: []unified.DataSource{unified.SourceTrueNAS},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=physical_disk&source=truenas", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) == 0 {
+		t.Fatal("expected TrueNAS physical disk resources")
+	}
+
+	var disk unified.Resource
+	found := false
+	for _, candidate := range resp.Data {
+		if candidate.Name == "sda" {
+			disk = candidate
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected sda in TrueNAS physical disk response, got %+v", resp.Data)
+	}
+	if disk.PhysicalDisk == nil {
+		t.Fatalf("expected physical-disk metadata, got %+v", disk)
+	}
+	if disk.PhysicalDisk.Temperature != 34 {
+		t.Fatalf("expected sda temperature 34, got %+v", disk.PhysicalDisk)
+	}
+	if disk.MetricsTarget == nil || disk.MetricsTarget.ResourceType != "disk" || disk.MetricsTarget.ResourceID != "ZL0A1234" {
+		t.Fatalf("expected canonical disk metrics target ZL0A1234, got %+v", disk.MetricsTarget)
 	}
 }
 

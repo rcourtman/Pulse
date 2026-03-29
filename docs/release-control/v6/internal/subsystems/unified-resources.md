@@ -159,6 +159,11 @@ assembly branch.
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface.
+TrueNAS disk telemetry now follows the same rule. API-backed TrueNAS disks must
+populate canonical `physicalDisk.temperature` and reuse the shared
+physical-disk risk semantics, so infrastructure, storage, charts, and AI read
+the same disk-health contract instead of inventing a provider-local temperature
+surface.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -294,6 +295,9 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 	if sda.Resource.PhysicalDisk.DiskType != "sata" {
 		t.Fatalf("expected sda disk type %q, got %q", "sata", sda.Resource.PhysicalDisk.DiskType)
 	}
+	if sda.Resource.PhysicalDisk.Temperature != 34 {
+		t.Fatalf("expected sda temperature 34, got %d", sda.Resource.PhysicalDisk.Temperature)
+	}
 	if sda.Resource.PhysicalDisk.RPM != 7200 {
 		t.Fatalf("expected sda rpm 7200, got %d", sda.Resource.PhysicalDisk.RPM)
 	}
@@ -325,5 +329,68 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 	}
 	if sdc.Resource.PhysicalDisk.Health != "UNKNOWN" {
 		t.Fatalf("expected sdc health UNKNOWN, got %q", sdc.Resource.PhysicalDisk.Health)
+	}
+	if sdc.Resource.PhysicalDisk.Temperature != 63 {
+		t.Fatalf("expected sdc temperature 63, got %d", sdc.Resource.PhysicalDisk.Temperature)
+	}
+	if sdc.Resource.PhysicalDisk.Risk == nil {
+		t.Fatal("expected sdc physical-disk risk")
+	}
+	foundTemperatureReason := false
+	for _, reason := range sdc.Resource.PhysicalDisk.Risk.Reasons {
+		if reason.Code == "temperature_high" {
+			foundTemperatureReason = true
+			break
+		}
+	}
+	if !foundTemperatureReason {
+		t.Fatalf("expected sdc physical-disk risk to include temperature_high, got %+v", sdc.Resource.PhysicalDisk.Risk.Reasons)
+	}
+}
+
+func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	fixtures := DefaultFixtures()
+	fixtures.Disks = []Disk{{
+		ID:          "disk-hot",
+		Name:        "sda",
+		Pool:        "tank",
+		Status:      "ONLINE",
+		Model:       "Seagate Exos X18",
+		Serial:      "SER-HOT",
+		SizeBytes:   16 * 1024 * 1024 * 1024 * 1024,
+		Temperature: 72,
+		Transport:   "sata",
+		Rotational:  true,
+	}}
+
+	records := NewProvider(fixtures).Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	var diskRecord *unifiedresources.IngestRecord
+	for i := range records {
+		if records[i].Resource.Type == unifiedresources.ResourceTypePhysicalDisk {
+			diskRecord = &records[i]
+			break
+		}
+	}
+	if diskRecord == nil {
+		t.Fatal("expected physical disk record")
+	}
+	if diskRecord.Resource.Status != unifiedresources.StatusWarning {
+		t.Fatalf("expected hot disk status warning, got %s", diskRecord.Resource.Status)
+	}
+	if diskRecord.Resource.PhysicalDisk == nil || diskRecord.Resource.PhysicalDisk.Risk == nil {
+		t.Fatalf("expected hot disk physical risk, got %+v", diskRecord.Resource.PhysicalDisk)
+	}
+	if diskRecord.Resource.PhysicalDisk.Risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("expected hot disk critical risk, got %+v", diskRecord.Resource.PhysicalDisk.Risk)
 	}
 }

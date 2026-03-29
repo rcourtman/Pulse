@@ -220,3 +220,8 @@ TrueNAS monitoring ownership now also includes provider rebind semantics in
 host, auth, TLS, or fingerprint settings change, the poller must replace the
 live provider instance instead of keeping stale connection state in memory
 until the process restarts.
+That same monitoring boundary now also owns live TrueNAS disk temperatures.
+`internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
+`disk.temperatures` from the TrueNAS API and project those readings into the
+canonical physical-disk model and risk path instead of leaving temperature
+telemetry agent-only or adding a TrueNAS-local presentation shim.

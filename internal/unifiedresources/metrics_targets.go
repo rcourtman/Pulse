@@ -60,6 +60,11 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
 			}
 		}
+		if st, ok := bySource[SourceTrueNAS]; ok {
+			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
+				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}
+			}
+		}
 		if st, ok := bySource[SourceAgent]; ok {
 			if resourceID := PhysicalDiskMetaMetricID(resource.PhysicalDisk, st.SourceID); resourceID != "" {
 				return &MetricsTarget{ResourceType: "disk", ResourceID: resourceID}

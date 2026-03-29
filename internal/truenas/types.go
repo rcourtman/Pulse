@@ -47,15 +47,16 @@ type Dataset struct {
 
 // Disk mirrors a TrueNAS disk listing entry.
 type Disk struct {
-	ID         string
-	Name       string
-	Pool       string
-	Status     string
-	Model      string
-	Serial     string
-	SizeBytes  int64
-	Transport  string
-	Rotational bool
+	ID          string
+	Name        string
+	Pool        string
+	Status      string
+	Model       string
+	Serial      string
+	SizeBytes   int64
+	Temperature int
+	Transport   string
+	Rotational  bool
 }
 
 // Alert mirrors a TrueNAS alert listing entry.

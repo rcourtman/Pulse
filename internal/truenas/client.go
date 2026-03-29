@@ -231,6 +231,10 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
 	}
+	temperatures, err := c.GetDiskTemperatures(ctx)
+	if err != nil {
+		temperatures = nil
+	}
 
 	disks := make([]Disk, 0, len(response))
 	for _, item := range response {
@@ -251,19 +255,29 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 		}
 
 		disks = append(disks, Disk{
-			ID:         diskID,
-			Name:       strings.TrimSpace(item.Name),
-			Pool:       strings.TrimSpace(item.Pool),
-			Status:     strings.TrimSpace(item.Status),
-			Model:      strings.TrimSpace(item.Model),
-			Serial:     strings.TrimSpace(item.Serial),
-			SizeBytes:  item.Size,
-			Transport:  strings.ToLower(strings.TrimSpace(item.Bus)),
-			Rotational: rotational,
+			ID:          diskID,
+			Name:        strings.TrimSpace(item.Name),
+			Pool:        strings.TrimSpace(item.Pool),
+			Status:      strings.TrimSpace(item.Status),
+			Model:       strings.TrimSpace(item.Model),
+			Serial:      strings.TrimSpace(item.Serial),
+			SizeBytes:   item.Size,
+			Temperature: temperatureForTrueNASDisk(temperatures, item),
+			Transport:   strings.ToLower(strings.TrimSpace(item.Bus)),
+			Rotational:  rotational,
 		})
 	}
 
 	return disks, nil
+}
+
+// GetDiskTemperatures returns the current temperature by TrueNAS disk name.
+func (c *Client) GetDiskTemperatures(ctx context.Context) (map[string]int, error) {
+	var response any
+	if err := c.getJSON(ctx, http.MethodGet, "/disk/temperatures", &response); err != nil {
+		return nil, err
+	}
+	return parseDiskTemperatures(response), nil
 }
 
 // GetAlerts returns active and dismissed TrueNAS alerts.
@@ -458,6 +472,106 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		ZFSSnapshots:     zfsSnapshots,
 		ReplicationTasks: replicationTasks,
 	}, nil
+}
+
+func temperatureForTrueNASDisk(temperatures map[string]int, item diskResponse) int {
+	if len(temperatures) == 0 {
+		return 0
+	}
+	keys := []string{
+		strings.TrimSpace(item.Name),
+		strings.TrimSpace(item.Identifier),
+		strings.TrimSpace(item.Serial),
+	}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if temperature, ok := temperatures[key]; ok {
+			return temperature
+		}
+	}
+	return 0
+}
+
+func parseDiskTemperatures(raw any) map[string]int {
+	switch typed := raw.(type) {
+	case nil:
+		return nil
+	case map[string]any:
+		temperatures := make(map[string]int, len(typed))
+		for diskName, value := range typed {
+			appendDiskTemperature(temperatures, diskName, value)
+		}
+		if len(temperatures) == 0 {
+			return nil
+		}
+		return temperatures
+	case []any:
+		temperatures := make(map[string]int, len(typed))
+		for _, entry := range typed {
+			record, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			diskName := readStringAny(record, "disk", "name", "devname", "identifier", "serial")
+			if diskName == "" {
+				continue
+			}
+			value, found := firstAny(
+				record,
+				"temperature",
+				"temp",
+				"temperature_celsius",
+				"temperatureCelsius",
+				"value",
+				"parsed",
+			)
+			if !found {
+				continue
+			}
+			appendDiskTemperature(temperatures, diskName, value)
+		}
+		if len(temperatures) == 0 {
+			return nil
+		}
+		return temperatures
+	default:
+		return nil
+	}
+}
+
+func appendDiskTemperature(out map[string]int, diskName string, value any) {
+	if out == nil {
+		return
+	}
+	diskName = strings.TrimSpace(diskName)
+	if diskName == "" || value == nil {
+		return
+	}
+	if nested, ok := value.(map[string]any); ok {
+		if parsed, ok := firstAny(nested, "parsed", "rawvalue", "value"); ok {
+			value = parsed
+		}
+	}
+	temperature, ok := parseInt64Any(value)
+	if !ok || temperature <= 0 {
+		return
+	}
+	out[diskName] = int(temperature)
+}
+
+func firstAny(record map[string]any, keys ...string) (any, bool) {
+	if record == nil {
+		return nil, false
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if ok && value != nil {
+			return value, true
+		}
+	}
+	return nil, false
 }
 
 func splitSnapshotName(full string) (dataset string, snapshot string) {

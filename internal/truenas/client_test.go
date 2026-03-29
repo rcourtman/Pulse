@@ -91,6 +91,9 @@ func TestClientGetters(t *testing.T) {
 	if disks[1].Transport != "nvme" || disks[1].Rotational {
 		t.Fatalf("unexpected nvme disk mapping: %+v", disks[1])
 	}
+	if disks[0].Temperature != 34 || disks[1].Temperature != 49 {
+		t.Fatalf("unexpected disk temperatures: %+v", disks)
+	}
 
 	alerts, err := client.GetAlerts(ctx)
 	if err != nil {
@@ -186,6 +189,58 @@ func TestFetchSnapshot(t *testing.T) {
 	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 {
 		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d",
 			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts))
+	}
+	if snapshot.Disks[0].Temperature != 34 || snapshot.Disks[1].Temperature != 49 {
+		t.Fatalf("unexpected snapshot disk temperatures: %+v", snapshot.Disks)
+	}
+}
+
+func TestGetDiskTemperaturesSupportsArrayShape(t *testing.T) {
+	server := newMockServer(t, map[string]apiResponse{
+		"/api/v2.0/disk/temperatures": {
+			body: `[{"name":"sda","temperature":33},{"identifier":"{disk-2}","temperature_celsius":"48"},{"serial":"SER-C","temperature":{"parsed":52}}]`,
+		},
+	}, nil)
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	temperatures, err := client.GetDiskTemperatures(context.Background())
+	if err != nil {
+		t.Fatalf("GetDiskTemperatures() error = %v", err)
+	}
+	if got := temperatures["sda"]; got != 33 {
+		t.Fatalf("expected sda temperature 33, got %d", got)
+	}
+	if got := temperatures["{disk-2}"]; got != 48 {
+		t.Fatalf("expected {disk-2} temperature 48, got %d", got)
+	}
+	if got := temperatures["SER-C"]; got != 52 {
+		t.Fatalf("expected SER-C temperature 52, got %d", got)
+	}
+}
+
+func TestGetDisksToleratesUnavailableTemperatureEndpoint(t *testing.T) {
+	server := newMockServer(t, map[string]apiResponse{
+		"/api/v2.0/disk": {
+			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
+		},
+		"/api/v2.0/disk/temperatures": {
+			status: http.StatusNotFound,
+			body:   `{"error":"not found"}`,
+		},
+	}, nil)
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	disks, err := client.GetDisks(context.Background())
+	if err != nil {
+		t.Fatalf("GetDisks() error = %v", err)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+	if disks[0].Temperature != 0 {
+		t.Fatalf("expected unavailable temperature to stay empty, got %+v", disks[0])
 	}
 }
 
@@ -375,6 +430,9 @@ func defaultAPIResponses() map[string]apiResponse {
 		},
 		"/api/v2.0/disk": {
 			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"},{"identifier":"{disk-2}","name":"nvme0n1","serial":"SER-B","size":2000000,"model":"Samsung","type":"SSD","pool":"tank","bus":"NVMe","rotationrate":0,"status":"ONLINE"}]`,
+		},
+		"/api/v2.0/disk/temperatures": {
+			body: `{"sda":34,"nvme0n1":"49","SER-B":51}`,
 		},
 		"/api/v2.0/alert/list": {
 			body: `[{"id":"a1","level":"WARNING","formatted":"Disk temp high","source":"DiskService","dismissed":false,"datetime":{"$date":1707400000000}}]`,

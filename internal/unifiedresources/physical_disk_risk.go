@@ -74,3 +74,9 @@ func physicalDiskStatus(model, health string, assessment storagehealth.Assessmen
 		return StatusUnknown
 	}
 }
+
+// PhysicalDiskStatus applies the canonical shared physical-disk status policy
+// for providers that already calculated a disk-health assessment.
+func PhysicalDiskStatus(model, health string, assessment storagehealth.Assessment) ResourceStatus {
+	return physicalDiskStatus(model, health, assessment)
+}
