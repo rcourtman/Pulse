@@ -157,6 +157,27 @@ export function getRecoveryRollupIssueTone(
   return 'none';
 }
 
+export function getRecoveryRollupInventoryPriority(
+  rollup: ProtectionRollup,
+  nowMs: number = Date.now(),
+): number {
+  const successMs = rollup.lastSuccessAt ? Date.parse(rollup.lastSuccessAt) : 0;
+  const attemptMs = rollup.lastAttemptAt ? Date.parse(rollup.lastAttemptAt) : 0;
+  const neverSucceeded =
+    (!Number.isFinite(successMs) || successMs <= 0) &&
+    Number.isFinite(attemptMs) &&
+    attemptMs > 0;
+  const outcome = normalizeRecoveryOutcome(rollup.lastOutcome);
+
+  if (neverSucceeded) return 6;
+  if (outcome === 'failed') return 5;
+  if (isRecoveryRollupStale(rollup, nowMs)) return 4;
+  if (outcome === 'warning') return 3;
+  if (outcome === 'running') return 2;
+  if (outcome === 'success') return 1;
+  return 0;
+}
+
 export function getRecoveryRollupAgeTextClass(
   rollup: ProtectionRollup,
   nowMs: number,

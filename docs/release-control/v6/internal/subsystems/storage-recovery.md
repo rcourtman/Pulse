@@ -781,6 +781,10 @@ scan pattern in its first column. Protected-item rows should lead with a clear
 status cue, the primary item name, and compact badge-backed item/platform
 context instead of relying on recovery-only rails or plain-text metadata lines
 that make the table read like a report instead of an operational grid.
+That same triage rule applies to the default inventory sort. The protected
+items workspace should open with attention-state rollups first instead of
+defaulting to newest-successful backups, so operators land on failed,
+never-succeeded, stale, warning, and running items before the healthy catalog.
 That same row contract should avoid duplicating context that already has a
 dedicated column. When `Item Type` and `Platform` columns are visible, the
 primary item cell should not restate those same badges on desktop; duplicate

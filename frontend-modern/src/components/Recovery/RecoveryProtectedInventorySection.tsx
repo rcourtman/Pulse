@@ -32,9 +32,11 @@ import {
 import {
   getRecoveryArtifactColumnLabel,
   getRecoveryArtifactMetadataTextClass,
+  getRecoveryRollupInventoryPriority,
   getRecoveryRollupAgeTextClass,
   getRecoveryProtectedSearchPlaceholder,
   getRecoverySearchHistoryEmptyMessage,
+  getRecoveryRollupTimestampMs,
   isRecoveryRollupStale,
 } from '@/utils/recoveryTablePresentation';
 import {
@@ -94,7 +96,7 @@ export const RecoveryProtectedInventorySection: Component<
 > = (props) => {
   const [protectedFiltersOpen, setProtectedFiltersOpen] = createSignal(false);
   const [protectedPage, setProtectedPage] = createSignal(1);
-  const [protectedSortCol, setProtectedSortCol] = createSignal<ProtectedSortCol>('lastBackup');
+  const [protectedSortCol, setProtectedSortCol] = createSignal<ProtectedSortCol>('outcome');
   const [protectedSortDir, setProtectedSortDir] = createSignal<SortDir>('desc');
 
   const toggleProtectedSort = (col: ProtectedSortCol) => {
@@ -152,9 +154,28 @@ export const RecoveryProtectedInventorySection: Component<
           return multiplier * (leftSuccess - rightSuccess);
         }
         case 'outcome': {
+          const leftPriority = getRecoveryRollupInventoryPriority(left);
+          const rightPriority = getRecoveryRollupInventoryPriority(right);
+          if (leftPriority !== rightPriority) {
+            return multiplier * (leftPriority - rightPriority);
+          }
+
+          const leftTimestamp = getRecoveryRollupTimestampMs(left);
+          const rightTimestamp = getRecoveryRollupTimestampMs(right);
+          const naturalTieBreak =
+            leftPriority === 4
+              ? leftTimestamp - rightTimestamp
+              : rightTimestamp - leftTimestamp;
+          if (naturalTieBreak !== 0) return multiplier * naturalTieBreak;
+
           const leftOutcome = normalizeRecoveryOutcome(left.lastOutcome);
           const rightOutcome = normalizeRecoveryOutcome(right.lastOutcome);
-          return multiplier * leftOutcome.localeCompare(rightOutcome);
+          const outcomeCmp = leftOutcome.localeCompare(rightOutcome);
+          if (outcomeCmp !== 0) return multiplier * outcomeCmp;
+
+          const leftLabel = getRecoveryRollupItemLabel(left, resourceIndex).toLowerCase();
+          const rightLabel = getRecoveryRollupItemLabel(right, resourceIndex).toLowerCase();
+          return multiplier * leftLabel.localeCompare(rightLabel);
         }
         default:
           return 0;

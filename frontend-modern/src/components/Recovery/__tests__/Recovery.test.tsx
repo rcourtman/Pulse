@@ -267,6 +267,10 @@ describe('Recovery', () => {
     expect(within(inventoryTable).queryByText('PLATFORM')).not.toBeInTheDocument();
     expect(inventoryBody?.className).toContain('divide-y');
     expect(inventoryBody?.className).toContain('divide-border');
+    const inventoryRows = inventoryBody ? Array.from(inventoryBody.querySelectorAll('tr')) : [];
+    expect(inventoryRows.length).toBeGreaterThan(1);
+    expect(within(inventoryRows[0]!).getByText('tank/apps')).toBeInTheDocument();
+    expect(within(inventoryRows[0]!).getByText('Failed')).toBeInTheDocument();
     expect(within(inventoryTable).getAllByText('VM').length).toBeGreaterThan(0);
     const vmRow = screen.getByText('VM 123').closest('tr');
     expect(vmRow).not.toBeNull();
