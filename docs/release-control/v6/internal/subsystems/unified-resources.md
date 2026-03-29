@@ -501,6 +501,15 @@ workload-to-infrastructure href builder used by dashboard row and drawer
 consumers. Future workload-to-resource navigation changes must extend through
 that shared routing contract instead of reintroducing dashboard-local path
 builders.
+That same shared routing boundary now also owns storage deep links for unified
+resources. Infrastructure drawers and other cross-surface consumers must route
+storage-centric systems and exact storage resources through canonical
+`/storage` route state there, using owned `source`, `node`, and `resource`
+queries instead of rebuilding drawer-local storage paths or provider-local
+highlight rules. When a top-level system is a merged hybrid surface, that
+helper must resolve the deep-link source from the canonical merged source set
+before falling back to raw `platformType`, so TrueNAS-backed hybrid systems do
+not lose their storage handoff just because agent telemetry is also present.
 That same routing contract now also owns canonical `/workloads` platform
 scoping. Shared workloads links, dashboard URL-sync state, and infrastructure
 drill-down helpers must preserve `platform=<owned-source-key>` for API-backed
@@ -774,6 +783,14 @@ The shared workloads-link helper now also uses that preferred-label helper
 for Kubernetes-cluster navigation fallbacks, so drawer/table navigation
 context stays inside the same governed resource-label boundary instead of
 repeating a raw display-name fork.
+That same shared workloads-link path now also owns top-level TrueNAS system
+handoffs to the canonical app-container workloads route, so infrastructure
+drawers and related-link surfaces do not strand canonical `truenas` resources
+on infrastructure-only navigation while API-backed apps already exist in the
+shared workloads model. That same helper must also honor merged
+`agent`+`truenas` source sets for top-level systems, so hybrid TrueNAS
+surfaces keep the same workload handoff even when the resource shape presents
+through the canonical host path instead of a raw `type='truenas'` row.
 The resource drawer's Kubernetes namespace and deployment tabs use the
 canonical cluster-name helper for backend fetch keys, keeping lookup identity
 separate from the governed display-label contract.

@@ -7,6 +7,7 @@ import {
   buildRecoveryPath,
   buildInfrastructurePath,
   buildInfrastructureResourceHref,
+  buildStorageHrefForResource,
   buildStoragePath,
   buildWorkloadsPath,
   parseRecoveryLinkSearch,
@@ -215,6 +216,58 @@ describe('resource link routing contract', () => {
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
     expect(STORAGE_QUERY_PARAMS.order).toBe('order');
+  });
+
+  it('builds storage deep links for exact TrueNAS storage resources', () => {
+    const href = buildStorageHrefForResource({
+      id: 'storage-truenas-display',
+      type: 'storage',
+      name: 'tank',
+      displayName: 'tank',
+      platformId: 'truenas-1',
+      platformType: 'truenas',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: Date.now(),
+      storage: { platform: 'truenas', type: 'zfs-pool' },
+    } as any);
+
+    expect(href).toBe('/storage?source=truenas&resource=storage-truenas-display');
+  });
+
+  it('builds storage deep links for top-level TrueNAS systems', () => {
+    const href = buildStorageHrefForResource({
+      id: 'truenas-main',
+      type: 'truenas',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+      platformId: 'truenas-main',
+      platformType: 'truenas',
+      sourceType: 'hybrid',
+      status: 'online',
+      lastSeen: Date.now(),
+    } as any);
+
+    expect(href).toBe('/storage?source=truenas&node=truenas-main');
+  });
+
+  it('builds storage deep links for hybrid agent resources with merged truenas sources', () => {
+    const href = buildStorageHrefForResource({
+      id: 'truenas-main',
+      type: 'agent',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+      platformId: 'truenas-main',
+      platformType: 'agent',
+      sourceType: 'hybrid',
+      status: 'online',
+      lastSeen: Date.now(),
+      platformData: {
+        sources: ['agent', 'truenas'],
+      },
+    } as any);
+
+    expect(href).toBe('/storage?source=truenas&node=truenas-main');
   });
 
   it('canonicalizes legacy storage source aliases when parsing links', () => {

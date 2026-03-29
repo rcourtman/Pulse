@@ -343,6 +343,33 @@ describe('buildWorkloadsHref', () => {
         '/workloads?type=app-container&platform=truenas&agent=truenas-main',
       );
     });
+
+    it('routes hybrid agent resources with merged truenas sources to platform-scoped app workloads', () => {
+      const resource = makeResource({
+        type: 'agent',
+        platformType: 'agent',
+        name: 'truenas-main',
+        platformData: {
+          sources: ['agent', 'truenas'],
+        },
+      });
+
+      expect(buildWorkloadsHref(resource)).toBe(
+        '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+      );
+    });
+
+    it('routes top-level truenas resources to platform-scoped app workloads', () => {
+      const resource = makeResource({
+        type: 'truenas',
+        platformType: 'truenas',
+        name: 'truenas-main',
+      });
+
+      expect(buildWorkloadsHref(resource)).toBe(
+        '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+      );
+    });
   });
 
   // ── Unsupported types ───────────────────────────────────────────
@@ -369,7 +396,6 @@ describe('buildWorkloadsHref', () => {
       'dataset',
       'physical_disk',
       'ceph',
-      'truenas',
     ] as const)('returns null for %s', (type) => {
       const resource = makeResource({ type } as Partial<Resource>);
       expect(buildWorkloadsHref(resource)).toBeNull();

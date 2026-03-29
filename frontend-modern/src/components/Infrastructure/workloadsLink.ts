@@ -2,6 +2,7 @@ import type { Resource } from '@/types/resource';
 import { buildWorkloadsPath } from '@/routing/resourceLinks';
 import {
   getActionableDockerRuntimeIdFromResource,
+  getPlatformDataRecord,
   hasDockerWorkloadsScope,
 } from '@/utils/agentResources';
 import {
@@ -10,6 +11,7 @@ import {
   getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
+import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 
 const firstNonEmpty = (values: Array<string | undefined | null>): string | undefined => {
   for (const value of values) {
@@ -44,6 +46,12 @@ const resolveHostHint = (resource: Resource): string | undefined => {
 const resolveDockerWorkloadsHint = (resource: Resource): string | undefined =>
   getActionableDockerRuntimeIdFromResource(resource) || resolveHostHint(resource);
 
+const hasMergedSource = (resource: Resource, source: string): boolean => {
+  const platformData = getPlatformDataRecord(resource);
+  const mergedSources = Array.isArray(platformData?.sources) ? platformData.sources : [];
+  return mergedSources.some((value) => normalizeSourcePlatformKey(value) === source);
+};
+
 export const buildWorkloadsHref = (resource: Resource): string | null => {
   if (resource.type === 'k8s-cluster' || resource.type === 'k8s-node') {
     const context = resolveKubernetesContext(resource);
@@ -55,9 +63,14 @@ export const buildWorkloadsHref = (resource: Resource): string | null => {
     return buildWorkloadsPath({ type: 'app-container', platform: 'docker', agent });
   }
 
+  if (resource.type === 'truenas') {
+    const agent = resolveHostHint(resource);
+    return buildWorkloadsPath({ type: 'app-container', platform: 'truenas', agent });
+  }
+
   if (resource.type === 'agent') {
     const agent = resolveHostHint(resource);
-    if (resource.platformType === 'truenas') {
+    if (resource.platformType === 'truenas' || hasMergedSource(resource, 'truenas')) {
       return buildWorkloadsPath({ type: 'app-container', platform: 'truenas', agent });
     }
     if (hasDockerWorkloadsScope(resource)) {

@@ -134,10 +134,69 @@ describe('resourceDetailDrawerOperationalModel', () => {
       ),
     ).toEqual([
       {
-        href: '/workloads?type=app-container&agent=agent-1',
+        href: '/workloads?type=app-container&platform=docker&agent=agent-1',
         label: 'Open in Workloads',
         compactLabel: 'Workloads',
         ariaLabel: 'Open related workloads for Host 1',
+      },
+    ]);
+  });
+
+  it('builds canonical workloads and storage links for top-level truenas systems', () => {
+    expect(
+      buildRelatedLinks(
+        baseResource({
+          id: 'truenas-main',
+          type: 'truenas',
+          name: 'truenas-main',
+          platformId: 'truenas-main',
+          platformType: 'truenas',
+          platformData: { sources: ['truenas'] },
+        }),
+        'TrueNAS Main',
+      ),
+    ).toEqual([
+      {
+        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+        label: 'Open in Workloads',
+        compactLabel: 'Workloads',
+        ariaLabel: 'Open related workloads for TrueNAS Main',
+      },
+      {
+        href: '/storage?source=truenas&node=truenas-main',
+        label: 'Open in Storage',
+        compactLabel: 'Storage',
+        ariaLabel: 'Open related storage for TrueNAS Main',
+      },
+    ]);
+  });
+
+  it('builds canonical workloads and storage links for hybrid agent resources with merged truenas sources', () => {
+    expect(
+      buildRelatedLinks(
+        baseResource({
+          id: 'truenas-main',
+          type: 'agent',
+          name: 'truenas-main',
+          displayName: 'TrueNAS Main',
+          platformId: 'truenas-main',
+          platformType: 'agent',
+          platformData: { sources: ['agent', 'truenas'] },
+        }),
+        'TrueNAS Main',
+      ),
+    ).toEqual([
+      {
+        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+        label: 'Open in Workloads',
+        compactLabel: 'Workloads',
+        ariaLabel: 'Open related workloads for TrueNAS Main',
+      },
+      {
+        href: '/storage?source=truenas&node=truenas-main',
+        label: 'Open in Storage',
+        compactLabel: 'Storage',
+        ariaLabel: 'Open related storage for TrueNAS Main',
       },
     ]);
   });
@@ -162,7 +221,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
         hasWebInterface: true,
         links: [
           {
-            href: '/workloads?type=app-container&agent=agent-1',
+            href: '/workloads?type=app-container&platform=docker&agent=agent-1',
             label: 'Open in Workloads',
             compactLabel: 'Workloads',
             ariaLabel: 'Open related workloads for Host 1',

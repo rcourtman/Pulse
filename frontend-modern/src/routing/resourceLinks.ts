@@ -1,4 +1,7 @@
-import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
+import {
+  normalizeSourcePlatformQueryValue,
+  resolvePlatformTypeFromSources,
+} from '@/utils/sourcePlatforms';
 import { normalizeStorageSourceKey } from '@/utils/storageSources';
 import { normalizeRecoveryItemTypeQueryValue } from '@/utils/recoveryItemTypePresentation';
 import {
@@ -6,6 +9,7 @@ import {
   resolveWorkloadType,
 } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
+import type { Resource } from '@/types/resource';
 
 export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
@@ -219,6 +223,44 @@ export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string
   }
 
   return buildInfrastructurePath();
+};
+
+const resolveStorageRouteSource = (resource: Resource): string => {
+  const mergedPlatform = Array.isArray(resource.platformData?.sources)
+    ? resolvePlatformTypeFromSources(resource.platformData.sources)
+    : undefined;
+
+  return normalizeStorageSourceKey(
+    resource.storage?.platform || mergedPlatform || resource.platformType || resource.type,
+  );
+};
+
+export const buildStorageHrefForResource = (resource: Resource): string | null => {
+  const source = resolveStorageRouteSource(resource);
+  if (!source || source === 'all') return null;
+
+  if (resource.type === 'storage' || resource.type === 'datastore') {
+    return buildStoragePath({
+      source,
+      resource: resource.id,
+    });
+  }
+
+  if (resource.type === 'truenas' || resource.type === 'pbs') {
+    return buildStoragePath({
+      source,
+      node: resource.id,
+    });
+  }
+
+  if (resource.type === 'agent' && source === 'truenas') {
+    return buildStoragePath({
+      source,
+      node: resource.id,
+    });
+  }
+
+  return null;
 };
 
 export const parseStorageLinkSearch = (search: string) => {

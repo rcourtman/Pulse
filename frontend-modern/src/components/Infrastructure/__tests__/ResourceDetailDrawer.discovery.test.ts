@@ -248,7 +248,9 @@ describe('buildWorkloadsHref', () => {
       },
     };
 
-    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=cluster-a');
+    expect(buildWorkloadsHref(resource)).toBe(
+      '/workloads?type=pod&platform=kubernetes&context=cluster-a',
+    );
   });
 
   it('builds k8s workload route for node resources using cluster context', () => {
@@ -266,7 +268,9 @@ describe('buildWorkloadsHref', () => {
       },
     };
 
-    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=pod&context=cluster-a');
+    expect(buildWorkloadsHref(resource)).toBe(
+      '/workloads?type=pod&platform=kubernetes&context=cluster-a',
+    );
   });
 
   it('returns null for non-kubernetes infrastructure resources', () => {
@@ -305,7 +309,9 @@ describe('buildWorkloadsHref', () => {
         docker: { hostname: 'docker-host-1' },
       },
     };
-    expect(buildWorkloadsHref(resource)).toBe('/workloads?type=app-container&agent=docker-host-1');
+    expect(buildWorkloadsHref(resource)).toBe(
+      '/workloads?type=app-container&platform=docker&agent=docker-host-1',
+    );
   });
 
   it('reuses the shared preferred hostname fallback for docker and agent workloads links', () => {
@@ -324,7 +330,7 @@ describe('buildWorkloadsHref', () => {
     };
 
     expect(buildWorkloadsHref(dockerResource)).toBe(
-      '/workloads?type=app-container&agent=docker-agent-host.local',
+      '/workloads?type=app-container&platform=docker&agent=docker-agent-host.local',
     );
 
     const agentResource: Resource = {

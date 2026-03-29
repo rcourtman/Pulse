@@ -539,5 +539,19 @@ describe('resourceIdentity', () => {
         }),
       ),
     ).toBe('pve1');
+
+    expect(
+      getPreferredWorkloadsAgentHint(
+        makeResource({
+          type: 'truenas',
+          platformType: 'truenas',
+          id: 'truenas-id',
+          identity: { hostname: 'identity-host' },
+          platformData: {
+            truenas: { hostname: 'truenas-main' },
+          },
+        }),
+      ),
+    ).toBe('truenas-main');
   });
 });

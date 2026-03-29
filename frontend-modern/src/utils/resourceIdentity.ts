@@ -366,10 +366,17 @@ export const getPreferredWorkloadsAgentHint = (resource: Resource): string | und
   const platformData = getPlatformDataRecord(resource);
   const proxmox = platformData?.proxmox as Record<string, unknown> | undefined;
   const docker = platformData?.docker as Record<string, unknown> | undefined;
+  const truenas = platformData?.truenas as Record<string, unknown> | undefined;
 
   if (resource.type === 'docker-host') {
     return (
       asTrimmedString(docker?.hostname) || getPreferredResourceHostname(resource) || resource.id
+    );
+  }
+
+  if (resource.type === 'truenas') {
+    return (
+      asTrimmedString(truenas?.hostname) || getPreferredResourceHostname(resource) || resource.id
     );
   }
 

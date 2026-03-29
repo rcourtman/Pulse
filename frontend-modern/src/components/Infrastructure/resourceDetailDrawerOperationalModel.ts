@@ -2,6 +2,7 @@ import type { Resource } from '@/types/resource';
 import type { KubernetesMetricCapabilities, PlatformData } from './resourceDetailMappers';
 import { buildServiceDetailLinks, type ServiceDetailLink } from './serviceDetailLinks';
 import { buildWorkloadsHref } from './workloadsLink';
+import { buildStorageHrefForResource } from '@/routing/resourceLinks';
 
 export type ResourceDetailDrawerOperationalBadge = {
   label: string;
@@ -207,6 +208,15 @@ export const buildRelatedLinks = (
       label: 'Open in Workloads',
       compactLabel: 'Workloads',
       ariaLabel: `Open related workloads for ${displayName}`,
+    });
+  }
+  const storage = buildStorageHrefForResource(resource);
+  if (storage) {
+    links.push({
+      href: storage,
+      label: 'Open in Storage',
+      compactLabel: 'Storage',
+      ariaLabel: `Open related storage for ${displayName}`,
     });
   }
   links.push(...buildServiceDetailLinks(resource));
