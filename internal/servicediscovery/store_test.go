@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 type fakeCrypto struct{}
@@ -289,6 +290,31 @@ func TestStore_CryptoRoundTripAndPaths(t *testing.T) {
 	list, err := store.List()
 	if err != nil || len(list) != 1 {
 		t.Fatalf("List with decrypt error: %v len=%d", err, len(list))
+	}
+}
+
+func TestStoreDiscoveryPathForLeafRejectsTraversal(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	if _, err := store.discoveryPathForLeaf("../evil.enc"); err == nil {
+		t.Fatal("expected discoveryPathForLeaf to reject traversal leaf")
+	}
+	if _, err := store.readDiscoveryIDFromFile("../evil.enc"); err == nil {
+		t.Fatal("expected readDiscoveryIDFromFile to reject traversal filename")
+	}
+}
+
+func TestStoreFingerprintPathRejectsTraversal(t *testing.T) {
+	store, err := NewStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewStore error: %v", err)
+	}
+
+	if _, err := securityutil.JoinStorageLeaf(store.fingerprintDir, "../evil.json"); err == nil {
+		t.Fatal("expected fingerprint storage leaf join to reject traversal leaf")
 	}
 }
 

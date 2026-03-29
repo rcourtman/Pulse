@@ -206,9 +206,17 @@ func NewStore(dataDir string) (*Store, error) {
 	return store, nil
 }
 
+func (s *Store) discoveryPathForLeaf(leaf string) (string, error) {
+	return securityutil.JoinStorageLeaf(s.dataDir, leaf)
+}
+
 // getFilePath returns the file path for a resource ID.
 func (s *Store) getFilePath(id string) string {
-	return filepath.Join(s.dataDir, securityutil.HashedStorageName(id)+".enc")
+	path, err := s.discoveryPathForLeaf(securityutil.HashedStorageName(id) + ".enc")
+	if err != nil {
+		panic(fmt.Sprintf("invalid hashed discovery storage leaf for %q: %v", id, err))
+	}
+	return path
 }
 
 func (s *Store) findLegacyDiscoveryPath(id string) (string, error) {
@@ -228,7 +236,11 @@ func (s *Store) findLegacyDiscoveryPath(id string) (string, error) {
 		if entry.Name() == canonicalName {
 			continue
 		}
-		path := filepath.Join(s.dataDir, entry.Name())
+		path, err := s.discoveryPathForLeaf(entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("skipping invalid legacy discovery candidate")
+			continue
+		}
 		storedID, err := s.readDiscoveryIDFromPath(path)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to inspect legacy discovery candidate")
@@ -521,7 +533,11 @@ func (s *Store) List() ([]*ResourceDiscovery, error) {
 			continue
 		}
 
-		filePath := filepath.Join(s.dataDir, entry.Name())
+		filePath, err := s.discoveryPathForLeaf(entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("skipping invalid discovery file leaf")
+			continue
+		}
 		data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read discovery file")
@@ -685,7 +701,11 @@ func (s *Store) NeedsRefresh(id string, maxAge time.Duration) bool {
 
 // getFingerprintFilePath returns the file path for a fingerprint.
 func (s *Store) getFingerprintFilePath(resourceID string) string {
-	return filepath.Join(s.fingerprintDir, securityutil.HashedStorageName(resourceID)+".json")
+	path, err := securityutil.JoinStorageLeaf(s.fingerprintDir, securityutil.HashedStorageName(resourceID)+".json")
+	if err != nil {
+		panic(fmt.Sprintf("invalid hashed fingerprint storage leaf for %q: %v", resourceID, err))
+	}
+	return path
 }
 
 func (s *Store) findLegacyFingerprintPath(resourceID string) (string, error) {
@@ -706,7 +726,11 @@ func (s *Store) findLegacyFingerprintPath(resourceID string) (string, error) {
 			continue
 		}
 
-		path := filepath.Join(s.fingerprintDir, entry.Name())
+		path, err := securityutil.JoinStorageLeaf(s.fingerprintDir, entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("skipping invalid legacy fingerprint candidate")
+			continue
+		}
 		data, err := readRegularFileWithLimit(path, maxFingerprintFileReadBytes)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to inspect legacy fingerprint candidate")
@@ -745,7 +769,12 @@ func (s *Store) loadFingerprints() {
 			continue
 		}
 
-		data, err := readRegularFileWithLimit(filepath.Join(s.fingerprintDir, entry.Name()), maxFingerprintFileReadBytes)
+		filePath, err := securityutil.JoinStorageLeaf(s.fingerprintDir, entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("skipping invalid fingerprint file leaf")
+			continue
+		}
+		data, err := readRegularFileWithLimit(filePath, maxFingerprintFileReadBytes)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read fingerprint file")
 			continue
@@ -975,7 +1004,11 @@ func (s *Store) CleanupOrphanedDiscoveries(currentResourceIDs map[string]bool) i
 		}
 
 		if !currentResourceIDs[resourceID] {
-			filePath := filepath.Join(s.dataDir, entry.Name())
+			filePath, err := s.discoveryPathForLeaf(entry.Name())
+			if err != nil {
+				log.Warn().Err(err).Str("file", entry.Name()).Msg("skipping invalid orphaned discovery file leaf")
+				continue
+			}
 			if err := os.Remove(filePath); err != nil {
 				log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to remove orphaned discovery file")
 			} else {
@@ -1037,7 +1070,11 @@ func (s *Store) readDiscoveryIDFromPath(filePath string) (string, error) {
 }
 
 func (s *Store) readDiscoveryIDFromFile(filename string) (string, error) {
-	return s.readDiscoveryIDFromPath(filepath.Join(s.dataDir, filename))
+	filePath, err := s.discoveryPathForLeaf(filename)
+	if err != nil {
+		return "", err
+	}
+	return s.readDiscoveryIDFromPath(filePath)
 }
 
 // ListDiscoveryIDs returns all discovery IDs currently stored.
