@@ -62,14 +62,15 @@ describe('RecoverySummary', () => {
     expect(screen.getByText(/recovery points/i)).toBeInTheDocument();
     expect(screen.getByText(/item types/i)).toBeInTheDocument();
     expect(screen.getByText('2 platforms')).toBeInTheDocument();
-    expect(screen.getByText('1 healthy')).toBeInTheDocument();
+    expect(screen.getAllByText('1 healthy').length).toBeGreaterThan(1);
     expect(screen.getByText('1 attention')).toBeInTheDocument();
-    expect(screen.getByText('Failed 1')).toBeInTheDocument();
-    expect(screen.getByText('>7d 1 · Never Succeeded 1')).toBeInTheDocument();
+    expect(screen.getByText('1 stale')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
     expect(screen.getByText('Mar 9')).toBeInTheDocument();
     expect(screen.getByText('2 protected items')).toBeInTheDocument();
     expect(screen.getByText('need attention')).toBeInTheDocument();
+    expect(screen.queryByText('Failed 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('>7d 1 · Never Succeeded 1')).not.toBeInTheDocument();
     expect(screen.queryByText('Healthy 1 · Failed 1')).not.toBeInTheDocument();
     expect(screen.queryByText('Running')).not.toBeInTheDocument();
     expect(screen.queryByText('<7d')).not.toBeInTheDocument();

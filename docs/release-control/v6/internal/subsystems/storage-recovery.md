@@ -790,6 +790,10 @@ count through the shared card-header secondary label path instead of another
 body row, and `Activity` should route latest-activity context through that same
 secondary-label path instead of adding recovery-only support text under the
 metric.
+That same summary-header rule also applies to posture and freshness. Recovery
+should prefer shared card-header secondary labels such as healthy-count or
+stale-count context instead of stacking extra recovery-only support rows under
+those headline metrics.
 That same scan-first rule applies to the workspace strip. Recovery should not
 show tab labels and then repeat the same workspace count as standalone text in
 the same strip; the workspace tabs should carry their own counts, while the

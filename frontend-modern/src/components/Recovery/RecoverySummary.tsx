@@ -62,84 +62,36 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
   });
   const handleTimeRangeChange = (range: string) =>
     props.onTimeRangeChange?.(range as RecoverySummaryTimeRange);
-  const postureRows = createMemo(
-    () => {
-      const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
-      const failedCount = postureSummary().failed + postureSummary().neverSucceeded;
-      if (failedCount > 0) {
-        rows.push({
-          label: 'Failed',
-          value: failedCount,
-          valueClass: 'text-rose-600 dark:text-rose-400',
-        });
-      } else if (postureSummary().stale > 0) {
-        rows.push({
-          label: 'Stale',
-          value: postureSummary().stale,
-          valueClass: 'text-amber-600 dark:text-amber-400',
-        });
-      } else if (postureSummary().warning > 0) {
-        rows.push({
-          label: 'Warning',
-          value: postureSummary().warning,
-          valueClass: 'text-amber-600 dark:text-amber-400',
-        });
-      } else if (postureSummary().running > 0) {
-        rows.push({
-          label: 'Running',
-          value: postureSummary().running,
-          valueClass: 'text-blue-600 dark:text-blue-400',
-        });
-      } else if (healthyCount() > 0) {
-        rows.push({
-          label: 'Healthy',
-          value: healthyCount(),
-          valueClass: 'text-emerald-600 dark:text-emerald-400',
-        });
-      }
-      return rows.slice(0, 2);
-    },
-  );
-  const postureSupportLine = createMemo(() =>
-    postureRows()
-      .map((row) => `${row.label} ${row.value}`)
-      .join(' · '),
-  );
+  const postureSecondaryLabel = createMemo(() => {
+    if (healthyCount() <= 0) return undefined;
+    return (
+      <span class="ml-auto truncate text-xs text-emerald-600 dark:text-emerald-400">
+        {healthyCount()} healthy
+      </span>
+    );
+  });
   const freshWithin24hCount = createMemo(
     () =>
       (freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0) +
       (freshnessBuckets().find((bucket) => bucket.key === 'under24h')?.count ?? 0),
   );
-  const freshWithin1hCount = createMemo(
-    () => freshnessBuckets().find((bucket) => bucket.key === 'under1h')?.count ?? 0,
-  );
-  const freshnessRows = createMemo(
-    () => {
-      const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
-      const over7dCount = freshnessBuckets().find((bucket) => bucket.key === 'over7d')?.count ?? 0;
-      if (over7dCount > 0) {
-        rows.push({ label: '>7d', value: over7dCount });
-      }
-      if (summary().neverSucceeded > 0) {
-        rows.push({
-          label: 'Never Succeeded',
-          value: summary().neverSucceeded,
-        });
-      }
-      if (freshWithin1hCount() > 0) {
-        rows.push({
-          label: '<1h',
-          value: freshWithin1hCount(),
-        });
-      }
-      return rows.slice(0, 2);
-    },
-  );
-  const freshnessSupportLine = createMemo(() =>
-    freshnessRows()
-      .map((row) => `${row.label} ${row.value}`)
-      .join(' · '),
-  );
+  const freshnessSecondaryLabel = createMemo(() => {
+    if (summary().stale > 0) {
+      return (
+        <span class="ml-auto truncate text-xs text-amber-600 dark:text-amber-400">
+          {summary().stale} stale
+        </span>
+      );
+    }
+    if (summary().neverSucceeded > 0) {
+      return (
+        <span class="ml-auto truncate text-xs text-red-600 dark:text-red-400">
+          {summary().neverSucceeded} never succeeded
+        </span>
+      );
+    }
+    return undefined;
+  });
 
   const coverageSecondaryLabel = createMemo(() => {
     const platformCount = platformCoverage().platformCount;
@@ -182,7 +134,12 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         testId="recovery-summary"
         class="overflow-hidden"
       >
-        <SummaryMetricCard label="Posture" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard
+          label="Posture"
+          secondaryLabel={postureSecondaryLabel()}
+          loaded={true}
+          hasData={hasRollups()}
+        >
           <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class={`text-xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
@@ -190,13 +147,15 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">{primaryPostureMetric().label}</div>
             </div>
-            <Show when={postureSupportLine()}>
-              <div class="text-[11px] text-muted">{postureSupportLine()}</div>
-            </Show>
           </div>
         </SummaryMetricCard>
 
-        <SummaryMetricCard label="Freshness" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard
+          label="Freshness"
+          secondaryLabel={freshnessSecondaryLabel()}
+          loaded={true}
+          hasData={hasRollups()}
+        >
           <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class="text-xl font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
@@ -204,9 +163,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               </div>
               <div class="text-[11px] text-muted">fresh in 24h</div>
             </div>
-            <Show when={freshnessSupportLine()}>
-              <div class="text-[11px] text-muted">{freshnessSupportLine()}</div>
-            </Show>
           </div>
         </SummaryMetricCard>
 
