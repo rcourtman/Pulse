@@ -815,11 +815,10 @@ of those separators and local duplicate row or header borders that make the
 lines read heavier than other monitoring tables.
 That same workspace-shell rule should also avoid a dedicated recovery-only
 status strip above the control bar. Recovery should use the same handoff shape
-as storage: one canonical workspace card per active view, with the shared
-`Subtabs.tsx` row rendered at the top of that card before the workspace's
-controls and data, instead of splitting the same recovery workspace into
-stacked tabs, controls, and data cards or burying the switcher inside the
-filter row.
+as storage: a standalone shared `Subtabs.tsx` row, then any workspace-specific
+context like activity, then a shared controls card, then a data card. Recovery
+should not collapse controls and content back into one fused workspace slab or
+bury the switcher inside the filter row.
 That same strip should not repeat page-level counts or posture cues once the
 summary already owns those signals. The recovery workspace tabs should stay on
 plain canonical labels like `Protected items` and `Recovery events` rather than
@@ -832,10 +831,10 @@ shared `Subtabs.tsx` shell, list, and button class pattern already used by
 storage and other established Pulse tab surfaces instead of inventing a
 recovery-only variant or recovery-only class stack.
 That same workspace rule also means the protected-items versus recovery-events
-switcher should live at the top of the active workspace card, ahead of the
-embedded controls and table shell, so the page hands off from summary into one
-contained workspace the same way storage does rather than stepping through
-multiple recovery-only card layers.
+switcher should live in its own standalone row above the active workspace,
+ahead of activity, controls, and data, so the page hands off from summary into
+the active recovery surface the same way storage does rather than fusing the
+entire workspace into one recovery-only card.
 That same canonical-row rule also means the subtabs row should stand on its own
 full-width shell instead of sharing a flex line with recovery-only chips or
 adjacent badges that break the storage-style border and spacing treatment.
@@ -864,9 +863,9 @@ controls denser and wider than storage for the same amount of operator input.
 That same events-workspace rule should keep the activity strip as orientation
 for the event list rather than burying it at the bottom. The events workspace
 should move from the subtabs row to `RecoveryActivitySection.tsx`, then shared
-controls, then the recovery history table, all inside the same workspace card,
-so the timeline frames the event list without turning the page back into
-stacked primary tables.
+controls, then the recovery history table as sibling sections, so the timeline
+frames the event list without turning the page back into stacked primary
+tables or embedding the activity strip inside the history card.
 That same events-shell contract should avoid repeating page-state bookkeeping
 ahead of the history grid. Recovery events should keep the toolbar utility area
 focused on actual controls like advanced filters and column visibility instead

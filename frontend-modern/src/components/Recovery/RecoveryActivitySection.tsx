@@ -76,7 +76,6 @@ interface RecoveryActivitySectionProps {
   setChartRangeDays: (value: 7 | 30 | 90 | 365) => void;
   toggleSelectedDate: (key: string) => void;
   timeline: Accessor<TimelineModel>;
-  embedded?: boolean;
 }
 
 const rangeOptions: Array<7 | 30 | 90 | 365> = [7, 30, 90, 365];
@@ -413,13 +412,8 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
   );
 }
 
-export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = (props) =>
-  props.embedded ? (
-    <div class="px-4 py-3 sm:px-5">
-      <RecoveryActivitySectionContent {...props} />
-    </div>
-  ) : (
-    <Card padding="sm" class="h-full border-border-subtle bg-surface">
-      <RecoveryActivitySectionContent {...props} />
-    </Card>
-  );
+export const RecoveryActivitySection: Component<RecoveryActivitySectionProps> = (props) => (
+  <Card padding="sm" class="h-full border-border-subtle bg-surface">
+    <RecoveryActivitySectionContent {...props} />
+  </Card>
+);

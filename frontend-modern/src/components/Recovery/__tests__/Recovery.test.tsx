@@ -257,6 +257,9 @@ describe('Recovery', () => {
     expect(
       inventoryControls.compareDocumentPosition(inventoryTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
+    expect(inventoryControls.closest('.rounded-md')).not.toBeNull();
+    expect(inventoryTable.closest('.rounded-md')).not.toBeNull();
+    expect(inventoryControls.closest('.rounded-md')).not.toBe(inventoryTable.closest('.rounded-md'));
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
@@ -321,6 +324,11 @@ describe('Recovery', () => {
     expect(
       historyControls.compareDocumentPosition(historyTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
+    expect(activityHeading.closest('.rounded-md')).not.toBeNull();
+    expect(historyControls.closest('.rounded-md')).not.toBeNull();
+    expect(historyTable.closest('.rounded-md')).not.toBeNull();
+    expect(activityHeading.closest('.rounded-md')).not.toBe(historyControls.closest('.rounded-md'));
+    expect(historyControls.closest('.rounded-md')).not.toBe(historyTable.closest('.rounded-md'));
     const historySearch = within(historyControls).getByPlaceholderText('Search recovery history...');
     expect(historySearch).toBeInTheDocument();
     expect(historySearch.closest('div.relative')?.className).toContain('w-full');

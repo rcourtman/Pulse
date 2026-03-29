@@ -1,5 +1,5 @@
 import { For, Show } from 'solid-js';
-import type { Accessor, Component, JSX } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import {
@@ -99,8 +99,6 @@ interface RecoveryHistorySectionProps {
   tableMinWidth: Accessor<string>;
   totalPages: Accessor<number>;
   verificationFilter: Accessor<VerificationFilter>;
-  workspaceControls?: JSX.Element;
-  workspaceIntro?: JSX.Element;
 }
 
 export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (props) => {
@@ -130,80 +128,75 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
   });
 
   return (
-    <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
-      <Show when={props.workspaceControls}>{props.workspaceControls}</Show>
-
-      <Show when={props.workspaceIntro}>
-        <div class="border-b border-border-subtle">{props.workspaceIntro}</div>
-      </Show>
-
+    <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle px-4 py-3 sm:px-5">
-          <PageControls
-            role="group"
-            aria-label="Recovery events controls"
-            search={
-              <SearchInput
-                value={props.queryFilter}
-                onChange={(value) => {
-                  props.setQueryFilter(value);
-                  props.setCurrentPage(1);
-                }}
-                placeholder={getRecoveryHistorySearchPlaceholder()}
-                inputClass="py-2 text-sm"
-                clearOnEscape
-                history={{
-                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                  emptyMessage: getRecoverySearchHistoryEmptyMessage(),
-                }}
-              />
-            }
-            mobileFilters={{
-              enabled: props.isMobile,
-              onToggle: () => setHistoryFiltersOpen((open) => !open),
-              count: historyActiveFilterCount(),
-            }}
-            utilityActions={
-              <div class="ml-auto flex items-center gap-2">
-                <div class="relative">
-                  <FilterActionButton
-                    ref={advancedFiltersButtonRef}
-                    aria-label="Filter"
-                    aria-expanded={moreFiltersOpen()}
-                    aria-controls="recovery-filter-panel"
-                    aria-haspopup="dialog"
-                    onClick={() => setMoreFiltersOpen((open) => !open)}
-                    active={moreFiltersOpen() || props.activeAdvancedFilterCount() > 0}
-                  >
-                    <span>Filter</span>
-                    <Show when={props.activeAdvancedFilterCount() > 0}>
-                      <span class={filterUtilityBadgeClass}>
-                        {props.activeAdvancedFilterCount()}
-                      </span>
-                    </Show>
-                  </FilterActionButton>
+        <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+          <div class="px-4 py-3 sm:px-5">
+            <PageControls
+              role="group"
+              aria-label="Recovery events controls"
+              search={
+                <SearchInput
+                  value={props.queryFilter}
+                  onChange={(value) => {
+                    props.setQueryFilter(value);
+                    props.setCurrentPage(1);
+                  }}
+                  placeholder={getRecoveryHistorySearchPlaceholder()}
+                  inputClass="py-2 text-sm"
+                  clearOnEscape
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: getRecoverySearchHistoryEmptyMessage(),
+                  }}
+                />
+              }
+              mobileFilters={{
+                enabled: props.isMobile,
+                onToggle: () => setHistoryFiltersOpen((open) => !open),
+                count: historyActiveFilterCount(),
+              }}
+              utilityActions={
+                <div class="ml-auto flex items-center gap-2">
+                  <div class="relative">
+                    <FilterActionButton
+                      ref={advancedFiltersButtonRef}
+                      aria-label="Filter"
+                      aria-expanded={moreFiltersOpen()}
+                      aria-controls="recovery-filter-panel"
+                      aria-haspopup="dialog"
+                      onClick={() => setMoreFiltersOpen((open) => !open)}
+                      active={moreFiltersOpen() || props.activeAdvancedFilterCount() > 0}
+                    >
+                      <span>Filter</span>
+                      <Show when={props.activeAdvancedFilterCount() > 0}>
+                        <span class={filterUtilityBadgeClass}>
+                          {props.activeAdvancedFilterCount()}
+                        </span>
+                      </Show>
+                    </FilterActionButton>
 
-                  <Show when={moreFiltersOpen()}>
-                    <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
-                      <div class="mb-3 flex items-center justify-between gap-3">
-                        <div>
-                          <div class={filterPanelTitleClass}>Filter results</div>
-                          <div class={filterPanelDescriptionClass}>
-                            Narrow by scope, method, verification, or placement.
+                    <Show when={moreFiltersOpen()}>
+                      <FilterToolbarPanel ref={advancedFiltersPanelRef} id="recovery-filter-panel">
+                        <div class="mb-3 flex items-center justify-between gap-3">
+                          <div>
+                            <div class={filterPanelTitleClass}>Filter results</div>
+                            <div class={filterPanelDescriptionClass}>
+                              Narrow by scope, method, verification, or placement.
+                            </div>
                           </div>
+                          <Show when={props.activeAdvancedFilterCount() > 0}>
+                            <button
+                              type="button"
+                              onClick={props.resetAdvancedArtifactFilters}
+                              class={getRecoveryFilterPanelClearClass()}
+                            >
+                              Clear filters
+                            </button>
+                          </Show>
                         </div>
-                        <Show when={props.activeAdvancedFilterCount() > 0}>
-                          <button
-                            type="button"
-                            onClick={props.resetAdvancedArtifactFilters}
-                            class={getRecoveryFilterPanelClearClass()}
-                          >
-                            Clear filters
-                          </button>
-                        </Show>
-                      </div>
 
-                      <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <label class="flex min-w-0 flex-col gap-1">
                           <span class={RECOVERY_ADVANCED_FILTER_LABEL_CLASS}>Scope</span>
                           <select
@@ -338,105 +331,108 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
                             </select>
                           </label>
                         </Show>
-                      </div>
-                    </FilterToolbarPanel>
-                  </Show>
+                        </div>
+                      </FilterToolbarPanel>
+                    </Show>
+                  </div>
                 </div>
-              </div>
-            }
-            columnVisibility={props.artifactColumnVisibility}
-            resetAction={{
-              show: props.hasActiveArtifactFilters(),
-              onClick: props.resetAllArtifactFilters,
-              label: 'Reset all',
-            }}
-            showFilters={!props.isMobile || historyFiltersOpen()}
-            toolbarClass="lg:flex-nowrap"
-          >
-            <LabeledFilterSelect
-              id="recovery-item-type-filter-history"
-              label="Item type"
-              value={props.itemTypeFilter()}
-              onChange={(event) => {
-                props.setItemTypeFilter(
-                  normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
-                );
-                props.setCurrentPage(1);
+              }
+              columnVisibility={props.artifactColumnVisibility}
+              resetAction={{
+                show: props.hasActiveArtifactFilters(),
+                onClick: props.resetAllArtifactFilters,
+                label: 'Reset all',
               }}
-              selectClass="py-1 text-xs"
+              showFilters={!props.isMobile || historyFiltersOpen()}
+              toolbarClass="lg:flex-nowrap"
             >
-              <For each={props.itemTypeOptions()}>
-                {(itemType) => (
-                  <option value={itemType}>
-                    {itemType === 'all'
-                      ? 'All Item Types'
-                      : getRecoveryItemTypePresentation(itemType)?.label || itemType}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
+              <LabeledFilterSelect
+                id="recovery-item-type-filter-history"
+                label="Item type"
+                value={props.itemTypeFilter()}
+                onChange={(event) => {
+                  props.setItemTypeFilter(
+                    normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
+                  );
+                  props.setCurrentPage(1);
+                }}
+                selectClass="py-1 text-xs"
+              >
+                <For each={props.itemTypeOptions()}>
+                  {(itemType) => (
+                    <option value={itemType}>
+                      {itemType === 'all'
+                        ? 'All Item Types'
+                        : getRecoveryItemTypePresentation(itemType)?.label || itemType}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-            <LabeledFilterSelect
-              id="recovery-platform-filter-history"
-              label="Platform"
-              value={props.platformFilter()}
-              onChange={(event) => {
-                props.setPlatformFilter(
-                  normalizeSourcePlatformQueryValue(event.currentTarget.value),
-                );
-                props.setCurrentPage(1);
-              }}
-              selectClass="py-1 text-xs"
-            >
-              <For each={props.platformOptions()}>
-                {(platform) => (
-                  <option value={platform}>
-                    {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
+              <LabeledFilterSelect
+                id="recovery-platform-filter-history"
+                label="Platform"
+                value={props.platformFilter()}
+                onChange={(event) => {
+                  props.setPlatformFilter(
+                    normalizeSourcePlatformQueryValue(event.currentTarget.value),
+                  );
+                  props.setCurrentPage(1);
+                }}
+                selectClass="py-1 text-xs"
+              >
+                <For each={props.platformOptions()}>
+                  {(platform) => (
+                    <option value={platform}>
+                      {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-            <LabeledFilterSelect
-              id="recovery-status-filter"
-              label="Status"
-              value={props.historyOutcomeFilter()}
-              onChange={(event) => {
-                const value = event.currentTarget.value as 'all' | RecoveryOutcome;
-                props.setHistoryOutcomeFilter(value);
-                if (value !== 'all') props.setVerificationFilter('all');
-                props.setCurrentPage(1);
-              }}
-              selectClass="py-1 text-xs"
-            >
-              <For each={props.availableOutcomes}>
-                {(outcome) => (
-                  <option value={outcome}>
-                    {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
-          </PageControls>
-        </div>
+              <LabeledFilterSelect
+                id="recovery-status-filter"
+                label="Status"
+                value={props.historyOutcomeFilter()}
+                onChange={(event) => {
+                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
+                  props.setHistoryOutcomeFilter(value);
+                  if (value !== 'all') props.setVerificationFilter('all');
+                  props.setCurrentPage(1);
+                }}
+                selectClass="py-1 text-xs"
+              >
+                <For each={props.availableOutcomes}>
+                  {(outcome) => (
+                    <option value={outcome}>
+                      {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
+            </PageControls>
+          </div>
+        </Card>
       </Show>
 
-      <RecoveryHistoryTable
-        clearSelectedPoint={clearSelectedPoint}
-        currentPage={props.currentPage}
-        groupedByDay={props.groupedByDay}
-        hasActiveArtifactFilters={props.hasActiveArtifactFilters}
-        mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
-        recoveryPoints={props.recoveryPoints}
-        resetAllArtifactFilters={props.resetAllArtifactFilters}
-        resourcesById={props.resourcesById}
-        selectedPoint={selectedPoint}
-        setCurrentPage={props.setCurrentPage}
-        tableColumnCount={props.tableColumnCount}
-        tableMinWidth={props.tableMinWidth}
-        toggleSelectedPoint={toggleSelectedPoint}
-        totalPages={props.totalPages}
-      />
-    </Card>
+      <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+        <RecoveryHistoryTable
+          clearSelectedPoint={clearSelectedPoint}
+          currentPage={props.currentPage}
+          groupedByDay={props.groupedByDay}
+          hasActiveArtifactFilters={props.hasActiveArtifactFilters}
+          mobileVisibleArtifactColumns={props.mobileVisibleArtifactColumns}
+          recoveryPoints={props.recoveryPoints}
+          resetAllArtifactFilters={props.resetAllArtifactFilters}
+          resourcesById={props.resourcesById}
+          selectedPoint={selectedPoint}
+          setCurrentPage={props.setCurrentPage}
+          tableColumnCount={props.tableColumnCount}
+          tableMinWidth={props.tableMinWidth}
+          toggleSelectedPoint={toggleSelectedPoint}
+          totalPages={props.totalPages}
+        />
+      </Card>
+    </div>
   );
 };

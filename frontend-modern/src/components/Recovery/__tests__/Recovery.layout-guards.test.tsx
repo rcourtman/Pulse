@@ -27,12 +27,7 @@ vi.mock('@/hooks/useColumnVisibility', () => ({
 }));
 
 vi.mock('@/components/Recovery/RecoveryProtectedInventorySection', () => ({
-  RecoveryProtectedInventorySection: (props: { workspaceControls?: any }) => (
-    <div>
-      {props.workspaceControls}
-      <div data-testid="protected-inventory" />
-    </div>
-  ),
+  RecoveryProtectedInventorySection: () => <div data-testid="protected-inventory" />,
 }));
 
 vi.mock('@/components/Recovery/RecoveryActivitySection', () => ({
@@ -40,13 +35,7 @@ vi.mock('@/components/Recovery/RecoveryActivitySection', () => ({
 }));
 
 vi.mock('@/components/Recovery/RecoveryHistorySection', () => ({
-  RecoveryHistorySection: (props: { workspaceControls?: any; workspaceIntro?: any }) => (
-    <div>
-      {props.workspaceControls}
-      {props.workspaceIntro}
-      <div data-testid="history-section" />
-    </div>
-  ),
+  RecoveryHistorySection: () => <div data-testid="history-section" />,
 }));
 
 import Recovery from '@/components/Recovery/Recovery';

@@ -1,5 +1,5 @@
 import { For, Show, createEffect, createMemo, createSignal } from 'solid-js';
-import type { Accessor, Component, JSX } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -84,7 +84,6 @@ interface RecoveryProtectedInventorySectionProps {
   setVerificationFilter: (value: VerificationFilter) => void;
   loading: Accessor<boolean>;
   error: Accessor<unknown>;
-  workspaceControls?: JSX.Element;
 }
 
 const availableOutcomes = ['all', 'success', 'warning', 'failed', 'running'] as const;
@@ -210,147 +209,144 @@ export const RecoveryProtectedInventorySection: Component<
   };
 
   return (
-    <Card
-      padding="none"
-      tone="card"
-      class="overflow-hidden border-border-subtle bg-surface"
-    >
-      <Show when={props.workspaceControls}>{props.workspaceControls}</Show>
-
+    <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
-        <div class="border-b border-border-subtle px-4 py-3 sm:px-5">
-          <PageControls
-            role="group"
-            aria-label="Protected items controls"
-            search={
-              <SearchInput
-                value={props.queryFilter}
-                onChange={(value) => props.setQueryFilter(value)}
-                placeholder={getRecoveryProtectedSearchPlaceholder()}
-                inputClass="py-1.5 text-sm"
-                clearOnEscape
-                history={{
-                  storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
-                  emptyMessage: getRecoverySearchHistoryEmptyMessage(),
-                }}
-              />
-            }
-            mobileFilters={{
-              enabled: props.isMobile,
-              onToggle: () => setProtectedFiltersOpen((open) => !open),
-              count: protectedActiveFilterCount(),
-            }}
-            resetAction={{
-              show: protectedActiveFilterCount() > 0,
-              onClick: resetProtectedFilters,
-              label: 'Reset all',
-              title: 'Reset protected item filters',
-            }}
-            showFilters={!props.isMobile || protectedFiltersOpen()}
-            toolbarClass="gap-3 lg:flex-nowrap"
-          >
-            <LabeledFilterSelect
-              id="recovery-item-type-filter"
-              label="Item Type"
-              value={props.itemTypeFilter()}
-              onChange={(event) =>
-                props.setItemTypeFilter(
-                  normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
-                )
+        <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+          <div class="px-4 py-3 sm:px-5">
+            <PageControls
+              role="group"
+              aria-label="Protected items controls"
+              search={
+                <SearchInput
+                  value={props.queryFilter}
+                  onChange={(value) => props.setQueryFilter(value)}
+                  placeholder={getRecoveryProtectedSearchPlaceholder()}
+                  inputClass="py-1.5 text-sm"
+                  clearOnEscape
+                  history={{
+                    storageKey: STORAGE_KEYS.RECOVERY_SEARCH_HISTORY,
+                    emptyMessage: getRecoverySearchHistoryEmptyMessage(),
+                  }}
+                />
               }
-              groupClass="gap-1.5 px-1.5 py-0.5"
-              selectClass="py-1 text-xs"
-            >
-              <For each={props.itemTypeOptions()}>
-                {(itemType) => (
-                  <option value={itemType}>
-                    {itemType === 'all'
-                      ? 'All Item Types'
-                      : getRecoveryItemTypePresentation(itemType)?.label || itemType}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
-
-            <LabeledFilterSelect
-              id="recovery-platform-filter"
-              label="Platform"
-              value={props.platformFilter()}
-              onChange={(event) =>
-                props.setPlatformFilter(
-                  normalizeSourcePlatformQueryValue(event.currentTarget.value),
-                )
-              }
-              groupClass="gap-1.5 px-1.5 py-0.5"
-              selectClass="py-1 text-xs"
-            >
-              <For each={props.platformOptions()}>
-                {(platform) => (
-                  <option value={platform}>
-                    {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
-
-            <LabeledFilterSelect
-              id="recovery-protected-status-filter"
-              label="Latest status"
-              value={props.historyOutcomeFilter()}
-              onChange={(event) => {
-                const value = event.currentTarget.value as 'all' | RecoveryOutcome;
-                props.setHistoryOutcomeFilter(value);
-                if (value !== 'all') props.setVerificationFilter('all');
+              mobileFilters={{
+                enabled: props.isMobile,
+                onToggle: () => setProtectedFiltersOpen((open) => !open),
+                count: protectedActiveFilterCount(),
               }}
-              groupClass="gap-1.5 px-1.5 py-0.5"
-              selectClass="py-1 text-xs"
+              resetAction={{
+                show: protectedActiveFilterCount() > 0,
+                onClick: resetProtectedFilters,
+                label: 'Reset all',
+                title: 'Reset protected item filters',
+              }}
+              showFilters={!props.isMobile || protectedFiltersOpen()}
+              toolbarClass="gap-3 lg:flex-nowrap"
             >
-              <For each={availableOutcomes}>
-                {(outcome) => (
-                  <option value={outcome}>
-                    {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
-                  </option>
-                )}
-              </For>
-            </LabeledFilterSelect>
+              <LabeledFilterSelect
+                id="recovery-item-type-filter"
+                label="Item Type"
+                value={props.itemTypeFilter()}
+                onChange={(event) =>
+                  props.setItemTypeFilter(
+                    normalizeRecoveryItemTypeQueryValue(event.currentTarget.value) || 'all',
+                  )
+                }
+                groupClass="gap-1.5 px-1.5 py-0.5"
+                selectClass="py-1 text-xs"
+              >
+                <For each={props.itemTypeOptions()}>
+                  {(itemType) => (
+                    <option value={itemType}>
+                      {itemType === 'all'
+                        ? 'All Item Types'
+                        : getRecoveryItemTypePresentation(itemType)?.label || itemType}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
 
-            <button
-              type="button"
-              aria-pressed={props.protectedStaleOnly()}
-              onClick={() => props.setProtectedStaleOnly((value) => !value)}
-              class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(
-                props.protectedStaleOnly(),
-              )}`}
-            >
-              Stale only
-            </button>
-          </PageControls>
-        </div>
+              <LabeledFilterSelect
+                id="recovery-platform-filter"
+                label="Platform"
+                value={props.platformFilter()}
+                onChange={(event) =>
+                  props.setPlatformFilter(
+                    normalizeSourcePlatformQueryValue(event.currentTarget.value),
+                  )
+                }
+                groupClass="gap-1.5 px-1.5 py-0.5"
+                selectClass="py-1 text-xs"
+              >
+                <For each={props.platformOptions()}>
+                  {(platform) => (
+                    <option value={platform}>
+                      {platform === 'all' ? 'All Platforms' : getSourcePlatformLabel(platform)}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
+
+              <LabeledFilterSelect
+                id="recovery-protected-status-filter"
+                label="Latest status"
+                value={props.historyOutcomeFilter()}
+                onChange={(event) => {
+                  const value = event.currentTarget.value as 'all' | RecoveryOutcome;
+                  props.setHistoryOutcomeFilter(value);
+                  if (value !== 'all') props.setVerificationFilter('all');
+                }}
+                groupClass="gap-1.5 px-1.5 py-0.5"
+                selectClass="py-1 text-xs"
+              >
+                <For each={availableOutcomes}>
+                  {(outcome) => (
+                    <option value={outcome}>
+                      {outcome === 'all' ? 'Any status' : titleCaseDelimitedLabel(outcome)}
+                    </option>
+                  )}
+                </For>
+              </LabeledFilterSelect>
+
+              <button
+                type="button"
+                aria-pressed={props.protectedStaleOnly()}
+                onClick={() => props.setProtectedStaleOnly((value) => !value)}
+                class={`rounded-md border px-2.5 py-1 text-xs font-medium transition-colors ${getRecoveryProtectedToggleClass(
+                  props.protectedStaleOnly(),
+                )}`}
+              >
+                Stale only
+              </button>
+            </PageControls>
+          </div>
+        </Card>
       </Show>
 
-      <Show when={props.loading() && props.filteredRollups().length === 0}>
-        <div class="px-6 py-6 text-sm text-muted">
-          {getRecoveryProtectedItemsLoadingState().text}
-        </div>
-      </Show>
+      <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+        <Show when={props.loading() && props.filteredRollups().length === 0}>
+          <div class="px-6 py-6 text-sm text-muted">
+            {getRecoveryProtectedItemsLoadingState().text}
+          </div>
+        </Show>
 
-      <Show when={!props.loading() && props.error()}>
-        <div class="p-6">
-          <EmptyState
-            title={getRecoveryProtectedItemsFailureState().title}
-            description={String((props.error() as Error)?.message || props.error())}
-          />
-        </div>
-      </Show>
+        <Show when={!props.loading() && props.error()}>
+          <div class="p-6">
+            <EmptyState
+              title={getRecoveryProtectedItemsFailureState().title}
+              description={String((props.error() as Error)?.message || props.error())}
+            />
+          </div>
+        </Show>
 
-      <Show when={!props.loading() && !props.error() && props.filteredRollups().length === 0}>
-        <div class="p-6">
-          <EmptyState {...getRecoveryProtectedItemsEmptyState()} />
-        </div>
-      </Show>
+        <Show when={!props.loading() && !props.error() && props.filteredRollups().length === 0}>
+          <div class="p-6">
+            <EmptyState {...getRecoveryProtectedItemsEmptyState()} />
+          </div>
+        </Show>
 
-      <Show when={props.filteredRollups().length > 0}>
-        <div class="overflow-x-auto bg-surface">
+        <Show when={props.filteredRollups().length > 0}>
+          <div class="overflow-x-auto bg-surface">
           <Table
             class="w-full border-collapse whitespace-nowrap"
             style={{ 'table-layout': 'fixed', 'min-width': props.isMobile ? '100%' : '640px' }}
@@ -586,7 +582,8 @@ export const RecoveryProtectedInventorySection: Component<
             </button>
           </div>
         </div>
-      </Show>
-    </Card>
+        </Show>
+      </Card>
+    </div>
   );
 };

@@ -539,7 +539,6 @@ const Recovery: Component = () => {
         setSelectedDateKey((previous) => (previous === key ? null : key));
         setCurrentPage(1);
       }}
-      embedded
     />
   );
 
@@ -588,9 +587,10 @@ const Recovery: Component = () => {
               </Show>
 
               <Show when={workspaceView() === 'events'}>
+                {eventsActivity()}
+
                 <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
                   <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
-                    <div class="border-b border-border-subtle">{eventsActivity()}</div>
                     <div class="p-6">
                       <EmptyState
                         title={getRecoveryPointsFailureState().title}
@@ -650,7 +650,6 @@ const Recovery: Component = () => {
                     tableMinWidth={tableMinWidth}
                     totalPages={totalPages}
                     verificationFilter={verificationFilter}
-                    workspaceIntro={eventsActivity()}
                   />
                 </Show>
               </Show>
