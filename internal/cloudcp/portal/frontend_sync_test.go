@@ -32,8 +32,14 @@ func TestPulseAccountFrontendBundleStaysInSync(t *testing.T) {
 		t.Fatal("portal frontend manifest missing build_inputs")
 	}
 
+	requiredInputs := map[string]struct{}{
+		"build_config.mjs": {},
+		"src/styles.css":   {},
+	}
+
 	hash := sha256.New()
 	for _, relativePath := range manifest.BuildInputs {
+		delete(requiredInputs, relativePath)
 		hash.Write([]byte(relativePath))
 		hash.Write([]byte("\n"))
 		content, err := os.ReadFile(filepath.Join("frontend", relativePath))
@@ -52,4 +58,15 @@ func TestPulseAccountFrontendBundleStaysInSync(t *testing.T) {
 			actualHash,
 		)
 	}
+	if len(requiredInputs) > 0 {
+		t.Fatalf("portal frontend manifest missing canonical inputs: %v", mapsKeys(requiredInputs))
+	}
+}
+
+func mapsKeys(values map[string]struct{}) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	return keys
 }

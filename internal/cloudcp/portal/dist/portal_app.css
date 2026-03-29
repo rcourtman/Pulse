@@ -145,7 +145,7 @@ header .brand {
   gap: 10px;
   border: 1px solid var(--line);
   background: #fff;
-  border-radius: 999px;
+  border-radius: 4px;
   padding: 3px 6px 3px 10px;
 }
 .header-account-email {
@@ -255,7 +255,6 @@ header .logout-btn:hover,
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--ink-soft);
-  text-transform: uppercase;
 }
 .portal-shell-head-kicker,
 .account-panel-kicker,
@@ -288,7 +287,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .portal-shell-head-title {
   margin: 0;
@@ -304,20 +303,19 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 24px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 4px;
   background: #edf5f7;
   color: var(--accent-strong);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .portal-shell-head-summary {
   display: flex;
   align-items: center;
   gap: 8px;
   align-self: start;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .portal-shell-summary-pill {
   display: inline-flex;
@@ -325,9 +323,9 @@ header .logout-btn:hover,
   gap: 6px;
   min-height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   font-size: 12px;
   color: var(--ink-soft);
 }
@@ -336,7 +334,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .portal-command-strip,
 .intro-card,
@@ -374,7 +371,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .portal-shell-nav-title {
@@ -455,13 +451,12 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 20px;
   padding: 0 7px;
-  border-radius: 999px;
-  background: var(--panel);
-  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  border: none;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
   color: var(--ink-muted);
   white-space: nowrap;
 }
@@ -507,7 +502,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .portal-account-context-separator,
 .portal-account-context-access {
@@ -519,7 +514,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: baseline;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .portal-account-context-row h2 {
   margin: 0;
@@ -541,14 +536,14 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .portal-account-context-summary {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 0;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   padding: 4px;
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
@@ -573,7 +568,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .portal-account-context-stat strong {
@@ -642,7 +636,7 @@ header .logout-btn:hover,
   align-items: start;
   justify-content: space-between;
   gap: 12px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .account-surface {
   border: none;
@@ -663,7 +657,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .account-context-strip {
   justify-content: flex-end;
@@ -671,17 +665,21 @@ header .logout-btn:hover,
 .account-context-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
+  min-height: auto;
   padding: 0 8px;
-  border: 1px solid var(--line);
+  border: none;
   border-radius: var(--radius-sm);
-  background: var(--panel-muted);
+  background: transparent;
   color: var(--ink-soft);
   font-size: 12px;
   font-weight: 500;
 }
 .workspace-actions {
   justify-content: flex-end;
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;
 }
 .workspace-actions form {
   margin: 0;
@@ -876,7 +874,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .overview-task-actions,
 .billing-task-actions {
@@ -891,9 +889,9 @@ header .logout-btn:hover,
   gap: 8px;
   min-height: 34px;
   padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
+  border: none;
+  border-radius: 0;
+  background: transparent;
   font-size: 12px;
   color: var(--ink-soft);
 }
@@ -901,7 +899,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .account-overview-main-column,
@@ -1026,7 +1023,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .account-stat-value,
@@ -1160,7 +1156,7 @@ header .logout-btn:hover,
 .overview-next-actions {
   display: flex;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-top: 12px;
 }
 .overview-alert-list {
@@ -1243,7 +1239,6 @@ header .logout-btn:hover,
 .portal-support-brief-card strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent-strong);
 }
 .portal-support-brief-card span {
@@ -1320,7 +1315,6 @@ header .logout-btn:hover,
 .portal-support-runbook-brief-card strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent-strong);
 }
 .portal-support-runbook-brief-card span {
@@ -1342,7 +1336,6 @@ header .logout-btn:hover,
 .portal-support-runbook-section-title {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .portal-support-handoff-note {
@@ -1359,7 +1352,6 @@ header .logout-btn:hover,
 .portal-support-handoff-note strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .portal-support-handoff-note span {
@@ -1403,7 +1395,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 10px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-top: auto;
 }
 .account-stage-header {
@@ -1421,7 +1413,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-top: 8px;
 }
 .section-context-chip {
@@ -1429,20 +1421,19 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 24px;
   padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fff;
+  border: none;
+  border-radius: 0;
+  background: transparent;
   color: var(--ink-muted);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .account-stage-header-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
   flex: 0 0 auto;
   padding-top: 0;
@@ -1496,7 +1487,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .workspace-list {
@@ -1559,7 +1549,7 @@ header .logout-btn:hover,
 .workspace-meta {
   display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   min-width: 0;
 }
 .workspace-row-heading .workspace-meta:empty {
@@ -1721,7 +1711,6 @@ header .logout-btn:hover,
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .workspace-management-facts {
@@ -1742,7 +1731,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .workspace-management-fact strong {
@@ -1790,7 +1778,6 @@ header .logout-btn:hover,
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .add-workspace-form input,
@@ -1839,7 +1826,7 @@ header .logout-btn:hover,
 }
 .access-task-strip {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
   margin-top: 12px;
 }
@@ -1850,13 +1837,12 @@ header .logout-btn:hover,
   min-height: 32px;
   padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 4px;
   background: #fff;
   color: var(--ink-muted);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .access-task-button.is-active {
   border-color: rgba(15, 109, 115, 0.22);
@@ -2001,7 +1987,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .access-member-row {
@@ -2070,7 +2055,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .access-inline-role-badge {
   display: inline-flex;
@@ -2084,7 +2068,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 .access-role-select {
@@ -2113,7 +2096,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .access-list-message {
   display: flex;
@@ -2159,7 +2141,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   cursor: pointer;
 }
 .btn-remove:hover {
@@ -2192,7 +2173,6 @@ header .logout-btn:hover,
 .access-policy-row strong {
   font-size: 12px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .access-policy-row span {
@@ -2297,7 +2277,6 @@ header .logout-btn:hover,
 .billing-inline-support-point strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .billing-inline-support-point span {
@@ -2309,7 +2288,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-top: 10px;
 }
 .billing-detail-shell {
@@ -2392,7 +2371,6 @@ header .logout-btn:hover,
 .billing-empty-intro-item strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent-strong);
 }
 .billing-empty-intro-item span {
@@ -2423,7 +2401,6 @@ header .logout-btn:hover,
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .billing-action-row {
@@ -2462,14 +2439,14 @@ header .logout-btn:hover,
   gap: 6px;
 }
 .billing-action-tags-tight {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .billing-action-meta-chip {
   display: inline-flex;
   align-items: center;
   min-height: 20px;
   padding: 0 8px;
-  border-radius: 999px;
+  border-radius: 4px;
   background: #eef4f8;
   color: var(--ink-muted);
   font-size: 10px;
@@ -2505,7 +2482,6 @@ header .logout-btn:hover,
   border-radius: 8px;
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .billing-panel {
   padding: 16px;
@@ -2533,7 +2509,7 @@ header .logout-btn:hover,
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   margin-top: 10px;
 }
 .billing-empty-point {
@@ -2552,7 +2528,6 @@ header .logout-btn:hover,
 .billing-empty-point strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .billing-empty-point span {
@@ -2608,7 +2583,6 @@ header .logout-btn:hover,
 .billing-empty-flow strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 .billing-empty-flow span {
@@ -2693,11 +2667,10 @@ header .logout-btn:hover,
   align-items: center;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: 4px;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .badge-role,
 .badge-read_only,
@@ -2850,7 +2823,7 @@ header .logout-btn:hover,
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-@media (max-width: 720px) {
+@media (max-width: 1024px) {
   header {
     padding: 14px 16px;
     align-items: flex-start;
@@ -2864,6 +2837,12 @@ header .logout-btn:hover,
   .portal-support-runbook-brief,
   .portal-support-route-grid {
     grid-template-columns: 1fr;
+  }
+  .portal-shell-layout {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: 100vh;
   }
   .portal-support-layout,
   .portal-support-runbook-grid {
@@ -2954,7 +2933,7 @@ header .logout-btn:hover,
     gap: 6px;
   }
   .account-context-chip {
-    min-height: 20px;
+    min-height: auto;
     padding: 0 7px;
     font-size: 10px;
   }
@@ -3045,4 +3024,49 @@ header .logout-btn:hover,
     width: 100%;
     justify-content: start;
   }
+}
+.account-context-chip + .account-context-chip::before {
+  content: "\2022";
+  margin-right: 8px;
+  color: var(--line-strong);
+}
+.portal-shell-summary-pill + .portal-shell-summary-pill::before {
+  content: "\b7";
+  margin-right: 12px;
+  font-size: 16px;
+  color: var(--line-strong);
+}
+.portal-shell-summary-pill {
+  padding: 0;
+  min-height: auto;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.overview-task-summary-pill + .overview-task-summary-pill::before {
+  content: "\2022";
+  margin-right: 12px;
+  color: var(--line-strong);
+}
+.section-context-chip + .section-context-chip::before {
+  content: "\2022";
+  margin-right: 8px;
+  color: var(--line-strong);
+}
+.workspace-actions {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  gap: 12px !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+}
+.workspace-actions form {
+  margin: 0 !important;
+  display: flex !important;
+}
+.workspace-actions .btn-primary,
+.workspace-actions .btn-secondary {
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  width: auto !important;
 }

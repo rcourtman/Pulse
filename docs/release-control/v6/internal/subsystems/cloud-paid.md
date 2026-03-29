@@ -268,6 +268,14 @@ for every iteration. Final verification still belongs on a real control-plane
 instance, but local portal design work must not depend on redeploying
 `cloud.pulserelay.pro` just to see each frontend change.
 That same frontend delivery boundary must keep the account portal visual language sharp and high-density, avoiding gradients, heavy shadows, and decorative SaaS styling in favor of a clean, restrained, Cloudflare/GCP-grade baseline with flat inline workspace action rows and text-driven unboxed metadata instead of pills and absolutely inline row actions.
+That same portal delivery boundary also owns the checked-in embedded bundle in
+`internal/cloudcp/portal/dist/`. Visual or interaction changes are not
+complete when they exist only in the local preview runtime or in hand-edited
+generated output. The canonical edit path remains the frontend source under
+`internal/cloudcp/portal/frontend/`, and any ship-ready portal styling change
+must regenerate the embedded bundle plus the source-hash manifest so the live
+control-plane, embedded Go template, and local preview all run the same
+frontend revision.
 That same shell framing also owns user-facing prerelease labeling for
 rc-channel builds. `frontend-modern/src/AppLayout.tsx` may still key off the
 canonical `rc` channel metadata internally, but the visible badge must frame
