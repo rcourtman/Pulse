@@ -269,6 +269,9 @@ Core rules:
     the exact state or action (for example `Manage access`, `Hosted billing
     attached`, `Email support`, or `Failed to load roster`) instead of
     shorthand such as `Manage`, `Hosted`, `Email`, or generic alert labels.
+    Support copy follows the same rule: escalation surfaces must name the
+    exact task path, account/email, and failed step in short literal wording,
+    not long procedural prose.
 
 ## Screen Model
 

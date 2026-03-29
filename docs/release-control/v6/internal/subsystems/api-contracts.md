@@ -378,7 +378,9 @@ rendered. The same typed contract applies to shell badges, section labels,
 context chips, route labels, and error headings: they must render the exact
 action or state (`Manage access`, `Hosted billing attached`, `Email support`,
 `Failed to load roster`) instead of shorthand such as `Manage`, `Hosted`, or
-generic alert labels.
+generic alert labels. Support copy is part of the same typed contract:
+escalation surfaces must render short literal path/account/action wording
+instead of longer procedural prose.
 That same typed overview contract must also preserve a sharp, high-density enterprise visual aesthetic (e.g. Cloudflare/GCP density standards) across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, rigorous visual language with standard 256px sidebars, Inter-grade typography, clean text-transform rules, and cleanly unboxed typography without excessive pills or stacked metrics.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
