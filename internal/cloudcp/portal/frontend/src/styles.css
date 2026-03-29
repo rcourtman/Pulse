@@ -18,17 +18,17 @@
 
 :root {
   color-scheme: light;
-  --font-ui: "Roboto", "Segoe UI Variable Text", "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --font-display: "Roboto", "Segoe UI Variable Display", "Segoe UI Variable Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --bg: #f8f9fa;
+  --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --bg: #f4f4f5;
   --panel: #ffffff;
   --panel-strong: #f7fafc;
   --panel-muted: #eff4f8;
-  --ink: #0f172a;
-  --ink-soft: #475569;
-  --ink-muted: #64748b;
-  --line: #d9e2ec;
-  --line-strong: #c1cdda;
+  --ink: #18181b;
+  --ink-soft: #52525b;
+  --ink-muted: #71717a;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
   --accent: #0f766e;
   --accent-strong: #115e59;
   --accent-soft: #ccfbf1;
@@ -38,7 +38,7 @@
   --danger-soft: #fee2e2;
   --success: #166534;
   --success-soft: #dcfce7;
-  --nav-bg: #f8f9fa;
+  --nav-bg: #ffffff;
   --nav-line: #e2e8f0;
   --nav-copy: #64748b;
   --nav-ink: #0f172a;
@@ -47,8 +47,8 @@
   --shadow-lg: none;
   --shadow-hover: none;
   --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 }
 
 * { box-sizing: border-box; }
@@ -121,23 +121,32 @@ header .logout-btn,
   border: 1px solid var(--line-strong);
   background: #fff;
   color: var(--ink);
-  border-radius: 8px;
-  padding: 8px 12px;
+  border-radius: var(--radius-md);
+  padding: 6px 16px;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 header .logout-btn:hover,
 .btn-secondary:hover,
 .link-button:hover {
   border-color: var(--line-strong);
-  background: #ffffff;
+  background: #f4f4f5;
   box-shadow: none;
 }
 
 .btn-primary {
-  border-radius: 8px;
-  padding: 10px 15px;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--accent);
   color: #fff;
   font-weight: 600;
@@ -152,8 +161,12 @@ header .logout-btn:hover,
 }
 
 .btn-danger {
-  border-radius: 8px;
-  padding: 10px 15px;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background: var(--danger-soft);
   color: var(--danger);
   font-weight: 600;
@@ -167,8 +180,9 @@ header .logout-btn:hover,
 }
 
 .btn-compact {
-  padding: 9px 14px;
+  padding: 6px 12px;
   font-size: 13px;
+  border-radius: var(--radius-sm);
 }
 
 .main {
@@ -193,9 +207,10 @@ header .logout-btn:hover,
 .account-panel-kicker,
 .billing-card-kicker,
 .account-eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
   text-transform: uppercase;
 }
 
@@ -305,27 +320,18 @@ header .logout-btn:hover,
 
 .portal-shell-layout {
   display: grid;
-  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-columns: 256px minmax(0, 1fr);
   gap: 0;
   align-items: start;
-  border: 1px solid var(--line);
-  border-radius: 18px;
-  background: #ffffff;
-  box-shadow: none;
-border-radius: 0;
-border: none;
-  overflow: hidden;
+  background: var(--bg);
+  min-height: calc(100vh - 57px);
 }
 
 .portal-shell-nav {
   position: static;
-  min-height: 100%;
-  border: none;
-  border-right: 1px solid var(--nav-line);
-  border-radius: 0;
-  background: var(--nav-bg);
-  box-shadow: none;
-  overflow: hidden;
+  height: 100%;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
 }
 
 .portal-shell-nav-header {
@@ -338,19 +344,18 @@ border: none;
 
 .portal-shell-nav-eyebrow {
   font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: #78b6c0;
+  color: var(--ink-muted);
 }
 
 .portal-shell-nav-title {
-  font-family: var(--font-display);
-  font-size: 18px;
-  line-height: 1.02;
-  letter-spacing: -0.028em;
-  font-weight: 720;
-  color: var(--nav-ink);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .portal-shell-nav-support {
@@ -372,13 +377,13 @@ border: none;
   flex-direction: column;
   gap: 4px;
   width: 100%;
-  padding: 12px 12px 11px;
+  padding: 8px 12px;
   border: 1px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: transparent;
   text-align: left;
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+  transition: background 140ms ease, color 140ms ease;
 }
 
 .portal-shell-nav-link + .portal-shell-nav-link {
@@ -387,15 +392,12 @@ border: none;
 
 .portal-shell-nav-link:hover {
   background: var(--panel-muted);
-  border-color: var(--line);
-  transform: none;
+  border-color: transparent;
 }
 
 .portal-shell-nav-link.active {
   background: var(--panel-muted);
-  border-color: var(--line);
-  box-shadow: none;
-  transform: translateX(2px);
+  border-color: transparent;
 }
 
 .portal-shell-nav-row {
@@ -416,22 +418,20 @@ border: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 18px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  color: #8fb8bf;
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: 0.12em;
+  min-width: 20px;
+  height: 20px;
+  border-radius: var(--radius-md);
+  background: var(--panel-strong);
+  color: var(--ink-muted);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .portal-shell-nav-label {
   display: block;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--nav-ink);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
 }
 
 .portal-shell-nav-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; }
@@ -601,20 +601,19 @@ border: none;
 .portal-top-section-header h2,
 .billing-header h2 {
   margin: 4px 0 0;
-  font-family: var(--font-display);
-  font-size: clamp(1.34rem, 1.7vw, 1.72rem);
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  font-weight: 720;
+  font-family: var(--font-ui);
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 600;
 }
 
 .portal-top-section-header p,
 .billing-note {
   margin: 6px 0 0;
-  font-size: 12px;
-  line-height: 1.42;
+  font-size: 14px;
+  line-height: 1.5;
   color: var(--ink-soft);
-  max-width: 520px;
+  max-width: 600px;
 }
 
 .billing-header {
@@ -656,16 +655,14 @@ border: none;
 .account-context-chip {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid var(--line);
-  border-radius: 999px;
-  background: #fbfcfd;
+  border-radius: var(--radius-sm);
+  background: var(--panel-muted);
   color: var(--ink-soft);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .workspace-actions {
@@ -746,11 +743,10 @@ border: none;
 .billing-panel h3,
 .billing-panel .subsection h4 {
   margin: 8px 0 0;
-  font-family: var(--font-display);
-  font-size: 18px;
-  line-height: 1.08;
-  letter-spacing: -0.022em;
-  font-weight: 710;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink);
 }
 
 .account-overview-card p,
