@@ -76,11 +76,12 @@ describe('shell view', function() {
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 
-    expect(html).toContain('Account triage');
+    expect(html).toContain('Account state');
     expect(html).toContain('No hosted account');
+    expect(html).toContain('0 hosted workspaces');
     expect(html).toContain('Billing available');
-    expect(html).toContain('Nothing urgent');
-    expect(html).toContain('Billing tools are ready');
+    expect(html).toContain('0 hosted workspaces need review');
+    expect(html).toContain('Billing is available');
     expect(html).toContain('Open billing');
   });
 
@@ -138,8 +139,8 @@ describe('shell view', function() {
     expect(html).toContain('What needs attention, what is ready, and the next obvious action.');
     expect(html).toContain('1 account');
     expect(html).toContain('3 workspaces');
-    expect(html).toContain('1 ready');
-    expect(html).toContain('2 attention');
+    expect(html).toContain('1 ready workspace');
+    expect(html).toContain('2 workspaces to review');
     expect(html).toContain('Manage');
     expect(html).toContain('id="billing-section"');
     expect(html).toContain('portal-account-context');
@@ -154,18 +155,18 @@ describe('shell view', function() {
     expect(html).toContain('Create workspace');
     expect(html).not.toContain('Manage billing');
     expect(html).not.toContain('Manage team');
-    expect(html).toContain('Account triage');
-    expect(html).toContain('Only three questions matter here.');
+    expect(html).toContain('Account state');
+    expect(html).toContain('Current hosted workspace state, readiness, and next action.');
     expect(html).toContain('section-context-strip');
     expect(html).toContain('Needs attention');
     expect(html).toContain('Ready');
     expect(html).toContain('Next action');
-    expect(html).toContain('Review these first');
-    expect(html).toContain('Open and work');
+    expect(html).toContain('2 workspaces need review');
+    expect(html).toContain('1 workspace is ready to use');
     expect(html).toContain('Review workspaces');
     expect(html).toContain('Review access');
     expect(html).toContain('account-stage-header-actions');
-    expect(html).toContain('No suspended');
+    expect(html).toContain('0 suspended workspaces');
     expect(html).toContain('Alpha Workspace');
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
@@ -174,8 +175,8 @@ describe('shell view', function() {
     expect(html).toContain('Needs attention</span>');
     expect(html).toContain('Checking</span>');
     expect(html).toContain('Ready to use');
-    expect(html).toContain('This workspace needs attention before it is trustworthy.');
-    expect(html).toContain('This workspace is still waiting on a completed health check.');
+    expect(html).toContain('This workspace is in a failed state.');
+    expect(html).toContain('Latest health check is still pending.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
     expect(html).toContain('Open workspace');
     expect(html).toContain('data-action="select-workspace"');
@@ -387,8 +388,8 @@ describe('shell view', function() {
     expect(html).toContain('Hosted account where you can open workspaces and review who already has access. An owner or admin handles access changes and billing.');
     expect(html).toContain('View only');
     expect(html).toContain('Owner/admin required');
-    expect(html).toContain('Hosted billing stays separate');
-    expect(html).toContain('Hosted billing stays in Billing, and an owner or admin must open it.');
+    expect(html).toContain('0 workspaces need review');
+    expect(html).toContain('1 workspace is ready to use');
     expect(html).toContain('Review access');
     expect(html).toContain('Owner or admin required');
     expect(html).toContain('Review who already has access to this hosted account. An owner or admin must make changes.');
@@ -506,9 +507,9 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Nothing is ready yet');
+    expect(html).toContain('0 workspaces are ready to use');
     expect(html).toContain('An owner or admin still needs to create the first hosted workspace before routine work can start.');
-    expect(html).not.toContain('Use Workspaces to review current state before you start routine work.');
+    expect(html).not.toContain('Open Workspaces for the current workspace state before routine use.');
   });
 
   it('keeps ready state honest for managed hosted accounts with no workspace yet', function() {
@@ -532,9 +533,9 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Nothing is ready yet');
+    expect(html).toContain('0 workspaces are ready to use');
     expect(html).toContain('The first hosted workspace still needs to be created before routine work can start.');
-    expect(html).not.toContain('Use Workspaces to review current state before you start routine work.');
+    expect(html).not.toContain('Open Workspaces for the current workspace state before routine use.');
   });
 
   it('keeps next action on review surfaces for suspended hosted view-only accounts', function() {
@@ -602,8 +603,8 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('No active workspace is ready for routine use right now.');
-    expect(html).toContain('1 suspended workspace stays out of the way until you deliberately resume it.');
+    expect(html).toContain('0 workspaces are ready to use');
+    expect(html).toContain('1 workspace is suspended and excluded from routine use until you resume it.');
     expect(html).not.toContain('Active workspaces look clear for routine use.');
   });
 
@@ -619,14 +620,15 @@ describe('shell view', function() {
     expect(html).toContain('Pulse Account');
     expect(html).toContain('Account tasks');
     expect(html).toContain('Self-hosted');
-    expect(html).toContain('Account triage');
+    expect(html).toContain('Account state');
     expect(html).toMatch(/Workspaces[\s\S]*Unavailable on this account\. Hosted workspaces are not attached here\./);
     expect(html).toContain('Unavailable on this account. Hosted workspaces are not attached here.');
     expect(html).toMatch(/Access[\s\S]*Unavailable on this account\. Hosted roster and role controls live only on hosted workspace accounts\./);
     expect(html).toContain('Unavailable on this account. Hosted roster and role controls live only on hosted workspace accounts.');
     expect(html).toMatch(/Support[\s\S]*Escalation only after the billing path is exhausted\./);
     expect(html).toContain('No hosted account');
-    expect(html).toContain('Billing tools are ready');
+    expect(html).toContain('0 hosted workspaces need review');
+    expect(html).toContain('Billing is available');
     expect(html).toContain('There is nothing to open or manage here yet.');
     expect(html).toContain('There are no hosted roles or invites to manage for this account right now.');
     expect(html).toContain('Use this billing surface only for self-hosted subscriptions, licenses, refunds, and privacy requests.');
@@ -709,10 +711,11 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Suspended until you resume it');
-    expect(html).toContain('Nothing urgent');
-    expect(html).toContain('No workspace is ready yet');
+    expect(html).toContain('0 workspaces need review');
+    expect(html).toContain('0 workspaces are ready to use');
+    expect(html).toContain('Every hosted workspace is suspended right now.');
     expect(html).toContain('Create the next workspace');
-    expect(html).toContain('Suspended stays parked');
+    expect(html).toContain('1 workspace is suspended and excluded from routine use until you resume it.');
   });
 
   it('preserves the high-density grid, standard sidebar hooks, and strictly horizontal, pill-free action constraints in the rendered shell', function() {

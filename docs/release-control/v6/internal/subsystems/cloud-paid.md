@@ -934,6 +934,10 @@ is ready yet until the first hosted workspace exists.
 That same owned `Overview` surface must also keep `Needs attention` honest
 when only suspended workspaces remain: a suspended-only account may not imply
 that active work is ready simply because hosted workspace history exists.
+That same owned `Overview` surface must also stay fact-first: it may not
+invent urgency or health verdicts such as `Nothing urgent` or `Healthy now`,
+and must instead report concrete counts, explicit workspace state, and the
+next action directly from runtime-backed account truth.
 That same canonical shell/runtime boundary now also owns the bootstrap truth
 for when self-hosted commercial history is relevant. Hosted-only accounts must
 not render self-hosted license, refund, privacy, or support-escalation copy

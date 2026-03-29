@@ -366,6 +366,10 @@ ready until the first hosted workspace exists.
 That same typed overview contract must also keep `Needs attention` honest when
 only suspended workspaces remain: hosted workspace history alone may not make
 the shell imply that active work is ready.
+That same typed overview contract must also stay fact-first: overview copy may
+not synthesize urgency or health verdicts such as `Nothing urgent` or
+`Healthy now`, and must instead render concrete counts, explicit workspace
+state, and next-action routing from the owned runtime payload.
 That same typed overview contract must also preserve a sharp, high-density enterprise visual aesthetic (e.g. Cloudflare/GCP density standards) across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, rigorous visual language with standard 256px sidebars, Inter-grade typography, clean text-transform rules, and cleanly unboxed typography without excessive pills or stacked metrics.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime

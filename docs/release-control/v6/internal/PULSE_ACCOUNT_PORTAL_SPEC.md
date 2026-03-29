@@ -1,6 +1,6 @@
 # Pulse Account Portal Spec
 
-Last updated: 2026-03-28
+Last updated: 2026-03-29
 Status: ACTIVE
 
 ## Purpose
@@ -257,6 +257,10 @@ Core rules:
     workspaces remain. The shell may not imply active work is ready merely
     because a suspended workspace exists; suspended-only states must say that
     no active workspace is ready for routine use right now.
+39. `Overview` must stay fact-first. It may not synthesize urgency or health
+    verdicts such as `Nothing urgent` or `Healthy now`; it must report
+    concrete counts, explicit workspace state, and the next action directly
+    from the owned runtime truth.
 
 ## Screen Model
 

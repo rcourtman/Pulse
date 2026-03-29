@@ -69,6 +69,26 @@ function workspaceCountLabel(count: number): string {
   return count === 1 ? '1 workspace' : String(count) + ' workspaces';
 }
 
+function reviewWorkspaceHeadline(count: number): string {
+  return count === 1 ? '1 workspace needs review' : String(count) + ' workspaces need review';
+}
+
+function readyWorkspaceHeadline(count: number): string {
+  return count === 1 ? '1 workspace is ready to use' : String(count) + ' workspaces are ready to use';
+}
+
+function reviewWorkspaceChipLabel(count: number): string {
+  return count === 1 ? '1 workspace to review' : String(count) + ' workspaces to review';
+}
+
+function readyWorkspaceChipLabel(count: number): string {
+  return count === 1 ? '1 ready workspace' : String(count) + ' ready workspaces';
+}
+
+function suspendedWorkspaceChipLabel(count: number): string {
+  return count === 1 ? '1 suspended workspace' : String(count) + ' suspended workspaces';
+}
+
 function hasHostedAccounts(accounts: PortalAccountSummary[]): boolean {
   return accounts.length > 0;
 }
@@ -188,11 +208,11 @@ function renderSectionContextChips(chips: string[]): string {
 function workspaceStatusCopy(workspace: PortalWorkspaceSummary): string {
   var status = workspaceHealthState(workspace);
   var state = String(workspace.state || '');
-  if (state === 'suspended') return 'This workspace is suspended and will stay closed until you resume it.';
-  if (state === 'failed') return 'This workspace needs attention before it is trustworthy.';
-  if (status === 'healthy') return 'Live updates and health checks are currently good.';
-  if (status === 'unhealthy') return 'This workspace needs attention before it is trustworthy.';
-  return 'This workspace is still waiting on a completed health check.';
+  if (state === 'suspended') return 'This workspace is suspended.';
+  if (state === 'failed') return 'This workspace is in a failed state.';
+  if (status === 'healthy') return 'Latest health check is healthy.';
+  if (status === 'unhealthy') return 'Latest health check is unhealthy.';
+  return 'Latest health check is still pending.';
 }
 
 function workspaceRowNote(workspace: PortalWorkspaceSummary): string {
@@ -629,26 +649,29 @@ function renderOverviewAttentionCard(
   var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
     return entry.workspace;
   }), 'suspended');
-  var billingSeparation = overviewBillingSeparationCopy(accounts, showSelfHostedCommercial);
   if (!attention.length) {
     return (
       '<article class="overview-task-card">' +
         '<div class="account-panel-kicker">Needs attention</div>' +
-        '<h4>Nothing urgent</h4>' +
+        '<h4>' + escapeHTML(accounts.length > 0 ? reviewWorkspaceHeadline(0) : '0 hosted workspaces need review') + '</h4>' +
         '<p>' + escapeHTML(entries.length > 0
-          ? 'No active workspace is currently asking for review.'
-          : 'No hosted workspace is currently asking for review.'
+          ? 'No active workspace is failed or waiting on a completed health check.'
+          : accounts.length > 0
+            ? 'No hosted workspace is attached to this account yet.'
+            : 'No hosted account is attached to this sign-in.'
         ) + '</p>' +
         '<div class="overview-task-list">' +
-          '<div class="overview-task-item"><strong>Healthy now</strong><span>' + escapeHTML(ready.length > 0
-            ? 'Active workspaces look clear for routine use.'
-            : entries.length > 0
-              ? 'No active workspace is ready for routine use right now.'
-            : 'There is no hosted workspace waiting for review yet.'
+          '<div class="overview-task-item"><strong>Ready</strong><span>' + escapeHTML(entries.length > 0
+            ? readyWorkspaceHeadline(ready.length)
+            : accounts.length > 0
+              ? readyWorkspaceHeadline(0)
+              : '0 hosted workspaces are ready to use'
           ) + '</span></div>' +
-          '<div class="overview-task-item"><strong>' + escapeHTML(suspendedCount > 0 ? 'Suspended stays parked' : billingSeparation.title) + '</strong><span>' + escapeHTML(suspendedCount > 0
-            ? String(suspendedCount) + ' suspended workspace' + (suspendedCount === 1 ? ' stays' : 's stay') + ' out of the way until you deliberately resume it.'
-            : billingSeparation.copy
+          '<div class="overview-task-item"><strong>Suspended</strong><span>' + escapeHTML(suspendedCount > 0
+            ? suspendedCount === 1
+              ? '1 workspace is suspended and excluded from routine use until you resume it.'
+              : String(suspendedCount) + ' workspaces are suspended and excluded from routine use until you resume them.'
+            : '0 suspended workspaces.'
           ) + '</span></div>' +
         '</div>' +
       '</article>'
@@ -658,8 +681,8 @@ function renderOverviewAttentionCard(
   return (
     '<article class="overview-task-card overview-task-card-attention">' +
       '<div class="account-panel-kicker">Needs attention</div>' +
-      '<h4>Review these first</h4>' +
-      '<p>These workspaces still need a human check before you treat the account as settled.</p>' +
+      '<h4>' + escapeHTML(reviewWorkspaceHeadline(attention.length)) + '</h4>' +
+      '<p>Each listed workspace is failed or still waiting on a completed health check.</p>' +
       '<div class="overview-task-list">' +
         attention.slice(0, 3).map(function(entry) {
           return (
@@ -685,20 +708,23 @@ function renderOverviewReadyCard(
   var canManageHosted = accounts.some(function(account) {
     return account.can_manage;
   });
+  var suspendedCount = countWorkspacesByState(entries.map(function(entry) {
+    return entry.workspace;
+  }), 'suspended');
   if (!ready.length) {
     return (
       '<article class="overview-task-card">' +
         '<div class="account-panel-kicker">Ready</div>' +
         '<h4>' + escapeHTML(!accounts.length
-          ? 'Billing tools are ready'
-          : totalWorkspaces > 0
-            ? 'No workspace is ready yet'
-            : 'Nothing is ready yet'
+          ? 'Billing is available'
+          : readyWorkspaceHeadline(0)
         ) + '</h4>' +
         '<p>' + escapeHTML(!accounts.length
           ? 'Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.'
           : totalWorkspaces > 0
-            ? 'Use Workspaces to review current state before you start routine work.'
+            ? suspendedCount === totalWorkspaces
+              ? 'Every hosted workspace is suspended right now.'
+              : 'Open Workspaces for the current workspace state before routine use.'
             : canManageHosted
               ? 'The first hosted workspace still needs to be created before routine work can start.'
               : 'An owner or admin still needs to create the first hosted workspace before routine work can start.'
@@ -710,8 +736,8 @@ function renderOverviewReadyCard(
   return (
     '<article class="overview-task-card">' +
       '<div class="account-panel-kicker">Ready</div>' +
-      '<h4>Open and work</h4>' +
-      '<p>These workspaces are active and healthy right now.</p>' +
+      '<h4>' + escapeHTML(readyWorkspaceHeadline(ready.length)) + '</h4>' +
+      '<p>Each listed workspace is active and passed its latest health check.</p>' +
       '<div class="overview-task-list">' +
         ready.slice(0, 3).map(function(entry) {
           return (
@@ -840,19 +866,19 @@ function renderShellOverviewSection(context: ShellViewContext): string {
     ? [
       accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts',
       workspaceCountLabel(totalCount),
-      String(readyCount) + ' ready',
-      attentionCount > 0 ? String(attentionCount) + ' attention' : 'Nothing urgent',
-      suspendedCount > 0 ? String(suspendedCount) + ' suspended' : 'No suspended',
+      readyWorkspaceChipLabel(readyCount),
+      reviewWorkspaceChipLabel(attentionCount),
+      suspendedWorkspaceChipLabel(suspendedCount),
     ]
-    : ['No hosted account', 'Billing available', 'Support only on escalation'];
+    : ['No hosted account', '0 hosted workspaces', 'Billing available', 'Support only on escalation'];
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
       '<div class="account-stage-header account-stage-header-overview overview-stage-header">' +
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
-          '<h3>Account triage</h3>' +
-          '<p>Only three questions matter here.</p>' +
+          '<h3>Account state</h3>' +
+          '<p>Current hosted workspace state, readiness, and next action.</p>' +
           renderSectionContextChips(chips) +
         '</div>' +
       '</div>' +
