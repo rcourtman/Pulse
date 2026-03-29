@@ -2185,7 +2185,12 @@ func (n *NotificationManager) executeWebhookRequest(webhook WebhookConfig, paylo
 		method = "POST"
 	}
 
-	req, err := http.NewRequest(method, normalizeWebhookRequestURL(webhook), bytes.NewBuffer(payload))
+	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(normalizeWebhookRequestURL(webhook))
+	if err != nil {
+		return nil, fmt.Errorf("failed to normalize webhook request URL: %w", err)
+	}
+
+	req, err := securityutil.NewValidatedRequestWithContext(context.Background(), method, targetURL, bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create webhook request: %w", err)
 	}
@@ -2607,6 +2612,9 @@ func (n *NotificationManager) ValidateWebhookURL(webhookURL string) error {
 	u, err := url.Parse(webhookURL)
 	if err != nil {
 		return fmt.Errorf("invalid URL format: %w", err)
+	}
+	if u.User != nil {
+		return fmt.Errorf("webhook URL userinfo is not allowed")
 	}
 
 	// Must be HTTP or HTTPS

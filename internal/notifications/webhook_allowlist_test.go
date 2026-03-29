@@ -332,6 +332,18 @@ func TestValidateWebhookURL_InvalidScheme(t *testing.T) {
 	}
 }
 
+func TestValidateWebhookURL_RejectsUserinfo(t *testing.T) {
+	nm := NewNotificationManager("")
+
+	err := nm.ValidateWebhookURL("http://user:pass@127.0.0.1/webhook")
+	if err == nil {
+		t.Fatal("expected error for URL userinfo")
+	}
+	if !strings.Contains(err.Error(), "userinfo") {
+		t.Fatalf("expected userinfo error, got %v", err)
+	}
+}
+
 func TestValidateWebhookURL_MissingHostname(t *testing.T) {
 	nm := NewNotificationManager("")
 

@@ -105,6 +105,10 @@ Enhanced webhook test/live delivery must follow that same ownership model:
 into the canonical webhook render and transport path instead of maintaining a
 parallel URL-rendering, enrichment, Telegram URL sanitization, or single-send
 HTTP stack.
+That same transport boundary also owns webhook request normalization. Rendered
+webhook URLs must reject userinfo during validation, and request construction
+must route through a validated absolute URL object instead of reparsing raw URL
+strings at send time.
 That same ownership includes webhook retry classification. The canonical
 retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides

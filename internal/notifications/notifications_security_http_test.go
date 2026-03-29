@@ -68,6 +68,46 @@ func TestSendAppriseViaHTTPRejectsUserinfoServerURL(t *testing.T) {
 	}
 }
 
+func TestSendTestWebhookRejectsUserinfoURLBeforeOutboundDelivery(t *testing.T) {
+	nm := NewNotificationManager("https://pulse.local")
+	defer nm.Stop()
+
+	called := make(chan struct{}, 1)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case called <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("allowlist: %v", err)
+	}
+
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	serverURL.User = url.UserPassword("user", "pass")
+
+	err = nm.SendTestWebhook(WebhookConfig{
+		Name:    "Userinfo Webhook",
+		URL:     serverURL.String(),
+		Enabled: true,
+	})
+	if err == nil || !strings.Contains(err.Error(), "userinfo") {
+		t.Fatalf("expected userinfo validation error, got %v", err)
+	}
+
+	select {
+	case <-called:
+		t.Fatal("expected userinfo-bearing webhook URL to be rejected before outbound delivery")
+	default:
+	}
+}
+
 func TestSendAppriseViaHTTPBlocksRedirectToLinkLocal(t *testing.T) {
 	nm := NewNotificationManager("")
 	defer nm.Stop()
