@@ -89,6 +89,29 @@ type App struct {
 	Volumes               []AppVolume
 	Images                []string
 	Networks              []AppNetwork
+	Stats                 *AppStats
+}
+
+// AppStats contains live API-backed workload telemetry for one TrueNAS app.
+type AppStats struct {
+	CPUPercent      float64
+	MemoryBytes     int64
+	NetInRate       float64
+	NetOutRate      float64
+	BlockReadBytes  int64
+	BlockWriteBytes int64
+	DiskReadRate    float64
+	DiskWriteRate   float64
+	IntervalSeconds int
+	CollectedAt     time.Time
+	Interfaces      []AppInterfaceStats
+}
+
+// AppInterfaceStats stores per-interface throughput from TrueNAS app.stats.
+type AppInterfaceStats struct {
+	Name      string
+	RxBytesPS float64
+	TxBytesPS float64
 }
 
 // AppPort describes an app-level published port mapping.

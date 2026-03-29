@@ -148,6 +148,26 @@ func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
 	}
 }
 
+func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"m.syncUnifiedAppContainerMetrics(store)",
+		`if target == nil || target.ResourceType != "app-container" || strings.TrimSpace(target.ResourceID) == "" {`,
+		`metricKey := fmt.Sprintf("docker:%s", targetID)`,
+		`m.metricsStore.Write("dockerContainer", targetID, "cpu", value, now)`,
+		`m.metricsStore.Write("dockerContainer", targetID, "diskwrite", metric.Value, now)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	data, err := os.ReadFile("monitor_agents.go")
 	if err != nil {

@@ -231,3 +231,11 @@ That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `disk.temperatures` from the TrueNAS API and project those readings into the
 canonical physical-disk model and risk path instead of leaving temperature
 telemetry agent-only or adding a TrueNAS-local presentation shim.
+That same monitoring boundary now also owns modern TrueNAS app workload
+telemetry. `internal/truenas/client.go`, `internal/truenas/provider.go`, and
+`internal/monitoring/monitor.go` must ingest `app.stats` through the official
+`/api/current` JSON-RPC websocket transport, project those readings onto the
+canonical `app-container` metrics contract, and sync them into the existing
+guest metrics-history/store path. Pulse must not add a TrueNAS-only charts
+path or treat API-backed app workloads as second-class compared with native
+Docker reports.

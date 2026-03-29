@@ -132,6 +132,7 @@ func (p *Provider) Refresh(ctx context.Context) error {
 	}
 
 	p.mu.Lock()
+	enrichAppStatsFromPreviousSnapshot(snapshot, p.lastSnapshot)
 	p.lastSnapshot = copyFixtureSnapshot(snapshot)
 	p.mu.Unlock()
 	return nil
@@ -302,6 +303,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	}
 
 	for _, app := range snapshot.Apps {
+		metrics := metricsFromTrueNASApp(app)
 		dockerMeta := &unifiedresources.DockerData{
 			ContainerID:    appCanonicalID(app),
 			Hostname:       strings.TrimSpace(snapshot.System.Hostname),
@@ -315,6 +317,12 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			Labels: map[string]string{
 				"truenas.app_id": strings.TrimSpace(app.ID),
 			},
+		}
+		if app.Stats != nil {
+			dockerMeta.NetInRate = app.Stats.NetInRate
+			dockerMeta.NetOutRate = app.Stats.NetOutRate
+			dockerMeta.DiskReadRate = app.Stats.DiskReadRate
+			dockerMeta.DiskWriteRate = app.Stats.DiskWriteRate
 		}
 		if strings.TrimSpace(app.Version) != "" {
 			dockerMeta.Labels["truenas.version"] = strings.TrimSpace(app.Version)
@@ -336,6 +344,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Status:     statusFromApp(app),
 				LastSeen:   collectedAt,
 				UpdatedAt:  collectedAt,
+				Metrics:    metrics,
 				Docker:     dockerMeta,
 				Tags:       appTags(app),
 			},
@@ -383,6 +392,99 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	}
 
 	return records
+}
+
+func metricsFromTrueNASApp(app App) *unifiedresources.ResourceMetrics {
+	if app.Stats == nil {
+		return nil
+	}
+
+	stats := app.Stats
+	metrics := &unifiedresources.ResourceMetrics{
+		CPU: &unifiedresources.MetricValue{
+			Value:   stats.CPUPercent,
+			Percent: stats.CPUPercent,
+			Unit:    "percent",
+			Source:  unifiedresources.SourceTrueNAS,
+		},
+		NetIn: &unifiedresources.MetricValue{
+			Value:  stats.NetInRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		},
+		NetOut: &unifiedresources.MetricValue{
+			Value:  stats.NetOutRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		},
+		DiskRead: &unifiedresources.MetricValue{
+			Value:  stats.DiskReadRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		},
+		DiskWrite: &unifiedresources.MetricValue{
+			Value:  stats.DiskWriteRate,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceTrueNAS,
+		},
+	}
+
+	memoryUsed := stats.MemoryBytes
+	metrics.Memory = &unifiedresources.MetricValue{
+		Used:   &memoryUsed,
+		Unit:   "bytes",
+		Source: unifiedresources.SourceTrueNAS,
+	}
+	return metrics
+}
+
+func enrichAppStatsFromPreviousSnapshot(current *FixtureSnapshot, previous *FixtureSnapshot) {
+	if current == nil || previous == nil || len(current.Apps) == 0 || len(previous.Apps) == 0 {
+		return
+	}
+
+	previousByApp := make(map[string]*AppStats, len(previous.Apps))
+	for i := range previous.Apps {
+		if previous.Apps[i].Stats == nil {
+			continue
+		}
+		key := normalizeAppStatsKey(previous.Apps[i].ID)
+		if key == "" {
+			key = normalizeAppStatsKey(previous.Apps[i].Name)
+		}
+		if key == "" {
+			continue
+		}
+		previousByApp[key] = previous.Apps[i].Stats
+	}
+
+	for i := range current.Apps {
+		stats := current.Apps[i].Stats
+		if stats == nil {
+			continue
+		}
+		key := normalizeAppStatsKey(current.Apps[i].ID)
+		if key == "" {
+			key = normalizeAppStatsKey(current.Apps[i].Name)
+		}
+		if key == "" {
+			continue
+		}
+		previousStats, ok := previousByApp[key]
+		if !ok || previousStats == nil {
+			continue
+		}
+		deltaSeconds := stats.CollectedAt.Sub(previousStats.CollectedAt).Seconds()
+		if deltaSeconds <= 0 {
+			continue
+		}
+		if stats.BlockReadBytes >= previousStats.BlockReadBytes {
+			stats.DiskReadRate = float64(stats.BlockReadBytes-previousStats.BlockReadBytes) / deltaSeconds
+		}
+		if stats.BlockWriteBytes >= previousStats.BlockWriteBytes {
+			stats.DiskWriteRate = float64(stats.BlockWriteBytes-previousStats.BlockWriteBytes) / deltaSeconds
+		}
+	}
 }
 
 func buildIncidentAssignments(snapshot *FixtureSnapshot) ([]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident, map[string][]unifiedresources.ResourceIncident) {
@@ -880,6 +982,11 @@ func cloneApps(apps []App) []App {
 		out[i].Volumes = append([]AppVolume(nil), apps[i].Volumes...)
 		out[i].Images = append([]string(nil), apps[i].Images...)
 		out[i].Networks = cloneAppNetworks(apps[i].Networks)
+		if apps[i].Stats != nil {
+			stats := *apps[i].Stats
+			stats.Interfaces = append([]AppInterfaceStats(nil), apps[i].Stats.Interfaces...)
+			out[i].Stats = &stats
+		}
 	}
 	return out
 }

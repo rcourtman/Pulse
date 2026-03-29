@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 type apiResponse struct {
@@ -215,6 +218,62 @@ func TestFetchSnapshot(t *testing.T) {
 	}
 	if snapshot.Apps[0].ID != "nextcloud" || snapshot.Apps[0].ContainerCount != 2 {
 		t.Fatalf("unexpected snapshot apps: %+v", snapshot.Apps)
+	}
+}
+
+func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		subscribeReq := readRPCRequest(t, conn)
+		if subscribeReq.Method != "core.subscribe" {
+			t.Fatalf("expected core.subscribe, got %q", subscribeReq.Method)
+		}
+		writeRPCResult(t, conn, subscribeReq.ID, "sub-1")
+		writeRPCNotification(t, conn, "collection_update", map[string]any{
+			"collection": "app.stats:{\"interval\":2}",
+			"fields": []map[string]any{
+				{
+					"app_name":  "nextcloud",
+					"cpu_usage": 17,
+					"memory":    268435456,
+					"networks": []map[string]any{
+						{"interface_name": "eth0", "rx_bytes": 2048, "tx_bytes": 1024},
+						{"interface_name": "eth1", "rx_bytes": 512, "tx_bytes": 256},
+					},
+					"blkio": map[string]any{
+						"read":  4096,
+						"write": 2048,
+					},
+				},
+			},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	apps, err := client.GetApps(context.Background())
+	if err != nil {
+		t.Fatalf("GetApps() error = %v", err)
+	}
+	if len(apps) != 1 || apps[0].Stats == nil {
+		t.Fatalf("expected one app with stats, got %+v", apps)
+	}
+	if apps[0].Stats.CPUPercent != 17 || apps[0].Stats.MemoryBytes != 268435456 {
+		t.Fatalf("unexpected app stats core fields: %+v", apps[0].Stats)
+	}
+	if apps[0].Stats.NetInRate != 2560 || apps[0].Stats.NetOutRate != 1280 {
+		t.Fatalf("unexpected aggregated app network rates: %+v", apps[0].Stats)
+	}
+	if apps[0].Stats.BlockReadBytes != 4096 || apps[0].Stats.BlockWriteBytes != 2048 {
+		t.Fatalf("unexpected app blkio stats: %+v", apps[0].Stats)
+	}
+	if len(apps[0].Stats.Interfaces) != 2 {
+		t.Fatalf("expected two interface stats, got %+v", apps[0].Stats.Interfaces)
 	}
 }
 
@@ -493,6 +552,88 @@ func newMockServer(t *testing.T, responses map[string]apiResponse, assertRequest
 		writer.WriteHeader(status)
 		_, _ = writer.Write([]byte(response.body))
 	}))
+}
+
+func newMockServerWithRPC(t *testing.T, responses map[string]apiResponse, assertRequest func(*testing.T, *http.Request), handleRPC func(*testing.T, *websocket.Conn)) *httptest.Server {
+	t.Helper()
+
+	upgrader := websocket.Upgrader{}
+	return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == "/api/current" && websocket.IsWebSocketUpgrade(request) {
+			conn, err := upgrader.Upgrade(writer, request, nil)
+			if err != nil {
+				t.Fatalf("upgrade websocket: %v", err)
+			}
+			defer func() { _ = conn.Close() }()
+			handleRPC(t, conn)
+			return
+		}
+
+		if assertRequest != nil {
+			assertRequest(t, request)
+		}
+
+		response, ok := responses[request.URL.Path]
+		if !ok {
+			http.NotFound(writer, request)
+			return
+		}
+
+		status := response.status
+		if status == 0 {
+			status = http.StatusOK
+		}
+		contentType := response.contentType
+		if contentType == "" {
+			contentType = "application/json"
+		}
+
+		writer.Header().Set("Content-Type", contentType)
+		writer.WriteHeader(status)
+		_, _ = writer.Write([]byte(response.body))
+	}))
+}
+
+func readRPCRequest(t *testing.T, conn *websocket.Conn) trueNASRPCRequest {
+	t.Helper()
+
+	var request trueNASRPCRequest
+	if err := conn.ReadJSON(&request); err != nil {
+		t.Fatalf("ReadJSON() rpc request error = %v", err)
+	}
+	return request
+}
+
+func writeRPCResult(t *testing.T, conn *websocket.Conn, id int64, result any) {
+	t.Helper()
+
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("Marshal() rpc result error = %v", err)
+	}
+	if err := conn.WriteJSON(trueNASRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result:  raw,
+	}); err != nil {
+		t.Fatalf("WriteJSON() rpc result error = %v", err)
+	}
+}
+
+func writeRPCNotification(t *testing.T, conn *websocket.Conn, method string, params any) {
+	t.Helper()
+
+	raw, err := json.Marshal(params)
+	if err != nil {
+		t.Fatalf("Marshal() rpc notification params error = %v", err)
+	}
+	if err := conn.WriteJSON(trueNASRPCResponse{
+		JSONRPC: "2.0",
+		Method:  method,
+		Params:  raw,
+	}); err != nil {
+		t.Fatalf("WriteJSON() rpc notification error = %v", err)
+	}
 }
 
 func mustClientForServer(t *testing.T, serverURL string, config ClientConfig) *Client {

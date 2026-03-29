@@ -168,9 +168,10 @@ TrueNAS-managed applications now follow the same canonical workload rule. One
 TrueNAS app instance from `app.query` must project as one canonical
 `app-container` resource under `SourceTrueNAS`, reusing the shared workload and
 Docker payload contracts instead of inventing a `truenas-app` resource type or
-lane-local workload UI. Until Pulse ingests a real TrueNAS app stats/history
-path, those resources must keep metrics-history targets unset rather than
-pretending Docker memory-store history exists for them.
+lane-local workload UI. API-backed `app.stats` telemetry must now project onto
+that same canonical `app-container` contract as live metrics and metrics
+targets, using the shared `docker:<id>` in-memory key and `dockerContainer`
+history store path instead of adding a TrueNAS-local workload history lane.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

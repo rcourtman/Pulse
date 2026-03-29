@@ -41,6 +41,11 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		if st, ok := bySource[SourceDocker]; ok {
 			return &MetricsTarget{ResourceType: "app-container", ResourceID: st.SourceID}
 		}
+		if st, ok := bySource[SourceTrueNAS]; ok {
+			if resourceID := canonicalAppContainerMetricID(st.SourceID); resourceID != "" {
+				return &MetricsTarget{ResourceType: "app-container", ResourceID: resourceID}
+			}
+		}
 	case ResourceTypeStorage, ResourceTypeCeph:
 		if st, ok := bySource[SourceProxmox]; ok {
 			return &MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
@@ -97,4 +102,10 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 	}
 
 	return nil
+}
+
+func canonicalAppContainerMetricID(sourceID string) string {
+	trimmed := strings.TrimSpace(sourceID)
+	trimmed = strings.TrimPrefix(trimmed, "app:")
+	return strings.TrimSpace(trimmed)
 }

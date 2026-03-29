@@ -132,6 +132,16 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	if app.Status != unifiedresources.StatusOnline {
 		t.Fatalf("expected Nextcloud status online, got %q", app.Status)
 	}
+	if app.Metrics == nil || app.Metrics.CPU == nil || app.Metrics.CPU.Percent != 18 {
+		t.Fatalf("expected Nextcloud CPU metrics, got %+v", app.Metrics)
+	}
+	appTarget := registry.MetricsTarget(app.ID)
+	if appTarget == nil || appTarget.ResourceType != "app-container" || appTarget.ResourceID != "nextcloud" {
+		t.Fatalf("expected canonical Nextcloud metrics target, got %+v", appTarget)
+	}
+	if app.Docker.NetInRate != 2_100_000 || app.Docker.NetOutRate != 1_250_000 {
+		t.Fatalf("expected Nextcloud network rates, got in=%v out=%v", app.Docker.NetInRate, app.Docker.NetOutRate)
+	}
 
 	disk := requireResource(t, resources, unifiedresources.ResourceTypePhysicalDisk, "sda")
 	assertSourceTracking(t, *disk, unifiedresources.SourceTrueNAS)

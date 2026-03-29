@@ -4137,6 +4137,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		m.syncUnifiedStorageMetrics(store)
+		m.syncUnifiedAppContainerMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
 				continue
@@ -4151,25 +4152,23 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	store.PopulateFromSnapshot(snapshotForStore)
-	m.syncUnifiedStorageMetrics(store)
 
 	supplementalStore, ok := store.(SupplementalRecordStore)
-	if !ok {
-		m.syncUnifiedResourceAlertsToState(store.GetAll())
-		return
-	}
-
-	for source, records := range recordsBySource {
-		if len(records) == 0 {
-			continue
+	if ok {
+		for source, records := range recordsBySource {
+			if len(records) == 0 {
+				continue
+			}
+			supplementalStore.PopulateSupplementalRecords(source, records)
+			log.Debug().
+				Str("source", string(source)).
+				Int("records", len(records)).
+				Msg("[Resources] Ingested supplemental records")
 		}
-		supplementalStore.PopulateSupplementalRecords(source, records)
-		log.Debug().
-			Str("source", string(source)).
-			Int("records", len(records)).
-			Msg("[Resources] Ingested supplemental records")
 	}
 
+	m.syncUnifiedStorageMetrics(store)
+	m.syncUnifiedAppContainerMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
 
@@ -4246,6 +4245,115 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 				m.metricsStore.Write("storage", targetID, "used", float64(used), now)
 				m.metricsStore.Write("storage", targetID, "total", float64(total), now)
 				m.metricsStore.Write("storage", targetID, "avail", float64(free), now)
+			}
+		}
+	}
+}
+
+func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
+	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
+		return
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	seenTargets := make(map[string]struct{})
+	for _, resource := range store.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeAppContainer || resource.Metrics == nil {
+			continue
+		}
+		hasDockerSource := false
+		for _, source := range resource.Sources {
+			if source == unifiedresources.SourceDocker {
+				hasDockerSource = true
+				break
+			}
+		}
+		if hasDockerSource {
+			continue
+		}
+
+		target := resolver.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "app-container" || strings.TrimSpace(target.ResourceID) == "" {
+			continue
+		}
+		targetID := strings.TrimSpace(target.ResourceID)
+		if _, ok := seenTargets[targetID]; ok {
+			continue
+		}
+		seenTargets[targetID] = struct{}{}
+		metricKey := fmt.Sprintf("docker:%s", targetID)
+
+		if metric := resource.Metrics.CPU; metric != nil {
+			value := metric.Percent
+			if value == 0 {
+				value = metric.Value
+			}
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "cpu", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "cpu", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0) {
+			value := metric.Percent
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "memory", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "memory", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0) {
+			value := metric.Percent
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "disk", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "disk", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.NetIn; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "netin", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "netin", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.NetOut; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "netout", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "netout", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.DiskRead; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "diskread", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "diskread", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.DiskWrite; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", targetID, "diskwrite", metric.Value, now)
 			}
 		}
 	}

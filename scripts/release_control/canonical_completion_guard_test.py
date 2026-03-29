@@ -180,6 +180,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             policy_ids,
             [
                 "discovery-provider-runtime",
+                "truenas-runtime",
                 "metrics-hot-path",
                 "metrics-history-runtime",
                 "memory-source-runtime",

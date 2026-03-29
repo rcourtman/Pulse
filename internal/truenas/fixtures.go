@@ -244,6 +244,21 @@ func DefaultFixtures() FixtureSnapshot {
 						},
 					},
 				},
+				Stats: &AppStats{
+					CPUPercent:      18,
+					MemoryBytes:     768 * 1024 * 1024,
+					NetInRate:       2_100_000,
+					NetOutRate:      1_250_000,
+					BlockReadBytes:  15_000_000,
+					BlockWriteBytes: 9_000_000,
+					DiskReadRate:    320_000,
+					DiskWriteRate:   180_000,
+					IntervalSeconds: 2,
+					CollectedAt:     time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC),
+					Interfaces: []AppInterfaceStats{
+						{Name: "eth0", RxBytesPS: 2_100_000, TxBytesPS: 1_250_000},
+					},
+				},
 			},
 			{
 				ID:           "adguard-home",
@@ -252,6 +267,18 @@ func DefaultFixtures() FixtureSnapshot {
 				Version:      "0.1.2",
 				HumanVersion: "0.107.64",
 				CustomApp:    true,
+				Stats: &AppStats{
+					CPUPercent:      0,
+					MemoryBytes:     96 * 1024 * 1024,
+					NetInRate:       0,
+					NetOutRate:      0,
+					BlockReadBytes:  1_000_000,
+					BlockWriteBytes: 500_000,
+					DiskReadRate:    0,
+					DiskWriteRate:   0,
+					IntervalSeconds: 2,
+					CollectedAt:     time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC),
+				},
 				Containers: []AppContainer{
 					{
 						ID:          "adguard-home-1",

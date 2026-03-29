@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -213,6 +214,73 @@ func TestSystemRecordPopulatesTrueNASMetadata(t *testing.T) {
 	}
 	if system.Resource.TrueNAS.Hostname != "truenas-main" {
 		t.Fatalf("expected hostname %q, got %q", "truenas-main", system.Resource.TrueNAS.Hostname)
+	}
+}
+
+func TestRecordsProjectTrueNASAppStatsIntoCanonicalMetrics(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	provider := NewProvider(DefaultFixtures())
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	for _, record := range records {
+		if record.Resource.Type != unifiedresources.ResourceTypeAppContainer || record.Resource.Name != "Nextcloud" {
+			continue
+		}
+		if record.Resource.Metrics == nil || record.Resource.Metrics.CPU == nil || record.Resource.Metrics.CPU.Percent != 18 {
+			t.Fatalf("expected canonical CPU metrics on Nextcloud, got %+v", record.Resource.Metrics)
+		}
+		if record.Resource.Docker == nil || record.Resource.Docker.NetInRate != 2_100_000 || record.Resource.Docker.DiskReadRate != 320_000 {
+			t.Fatalf("expected projected TrueNAS app rates, got %+v", record.Resource.Docker)
+		}
+		return
+	}
+
+	t.Fatal("expected Nextcloud app record")
+}
+
+func TestProviderRefreshDerivesTrueNASAppDiskRatesFromPreviousSnapshot(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	initial := DefaultFixtures()
+	initial.CollectedAt = time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC)
+	initial.Apps[0].Stats.BlockReadBytes = 100
+	initial.Apps[0].Stats.BlockWriteBytes = 50
+	initial.Apps[0].Stats.CollectedAt = initial.CollectedAt
+
+	updated := DefaultFixtures()
+	updated.CollectedAt = initial.CollectedAt.Add(4 * time.Second)
+	updated.Apps[0].Stats.BlockReadBytes = 500
+	updated.Apps[0].Stats.BlockWriteBytes = 250
+	updated.Apps[0].Stats.CollectedAt = updated.CollectedAt
+
+	provider := NewProvider(initial)
+	provider.fetcher = &stubFetcher{snapshot: &updated}
+
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	snapshot := provider.Snapshot()
+	if snapshot == nil || snapshot.Apps[0].Stats == nil {
+		t.Fatal("expected refreshed app stats")
+	}
+	if snapshot.Apps[0].Stats.DiskReadRate != 100 {
+		t.Fatalf("expected disk read rate 100, got %v", snapshot.Apps[0].Stats.DiskReadRate)
+	}
+	if snapshot.Apps[0].Stats.DiskWriteRate != 50 {
+		t.Fatalf("expected disk write rate 50, got %v", snapshot.Apps[0].Stats.DiskWriteRate)
 	}
 }
 

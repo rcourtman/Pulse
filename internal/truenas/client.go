@@ -16,11 +16,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
 
 const defaultHTTPTimeout = 30 * time.Second
 
 const maxResponseBodyBytes int64 = 4 * 1024 * 1024
+
+const defaultAppStatsIntervalSeconds = 2
 
 // ClientConfig configures the TrueNAS REST API client.
 type ClientConfig struct {
@@ -40,6 +44,7 @@ type Client struct {
 	config     ClientConfig
 	httpClient *http.Client
 	baseURL    string
+	rpcURL     string
 }
 
 // APIError represents an HTTP-level error from the TrueNAS REST API.
@@ -96,6 +101,10 @@ func NewClient(config ClientConfig) (*Client, error) {
 	if useHTTPS {
 		scheme = "https"
 	}
+	wsScheme := "ws"
+	if useHTTPS {
+		wsScheme = "wss"
+	}
 
 	return &Client{
 		config: config,
@@ -104,6 +113,7 @@ func NewClient(config ClientConfig) (*Client, error) {
 			Transport: transport,
 		},
 		baseURL: fmt.Sprintf("%s://%s/api/v2.0", scheme, hostPort),
+		rpcURL:  fmt.Sprintf("%s://%s/api/current", wsScheme, hostPort),
 	}, nil
 }
 
@@ -320,6 +330,10 @@ func (c *Client) GetApps(ctx context.Context) ([]App, error) {
 	if err := c.getJSON(ctx, http.MethodGet, "/app", &response); err != nil {
 		return nil, err
 	}
+	statsByApp, err := c.GetAppStats(ctx)
+	if err != nil {
+		statsByApp = nil
+	}
 
 	apps := make([]App, 0, len(response))
 	for _, item := range response {
@@ -356,11 +370,47 @@ func (c *Client) GetApps(ctx context.Context) ([]App, error) {
 		if len(app.Volumes) == 0 {
 			app.Volumes = dedupeAppVolumes(appVolumesFromContainers(app.Containers))
 		}
+		if len(statsByApp) > 0 {
+			if stats, ok := statsByApp[normalizeAppStatsKey(app.ID)]; ok {
+				statsCopy := stats
+				app.Stats = &statsCopy
+			} else if stats, ok := statsByApp[normalizeAppStatsKey(app.Name)]; ok {
+				statsCopy := stats
+				app.Stats = &statsCopy
+			}
+		}
 
 		apps = append(apps, app)
 	}
 
 	return apps, nil
+}
+
+// GetAppStats retrieves live TrueNAS app workload telemetry from the modern
+// JSON-RPC websocket API. This path is best-effort; callers should treat any
+// transport or endpoint failure as "stats unavailable" rather than inventory
+// failure.
+func (c *Client) GetAppStats(ctx context.Context) (map[string]AppStats, error) {
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+
+	subscriptionName := fmt.Sprintf("app.stats:{\"interval\":%d}", defaultAppStatsIntervalSeconds)
+	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
+		return nil, err
+	}
+
+	return rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds)
 }
 
 // GetZFSSnapshots returns a best-effort list of ZFS snapshots.
@@ -612,6 +662,216 @@ func appendDiskTemperature(out map[string]int, diskName string, value any) {
 		return
 	}
 	out[diskName] = int(temperature)
+}
+
+type trueNASRPCClient struct {
+	conn   *websocket.Conn
+	nextID int64
+}
+
+type trueNASRPCRequest struct {
+	JSONRPC string `json:"jsonrpc"`
+	ID      int64  `json:"id"`
+	Method  string `json:"method"`
+	Params  any    `json:"params,omitempty"`
+}
+
+type trueNASRPCResponse struct {
+	JSONRPC string           `json:"jsonrpc"`
+	ID      int64            `json:"id,omitempty"`
+	Method  string           `json:"method,omitempty"`
+	Result  json.RawMessage  `json:"result,omitempty"`
+	Params  json.RawMessage  `json:"params,omitempty"`
+	Error   *trueNASRPCError `json:"error,omitempty"`
+}
+
+type trueNASRPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+}
+
+type trueNASCollectionUpdate struct {
+	Collection string                 `json:"collection"`
+	Fields     []trueNASAppStatsEvent `json:"fields"`
+}
+
+type trueNASAppStatsEvent struct {
+	AppName  string                   `json:"app_name"`
+	CPUUsage int64                    `json:"cpu_usage"`
+	Memory   int64                    `json:"memory"`
+	Networks []trueNASAppNetworkStats `json:"networks"`
+	BlkIO    trueNASAppBlkIOStats     `json:"blkio"`
+}
+
+type trueNASAppNetworkStats struct {
+	InterfaceName string `json:"interface_name"`
+	RXBytes       int64  `json:"rx_bytes"`
+	TXBytes       int64  `json:"tx_bytes"`
+}
+
+type trueNASAppBlkIOStats struct {
+	Read  int64 `json:"read"`
+	Write int64 `json:"write"`
+}
+
+func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
+	if c == nil {
+		return nil, fmt.Errorf("truenas client is nil")
+	}
+
+	dialer := websocket.Dialer{
+		Proxy: http.ProxyFromEnvironment,
+	}
+	if c.config.UseHTTPS {
+		tlsConfig, err := buildTLSConfig(c.config.InsecureSkipVerify, c.config.Fingerprint)
+		if err != nil {
+			return nil, err
+		}
+		dialer.TLSClientConfig = tlsConfig
+	}
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout := time.Until(deadline)
+		if timeout > 0 {
+			dialer.HandshakeTimeout = timeout
+		}
+	}
+
+	conn, response, err := dialer.DialContext(ctx, c.rpcURL, nil)
+	if err != nil {
+		if response != nil {
+			return nil, fmt.Errorf("dial truenas rpc websocket: status=%d: %w", response.StatusCode, err)
+		}
+		return nil, fmt.Errorf("dial truenas rpc websocket: %w", err)
+	}
+	return conn, nil
+}
+
+func (c *trueNASRPCClient) authenticate(ctx context.Context, config ClientConfig) error {
+	if apiKey := strings.TrimSpace(config.APIKey); apiKey != "" {
+		return c.call(ctx, "auth.login_with_api_key", []any{apiKey}, nil)
+	}
+	if config.Username != "" || config.Password != "" {
+		return c.call(ctx, "auth.login", []any{config.Username, config.Password}, nil)
+	}
+	return fmt.Errorf("truenas rpc authentication requires api key or username/password")
+}
+
+func (c *trueNASRPCClient) call(ctx context.Context, method string, params any, result any) error {
+	if c == nil || c.conn == nil {
+		return fmt.Errorf("truenas rpc connection is nil")
+	}
+
+	request := trueNASRPCRequest{
+		JSONRPC: "2.0",
+		ID:      c.nextID,
+		Method:  method,
+		Params:  params,
+	}
+	c.nextID++
+
+	if deadline, ok := ctx.Deadline(); ok {
+		_ = c.conn.SetWriteDeadline(deadline)
+	}
+	if err := c.conn.WriteJSON(request); err != nil {
+		return fmt.Errorf("write truenas rpc %s request: %w", method, err)
+	}
+
+	for {
+		if deadline, ok := ctx.Deadline(); ok {
+			_ = c.conn.SetReadDeadline(deadline)
+		}
+
+		var message trueNASRPCResponse
+		if err := c.conn.ReadJSON(&message); err != nil {
+			return fmt.Errorf("read truenas rpc %s response: %w", method, err)
+		}
+		if message.Method != "" {
+			continue
+		}
+		if message.ID != request.ID {
+			continue
+		}
+		if message.Error != nil {
+			return fmt.Errorf("truenas rpc %s failed: code=%d message=%q", method, message.Error.Code, strings.TrimSpace(message.Error.Message))
+		}
+		if result == nil || len(message.Result) == 0 || string(message.Result) == "null" {
+			return nil
+		}
+		if err := json.Unmarshal(message.Result, result); err != nil {
+			return fmt.Errorf("decode truenas rpc %s response: %w", method, err)
+		}
+		return nil
+	}
+}
+
+func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSeconds int) (map[string]AppStats, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+
+	for {
+		if deadline, ok := ctx.Deadline(); ok {
+			_ = c.conn.SetReadDeadline(deadline)
+		}
+
+		var message trueNASRPCResponse
+		if err := c.conn.ReadJSON(&message); err != nil {
+			return nil, fmt.Errorf("read truenas rpc app.stats notification: %w", err)
+		}
+		if message.Method == "" {
+			if message.Error != nil {
+				return nil, fmt.Errorf("truenas rpc app.stats failed: code=%d message=%q", message.Error.Code, strings.TrimSpace(message.Error.Message))
+			}
+			continue
+		}
+		if message.Method != "collection_update" || len(message.Params) == 0 {
+			continue
+		}
+
+		var update trueNASCollectionUpdate
+		if err := json.Unmarshal(message.Params, &update); err != nil {
+			return nil, fmt.Errorf("decode truenas app.stats notification: %w", err)
+		}
+		if !strings.HasPrefix(strings.TrimSpace(update.Collection), "app.stats") {
+			continue
+		}
+
+		collectedAt := time.Now().UTC()
+		stats := make(map[string]AppStats, len(update.Fields))
+		for _, field := range update.Fields {
+			key := normalizeAppStatsKey(field.AppName)
+			if key == "" {
+				continue
+			}
+
+			appStats := AppStats{
+				CPUPercent:      float64(field.CPUUsage),
+				MemoryBytes:     field.Memory,
+				BlockReadBytes:  field.BlkIO.Read,
+				BlockWriteBytes: field.BlkIO.Write,
+				IntervalSeconds: intervalSeconds,
+				CollectedAt:     collectedAt,
+			}
+			if len(field.Networks) > 0 {
+				appStats.Interfaces = make([]AppInterfaceStats, 0, len(field.Networks))
+			}
+			for _, network := range field.Networks {
+				appStats.NetInRate += float64(network.RXBytes)
+				appStats.NetOutRate += float64(network.TXBytes)
+				appStats.Interfaces = append(appStats.Interfaces, AppInterfaceStats{
+					Name:      strings.TrimSpace(network.InterfaceName),
+					RxBytesPS: float64(network.RXBytes),
+					TxBytesPS: float64(network.TXBytes),
+				})
+			}
+			stats[key] = appStats
+		}
+		return stats, nil
+	}
+}
+
+func normalizeAppStatsKey(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func firstAny(record map[string]any, keys ...string) (any, bool) {

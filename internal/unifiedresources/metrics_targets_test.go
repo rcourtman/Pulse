@@ -183,3 +183,24 @@ func TestBuildMetricsTarget_UsesCanonicalPhysicalDiskMetricIDForTrueNAS(t *testi
 		t.Fatalf("ResourceID = %q, want SER-TRUE-1", target.ResourceID)
 	}
 }
+
+func TestBuildMetricsTarget_UsesCanonicalAppMetricIDForTrueNAS(t *testing.T) {
+	target := BuildMetricsTarget(
+		Resource{
+			Type: ResourceTypeAppContainer,
+		},
+		[]SourceTarget{{
+			Source:   SourceTrueNAS,
+			SourceID: " app:nextcloud ",
+		}},
+	)
+	if target == nil {
+		t.Fatal("BuildMetricsTarget() returned nil")
+	}
+	if target.ResourceType != "app-container" {
+		t.Fatalf("ResourceType = %q, want app-container", target.ResourceType)
+	}
+	if target.ResourceID != "nextcloud" {
+		t.Fatalf("ResourceID = %q, want nextcloud", target.ResourceID)
+	}
+}

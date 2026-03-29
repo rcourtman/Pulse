@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
@@ -478,6 +479,64 @@ func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) 
 	}
 	if frontend.ActiveAlerts[0].Type != "storage-incident" {
 		t.Fatalf("alert type = %q, want storage-incident", frontend.ActiveAlerts[0].Type)
+	}
+}
+
+func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	records := truenas.NewProvider(truenas.DefaultFixtures()).Records()
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: records,
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedAppContainerMetrics(resourceStore)
+
+	var appResourceID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAppContainer && resource.Name == "Nextcloud" {
+			appResourceID = resource.ID
+			break
+		}
+	}
+	if appResourceID == "" {
+		t.Fatal("expected Nextcloud app-container resource in unified store")
+	}
+
+	target := resourceStore.MetricsTargetForResource(appResourceID)
+	if target == nil || target.ResourceType != "app-container" || target.ResourceID != "nextcloud" {
+		t.Fatalf("unexpected app-container metrics target %+v", target)
+	}
+
+	inMemory := monitor.GetGuestMetrics("docker:nextcloud", time.Hour)
+	if got := len(inMemory["cpu"]); got == 0 {
+		t.Fatalf("expected in-memory cpu history for nextcloud")
+	}
+	if got := len(inMemory["netin"]); got == 0 {
+		t.Fatalf("expected in-memory network history for nextcloud")
+	}
+
+	storeBacked := monitor.GetGuestMetricsForChart("docker:nextcloud", "dockerContainer", "nextcloud", 7*24*time.Hour)
+	if got := len(storeBacked["cpu"]); got == 0 {
+		t.Fatalf("expected persisted cpu history for nextcloud")
 	}
 }
 

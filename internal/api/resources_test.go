@@ -2995,8 +2995,8 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 	if nextcloud.Docker.Runtime != "docker" {
 		t.Fatalf("expected runtime docker, got %q", nextcloud.Docker.Runtime)
 	}
-	if nextcloud.MetricsTarget != nil {
-		t.Fatalf("expected metrics target to remain unset until TrueNAS app stats are ingested, got %+v", nextcloud.MetricsTarget)
+	if nextcloud.MetricsTarget == nil || nextcloud.MetricsTarget.ResourceType != "app-container" || nextcloud.MetricsTarget.ResourceID != "nextcloud" {
+		t.Fatalf("expected canonical TrueNAS app metrics target nextcloud, got %+v", nextcloud.MetricsTarget)
 	}
 }
 
