@@ -2021,7 +2021,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type. For get: 'system', 'vm', 'system-container', 'app-container'. For config: 'vm' or 'system-container'. For search: use type or resource_type with canonical values.",
+						Description: "Resource type. For get: 'system', 'vm', 'system-container', 'app-container'. For config: 'vm', 'system-container', or supported API-backed 'app-container'. For search: use type or resource_type with canonical values.",
 						Enum:        []string{"system", "vm", "system-container", "app-container", "node", "docker-host", "storage-pool", "physical-disk"},
 					},
 					"resource_id": {
@@ -2330,6 +2330,33 @@ func canonicalAppContainerHost(resource unifiedresources.Resource) string {
 	return ""
 }
 
+func matchCanonicalAppContainerResource(resource unifiedresources.Resource, resourceID string) (string, bool) {
+	query := strings.TrimSpace(resourceID)
+	if query == "" {
+		return "", false
+	}
+	containerID := canonicalAppContainerID(resource)
+	if strings.EqualFold(containerID, query) ||
+		strings.EqualFold(resourceDisplayName(resource), query) ||
+		strings.EqualFold(strings.TrimSpace(resource.ID), query) ||
+		strings.HasPrefix(strings.ToLower(containerID), strings.ToLower(query)) {
+		return containerID, true
+	}
+	return "", false
+}
+
+func findCanonicalAppContainerResource(provider UnifiedResourceProvider, resourceID string) (unifiedresources.Resource, string, bool) {
+	if provider == nil {
+		return unifiedresources.Resource{}, "", false
+	}
+	for _, resource := range provider.GetByType(unifiedresources.ResourceTypeAppContainer) {
+		if containerID, ok := matchCanonicalAppContainerResource(resource, resourceID); ok {
+			return resource, containerID, true
+		}
+	}
+	return unifiedresources.Resource{}, "", false
+}
+
 func guestExecutorActions() []string {
 	return []string{"query", "get", "logs", "console", "exec", "start", "stop", "shutdown", "restart", "delete"}
 }
@@ -2584,7 +2611,7 @@ func (e *PulseToolExecutor) executeQuery(ctx context.Context, args map[string]in
 	case "get":
 		return e.executeGetResource(ctx, args)
 	case "config":
-		return e.executeGetGuestConfig(ctx, args)
+		return e.executeGetResourceConfig(ctx, args)
 	case "topology":
 		return e.executeGetTopology(ctx, args)
 	case "list":
@@ -3858,83 +3885,73 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "app-container":
-		if e.unifiedResourceProvider != nil {
-			for _, resource := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAppContainer) {
-				containerID := canonicalAppContainerID(resource)
-				if !strings.EqualFold(containerID, strings.TrimSpace(resourceID)) &&
-					!strings.EqualFold(resourceDisplayName(resource), strings.TrimSpace(resourceID)) &&
-					!strings.EqualFold(strings.TrimSpace(resource.ID), strings.TrimSpace(resourceID)) &&
-					!strings.HasPrefix(strings.ToLower(containerID), strings.ToLower(strings.TrimSpace(resourceID))) {
-					continue
-				}
-
-				response := EmptyResourceResponse()
-				response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID, containerID)
-				response.Type = "app-container"
-				response.ID = containerID
-				response.Name = resourceDisplayName(resource)
-				response.Status = canonicalAppContainerState(resource)
-				response.Platform = canonicalResourcePlatform(resource)
-				response.Host = canonicalAppContainerHost(resource)
-				response.CPU = ResourceCPU{
-					Percent: metricPercent(resourceMetric(resource, "cpu")),
-				}
-				response.Memory = ResourceMemory{
-					Percent: metricPercent(resourceMetric(resource, "memory")),
-					UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
-					TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
-				}
-				if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
-					response.Disk = &ResourceDisk{
-						Percent: metricPercent(diskMetric),
-						UsedGB:  metricUsedGB(diskMetric),
-						TotalGB: metricTotalGB(diskMetric),
-					}
-				}
-				response.Tags = append([]string{}, resource.Tags...)
-				if resource.Docker != nil {
-					response.Image = strings.TrimSpace(resource.Docker.Image)
-					response.Health = strings.TrimSpace(resource.Docker.Health)
-					response.RestartCount = resource.Docker.RestartCount
-					response.Labels = resource.Docker.Labels
-					if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
-						response.UpdateAvailable = true
-					}
-					for _, p := range resource.Docker.Ports {
-						response.Ports = append(response.Ports, PortInfo{
-							Private:  p.PrivatePort,
-							Public:   p.PublicPort,
-							Protocol: p.Protocol,
-							IP:       p.IP,
-						})
-					}
-					for _, n := range resource.Docker.Networks {
-						addresses := make([]string, 0, 2)
-						if n.IPv4 != "" {
-							addresses = append(addresses, n.IPv4)
-						}
-						if n.IPv6 != "" {
-							addresses = append(addresses, n.IPv6)
-						}
-						response.Networks = append(response.Networks, NetworkInfo{
-							Name:      n.Name,
-							Addresses: addresses,
-						})
-					}
-					for _, m := range resource.Docker.Mounts {
-						response.Mounts = append(response.Mounts, MountInfo{
-							Source:      m.Source,
-							Destination: m.Destination,
-							ReadWrite:   !strings.EqualFold(strings.TrimSpace(m.Mode), "ro"),
-						})
-					}
-				}
-
-				if reg, ok := resolvedAppContainerRegistration(resource); ok {
-					e.registerResolvedResourceWithExplicitAccess(reg)
-				}
-				return NewJSONResult(response.NormalizeCollections()), nil
+		if resource, containerID, ok := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceID); ok {
+			response := EmptyResourceResponse()
+			response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID, containerID)
+			response.Type = "app-container"
+			response.ID = containerID
+			response.Name = resourceDisplayName(resource)
+			response.Status = canonicalAppContainerState(resource)
+			response.Platform = canonicalResourcePlatform(resource)
+			response.Host = canonicalAppContainerHost(resource)
+			response.CPU = ResourceCPU{
+				Percent: metricPercent(resourceMetric(resource, "cpu")),
 			}
+			response.Memory = ResourceMemory{
+				Percent: metricPercent(resourceMetric(resource, "memory")),
+				UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
+				TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
+			}
+			if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
+				response.Disk = &ResourceDisk{
+					Percent: metricPercent(diskMetric),
+					UsedGB:  metricUsedGB(diskMetric),
+					TotalGB: metricTotalGB(diskMetric),
+				}
+			}
+			response.Tags = append([]string{}, resource.Tags...)
+			if resource.Docker != nil {
+				response.Image = strings.TrimSpace(resource.Docker.Image)
+				response.Health = strings.TrimSpace(resource.Docker.Health)
+				response.RestartCount = resource.Docker.RestartCount
+				response.Labels = resource.Docker.Labels
+				if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
+					response.UpdateAvailable = true
+				}
+				for _, p := range resource.Docker.Ports {
+					response.Ports = append(response.Ports, PortInfo{
+						Private:  p.PrivatePort,
+						Public:   p.PublicPort,
+						Protocol: p.Protocol,
+						IP:       p.IP,
+					})
+				}
+				for _, n := range resource.Docker.Networks {
+					addresses := make([]string, 0, 2)
+					if n.IPv4 != "" {
+						addresses = append(addresses, n.IPv4)
+					}
+					if n.IPv6 != "" {
+						addresses = append(addresses, n.IPv6)
+					}
+					response.Networks = append(response.Networks, NetworkInfo{
+						Name:      n.Name,
+						Addresses: addresses,
+					})
+				}
+				for _, m := range resource.Docker.Mounts {
+					response.Mounts = append(response.Mounts, MountInfo{
+						Source:      m.Source,
+						Destination: m.Destination,
+						ReadWrite:   !strings.EqualFold(strings.TrimSpace(m.Mode), "ro"),
+					})
+				}
+			}
+
+			if reg, ok := resolvedAppContainerRegistration(resource); ok {
+				e.registerResolvedResourceWithExplicitAccess(reg)
+			}
+			return NewJSONResult(response.NormalizeCollections()), nil
 		}
 
 		dockerHostsByID := make(map[string]*unifiedresources.DockerHostView)
@@ -4086,15 +4103,19 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	}
 }
 
-func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[string]interface{}) (CallToolResult, error) {
+func (e *PulseToolExecutor) executeGetResourceConfig(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
 	resourceType, _ := args["resource_type"].(string)
 	resourceID, _ := args["resource_id"].(string)
+	resourceType = canonicalQueryResourceType(resourceType)
 
 	if resourceType == "" {
 		return NewErrorResult(fmt.Errorf("resource_type is required")), nil
 	}
 	if resourceID == "" {
 		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
+	}
+	if resourceType == "app-container" {
+		return e.executeNativeAppContainerConfig(ctx, strings.TrimSpace(resourceID))
 	}
 	if e.guestConfigProvider == nil {
 		return NewTextResult("Guest configuration not available."), nil
@@ -4152,6 +4173,116 @@ func (e *PulseToolExecutor) executeGetGuestConfig(_ context.Context, args map[st
 		response.Disks = disks
 	default:
 		return NewErrorResult(fmt.Errorf("unsupported guest type: %s", guestType)), nil
+	}
+
+	return NewJSONResult(response.NormalizeCollections()), nil
+}
+
+func (e *PulseToolExecutor) executeNativeAppContainerConfig(ctx context.Context, resourceRef string) (CallToolResult, error) {
+	if e.appContainerConfigProvider == nil {
+		return NewTextResult("App-container configuration not available."), nil
+	}
+
+	rs, err := e.readStateForControl()
+	if err != nil {
+		return NewTextResult("State information not available."), nil
+	}
+	governance := newGovernedQueryMetadataResolver(rs)
+
+	var resource unifiedresources.Resource
+	var found bool
+	if validation := e.validateResolvedResource(resourceRef, "query", true); validation.Resource != nil {
+		if matched, _, ok := findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef); ok {
+			resource = matched
+			found = true
+		}
+	}
+	if !found {
+		var containerID string
+		resource, containerID, found = findCanonicalAppContainerResource(e.unifiedResourceProvider, resourceRef)
+		if !found {
+			return NewJSONResult(map[string]interface{}{
+				"error":       "not_found",
+				"resource_id": resourceRef,
+				"type":        "app-container",
+			}), nil
+		}
+		if reg, ok := resolvedAppContainerRegistration(resource); ok {
+			e.registerResolvedResourceWithExplicitAccess(reg)
+		}
+		_ = containerID
+	}
+
+	validation := e.validateResolvedResource(resourceRef, "query", true)
+	if validation.Resource == nil {
+		if validation.ErrorMsg != "" {
+			return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+		}
+		return NewErrorResult(fmt.Errorf("app-container not found: %s", resourceRef)), nil
+	}
+	if validation.ErrorMsg != "" {
+		return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+	}
+	resolved := validation.Resource
+	if resolved.GetKind() != "app-container" {
+		return NewErrorResult(fmt.Errorf("resource '%s' is %q, not app-container", resourceRef, resolved.GetKind())), nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(resolved.GetAdapter()), "truenas") {
+		return NewTextResult("App-container configuration not available."), nil
+	}
+
+	result, err := e.appContainerConfigProvider.GetConfig(ctx, AppContainerConfigRequest{
+		OrgID:       e.orgID,
+		ResourceID:  strings.TrimSpace(resolved.GetResourceID()),
+		ProviderUID: strings.TrimSpace(resolved.GetProviderUID()),
+		Name:        resourceDisplayName(resource),
+		Host:        strings.TrimSpace(resolved.GetTargetHost()),
+		Platform:    "truenas",
+	})
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+
+	response := EmptyAppContainerConfigResponse()
+	if result != nil {
+		response.GovernedResourceMetadata = governance.Resolve(result.Name, result.ResourceID, result.ProviderUID)
+		response.Type = "app-container"
+		response.ID = result.ProviderUID
+		if response.ID == "" {
+			response.ID = strings.TrimSpace(result.ResourceID)
+		}
+		response.Name = result.Name
+		response.Host = result.Host
+		response.Platform = result.Platform
+		response.Status = result.Status
+		response.Version = result.Version
+		response.HumanVersion = result.HumanVersion
+		response.Notes = result.Notes
+		response.CustomApp = result.CustomApp
+		response.UpgradeAvailable = result.UpgradeAvailable
+		response.ImageUpdatesAvailable = result.ImageUpdatesAvailable
+		response.ContainerCount = result.ContainerCount
+		response.UsedHostIPs = append([]string{}, result.UsedHostIPs...)
+		response.Images = append([]string{}, result.Images...)
+		response.Ports = append([]PortInfo{}, result.Ports...)
+		response.Networks = append([]NetworkInfo{}, result.Networks...)
+		response.Mounts = append([]MountInfo{}, result.Mounts...)
+		response.Containers = append([]AppContainerConfigContainer{}, result.Containers...)
+	}
+	if response.ID == "" {
+		response.ID = strings.TrimSpace(resolved.GetProviderUID())
+	}
+	if response.Name == "" {
+		response.Name = resolvedResourceDisplayName(resolved)
+	}
+	if response.Host == "" {
+		response.Host = strings.TrimSpace(resolved.GetTargetHost())
+	}
+	if response.Platform == "" {
+		response.Platform = strings.TrimSpace(resolved.GetAdapter())
+	}
+	if response.GovernedResourceMetadata.Policy == nil && response.AISafeSummary == "" {
+		response.GovernedResourceMetadata = governance.Resolve(response.Name, strings.TrimSpace(resolved.GetResourceID()), response.ID)
 	}
 
 	return NewJSONResult(response.NormalizeCollections()), nil

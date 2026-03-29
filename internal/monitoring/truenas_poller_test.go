@@ -380,6 +380,37 @@ func TestTrueNASPollerReadAppLogsUsesTenantScopedProvider(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerGetAppConfigUsesTenantScopedProvider(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	fixtures := truenas.DefaultFixtures()
+	fetcher := &pollerControlFetcher{snapshot: &fixtures}
+	provider := truenas.NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{"conn-1": provider}
+	poller.cachedRecordsByOrg["default"] = map[string][]unifiedresources.IngestRecord{"conn-1": provider.Records()}
+
+	result, err := poller.GetAppConfig(context.Background(), "default", "truenas-main", "nextcloud")
+	if err != nil {
+		t.Fatalf("GetAppConfig() error = %v", err)
+	}
+	if result == nil || result.App.Name != "Nextcloud" {
+		t.Fatalf("expected Nextcloud config result, got %+v", result)
+	}
+	if result.Host != "truenas-main" {
+		t.Fatalf("expected config host truenas-main, got %+v", result)
+	}
+	if len(result.App.Containers) != 2 {
+		t.Fatalf("expected canonical app runtime shape, got %+v", result.App.Containers)
+	}
+}
+
 func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

@@ -39,6 +39,11 @@ type TrueNASPoller struct {
 	interval           time.Duration
 }
 
+type trueNASPollerProviderEntry struct {
+	connectionID string
+	provider     *truenas.Provider
+}
+
 // NewTrueNASPoller builds a new TrueNAS poller with the provided poll interval.
 func NewTrueNASPoller(multiTenant *config.MultiTenantPersistence, interval time.Duration, recoveryManager *recoverymanager.Manager) *TrueNASPoller {
 	if interval <= 0 {
@@ -515,68 +520,44 @@ func (p *TrueNASPoller) ControlApp(ctx context.Context, orgID, host, appID, acti
 		return nil, fmt.Errorf("truenas app id is required")
 	}
 
-	type providerEntry struct {
-		connectionID string
-		provider     *truenas.Provider
+	entry, currentApp, err := p.findProviderEntryForApp(orgID, host, appID)
+	if err != nil {
+		return nil, err
 	}
 
-	p.mu.Lock()
-	entries := make([]providerEntry, 0, len(p.providersByOrg[orgID]))
-	for connectionID, provider := range p.providersByOrg[orgID] {
-		if provider == nil {
-			continue
-		}
-		entries = append(entries, providerEntry{
-			connectionID: connectionID,
-			provider:     provider,
-		})
-	}
-	p.mu.Unlock()
-
-	for _, entry := range entries {
-		currentSnapshot := entry.provider.Snapshot()
-		currentApp, ok := findTrueNASAppSnapshot(currentSnapshot, host, appID)
-		if !ok {
-			continue
-		}
-
-		var nextSnapshot *truenas.FixtureSnapshot
-		var err error
-		switch action {
-		case "start", "stop":
-			nextSnapshot, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), action)
-		case "restart":
-			if trueNASAppRunning(currentApp) {
-				if _, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), "stop"); err != nil {
-					return nil, err
-				}
+	var nextSnapshot *truenas.FixtureSnapshot
+	switch action {
+	case "start", "stop":
+		nextSnapshot, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), action)
+	case "restart":
+		if trueNASAppRunning(currentApp) {
+			if _, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), "stop"); err != nil {
+				return nil, err
 			}
-			nextSnapshot, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), "start")
-		default:
-			return nil, fmt.Errorf("unsupported truenas app action %q", action)
 		}
-		if err != nil {
-			return nil, err
-		}
+		nextSnapshot, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), "start")
+	default:
+		return nil, fmt.Errorf("unsupported truenas app action %q", action)
+	}
+	if err != nil {
+		return nil, err
+	}
 
-		records := entry.provider.Records()
-		p.mu.Lock()
-		if p.cachedRecordsByOrg[orgID] == nil {
-			p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
-		}
-		p.cachedRecordsByOrg[orgID][entry.connectionID] = cloneIngestRecords(records)
-		p.mu.Unlock()
-		p.ingestRecoveryPoints(ctx, orgID, entry.connectionID, entry.provider)
+	records := entry.provider.Records()
+	p.mu.Lock()
+	if p.cachedRecordsByOrg[orgID] == nil {
+		p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
+	}
+	p.cachedRecordsByOrg[orgID][entry.connectionID] = cloneIngestRecords(records)
+	p.mu.Unlock()
+	p.ingestRecoveryPoints(ctx, orgID, entry.connectionID, entry.provider)
 
-		if updatedApp, ok := findTrueNASAppSnapshot(nextSnapshot, host, appID); ok {
-			appCopy := *updatedApp
-			return &appCopy, nil
-		}
-		appCopy := *currentApp
+	if updatedApp, ok := findTrueNASAppSnapshot(nextSnapshot, host, appID); ok {
+		appCopy := *updatedApp
 		return &appCopy, nil
 	}
-
-	return nil, fmt.Errorf("truenas app %q was not found for org %q", appID, orgID)
+	appCopy := *currentApp
+	return &appCopy, nil
 }
 
 // ReadAppLogs executes a canonical bounded log read for one tenant-scoped
@@ -599,33 +580,46 @@ func (p *TrueNASPoller) ReadAppLogs(ctx context.Context, orgID, host, appID, con
 		return nil, fmt.Errorf("truenas app id is required")
 	}
 
-	type providerEntry struct {
-		connectionID string
-		provider     *truenas.Provider
+	entry, _, err := p.findProviderEntryForApp(orgID, host, appID)
+	if err != nil {
+		return nil, err
+	}
+	return entry.provider.ReadAppLogs(ctx, appID, containerRef, tailLines)
+}
+
+// GetAppConfig reads the current TrueNAS app configuration/runtime shape for
+// one tenant-scoped API-backed app-container resource.
+func (p *TrueNASPoller) GetAppConfig(ctx context.Context, orgID, host, appID string) (*truenas.AppConfigResult, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas poller is nil")
+	}
+	if !truenas.IsFeatureEnabled() {
+		return nil, fmt.Errorf("truenas integration is disabled")
 	}
 
-	p.mu.Lock()
-	entries := make([]providerEntry, 0, len(p.providersByOrg[orgID]))
-	for connectionID, provider := range p.providersByOrg[orgID] {
-		if provider == nil {
-			continue
-		}
-		entries = append(entries, providerEntry{
-			connectionID: connectionID,
-			provider:     provider,
-		})
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
 	}
-	p.mu.Unlock()
-
-	for _, entry := range entries {
-		currentSnapshot := entry.provider.Snapshot()
-		if _, ok := findTrueNASAppSnapshot(currentSnapshot, host, appID); !ok {
-			continue
-		}
-		return entry.provider.ReadAppLogs(ctx, appID, containerRef, tailLines)
+	host = strings.TrimSpace(host)
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return nil, fmt.Errorf("truenas app id is required")
 	}
 
-	return nil, fmt.Errorf("truenas app %q was not found for org %q", appID, orgID)
+	entry, currentApp, err := p.findProviderEntryForApp(orgID, host, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := entry.provider.GetAppConfig(ctx, trueNASAppCanonicalID(*currentApp))
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, fmt.Errorf("truenas app %q configuration is unavailable", appID)
+	}
+	return result, nil
 }
 
 func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresources.IngestRecord {
@@ -635,6 +629,38 @@ func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresour
 	cloned := make([]unifiedresources.IngestRecord, len(records))
 	copy(cloned, records)
 	return cloned
+}
+
+func (p *TrueNASPoller) providerEntriesForOrg(orgID string) []trueNASPollerProviderEntry {
+	if p == nil {
+		return nil
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	entries := make([]trueNASPollerProviderEntry, 0, len(p.providersByOrg[orgID]))
+	for connectionID, provider := range p.providersByOrg[orgID] {
+		if provider == nil {
+			continue
+		}
+		entries = append(entries, trueNASPollerProviderEntry{
+			connectionID: connectionID,
+			provider:     provider,
+		})
+	}
+	return entries
+}
+
+func (p *TrueNASPoller) findProviderEntryForApp(orgID, host, appID string) (trueNASPollerProviderEntry, *truenas.App, error) {
+	for _, entry := range p.providerEntriesForOrg(orgID) {
+		currentSnapshot := entry.provider.Snapshot()
+		currentApp, ok := findTrueNASAppSnapshot(currentSnapshot, host, appID)
+		if ok {
+			return entry, currentApp, nil
+		}
+	}
+	return trueNASPollerProviderEntry{}, nil, fmt.Errorf("truenas app %q was not found for org %q", appID, orgID)
 }
 
 func findTrueNASAppSnapshot(snapshot *truenas.FixtureSnapshot, host, appID string) (*truenas.App, bool) {

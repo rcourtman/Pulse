@@ -163,6 +163,13 @@ type AppLogResult struct {
 	TailLines int
 }
 
+// AppConfigResult captures the current configuration/runtime shape of one
+// TrueNAS application.
+type AppConfigResult struct {
+	Host string
+	App  App
+}
+
 // AppVolume describes a bind or named volume mount exposed by a TrueNAS app.
 type AppVolume struct {
 	Source      string

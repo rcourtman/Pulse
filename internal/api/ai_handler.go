@@ -56,6 +56,7 @@ type AIService interface {
 	SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)
 	SetAgentProfileManager(manager chat.AgentProfileManager)
 	SetGuestConfigProvider(provider chat.MCPGuestConfigProvider)
+	SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider)
 	SetBackupProvider(provider chat.MCPBackupProvider)
 	SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)
 	SetUpdatesProvider(provider chat.MCPUpdatesProvider)
@@ -1231,6 +1232,13 @@ func (h *AIHandler) SetAgentProfileManager(manager chat.AgentProfileManager) {
 func (h *AIHandler) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
 	if svc := h.getDefaultService(); svc != nil {
 		svc.SetGuestConfigProvider(provider)
+	}
+}
+
+// SetAppContainerConfigProvider sets the native app-container config provider for MCP tools
+func (h *AIHandler) SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider) {
+	if svc := h.getDefaultService(); svc != nil {
+		svc.SetAppContainerConfigProvider(provider)
 	}
 }
 

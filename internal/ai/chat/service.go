@@ -44,6 +44,7 @@ type (
 	MCPMetricsHistoryProvider     = tools.MetricsHistoryProvider
 	MCPBackupProvider             = tools.BackupProvider
 	MCPGuestConfigProvider        = tools.GuestConfigProvider
+	MCPAppContainerConfigProvider = tools.AppContainerConfigProvider
 	MCPDiskHealthProvider         = tools.DiskHealthProvider
 	MCPUpdatesProvider            = tools.UpdatesProvider
 	MCPAppContainerActionProvider = tools.AppContainerActionProvider
@@ -1160,6 +1161,14 @@ func (s *Service) SetGuestConfigProvider(provider MCPGuestConfigProvider) {
 	defer s.mu.Unlock()
 	if s.executor != nil {
 		s.executor.SetGuestConfigProvider(provider)
+	}
+}
+
+func (s *Service) SetAppContainerConfigProvider(provider MCPAppContainerConfigProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetAppContainerConfigProvider(provider)
 	}
 }
 

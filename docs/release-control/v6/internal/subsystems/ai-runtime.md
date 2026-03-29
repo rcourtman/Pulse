@@ -165,6 +165,13 @@ API-backed app log reads such as TrueNAS app-container logs on the shared
 `pulse_read` tool with `action="logs"` and `resource_id=<canonical app>`
 instead of requiring `target_host` for non-agent platforms or adding a
 provider-local log-read tool.
+That same AI tool ownership now also includes canonical resource-native
+configuration reads. `internal/ai/tools/tools_query.go`,
+`internal/ai/tools/executor.go`, and `internal/api/router.go` must keep
+API-backed app configuration reads such as TrueNAS app-container runtime
+shape on the shared `pulse_query` tool with `action="config"` and
+`resource_id=<canonical app>` instead of forcing those resources through the
+guest-config shim or adding a provider-local config tool.
 That same AI tool ownership also applies to recovery-backed storage reads.
 When `internal/ai/tools/adapters.go` returns recovery points with malformed
 persisted metadata omitted at the shared recovery-store boundary, the storage
@@ -298,7 +305,11 @@ top-level pools.
 That same requirement includes `pulse_query action=config`: guest-config
 payloads must carry canonical resource policy metadata, and config-fact
 extraction must not persist raw guest hostnames when governed redaction covers
-hostname or platform identity fields.
+hostname or platform identity fields. The same `action=config` contract now
+also applies to API-backed canonical `app-container` resources such as
+TrueNAS apps: runtime routing must resolve the shared resource identity first
+and then read native config through the owned provider path rather than
+falling back to guest semantics.
 Outbound model-bound context exports now also belong to this runtime
 boundary. When the AI service assembles unified-resource context for a model
 request, it must record a durable export audit with the active destination

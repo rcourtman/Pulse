@@ -152,6 +152,47 @@ type GuestConfigProvider interface {
 	GetGuestConfig(guestType, instance, node string, vmID int) (map[string]interface{}, error)
 }
 
+// AppContainerConfigRequest describes a canonical configuration read against an
+// API-backed app-container resource.
+type AppContainerConfigRequest struct {
+	OrgID       string
+	ResourceID  string
+	ProviderUID string
+	Name        string
+	Host        string
+	Platform    string
+}
+
+// AppContainerConfigResult captures canonical configuration/state metadata for
+// an API-backed app-container resource.
+type AppContainerConfigResult struct {
+	ResourceID            string
+	ProviderUID           string
+	Name                  string
+	Host                  string
+	Platform              string
+	Status                string
+	Version               string
+	HumanVersion          string
+	Notes                 string
+	CustomApp             bool
+	UpgradeAvailable      bool
+	ImageUpdatesAvailable bool
+	ContainerCount        int
+	UsedHostIPs           []string
+	Images                []string
+	Ports                 []PortInfo
+	Networks              []NetworkInfo
+	Mounts                []MountInfo
+	Containers            []AppContainerConfigContainer
+}
+
+// AppContainerConfigProvider executes canonical configuration reads for
+// API-backed app-container resources such as TrueNAS-managed applications.
+type AppContainerConfigProvider interface {
+	GetConfig(ctx context.Context, req AppContainerConfigRequest) (*AppContainerConfigResult, error)
+}
+
 // DiskHealthProvider provides disk health information from host agents
 type DiskHealthProvider interface {
 	GetHosts() []*unifiedresources.HostView
@@ -413,9 +454,10 @@ type ExecutorConfig struct {
 	ConnectionHealth       ConnectionHealthProvider
 	RecoveryPointsProvider RecoveryPointsProvider
 
-	GuestConfigProvider GuestConfigProvider
-	DiskHealthProvider  DiskHealthProvider
-	UpdatesProvider     UpdatesProvider
+	GuestConfigProvider        GuestConfigProvider
+	AppContainerConfigProvider AppContainerConfigProvider
+	DiskHealthProvider         DiskHealthProvider
+	UpdatesProvider            UpdatesProvider
 
 	// Optional providers - management
 	MetadataUpdater     MetadataUpdater
@@ -466,9 +508,10 @@ type PulseToolExecutor struct {
 	// Paged recovery points access for snapshot/backup tools.
 	recoveryPointsProvider RecoveryPointsProvider
 
-	guestConfigProvider GuestConfigProvider
-	diskHealthProvider  DiskHealthProvider
-	updatesProvider     UpdatesProvider
+	guestConfigProvider        GuestConfigProvider
+	appContainerConfigProvider AppContainerConfigProvider
+	diskHealthProvider         DiskHealthProvider
+	updatesProvider            UpdatesProvider
 
 	// Management providers
 	metadataUpdater     MetadataUpdater
@@ -551,6 +594,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		recoveryPointsProvider: cfg.RecoveryPointsProvider,
 
 		guestConfigProvider:        cfg.GuestConfigProvider,
+		appContainerConfigProvider: cfg.AppContainerConfigProvider,
 		diskHealthProvider:         cfg.DiskHealthProvider,
 		updatesProvider:            cfg.UpdatesProvider,
 		metadataUpdater:            cfg.MetadataUpdater,
@@ -723,6 +767,12 @@ func (e *PulseToolExecutor) SetBackupProvider(provider BackupProvider) {
 // SetGuestConfigProvider sets the guest config provider
 func (e *PulseToolExecutor) SetGuestConfigProvider(provider GuestConfigProvider) {
 	e.guestConfigProvider = provider
+}
+
+// SetAppContainerConfigProvider sets the provider used for canonical native
+// app-container configuration reads.
+func (e *PulseToolExecutor) SetAppContainerConfigProvider(provider AppContainerConfigProvider) {
+	e.appContainerConfigProvider = provider
 }
 
 // SetDiskHealthProvider sets the disk health provider

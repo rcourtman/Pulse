@@ -15,6 +15,7 @@ import (
 
 type capturingAIService struct {
 	running                    bool
+	appContainerConfigProvider chat.MCPAppContainerConfigProvider
 	appContainerActionProvider chat.MCPAppContainerActionProvider
 	appContainerReadProvider   chat.MCPAppContainerReadProvider
 }
@@ -61,13 +62,16 @@ func (s *capturingAIService) UnrevertSession(ctx context.Context, sessionID stri
 func (s *capturingAIService) AnswerQuestion(ctx context.Context, questionID string, answers []chat.QuestionAnswer) error {
 	return nil
 }
-func (s *capturingAIService) SetAlertProvider(provider chat.MCPAlertProvider)                     {}
-func (s *capturingAIService) SetFindingsProvider(provider chat.MCPFindingsProvider)               {}
-func (s *capturingAIService) SetBaselineProvider(provider chat.MCPBaselineProvider)               {}
-func (s *capturingAIService) SetPatternProvider(provider chat.MCPPatternProvider)                 {}
-func (s *capturingAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)           {}
-func (s *capturingAIService) SetAgentProfileManager(manager chat.AgentProfileManager)             {}
-func (s *capturingAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider)         {}
+func (s *capturingAIService) SetAlertProvider(provider chat.MCPAlertProvider)             {}
+func (s *capturingAIService) SetFindingsProvider(provider chat.MCPFindingsProvider)       {}
+func (s *capturingAIService) SetBaselineProvider(provider chat.MCPBaselineProvider)       {}
+func (s *capturingAIService) SetPatternProvider(provider chat.MCPPatternProvider)         {}
+func (s *capturingAIService) SetMetricsHistory(provider chat.MCPMetricsHistoryProvider)   {}
+func (s *capturingAIService) SetAgentProfileManager(manager chat.AgentProfileManager)     {}
+func (s *capturingAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {}
+func (s *capturingAIService) SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider) {
+	s.appContainerConfigProvider = provider
+}
 func (s *capturingAIService) SetBackupProvider(provider chat.MCPBackupProvider)                   {}
 func (s *capturingAIService) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider)           {}
 func (s *capturingAIService) SetUpdatesProvider(provider chat.MCPUpdatesProvider)                 {}
@@ -100,6 +104,9 @@ func TestWireAIChatDependenciesForService_WiresTrueNASAppActionProvider(t *testi
 	}
 	if service.appContainerReadProvider == nil {
 		t.Fatal("expected TrueNAS app read provider to be wired into AI chat service")
+	}
+	if service.appContainerConfigProvider == nil {
+		t.Fatal("expected TrueNAS app config provider to be wired into AI chat service")
 	}
 }
 

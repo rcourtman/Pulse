@@ -755,6 +755,84 @@ type GuestDiskConfig struct {
 	Value string `json:"value"`
 }
 
+// AppContainerConfigResponse is returned by pulse_query action=config for
+// API-backed app-container resources.
+type AppContainerConfigResponse struct {
+	GovernedResourceMetadata
+	Type                  string                        `json:"type"`
+	ID                    string                        `json:"id"`
+	Name                  string                        `json:"name"`
+	Host                  string                        `json:"host,omitempty"`
+	Platform              string                        `json:"platform,omitempty"`
+	Status                string                        `json:"status,omitempty"`
+	Version               string                        `json:"version,omitempty"`
+	HumanVersion          string                        `json:"human_version,omitempty"`
+	Notes                 string                        `json:"notes,omitempty"`
+	CustomApp             bool                          `json:"custom_app,omitempty"`
+	UpgradeAvailable      bool                          `json:"upgrade_available,omitempty"`
+	ImageUpdatesAvailable bool                          `json:"image_updates_available,omitempty"`
+	ContainerCount        int                           `json:"container_count,omitempty"`
+	UsedHostIPs           []string                      `json:"used_host_ips"`
+	Images                []string                      `json:"images"`
+	Ports                 []PortInfo                    `json:"ports"`
+	Networks              []NetworkInfo                 `json:"networks"`
+	Mounts                []MountInfo                   `json:"mounts"`
+	Containers            []AppContainerConfigContainer `json:"containers"`
+}
+
+func EmptyAppContainerConfigResponse() AppContainerConfigResponse {
+	return AppContainerConfigResponse{}.NormalizeCollections()
+}
+
+func (r AppContainerConfigResponse) NormalizeCollections() AppContainerConfigResponse {
+	if r.UsedHostIPs == nil {
+		r.UsedHostIPs = []string{}
+	}
+	if r.Images == nil {
+		r.Images = []string{}
+	}
+	if r.Ports == nil {
+		r.Ports = []PortInfo{}
+	}
+	if r.Networks == nil {
+		r.Networks = []NetworkInfo{}
+	}
+	if r.Mounts == nil {
+		r.Mounts = []MountInfo{}
+	}
+	if r.Containers == nil {
+		r.Containers = []AppContainerConfigContainer{}
+	}
+	for i := range r.Networks {
+		r.Networks[i] = r.Networks[i].NormalizeCollections()
+	}
+	for i := range r.Containers {
+		r.Containers[i] = r.Containers[i].NormalizeCollections()
+	}
+	return r
+}
+
+// AppContainerConfigContainer summarizes one runtime container inside a
+// canonical app-container configuration response.
+type AppContainerConfigContainer struct {
+	ID      string      `json:"id"`
+	Service string      `json:"service,omitempty"`
+	Image   string      `json:"image,omitempty"`
+	State   string      `json:"state,omitempty"`
+	Ports   []PortInfo  `json:"ports"`
+	Mounts  []MountInfo `json:"mounts"`
+}
+
+func (c AppContainerConfigContainer) NormalizeCollections() AppContainerConfigContainer {
+	if c.Ports == nil {
+		c.Ports = []PortInfo{}
+	}
+	if c.Mounts == nil {
+		c.Mounts = []MountInfo{}
+	}
+	return c
+}
+
 // ResourceCPU describes CPU usage
 type ResourceCPU struct {
 	Percent float64 `json:"percent"`

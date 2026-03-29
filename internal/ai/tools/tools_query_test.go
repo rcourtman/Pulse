@@ -1396,7 +1396,7 @@ func TestExecuteGetResource_MissingArgs(t *testing.T) {
 	}
 }
 
-func TestExecuteGetGuestConfig_SystemContainerUsesCanonicalResolution(t *testing.T) {
+func TestExecuteGetResourceConfig_SystemContainerUsesCanonicalResolution(t *testing.T) {
 	guestCfg := &mockGuestConfigProvider{
 		config: map[string]interface{}{
 			"hostname": "ct1",
@@ -1416,7 +1416,7 @@ func TestExecuteGetGuestConfig_SystemContainerUsesCanonicalResolution(t *testing
 		GuestConfigProvider: guestCfg,
 	})
 
-	result, _ := executor.executeGetGuestConfig(context.Background(), map[string]interface{}{
+	result, _ := executor.executeGetResourceConfig(context.Background(), map[string]interface{}{
 		"resource_type": "system-container",
 		"resource_id":   "ct1",
 	})
@@ -1458,7 +1458,7 @@ func TestExecuteGetGuestConfig_RejectsLegacyResourceTypes(t *testing.T) {
 
 	for _, resourceType := range []string{"lxc", "host"} {
 		t.Run(resourceType, func(t *testing.T) {
-			result, _ := executor.executeGetGuestConfig(context.Background(), map[string]interface{}{
+			result, _ := executor.executeGetResourceConfig(context.Background(), map[string]interface{}{
 				"resource_type": resourceType,
 				"resource_id":   "ct1",
 			})

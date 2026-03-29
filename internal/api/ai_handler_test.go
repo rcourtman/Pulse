@@ -128,6 +128,9 @@ func (m *MockAIService) SetBackupProvider(provider chat.MCPBackupProvider) { m.C
 func (m *MockAIService) SetGuestConfigProvider(provider chat.MCPGuestConfigProvider) {
 	m.Called(provider)
 }
+func (m *MockAIService) SetAppContainerConfigProvider(provider chat.MCPAppContainerConfigProvider) {
+	m.Called(provider)
+}
 func (m *MockAIService) SetDiskHealthProvider(provider chat.MCPDiskHealthProvider) {
 	m.Called(provider)
 }

@@ -257,6 +257,12 @@ That same monitoring boundary now also owns canonical TrueNAS app log reads.
 through the owned `/api/current` JSON-RPC runtime and tenant-scoped poller
 selection path, so assistant-driven diagnostics do not depend on the unified
 agent or a parallel config-local read path.
+That same monitoring boundary now also owns canonical TrueNAS app
+configuration reads. `internal/truenas/provider.go` and
+`internal/monitoring/truenas_poller.go` must serve API-backed app-container
+runtime/config shape through the same tenant-scoped provider snapshot and app
+selection path used for control and logs, so assistant config reads do not
+fork into a separate ad hoc fetch path or stale config cache.
 That same monitoring boundary now also owns API-backed TrueNAS system
 telemetry for the top-level NAS host. `internal/truenas/client.go` must ingest
 `reporting.realtime` through the official `/api/current` JSON-RPC websocket

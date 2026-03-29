@@ -235,6 +235,26 @@ func (p *Provider) ReadAppLogs(ctx context.Context, appID, containerRef string, 
 	return result, nil
 }
 
+// GetAppConfig returns the current application configuration/runtime shape for
+// one TrueNAS app from the provider snapshot.
+func (p *Provider) GetAppConfig(_ context.Context, appID string) (*AppConfigResult, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas provider is nil")
+	}
+
+	snapshot := p.Snapshot()
+	app, err := findAppInSnapshot(snapshot, appID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &AppConfigResult{App: *app}
+	if snapshot != nil {
+		result.Host = strings.TrimSpace(snapshot.System.Hostname)
+	}
+	return result, nil
+}
+
 // Close releases resources held by the active fetcher, if supported.
 func (p *Provider) Close() {
 	if p == nil || p.fetcher == nil {

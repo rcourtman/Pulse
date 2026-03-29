@@ -196,6 +196,12 @@ runtime paths such as `pulse_read` must resolve API-backed TrueNAS apps
 through the shared canonical `app-container` identity and `resource_id`
 contract instead of reintroducing host-local container routing assumptions for
 platforms that do not use the unified agent as their primary runtime path.
+That same canonical app-container rule now also governs configuration reads.
+Assistant runtime paths such as `pulse_query action="config"` must resolve
+API-backed TrueNAS apps through the same canonical `app-container` identity
+and `resource_id` contract, then project native runtime/config shape through
+the shared app-container payload rather than forcing those resources through
+guest-config routing or inventing a TrueNAS-local config type.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

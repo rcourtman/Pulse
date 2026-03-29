@@ -258,6 +258,32 @@ func TestProviderReadAppLogsSupportsExplicitServiceSelection(t *testing.T) {
 	}
 }
 
+func TestProviderGetAppConfigReturnsCanonicalApp(t *testing.T) {
+	fixtures := DefaultFixtures()
+	fetcher := &controllableStubFetcher{snapshot: &fixtures}
+	provider := NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	result, err := provider.GetAppConfig(context.Background(), "nextcloud")
+	if err != nil {
+		t.Fatalf("GetAppConfig() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected app config result")
+	}
+	if result.Host != "truenas-main" {
+		t.Fatalf("expected host truenas-main, got %+v", result)
+	}
+	if result.App.ID != "nextcloud" || result.App.Name != "Nextcloud" {
+		t.Fatalf("unexpected app config payload: %+v", result.App)
+	}
+	if len(result.App.Containers) != 2 {
+		t.Fatalf("expected full app container runtime shape, got %+v", result.App.Containers)
+	}
+}
+
 func TestProviderRefreshPreservesLastSnapshotOnError(t *testing.T) {
 	initial := DefaultFixtures()
 	provider := NewProvider(initial)
