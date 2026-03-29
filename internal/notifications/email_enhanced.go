@@ -1,11 +1,15 @@
 package notifications
 
 import (
+	"bytes"
 	"crypto/tls"
 	"fmt"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
 	"net/mail"
 	"net/smtp"
+	"net/textproto"
 	"strconv"
 	"strings"
 	"sync"
@@ -148,6 +152,87 @@ func envelopeRecipients(addresses []*mail.Address) []string {
 	return recipients
 }
 
+func normalizeEmailBodyLineEndings(body string) string {
+	body = strings.ReplaceAll(body, "\r\n", "\n")
+	body = strings.ReplaceAll(body, "\r", "\n")
+	return strings.ReplaceAll(body, "\n", "\r\n")
+}
+
+func writeMultipartBodyPart(writer *multipart.Writer, contentType, body string) error {
+	headers := make(textproto.MIMEHeader)
+	headers.Set("Content-Type", fmt.Sprintf("%s; charset=UTF-8", contentType))
+	headers.Set("Content-Transfer-Encoding", "quoted-printable")
+
+	part, err := writer.CreatePart(headers)
+	if err != nil {
+		return fmt.Errorf("create %s part: %w", contentType, err)
+	}
+
+	encoder := quotedprintable.NewWriter(part)
+	if _, err := encoder.Write([]byte(normalizeEmailBodyLineEndings(body))); err != nil {
+		_ = encoder.Close()
+		return fmt.Errorf("encode %s part: %w", contentType, err)
+	}
+	if err := encoder.Close(); err != nil {
+		return fmt.Errorf("finalize %s part: %w", contentType, err)
+	}
+
+	return nil
+}
+
+func buildMultipartEmailMessage(addresses resolvedEmailAddresses, subject, htmlBody, textBody string, now time.Time) ([]byte, error) {
+	var message bytes.Buffer
+	var body bytes.Buffer
+
+	multipartWriter := multipart.NewWriter(&body)
+
+	if _, err := fmt.Fprintf(&message, "From: %s\r\n", addresses.from.String()); err != nil {
+		return nil, fmt.Errorf("write from header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "To: %s\r\n", formatHeaderAddresses(addresses.to)); err != nil {
+		return nil, fmt.Errorf("write to header: %w", err)
+	}
+	if addresses.replyTo != nil {
+		if _, err := fmt.Fprintf(&message, "Reply-To: %s\r\n", addresses.replyTo.String()); err != nil {
+			return nil, fmt.Errorf("write reply-to header: %w", err)
+		}
+	}
+	if _, err := fmt.Fprintf(&message, "Subject: %s\r\n", sanitizeEmailHeaderValue(subject)); err != nil {
+		return nil, fmt.Errorf("write subject header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "Date: %s\r\n", now.Format(time.RFC1123Z)); err != nil {
+		return nil, fmt.Errorf("write date header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "Message-ID: <%d@pulse-monitoring>\r\n", now.UnixNano()); err != nil {
+		return nil, fmt.Errorf("write message-id header: %w", err)
+	}
+	if _, err := message.WriteString("MIME-Version: 1.0\r\n"); err != nil {
+		return nil, fmt.Errorf("write mime-version header: %w", err)
+	}
+	if _, err := fmt.Fprintf(&message, "Content-Type: multipart/alternative; boundary=%q\r\n", multipartWriter.Boundary()); err != nil {
+		return nil, fmt.Errorf("write content-type header: %w", err)
+	}
+	if _, err := message.WriteString("X-Mailer: Pulse Monitoring System\r\n\r\n"); err != nil {
+		return nil, fmt.Errorf("write x-mailer header: %w", err)
+	}
+
+	if err := writeMultipartBodyPart(multipartWriter, "text/plain", textBody); err != nil {
+		return nil, err
+	}
+	if err := writeMultipartBodyPart(multipartWriter, "text/html", htmlBody); err != nil {
+		return nil, err
+	}
+	if err := multipartWriter.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
+
+	if _, err := message.Write(body.Bytes()); err != nil {
+		return nil, fmt.Errorf("write multipart body: %w", err)
+	}
+
+	return message.Bytes(), nil
+}
+
 // negotiateAuth queries the server for supported AUTH mechanisms after EHLO
 // and returns the best smtp.Auth to use. Prefers PLAIN, falls back to LOGIN.
 // Returns nil if auth is not configured.
@@ -285,41 +370,13 @@ func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string)
 		return err
 	}
 
-	// Build message with enhanced headers
-	boundary := fmt.Sprintf("===============%d==", time.Now().UnixNano())
-
-	msg := fmt.Sprintf("From: %s\r\n", addresses.from.String())
-	msg += fmt.Sprintf("To: %s\r\n", formatHeaderAddresses(addresses.to))
-	if addresses.replyTo != nil {
-		msg += fmt.Sprintf("Reply-To: %s\r\n", addresses.replyTo.String())
+	msg, err := buildMultipartEmailMessage(addresses, subject, htmlBody, textBody, time.Now())
+	if err != nil {
+		return err
 	}
-	msg += fmt.Sprintf("Subject: %s\r\n", sanitizeEmailHeaderValue(subject))
-	msg += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
-	msg += fmt.Sprintf("Message-ID: <%d@pulse-monitoring>\r\n", time.Now().UnixNano())
-	msg += "MIME-Version: 1.0\r\n"
-	msg += fmt.Sprintf("Content-Type: multipart/alternative; boundary=\"%s\"\r\n", boundary)
-	msg += "X-Mailer: Pulse Monitoring System\r\n"
-	msg += "\r\n"
-
-	// Text part
-	msg += fmt.Sprintf("--%s\r\n", boundary)
-	msg += "Content-Type: text/plain; charset=\"UTF-8\"\r\n"
-	msg += "Content-Transfer-Encoding: 7bit\r\n"
-	msg += "\r\n"
-	msg += textBody + "\r\n"
-
-	// HTML part
-	msg += fmt.Sprintf("--%s\r\n", boundary)
-	msg += "Content-Type: text/html; charset=\"UTF-8\"\r\n"
-	msg += "Content-Transfer-Encoding: 7bit\r\n"
-	msg += "\r\n"
-	msg += htmlBody + "\r\n"
-
-	// End boundary
-	msg += fmt.Sprintf("--%s--\r\n", boundary)
 
 	// Send based on provider configuration
-	return e.sendViaProviderWithAddresses([]byte(msg), addresses)
+	return e.sendViaProviderWithAddresses(msg, addresses)
 }
 
 // sendViaProvider sends email using provider-specific settings

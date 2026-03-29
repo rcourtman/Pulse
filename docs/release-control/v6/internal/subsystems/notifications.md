@@ -123,6 +123,9 @@ That same delivery boundary also owns SMTP mailbox normalization. `From`,
 recipient, and `Reply-To` inputs must be parsed as canonical mailboxes before
 headers or SMTP envelope commands are constructed, so notification delivery
 cannot treat raw config strings as header fragments or `RCPT TO` input.
+That same SMTP boundary also owns MIME-safe body construction. Text and HTML
+payloads must be emitted through canonical multipart writers with encoded body
+parts instead of being concatenated directly into handcrafted message bodies.
 That same queue ownership also governs persistent queue storage roots. The
 notifications queue database must normalize its owned data directory and
 resolve the fixed `notification_queue.db` leaf through the shared storage-path

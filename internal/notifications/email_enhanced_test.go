@@ -2,9 +2,15 @@ package notifications
 
 import (
 	"bufio"
+	"bytes"
 	"crypto/tls"
 	"fmt"
+	"io"
+	"mime"
+	"mime/multipart"
+	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"net/textproto"
 	"strings"
 	"testing"
@@ -322,6 +328,100 @@ func TestSendEmailOnce_BuildsMultipartMessage(t *testing.T) {
 	// Error should be from connection, not from message construction
 	if strings.Contains(err.Error(), "message") && strings.Contains(err.Error(), "build") {
 		t.Errorf("unexpected message build error: %v", err)
+	}
+}
+
+func TestBuildMultipartEmailMessage_EncodesMultipartBodies(t *testing.T) {
+	addresses := resolvedEmailAddresses{
+		from: &mail.Address{
+			Name:    "Pulse Sender",
+			Address: "sender@example.com",
+		},
+		to: []*mail.Address{
+			{
+				Name:    "Recipient",
+				Address: "recipient@example.com",
+			},
+		},
+		replyTo: &mail.Address{Address: "reply@example.com"},
+	}
+
+	textBody := "Text line 1\nBcc: attacker@example.com\n.\n--pretend-boundary"
+	htmlBody := "<p>Hello</p>\nContent-Type: text/plain\n.\n--pretend-boundary"
+
+	msg, err := buildMultipartEmailMessage(addresses, "Alert Subject", htmlBody, textBody, time.Unix(1711711711, 1234).UTC())
+	if err != nil {
+		t.Fatalf("buildMultipartEmailMessage() error = %v", err)
+	}
+
+	raw := string(msg)
+	if strings.Contains(raw, "Content-Transfer-Encoding: 7bit") {
+		t.Fatalf("message should not use raw 7bit body encoding:\n%s", raw)
+	}
+	if count := strings.Count(raw, "Content-Transfer-Encoding: quoted-printable"); count != 2 {
+		t.Fatalf("expected two quoted-printable parts, got %d", count)
+	}
+
+	parsed, err := mail.ReadMessage(bytes.NewReader(msg))
+	if err != nil {
+		t.Fatalf("mail.ReadMessage() error = %v", err)
+	}
+
+	if got := parsed.Header.Get("From"); got != addresses.from.String() {
+		t.Fatalf("From header = %q, want %q", got, addresses.from.String())
+	}
+	if got := parsed.Header.Get("To"); got != formatHeaderAddresses(addresses.to) {
+		t.Fatalf("To header = %q, want %q", got, formatHeaderAddresses(addresses.to))
+	}
+	if got := parsed.Header.Get("Reply-To"); got != addresses.replyTo.String() {
+		t.Fatalf("Reply-To header = %q, want %q", got, addresses.replyTo.String())
+	}
+	if got := parsed.Header.Get("Subject"); got != "Alert Subject" {
+		t.Fatalf("Subject header = %q, want %q", got, "Alert Subject")
+	}
+
+	mediaType, params, err := mime.ParseMediaType(parsed.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatalf("mime.ParseMediaType() error = %v", err)
+	}
+	if mediaType != "multipart/alternative" {
+		t.Fatalf("content type = %q, want %q", mediaType, "multipart/alternative")
+	}
+
+	reader := multipart.NewReader(parsed.Body, params["boundary"])
+
+	textPart, err := reader.NextRawPart()
+	if err != nil {
+		t.Fatalf("NextPart() text error = %v", err)
+	}
+	if got := textPart.Header.Get("Content-Transfer-Encoding"); got != "quoted-printable" {
+		t.Fatalf("text part transfer encoding = %q, want %q", got, "quoted-printable")
+	}
+	decodedText, err := io.ReadAll(quotedprintable.NewReader(textPart))
+	if err != nil {
+		t.Fatalf("ReadAll(text part) error = %v", err)
+	}
+	if got := string(decodedText); got != normalizeEmailBodyLineEndings(textBody) {
+		t.Fatalf("decoded text body = %q, want %q", got, normalizeEmailBodyLineEndings(textBody))
+	}
+
+	htmlPart, err := reader.NextRawPart()
+	if err != nil {
+		t.Fatalf("NextPart() html error = %v", err)
+	}
+	if got := htmlPart.Header.Get("Content-Transfer-Encoding"); got != "quoted-printable" {
+		t.Fatalf("html part transfer encoding = %q, want %q", got, "quoted-printable")
+	}
+	decodedHTML, err := io.ReadAll(quotedprintable.NewReader(htmlPart))
+	if err != nil {
+		t.Fatalf("ReadAll(html part) error = %v", err)
+	}
+	if got := string(decodedHTML); got != normalizeEmailBodyLineEndings(htmlBody) {
+		t.Fatalf("decoded html body = %q, want %q", got, normalizeEmailBodyLineEndings(htmlBody))
+	}
+
+	if _, err := reader.NextRawPart(); err != io.EOF {
+		t.Fatalf("expected multipart EOF, got %v", err)
 	}
 }
 
