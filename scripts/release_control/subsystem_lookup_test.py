@@ -24,6 +24,19 @@ PATROL_PAGE_AND_STATE_EXACT_FILES = [
     "tests/integration/tests/18-patrol-runtime-state.spec.ts",
 ]
 
+PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
+    "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/PlatformConnectionsWorkspace.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+    "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+    "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
+    "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
+    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+    "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
+]
+
 
 class SubsystemLookupTest(unittest.TestCase):
     def test_lookup_paths_reports_multiple_subsystems_for_shared_runtime_file(self) -> None:
@@ -1804,19 +1817,11 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-            ],
+            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_infrastructure_workspace_model_to_agent_lifecycle(self) -> None:
@@ -1842,19 +1847,11 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-            ],
+            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_infrastructure_reporting_summary_to_agent_lifecycle(
@@ -1862,7 +1859,7 @@ class SubsystemLookupTest(unittest.TestCase):
     ) -> None:
         result = lookup_paths(
             [
-                "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx"
+                "frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx"
             ]
         )
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -1884,19 +1881,11 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-            ],
+            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_proxmox_direct_workspace_state_to_agent_lifecycle(self) -> None:
@@ -1922,19 +1911,11 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L16")
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-            ],
+            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_assigns_infrastructure_settings_model_to_agent_lifecycle(self) -> None:
@@ -1955,19 +1936,11 @@ class SubsystemLookupTest(unittest.TestCase):
         match = file_entry["matches"][0]
         self.assertEqual(
             match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
         self.assertEqual(
             match["verification_requirement"]["exact_files"],
-            [
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-            ],
+            PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
         )
 
     def test_lookup_paths_reports_agent_install_backend_as_shared_boundary(self) -> None:
@@ -3919,7 +3892,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             lifecycle_match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
 
     def test_lookup_paths_assigns_infrastructure_discovery_runtime_state_to_shared_agent_lifecycle_and_api_contracts(
@@ -3952,7 +3925,7 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertEqual(
             lifecycle_match["verification_requirement"]["id"],
-            "direct-proxmox-workspace-surface",
+            "platform-connections-workspace-surface",
         )
 
     def test_lookup_paths_assigns_infrastructure_reporting_state_to_shared_agent_lifecycle_and_api_contracts(

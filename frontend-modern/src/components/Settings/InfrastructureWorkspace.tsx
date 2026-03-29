@@ -34,16 +34,16 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
             <h3 class="text-base font-semibold text-base-content">Connect your first system</h3>
             <p class="text-sm text-muted">
               Start with Install on a host to connect the first machine you want Pulse to monitor.
-              If you already know you want an API-backed platform integration instead, go straight
-              to Platform connections.
+              If you already know you want an API-backed platform such as Proxmox or TrueNAS
+              instead, go straight to Platform connections.
             </p>
           </div>
           <div class="grid gap-3 lg:grid-cols-3">
             <div class="rounded-md border border-border bg-surface px-4 py-3">
               <p class="text-xs font-semibold uppercase tracking-wide text-muted">1. Choose path</p>
               <p class="mt-1 text-sm text-base-content">
-                Install Pulse on a host first, or open Platform connections for systems Pulse
-                should poll through their own APIs.
+                Install Pulse on a host first, or open Platform connections for Proxmox, TrueNAS,
+                and other systems Pulse should poll through their own APIs.
               </p>
             </div>
             <div class="rounded-md border border-border bg-surface px-4 py-3">
@@ -52,7 +52,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
               </p>
               <p class="mt-1 text-sm text-base-content">
                 Create the install token Pulse expects for the first monitored host, or add the API
-                credentials Pulse should store for platform-backed systems.
+                credentials Pulse should store for API-backed platforms like Proxmox and TrueNAS.
               </p>
             </div>
             <div class="rounded-md border border-border bg-surface px-4 py-3">
@@ -121,7 +121,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
         <Match when={activeView() === 'inventory'}>
           <InfrastructureReportingPanel
             {...props}
-            onManageDirectConnections={() => openView('platforms')}
+            onManagePlatformConnections={() => openView('platforms')}
           />
         </Match>
       </Switch>

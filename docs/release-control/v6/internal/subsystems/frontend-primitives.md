@@ -199,9 +199,10 @@ work extends shared components instead of creating new local variants.
 10. Keep dashboard onboarding copy on the shared presentation owner in
    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
    infrastructure empty state and the dashboard route's no-resources state
-   must name the canonical install workspace explicitly and expose the same
-   first-host next step instead of falling back to passive “nothing here yet”
-   wording.
+   must name the canonical install workspace explicitly, keep `Platform
+   connections` visible as the API-backed alternative for Proxmox and
+   TrueNAS, and expose the same first-host next step instead of falling back
+   to passive “nothing here yet” wording.
 11. Keep the authenticated app root aligned with that same first-session path.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
     the governed dashboard empty state route first-time operators into
@@ -1488,8 +1489,9 @@ locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
 The same shared settings-shell boundary now also owns the API-backed
 alternative path inside Infrastructure Operations. `InfrastructureWorkspace.tsx`,
-`settingsHeaderMeta.ts`, `settingsNavigationModel.ts`,
-`dashboardEmptyStatePresentation.ts`, and adjacent setup guidance must treat
-`Platform connections` as the canonical API-backed alternative for Proxmox,
-TrueNAS, and future provider integrations instead of reviving top-level
-`Direct Proxmox` wording or shell-local provider routes.
+`InfrastructurePlatformConnectionsSummaryCard.tsx`, `settingsHeaderMeta.ts`,
+`settingsNavigationModel.ts`, `dashboardEmptyStatePresentation.ts`,
+`infrastructureEmptyStatePresentation.ts`, and adjacent setup guidance must
+treat `Platform connections` as the canonical API-backed alternative for
+Proxmox, TrueNAS, and future provider integrations instead of reviving
+top-level `Direct Proxmox` wording or shell-local provider routes.

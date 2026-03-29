@@ -34,9 +34,9 @@ export const TrueNASSettingsPanel: Component = () => {
         description={
           <>
             <p>
-              Connect TrueNAS through its API so Pulse can ingest pools, datasets, disks, alerts,
-              and recovery artifacts as a first-class platform instead of treating the NAS like a
-              generic host.
+              Connect TrueNAS through its API so Pulse can ingest pools, datasets, disks, disk
+              temperatures, apps, alerts, and recovery artifacts as a first-class platform instead
+              of treating the NAS like a generic host.
             </p>
             <p class="mt-2">
               Use the unified agent on TrueNAS only as optional augmentation later if there is
@@ -72,7 +72,8 @@ export const TrueNASSettingsPanel: Component = () => {
                 <h3 class="text-base font-semibold text-base-content">TrueNAS connections</h3>
                 <p class="text-sm text-muted">
                   Manage the API-backed TrueNAS systems Pulse should poll and normalize into the
-                  unified resource model.
+                  unified resource model for infrastructure, workloads, alerts, storage, and
+                  recovery.
                 </p>
               </div>
               <div class="flex items-center gap-2">

@@ -1,30 +1,30 @@
 import type { Component } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 
-interface InfrastructureDirectConnectionsSummaryCardProps {
+interface InfrastructurePlatformConnectionsSummaryCardProps {
   pveCount: number;
   pbsCount: number;
   pmgCount: number;
-  onManageDirectConnections: () => void;
+  onManagePlatformConnections: () => void;
 }
 
-export const InfrastructureDirectConnectionsSummaryCard: Component<
-  InfrastructureDirectConnectionsSummaryCardProps
+export const InfrastructurePlatformConnectionsSummaryCard: Component<
+  InfrastructurePlatformConnectionsSummaryCardProps
 > = (props) => {
   return (
     <Card padding="lg" class="rounded-xl border border-border shadow-sm">
       <div class="space-y-4">
         <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 class="text-base font-semibold text-base-content">Direct Proxmox connections</h3>
+            <h3 class="text-base font-semibold text-base-content">Platform connections</h3>
             <p class="text-sm text-muted">
-              Review fallback Proxmox coverage separately from agent-managed hosts, then open the
-              shared platform-connections workspace for Proxmox and TrueNAS integrations.
+              Manage the API-backed platforms Pulse polls directly. Proxmox VE, PBS, PMG, and
+              TrueNAS all live in the same shared platform-connections workspace.
             </p>
           </div>
           <button
             type="button"
-            onClick={props.onManageDirectConnections}
+            onClick={props.onManagePlatformConnections}
             class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
           >
             Open platform connections
@@ -45,9 +45,17 @@ export const InfrastructureDirectConnectionsSummaryCard: Component<
             <div class="mt-1 text-xl font-semibold text-base-content">{props.pmgCount}</div>
           </div>
         </div>
+
+        <div class="rounded-lg border border-border bg-surface-alt px-4 py-3">
+          <div class="text-sm font-medium text-base-content">TrueNAS</div>
+          <p class="mt-1 text-sm text-muted">
+            Add and manage API-backed NAS systems, apps, disks, alerts, temperatures, and
+            recovery coverage from the TrueNAS tab in Platform connections.
+          </p>
+        </div>
       </div>
     </Card>
   );
 };
 
-export default InfrastructureDirectConnectionsSummaryCard;
+export default InfrastructurePlatformConnectionsSummaryCard;

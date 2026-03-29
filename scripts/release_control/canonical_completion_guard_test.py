@@ -20,6 +20,19 @@ from canonical_completion_guard import (
 
 WORKSPACE_REPOS_ROOT = REPO_ROOT.parent
 
+PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
+    "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/PlatformConnectionsWorkspace.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
+    "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
+    "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
+    "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
+    "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
+    "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
+]
+
 
 def split_workspace_path(path: str) -> tuple[Path, str]:
     if ":" not in path:
@@ -1998,7 +2011,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
-    def _assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+    def _assert_platform_connections_workspace_change_requires_agent_lifecycle(
         self, touched_path: str
     ) -> None:
         required = infer_impacted_subsystems([touched_path])
@@ -2014,36 +2027,28 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             lifecycle["verification_requirements"],
             [
                 {
-                    "id": "direct-proxmox-workspace-surface",
-                    "label": "direct Proxmox workspace lifecycle proof",
+                    "id": "platform-connections-workspace-surface",
+                    "label": "platform connections workspace lifecycle proof",
                     "touched_runtime_files": [touched_path],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                        "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                        "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-                    ],
+                    "exact_files": PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
                 }
             ],
         )
 
     def test_proxmox_settings_panel_change_requires_agent_lifecycle(self):
-        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/ProxmoxSettingsPanel.tsx"
         )
 
     def test_infrastructure_settings_state_change_requires_agent_lifecycle(self):
-        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts"
         )
 
     def test_infrastructure_settings_model_change_requires_agent_lifecycle(self):
-        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts"
         )
 
@@ -2064,22 +2069,14 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             lifecycle["verification_requirements"],
             [
                 {
-                    "id": "direct-proxmox-workspace-surface",
-                    "label": "direct Proxmox workspace lifecycle proof",
+                    "id": "platform-connections-workspace-surface",
+                    "label": "platform connections workspace lifecycle proof",
                     "touched_runtime_files": [
                         "frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts"
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                        "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                        "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-                    ],
+                    "exact_files": PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
                 }
             ],
         )
@@ -2128,22 +2125,14 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             lifecycle["verification_requirements"],
             [
                 {
-                    "id": "direct-proxmox-workspace-surface",
-                    "label": "direct Proxmox workspace lifecycle proof",
+                    "id": "platform-connections-workspace-surface",
+                    "label": "platform connections workspace lifecycle proof",
                     "touched_runtime_files": [
                         "frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts"
                     ],
                     "allow_same_subsystem_tests": False,
                     "test_prefixes": [],
-                    "exact_files": [
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureOperationsController.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
-                        "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
-                        "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
-                        "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
-                        "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-                        "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
-                    ],
+                    "exact_files": PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES,
                 }
             ],
         )
@@ -2176,17 +2165,17 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         )
 
     def test_infrastructure_workspace_model_change_requires_agent_lifecycle(self):
-        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts"
         )
 
     def test_infrastructure_reporting_summary_change_requires_agent_lifecycle(self):
-        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
-            "frontend-modern/src/components/Settings/InfrastructureDirectConnectionsSummaryCard.tsx"
+        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
+            "frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx"
         )
 
     def test_proxmox_direct_workspace_state_change_requires_agent_lifecycle(self):
-        self._assert_direct_proxmox_workspace_change_requires_agent_lifecycle(
+        self._assert_platform_connections_workspace_change_requires_agent_lifecycle(
             "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts"
         )
 

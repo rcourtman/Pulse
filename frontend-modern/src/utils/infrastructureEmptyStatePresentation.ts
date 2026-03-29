@@ -2,7 +2,7 @@ export function getInfrastructureEmptyState() {
   return {
     title: 'No infrastructure resources yet',
     description:
-      'Start by opening Settings → Infrastructure → Install on a host and adding the first system you want Pulse to monitor. If you prefer an API-backed platform integration instead, use Platform connections.',
+      'Start by opening Settings → Infrastructure → Install on a host and adding the first system you want Pulse to monitor. If you prefer an API-backed platform such as Proxmox or TrueNAS instead, use Platform connections.',
     actionLabel: 'Open Infrastructure Install',
   } as const;
 }

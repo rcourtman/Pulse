@@ -14,7 +14,7 @@ describe('dashboardEmptyStatePresentation', () => {
     expect(getDashboardInfrastructureEmptyState()).toEqual({
       title: 'No infrastructure hosts connected',
       description:
-        'To start using Pulse, first add your infrastructure in Settings → Infrastructure → Install on a host. If you want an API-backed platform integration instead, use Settings → Infrastructure → Platform connections.',
+        'To start using Pulse, first add your infrastructure in Settings → Infrastructure → Install on a host. If you want an API-backed platform such as Proxmox or TrueNAS instead, use Settings → Infrastructure → Platform connections.',
       actionLabel: 'Open infrastructure setup',
     });
   });

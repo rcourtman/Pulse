@@ -59,7 +59,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Connect your first system')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Start with Install on a host to connect the first machine you want Pulse to monitor. If you already know you want an API-backed platform integration instead, go straight to Platform connections.',
+        'Start with Install on a host to connect the first machine you want Pulse to monitor. If you already know you want an API-backed platform such as Proxmox or TrueNAS instead, go straight to Platform connections.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('1. Choose path')).toBeInTheDocument();

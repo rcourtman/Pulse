@@ -14,7 +14,7 @@ import infrastructureInstallerSectionSource from '../InfrastructureInstallerSect
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
-import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
+import infrastructurePlatformConnectionsSummaryCardSource from '../InfrastructurePlatformConnectionsSummaryCard.tsx?raw';
 import trueNASSettingsPanelSource from '../TrueNASSettingsPanel.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDetails.tsx?raw';
@@ -200,7 +200,7 @@ const extractedModules = [
   '../InfrastructureInstallPanel.tsx',
   '../InfrastructureInstallerSection.tsx',
   '../InfrastructureReportingPanel.tsx',
-  '../InfrastructureDirectConnectionsSummaryCard.tsx',
+  '../InfrastructurePlatformConnectionsSummaryCard.tsx',
   '../InfrastructureInventorySection.tsx',
   '../InfrastructureActiveRowDetails.tsx',
   '../InfrastructureIgnoredRowDetails.tsx',
@@ -878,9 +878,9 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureReportingPanelSource).toContain('InfrastructureInventorySection');
     expect(infrastructureReportingPanelSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureReportingPanelSource).toContain(
-      './InfrastructureDirectConnectionsSummaryCard',
+      './InfrastructurePlatformConnectionsSummaryCard',
     );
-    expect(infrastructureReportingPanelSource).not.toContain('Direct Proxmox connections');
+    expect(infrastructureReportingPanelSource).not.toContain('Platform connections');
     expect(infrastructureReportingPanelSource).not.toContain('Manage direct connections');
     expect(infrastructureOperationsControllerSource).toContain(
       'InfrastructureOperationsStateProvider',
@@ -929,10 +929,11 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',
     );
-    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
-      'Direct Proxmox connections',
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
+      'Platform connections',
     );
-    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('TrueNAS');
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
       'Open platform connections',
     );
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');

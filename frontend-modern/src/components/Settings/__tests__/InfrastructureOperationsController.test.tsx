@@ -9,7 +9,7 @@ import infrastructureInstallerSectionSource from '../InfrastructureInstallerSect
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
-import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
+import infrastructurePlatformConnectionsSummaryCardSource from '../InfrastructurePlatformConnectionsSummaryCard.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
@@ -98,12 +98,13 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureReportingPanelSource).toContain('InfrastructureInventorySection');
     expect(infrastructureReportingPanelSource).toContain('InfrastructureStopMonitoringDialog');
     expect(infrastructureReportingPanelSource).toContain(
-      './InfrastructureDirectConnectionsSummaryCard',
+      './InfrastructurePlatformConnectionsSummaryCard',
     );
-    expect(infrastructureReportingPanelSource).not.toContain('Direct Proxmox connections');
-    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
-      'Direct Proxmox connections',
+    expect(infrastructureReportingPanelSource).not.toContain('Platform connections');
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
+      'Platform connections',
     );
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('TrueNAS');
     expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureReportingState');
