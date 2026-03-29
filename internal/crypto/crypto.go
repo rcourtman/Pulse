@@ -15,6 +15,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/hkdf"
@@ -152,10 +153,25 @@ func resolveDataDir(dataDir string) (string, error) {
 	if dir == "" {
 		dir = strings.TrimSpace(defaultDataDirFn())
 	}
-	if dir == "" {
-		return "", fmt.Errorf("data directory is required")
+	resolvedDir, err := securityutil.NormalizeStorageDir(dir)
+	if err != nil {
+		return "", fmt.Errorf("data directory is required: %w", err)
 	}
-	return filepath.Clean(dir), nil
+	return resolvedDir, nil
+}
+
+func resolveEncryptionKeyPath(dataDir string) (string, string, error) {
+	resolvedDataDir, err := resolveDataDir(dataDir)
+	if err != nil {
+		return "", "", err
+	}
+
+	keyPath, err := securityutil.JoinStorageLeaf(resolvedDataDir, encryptionKeyFileName)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve encryption key path: %w", err)
+	}
+
+	return resolvedDataDir, keyPath, nil
 }
 
 func resolveLegacyKeyPath() string {
@@ -199,11 +215,10 @@ func (c *CryptoManager) DeriveKey(purpose string, length int) ([]byte, error) {
 
 // NewCryptoManagerAt creates a new crypto manager with an explicit data directory override.
 func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
-	resolvedDataDir, err := resolveDataDir(dataDir)
+	resolvedDataDir, keyPath, err := resolveEncryptionKeyPath(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve data directory: %w", err)
 	}
-	keyPath := filepath.Join(resolvedDataDir, ".encryption.key")
 
 	key, err := getOrCreateKeyAt(resolvedDataDir)
 	if err != nil {
@@ -218,12 +233,10 @@ func NewCryptoManagerAt(dataDir string) (*CryptoManager, error) {
 
 // getOrCreateKeyAt gets the encryption key or creates one if it doesn't exist
 func getOrCreateKeyAt(dataDir string) ([]byte, error) {
-	resolvedDataDir, err := resolveDataDir(dataDir)
+	resolvedDataDir, keyPath, err := resolveEncryptionKeyPath(dataDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolve data directory: %w", err)
 	}
-
-	keyPath := filepath.Join(dataDir, encryptionKeyFileName)
 	// Test/ops hook: allow overriding the legacy key location to avoid touching /etc/pulse in unit tests.
 	// Invalid overrides are ignored to avoid accidentally reading from relative CWD paths.
 	oldKeyPath := resolveLegacyKeyPath()
@@ -285,16 +298,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 			} else {
 				key := decoded[:n]
 				// Migrate key to new location
-				if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
-					// Migration failed, but we can still use the old key
-					log.Warn().
-						Err(err).
-						Str("from", oldKeyPath).
-						Str("to", keyPath).
-						Msg("Failed to create directory for key migration, using old location")
-					return key, nil
-				}
-				if err := os.WriteFile(keyPath, data, 0600); err != nil {
+				if err := writeKeyFile(keyPath, key); err != nil {
 					// Migration failed, but we can still use the old key
 					log.Warn().
 						Err(err).
@@ -342,7 +346,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		log.Debug().
 			Str("dataDir", resolvedDataDir).
 			Str("keyPath", keyPath).
-			Bool("sameAsOldPath", dataDir == oldKeyDir).
+			Bool("sameAsOldPath", resolvedDataDir == oldKeyDir).
 			Msg("skipping key migration check (legacy and current paths are equivalent)")
 	}
 
@@ -364,7 +368,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 
 	var foundFiles []string
 	for _, pattern := range checkPatterns {
-		globPattern := filepath.Join(dataDir, pattern)
+		globPattern := filepath.Join(resolvedDataDir, pattern)
 		matches, err := filepath.Glob(globPattern)
 		if err != nil {
 			return nil, fmt.Errorf("crypto.getOrCreateKeyAt: glob encrypted-data pattern %q: %w", globPattern, err)
@@ -397,14 +401,7 @@ func getOrCreateKeyAt(dataDir string) ([]byte, error) {
 		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: generate key bytes: %w", err)
 	}
 
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(keyPath), 0700); err != nil {
-		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: create key directory %q: %w", filepath.Dir(keyPath), err)
-	}
-
-	// Save key with restricted permissions
-	encoded := base64.StdEncoding.EncodeToString(key)
-	if err := os.WriteFile(keyPath, []byte(encoded), 0600); err != nil {
+	if err := writeKeyFile(keyPath, key); err != nil {
 		return nil, fmt.Errorf("crypto.getOrCreateKeyAt: save key file %q: %w", keyPath, err)
 	}
 

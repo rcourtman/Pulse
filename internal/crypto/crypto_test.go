@@ -398,6 +398,25 @@ func TestNewCryptoManagerAt_WhitespaceDataDirUsesDefault(t *testing.T) {
 	}
 }
 
+func TestResolveEncryptionKeyPathCanonicalizesDataDir(t *testing.T) {
+	root := t.TempDir()
+	rawDir := filepath.Join(root, "crypto", "..", "crypto")
+
+	resolvedDir, keyPath, err := resolveEncryptionKeyPath("  " + rawDir + "  ")
+	if err != nil {
+		t.Fatalf("resolveEncryptionKeyPath() error: %v", err)
+	}
+
+	wantDir := filepath.Clean(rawDir)
+	wantKeyPath := filepath.Join(wantDir, encryptionKeyFileName)
+	if resolvedDir != wantDir {
+		t.Fatalf("resolvedDir = %q, want %q", resolvedDir, wantDir)
+	}
+	if keyPath != wantKeyPath {
+		t.Fatalf("keyPath = %q, want %q", keyPath, wantKeyPath)
+	}
+}
+
 func TestNewCryptoManagerAt_EmptyDefaultDataDirFails(t *testing.T) {
 	withDefaultDataDir(t, "   ")
 
@@ -479,6 +498,25 @@ func TestGetOrCreateKeyAt_DefaultDataDir(t *testing.T) {
 	}
 	if len(key) != 32 {
 		t.Fatalf("expected 32-byte key, got %d", len(key))
+	}
+}
+
+func TestGetOrCreateKeyAt_CanonicalizesDataDir(t *testing.T) {
+	root := t.TempDir()
+	rawDir := filepath.Join(root, "crypto", "..", "crypto")
+	withLegacyKeyPath(t, filepath.Join(t.TempDir(), ".encryption.key"))
+
+	key, err := getOrCreateKeyAt("  " + rawDir + "  ")
+	if err != nil {
+		t.Fatalf("getOrCreateKeyAt() error: %v", err)
+	}
+	if len(key) != encryptionKeyLength {
+		t.Fatalf("expected %d-byte key, got %d", encryptionKeyLength, len(key))
+	}
+
+	wantKeyPath := filepath.Join(filepath.Clean(rawDir), encryptionKeyFileName)
+	if _, err := os.Stat(wantKeyPath); err != nil {
+		t.Fatalf("expected canonical key path %q: %v", wantKeyPath, err)
 	}
 }
 
