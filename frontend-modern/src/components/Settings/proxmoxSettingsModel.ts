@@ -8,10 +8,19 @@ import type {
   DiscoveryScanStatus,
   NodeType,
 } from './infrastructureSettingsModel';
+import type { TrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 
 export type DiscoveryMode = 'auto' | 'custom';
 
-export interface ProxmoxSettingsPanelProps {
+export interface PlatformConnectionsSummary {
+  pveCount: number;
+  pbsCount: number;
+  pmgCount: number;
+  truenasCount: number;
+  truenasAvailable: boolean;
+}
+
+export interface InfrastructurePlatformSettingsProps {
   selectedAgent: Accessor<NodeType>;
   onSelectAgent: (agent: NodeType) => void;
   initialLoadComplete: Accessor<boolean>;
@@ -27,6 +36,8 @@ export interface ProxmoxSettingsPanelProps {
   pveNodes: Accessor<NodeConfigWithStatus[]>;
   pbsNodes: Accessor<NodeConfigWithStatus[]>;
   pmgNodes: Accessor<NodeConfigWithStatus[]>;
+  trueNASSettings: TrueNASSettingsPanelState;
+  platformConnectionsSummary: Accessor<PlatformConnectionsSummary>;
   temperatureMonitoringEnabled: Accessor<boolean>;
   triggerDiscoveryScan: (options?: { quiet?: boolean }) => Promise<void>;
   loadDiscoveredNodes: () => Promise<void>;

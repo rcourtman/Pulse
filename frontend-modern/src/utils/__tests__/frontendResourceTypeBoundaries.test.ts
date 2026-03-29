@@ -3414,7 +3414,9 @@ describe('frontend resource type boundaries', () => {
     expect(proxmoxConfiguredNodesTableSource).toContain('PbsNodesTable');
     expect(proxmoxConfiguredNodesTableSource).toContain('PmgNodesTable');
     expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
-    expect(proxmoxSettingsModelSource).toContain('export interface ProxmoxSettingsPanelProps');
+    expect(proxmoxSettingsModelSource).toContain(
+      'export interface InfrastructurePlatformSettingsProps',
+    );
     expect(proxmoxDirectWorkspaceStateSource).toContain(
       'export function useProxmoxDirectWorkspaceState',
     );

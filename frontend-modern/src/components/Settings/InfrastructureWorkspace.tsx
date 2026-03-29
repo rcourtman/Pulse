@@ -12,9 +12,9 @@ import {
   getInfrastructureWorkspaceViewFromPath,
   type InfrastructureWorkspaceView,
 } from './infrastructureWorkspaceModel';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 
-export type InfrastructureWorkspaceProps = ProxmoxSettingsPanelProps;
+export type InfrastructureWorkspaceProps = InfrastructurePlatformSettingsProps;
 
 export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = (props) => {
   const navigate = useNavigate();

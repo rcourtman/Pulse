@@ -235,6 +235,14 @@ work extends shared components instead of creating new local variants.
     present `Platform connections` as the canonical API-backed alternative for
     Proxmox, TrueNAS, and future provider integrations instead of reviving
     top-level `Direct Proxmox` wording or shell-local provider routes.
+17. Keep the infrastructure settings platform-connections summary and provider
+    workspaces on one shared state source. `useInfrastructureSettingsState.ts`,
+    `useSettingsInfrastructurePanelProps.ts`,
+    `InfrastructurePlatformConnectionsSummaryCard.tsx`,
+    `PlatformConnectionsWorkspace.tsx`, and `TrueNASSettingsPanel.tsx` must
+    derive TrueNAS connection counts and availability from the shared
+    infrastructure settings state instead of letting the reporting summary and
+    the provider-specific panel issue separate connection fetches.
 
 ## Current State
 
@@ -1506,3 +1514,11 @@ alternative path inside Infrastructure Operations. `InfrastructureWorkspace.tsx`
 treat `Platform connections` as the canonical API-backed alternative for
 Proxmox, TrueNAS, and future provider integrations instead of reviving
 top-level `Direct Proxmox` wording or shell-local provider routes.
+That same settings-shell contract also owns the shared platform-connections
+summary state. `useInfrastructureSettingsState.ts`,
+`useSettingsInfrastructurePanelProps.ts`,
+`InfrastructurePlatformConnectionsSummaryCard.tsx`,
+`PlatformConnectionsWorkspace.tsx`, and `TrueNASSettingsPanel.tsx` must derive
+Proxmox/PBS/PMG/TrueNAS counts and availability from one shared infrastructure
+settings state source instead of letting the reporting summary and the
+provider-specific panel fetch the same TrueNAS connection state separately.

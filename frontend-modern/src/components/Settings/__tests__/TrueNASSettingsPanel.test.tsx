@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrueNASSettingsPanel } from '../TrueNASSettingsPanel';
+import type { TrueNASSettingsPanelState } from '../useTrueNASSettingsPanelState';
 
 const mockState = vi.hoisted(() => ({
   closeDeleteDialog: vi.fn(),
@@ -43,10 +44,6 @@ const mockState = vi.hoisted(() => ({
   updateForm: vi.fn(),
 }));
 
-vi.mock('../useTrueNASSettingsPanelState', () => ({
-  useTrueNASSettingsPanelState: () => mockState,
-}));
-
 describe('TrueNASSettingsPanel', () => {
   beforeEach(() => {
     Object.values(mockState).forEach((value) => {
@@ -87,6 +84,8 @@ describe('TrueNASSettingsPanel', () => {
     cleanup();
   });
 
+  const renderPanel = () => render(() => <TrueNASSettingsPanel state={mockState as unknown as TrueNASSettingsPanelState} />);
+
   it('renders the settings shell and existing connections', () => {
     mockState.connections.mockReturnValue([
       {
@@ -101,7 +100,7 @@ describe('TrueNASSettingsPanel', () => {
       },
     ]);
 
-    render(() => <TrueNASSettingsPanel />);
+    renderPanel();
 
     expect(screen.getByText('TrueNAS platform integration')).toBeInTheDocument();
     expect(screen.getByText('TrueNAS connections')).toBeInTheDocument();
@@ -116,7 +115,7 @@ describe('TrueNASSettingsPanel', () => {
     mockState.featureDisabled.mockReturnValue(true);
     mockState.featureDisabledMessage.mockReturnValue('truenas_disabled');
 
-    render(() => <TrueNASSettingsPanel />);
+    renderPanel();
 
     expect(screen.getByText('TrueNAS integration is disabled')).toBeInTheDocument();
     expect(screen.getByText('truenas_disabled')).toBeInTheDocument();

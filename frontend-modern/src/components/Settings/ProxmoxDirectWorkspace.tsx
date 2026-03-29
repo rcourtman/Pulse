@@ -5,10 +5,10 @@ import { ProxmoxDeleteNodeDialog } from './ProxmoxDeleteNodeDialog';
 import { ProxmoxDirectConnectionsCard } from './ProxmoxDirectConnectionsCard';
 import { ProxmoxDiscoveryResultsCard } from './ProxmoxDiscoveryResultsCard';
 import { ProxmoxNodeModalStack } from './ProxmoxNodeModalStack';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import { useProxmoxDirectWorkspaceState } from './useProxmoxDirectWorkspaceState';
 
-export const ProxmoxDirectWorkspace: Component<ProxmoxSettingsPanelProps> = (props) => {
+export const ProxmoxDirectWorkspace: Component<InfrastructurePlatformSettingsProps> = (props) => {
   const state = useProxmoxDirectWorkspaceState(props);
 
   const handleDiscoveryToggle = async (event: ToggleChangeEvent) => {

@@ -14,7 +14,7 @@ import {
   formSelect,
 } from '@/components/shared/Form';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
-import { useTrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
+import type { TrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 
 const buttonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
@@ -23,8 +23,12 @@ const primaryButtonClass =
 const dangerButtonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/30';
 
-export const TrueNASSettingsPanel: Component = () => {
-  const state = useTrueNASSettingsPanelState();
+interface TrueNASSettingsPanelProps {
+  state: TrueNASSettingsPanelState;
+}
+
+export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props) => {
+  const state = props.state;
 
   return (
     <div class="space-y-6">

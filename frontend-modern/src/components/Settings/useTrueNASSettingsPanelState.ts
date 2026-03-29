@@ -312,4 +312,6 @@ export function useTrueNASSettingsPanelState() {
   };
 }
 
+export type TrueNASSettingsPanelState = ReturnType<typeof useTrueNASSettingsPanelState>;
+
 export default useTrueNASSettingsPanelState;

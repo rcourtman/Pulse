@@ -3,15 +3,17 @@ import { Match, Switch, createMemo } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { Subtabs } from '@/components/shared/Subtabs';
 import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
 import {
   PLATFORM_CONNECTIONS_TABS,
   buildPlatformConnectionsPath,
   getPlatformConnectionsViewFromPath,
 } from './platformConnectionsModel';
 import { TrueNASSettingsPanel } from './TrueNASSettingsPanel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 
-export const PlatformConnectionsWorkspace: Component<ProxmoxSettingsPanelProps> = (props) => {
+export const PlatformConnectionsWorkspace: Component<InfrastructurePlatformSettingsProps> = (
+  props,
+) => {
   const navigate = useNavigate();
   const location = useLocation();
   const activeView = createMemo(() => getPlatformConnectionsViewFromPath(location.pathname));
@@ -30,7 +32,7 @@ export const PlatformConnectionsWorkspace: Component<ProxmoxSettingsPanelProps> 
 
       <Switch>
         <Match when={activeView() === 'truenas'}>
-          <TrueNASSettingsPanel />
+          <TrueNASSettingsPanel state={props.trueNASSettings} />
         </Match>
 
         <Match when={activeView() === 'proxmox'}>

@@ -732,7 +732,11 @@ describe('Settings architecture guardrails', () => {
     expect(proxmoxDeleteNodeDialogSource).toContain('What happens next');
     expect(proxmoxNodeModalStackSource).toContain('PROXMOX_NODE_TYPES');
     expect(proxmoxNodeModalStackSource).toContain('<NodeModal');
-    expect(proxmoxSettingsModelSource).toContain('export interface ProxmoxSettingsPanelProps');
+    expect(proxmoxSettingsModelSource).toContain(
+      'export interface InfrastructurePlatformSettingsProps',
+    );
+    expect(proxmoxSettingsModelSource).toContain('platformConnectionsSummary');
+    expect(proxmoxSettingsModelSource).toContain('trueNASSettings');
     expect(proxmoxSettingsModelSource).toContain('./infrastructureSettingsModel');
     expect(proxmoxDirectWorkspaceStateSource).toContain(
       'export function useProxmoxDirectWorkspaceState',
@@ -901,9 +905,10 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsContext',
     );
-    expect(trueNASSettingsPanelSource).toContain('./useTrueNASSettingsPanelState');
+    expect(trueNASSettingsPanelSource).toContain('state: TrueNASSettingsPanelState');
     expect(trueNASSettingsStateSource).toContain('@/api/truenas');
     expect(trueNASSettingsStateSource).toContain('export function useTrueNASSettingsPanelState');
+    expect(infrastructureSettingsStateSource).toContain('./useTrueNASSettingsPanelState');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInstallerSection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInventorySection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderStopMonitoringDialog =');
@@ -1319,7 +1324,12 @@ describe('Settings architecture guardrails', () => {
   it('routes every top-level settings surface through the canonical panel shell framing', () => {
     for (const [panelName, source] of Object.entries(topLevelSettingsPanelSources)) {
       const usesCanonicalShell =
-        source.includes('SettingsPanel') || source.includes('CommercialBillingShell');
+        source.includes('SettingsPanel') ||
+        source.includes('CommercialBillingShell') ||
+        (panelName === 'InfrastructureWorkspace' &&
+          source.includes('./InfrastructureInstallPanel') &&
+          source.includes('./PlatformConnectionsWorkspace') &&
+          source.includes('./InfrastructureReportingPanel'));
       expect(usesCanonicalShell, `${panelName} should use a canonical settings panel shell`).toBe(
         true,
       );

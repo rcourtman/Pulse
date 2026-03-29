@@ -3,6 +3,7 @@ import { render, fireEvent, screen, waitFor, cleanup, within } from '@solidjs/te
 import { createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Router, Route } from '@solidjs/router';
+import { InfrastructurePlatformConnectionsSummaryCard } from '../InfrastructurePlatformConnectionsSummaryCard';
 import { InfrastructureOperationsController } from '../InfrastructureOperationsController';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
@@ -153,6 +154,51 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsModelSource).toContain(
       'export const getPowerShellInstallProfileEnvFromFlags',
     );
+  });
+});
+
+describe('InfrastructurePlatformConnectionsSummaryCard', () => {
+  it('renders TrueNAS as a counted first-class platform connection', () => {
+    const onManagePlatformConnections = vi.fn();
+
+    render(() => (
+      <InfrastructurePlatformConnectionsSummaryCard
+        pveCount={1}
+        pbsCount={2}
+        pmgCount={3}
+        truenasCount={4}
+        truenasAvailable={true}
+        onManagePlatformConnections={onManagePlatformConnections}
+      />
+    ));
+
+    expect(screen.getByText('PVE')).toBeInTheDocument();
+    expect(screen.getByText('PBS')).toBeInTheDocument();
+    expect(screen.getByText('PMG')).toBeInTheDocument();
+    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getByTestId('platform-connections-truenas')).toHaveTextContent('4');
+    expect(screen.getByText('API-backed NAS connections')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open platform connections' }));
+    expect(onManagePlatformConnections).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows when the TrueNAS integration is disabled instead of implying zero configured systems', () => {
+    render(() => (
+      <InfrastructurePlatformConnectionsSummaryCard
+        pveCount={0}
+        pbsCount={0}
+        pmgCount={0}
+        truenasCount={0}
+        truenasAvailable={false}
+        onManagePlatformConnections={() => {}}
+      />
+    ));
+
+    expect(screen.getByText('Disabled')).toBeInTheDocument();
+    expect(
+      screen.getByText('Enable the TrueNAS integration to add API-backed NAS systems.'),
+    ).toBeInTheDocument();
   });
 });
 

@@ -3,9 +3,9 @@ import { useNavigate } from '@solidjs/router';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { ProxmoxDirectWorkspace } from './ProxmoxDirectWorkspace';
 import { SettingsSectionNav } from './SettingsSectionNav';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 
-export const ProxmoxSettingsPanel: Component<ProxmoxSettingsPanelProps> = (props) => {
+export const ProxmoxSettingsPanel: Component<InfrastructurePlatformSettingsProps> = (props) => {
   const navigate = useNavigate();
 
   return (

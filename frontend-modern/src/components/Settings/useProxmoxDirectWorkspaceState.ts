@@ -5,10 +5,10 @@ import {
   getProxmoxVariantPresentation,
 } from '@/utils/proxmoxSettingsPresentation';
 import type { NodeConfig, NodeConfigWithStatus } from '@/types/nodes';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
 import type { DiscoveredServer, NodeType } from './infrastructureSettingsModel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 
-export function useProxmoxDirectWorkspaceState(props: ProxmoxSettingsPanelProps) {
+export function useProxmoxDirectWorkspaceState(props: InfrastructurePlatformSettingsProps) {
   const [prefillNode, setPrefillNode] = createSignal<Partial<NodeConfig> | null>(null);
 
   const activeAgent = () => props.selectedAgent();

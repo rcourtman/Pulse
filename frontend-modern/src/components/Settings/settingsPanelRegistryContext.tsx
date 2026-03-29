@@ -5,7 +5,7 @@ import { AICostDashboard } from '@/components/AI/AICostDashboard';
 import { AISettings } from './AISettings';
 import { ProLicensePanel } from './ProLicensePanel';
 import { SSOProvidersPanel } from './SSOProvidersPanel';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import type { SettingsPanelRegistryContext } from './settingsPanelRegistry';
 import type { SettingsSystemPanels } from './useSettingsSystemPanels';
 
@@ -26,7 +26,7 @@ export interface UseSettingsPanelRegistryParams {
   savingHideLocalLogin: Accessor<boolean>;
   handleHideLocalLoginChange: (enabled: boolean) => Promise<void>;
   versionInfo: Accessor<VersionInfo | null>;
-  getInfrastructurePanelProps: () => ProxmoxSettingsPanelProps;
+  getInfrastructurePanelProps: () => InfrastructurePlatformSettingsProps;
   systemPanels: SettingsSystemPanels;
 }
 

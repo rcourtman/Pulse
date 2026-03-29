@@ -26,7 +26,16 @@ const createServiceResource = (
     ...overrides,
   }) as Resource;
 
-const mountHook = (resources: Resource[]) => {
+const mountHook = (
+  resources: Resource[],
+  options?: {
+    truenasConnections?: Array<{ id: string }>;
+    truenasFeatureDisabled?: boolean;
+    pveCount?: number;
+    pbsCount?: number;
+    pmgCount?: number;
+  },
+) => {
   let dispose = () => {};
   let hookState!: ReturnType<typeof useSettingsInfrastructurePanelProps>;
 
@@ -61,9 +70,13 @@ const mountHook = (resources: Resource[]) => {
         initialLoadComplete: () => true,
         discoveryScanStatus: () => ({ scanning: false }),
         discoveredNodes: () => [],
-        pveNodes: () => [],
-        pbsNodes: () => [],
-        pmgNodes: () => [],
+        pveNodes: () => Array.from({ length: options?.pveCount ?? 0 }, () => ({} as any)),
+        pbsNodes: () => Array.from({ length: options?.pbsCount ?? 0 }, () => ({} as any)),
+        pmgNodes: () => Array.from({ length: options?.pmgCount ?? 0 }, () => ({} as any)),
+        trueNASSettings: {
+          connections: () => options?.truenasConnections ?? [],
+          featureDisabled: () => options?.truenasFeatureDisabled ?? false,
+        },
         triggerDiscoveryScan: async () => {},
         loadDiscoveredNodes: async () => {},
         handleDiscoveryEnabledChange: async () => true,
@@ -127,6 +140,34 @@ describe('useSettingsInfrastructurePanelProps', () => {
     expect(panelProps.pmgInstances()).toEqual([
       expect.objectContaining({ name: 'PMG Main' }),
     ]);
+    expect(panelProps.platformConnectionsSummary()).toMatchObject({
+      pveCount: 0,
+      pbsCount: 0,
+      pmgCount: 0,
+      truenasCount: 0,
+      truenasAvailable: true,
+    });
+
+    dispose();
+  });
+
+  it('derives platform connection counts from the shared infrastructure settings state', () => {
+    const { hookState, dispose } = mountHook([], {
+      pveCount: 1,
+      pbsCount: 2,
+      pmgCount: 3,
+      truenasConnections: [{ id: 'truenas-1' }, { id: 'truenas-2' }],
+    });
+
+    const panelProps = hookState.getInfrastructurePanelProps();
+
+    expect(panelProps.platformConnectionsSummary()).toEqual({
+      pveCount: 1,
+      pbsCount: 2,
+      pmgCount: 3,
+      truenasCount: 2,
+      truenasAvailable: true,
+    });
 
     dispose();
   });

@@ -432,7 +432,8 @@ and `useProxmoxDirectWorkspaceState.ts` own the fallback install/direct/reportin
 operator flow, with `PlatformConnectionsWorkspace.tsx` as the canonical
 API-backed platform shell, `ProxmoxSettingsPanel.tsx` and
 `TrueNASSettingsPanel.tsx` as provider-specific workspaces,
-`useInfrastructureSettingsState.ts` as the Proxmox composition boundary, and
+`useInfrastructureSettingsState.ts` as the shared platform-connections
+composition boundary, and
 the direct-node/discovery runtime hooks plus `useTrueNASSettingsPanelState.ts`
 as the canonical provider state owners, instead of leaving those panels
 ungoverned beside the canonical unified-agent install path.

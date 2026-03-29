@@ -4,6 +4,7 @@ import type { EventDataMap, EventType } from '@/stores/events';
 import type { SettingsTab } from './settingsTypes';
 import { useInfrastructureConfiguredNodesState } from './useInfrastructureConfiguredNodesState';
 import { useInfrastructureDiscoveryRuntimeState } from './useInfrastructureDiscoveryRuntimeState';
+import { useTrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 
 export type {
   DiscoveryScanStatus,
@@ -75,6 +76,7 @@ export function useInfrastructureSettingsState({
     savingTemperatureSetting,
     setSavingTemperatureSetting,
   });
+  const trueNASSettings = useTrueNASSettingsPanelState();
 
   const discoveryRuntime = useInfrastructureDiscoveryRuntimeState({
     eventBus,
@@ -153,6 +155,7 @@ export function useInfrastructureSettingsState({
 
   return {
     initialLoadComplete,
+    trueNASSettings,
     ...configuredNodes,
     ...discoveryRuntime,
   };

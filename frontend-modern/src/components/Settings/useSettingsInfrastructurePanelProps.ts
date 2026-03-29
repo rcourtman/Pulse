@@ -3,7 +3,7 @@ import type { SecurityStatus as SecurityStatusInfo } from '@/types/config';
 import type { Resource } from '@/types/resource';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 import type { NodeType } from './infrastructureSettingsModel';
-import type { ProxmoxSettingsPanelProps } from './proxmoxSettingsModel';
+import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 import type { useDiscoverySettingsState } from './useDiscoverySettingsState';
 import type { useInfrastructureSettingsState } from './useInfrastructureSettingsState';
 import type { useSystemSettingsState } from './useSystemSettingsState';
@@ -37,7 +37,15 @@ export function useSettingsInfrastructurePanelProps(
       .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
   );
 
-  const getInfrastructurePanelProps = (): ProxmoxSettingsPanelProps => ({
+  const platformConnectionsSummary = createMemo(() => ({
+    pveCount: params.infrastructureSettings.pveNodes().length,
+    pbsCount: params.infrastructureSettings.pbsNodes().length,
+    pmgCount: params.infrastructureSettings.pmgNodes().length,
+    truenasCount: params.infrastructureSettings.trueNASSettings.connections().length,
+    truenasAvailable: !params.infrastructureSettings.trueNASSettings.featureDisabled(),
+  }));
+
+  const getInfrastructurePanelProps = (): InfrastructurePlatformSettingsProps => ({
     selectedAgent: params.selectedAgent,
     onSelectAgent: params.onSelectAgent,
     initialLoadComplete: params.infrastructureSettings.initialLoadComplete,
@@ -53,6 +61,8 @@ export function useSettingsInfrastructurePanelProps(
     pveNodes: params.infrastructureSettings.pveNodes,
     pbsNodes: params.infrastructureSettings.pbsNodes,
     pmgNodes: params.infrastructureSettings.pmgNodes,
+    trueNASSettings: params.infrastructureSettings.trueNASSettings,
+    platformConnectionsSummary,
     temperatureMonitoringEnabled: params.systemSettings.temperatureMonitoringEnabled,
     triggerDiscoveryScan: params.infrastructureSettings.triggerDiscoveryScan,
     loadDiscoveredNodes: params.infrastructureSettings.loadDiscoveredNodes,

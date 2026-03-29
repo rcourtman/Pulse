@@ -4,6 +4,7 @@ import { PlatformConnectionsWorkspace } from '../PlatformConnectionsWorkspace';
 
 let mockPathname = '/settings/infrastructure/platforms/proxmox';
 const navigateSpy = vi.hoisted(() => vi.fn());
+const trueNASStateSpy = vi.hoisted(() => vi.fn());
 
 vi.mock('@solidjs/router', async () => {
   const actual = await vi.importActual<typeof import('@solidjs/router')>('@solidjs/router');
@@ -19,12 +20,16 @@ vi.mock('../ProxmoxSettingsPanel', () => ({
 }));
 
 vi.mock('../TrueNASSettingsPanel', () => ({
-  TrueNASSettingsPanel: () => <div data-testid="truenas-settings">truenas</div>,
+  TrueNASSettingsPanel: (props: { state: unknown }) => {
+    trueNASStateSpy(props.state);
+    return <div data-testid="truenas-settings">truenas</div>;
+  },
 }));
 
 describe('PlatformConnectionsWorkspace', () => {
   beforeEach(() => {
     navigateSpy.mockReset();
+    trueNASStateSpy.mockReset();
     mockPathname = '/settings/infrastructure/platforms/proxmox';
   });
 
@@ -41,6 +46,7 @@ describe('PlatformConnectionsWorkspace', () => {
               pveNodes: () => [],
               pbsNodes: () => [],
               pmgNodes: () => [],
+              trueNASSettings: { connections: () => [], featureDisabled: () => false },
             } as any)}
           />
         ) as any,
@@ -68,5 +74,11 @@ describe('PlatformConnectionsWorkspace', () => {
 
     expect(screen.getByRole('tab', { name: 'TrueNAS' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('truenas-settings')).toBeInTheDocument();
+    expect(trueNASStateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connections: expect.any(Function),
+        featureDisabled: expect.any(Function),
+      }),
+    );
   });
 });
