@@ -54,6 +54,39 @@ describe('portal store', function() {
     expect(bootstrap.portal_path).toBe('/portal');
   });
 
+  it('defaults authenticated hosted accounts to the workspaces section', function() {
+    var store = createPortalStore(bootstrapDefaults, {
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [
+        {
+          id: 'acct_1',
+          name: 'Acme MSP',
+          kind: 'msp',
+          kind_label: 'MSP',
+          role: 'owner',
+          can_manage: true,
+          has_billing: true,
+          members: [],
+          workspaces: [],
+        },
+      ],
+    });
+
+    expect(store.getShellState().activeSection).toBe('workspaces');
+  });
+
+  it('defaults authenticated self-hosted-only accounts to the billing section', function() {
+    var store = createPortalStore(bootstrapDefaults, {
+      authenticated: true,
+      email: 'owner@example.com',
+      has_self_hosted_commercial: true,
+      accounts: [],
+    });
+
+    expect(store.getShellState().activeSection).toBe('billing');
+  });
+
   it('publishes bootstrap changes through a subscription boundary', function() {
     var store = createPortalStore(bootstrapDefaults, null);
     var listener = vi.fn();

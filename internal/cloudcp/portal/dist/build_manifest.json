@@ -1,5 +1,5 @@
 {
-  "source_hash": "f7f77f15e1e887cf22dbf1d2761f62f85af88f539f80de9e7b84facb9c43c890",
+  "source_hash": "ce6e280f3787d7661ec4b3c30bb7997ff7a0df50d8dac23eeb0d44dcd7daf574",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -33,6 +33,7 @@
     "src/runtime.ts",
     "src/shell.test.ts",
     "src/shell.ts",
+    "src/shell_section.ts",
     "src/shell_view.test.ts",
     "src/shell_view.ts",
     "src/state.test.ts",

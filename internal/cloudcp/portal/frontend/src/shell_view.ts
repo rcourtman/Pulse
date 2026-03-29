@@ -6,6 +6,7 @@ import type {
   PortalWorkspaceSummary,
 } from './types';
 import { portalRoleLabel } from './account_roles';
+import { preferredPortalShellSection } from './shell_section';
 import { workspaceHealthLabel, workspaceHealthState, workspaceRowNote, workspaceStatusCopy } from './workspace_presentation';
 
 export interface ShellViewContext {
@@ -1369,7 +1370,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-  var activeSection = context.activeSection || 'overview';
+  var activeSection = context.activeSection || preferredPortalShellSection(context.bootstrap);
   var hostedBillingCount = accounts.filter(function(account) {
     return account.has_billing;
   }).length;

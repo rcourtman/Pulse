@@ -69,7 +69,7 @@ export function createPortalStore(
   var accountState = createPortalAccountState();
   syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
   var loginState = createPortalLoginState();
-  var shellState = createPortalShellState();
+  var shellState = createPortalShellState(bootstrapState);
   var billingState = createPortalBillingState();
   syncLoginStateBootstrapEmail(loginState, bootstrapState.email || '');
   syncBillingStateBootstrapEmail(billingState, bootstrapState.email || '');

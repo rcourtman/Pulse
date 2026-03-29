@@ -78,4 +78,29 @@ describe('shell runtime', function() {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'center' });
   });
+
+  it('opens hosted accounts on workspaces by default', function() {
+    var store = createPortalStore(bootstrapDefaults, {
+      authenticated: true,
+      email: 'owner@example.com',
+      accounts: [
+        {
+          id: 'acct_default',
+          name: 'Acme MSP',
+          kind: 'msp',
+          kind_label: 'MSP',
+          role: 'owner',
+          can_manage: true,
+          has_billing: true,
+          members: [],
+          workspaces: [],
+        },
+      ],
+    });
+
+    installShell({ store: store });
+
+    var activeLink = document.querySelector('.portal-shell-nav-link.active') as HTMLElement | null;
+    expect(activeLink?.getAttribute('data-shell-section')).toBe('workspaces');
+  });
 });

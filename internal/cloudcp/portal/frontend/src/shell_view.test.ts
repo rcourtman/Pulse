@@ -234,6 +234,30 @@ describe('shell view', function() {
     expect(html).not.toContain('>Privacy<');
   });
 
+  it('defaults the authenticated hosted shell to workspaces', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          accounts: [
+            {
+              id: 'acct_default',
+              name: 'Default Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              members: [],
+              workspaces: [],
+            },
+          ],
+        }),
+      })
+    );
+
+    expect(html).toContain('data-shell-section="workspaces"');
+  });
+
   it('renders mixed billing tools only when self-hosted commercial history is relevant', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
@@ -278,6 +302,19 @@ describe('shell view', function() {
     expect(html).toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
   });
 
+  it('defaults the authenticated self-hosted shell to billing', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          has_self_hosted_commercial: true,
+          accounts: [],
+        }),
+      })
+    );
+
+    expect(html).toContain('data-shell-section="billing"');
+  });
+
   it('keeps top-level task navigation in the canonical section order', function() {
     var html = renderAuthenticatedPortalHTML(
       createContext({
@@ -307,11 +344,11 @@ describe('shell view', function() {
       })
     );
 
-    var overviewIndex = html.indexOf('data-shell-section="overview"');
-    var workspacesIndex = html.indexOf('data-shell-section="workspaces"');
-    var accessIndex = html.indexOf('data-shell-section="access"');
-    var billingIndex = html.indexOf('data-shell-section="billing"');
-    var supportIndex = html.indexOf('data-shell-section="support"');
+    var overviewIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="overview"');
+    var workspacesIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="workspaces"');
+    var accessIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="access"');
+    var billingIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="billing"');
+    var supportIndex = html.indexOf('data-shell-action="activate-section" data-shell-section="support"');
 
     expect(overviewIndex).toBeGreaterThan(-1);
     expect(workspacesIndex).toBeGreaterThan(overviewIndex);

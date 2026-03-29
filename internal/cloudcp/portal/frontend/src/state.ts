@@ -3,6 +3,7 @@ import type {
   PortalAccountState,
   PortalAccountSummary,
   PortalAccountUIEntry,
+  PortalBootstrapData,
   PortalLoginState,
   PortalShellState,
   PortalBillingFlowID,
@@ -13,6 +14,7 @@ import type {
   PortalAccessMember,
   VerificationFlowState,
 } from './types';
+import { preferredPortalShellSection } from './shell_section';
 
 export function emptyStatus(): BillingStatus {
   return {
@@ -51,9 +53,11 @@ export function createPortalAccountState(): PortalAccountState {
   };
 }
 
-export function createPortalShellState(): PortalShellState {
+export function createPortalShellState(
+  initialBootstrap: Pick<PortalBootstrapData, 'authenticated' | 'has_self_hosted_commercial' | 'accounts'>
+): PortalShellState {
   return {
-    activeSection: 'overview',
+    activeSection: preferredPortalShellSection(initialBootstrap),
   };
 }
 

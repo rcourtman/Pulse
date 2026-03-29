@@ -324,6 +324,10 @@ self-hosted commercial history is relevant to the signed-in account, so
 hosted-only accounts do not render self-hosted license, refund, privacy, or
 self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
+That same typed bootstrap/runtime contract must also derive the default signed-
+in shell section from account shape: hosted accounts open on `Workspaces`,
+self-hosted-only accounts open on `Billing`, and `Overview` remains available
+as triage instead of acting as the default authenticated landing layer.
 The same account-shape runtime contract must also keep the shell navigation
 honest: unavailable hosted `Workspaces` or `Access` tasks must read as
 unavailable in the nav itself rather than implying live hosted work. `Support` follows the same

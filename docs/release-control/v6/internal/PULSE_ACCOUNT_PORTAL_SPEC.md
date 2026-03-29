@@ -278,6 +278,11 @@ Core rules:
     presentation, and hierarchy driven by spacing, typography, and dividers
     instead of dashboard chrome, decorative dark rails, nested card stacks,
     or dense pill collections competing with the active job.
+42. The signed-in shell must also open on the first live task, not the
+    summary layer. Hosted accounts should land in `Workspaces`; self-hosted-
+    only accounts should land in `Billing`. `Overview` remains available as a
+    precise triage surface, but it must not be the default first impression
+    for authenticated users.
 
 ## Screen Model
 
@@ -303,6 +308,9 @@ Each signed-in state should render:
 1. a concise overview band that answers `Needs attention`, `Ready`, and `Next
    action`
    The overview band is shell-level triage, not one repeated card per account.
+   The overview band remains available from navigation, but authenticated
+   users should open on the first live task for the current account shape
+   rather than landing here by default.
 2. account cards with role, account kind, workspace totals, and account-level
    fleet status
 3. an explicit `Workspaces` area for open, create, and lifecycle actions

@@ -911,6 +911,10 @@ Navigation chrome, account framing, and overview panels must stay visually
 quieter than the active task surface, with flatter light treatment and
 list-first task presentation instead of dark ornamental rails or nested
 explanatory cards.
+That same owned shell must also open on the first live job instead of the
+summary layer: hosted accounts should land in `Workspaces`, and self-hosted-
+only accounts should land in `Billing`. `Overview` remains part of the shell,
+but it is triage, not the default authenticated landing surface.
 That same owned shell also owns the signed-out visual posture: the unauthenticated
 `/portal` page must read like the same product boundary, not a leftover
 marketing block plus a generic login card. The auth surface should present one

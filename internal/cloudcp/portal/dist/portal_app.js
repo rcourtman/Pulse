@@ -717,6 +717,23 @@
     };
   }
 
+  // src/shell_section.ts
+  function preferredPortalShellSection(bootstrap) {
+    var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+    var hasHostedAccounts2 = accounts.length > 0;
+    var hasSelfHostedCommercial2 = bootstrap.has_self_hosted_commercial === true || !hasHostedAccounts2;
+    if (!bootstrap.authenticated) {
+      return "overview";
+    }
+    if (hasHostedAccounts2) {
+      return "workspaces";
+    }
+    if (hasSelfHostedCommercial2) {
+      return "billing";
+    }
+    return "overview";
+  }
+
   // src/state.ts
   function emptyStatus() {
     return {
@@ -751,9 +768,9 @@
       byAccountID: {}
     };
   }
-  function createPortalShellState() {
+  function createPortalShellState(initialBootstrap) {
     return {
-      activeSection: "overview"
+      activeSection: preferredPortalShellSection(initialBootstrap)
     };
   }
   function createMutationState() {
@@ -2480,7 +2497,7 @@
     var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
     var hosted = hasHostedAccounts(accounts);
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-    var activeSection = context.activeSection || "overview";
+    var activeSection = context.activeSection || preferredPortalShellSection(context.bootstrap);
     var hostedBillingCount = accounts.filter(function(account) {
       return account.has_billing;
     }).length;
@@ -2619,7 +2636,7 @@
     var accountState = createPortalAccountState();
     syncPortalAccountStateBootstrap(accountState, bootstrapState.accounts || []);
     var loginState = createPortalLoginState();
-    var shellState = createPortalShellState();
+    var shellState = createPortalShellState(bootstrapState);
     var billingState = createPortalBillingState();
     syncLoginStateBootstrapEmail(loginState, bootstrapState.email || "");
     syncBillingStateBootstrapEmail(billingState, bootstrapState.email || "");
