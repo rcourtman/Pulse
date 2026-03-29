@@ -98,8 +98,14 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 	adapter.SetAlertCallback(func(ad AlertAdapter) {
 		alertCh <- ad.GetAlertIdentifier()
 	})
-	onAlert := getUnexportedField(t, manager, "onAlert").Interface().(func(alert *alerts.Alert))
-	onAlert(alert)
+	alertSubs := getUnexportedField(t, manager, "alertSubs")
+	if alertSubs.Len() == 0 {
+		t.Fatal("expected subscribed alert callback")
+	}
+	for _, key := range alertSubs.MapKeys() {
+		alertSubs.MapIndex(key).Interface().(func(alert *alerts.Alert))(alert)
+		break
+	}
 	select {
 	case got := <-alertCh:
 		if got != alert.ID {
@@ -113,8 +119,14 @@ func TestAlertManagerAdapter_WithManagerAndCallbacks(t *testing.T) {
 	adapter.SetResolvedCallback(func(alertID string) {
 		resolvedCh <- alertID
 	})
-	onResolved := getUnexportedField(t, manager, "onResolved").Interface().(func(alertID string))
-	onResolved(alert.ID)
+	resolvedSubs := getUnexportedField(t, manager, "resolvedSubs")
+	if resolvedSubs.Len() == 0 {
+		t.Fatal("expected subscribed resolved callback")
+	}
+	for _, key := range resolvedSubs.MapKeys() {
+		resolvedSubs.MapIndex(key).Interface().(func(alertID string))(alert.ID)
+		break
+	}
 	select {
 	case got := <-resolvedCh:
 		if got != alert.ID {

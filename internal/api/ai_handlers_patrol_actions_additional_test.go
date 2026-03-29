@@ -186,6 +186,36 @@ func TestHandleGetPatrolStatus_DerivesBlockedRuntimeStateForExhaustedQuickstartC
 	}
 }
 
+func TestHandleGetPatrolStatus_DistinguishesLastFullPatrolFromLastActivity(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+
+	lastPatrolAt := time.Date(2026, 3, 12, 9, 30, 0, 0, time.UTC)
+	lastActivityAt := lastPatrolAt.Add(8 * time.Minute)
+	setUnexportedField(t, patrol, "lastFullPatrol", lastPatrolAt)
+	setUnexportedField(t, patrol, "lastActivity", lastActivityAt)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.LastPatrolAt == nil || !resp.LastPatrolAt.Equal(lastPatrolAt) {
+		t.Fatalf("last_patrol_at = %v, want %v", resp.LastPatrolAt, lastPatrolAt)
+	}
+	if resp.LastActivityAt == nil || !resp.LastActivityAt.Equal(lastActivityAt) {
+		t.Fatalf("last_activity_at = %v, want %v", resp.LastActivityAt, lastActivityAt)
+	}
+}
+
 func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
@@ -670,5 +700,24 @@ func TestHandleForcePatrol_ConfigDisabled(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "Triggered patrol run") {
 		t.Fatalf("expected success message")
+	}
+}
+
+func TestHandleForcePatrol_CommunityTierIgnoresRecentScopedActivityForFullPatrolRateLimit(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	handler.defaultAIService.SetLicenseChecker(communityLicenseChecker{})
+
+	setUnexportedField(t, patrol, "lastActivity", time.Now().Add(-10*time.Minute))
+
+	req := httptest.NewRequest(http.MethodPost, "/api/ai/patrol/run", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleForcePatrol(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "patrol_rate_limited") {
+		t.Fatalf("expected community force patrol to ignore scoped-only activity, got %s", rec.Body.String())
 	}
 }

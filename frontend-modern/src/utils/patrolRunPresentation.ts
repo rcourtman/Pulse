@@ -94,10 +94,26 @@ export function getToolCallResultTextClass(success: boolean): string {
 }
 
 export function getPatrolRunKindLabel(type: string | undefined): string {
-  return normalizePatrolRunType(type) === 'scoped' ? 'Scoped run' : 'Full patrol';
+  switch (normalizePatrolRunType(type)) {
+    case 'scoped':
+      return 'Scoped run';
+    case 'verification':
+      return 'Verification check';
+    case '':
+    case 'full':
+    case 'patrol':
+      return 'Full patrol';
+    default:
+      return 'Patrol run';
+  }
 }
 
-export function getPatrolRunCoverageSummary(run: Pick<PatrolRunRecord, 'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'>): string {
+export function getPatrolRunCoverageSummary(
+  run: Pick<
+    PatrolRunRecord,
+    'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'
+  >,
+): string {
   const resourcesChecked = Math.max(0, run.resources_checked || 0);
   const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
 
@@ -117,7 +133,12 @@ export function getPatrolRunCoverageSummary(run: Pick<PatrolRunRecord, 'resource
   return '';
 }
 
-export function getPatrolRunResourcesHeading(run: Pick<PatrolRunRecord, 'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'>): string {
+export function getPatrolRunResourcesHeading(
+  run: Pick<
+    PatrolRunRecord,
+    'resources_checked' | 'scope_resource_ids' | 'effective_scope_resource_ids'
+  >,
+): string {
   const resourcesChecked = Math.max(0, run.resources_checked || 0);
   const scopedResourceCount = getCanonicalScopeResourceIds(run)?.length ?? 0;
 

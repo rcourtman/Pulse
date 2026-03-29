@@ -4364,6 +4364,7 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 
 func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 	lastPatrolAt := time.Date(2026, 3, 12, 9, 30, 0, 0, time.UTC)
+	lastActivityAt := lastPatrolAt.Add(5 * time.Minute)
 	nextPatrolAt := lastPatrolAt.Add(6 * time.Hour)
 	blockedAt := lastPatrolAt.Add(15 * time.Minute)
 
@@ -4372,6 +4373,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 		Running:                    false,
 		Enabled:                    true,
 		LastPatrolAt:               &lastPatrolAt,
+		LastActivityAt:             &lastActivityAt,
 		NextPatrolAt:               &nextPatrolAt,
 		LastDurationMs:             12345,
 		ResourcesChecked:           18,
@@ -4404,6 +4406,7 @@ func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 		"running":false,
 		"enabled":true,
 		"last_patrol_at":"2026-03-12T09:30:00Z",
+		"last_activity_at":"2026-03-12T09:35:00Z",
 		"next_patrol_at":"2026-03-12T15:30:00Z",
 		"last_duration_ms":12345,
 		"resources_checked":18,

@@ -32,6 +32,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     getPatrolRecencyPresentation({
       runs: state.patrolRunHistory() ?? [],
       lastPatrolAt: state.patrolStatus()?.last_patrol_at,
+      lastActivityAt: state.patrolStatus()?.last_activity_at,
     }),
   );
   const showQuickstartStatus = createMemo(() => {

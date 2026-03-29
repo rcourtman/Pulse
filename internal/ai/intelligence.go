@@ -1074,21 +1074,22 @@ func summarizeRecentPatrolCoverage(
 	var recentErrors int
 	var hasSuccessfulFullRun bool
 	var hasRecentFullRun bool
-	var scopedRuns int
+	var limitedActivityRuns int
 	for _, run := range relevant {
 		if run.ErrorCount > 0 || strings.EqualFold(strings.TrimSpace(run.Status), "error") {
 			recentErrors++
 		}
-		if !isScopedPatrolRun(run) {
+		if isFullPatrolRun(run) {
 			hasRecentFullRun = true
+		} else {
+			limitedActivityRuns++
 		}
 		if isSuccessfulFullPatrolRun(run) {
 			hasSuccessfulFullRun = true
 		}
-		if isScopedPatrolRun(run) {
-			scopedRuns++
-		}
 	}
+
+	limitedActivityLabel := describeLimitedPatrolActivity(relevant)
 
 	switch {
 	case !hasSuccessfulFullRun && hasRecentFullRun && recentErrors > 0:
@@ -1100,13 +1101,13 @@ func summarizeRecentPatrolCoverage(
 	case !hasSuccessfulFullRun && recentErrors > 0:
 		return patrolCoverageFactor{
 			name:        "Patrol coverage incomplete",
-			description: "Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.",
+			description: fmt.Sprintf("Patrol coverage is incomplete: recent activity was limited to %s and ended with errors, so overall health is not fully verified.", limitedActivityLabel),
 			impact:      35,
 		}, true
-	case !hasSuccessfulFullRun && scopedRuns == len(relevant):
+	case !hasSuccessfulFullRun && limitedActivityRuns == len(relevant):
 		return patrolCoverageFactor{
 			name:        "Patrol coverage incomplete",
-			description: "Patrol coverage is incomplete: recent activity was limited to scoped runs, so overall infrastructure health is not fully verified.",
+			description: fmt.Sprintf("Patrol coverage is incomplete: recent activity was limited to %s, so overall infrastructure health is not fully verified.", limitedActivityLabel),
 			impact:      20,
 		}, true
 	case recentErrors > 0:
@@ -1120,12 +1121,60 @@ func summarizeRecentPatrolCoverage(
 	}
 }
 
+func normalizePatrolRunType(run PatrolRunRecord) string {
+	return strings.ToLower(strings.TrimSpace(run.Type))
+}
+
+func isFullPatrolRun(run PatrolRunRecord) bool {
+	switch normalizePatrolRunType(run) {
+	case "", "full", "patrol":
+		return true
+	default:
+		return false
+	}
+}
+
 func isScopedPatrolRun(run PatrolRunRecord) bool {
-	return strings.EqualFold(strings.TrimSpace(run.Type), "scoped")
+	return normalizePatrolRunType(run) == "scoped"
+}
+
+func isVerificationPatrolRun(run PatrolRunRecord) bool {
+	return normalizePatrolRunType(run) == "verification"
+}
+
+func describeLimitedPatrolActivity(runs []PatrolRunRecord) string {
+	hasScoped := false
+	hasVerification := false
+	hasOther := false
+
+	for _, run := range runs {
+		if isFullPatrolRun(run) {
+			continue
+		}
+		switch {
+		case isScopedPatrolRun(run):
+			hasScoped = true
+		case isVerificationPatrolRun(run):
+			hasVerification = true
+		default:
+			hasOther = true
+		}
+	}
+
+	switch {
+	case hasScoped && !hasVerification && !hasOther:
+		return "scoped runs"
+	case hasVerification && !hasScoped && !hasOther:
+		return "verification checks"
+	case hasScoped && hasVerification && !hasOther:
+		return "scoped runs and verification checks"
+	default:
+		return "targeted Patrol activity"
+	}
 }
 
 func isSuccessfulFullPatrolRun(run PatrolRunRecord) bool {
-	return !isScopedPatrolRun(run) &&
+	return isFullPatrolRun(run) &&
 		run.ErrorCount == 0 &&
 		!strings.EqualFold(strings.TrimSpace(run.Status), "error")
 }

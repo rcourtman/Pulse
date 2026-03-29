@@ -53,7 +53,7 @@ func (a *AlertManagerAdapter) SetAlertCallback(cb func(AlertAdapter)) {
 		return
 	}
 
-	a.manager.SetAlertCallback(func(alert *alerts.Alert) {
+	a.manager.SubscribeAlertCallback(func(alert *alerts.Alert) {
 		if cb != nil && alert != nil {
 			cb(&alertWrapper{alert: alert})
 		}
@@ -66,7 +66,7 @@ func (a *AlertManagerAdapter) SetResolvedCallback(cb func(alertID string)) {
 		return
 	}
 
-	a.manager.SetResolvedCallback(cb)
+	a.manager.SubscribeResolvedCallback(cb)
 }
 
 // alertWrapper wraps an alerts.Alert to implement AlertAdapter

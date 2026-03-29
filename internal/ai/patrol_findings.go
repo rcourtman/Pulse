@@ -1341,24 +1341,44 @@ func (p *PatrolService) VerifyFixResolved(ctx context.Context, resourceID, resou
 	}
 
 	verifyRecord := PatrolRunRecord{
-		ID:                 fmt.Sprintf("%d", startTime.UnixNano()),
-		StartedAt:          startTime,
-		CompletedAt:        endTime,
-		Duration:           duration,
-		DurationMs:         duration.Milliseconds(),
-		Type:               "verification",
-		TriggerReason:      string(TriggerReasonVerification),
-		ScopeResourceIDs:   []string{resourceID},
-		ScopeResourceTypes: []string{resourceType},
-		ScopeContext:       fmt.Sprintf("Verifying fix for finding: %s", findingID),
-		FindingID:          findingID,
-		NewFindings:        0,
-		FindingsSummary:    summary,
-		Status:             status,
+		ID:                        fmt.Sprintf("%d", startTime.UnixNano()),
+		StartedAt:                 startTime,
+		CompletedAt:               endTime,
+		Duration:                  duration,
+		DurationMs:                duration.Milliseconds(),
+		Type:                      "verification",
+		TriggerReason:             string(TriggerReasonVerification),
+		ScopeResourceIDs:          []string{resourceID},
+		EffectiveScopeResourceIDs: []string{resourceID},
+		ScopeResourceTypes:        []string{resourceType},
+		ScopeContext:              fmt.Sprintf("Verifying fix for finding: %s", findingID),
+		FindingID:                 findingID,
+		ResourcesChecked:          1,
+		NewFindings:               0,
+		FindingsSummary:           summary,
+		Status:                    status,
+	}
+	if strings.TrimSpace(resourceID) == "" {
+		verifyRecord.ScopeResourceIDs = nil
+		verifyRecord.EffectiveScopeResourceIDs = nil
+		verifyRecord.ResourcesChecked = 0
+	}
+	if strings.TrimSpace(resourceType) == "" {
+		verifyRecord.ScopeResourceTypes = nil
+	}
+	if verifyErr != nil {
+		verifyRecord.ErrorCount = 1
 	}
 	if p.runHistoryStore != nil {
 		p.runHistoryStore.Add(verifyRecord)
 	}
+
+	p.mu.Lock()
+	p.lastActivity = endTime
+	p.lastDuration = duration
+	p.resourcesChecked = verifyRecord.ResourcesChecked
+	p.errorCount = verifyRecord.ErrorCount
+	p.mu.Unlock()
 
 	return verified, verifyErr
 }

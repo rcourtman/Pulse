@@ -145,6 +145,7 @@ export interface PatrolStatus {
   running: boolean;
   enabled: boolean;
   last_patrol_at?: string;
+  last_activity_at?: string;
   next_patrol_at?: string;
   last_duration_ms: number;
   resources_checked: number;

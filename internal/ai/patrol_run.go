@@ -101,11 +101,13 @@ func (p *PatrolService) Stop() {
 
 // patrolLoop is the main background loop
 func (p *PatrolService) patrolLoop(ctx context.Context) {
-	// Seed lastPatrol from persisted run history so the API can return
-	// last_patrol_at immediately (before the first in-process patrol completes).
-	if history := p.GetRunHistory(1); len(history) > 0 && !history[0].CompletedAt.IsZero() {
+	// Seed recency from persisted run history so the API can return Patrol timing
+	// metadata immediately (before the first in-process patrol completes).
+	if history := p.GetRunHistory(10); len(history) > 0 {
+		lastActivity, lastFullPatrol := patrolRecencyFromHistory(history)
 		p.mu.Lock()
-		p.lastPatrol = history[0].CompletedAt
+		p.lastActivity = lastActivity
+		p.lastFullPatrol = lastFullPatrol
 		p.mu.Unlock()
 	}
 
@@ -214,6 +216,23 @@ func shouldSkipInitialFullPatrol(runHistory []PatrolRunRecord, now time.Time) bo
 		}
 	}
 	return false
+}
+
+func patrolRecencyFromHistory(runHistory []PatrolRunRecord) (time.Time, time.Time) {
+	var lastActivity time.Time
+	var lastFullPatrol time.Time
+	for _, run := range runHistory {
+		if run.CompletedAt.IsZero() {
+			continue
+		}
+		if lastActivity.IsZero() || run.CompletedAt.After(lastActivity) {
+			lastActivity = run.CompletedAt
+		}
+		if isFullPatrolRun(run) && (lastFullPatrol.IsZero() || run.CompletedAt.After(lastFullPatrol)) {
+			lastFullPatrol = run.CompletedAt
+		}
+	}
+	return lastActivity, lastFullPatrol
 }
 
 // runPatrol executes a scheduled patrol run
@@ -600,7 +619,8 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	}
 
 	p.mu.Lock()
-	p.lastPatrol = completedAt
+	p.lastActivity = completedAt
+	p.lastFullPatrol = completedAt
 	p.lastDuration = duration
 	p.resourcesChecked = runStats.resourceCount
 	p.errorCount = runStats.errors
@@ -941,7 +961,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 
 	p.mu.Lock()
-	p.lastPatrol = completedAt
+	p.lastActivity = completedAt
 	p.lastDuration = duration
 	p.resourcesChecked = runStats.resourceCount
 	p.errorCount = runStats.errors
@@ -1555,8 +1575,11 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		status.RuntimeState = PatrolRuntimeStateActive
 	}
 
-	if !p.lastPatrol.IsZero() {
-		status.LastPatrolAt = &p.lastPatrol
+	if !p.lastFullPatrol.IsZero() {
+		status.LastPatrolAt = &p.lastFullPatrol
+	}
+	if !p.lastActivity.IsZero() {
+		status.LastActivityAt = &p.lastActivity
 	}
 	if strings.TrimSpace(status.BlockedReason) != "" && !p.lastBlockedAt.IsZero() {
 		status.BlockedAt = &p.lastBlockedAt

@@ -59,10 +59,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
     getSemanticTonePresentation(assessment().tone),
   );
   const activeFindingsSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation(
-      metricState().primarySeverity,
-      metricState().primaryValue > 0,
-    ),
+    getPatrolSummaryPresentation(metricState().primarySeverity, metricState().primaryValue > 0),
   );
   const verification = createMemo(() =>
     getPatrolVerificationPresentation({
@@ -75,6 +72,7 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
     getPatrolRecencyPresentation({
       runs: state.patrolRunHistory() ?? [],
       lastPatrolAt: state.patrolStatus()?.last_patrol_at,
+      lastActivityAt: state.patrolStatus()?.last_activity_at,
     }),
   );
   const fixedSummaryPresentation = createMemo(() =>
@@ -156,7 +154,9 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                         </Show>
                       }
                     >
-                      <CheckCircleIcon class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`} />
+                      <CheckCircleIcon
+                        class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
+                      />
                     </Show>
                   </div>
 

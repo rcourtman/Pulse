@@ -3125,32 +3125,23 @@ func (r *Router) WireAlertTriggeredAI() {
 		return
 	}
 
-	// 2. Get the Patrol Service (The Watchdog)
-	patrol := aiService.GetPatrolService()
-	if patrol == nil {
-		log.Debug().Msg("Patrol service not available for wiring")
-		return
-	}
-
-	// 3. Get the Monitor (The Trigger)
+	// 2. Get the Monitor (The Trigger)
 	if r.monitor == nil {
 		log.Debug().Msg("Monitor not available for AI alert callback")
 		return
 	}
 
-	// 4. Connect Trigger -> Watchdog
-	// When an alert fires, we immediately trigger the Patrol Agent to investigate
+	// 3. Connect alert-fired events to the dedicated alert-triggered analyzer.
+	// Patrol's event-triggered runs are owned by the canonical alert bridge /
+	// trigger-manager path, so this callback should not enqueue Patrol directly.
 	r.monitor.SetAlertTriggeredAICallback(func(alert *alerts.Alert) {
-		log.Info().Str("alert_identifier", alert.ID).Msg("Alert fired leading to Patrol Trigger")
-		patrol.TriggerPatrolForAlert(alert)
-
-		// We also trigger the specific analyzer if enabled, as it tracks specific stats
 		if analyzer := r.GetAlertTriggeredAnalyzer(); analyzer != nil {
+			log.Info().Str("alert_identifier", alert.ID).Msg("Alert fired leading to alert-triggered analysis")
 			analyzer.OnAlertFired(alert)
 		}
 	})
 
-	log.Info().Msg("Alert-triggered AI Watchdog wired to monitor")
+	log.Info().Msg("Alert-triggered AI analyzer wired to monitor")
 }
 
 // Deprecated: deriveResourceTypeFromAlert uses heuristic string matching.

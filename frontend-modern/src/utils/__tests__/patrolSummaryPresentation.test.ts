@@ -387,6 +387,49 @@ describe('getPatrolSummaryPresentation', () => {
     });
   });
 
+  it('reports limited verification when only verification checks are recent', () => {
+    expect(
+      getPatrolVerificationPresentation({
+        runs: [
+          {
+            id: 'run-1',
+            started_at: '2026-03-12T09:58:00Z',
+            completed_at: '2026-03-12T09:59:00Z',
+            duration_ms: 60000,
+            type: 'verification',
+            trigger_reason: 'verification',
+            resources_checked: 1,
+            nodes_checked: 1,
+            guests_checked: 0,
+            docker_checked: 0,
+            storage_checked: 0,
+            hosts_checked: 0,
+            pbs_checked: 0,
+            pmg_checked: 0,
+            kubernetes_checked: 0,
+            new_findings: 0,
+            existing_findings: 0,
+            rejected_findings: 0,
+            resolved_findings: 1,
+            auto_fix_count: 0,
+            findings_summary: 'Verification: issue resolved',
+            finding_ids: ['finding-1'],
+            error_count: 0,
+            status: 'healthy',
+            triage_flags: 0,
+            tool_call_count: 0,
+          },
+        ] as never,
+      }),
+    ).toEqual({
+      title: 'No recent full patrol',
+      description:
+        'Recent activity was limited to verification checks over 1 resource, so Patrol has not recently re-verified your full infrastructure.',
+      compactLabel: 'Partial verification',
+      tone: 'warning',
+    });
+  });
+
   it('labels scoped recency as activity rather than patrol', () => {
     expect(
       getPatrolRecencyPresentation({
@@ -463,6 +506,18 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       label: 'Last full patrol',
       timestamp: '2026-03-12T09:57:00Z',
+    });
+  });
+
+  it('prefers explicit last activity transport over last full patrol transport when no run history is loaded', () => {
+    expect(
+      getPatrolRecencyPresentation({
+        lastPatrolAt: '2026-03-12T09:57:00Z',
+        lastActivityAt: '2026-03-12T09:59:00Z',
+      }),
+    ).toEqual({
+      label: 'Last activity',
+      timestamp: '2026-03-12T09:59:00Z',
     });
   });
 });

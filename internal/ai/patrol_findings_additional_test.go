@@ -268,6 +268,66 @@ func TestVerifyFixResolved_UsesReadStateWithoutSnapshotProvider(t *testing.T) {
 	}
 }
 
+func TestVerifyFixResolved_RecordsVerificationAsActivityWithoutReplacingLastFullPatrol(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.thresholds = PatrolThresholds{NodeCPUWarning: 90}
+
+	nodeView := unifiedresources.NewNodeView(&unifiedresources.Resource{
+		ID:     "node-1",
+		Name:   "node-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Proxmox: &unifiedresources.ProxmoxData{
+			NodeName: "node-1",
+		},
+		Metrics: &unifiedresources.ResourceMetrics{
+			CPU: &unifiedresources.MetricValue{Percent: 20},
+		},
+	})
+	ps.SetReadState(&mockReadState{nodes: []*unifiedresources.NodeView{&nodeView}})
+
+	lastFullPatrol := time.Now().Add(-1 * time.Hour).UTC().Truncate(time.Second)
+	ps.mu.Lock()
+	ps.lastFullPatrol = lastFullPatrol
+	ps.mu.Unlock()
+
+	verified, err := ps.VerifyFixResolved(context.Background(), "node-1", "node", "cpu-high", "finding-1")
+	if err != nil {
+		t.Fatalf("expected verification to succeed, got %v", err)
+	}
+	if !verified {
+		t.Fatal("expected verification to resolve the issue")
+	}
+
+	status := ps.GetStatus()
+	if status.LastPatrolAt == nil || !status.LastPatrolAt.Equal(lastFullPatrol) {
+		t.Fatalf("last full patrol = %v, want %v", status.LastPatrolAt, lastFullPatrol)
+	}
+	if status.LastActivityAt == nil {
+		t.Fatal("expected verification run to update last activity")
+	}
+	if !status.LastActivityAt.After(lastFullPatrol) {
+		t.Fatalf("expected last activity %v to be after last full patrol %v", *status.LastActivityAt, lastFullPatrol)
+	}
+	if status.LastDuration <= 0 {
+		t.Fatalf("expected verification run to update last duration, got %v", status.LastDuration)
+	}
+	if status.ResourcesChecked != 1 {
+		t.Fatalf("resources checked = %d, want 1", status.ResourcesChecked)
+	}
+
+	runs := ps.GetRunHistory(1)
+	if len(runs) != 1 {
+		t.Fatalf("expected one verification run, got %d", len(runs))
+	}
+	if runs[0].Type != "verification" {
+		t.Fatalf("run type = %q, want verification", runs[0].Type)
+	}
+	if runs[0].ResourcesChecked != 1 {
+		t.Fatalf("verification run resources_checked = %d, want 1", runs[0].ResourcesChecked)
+	}
+}
+
 func TestVerifyFixResolved_WithoutRuntimeStateFailsClosed(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 

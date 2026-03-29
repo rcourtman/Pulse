@@ -199,6 +199,34 @@ func TestIntelligence_GetSummary_DegradesWhenRecentPatrolCoverageIsScopedAndErro
 	}
 }
 
+func TestIntelligence_GetSummary_DegradesWhenRecentPatrolCoverageIsVerificationOnly(t *testing.T) {
+	intel := NewIntelligence(IntelligenceConfig{})
+	runHistory := NewPatrolRunHistoryStore(10)
+	now := time.Now()
+	runHistory.Add(PatrolRunRecord{
+		ID:               "verification-1",
+		Type:             "verification",
+		TriggerReason:    "verification",
+		CompletedAt:      now.Add(-2 * time.Minute),
+		ErrorCount:       0,
+		Status:           "healthy",
+		ResourcesChecked: 1,
+	})
+	intel.SetRunHistoryStore(runHistory)
+
+	summary := intel.GetSummary()
+	if summary.OverallHealth.Score >= 100 {
+		t.Fatalf("expected reduced health score, got %f", summary.OverallHealth.Score)
+	}
+	if summary.OverallHealth.Grade == HealthGradeA {
+		t.Fatalf("expected non-A grade, got %s", summary.OverallHealth.Grade)
+	}
+	want := "Patrol coverage is incomplete: recent activity was limited to verification checks, so overall infrastructure health is not fully verified."
+	if summary.OverallHealth.Prediction != want {
+		t.Fatalf("expected verification-only coverage warning, got %q", summary.OverallHealth.Prediction)
+	}
+}
+
 func TestIntelligence_GetSummary_DegradesWhenRecentFullPatrolErrored(t *testing.T) {
 	intel := NewIntelligence(IntelligenceConfig{})
 	runHistory := NewPatrolRunHistoryStore(10)

@@ -300,7 +300,16 @@ function normalizeRunType(type: string | undefined): string {
 }
 
 function isFullPatrolRun(run: PatrolRunRecord): boolean {
-  return normalizeRunType(run.type) !== 'scoped';
+  const normalized = normalizeRunType(run.type);
+  return normalized === '' || normalized === 'full' || normalized === 'patrol';
+}
+
+function isScopedPatrolRun(run: PatrolRunRecord): boolean {
+  return normalizeRunType(run.type) === 'scoped';
+}
+
+function isVerificationPatrolRun(run: PatrolRunRecord): boolean {
+  return normalizeRunType(run.type) === 'verification';
 }
 
 function isCompletedPatrolRun(run: PatrolRunRecord): boolean {
@@ -308,7 +317,12 @@ function isCompletedPatrolRun(run: PatrolRunRecord): boolean {
 }
 
 function hasRunErrors(run: PatrolRunRecord): boolean {
-  return run.error_count > 0 || String(run.status || '').trim().toLowerCase() === 'error';
+  return (
+    run.error_count > 0 ||
+    String(run.status || '')
+      .trim()
+      .toLowerCase() === 'error'
+  );
 }
 
 export function getPatrolAssessmentPresentation(args: {
@@ -390,8 +404,7 @@ export function getPatrolAssessmentPresentation(args: {
     return {
       title: 'Health requires attention',
       description:
-        args.overallHealth.prediction?.trim() ||
-        'Patrol assessment still needs attention.',
+        args.overallHealth.prediction?.trim() || 'Patrol assessment still needs attention.',
       eyebrow: 'Patrol assessment',
       compactLabel: 'Health requires attention',
       tone: getHealthSummaryTone(args.overallHealth),
@@ -458,15 +471,29 @@ export function getPatrolVerificationPresentation(args: {
     };
   }
 
-  const recentScopedRun = completedRuns.find((run) => !isFullPatrolRun(run));
-  if (recentScopedRun) {
-    const resourcesChecked = recentScopedRun.resources_checked || 0;
+  const recentLimitedRun = completedRuns.find((run) => !isFullPatrolRun(run));
+  if (recentLimitedRun) {
+    const resourcesChecked = recentLimitedRun.resources_checked || 0;
+    let description =
+      'Recent activity was limited to targeted Patrol checks, so Patrol has not recently re-verified your full infrastructure.';
+
+    if (isVerificationPatrolRun(recentLimitedRun)) {
+      description =
+        resourcesChecked > 0
+          ? `Recent activity was limited to verification checks over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`
+          : 'Recent activity was limited to verification checks, so Patrol has not recently re-verified your full infrastructure.';
+    } else if (isScopedPatrolRun(recentLimitedRun)) {
+      description =
+        resourcesChecked > 0
+          ? `Recent activity was limited to scoped ${recentLimitedRun.trigger_reason ? String(recentLimitedRun.trigger_reason).replace(/_/g, ' ') : 'patrol'} runs over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`
+          : 'Recent activity was limited to scoped patrol runs, so Patrol has not recently re-verified your full infrastructure.';
+    } else if (resourcesChecked > 0) {
+      description = `Recent activity was limited to targeted Patrol checks over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`;
+    }
+
     return {
       title: 'No recent full patrol',
-      description:
-        resourcesChecked > 0
-          ? `Recent activity was limited to scoped ${recentScopedRun.trigger_reason ? String(recentScopedRun.trigger_reason).replace(/_/g, ' ') : 'patrol'} runs over ${resourcesChecked} resource${resourcesChecked === 1 ? '' : 's'}, so Patrol has not recently re-verified your full infrastructure.`
-          : 'Recent activity was limited to scoped patrol runs, so Patrol has not recently re-verified your full infrastructure.',
+      description,
       compactLabel: 'Partial verification',
       tone: 'warning',
     };
@@ -483,6 +510,7 @@ export function getPatrolVerificationPresentation(args: {
 export function getPatrolRecencyPresentation(args: {
   runs?: PatrolRunRecord[];
   lastPatrolAt?: string;
+  lastActivityAt?: string;
 }): PatrolRecencyPresentation {
   const latestCompletedRun = (args.runs ?? []).find((run) => isCompletedPatrolRun(run));
   if (latestCompletedRun?.completed_at) {
@@ -492,10 +520,41 @@ export function getPatrolRecencyPresentation(args: {
     };
   }
 
-  if (args.lastPatrolAt?.trim()) {
+  const lastPatrolAt = args.lastPatrolAt?.trim();
+  const lastActivityAt = args.lastActivityAt?.trim();
+
+  if (lastActivityAt && lastPatrolAt) {
+    const activityMs = Date.parse(lastActivityAt);
+    const patrolMs = Date.parse(lastPatrolAt);
+    if (Number.isNaN(activityMs) && !Number.isNaN(patrolMs)) {
+      return {
+        label: 'Last full patrol',
+        timestamp: lastPatrolAt,
+      };
+    }
+    if (!Number.isNaN(activityMs) && !Number.isNaN(patrolMs) && patrolMs >= activityMs) {
+      return {
+        label: 'Last full patrol',
+        timestamp: lastPatrolAt,
+      };
+    }
     return {
       label: 'Last activity',
-      timestamp: args.lastPatrolAt,
+      timestamp: lastActivityAt,
+    };
+  }
+
+  if (lastActivityAt) {
+    return {
+      label: 'Last activity',
+      timestamp: lastActivityAt,
+    };
+  }
+
+  if (lastPatrolAt) {
+    return {
+      label: 'Last full patrol',
+      timestamp: lastPatrolAt,
     };
   }
 

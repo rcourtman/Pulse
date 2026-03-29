@@ -610,7 +610,9 @@ describe('AIIntelligence entitlement gating', () => {
     const findingsPanel = screen.getByTestId('findings-panel');
     const contextHeading = screen.getByText('Investigation context');
     expect(
-      Boolean(findingsPanel.compareDocumentPosition(contextHeading) & Node.DOCUMENT_POSITION_FOLLOWING),
+      Boolean(
+        findingsPanel.compareDocumentPosition(contextHeading) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ),
     ).toBe(true);
 
     expect(screen.getByText(/Health A · 91\/100/)).toBeInTheDocument();
@@ -860,6 +862,54 @@ describe('AIIntelligence entitlement gating', () => {
     expect(findingsPanelState.latestProps?.lastPatrolAt).toBeUndefined();
     expect(findingsPanelState.latestProps?.lastPatrolLabel).toBeUndefined();
     expect(findingsPanelState.latestProps?.patrolIntervalMs).toBeUndefined();
+  });
+
+  it('prefers last activity transport over last full patrol transport when no run history is loaded', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        runtime_state: 'active',
+        last_patrol_at: '2026-03-12T09:30:00Z',
+        last_activity_at: '2026-03-12T09:59:00Z',
+      }),
+    );
+    getPatrolRunHistoryMock.mockResolvedValue([]);
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Last activity:/i)).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Last full patrol:/i)).not.toBeInTheDocument();
   });
 
   it('describes both findings and incomplete coverage when active issues exist', async () => {

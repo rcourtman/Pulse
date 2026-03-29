@@ -87,6 +87,12 @@ The alert webhook editor now mirrors that canonical Pushover field rule through
 `frontend-modern/src/utils/alertWebhookPresentation.ts`, so the UI shares the
 same alias, preset, and custom-field input mapping instead of carrying its own
 local webhook-field normalization fork.
+The alert manager callback layer now also has to stay fan-out-safe. Monitor
+delivery, the unified alert bridge, and Patrol-adjacent AI listeners must
+compose through additive fired/resolved subscriptions instead of overwriting a
+single callback slot, and alert-triggered Patrol enqueueing must stay on the
+canonical unified alert bridge plus trigger-manager path rather than reviving
+duplicate callback-side Patrol shortcuts.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field

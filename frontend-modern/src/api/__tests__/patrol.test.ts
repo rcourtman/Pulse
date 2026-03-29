@@ -62,14 +62,32 @@ describe('patrol api', () => {
   it('preserves the canonical patrol runtime state payload', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'blocked',
-      blocked_reason: 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+      blocked_reason:
+        'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
       healthy: false,
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
       runtime_state: 'blocked',
-      blocked_reason: 'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
+      blocked_reason:
+        'Quickstart credits exhausted. Connect your API key to continue using AI Patrol.',
       healthy: false,
+    });
+  });
+
+  it('preserves split patrol recency transport fields', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      runtime_state: 'active',
+      healthy: true,
+      last_patrol_at: '2026-03-12T09:30:00Z',
+      last_activity_at: '2026-03-12T09:59:00Z',
+    } as any);
+
+    await expect(getPatrolStatus()).resolves.toMatchObject({
+      runtime_state: 'active',
+      healthy: true,
+      last_patrol_at: '2026-03-12T09:30:00Z',
+      last_activity_at: '2026-03-12T09:59:00Z',
     });
   });
 

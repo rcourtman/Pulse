@@ -1066,6 +1066,10 @@ That same summary shell should also surface verification scope from the
 owning run-history contract. Operators should be able to see, inside the same
 summary surface, whether Patrol recently completed a full verification pass or
 whether recent activity was limited to scoped/erroring patrol runs.
+That same shell rule also owns Patrol recency labels. Shared Patrol header and
+status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
+transport fact and use `Last activity` for scoped or verification work instead
+of collapsing both timestamps back into a generic `Last run` label.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

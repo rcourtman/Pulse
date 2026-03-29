@@ -94,7 +94,8 @@ type PatrolStatus struct {
 	RuntimeState     PatrolRuntimeState `json:"runtime_state"`
 	Running          bool               `json:"running"`
 	Enabled          bool               `json:"enabled"`
-	LastPatrolAt     *time.Time         `json:"last_patrol_at,omitempty"`
+	LastPatrolAt     *time.Time         `json:"last_patrol_at,omitempty"`   // Last completed full patrol
+	LastActivityAt   *time.Time         `json:"last_activity_at,omitempty"` // Last completed Patrol activity of any kind
 	NextPatrolAt     *time.Time         `json:"next_patrol_at,omitempty"`
 	LastDuration     time.Duration      `json:"last_duration_ms"`
 	ResourcesChecked int                `json:"resources_checked"`
@@ -443,7 +444,8 @@ type PatrolService struct {
 	runStartedAt      time.Time
 	stopCh            chan struct{}
 	configChanged     chan struct{} // Signal when config changes to reset ticker
-	lastPatrol        time.Time
+	lastFullPatrol    time.Time
+	lastActivity      time.Time
 	lastDuration      time.Duration
 	resourcesChecked  int
 	errorCount        int

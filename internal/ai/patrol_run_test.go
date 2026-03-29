@@ -1391,14 +1391,14 @@ func TestGetStatus_NextPatrolAt(t *testing.T) {
 }
 
 func TestGetStatus_NextPatrolAt_IndependentOfLastPatrol(t *testing.T) {
-	// nextScheduledAt should drive NextPatrolAt, not lastPatrol + interval.
+	// nextScheduledAt should drive NextPatrolAt, not lastFullPatrol + interval.
 	// This is the scenario that was previously broken: user changes interval
-	// mid-cycle, lastPatrol is old, so lastPatrol+newInterval could be in the past.
+	// mid-cycle, lastFullPatrol is old, so lastFullPatrol+newInterval could be in the past.
 	ps := NewPatrolService(nil, nil)
 
 	// Simulate: patrol ran 45 min ago
 	ps.mu.Lock()
-	ps.lastPatrol = time.Now().Add(-45 * time.Minute)
+	ps.lastFullPatrol = time.Now().Add(-45 * time.Minute)
 	// But the ticker was just reset with a 15-min interval, so next fire is ~15 min from now
 	expectedNext := time.Now().Add(15 * time.Minute)
 	ps.nextScheduledAt = expectedNext
@@ -1409,7 +1409,7 @@ func TestGetStatus_NextPatrolAt_IndependentOfLastPatrol(t *testing.T) {
 		t.Fatal("expected NextPatrolAt to be set")
 	}
 	// NextPatrolAt must be the tracked nextScheduledAt (in the future),
-	// NOT lastPatrol + interval (which would be 30 min in the past).
+	// NOT lastFullPatrol + interval (which would be 30 min in the past).
 	if !status.NextPatrolAt.Equal(expectedNext) {
 		t.Errorf("expected NextPatrolAt = %v, got %v", expectedNext, *status.NextPatrolAt)
 	}

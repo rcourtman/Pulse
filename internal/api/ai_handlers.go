@@ -4711,6 +4711,7 @@ type PatrolStatusResponse struct {
 	Running          bool                  `json:"running"`
 	Enabled          bool                  `json:"enabled"`
 	LastPatrolAt     *time.Time            `json:"last_patrol_at,omitempty"`
+	LastActivityAt   *time.Time            `json:"last_activity_at,omitempty"`
 	NextPatrolAt     *time.Time            `json:"next_patrol_at,omitempty"`
 	LastDurationMs   int64                 `json:"last_duration_ms"`
 	ResourcesChecked int                   `json:"resources_checked"`
@@ -4816,6 +4817,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		Running:                    status.Running,
 		Enabled:                    status.Enabled,
 		LastPatrolAt:               status.LastPatrolAt,
+		LastActivityAt:             status.LastActivityAt,
 		NextPatrolAt:               status.NextPatrolAt,
 		LastDurationMs:             status.LastDuration.Milliseconds(),
 		ResourcesChecked:           status.ResourcesChecked,

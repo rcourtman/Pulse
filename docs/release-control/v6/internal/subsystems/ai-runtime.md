@@ -531,6 +531,11 @@ The Patrol status payload must keep that same scope distinction explicit in its
 own recency fields. `last_patrol_at` is reserved for the most recent completed
 full Patrol run, while scoped runs and fix-verification checks advance
 `last_activity_at` without pretending a full verification sweep just happened.
+That same runtime boundary also owns which Patrol work counts toward
+full-patrol cadence gates. Community-tier or other full-run limits must key
+off completed full sweeps only; recent scoped or verification activity may
+advance `last_activity_at`, but it must not block a manual full Patrol request
+as if a scheduled estate-wide sweep already happened.
 The Patrol startup scheduler must preserve that coverage guarantee as well:
 `internal/ai/patrol_run.go` may skip the startup full patrol only when recent
 run history already includes a successful full Patrol run, not merely because

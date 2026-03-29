@@ -83,14 +83,14 @@ describe('patrolRunPresentation', () => {
 
   it('returns canonical patrol run kind labels', () => {
     expect(getPatrolRunKindLabel('scoped')).toBe('Scoped run');
+    expect(getPatrolRunKindLabel('verification')).toBe('Verification check');
     expect(getPatrolRunKindLabel('patrol')).toBe('Full patrol');
     expect(getPatrolRunKindLabel('')).toBe('Full patrol');
+    expect(getPatrolRunKindLabel('unexpected')).toBe('Patrol run');
   });
 
   it('expresses scoped run coverage against the effective scope', () => {
-    expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe(
-      'Checked 1 of 2 scoped resources',
-    );
+    expect(getPatrolRunCoverageSummary(scopedCoverageRun)).toBe('Checked 1 of 2 scoped resources');
     expect(getPatrolRunResourcesHeading(scopedCoverageRun)).toBe(
       'Resources checked (1 of 2 scoped)',
     );
@@ -118,20 +118,13 @@ describe('patrolRunPresentation', () => {
   });
 
   it('warns when visible runs include legacy findings snapshots', () => {
-    expect(
-      getRunHistorySelectionHint([
-        { finding_ids: [] },
-        { finding_ids: undefined },
-      ]),
-    ).toBe(
+    expect(getRunHistorySelectionHint([{ finding_ids: [] }, { finding_ids: undefined }])).toBe(
       'Select a run to filter findings when available. Some older runs do not include findings snapshots.',
     );
   });
 
   it('explains selected legacy runs in the run-history shell', () => {
-    expect(
-      getRunHistorySelectionHint([{ finding_ids: [] }], { finding_ids: undefined }),
-    ).toBe(
+    expect(getRunHistorySelectionHint([{ finding_ids: [] }], { finding_ids: undefined })).toBe(
       'Selected run predates findings snapshots; run-scoped findings cannot be fully verified.',
     );
   });

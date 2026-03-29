@@ -534,11 +534,15 @@ type Manager struct {
 	activeAlertAlias map[string]string
 	historyManager   *HistoryManager
 	onAlert          func(alert *Alert)
+	alertSubs        map[int]func(alert *Alert)
 	onResolved       func(alertID string)
+	resolvedSubs     map[int]func(alertID string)
 	onAcknowledged   func(alert *Alert, user string)
 	onUnacknowledged func(alert *Alert, user string)
 	onEscalate       func(alert *Alert, level int)
 	onAlertForAI     func(alert *Alert) // AI analysis callback - bypasses notification suppression
+	alertForAISubs   map[int]func(alert *Alert)
+	nextCallbackID   int
 	escalationStop   chan struct{}
 	alertRateLimit   map[string][]time.Time // Track alert times for rate limiting
 	// New fields for deduplication and suppression
@@ -625,6 +629,9 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		activeAlertAlias:                make(map[string]string),
 		historyManager:                  NewHistoryManager(alertsDir),
 		escalationStop:                  make(chan struct{}),
+		alertSubs:                       make(map[int]func(*Alert)),
+		resolvedSubs:                    make(map[int]func(string)),
+		alertForAISubs:                  make(map[int]func(*Alert)),
 		alertRateLimit:                  make(map[string][]time.Time),
 		recentAlerts:                    make(map[string]*Alert),
 		suppressedUntil:                 make(map[string]time.Time),
@@ -834,6 +841,27 @@ func (m *Manager) SetAlertCallback(cb func(alert *Alert)) {
 	m.onAlert = cb
 }
 
+// SubscribeAlertCallback registers an additional alert callback without
+// replacing the legacy single callback slot. The returned function removes the
+// subscription when called.
+func (m *Manager) SubscribeAlertCallback(cb func(alert *Alert)) func() {
+	if cb == nil {
+		return func() {}
+	}
+
+	m.callbackMu.Lock()
+	m.nextCallbackID++
+	id := m.nextCallbackID
+	m.alertSubs[id] = cb
+	m.callbackMu.Unlock()
+
+	return func() {
+		m.callbackMu.Lock()
+		delete(m.alertSubs, id)
+		m.callbackMu.Unlock()
+	}
+}
+
 // SetAlertForAICallback sets a callback for AI analysis when alerts are created.
 // Unlike SetAlertCallback, this callback is invoked unconditionally - it bypasses
 // activation state, quiet hours, and other notification suppression checks.
@@ -845,11 +873,53 @@ func (m *Manager) SetAlertForAICallback(cb func(alert *Alert)) {
 	log.Info().Msg("alert-for-AI callback registered (bypasses notification suppression)")
 }
 
+// SubscribeAlertForAICallback registers an additional AI alert callback without
+// replacing the legacy single callback slot. The returned function removes the
+// subscription when called.
+func (m *Manager) SubscribeAlertForAICallback(cb func(alert *Alert)) func() {
+	if cb == nil {
+		return func() {}
+	}
+
+	m.callbackMu.Lock()
+	m.nextCallbackID++
+	id := m.nextCallbackID
+	m.alertForAISubs[id] = cb
+	m.callbackMu.Unlock()
+
+	return func() {
+		m.callbackMu.Lock()
+		delete(m.alertForAISubs, id)
+		m.callbackMu.Unlock()
+	}
+}
+
 // SetResolvedCallback sets the callback for resolved alerts
 func (m *Manager) SetResolvedCallback(cb func(alertID string)) {
 	m.callbackMu.Lock()
 	defer m.callbackMu.Unlock()
 	m.onResolved = cb
+}
+
+// SubscribeResolvedCallback registers an additional resolved-alert callback
+// without replacing the legacy single callback slot. The returned function
+// removes the subscription when called.
+func (m *Manager) SubscribeResolvedCallback(cb func(alertID string)) func() {
+	if cb == nil {
+		return func() {}
+	}
+
+	m.callbackMu.Lock()
+	m.nextCallbackID++
+	id := m.nextCallbackID
+	m.resolvedSubs[id] = cb
+	m.callbackMu.Unlock()
+
+	return func() {
+		m.callbackMu.Lock()
+		delete(m.resolvedSubs, id)
+		m.callbackMu.Unlock()
+	}
 }
 
 // SetAcknowledgedCallback sets the callback for acknowledged alerts.
@@ -880,6 +950,22 @@ func (m *Manager) getAlertCallback() func(alert *Alert) {
 	return cb
 }
 
+func (m *Manager) getAlertCallbacks() []func(alert *Alert) {
+	m.callbackMu.RLock()
+	defer m.callbackMu.RUnlock()
+
+	callbacks := make([]func(alert *Alert), 0, len(m.alertSubs)+1)
+	if m.onAlert != nil {
+		callbacks = append(callbacks, m.onAlert)
+	}
+	for _, cb := range m.alertSubs {
+		if cb != nil {
+			callbacks = append(callbacks, cb)
+		}
+	}
+	return callbacks
+}
+
 func (m *Manager) getAlertForAICallback() func(alert *Alert) {
 	m.callbackMu.RLock()
 	cb := m.onAlertForAI
@@ -887,11 +973,43 @@ func (m *Manager) getAlertForAICallback() func(alert *Alert) {
 	return cb
 }
 
+func (m *Manager) getAlertForAICallbacks() []func(alert *Alert) {
+	m.callbackMu.RLock()
+	defer m.callbackMu.RUnlock()
+
+	callbacks := make([]func(alert *Alert), 0, len(m.alertForAISubs)+1)
+	if m.onAlertForAI != nil {
+		callbacks = append(callbacks, m.onAlertForAI)
+	}
+	for _, cb := range m.alertForAISubs {
+		if cb != nil {
+			callbacks = append(callbacks, cb)
+		}
+	}
+	return callbacks
+}
+
 func (m *Manager) getResolvedCallback() func(alertID string) {
 	m.callbackMu.RLock()
 	cb := m.onResolved
 	m.callbackMu.RUnlock()
 	return cb
+}
+
+func (m *Manager) getResolvedCallbacks() []func(alertID string) {
+	m.callbackMu.RLock()
+	defer m.callbackMu.RUnlock()
+
+	callbacks := make([]func(alertID string), 0, len(m.resolvedSubs)+1)
+	if m.onResolved != nil {
+		callbacks = append(callbacks, m.onResolved)
+	}
+	for _, cb := range m.resolvedSubs {
+		if cb != nil {
+			callbacks = append(callbacks, cb)
+		}
+	}
+	return callbacks
 }
 
 func (m *Manager) getAcknowledgedCallback() func(alert *Alert, user string) {
@@ -919,8 +1037,8 @@ func (m *Manager) getEscalateCallback() func(alert *Alert, level int) {
 // preserving canonical state as the internal identity and emitting the public
 // alert ID to external callbacks for compatibility.
 func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string, async bool) {
-	callback := m.getResolvedCallback()
-	if callback == nil {
+	callbacks := m.getResolvedCallbacks()
+	if len(callbacks) == 0 {
 		return
 	}
 
@@ -937,7 +1055,9 @@ func (m *Manager) safeCallResolvedAlertCallback(alert *Alert, fallbackID string,
 					Msg("Panic in onResolved callback")
 			}
 		}()
-		callback(publicID)
+		for _, callback := range callbacks {
+			callback(publicID)
+		}
 	}
 
 	if async {
@@ -1070,8 +1190,8 @@ func (m *Manager) checkFlappingLocked(trackingKey string) bool {
 }
 
 func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
-	callback := m.getAlertCallback()
-	if callback == nil || alert == nil {
+	callbacks := m.getAlertCallbacks()
+	if len(callbacks) == 0 || alert == nil {
 		return false
 	}
 
@@ -1130,7 +1250,7 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 
 	alertCopy := cloneAlertForOutput(alert)
 	if async {
-		go func(a *Alert) {
+		go func(a *Alert, fns []func(*Alert)) {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Error().
@@ -1140,11 +1260,13 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 						Msg("Panic in onAlert callback")
 				}
 			}()
-			callback(a)
-		}(alertCopy)
+			for _, callback := range fns {
+				callback(a)
+			}
+		}(alertCopy, callbacks)
 	} else {
 		// Synchronous calls also need panic recovery to prevent service crash
-		func() {
+		func(fns []func(*Alert)) {
 			defer func() {
 				if r := recover(); r != nil {
 					log.Error().
@@ -1154,8 +1276,10 @@ func (m *Manager) dispatchAlert(alert *Alert, async bool) bool {
 						Msg("Panic in onAlert callback (synchronous)")
 				}
 			}()
-			callback(alertCopy)
-		}()
+			for _, callback := range fns {
+				callback(alertCopy)
+			}
+		}(callbacks)
 	}
 	return true
 }
@@ -4873,16 +4997,18 @@ func (m *Manager) HandleDockerHostOffline(host models.DockerHost) {
 	alert, _ := m.getActiveAlertNoLock(alertID)
 	m.mu.RUnlock()
 	if alert != nil {
-		if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
+		if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
 			alertCopy := cloneAlertForOutput(alert)
-			go func(a *Alert) {
+			go func(a *Alert, fns []func(*Alert)) {
 				defer func() {
 					if r := recover(); r != nil {
 						log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
 					}
 				}()
-				alertForAICallback(a)
-			}(alertCopy)
+				for _, callback := range fns {
+					callback(a)
+				}
+			}(alertCopy, callbacks)
 		}
 	}
 
@@ -6875,16 +7001,18 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				Msg("Alert triggered")
 
 			// Trigger AI analysis callback unconditionally (bypasses notification suppression)
-			if alertForAICallback := m.getAlertForAICallback(); alertForAICallback != nil {
+			if callbacks := m.getAlertForAICallbacks(); len(callbacks) > 0 {
 				alertCopy := cloneAlertForOutput(alert)
-				go func(a *Alert) {
+				go func(a *Alert, fns []func(*Alert)) {
 					defer func() {
 						if r := recover(); r != nil {
 							log.Error().Interface("panic", r).Str("alertID", a.ID).Msg("panic in AI alert callback")
 						}
 					}()
-					alertForAICallback(a)
-				}(alertCopy)
+					for _, callback := range fns {
+						callback(a)
+					}
+				}(alertCopy, callbacks)
 			}
 
 			// Check rate limit (but don't remove alert from tracking)
@@ -6899,7 +7027,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Notify callback (may be suppressed by quiet hours)
-			if m.getAlertCallback() != nil {
+			if len(m.getAlertCallbacks()) > 0 {
 				now := time.Now()
 				alert.LastNotified = &now
 				if m.dispatchAlert(alert, true) {
@@ -6967,7 +7095,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			}
 
 			// Send re-notification if appropriate (may be suppressed by quiet hours)
-			if shouldRenotify && m.getAlertCallback() != nil {
+			if shouldRenotify && len(m.getAlertCallbacks()) > 0 {
 				now := time.Now()
 				existingAlert.LastNotified = &now
 				// Dispatch asynchronously so callback I/O cannot block alert evaluation.

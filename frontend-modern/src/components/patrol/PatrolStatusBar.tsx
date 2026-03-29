@@ -16,7 +16,6 @@ import {
 } from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import ActivityIcon from 'lucide-solid/icons/activity';
-import CheckCircleIcon from 'lucide-solid/icons/check-circle';
 import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 
@@ -25,6 +24,13 @@ interface PatrolStatusBarProps {
   refreshTrigger?: number;
   runtimeState?: PatrolRuntimeState;
   blockedReason?: string;
+}
+
+function normalizePatrolRunType(type: string | undefined): string {
+  return String(type || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
 }
 
 export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
@@ -48,7 +54,8 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
     const todayRuns = allRuns.filter((r) => new Date(r.started_at) >= todayStart);
 
     const lastRun = allRuns[0];
-    const lastRunTime = lastRun ? new Date(lastRun.started_at) : null;
+    const lastRunTime = lastRun ? new Date(lastRun.completed_at || lastRun.started_at) : null;
+    const lastRunType = normalizePatrolRunType(lastRun?.type);
     const lastRunStatus = getPatrolRunStatusPresentation(
       lastRun?.status ?? 'unknown',
       lastRun?.error_count ?? 0,
@@ -59,6 +66,10 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
       runsToday: todayRuns.length,
       newFindingsToday: todayRuns.reduce((sum, r) => sum + (r.new_findings || 0), 0),
       lastRunTime: lastRunTime ? formatRelativeTime(lastRunTime, { compact: true }) : null,
+      lastRunTimeLabel:
+        lastRunType === '' || lastRunType === 'full' || lastRunType === 'patrol'
+          ? 'Last full patrol'
+          : 'Last activity',
       lastRunTrigger: formatTriggerReason(lastRun?.trigger_reason),
       lastRunTypeLabel: getPatrolRunKindLabel(lastRun?.type),
       lastRunStatus,
@@ -73,9 +84,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
   const showRuntimeState = createMemo(() => {
     const runtimeState = props.runtimeState;
     return (
-      runtimeState === 'blocked' ||
-      runtimeState === 'disabled' ||
-      runtimeState === 'unavailable'
+      runtimeState === 'blocked' || runtimeState === 'disabled' || runtimeState === 'unavailable'
     );
   });
   const showRunInProgress = createMemo(() => props.runtimeState === 'running');
@@ -153,7 +162,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
             {/* Last run */}
             <Show when={s().lastRunTime}>
               <span class="text-xs text-muted">
-                Last run: {s().lastRunTime}
+                {s().lastRunTimeLabel}: {s().lastRunTime}
                 <Show when={s().lastRunTrigger}>
                   <span class=" "> ({s().lastRunTrigger})</span>
                 </Show>

@@ -201,6 +201,9 @@ The summary recency chip must follow the same governed scope distinction. When
 the latest completed activity was only a scoped run, the summary should label
 that timestamp as `Last activity` instead of `Last patrol`; `Last full patrol`
 belongs only to the most recent completed full Patrol run.
+That same distinction is transport-backed. `last_patrol_at` names the last
+completed full Patrol sweep, while `last_activity_at` may advance on scoped
+work or fix-verification checks without claiming a new full verification pass.
 That same recency contract also applies to the header metadata row. The top
 header must not revert to a generic `Last:` timestamp when the rest of Patrol
 is explicitly distinguishing activity from full verification recency.
@@ -224,6 +227,8 @@ operator whether Patrol recently completed a successful full patrol, only ran
 scoped alert-triggered checks, or ended its most recent full patrol with
 errors, so the page does not leave trust and coverage as implicit background
 knowledge.
+Fix-verification checks belong to that same explanation layer as targeted
+activity, not as evidence of a fresh full-estate sweep.
 The same hierarchy applies to investigation context. Correlations, recent
 changes, and policy posture are secondary evidence for deeper investigation, so
 the `Investigation context` section belongs beneath the primary findings/history

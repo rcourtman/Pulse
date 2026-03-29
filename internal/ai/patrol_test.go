@@ -598,6 +598,7 @@ func TestPatrolStatus_Fields(t *testing.T) {
 		Running:          true,
 		Enabled:          true,
 		LastPatrolAt:     &now,
+		LastActivityAt:   &now,
 		NextPatrolAt:     &next,
 		LastDuration:     5 * time.Second,
 		ResourcesChecked: 25,
@@ -618,6 +619,9 @@ func TestPatrolStatus_Fields(t *testing.T) {
 	}
 	if status.LastPatrolAt == nil {
 		t.Error("Expected LastPatrolAt to be set")
+	}
+	if status.LastActivityAt == nil {
+		t.Error("Expected LastActivityAt to be set")
 	}
 	if *status.NextPatrolAt != next {
 		t.Error("NextPatrolAt value mismatch")
