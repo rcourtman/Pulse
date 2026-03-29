@@ -836,6 +836,10 @@ Canonical physical-disk views now expose the full disk identity and SMART
 metadata needed by monitoring refresh paths, so physical-disk temperature and
 SMART merges can run from unified `ReadState` instead of from snapshot-owned
 disk arrays.
+That same canonical physical-disk view must also expose source-independent host
+context. When a disk is API-backed rather than node-backed, typed views should
+fall back to canonical host identity such as `identity.hostnames` instead of
+returning an empty node label purely because no Proxmox metadata is present.
 
 Canonical identity now also treats Proxmox-backed infrastructure parents as
 node-owned resources first: when an agent resource carries canonical Proxmox

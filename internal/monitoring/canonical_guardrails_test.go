@@ -188,6 +188,25 @@ func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
 	}
 }
 
+func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"m.syncUnifiedPhysicalDiskMetrics(store)",
+		`if target == nil || target.ResourceType != "disk" || strings.TrimSpace(target.ResourceID) == "" {`,
+		`if source == unifiedresources.SourceProxmox || source == unifiedresources.SourceAgent {`,
+		`m.writeSMARTMetrics(disk, now)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	data, err := os.ReadFile("monitor_agents.go")
 	if err != nil {

@@ -598,6 +598,69 @@ func TestSyncUnifiedAgentMetricsRecordsTrueNASHostHistory(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedPhysicalDiskMetricsRecordsTrueNASDiskHistory(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	records := truenas.NewProvider(truenas.DefaultFixtures()).Records()
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: records,
+	})
+
+	monitor := &Monitor{
+		resourceStore: resourceStore,
+		metricsStore:  store,
+	}
+
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+
+	var diskResourceID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
+			continue
+		}
+		if strings.TrimSpace(resource.PhysicalDisk.DevPath) == "/dev/sdc" {
+			diskResourceID = resource.ID
+			break
+		}
+	}
+	if diskResourceID == "" {
+		t.Fatal("expected TrueNAS sdc disk resource in unified store")
+	}
+
+	target := resourceStore.MetricsTargetForResource(diskResourceID)
+	if target == nil || target.ResourceType != "disk" || target.ResourceID != "WD-WX12A3456" {
+		t.Fatalf("unexpected physical-disk metrics target %+v", target)
+	}
+
+	charts := monitor.GetPhysicalDiskTemperatureCharts(7 * 24 * time.Hour)
+	entry, ok := charts[target.ResourceID]
+	if !ok {
+		t.Fatalf("expected persisted disk chart for %s, got %#v", target.ResourceID, charts)
+	}
+	if entry.Node != "truenas-main" {
+		t.Fatalf("chart node = %q, want truenas-main", entry.Node)
+	}
+	if len(entry.Temperature) == 0 {
+		t.Fatalf("expected temperature history for %s", target.ResourceID)
+	}
+	last := entry.Temperature[len(entry.Temperature)-1]
+	if last.Value != 63 {
+		t.Fatalf("expected last disk temperature 63, got %.2f", last.Value)
+	}
+}
+
 func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t *testing.T) {
 	alertManager := alerts.NewManagerWithDataDir(t.TempDir())
 	defer alertManager.Stop()

@@ -776,6 +776,30 @@ func TestView_PhysicalDiskViewAccessors(t *testing.T) {
 	}
 }
 
+func TestView_PhysicalDiskViewNodeFallsBackToIdentityHostnames(t *testing.T) {
+	r := &Resource{
+		ID:     "disk-truenas-1",
+		Type:   ResourceTypePhysicalDisk,
+		Status: StatusOnline,
+		Identity: ResourceIdentity{
+			Hostnames: []string{"", " truenas-main ", "truenas-backup"},
+		},
+		PhysicalDisk: &PhysicalDiskMeta{
+			DevPath: "/dev/sdc",
+			Model:   "WD Red Plus",
+		},
+	}
+
+	v := NewPhysicalDiskView(r)
+
+	if got := v.Node(); got != "truenas-main" {
+		t.Fatalf("expected Node() to fall back to canonical identity hostname %q, got %q", "truenas-main", got)
+	}
+	if got := v.Instance(); got != "" {
+		t.Fatalf("expected Instance() to remain empty without Proxmox metadata, got %q", got)
+	}
+}
+
 func TestView_DockerHostViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 4, 0, 0, time.UTC)
 	temp := 44.4

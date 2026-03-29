@@ -1899,10 +1899,18 @@ func (v PhysicalDiskView) Wearout() int {
 }
 
 func (v PhysicalDiskView) Node() string {
-	if v.r == nil || v.r.Proxmox == nil {
+	if v.r == nil {
 		return ""
 	}
-	return v.r.Proxmox.NodeName
+	if v.r.Proxmox != nil && strings.TrimSpace(v.r.Proxmox.NodeName) != "" {
+		return strings.TrimSpace(v.r.Proxmox.NodeName)
+	}
+	for _, hostname := range v.r.Identity.Hostnames {
+		if hostname = strings.TrimSpace(hostname); hostname != "" {
+			return hostname
+		}
+	}
+	return ""
 }
 
 func (v PhysicalDiskView) Instance() string {

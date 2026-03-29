@@ -4138,6 +4138,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		m.syncUnifiedAgentMetrics(store)
 		m.syncUnifiedStorageMetrics(store)
+		m.syncUnifiedPhysicalDiskMetrics(store)
 		m.syncUnifiedAppContainerMetrics(store)
 		for source, records := range recordsBySource {
 			if len(records) == 0 {
@@ -4170,6 +4171,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 
 	m.syncUnifiedAgentMetrics(store)
 	m.syncUnifiedStorageMetrics(store)
+	m.syncUnifiedPhysicalDiskMetrics(store)
 	m.syncUnifiedAppContainerMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
 }
@@ -4353,6 +4355,79 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 				m.metricsStore.Write("storage", targetID, "avail", float64(free), now)
 			}
 		}
+	}
+}
+
+func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
+	if store == nil || m.metricsStore == nil {
+		return
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	seenTargets := make(map[string]struct{})
+	for _, resource := range store.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
+			continue
+		}
+
+		hasNativeWriter := false
+		for _, source := range resource.Sources {
+			if source == unifiedresources.SourceProxmox || source == unifiedresources.SourceAgent {
+				hasNativeWriter = true
+				break
+			}
+		}
+		if hasNativeWriter {
+			continue
+		}
+
+		target := resolver.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "disk" || strings.TrimSpace(target.ResourceID) == "" {
+			continue
+		}
+		targetID := strings.TrimSpace(target.ResourceID)
+		if _, ok := seenTargets[targetID]; ok {
+			continue
+		}
+		seenTargets[targetID] = struct{}{}
+
+		nodeName := ""
+		for _, hostname := range resource.Identity.Hostnames {
+			if hostname = strings.TrimSpace(hostname); hostname != "" {
+				nodeName = hostname
+				break
+			}
+		}
+		if nodeName == "" {
+			nodeName = firstNonEmptyString(strings.TrimSpace(resource.ParentName), strings.TrimSpace(resource.Name))
+		}
+
+		disk := models.PhysicalDisk{
+			ID:              resource.ID,
+			Node:            nodeName,
+			DevPath:         resource.PhysicalDisk.DevPath,
+			Model:           resource.PhysicalDisk.Model,
+			Serial:          resource.PhysicalDisk.Serial,
+			WWN:             resource.PhysicalDisk.WWN,
+			Type:            resource.PhysicalDisk.DiskType,
+			Size:            resource.PhysicalDisk.SizeBytes,
+			Health:          resource.PhysicalDisk.Health,
+			Wearout:         resource.PhysicalDisk.Wearout,
+			Temperature:     resource.PhysicalDisk.Temperature,
+			RPM:             resource.PhysicalDisk.RPM,
+			Used:            resource.PhysicalDisk.Used,
+			SmartAttributes: smartAttributesFromUnifiedMeta(resource.PhysicalDisk.SMART),
+			LastChecked:     resource.LastSeen,
+		}
+		if disk.Serial == "" {
+			disk.ID = targetID
+		}
+		m.writeSMARTMetrics(disk, now)
 	}
 }
 
