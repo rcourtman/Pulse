@@ -66,11 +66,17 @@ func TestGuestFilePath_Extensions(t *testing.T) {
 	if !strings.HasSuffix(encPath, ".enc") {
 		t.Errorf("expected encrypted path, got %q", encPath)
 	}
+	if strings.Contains(filepath.Base(encPath), "guest-1") {
+		t.Fatalf("expected encrypted guest path to use opaque hashed leaf, got %q", encPath)
+	}
 
 	store.crypto = nil
 	jsonPath := store.guestFilePath("guest-1")
 	if !strings.HasSuffix(jsonPath, ".json") {
 		t.Errorf("expected json path, got %q", jsonPath)
+	}
+	if strings.Contains(filepath.Base(jsonPath), "guest-1") {
+		t.Fatalf("expected json guest path to use opaque hashed leaf, got %q", jsonPath)
 	}
 }
 

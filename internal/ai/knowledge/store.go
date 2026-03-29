@@ -118,10 +118,15 @@ func NewStore(dataDir string) (*Store, error) {
 func (s *Store) guestFilePath(guestID string) string {
 	// Use .enc extension for encrypted files
 	fileBase := securityutil.HashedStorageName(guestID)
+	leaf := fileBase + ".json"
 	if s.crypto != nil {
-		return filepath.Join(s.dataDir, fileBase+".enc")
+		leaf = fileBase + ".enc"
 	}
-	return filepath.Join(s.dataDir, fileBase+".json")
+	path, err := securityutil.JoinStorageLeaf(s.dataDir, leaf)
+	if err != nil {
+		panic(fmt.Sprintf("resolve guest knowledge storage path: %v", err))
+	}
+	return path
 }
 
 func (s *Store) loadKnowledgeFromPath(path string) (*GuestKnowledge, bool, error) {
@@ -178,7 +183,14 @@ func (s *Store) findLegacyKnowledgePath(guestID string) (string, error) {
 			continue
 		}
 
-		path := filepath.Join(s.dataDir, entry.Name())
+		path, err := securityutil.JoinStorageLeaf(s.dataDir, entry.Name())
+		if err != nil {
+			if entry.Name() == legacyEnc || entry.Name() == legacyJSON {
+				return "", fmt.Errorf("invalid legacy knowledge file path %q: %w", entry.Name(), err)
+			}
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to resolve legacy knowledge candidate path")
+			continue
+		}
 		knowledge, _, err := s.loadKnowledgeFromPath(path)
 		if err != nil {
 			if entry.Name() == legacyEnc || entry.Name() == legacyJSON {

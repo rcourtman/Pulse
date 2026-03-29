@@ -527,6 +527,10 @@ That coverage explanation must also stay faithful to the actual recent run
 shape. When the most recent verification evidence includes a full Patrol run
 that ended with errors, the health summary must say that a recent full patrol
 errored rather than claiming recent activity was limited to scoped runs.
+The Patrol status payload must keep that same scope distinction explicit in its
+own recency fields. `last_patrol_at` is reserved for the most recent completed
+full Patrol run, while scoped runs and fix-verification checks advance
+`last_activity_at` without pretending a full verification sweep just happened.
 The Patrol startup scheduler must preserve that coverage guarantee as well:
 `internal/ai/patrol_run.go` may skip the startup full patrol only when recent
 run history already includes a successful full Patrol run, not merely because

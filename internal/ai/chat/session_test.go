@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -150,6 +151,20 @@ func TestSessionStoreMigratesLegacySessionFileOnWrite(t *testing.T) {
 
 	_, err = os.Stat(legacyPath)
 	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestSessionStoreSessionPathUsesOpaqueHashedLeaf(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	sessionID := "guest-alpha_123"
+	path, err := store.sessionPath(sessionID)
+	require.NoError(t, err)
+
+	base := filepath.Base(path)
+	assert.True(t, strings.HasSuffix(base, ".json"))
+	assert.NotContains(t, base, "guest")
+	assert.NotContains(t, base, "alpha")
 }
 
 func TestMessage_UsesCanonicalEmptyCollections(t *testing.T) {

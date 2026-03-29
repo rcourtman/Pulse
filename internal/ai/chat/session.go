@@ -72,7 +72,7 @@ func (s *SessionStore) sessionPath(id string) (string, error) {
 	if err := validateSessionID(id); err != nil {
 		return "", err
 	}
-	return filepath.Join(s.dataDir, securityutil.HashedStorageName(id)+".json"), nil
+	return securityutil.JoinStorageLeaf(s.dataDir, securityutil.HashedStorageName(id)+".json")
 }
 
 func (s *SessionStore) findLegacySessionPath(id string) (string, error) {
@@ -94,7 +94,11 @@ func (s *SessionStore) findLegacySessionPath(id string) (string, error) {
 		if entry.Name() == canonicalName {
 			continue
 		}
-		path := filepath.Join(s.dataDir, entry.Name())
+		path, err := securityutil.JoinStorageLeaf(s.dataDir, entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to resolve legacy session candidate path")
+			continue
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read legacy session candidate")
@@ -128,7 +132,13 @@ func (s *SessionStore) List() ([]Session, error) {
 			continue
 		}
 
-		file, err := os.ReadFile(filepath.Join(s.dataDir, entry.Name()))
+		path, err := securityutil.JoinStorageLeaf(s.dataDir, entry.Name())
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to resolve session file path")
+			continue
+		}
+
+		file, err := os.ReadFile(path)
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read session file")
 			continue
