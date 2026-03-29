@@ -524,3 +524,7 @@ identifiers and metric names passed back into `Query`, `QueryAll`, and
 case-polluted callers cannot manufacture false "missing metrics" results,
 split one governed metric stream into mixed-case query buckets, or trigger
 redundant batch work against otherwise valid stored samples.
+That same metrics-store boundary also owns the persistent DB file path. The
+runtime must normalize the owned metrics directory and resolve the selected DB
+filename through the shared storage-path helper before it creates directories
+or opens SQLite, instead of trusting raw caller-built paths.

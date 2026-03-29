@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	pdb "github.com/rcourtman/pulse-go-rewrite/pkg/db"
 )
 
@@ -51,8 +52,13 @@ type StoreConfig struct {
 
 // DefaultConfig returns sensible defaults for metrics storage
 func DefaultConfig(dataDir string) StoreConfig {
+	dbPath := filepath.Join(dataDir, "metrics.db")
+	if resolvedDBPath, err := resolveStoreDBPath(dbPath); err == nil {
+		dbPath = resolvedDBPath
+	}
+
 	return StoreConfig{
-		DBPath:          filepath.Join(dataDir, "metrics.db"),
+		DBPath:          dbPath,
 		WriteBufferSize: 100,
 		FlushInterval:   5 * time.Second,
 		RetentionRaw:    2 * time.Hour,
@@ -60,6 +66,26 @@ func DefaultConfig(dataDir string) StoreConfig {
 		RetentionHourly: 7 * 24 * time.Hour,
 		RetentionDaily:  90 * 24 * time.Hour,
 	}
+}
+
+func resolveStoreDBPath(dbPath string) (string, error) {
+	trimmedPath := strings.TrimSpace(dbPath)
+	if trimmedPath == "" {
+		return "", fmt.Errorf("metrics database path is required")
+	}
+
+	cleanedPath := filepath.Clean(trimmedPath)
+	dir, err := securityutil.NormalizeStorageDir(filepath.Dir(cleanedPath))
+	if err != nil {
+		return "", fmt.Errorf("resolve metrics database directory: %w", err)
+	}
+
+	resolvedPath, err := securityutil.JoinStorageLeaf(dir, filepath.Base(cleanedPath))
+	if err != nil {
+		return "", fmt.Errorf("resolve metrics database path: %w", err)
+	}
+
+	return resolvedPath, nil
 }
 
 // bufferedMetric holds a metric waiting to be written
@@ -101,6 +127,12 @@ type Store struct {
 
 // NewStore creates a new metrics store with the given configuration
 func NewStore(config StoreConfig) (*Store, error) {
+	resolvedDBPath, err := resolveStoreDBPath(config.DBPath)
+	if err != nil {
+		return nil, err
+	}
+	config.DBPath = resolvedDBPath
+
 	// Ensure directory exists
 	dir := filepath.Dir(config.DBPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {

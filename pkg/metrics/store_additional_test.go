@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -34,6 +35,47 @@ func TestStoreWriteBatchSync(t *testing.T) {
 	}
 	if len(points) != 1 || points[0].Value != 10.0 {
 		t.Fatalf("expected 1 point with value 10.0, got %v", points)
+	}
+}
+
+func TestResolveStoreDBPathCanonicalizesOwnedPath(t *testing.T) {
+	root := t.TempDir()
+	rawPath := filepath.Join(root, "metrics", "..", "metrics", "metrics.db")
+
+	resolved, err := resolveStoreDBPath("  " + rawPath + "  ")
+	if err != nil {
+		t.Fatalf("resolveStoreDBPath() error = %v", err)
+	}
+
+	want := filepath.Join(filepath.Clean(filepath.Join(root, "metrics")), "metrics.db")
+	if resolved != want {
+		t.Fatalf("resolveStoreDBPath() = %q, want %q", resolved, want)
+	}
+}
+
+func TestResolveStoreDBPathRejectsBlank(t *testing.T) {
+	if _, err := resolveStoreDBPath(" \t "); err == nil {
+		t.Fatal("expected blank DB path to be rejected")
+	}
+}
+
+func TestNewStoreCanonicalizesDBPath(t *testing.T) {
+	root := t.TempDir()
+	cfg := DefaultConfig(root)
+	cfg.DBPath = filepath.Join(root, "metrics", "..", "metrics", "tenant-metrics.db")
+
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore() error = %v", err)
+	}
+	defer store.Close()
+
+	want := filepath.Join(filepath.Clean(filepath.Join(root, "metrics")), "tenant-metrics.db")
+	if store.config.DBPath != want {
+		t.Fatalf("store.config.DBPath = %q, want %q", store.config.DBPath, want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("expected canonical metrics DB at %q: %v", want, err)
 	}
 }
 
