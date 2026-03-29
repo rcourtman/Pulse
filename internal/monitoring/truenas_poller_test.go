@@ -286,9 +286,53 @@ func TestTrueNASPollerPhysicalDiskTemperatureHistoryUsesTenantScopedProvider(t *
 	}
 }
 
+func TestTrueNASPollerGuestMetricHistoryUsesTenantScopedProvider(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	fixtures := truenas.DefaultFixtures()
+	now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
+	fetcher := &controllableTrueNASHistoryFetcher{
+		snapshot: &fixtures,
+		systemHistory: &truenas.SystemMetricHistory{
+			CPUPercent: []truenas.TimeSeriesPoint{
+				{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+				{Timestamp: now, Value: 34},
+			},
+			MemoryPercent: []truenas.TimeSeriesPoint{
+				{Timestamp: now.Add(-2 * time.Hour), Value: 45},
+				{Timestamp: now, Value: 62},
+			},
+		},
+	}
+	provider := truenas.NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(nil, time.Minute, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{
+		"conn-1": provider,
+	}
+
+	history := poller.GuestMetricHistory(nil, "default", "agent", 4*time.Hour)
+	metricMap, ok := history["truenas-main"]
+	if !ok {
+		t.Fatalf("expected canonical agent metric id truenas-main, got %#v", history)
+	}
+	if len(metricMap["cpu"]) != 2 || metricMap["cpu"][1].Value != 34 {
+		t.Fatalf("unexpected cpu history: %+v", metricMap["cpu"])
+	}
+	if len(metricMap["memory"]) != 2 || metricMap["memory"][1].Value != 62 {
+		t.Fatalf("unexpected memory history: %+v", metricMap["memory"])
+	}
+}
+
 type controllableTrueNASHistoryFetcher struct {
-	snapshot *truenas.FixtureSnapshot
-	history  map[string][]truenas.TimeSeriesPoint
+	snapshot      *truenas.FixtureSnapshot
+	history       map[string][]truenas.TimeSeriesPoint
+	systemHistory *truenas.SystemMetricHistory
 }
 
 func (s *controllableTrueNASHistoryFetcher) Fetch(context.Context) (*truenas.FixtureSnapshot, error) {
@@ -321,6 +365,23 @@ func (s *controllableTrueNASHistoryFetcher) DiskTemperatureHistory(_ context.Con
 		return nil, nil
 	}
 	return result, nil
+}
+
+func (s *controllableTrueNASHistoryFetcher) SystemMetricHistory(context.Context, time.Duration) (*truenas.SystemMetricHistory, error) {
+	if s == nil || s.systemHistory == nil {
+		return nil, nil
+	}
+	copied := *s.systemHistory
+	copied.CPUPercent = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.CPUPercent...)
+	copied.MemoryPercent = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.MemoryPercent...)
+	copied.MemoryUsedBytes = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.MemoryUsedBytes...)
+	copied.MemoryAvailableBytes = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.MemoryAvailableBytes...)
+	copied.MemoryTotalBytes = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.MemoryTotalBytes...)
+	copied.NetInRate = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.NetInRate...)
+	copied.NetOutRate = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.NetOutRate...)
+	copied.DiskReadRate = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.DiskReadRate...)
+	copied.DiskWriteRate = append([]truenas.TimeSeriesPoint(nil), s.systemHistory.DiskWriteRate...)
+	return &copied, nil
 }
 
 type pollerControlFetcher struct {

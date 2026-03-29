@@ -218,6 +218,26 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 	return telemetry, nil
 }
 
+// GetSystemMetricHistory retrieves historical system metrics from the native
+// TrueNAS reporting API for the canonical host-chart fallback path.
+func (c *Client) GetSystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+
+	return rpc.getSystemMetricHistory(ctx, duration)
+}
+
 // GetPools returns storage pools.
 func (c *Client) GetPools(ctx context.Context) ([]Pool, error) {
 	var response []poolResponse
@@ -1339,6 +1359,36 @@ func isTimeoutError(err error) bool {
 	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
+func (c *trueNASRPCClient) getSystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+	if duration <= 0 {
+		duration = 24 * time.Hour
+	}
+
+	end := time.Now().Unix()
+	start := end - int64(duration.Seconds())
+	if start <= 0 {
+		start = end
+	}
+
+	response, err := c.getReportingDataWithQuery(ctx, []map[string]any{
+		{"name": "cpu", "identifier": nil},
+		{"name": "memory", "identifier": nil},
+		{"name": "interface", "identifier": nil},
+		{"name": "disk", "identifier": nil},
+	}, map[string]any{
+		"aggregate": false,
+		"start":     start,
+		"end":       end,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseSystemMetricHistory(response), nil
+}
+
 func (c *trueNASRPCClient) getSystemTemperatures(ctx context.Context) (map[string]float64, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
@@ -1659,6 +1709,76 @@ func parseSystemTemperatures(responses []trueNASReportingGetDataResponse) map[st
 	return temperatures
 }
 
+func parseSystemMetricHistory(responses []trueNASReportingGetDataResponse) *SystemMetricHistory {
+	if len(responses) == 0 {
+		return nil
+	}
+
+	history := &SystemMetricHistory{}
+	for _, response := range responses {
+		name := strings.TrimSpace(strings.ToLower(response.Name))
+		switch name {
+		case "cpu", "memory", "interface", "disk":
+		default:
+			continue
+		}
+
+		for _, raw := range response.Data {
+			timestamp, values, ok := parseReportingSeriesValues(raw, response.Legend)
+			if !ok || timestamp.IsZero() || len(values) == 0 {
+				continue
+			}
+
+			switch name {
+			case "cpu":
+				if value, ok := parseSystemCPUPercent(values); ok {
+					history.CPUPercent = appendTimeSeriesPoint(history.CPUPercent, timestamp, value)
+				}
+			case "memory":
+				if value, ok := parseSystemMemoryPercent(values); ok {
+					history.MemoryPercent = appendTimeSeriesPoint(history.MemoryPercent, timestamp, value)
+				}
+				if value, ok := pickReportingValue(values, "used", "memory_used", "used_bytes", "active", "memory"); ok {
+					history.MemoryUsedBytes = appendTimeSeriesPoint(history.MemoryUsedBytes, timestamp, value)
+				}
+				if value, ok := pickReportingValue(values, "available", "free", "available_bytes", "free_bytes"); ok {
+					history.MemoryAvailableBytes = appendTimeSeriesPoint(history.MemoryAvailableBytes, timestamp, value)
+				}
+				if value, ok := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total"); ok {
+					history.MemoryTotalBytes = appendTimeSeriesPoint(history.MemoryTotalBytes, timestamp, value)
+				}
+			case "interface":
+				if value, ok := pickReportingValue(values, "received", "received_bytes", "rx", "rx_bytes", "netin", "in"); ok {
+					history.NetInRate = appendTimeSeriesPoint(history.NetInRate, timestamp, value)
+				}
+				if value, ok := pickReportingValue(values, "sent", "sent_bytes", "tx", "tx_bytes", "netout", "out"); ok {
+					history.NetOutRate = appendTimeSeriesPoint(history.NetOutRate, timestamp, value)
+				}
+			case "disk":
+				if value, ok := pickReportingValue(values, "read", "read_bytes", "diskread", "bytes_read"); ok {
+					history.DiskReadRate = appendTimeSeriesPoint(history.DiskReadRate, timestamp, value)
+				}
+				if value, ok := pickReportingValue(values, "write", "write_bytes", "diskwrite", "bytes_written"); ok {
+					history.DiskWriteRate = appendTimeSeriesPoint(history.DiskWriteRate, timestamp, value)
+				}
+			}
+		}
+	}
+
+	if len(history.CPUPercent) == 0 &&
+		len(history.MemoryPercent) == 0 &&
+		len(history.MemoryUsedBytes) == 0 &&
+		len(history.MemoryAvailableBytes) == 0 &&
+		len(history.MemoryTotalBytes) == 0 &&
+		len(history.NetInRate) == 0 &&
+		len(history.NetOutRate) == 0 &&
+		len(history.DiskReadRate) == 0 &&
+		len(history.DiskWriteRate) == 0 {
+		return nil
+	}
+	return history
+}
+
 func parseReportingDiskTemperatures(responses []trueNASReportingGetDataResponse) map[string]int {
 	if len(responses) == 0 {
 		return nil
@@ -1811,42 +1931,104 @@ func readFloatValueAny(record map[string]any, keys ...string) (float64, bool) {
 }
 
 func parseReportingSeriesPoint(raw any, legends []string) (time.Time, float64, bool) {
+	timestamp, values, ok := parseReportingSeriesValues(raw, legends)
+	if !ok || timestamp.IsZero() {
+		return time.Time{}, 0, false
+	}
+	for _, legend := range legends {
+		if value, ok := values[legend]; ok {
+			return timestamp, value, true
+		}
+	}
+	return time.Time{}, 0, false
+}
+
+func parseReportingSeriesValues(raw any, legends []string) (time.Time, map[string]float64, bool) {
 	switch typed := raw.(type) {
 	case []any:
 		if len(typed) < 2 {
-			return time.Time{}, 0, false
+			return time.Time{}, nil, false
 		}
 		timestamp, ok := parseReportingTimestampAny(typed[0])
 		if !ok {
-			return time.Time{}, 0, false
+			return time.Time{}, nil, false
 		}
-		if parsed, ok := parseFloat64Any(typed[1]); ok {
-			return timestamp, parsed, true
+		if parsed, ok := parseFloat64Any(typed[1]); ok && len(legends) == 1 {
+			return timestamp, map[string]float64{legends[0]: parsed}, true
 		}
 		values := extractReportingLegendFloatValues(typed[1:], legends)
-		for _, legend := range legends {
-			if value, ok := values[legend]; ok {
-				return timestamp, value, true
-			}
+		if len(values) == 0 {
+			return time.Time{}, nil, false
 		}
+		return timestamp, values, true
 	case map[string]any:
 		timestamp, ok := parseReportingTimestampAny(
 			firstNonNilMapValue(typed, "timestamp", "time", "ts", "x"),
 		)
 		if !ok {
-			return time.Time{}, 0, false
+			return time.Time{}, nil, false
 		}
 		values := extractReportingLegendFloatValues(typed, legends)
-		for _, legend := range legends {
-			if value, ok := values[legend]; ok {
-				return timestamp, value, true
+		if len(values) == 0 && len(legends) == 1 {
+			if value, ok := readFloatValueAny(typed, "value", "y", "temperature"); ok {
+				values = map[string]float64{legends[0]: value}
 			}
 		}
-		if value, ok := readFloatValueAny(typed, "value", "y", "temperature"); ok {
-			return timestamp, value, true
+		if len(values) == 0 {
+			return time.Time{}, nil, false
+		}
+		return timestamp, values, true
+	default:
+		return time.Time{}, nil, false
+	}
+}
+
+func appendTimeSeriesPoint(series []TimeSeriesPoint, timestamp time.Time, value float64) []TimeSeriesPoint {
+	return append(series, TimeSeriesPoint{Timestamp: timestamp, Value: value})
+}
+
+func parseSystemCPUPercent(values map[string]float64) (float64, bool) {
+	if value, ok := pickReportingValue(values, "usage", "percent", "cpu", "total", "system_cpu"); ok {
+		return value, true
+	}
+	if idle, ok := pickReportingValue(values, "idle"); ok {
+		return 100 - idle, true
+	}
+	return 0, false
+}
+
+func parseSystemMemoryPercent(values map[string]float64) (float64, bool) {
+	if value, ok := pickReportingValue(values, "usage", "percent", "used_percent", "memory_percent"); ok {
+		return value, true
+	}
+	used, hasUsed := pickReportingValue(values, "used", "memory_used", "used_bytes", "active", "memory")
+	total, hasTotal := pickReportingValue(values, "total", "memory_total", "total_bytes", "physical_memory_total")
+	if hasUsed && hasTotal && total > 0 {
+		return (used / total) * 100, true
+	}
+	available, hasAvailable := pickReportingValue(values, "available", "free", "available_bytes", "free_bytes")
+	if hasAvailable && hasTotal && total > 0 {
+		return ((total - available) / total) * 100, true
+	}
+	return 0, false
+}
+
+func pickReportingValue(values map[string]float64, candidates ...string) (float64, bool) {
+	if len(values) == 0 {
+		return 0, false
+	}
+
+	normalized := make(map[string]float64, len(values))
+	for key, value := range values {
+		normalized[normalizeTemperatureLegendLabel(key)] = value
+	}
+
+	for _, candidate := range candidates {
+		if value, ok := normalized[normalizeTemperatureLegendLabel(candidate)]; ok {
+			return value, true
 		}
 	}
-	return time.Time{}, 0, false
+	return 0, false
 }
 
 func firstNonNilMapValue(record map[string]any, keys ...string) any {

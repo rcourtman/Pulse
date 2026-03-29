@@ -38,11 +38,12 @@ func (s *closableStubFetcher) Close() {
 }
 
 type controllableStubFetcher struct {
-	snapshot    *FixtureSnapshot
-	startCalls  []string
-	stopCalls   []string
-	logReads    []appLogReadCall
-	diskHistory map[string][]TimeSeriesPoint
+	snapshot      *FixtureSnapshot
+	startCalls    []string
+	stopCalls     []string
+	logReads      []appLogReadCall
+	diskHistory   map[string][]TimeSeriesPoint
+	systemHistory *SystemMetricHistory
 }
 
 type appLogReadCall struct {
@@ -111,6 +112,23 @@ func (s *controllableStubFetcher) DiskTemperatureHistory(_ context.Context, iden
 		return nil, nil
 	}
 	return result, nil
+}
+
+func (s *controllableStubFetcher) SystemMetricHistory(context.Context, time.Duration) (*SystemMetricHistory, error) {
+	if s == nil || s.systemHistory == nil {
+		return nil, nil
+	}
+	copied := *s.systemHistory
+	copied.CPUPercent = cloneTimeSeriesPoints(s.systemHistory.CPUPercent)
+	copied.MemoryPercent = cloneTimeSeriesPoints(s.systemHistory.MemoryPercent)
+	copied.MemoryUsedBytes = cloneTimeSeriesPoints(s.systemHistory.MemoryUsedBytes)
+	copied.MemoryAvailableBytes = cloneTimeSeriesPoints(s.systemHistory.MemoryAvailableBytes)
+	copied.MemoryTotalBytes = cloneTimeSeriesPoints(s.systemHistory.MemoryTotalBytes)
+	copied.NetInRate = cloneTimeSeriesPoints(s.systemHistory.NetInRate)
+	copied.NetOutRate = cloneTimeSeriesPoints(s.systemHistory.NetOutRate)
+	copied.DiskReadRate = cloneTimeSeriesPoints(s.systemHistory.DiskReadRate)
+	copied.DiskWriteRate = cloneTimeSeriesPoints(s.systemHistory.DiskWriteRate)
+	return &copied, nil
 }
 
 func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
@@ -811,5 +829,50 @@ func TestProviderPhysicalDiskTemperatureHistoryUsesCanonicalMetricIDs(t *testing
 	}
 	if points[len(points)-1].Value != 34 {
 		t.Fatalf("expected latest point value 34, got %+v", points)
+	}
+}
+
+func TestProviderSystemMetricHistoryUsesCanonicalAgentMetricIDs(t *testing.T) {
+	fixtures := DefaultFixtures()
+	now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
+	fetcher := &controllableStubFetcher{
+		snapshot: &fixtures,
+		systemHistory: &SystemMetricHistory{
+			CPUPercent: []TimeSeriesPoint{
+				{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+				{Timestamp: now, Value: 34},
+			},
+			MemoryUsedBytes: []TimeSeriesPoint{
+				{Timestamp: now.Add(-2 * time.Hour), Value: 8 * 1024 * 1024 * 1024},
+				{Timestamp: now, Value: 10 * 1024 * 1024 * 1024},
+			},
+			NetInRate: []TimeSeriesPoint{
+				{Timestamp: now, Value: 4096},
+			},
+		},
+	}
+	provider := NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	resourceID, history, err := provider.SystemMetricHistory(context.Background(), 4*time.Hour)
+	if err != nil {
+		t.Fatalf("SystemMetricHistory() error = %v", err)
+	}
+	if resourceID != "truenas-main" {
+		t.Fatalf("resourceID = %q, want truenas-main", resourceID)
+	}
+	if got := len(history["cpu"]); got != 2 {
+		t.Fatalf("expected cpu history points, got %+v", history)
+	}
+	if got := len(history["memory"]); got != 2 {
+		t.Fatalf("expected memory history points, got %+v", history)
+	}
+	if history["memory"][1].Value <= 0 {
+		t.Fatalf("expected memory percent history, got %+v", history["memory"])
+	}
+	if got := len(history["netin"]); got != 1 {
+		t.Fatalf("expected netin history points, got %+v", history)
 	}
 }

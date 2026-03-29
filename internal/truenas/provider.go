@@ -60,6 +60,10 @@ type physicalDiskHistoryFetcher interface {
 	DiskTemperatureHistory(ctx context.Context, identifiers []string, duration time.Duration) (map[string][]TimeSeriesPoint, error)
 }
 
+type systemMetricHistoryFetcher interface {
+	SystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error)
+}
+
 // APIFetcher loads snapshots from the live TrueNAS API client.
 type APIFetcher struct {
 	Client *Client
@@ -107,6 +111,13 @@ func (f *APIFetcher) DiskTemperatureHistory(ctx context.Context, identifiers []s
 		return nil, fmt.Errorf("truenas api fetcher client is nil")
 	}
 	return f.Client.GetDiskTemperatureHistory(ctx, identifiers, duration)
+}
+
+func (f *APIFetcher) SystemMetricHistory(ctx context.Context, duration time.Duration) (*SystemMetricHistory, error) {
+	if f == nil || f.Client == nil {
+		return nil, fmt.Errorf("truenas api fetcher client is nil")
+	}
+	return f.Client.GetSystemMetricHistory(ctx, duration)
 }
 
 // FixtureFetcher loads snapshots from static fixture data.
@@ -264,6 +275,59 @@ func (p *Provider) GetAppConfig(_ context.Context, appID string) (*AppConfigResu
 		result.Host = strings.TrimSpace(snapshot.System.Hostname)
 	}
 	return result, nil
+}
+
+// SystemMetricHistory returns canonical host-chart metrics for the TrueNAS
+// appliance keyed by the shared agent metrics resource ID.
+func (p *Provider) SystemMetricHistory(ctx context.Context, duration time.Duration) (string, map[string][]TimeSeriesPoint, error) {
+	if p == nil {
+		return "", nil, fmt.Errorf("truenas provider is nil")
+	}
+	historyFetcher, ok := p.fetcher.(systemMetricHistoryFetcher)
+	if !ok {
+		return "", nil, fmt.Errorf("truenas provider fetcher does not support system metric history")
+	}
+
+	snapshot := p.Snapshot()
+	if snapshot == nil {
+		return "", nil, fmt.Errorf("truenas provider has no cached snapshot")
+	}
+	resourceID := trueNASSystemMetricResourceID(snapshot.System)
+	if resourceID == "" {
+		return "", nil, fmt.Errorf("truenas provider snapshot is missing system metric resource id")
+	}
+
+	nativeHistory, err := historyFetcher.SystemMetricHistory(ctx, duration)
+	if err != nil {
+		return "", nil, err
+	}
+	if nativeHistory == nil {
+		return resourceID, nil, nil
+	}
+
+	metricMap := make(map[string][]TimeSeriesPoint)
+	if len(nativeHistory.CPUPercent) > 0 {
+		metricMap["cpu"] = cloneTimeSeriesPoints(nativeHistory.CPUPercent)
+	}
+	if memoryPercent := systemMemoryPercentHistory(nativeHistory, snapshot.System.MemoryTotalBytes); len(memoryPercent) > 0 {
+		metricMap["memory"] = memoryPercent
+	}
+	if len(nativeHistory.NetInRate) > 0 {
+		metricMap["netin"] = cloneTimeSeriesPoints(nativeHistory.NetInRate)
+	}
+	if len(nativeHistory.NetOutRate) > 0 {
+		metricMap["netout"] = cloneTimeSeriesPoints(nativeHistory.NetOutRate)
+	}
+	if len(nativeHistory.DiskReadRate) > 0 {
+		metricMap["diskread"] = cloneTimeSeriesPoints(nativeHistory.DiskReadRate)
+	}
+	if len(nativeHistory.DiskWriteRate) > 0 {
+		metricMap["diskwrite"] = cloneTimeSeriesPoints(nativeHistory.DiskWriteRate)
+	}
+	if len(metricMap) == 0 {
+		return resourceID, nil, nil
+	}
+	return resourceID, metricMap, nil
 }
 
 // PhysicalDiskTemperatureHistory returns canonical physical-disk temperature
@@ -1406,6 +1470,60 @@ func temperatureAggregateMetaFromTrueNASDisk(disk Disk) *unifiedresources.Temper
 		AvgCelsius: aggregate.AvgCelsius,
 		MaxCelsius: aggregate.MaxCelsius,
 	}
+}
+
+func cloneTimeSeriesPoints(points []TimeSeriesPoint) []TimeSeriesPoint {
+	if len(points) == 0 {
+		return nil
+	}
+	cloned := make([]TimeSeriesPoint, len(points))
+	copy(cloned, points)
+	return cloned
+}
+
+func systemMemoryPercentHistory(history *SystemMetricHistory, fallbackTotalBytes int64) []TimeSeriesPoint {
+	if history == nil {
+		return nil
+	}
+	if len(history.MemoryPercent) > 0 {
+		return cloneTimeSeriesPoints(history.MemoryPercent)
+	}
+
+	totalBytes := float64(fallbackTotalBytes)
+	if totalBytes <= 0 {
+		if len(history.MemoryTotalBytes) > 0 {
+			totalBytes = history.MemoryTotalBytes[len(history.MemoryTotalBytes)-1].Value
+		}
+	}
+	if totalBytes <= 0 {
+		return nil
+	}
+
+	if len(history.MemoryUsedBytes) > 0 {
+		points := make([]TimeSeriesPoint, 0, len(history.MemoryUsedBytes))
+		for _, point := range history.MemoryUsedBytes {
+			points = append(points, TimeSeriesPoint{
+				Timestamp: point.Timestamp,
+				Value:     (point.Value / totalBytes) * 100,
+			})
+		}
+		return points
+	}
+	if len(history.MemoryAvailableBytes) > 0 {
+		points := make([]TimeSeriesPoint, 0, len(history.MemoryAvailableBytes))
+		for _, point := range history.MemoryAvailableBytes {
+			points = append(points, TimeSeriesPoint{
+				Timestamp: point.Timestamp,
+				Value:     ((totalBytes - point.Value) / totalBytes) * 100,
+			})
+		}
+		return points
+	}
+	return nil
+}
+
+func trueNASSystemMetricResourceID(system SystemInfo) string {
+	return strings.TrimSpace(system.Hostname)
 }
 
 func trueNASDiskHistoryLookupKeys(disk Disk) []string {

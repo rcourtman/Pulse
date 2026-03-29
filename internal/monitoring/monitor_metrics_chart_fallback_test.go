@@ -30,6 +30,31 @@ func (s *stubDiskTemperatureHistoryProvider) PhysicalDiskTemperatureHistory(*Mon
 	return result
 }
 
+type stubGuestMetricHistoryProvider struct {
+	history map[string]map[string][]MetricPoint
+}
+
+func (s *stubGuestMetricHistoryProvider) SupplementalRecords(*Monitor, string) []unifiedresources.IngestRecord {
+	return nil
+}
+
+func (s *stubGuestMetricHistoryProvider) GuestMetricHistory(*Monitor, string, string, time.Duration) map[string]map[string][]MetricPoint {
+	if len(s.history) == 0 {
+		return nil
+	}
+	result := make(map[string]map[string][]MetricPoint, len(s.history))
+	for resourceID, metricMap := range s.history {
+		cloned := make(map[string][]MetricPoint, len(metricMap))
+		for metricType, points := range metricMap {
+			copied := make([]MetricPoint, len(points))
+			copy(copied, points)
+			cloned[metricType] = copied
+		}
+		result[resourceID] = cloned
+	}
+	return result
+}
+
 func newChartFallbackTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 
@@ -284,6 +309,46 @@ func TestGetGuestMetricsForChart_UsesGapFillLookbackWhenRequestedRangeIsEmpty(t 
 	}
 }
 
+func TestGetGuestMetricsForChart_UsesNativeHistoryWhenStoreCoverageShallow(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "agent", "truenas-main", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-5 * time.Minute), Value: 41},
+	})
+	monitor.supplementalProviders = map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: &stubGuestMetricHistoryProvider{
+			history: map[string]map[string][]MetricPoint{
+				"truenas-main": {
+					"cpu": {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+						{Timestamp: now.Add(-1 * time.Hour), Value: 28},
+						{Timestamp: now, Value: 34},
+					},
+					"memory": {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 45},
+						{Timestamp: now, Value: 62},
+					},
+				},
+			},
+		},
+	}
+
+	result := monitor.GetGuestMetricsForChart("agent:truenas-main", "agent", "truenas-main", duration)
+	if got := len(result["cpu"]); got != 3 {
+		t.Fatalf("expected native cpu history to win, got %+v", result["cpu"])
+	}
+	if got := result["cpu"][2].Value; got != 34 {
+		t.Fatalf("expected latest native cpu value 34, got %+v", result["cpu"])
+	}
+	if got := len(result["memory"]); got != 2 {
+		t.Fatalf("expected native memory history, got %+v", result["memory"])
+	}
+}
+
 func TestGetNodeMetricsForChart_UsesGapFillLookbackWhenRequestedRangeIsEmpty(t *testing.T) {
 	t.Parallel()
 
@@ -379,6 +444,42 @@ func TestGetGuestMetricsForChartBatch_PrefersInMemoryForShortRanges(t *testing.T
 	// In-memory values are 11; store values are 99. Should prefer in-memory.
 	if cpuPoints[0].Value != 11 {
 		t.Fatalf("expected in-memory value 11, got %.2f (store leak)", cpuPoints[0].Value)
+	}
+}
+
+func TestGetGuestMetricsForChartBatch_UsesNativeAgentHistoryWhenStoreCoverageShallow(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "agent", "truenas-main", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-5 * time.Minute), Value: 41},
+	})
+	monitor.supplementalProviders = map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: &stubGuestMetricHistoryProvider{
+			history: map[string]map[string][]MetricPoint{
+				"truenas-main": {
+					"cpu": {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+						{Timestamp: now.Add(-1 * time.Hour), Value: 28},
+						{Timestamp: now, Value: 34},
+					},
+				},
+			},
+		},
+	}
+
+	requests := []GuestChartRequest{{InMemoryKey: "agent:truenas-main", SQLResourceID: "truenas-main"}}
+	result := monitor.GetGuestMetricsForChartBatch("agent", requests, duration)
+
+	cpuPoints := result["truenas-main"]["cpu"]
+	if len(cpuPoints) != 3 {
+		t.Fatalf("expected native batch cpu history to win, got %+v", cpuPoints)
+	}
+	if cpuPoints[2].Value != 34 {
+		t.Fatalf("expected latest batch cpu value 34, got %+v", cpuPoints)
 	}
 }
 

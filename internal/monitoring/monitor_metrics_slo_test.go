@@ -31,6 +31,8 @@ const (
 	SLONodeChartBatchGitHubActionsP95  = 140 * time.Millisecond
 	SLOPhysicalDiskChartFallbackP95    = 30 * time.Millisecond
 	SLOPhysicalDiskChartFallbackGHA    = 120 * time.Millisecond
+	SLOGuestChartFallbackP95           = 30 * time.Millisecond
+	SLOGuestChartFallbackGHA           = 120 * time.Millisecond
 
 	monitoringSLOIterations = 120
 )
@@ -292,6 +294,60 @@ func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testi
 	target := effectiveMonitoringSLOTarget(SLOPhysicalDiskChartFallbackP95, SLOPhysicalDiskChartFallbackGHA)
 	p95 := monitoringPercentile(latencies, 0.95)
 	t.Logf("GetPhysicalDiskTemperatureCharts(native-history fallback) p50=%v p95=%v p99=%v SLO=%v",
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
+
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
+	}
+}
+
+func TestSLO_GetGuestMetricsForChart_WithNativeHistoryFallback(t *testing.T) {
+	skipMonitoringSLOUnderRace(t)
+	suppressMonitoringTestLogs(t)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "agent", "truenas-main", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-5 * time.Minute), Value: 41},
+	})
+	monitor.supplementalProviders = map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: &stubGuestMetricHistoryProvider{
+			history: map[string]map[string][]MetricPoint{
+				"truenas-main": {
+					"cpu": {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 20},
+						{Timestamp: now.Add(-1 * time.Hour), Value: 28},
+						{Timestamp: now, Value: 34},
+					},
+					"memory": {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 45},
+						{Timestamp: now, Value: 62},
+					},
+				},
+			},
+		},
+	}
+
+	sanity := monitor.GetGuestMetricsForChart("agent:truenas-main", "agent", "truenas-main", duration)
+	if got := len(sanity["cpu"]); got != 3 {
+		t.Fatalf("sanity: expected native cpu history, got %+v", sanity["cpu"])
+	}
+
+	latencies := measureMonitoringLatencies(t, func() {
+		result := monitor.GetGuestMetricsForChart("agent:truenas-main", "agent", "truenas-main", duration)
+		if got := len(result["cpu"]); got != 3 {
+			t.Fatalf("expected native cpu history, got %+v", result["cpu"])
+		}
+		if got := len(result["memory"]); got != 2 {
+			t.Fatalf("expected native memory history, got %+v", result["memory"])
+		}
+	})
+
+	target := effectiveMonitoringSLOTarget(SLOGuestChartFallbackP95, SLOGuestChartFallbackGHA)
+	p95 := monitoringPercentile(latencies, 0.95)
+	t.Logf("GetGuestMetricsForChart(native-history fallback) p50=%v p95=%v p99=%v SLO=%v",
 		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
 
 	if p95 > target {

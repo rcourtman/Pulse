@@ -502,6 +502,70 @@ func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string,
 	return history
 }
 
+// GuestMetricHistory exposes native TrueNAS host history through the canonical
+// guest-chart boundary when local Pulse history is shallow.
+func (p *TrueNASPoller) GuestMetricHistory(_ *Monitor, orgID string, resourceType string, duration time.Duration) map[string]map[string][]MetricPoint {
+	if p == nil || !truenas.IsFeatureEnabled() || strings.TrimSpace(resourceType) != "agent" {
+		return nil
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	entries := p.providerEntriesForOrg(orgID)
+	if len(entries) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTrueNASHistoryReadTimeout)
+	defer cancel()
+
+	history := make(map[string]map[string][]MetricPoint)
+	for _, entry := range entries {
+		resourceID, nativeHistory, err := entry.provider.SystemMetricHistory(ctx, duration)
+		if err != nil {
+			log.Warn().
+				Str("component", "truenas_poller").
+				Str("action", "guest_metric_history").
+				Str("resource_type", resourceType).
+				Str("org_id", orgID).
+				Str("connection_id", strings.TrimSpace(entry.connectionID)).
+				Err(err).
+				Msg("TrueNAS poller failed to read native guest history")
+			continue
+		}
+		resourceID = strings.TrimSpace(resourceID)
+		if resourceID == "" || len(nativeHistory) == 0 {
+			continue
+		}
+
+		converted := make(map[string][]MetricPoint, len(nativeHistory))
+		for metricType, points := range nativeHistory {
+			if strings.TrimSpace(metricType) == "" || len(points) == 0 {
+				continue
+			}
+			series := make([]MetricPoint, len(points))
+			for i, point := range points {
+				series[i] = MetricPoint{
+					Timestamp: point.Timestamp,
+					Value:     point.Value,
+				}
+			}
+			converted[metricType] = series
+		}
+		if len(converted) == 0 {
+			continue
+		}
+		history[resourceID] = converted
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
+}
+
 // SnapshotOwnedSources declares source-native ingest ownership for legacy
 // snapshot suppression (default/global call path).
 func (p *TrueNASPoller) SnapshotOwnedSources() []unifiedresources.DataSource {

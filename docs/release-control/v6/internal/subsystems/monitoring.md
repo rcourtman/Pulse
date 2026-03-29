@@ -260,6 +260,14 @@ canonical `app-container` metrics contract, and sync them into the existing
 guest metrics-history/store path. Pulse must not add a TrueNAS-only charts
 path or treat API-backed app workloads as second-class compared with native
 Docker reports.
+That same boundary now also owns native host-history fallback for API-backed
+TrueNAS systems. `internal/truenas/client.go`,
+`internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and
+`internal/monitoring/monitor_metrics.go` must route TrueNAS
+`reporting.get_data` system history through the shared `agent` guest-chart
+path, so canonical host charts can show real provider-backed CPU, memory,
+network, and disk throughput history when Pulse's own local history is still
+shallow.
 That same monitoring boundary now also owns canonical TrueNAS app control
 refresh semantics. `internal/truenas/provider.go` and
 `internal/monitoring/truenas_poller.go` must execute native app start/stop

@@ -88,6 +88,20 @@ type TimeSeriesPoint struct {
 	Value     float64
 }
 
+// SystemMetricHistory stores provider-native TrueNAS system history before it
+// is normalized onto the canonical monitoring guest-chart surface.
+type SystemMetricHistory struct {
+	CPUPercent           []TimeSeriesPoint
+	MemoryPercent        []TimeSeriesPoint
+	MemoryUsedBytes      []TimeSeriesPoint
+	MemoryAvailableBytes []TimeSeriesPoint
+	MemoryTotalBytes     []TimeSeriesPoint
+	NetInRate            []TimeSeriesPoint
+	NetOutRate           []TimeSeriesPoint
+	DiskReadRate         []TimeSeriesPoint
+	DiskWriteRate        []TimeSeriesPoint
+}
+
 // Alert mirrors a TrueNAS alert listing entry.
 type Alert struct {
 	ID        string

@@ -469,6 +469,110 @@ func TestGetSystemTelemetryFromRPC(t *testing.T) {
 	}
 }
 
+func TestGetSystemMetricHistoryUsesReportingRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		historyReq := readRPCRequest(t, conn)
+		if historyReq.Method != "reporting.get_data" {
+			t.Fatalf("expected reporting.get_data, got %q", historyReq.Method)
+		}
+		params, ok := historyReq.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("unexpected history params: %#v", historyReq.Params)
+		}
+		graphs, ok := params[0].([]any)
+		if !ok || len(graphs) != 4 {
+			t.Fatalf("unexpected history graphs: %#v", params[0])
+		}
+		query, ok := params[1].(map[string]any)
+		if !ok || query["aggregate"] != false {
+			t.Fatalf("expected aggregate=false history query, got %#v", params[1])
+		}
+
+		now := time.Now().UTC().Truncate(time.Second)
+		writeRPCResult(t, conn, historyReq.ID, []map[string]any{
+			{
+				"name":       "cpu",
+				"identifier": nil,
+				"legend":     []string{"usage"},
+				"data": []any{
+					map[string]any{"timestamp": now.Add(-2 * time.Hour).Unix(), "usage": 21.0},
+					map[string]any{"timestamp": now.Unix(), "usage": 34.0},
+				},
+				"aggregations": map[string]any{},
+				"start":        now.Add(-2 * time.Hour).Unix(),
+				"end":          now.Unix(),
+			},
+			{
+				"name":       "memory",
+				"identifier": nil,
+				"legend":     []string{"used", "total"},
+				"data": []any{
+					map[string]any{"timestamp": now.Add(-2 * time.Hour).Unix(), "used": 8.0 * 1024 * 1024 * 1024, "total": 16.0 * 1024 * 1024 * 1024},
+					map[string]any{"timestamp": now.Unix(), "used": 10.0 * 1024 * 1024 * 1024, "total": 16.0 * 1024 * 1024 * 1024},
+				},
+				"aggregations": map[string]any{},
+				"start":        now.Add(-2 * time.Hour).Unix(),
+				"end":          now.Unix(),
+			},
+			{
+				"name":       "interface",
+				"identifier": nil,
+				"legend":     []string{"received", "sent"},
+				"data": []any{
+					map[string]any{"timestamp": now.Add(-2 * time.Hour).Unix(), "received": 1024.0, "sent": 512.0},
+					map[string]any{"timestamp": now.Unix(), "received": 4096.0, "sent": 2048.0},
+				},
+				"aggregations": map[string]any{},
+				"start":        now.Add(-2 * time.Hour).Unix(),
+				"end":          now.Unix(),
+			},
+			{
+				"name":       "disk",
+				"identifier": nil,
+				"legend":     []string{"read", "write"},
+				"data": []any{
+					map[string]any{"timestamp": now.Add(-2 * time.Hour).Unix(), "read": 2048.0, "write": 1024.0},
+					map[string]any{"timestamp": now.Unix(), "read": 8192.0, "write": 4096.0},
+				},
+				"aggregations": map[string]any{},
+				"start":        now.Add(-2 * time.Hour).Unix(),
+				"end":          now.Unix(),
+			},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	history, err := client.GetSystemMetricHistory(context.Background(), 4*time.Hour)
+	if err != nil {
+		t.Fatalf("GetSystemMetricHistory() error = %v", err)
+	}
+	if history == nil {
+		t.Fatal("expected system metric history")
+	}
+	if got := len(history.CPUPercent); got != 2 {
+		t.Fatalf("expected cpu history, got %+v", history)
+	}
+	if got := len(history.MemoryPercent); got != 2 {
+		t.Fatalf("expected memory percent history, got %+v", history)
+	}
+	if got := history.MemoryPercent[1].Value; got <= 0 {
+		t.Fatalf("expected non-zero memory percent, got %+v", history.MemoryPercent)
+	}
+	if got := history.NetInRate[1].Value; got != 4096.0 {
+		t.Fatalf("expected network history, got %+v", history.NetInRate)
+	}
+	if got := history.DiskWriteRate[1].Value; got != 4096.0 {
+		t.Fatalf("expected disk history, got %+v", history.DiskWriteRate)
+	}
+}
+
 func TestGetSystemTelemetryIgnoresUnavailableTemperatureRPC(t *testing.T) {
 	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
 		authReq := readRPCRequest(t, conn)

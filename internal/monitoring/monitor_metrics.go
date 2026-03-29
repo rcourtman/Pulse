@@ -35,6 +35,13 @@ const (
 	shortRangeCoverageMaxSlack = 2 * time.Minute
 )
 
+// MonitorGuestMetricHistoryProvider optionally exposes source-native guest
+// metric history through the canonical chart boundary when local Pulse history
+// is shallow.
+type MonitorGuestMetricHistoryProvider interface {
+	GuestMetricHistory(m *Monitor, orgID string, resourceType string, duration time.Duration) map[string]map[string][]MetricPoint
+}
+
 // GetGuestMetrics returns historical metrics for a guest
 func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[string][]MetricPoint {
 	if m == nil || m.metricsHistory == nil {
@@ -71,21 +78,22 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // (e.g. "dockerContainer"/"abc123").
 func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
 	inMemoryResult := m.GetGuestMetrics(inMemoryKey, duration)
-	if m.metricsStore == nil {
-		return inMemoryResult
-	}
 	if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemoryResult, duration) {
 		return inMemoryResult
 	}
 
-	converted, ok := m.queryStoreMetricMapWithGapFillAliases(sqlResourceType, sqlResourceID, duration)
-	if !ok {
-		return inMemoryResult
+	best := cloneMetricPointMap(inMemoryResult)
+	if m.metricsStore != nil {
+		if converted, ok := m.queryStoreMetricMapWithGapFillAliases(sqlResourceType, sqlResourceID, duration); ok {
+			best = mergeGuestMetricHistory(best, converted, duration)
+		}
 	}
-	if duration <= inMemoryChartThreshold && chartMapCoverageSpan(converted) <= chartMapCoverageSpan(inMemoryResult) {
-		return inMemoryResult
+	if nativeHistory := m.nativeGuestMetricHistory(sqlResourceType, duration); len(nativeHistory) > 0 {
+		if nativeMetrics, ok := nativeHistory[sqlResourceID]; ok {
+			best = mergeGuestMetricHistory(best, nativeMetrics, duration)
+		}
 	}
-	return converted
+	return best
 }
 
 // GetNodeMetrics returns historical metrics for a node
@@ -377,23 +385,19 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 
 	result := make(map[string]map[string][]MetricPoint, len(requests))
 
-	// Phase 1: Check in-memory for all guests.
-	var needStore []string
+	// Phase 1: Check in-memory for all guests and identify which need fallback.
+	var needFallback []string
 	for _, req := range requests {
 		inMemory := m.GetGuestMetrics(req.InMemoryKey, duration)
-		if m.metricsStore == nil {
-			result[req.SQLResourceID] = inMemory
-			continue
-		}
+		result[req.SQLResourceID] = inMemory
 		if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemory, duration) {
 			result[req.SQLResourceID] = inMemory
 			continue
 		}
-		needStore = append(needStore, req.SQLResourceID)
-		result[req.SQLResourceID] = inMemory // keep as fallback
+		needFallback = append(needFallback, req.SQLResourceID)
 	}
 
-	if len(needStore) == 0 {
+	if len(needFallback) == 0 {
 		return result
 	}
 
@@ -401,31 +405,36 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	// keeping the best coverage per ID. Ties on span are broken by total
 	// point count, matching the single-resource alias resolution logic.
 	storeResults := make(map[string]map[string][]MetricPoint)
-	for _, candidate := range monitorStoreResourceTypeCandidates(sqlResourceType) {
-		batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needStore, duration)
-		for id, metricMap := range batch {
-			if existing, ok := storeResults[id]; ok {
-				newSpan := chartMapCoverageSpan(metricMap)
-				oldSpan := chartMapCoverageSpan(existing)
-				if newSpan < oldSpan || (newSpan == oldSpan && monitorMetricMapPointCount(metricMap) <= monitorMetricMapPointCount(existing)) {
-					continue
+	if m.metricsStore != nil {
+		for _, candidate := range monitorStoreResourceTypeCandidates(sqlResourceType) {
+			batch := m.queryStoreBatchMetricMapWithGapFill(candidate, needFallback, duration)
+			for id, metricMap := range batch {
+				if existing, ok := storeResults[id]; ok {
+					newSpan := chartMapCoverageSpan(metricMap)
+					oldSpan := chartMapCoverageSpan(existing)
+					if newSpan < oldSpan || (newSpan == oldSpan && monitorMetricMapPointCount(metricMap) <= monitorMetricMapPointCount(existing)) {
+						continue
+					}
 				}
+				storeResults[id] = metricMap
 			}
-			storeResults[id] = metricMap
 		}
 	}
+	nativeResults := m.nativeGuestMetricHistory(sqlResourceType, duration)
 
-	// Phase 3: Merge — use store data when it has better coverage.
-	for _, id := range needStore {
+	// Phase 3: Merge fallback data per metric type.
+	for _, id := range needFallback {
+		best := cloneMetricPointMap(result[id])
 		storeData, ok := storeResults[id]
+		if ok {
+			best = mergeGuestMetricHistory(best, storeData, duration)
+		}
+		nativeData, ok := nativeResults[id]
 		if !ok {
+			result[id] = best
 			continue
 		}
-		inMemory := result[id]
-		if duration <= inMemoryChartThreshold && chartMapCoverageSpan(storeData) <= chartMapCoverageSpan(inMemory) {
-			continue
-		}
-		result[id] = storeData
+		result[id] = mergeGuestMetricHistory(best, nativeData, duration)
 	}
 
 	return result
@@ -544,6 +553,40 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 	return result
 }
 
+func (m *Monitor) nativeGuestMetricHistory(resourceType string, duration time.Duration) map[string]map[string][]MetricPoint {
+	providers := m.supplementalProviderSnapshot()
+	if len(providers) == 0 {
+		return nil
+	}
+
+	orgID := "default"
+	if m != nil {
+		if trimmed := strings.TrimSpace(m.GetOrgID()); trimmed != "" {
+			orgID = trimmed
+		}
+	}
+
+	history := make(map[string]map[string][]MetricPoint)
+	for _, provider := range providers {
+		historyProvider, ok := provider.(MonitorGuestMetricHistoryProvider)
+		if !ok {
+			continue
+		}
+		nativeHistory := historyProvider.GuestMetricHistory(m, orgID, resourceType, duration)
+		for resourceID, metricMap := range nativeHistory {
+			if strings.TrimSpace(resourceID) == "" || len(metricMap) == 0 {
+				continue
+			}
+			existing := history[resourceID]
+			history[resourceID] = mergeGuestMetricHistory(existing, metricMap, duration)
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
+}
+
 func chartGapFillLookbackWindow(duration time.Duration) time.Duration {
 	lookback := duration * chartGapFillLookbackMultiplier
 	if lookback < chartGapFillLookbackMin {
@@ -648,6 +691,71 @@ func convertAndDownsample(sqlResult map[string][]metrics.MetricPoint, target int
 		result[metric] = lttb(converted, target)
 	}
 	return result
+}
+
+func cloneMetricSeries(points []MetricPoint) []MetricPoint {
+	if len(points) == 0 {
+		return nil
+	}
+	cloned := make([]MetricPoint, len(points))
+	copy(cloned, points)
+	return cloned
+}
+
+func cloneMetricPointMap(metrics map[string][]MetricPoint) map[string][]MetricPoint {
+	if len(metrics) == 0 {
+		return map[string][]MetricPoint{}
+	}
+	cloned := make(map[string][]MetricPoint, len(metrics))
+	for metricType, points := range metrics {
+		cloned[metricType] = cloneMetricSeries(points)
+	}
+	return cloned
+}
+
+func mergeGuestMetricHistory(base, candidate map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
+	if len(candidate) == 0 {
+		return cloneMetricPointMap(base)
+	}
+
+	merged := cloneMetricPointMap(base)
+	for metricType, candidateSeries := range candidate {
+		if !shouldPreferGuestMetricSeries(merged[metricType], candidateSeries, duration) {
+			continue
+		}
+		merged[metricType] = cloneMetricSeries(candidateSeries)
+	}
+	return merged
+}
+
+func shouldPreferGuestMetricSeries(current, candidate []MetricPoint, duration time.Duration) bool {
+	if len(candidate) == 0 {
+		return false
+	}
+	if len(current) == 0 {
+		return true
+	}
+
+	candidateSpan := chartSeriesCoverageSpan(candidate)
+	currentSpan := chartSeriesCoverageSpan(current)
+	if duration <= inMemoryChartThreshold {
+		currentSufficient := hasSufficientChartSeriesCoverage(current, duration)
+		candidateSufficient := hasSufficientChartSeriesCoverage(candidate, duration)
+		switch {
+		case currentSufficient && !candidateSufficient:
+			return false
+		case !currentSufficient && candidateSufficient:
+			return true
+		}
+	}
+
+	if candidateSpan > currentSpan {
+		return true
+	}
+	if candidateSpan < currentSpan {
+		return false
+	}
+	return len(candidate) > len(current)
 }
 
 func chartCoverageRequiredSpan(duration time.Duration) time.Duration {
