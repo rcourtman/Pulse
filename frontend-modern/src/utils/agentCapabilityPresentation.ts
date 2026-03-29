@@ -1,4 +1,11 @@
-export type AgentCapability = 'agent' | 'docker' | 'kubernetes' | 'proxmox' | 'pbs' | 'pmg';
+export type AgentCapability =
+  | 'agent'
+  | 'docker'
+  | 'kubernetes'
+  | 'proxmox'
+  | 'pbs'
+  | 'pmg'
+  | 'truenas';
 
 export function getAgentCapabilityLabel(capability: AgentCapability): string {
   switch (capability) {
@@ -14,6 +21,8 @@ export function getAgentCapabilityLabel(capability: AgentCapability): string {
       return 'PBS';
     case 'pmg':
       return 'PMG';
+    case 'truenas':
+      return 'TrueNAS';
   }
 }
 
@@ -25,6 +34,8 @@ export function getAgentCapabilityBadgeClass(capability: AgentCapability): strin
       return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300';
     case 'pmg':
       return 'bg-rose-100 text-rose-800 dark:bg-rose-900 dark:text-rose-300';
+    case 'truenas':
+      return 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-300';
     case 'kubernetes':
       return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300';
     default:

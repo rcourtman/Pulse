@@ -1039,7 +1039,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
     await waitFor(() => {
       expect(screen.getAllByText('Reporting now').length).toBeGreaterThan(0);
     });
-    expect(screen.getByText(/Hosts and runtimes currently checking in to Pulse\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Systems, platforms, and runtimes currently checking in to Pulse\./i),
+    ).toBeInTheDocument();
     expect(screen.getByText('Reporting surfaces')).toBeInTheDocument();
 
     expect(screen.getAllByText('Test Server').length).toBeGreaterThan(0);
@@ -1222,9 +1224,59 @@ describe('InfrastructureOperationsController managed agents table', () => {
     expect(details.getByText('Docker runtime ID')).toBeInTheDocument();
     expect(details.getByText('Node ID')).toBeInTheDocument();
     expect(details.getAllByText('delly-resource').length).toBeGreaterThan(0);
-    expect(details.getByText('Managed with host telemetry')).toBeInTheDocument();
+    expect(
+      details.getByRole('button', { name: /Open platform connections/i }),
+    ).toBeInTheDocument();
     expect(details.getAllByText('delly-agent').length).toBeGreaterThan(0);
     expect(details.getAllByText('delly-docker').length).toBeGreaterThan(0);
+  });
+
+  it('routes api-backed truenas rows to platform connections instead of machine uninstall actions', async () => {
+    setupWithResources([], [
+      {
+        id: 'truenas-main',
+        name: 'Tower NAS',
+        displayName: 'Tower NAS',
+        hostname: 'truenas.local',
+        status: 'active',
+        healthStatus: 'online',
+        lastSeen: Date.now(),
+        version: '25.04.0',
+        upgradePlatform: 'linux',
+        surfaces: [
+          {
+            id: 'truenas:truenas.local',
+            kind: 'truenas',
+            label: 'TrueNAS data',
+            detail:
+              'System, storage, app, and recovery telemetry polled through the configured TrueNAS connection.',
+            idLabel: 'Hostname',
+            idValue: 'truenas.local',
+          },
+        ],
+      },
+    ]);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Reporting now').length).toBeGreaterThan(0);
+    });
+
+    expect(screen.getByText(/1 TrueNAS system/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /details for Tower NAS/i }));
+
+    const detailsRow = document.getElementById('agent-details-agent-truenas-main');
+    expect(detailsRow).not.toBeNull();
+    const details = within(detailsRow as HTMLElement);
+
+    expect(details.queryByText('Machine actions')).not.toBeInTheDocument();
+    expect(details.queryByRole('button', { name: /Copy uninstall command/i })).not.toBeInTheDocument();
+
+    const openPlatformConnectionsButton = details.getByRole('button', {
+      name: /Open platform connections/i,
+    });
+    fireEvent.click(openPlatformConnectionsButton);
+
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/platforms/truenas');
   });
 
   it('distinguishes PBS coverage from Proxmox nodes on non-Proxmox hosts', async () => {
@@ -1579,7 +1631,7 @@ describe('InfrastructureOperationsController managed agents table', () => {
 
     expect(screen.getByText('Stop monitoring?')).toBeInTheDocument();
     expect(
-      screen.getByText(/Host telemetry, Docker runtime data, and Proxmox data will stop in Pulse/i),
+      screen.getByText(/Host telemetry and Docker runtime data will stop in Pulse/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Pulse will stop these reporting surfaces')).toBeInTheDocument();
     expect(screen.getAllByText('Host telemetry').length).toBeGreaterThan(0);

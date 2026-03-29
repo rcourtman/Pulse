@@ -10,11 +10,13 @@ describe('agentCapabilityPresentation', () => {
     expect(getAgentCapabilityLabel('docker')).toBe('Docker');
     expect(getAgentCapabilityLabel('kubernetes')).toBe('Kubernetes');
     expect(getAgentCapabilityLabel('proxmox')).toBe('Proxmox');
+    expect(getAgentCapabilityLabel('truenas')).toBe('TrueNAS');
   });
 
   it('uses canonical capability badge tones', () => {
     expect(getAgentCapabilityBadgeClass('proxmox')).toContain('amber-100');
     expect(getAgentCapabilityBadgeClass('kubernetes')).toContain('emerald-100');
     expect(getAgentCapabilityBadgeClass('agent')).toContain('blue-100');
+    expect(getAgentCapabilityBadgeClass('truenas')).toContain('cyan-100');
   });
 });

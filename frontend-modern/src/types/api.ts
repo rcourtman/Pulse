@@ -32,7 +32,7 @@ export interface State {
 
 export interface ConnectedInfrastructureSurface {
   id: string;
-  kind: 'agent' | 'docker' | 'kubernetes' | 'proxmox' | 'pbs' | 'pmg';
+  kind: 'agent' | 'docker' | 'kubernetes' | 'proxmox' | 'pbs' | 'pmg' | 'truenas';
   label: string;
   detail?: string;
   controlId?: string;

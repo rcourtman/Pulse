@@ -25,7 +25,7 @@ export const InfrastructureInventorySection: Component = () => {
 
       <SettingsPanel
         title="Reporting now"
-        description="Hosts and runtimes currently checking in to Pulse."
+        description="Systems, platforms, and runtimes currently checking in to Pulse."
         icon={<Users class="h-5 w-5" strokeWidth={2} />}
         bodyClass="space-y-4"
       >
@@ -33,7 +33,7 @@ export const InfrastructureInventorySection: Component = () => {
           <p class="text-sm font-medium text-base-content">{state.reportingCoverageSummaryText()}</p>
           <p class="mt-2 text-xs text-muted">
             This workspace does not list every asset Pulse has discovered. It focuses on systems
-            and runtimes that are actively checking in right now.
+            plus platform-integrated runtimes that are actively checking in right now.
           </p>
         </div>
 
@@ -138,6 +138,7 @@ export const InfrastructureInventorySection: Component = () => {
                 <option value="proxmox">Proxmox</option>
                 <option value="pbs">PBS</option>
                 <option value="pmg">PMG</option>
+                <option value="truenas">TrueNAS</option>
               </select>
             </div>
             <div class="space-y-1">

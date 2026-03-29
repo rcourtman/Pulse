@@ -7,6 +7,10 @@ import {
   getAgentCapabilityLabel,
   type AgentCapability,
 } from '@/utils/agentCapabilityPresentation';
+import {
+  buildPlatformConnectionsPath,
+  type PlatformConnectionsView,
+} from './platformConnectionsModel';
 
 export const TOKEN_PLACEHOLDER = '<api-token>';
 export const UNIFIED_AGENT_TELEMETRY_SURFACE = 'settings_unified_agents';
@@ -138,6 +142,8 @@ export const getCapabilitySurfaceLabel = (capability: AgentCapability) => {
       return 'PBS data';
     case 'pmg':
       return 'PMG data';
+    case 'truenas':
+      return 'TrueNAS data';
     default:
       return getAgentCapabilityLabel(capability);
   }
@@ -186,10 +192,34 @@ export const getStopMonitoringSurfaces = (row: UnifiedAgentRow) => {
   if (!hostManagedStopApplies) {
     return stopMonitoringSurfaces;
   }
-  return surfaces.filter((surface) =>
-    ['agent', 'docker', 'kubernetes', 'proxmox', 'pbs', 'pmg'].includes(surface.kind),
-  );
+  return surfaces.filter((surface) => ['agent', 'docker', 'kubernetes'].includes(surface.kind));
 };
+
+export const isPlatformConnectionsCapability = (capability: AgentCapability) =>
+  ['proxmox', 'pbs', 'pmg', 'truenas'].includes(capability);
+
+export const getPlatformConnectionsViewForCapability = (
+  capability: AgentCapability,
+): PlatformConnectionsView | null => {
+  switch (capability) {
+    case 'proxmox':
+    case 'pbs':
+    case 'pmg':
+      return 'proxmox';
+    case 'truenas':
+      return 'truenas';
+    default:
+      return null;
+  }
+};
+
+export const getPlatformConnectionsPathForCapability = (capability: AgentCapability) => {
+  const view = getPlatformConnectionsViewForCapability(capability);
+  return view ? buildPlatformConnectionsPath(view) : null;
+};
+
+export const hasMachineInstallActions = (row: UnifiedAgentRow) =>
+  Boolean(row.agentActionId?.trim() || row.agentId?.trim());
 
 export const getStopMonitoringScopeLabel = (row: UnifiedAgentRow) => {
   const surfaceLabels = getStopMonitoringSurfaces(row).map((surface) => surface.label);
@@ -229,9 +259,8 @@ export const createSurfaceScopedRow = (
 
   if (surfaceKey === 'agent') {
     const hostManagedCapabilities: AgentCapability[] = ['agent'];
-    if (row.capabilities.includes('proxmox')) hostManagedCapabilities.push('proxmox');
-    if (row.capabilities.includes('pbs')) hostManagedCapabilities.push('pbs');
-    if (row.capabilities.includes('pmg')) hostManagedCapabilities.push('pmg');
+    if (row.capabilities.includes('docker')) hostManagedCapabilities.push('docker');
+    if (row.capabilities.includes('kubernetes')) hostManagedCapabilities.push('kubernetes');
     return {
       ...row,
       rowKey: `${row.rowKey}-agent-surface`,
@@ -239,7 +268,7 @@ export const createSurfaceScopedRow = (
       dockerActionId: undefined,
       kubernetesActionId: undefined,
       surfaces: row.surfaces.filter((surface) =>
-        ['agent', 'proxmox', 'pbs', 'pmg'].includes(surface.kind),
+        ['agent', 'docker', 'kubernetes'].includes(surface.kind),
       ),
     };
   }
@@ -413,6 +442,7 @@ const agentCapabilityFromSurfaceKind = (kind: ConnectedInfrastructureSurface['ki
     case 'proxmox':
     case 'pbs':
     case 'pmg':
+    case 'truenas':
       return kind;
     default:
       return 'agent';

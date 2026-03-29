@@ -182,9 +182,6 @@ func applyConnectedInfrastructureIgnoreState(
 		if agentSurface, ok := group.surfaces["agent"]; ok {
 			if _, ignored := ignoredHostIDs[strings.TrimSpace(agentSurface.ControlID)]; ignored {
 				delete(group.surfaces, "agent")
-				delete(group.surfaces, "proxmox")
-				delete(group.surfaces, "pbs")
-				delete(group.surfaces, "pmg")
 			}
 		}
 
@@ -223,6 +220,9 @@ func appendConnectedInfrastructureSurfaces(
 		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 	if surface, ok := connectedInfrastructurePMGSurface(resource); ok {
+		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
+	}
+	if surface, ok := connectedInfrastructureTrueNASSurface(resource); ok {
 		addConnectedInfrastructureSurface(groups, resource, surface, resolver)
 	}
 }
@@ -392,6 +392,7 @@ func connectedInfrastructureHostname(resource unifiedresources.Resource) string 
 		connectedInfrastructureDockerHostname(resource),
 		connectedInfrastructurePBSHostname(resource),
 		connectedInfrastructurePMGHostname(resource),
+		connectedInfrastructureTrueNASHostname(resource),
 		connectedInfrastructureCanonicalHostname(resource),
 		strings.TrimSpace(resource.Name),
 	} {
@@ -431,6 +432,8 @@ func connectedInfrastructureVersion(resource unifiedresources.Resource) string {
 		return strings.TrimSpace(resource.PBS.Version)
 	case resource.PMG != nil && strings.TrimSpace(resource.PMG.Version) != "":
 		return strings.TrimSpace(resource.PMG.Version)
+	case resource.TrueNAS != nil && strings.TrimSpace(resource.TrueNAS.Version) != "":
+		return strings.TrimSpace(resource.TrueNAS.Version)
 	case resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.PVEVersion) != "":
 		return strings.TrimSpace(resource.Proxmox.PVEVersion)
 	default:
@@ -616,6 +619,29 @@ func connectedInfrastructurePMGSurface(
 	}, true
 }
 
+func connectedInfrastructureTrueNASSurface(
+	resource unifiedresources.Resource,
+) (models.ConnectedInfrastructureSurfaceFrontend, bool) {
+	if resource.TrueNAS == nil {
+		return models.ConnectedInfrastructureSurfaceFrontend{}, false
+	}
+	hostname := strings.TrimSpace(resource.TrueNAS.Hostname)
+	if hostname == "" {
+		hostname = connectedInfrastructureCanonicalHostname(resource)
+	}
+	if hostname == "" {
+		hostname = resource.ID
+	}
+	return models.ConnectedInfrastructureSurfaceFrontend{
+		ID:      "truenas:" + hostname,
+		Kind:    "truenas",
+		Label:   "TrueNAS data",
+		Detail:  "System, storage, app, and recovery telemetry polled through the configured TrueNAS connection.",
+		IDLabel: "Hostname",
+		IDValue: hostname,
+	}, true
+}
+
 func connectedInfrastructureSurfaceOrder(kind string) int {
 	switch kind {
 	case "agent":
@@ -630,6 +656,8 @@ func connectedInfrastructureSurfaceOrder(kind string) int {
 		return 4
 	case "pmg":
 		return 5
+	case "truenas":
+		return 6
 	default:
 		return 99
 	}
@@ -664,6 +692,13 @@ func connectedInfrastructurePBSHostname(resource unifiedresources.Resource) stri
 func connectedInfrastructurePMGHostname(resource unifiedresources.Resource) string {
 	if resource.PMG != nil {
 		return strings.TrimSpace(resource.PMG.Hostname)
+	}
+	return ""
+}
+
+func connectedInfrastructureTrueNASHostname(resource unifiedresources.Resource) string {
+	if resource.TrueNAS != nil {
+		return strings.TrimSpace(resource.TrueNAS.Hostname)
 	}
 	return ""
 }

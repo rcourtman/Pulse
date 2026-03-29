@@ -228,6 +228,17 @@ Own canonical runtime payload shapes between backend and frontend.
     operators can receive the first success handoff without typing a hostname
     or agent ID.
 20. Keep the shared first-run install-token transport explicit on
+21. Keep connected-infrastructure surface vocabulary canonical across the
+    shared `/api/state` and reporting/install consumers: `frontend-modern/src/types/api.ts`
+    must treat `truenas` as a first-class connected-infrastructure surface kind,
+    and connected-infrastructure consumers such as
+    `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+    and
+    `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+    must preserve the transport distinction between machine-managed surfaces
+    (`agent`, `docker`, `kubernetes`) and platform-connections-managed
+    surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
+    into one uninstall/stop-monitoring model.
     `/api/security/tokens` as used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
     once quick setup has produced the setup handoff credentials, the canonical
@@ -2062,3 +2073,13 @@ on its empty-list payload once AI is enabled, even when the first enablement
 happens after process startup. A post-boot settings save may not leave that
 surface on `503 Approval store not initialized` just because the direct AI
 runtime had not previously started.
+That same shared infrastructure-settings API contract now also owns the
+connected-infrastructure distinction between machine-managed and
+platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,
+`frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
+and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+must treat `truenas` as a canonical connected-infrastructure surface kind
+alongside `proxmox`, `pbs`, and `pmg`, and the settings reporting/install
+surfaces must keep those platform-managed rows navigable back to platform
+connections instead of presenting host uninstall or stop-monitoring actions
+that only apply to `agent`, `docker`, and `kubernetes`.

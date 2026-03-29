@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import {
+  getPlatformConnectionsPathForCapability,
+  hasMachineInstallActions,
   getPowerShellInstallProfileEnvFromFlags,
   getStopMonitoringScopeLabel,
   rowFromConnectedInfrastructureItem,
@@ -91,7 +93,41 @@ describe('infrastructure operations model', () => {
       ],
     };
 
-    expect(getStopMonitoringScopeLabel(row)).toBe('Host telemetry, Docker runtime data, and PBS data');
+    expect(getStopMonitoringScopeLabel(row)).toBe('Host telemetry and Docker runtime data');
+  });
+
+  it('treats truenas surfaces as platform-managed items instead of machine installs', () => {
+    const item: ConnectedInfrastructureItem = {
+      id: 'truenas-main',
+      name: 'Tower NAS',
+      hostname: 'truenas.local',
+      status: 'active',
+      version: '25.04.0',
+      surfaces: [
+        {
+          id: 'truenas:truenas.local',
+          kind: 'truenas',
+          label: 'TrueNAS data',
+          detail:
+            'System, storage, app, and recovery telemetry polled through the configured TrueNAS connection.',
+          idLabel: 'Hostname',
+          idValue: 'truenas.local',
+        },
+      ],
+    };
+
+    const row = rowFromConnectedInfrastructureItem(item, {
+      label: 'N/A',
+      detail: '',
+      category: 'na',
+    });
+
+    expect(row.capabilities).toEqual(['truenas']);
+    expect(row.installFlags).toEqual([]);
+    expect(hasMachineInstallActions(row)).toBe(false);
+    expect(getPlatformConnectionsPathForCapability('truenas')).toBe(
+      '/settings/infrastructure/platforms/truenas',
+    );
   });
 
   it('maps install-profile flags into PowerShell installer env assignments', () => {

@@ -79,6 +79,38 @@ func TestConnectedInfrastructureUsesSharedTopLevelSystemResolver(t *testing.T) {
 	}
 }
 
+func TestConnectedInfrastructureKeepsPlatformConnectionsAndProjectsTrueNAS(t *testing.T) {
+	data, err := os.ReadFile("connected_infrastructure.go")
+	if err != nil {
+		t.Fatalf("failed to read connected_infrastructure.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		`if agentSurface, ok := group.surfaces["agent"]; ok {`,
+		`if dockerSurface, ok := group.surfaces["docker"]; ok {`,
+		`if kubernetesSurface, ok := group.surfaces["kubernetes"]; ok {`,
+		`if surface, ok := connectedInfrastructureTrueNASSurface(resource); ok {`,
+		`Kind:    "truenas",`,
+		`case "truenas":`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("connected_infrastructure.go must contain %q", snippet)
+		}
+	}
+
+	for _, forbidden := range []string{
+		`delete(group.surfaces, "proxmox")`,
+		`delete(group.surfaces, "pbs")`,
+		`delete(group.surfaces, "pmg")`,
+		`delete(group.surfaces, "truenas")`,
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Fatalf("connected_infrastructure.go must not remove platform-managed surfaces with %q", forbidden)
+		}
+	}
+}
+
 func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 	t.Parallel()
 

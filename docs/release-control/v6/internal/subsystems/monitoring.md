@@ -258,6 +258,15 @@ telemetry. `internal/truenas/client.go`, `internal/truenas/provider.go`, and
 `/api/current` JSON-RPC websocket transport, project those readings onto the
 canonical `app-container` metrics contract, and sync them into the existing
 guest metrics-history/store path. Pulse must not add a TrueNAS-only charts
+lane for that telemetry.
+That same monitoring boundary now also owns connected-infrastructure
+projection for API-backed platforms. `internal/monitoring/connected_infrastructure.go`
+must project TrueNAS into the canonical connected-infrastructure surface list,
+carry TrueNAS hostname/version through the shared top-level system grouping,
+and preserve platform-managed surfaces such as `proxmox`, `pbs`, `pmg`, and
+`truenas` when host telemetry is ignored. Ignore/remove semantics on that
+surface remain machine-scoped and may only strip the local `agent`, `docker`,
+and `kubernetes` reporting surfaces from the grouped row.
 path or treat API-backed app workloads as second-class compared with native
 Docker reports.
 That same boundary now also owns native host-history fallback for API-backed

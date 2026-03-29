@@ -154,3 +154,102 @@ func TestBuildConnectedInfrastructure_UsesSharedTopLevelSystemGrouping(t *testin
 		t.Fatalf("expected PBS surface to attach to the shared top-level system group, got %q", item.ID)
 	}
 }
+
+func TestBuildConnectedInfrastructure_KeepsPlatformConnectionsActiveWhenHostTelemetryIgnored(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+		{
+			ID:       "tower-agent",
+			Name:     "Tower Agent",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			Agent: &unifiedresources.AgentData{
+				AgentID:      "tower-agent",
+				AgentVersion: "1.2.3",
+				Hostname:     "tower.local",
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"tower.local"},
+			},
+		},
+		{
+			ID:       "tower-pbs",
+			Name:     "Tower PBS",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			PBS: &unifiedresources.PBSData{
+				InstanceID: "pbs-1",
+				Hostname:   "tower.local",
+				Version:    "3.4.1",
+			},
+		},
+	}, models.StateSnapshot{
+		RemovedHostAgents: []models.RemovedHostAgent{
+			{ID: "tower-agent", Hostname: "tower.local", DisplayName: "Tower", RemovedAt: now},
+		},
+	})
+
+	if len(items) != 2 {
+		t.Fatalf("expected active platform item and ignored host item, got %d", len(items))
+	}
+
+	var active *models.ConnectedInfrastructureItemFrontend
+	var ignored *models.ConnectedInfrastructureItemFrontend
+	for i := range items {
+		item := &items[i]
+		switch item.Status {
+		case "active":
+			active = item
+		case "ignored":
+			ignored = item
+		}
+	}
+
+	if active == nil {
+		t.Fatal("expected active connected infrastructure item")
+	}
+	if ignored == nil {
+		t.Fatal("expected ignored connected infrastructure item")
+	}
+
+	if len(active.Surfaces) != 1 || active.Surfaces[0].Kind != "pbs" {
+		t.Fatalf("expected active platform surface to remain after host ignore, got %#v", active.Surfaces)
+	}
+	if len(ignored.Surfaces) != 1 || ignored.Surfaces[0].Kind != "agent" {
+		t.Fatalf("expected ignored agent surface, got %#v", ignored.Surfaces)
+	}
+}
+
+func TestBuildConnectedInfrastructure_ProjectsTrueNASSurface(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	items := buildConnectedInfrastructure([]unifiedresources.Resource{
+		{
+			ID:       "truenas-main",
+			Name:     "Tower NAS",
+			LastSeen: now,
+			Status:   unifiedresources.StatusOnline,
+			TrueNAS: &unifiedresources.TrueNASData{
+				Hostname: "truenas.local",
+				Version:  "25.04.0",
+			},
+		},
+	}, models.StateSnapshot{})
+
+	if len(items) != 1 {
+		t.Fatalf("expected one connected infrastructure item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.Hostname != "truenas.local" {
+		t.Fatalf("expected truenas hostname to drive connected infrastructure hostname, got %q", item.Hostname)
+	}
+	if item.Version != "25.04.0" {
+		t.Fatalf("expected truenas version to drive connected infrastructure version, got %q", item.Version)
+	}
+	if len(item.Surfaces) != 1 {
+		t.Fatalf("expected one truenas surface, got %#v", item.Surfaces)
+	}
+	if item.Surfaces[0].Kind != "truenas" {
+		t.Fatalf("expected truenas surface kind, got %#v", item.Surfaces[0])
+	}
+}

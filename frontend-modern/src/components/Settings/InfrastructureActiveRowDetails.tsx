@@ -1,5 +1,6 @@
 import type { Accessor, Component } from 'solid-js';
 import { For, Show } from 'solid-js';
+import { useNavigate } from '@solidjs/router';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { notificationStore } from '@/stores/notifications';
@@ -13,7 +14,9 @@ import {
 } from '@/utils/unifiedAgentInventoryPresentation';
 import {
   createSurfaceScopedRow,
+  getPlatformConnectionsPathForCapability,
   getRowSurfaceBreakdown,
+  hasMachineInstallActions,
   type UnifiedAgentRow,
 } from './infrastructureOperationsModel';
 import { useInfrastructureOperationsContext } from './useInfrastructureOperationsState';
@@ -26,6 +29,7 @@ export const InfrastructureActiveRowDetails: Component<InfrastructureActiveRowDe
   props,
 ) => {
   const state = useInfrastructureOperationsContext();
+  const navigate = useNavigate();
   const row = () => props.rowAccessor();
   const isKubernetes = () =>
     row().capabilities.includes('kubernetes') && !row().capabilities.includes('agent');
@@ -36,6 +40,7 @@ export const InfrastructureActiveRowDetails: Component<InfrastructureActiveRowDe
     resolvedAgentId() ? Boolean(state.pendingScopeUpdates()[resolvedAgentId()]) : false;
   const agentName = () => row().displayName || row().hostname || row().name;
   const surfaces = () => getRowSurfaceBreakdown(row());
+  const hasLocalMachineActions = () => hasMachineInstallActions(row()) || Boolean(row().isOutdatedBinary);
 
   return (
     <div id={`agent-details-${row().rowKey}`} class="flex h-full flex-col overflow-y-auto">
@@ -296,7 +301,28 @@ export const InfrastructureActiveRowDetails: Component<InfrastructureActiveRowDe
                           surface.key === 'agent' ||
                           surface.key === 'kubernetes'
                         }
-                        fallback={<span class="text-[11px] text-muted">Managed with host telemetry</span>}
+                        fallback={
+                          <Show
+                            when={getPlatformConnectionsPathForCapability(surface.kind)}
+                            fallback={
+                              <span class="text-[11px] text-muted">Managed by this reporting item</span>
+                            }
+                          >
+                            {(path) => (
+                              <button
+                                type="button"
+                                data-row-action
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(path());
+                                }}
+                                class="inline-flex min-h-9 items-center rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-900 dark:text-blue-400 dark:hover:bg-blue-900 dark:hover:text-blue-300"
+                              >
+                                Open platform connections
+                              </button>
+                            )}
+                          </Show>
+                        }
                       >
                         <button
                           type="button"
@@ -323,49 +349,51 @@ export const InfrastructureActiveRowDetails: Component<InfrastructureActiveRowDe
           </div>
         </Show>
 
-        <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
-          <div class="text-xs font-semibold uppercase tracking-wide text-muted">Machine actions</div>
-          <div class="mt-2 text-xs text-muted">Machine-level utilities.</div>
-          <div class="mt-4 flex flex-col gap-2">
-            <Show when={!isKubernetes()}>
-              <button
-                type="button"
-                onClick={async () => {
-                  const success = await copyToClipboard(
-                    state.getPlatformUninstallCommand(row().upgradePlatform, row()),
-                  );
-                  if (success) {
-                    notificationStore.success(getUnifiedAgentClipboardCopySuccessMessage());
-                  } else {
-                    notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
-                  }
-                }}
-                class="rounded-md border border-border px-3 py-2 text-left text-xs text-slate-600 hover:bg-surface hover:text-base-content"
-              >
-                Copy uninstall command
-              </button>
-            </Show>
-            <Show when={row().isOutdatedBinary}>
-              <button
-                type="button"
-                onClick={async () => {
-                  const success = await copyToClipboard(state.getUpgradeCommand(row()));
-                  if (success) {
-                    notificationStore.success(getUnifiedAgentClipboardCopySuccessMessage());
-                  } else {
-                    notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
-                  }
-                }}
-                class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-700 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/60 dark:hover:text-amber-200"
-              >
-                Copy upgrade command
-              </button>
-            </Show>
-            <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
-              Use surface controls above to stop reporting without uninstalling.
+        <Show when={hasLocalMachineActions()}>
+          <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-muted">Machine actions</div>
+            <div class="mt-2 text-xs text-muted">Machine-level utilities.</div>
+            <div class="mt-4 flex flex-col gap-2">
+              <Show when={!isKubernetes() && hasMachineInstallActions(row())}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyToClipboard(
+                      state.getPlatformUninstallCommand(row().upgradePlatform, row()),
+                    );
+                    if (success) {
+                      notificationStore.success(getUnifiedAgentClipboardCopySuccessMessage());
+                    } else {
+                      notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
+                    }
+                  }}
+                  class="rounded-md border border-border px-3 py-2 text-left text-xs text-slate-600 hover:bg-surface hover:text-base-content"
+                >
+                  Copy uninstall command
+                </button>
+              </Show>
+              <Show when={row().isOutdatedBinary}>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const success = await copyToClipboard(state.getUpgradeCommand(row()));
+                    if (success) {
+                      notificationStore.success(getUnifiedAgentClipboardCopySuccessMessage());
+                    } else {
+                      notificationStore.error(getUnifiedAgentClipboardCopyErrorMessage());
+                    }
+                  }}
+                  class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-left text-xs text-amber-700 hover:bg-amber-100 hover:text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900/60 dark:hover:text-amber-200"
+                >
+                  Copy upgrade command
+                </button>
+              </Show>
+              <div class="rounded-md border border-blue-200 bg-blue-50 px-3 py-3 text-xs text-blue-900 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-100">
+                Use surface controls above to stop reporting without uninstalling.
+              </div>
             </div>
           </div>
-        </div>
+        </Show>
       </div>
     </div>
   );

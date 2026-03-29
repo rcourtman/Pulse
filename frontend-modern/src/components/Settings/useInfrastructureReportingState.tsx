@@ -546,6 +546,7 @@ export const useInfrastructureReportingState = () => {
       proxmox: active.filter((row) => row.capabilities.includes('proxmox')).length,
       pbs: active.filter((row) => row.capabilities.includes('pbs')).length,
       pmg: active.filter((row) => row.capabilities.includes('pmg')).length,
+      truenas: active.filter((row) => row.capabilities.includes('truenas')).length,
     };
   });
 
@@ -564,6 +565,9 @@ export const useInfrastructureReportingState = () => {
         : null,
       summary.pbs > 0 ? `${summary.pbs} PBS server${summary.pbs === 1 ? '' : 's'}` : null,
       summary.pmg > 0 ? `${summary.pmg} PMG server${summary.pmg === 1 ? '' : 's'}` : null,
+      summary.truenas > 0
+        ? `${summary.truenas} TrueNAS system${summary.truenas === 1 ? '' : 's'}`
+        : null,
     ].filter((value): value is string => Boolean(value));
 
     if (activeClauses.length === 0) {
