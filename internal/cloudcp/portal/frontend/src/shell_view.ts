@@ -1488,42 +1488,59 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   );
 }
 
+function renderAuthScopeRow(title: string, copy: string): string {
+  return (
+    '<article class="portal-auth-scope-row">' +
+      '<h3>' + escapeHTML(title) + '</h3>' +
+      '<p>' + escapeHTML(copy) + '</p>' +
+    '</article>'
+  );
+}
+
 export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   var statusHTML = '';
   if (context.loginState.request.error) {
     statusHTML = '<div class="billing-status visible error">' + escapeHTML(context.loginState.request.error) + '</div>';
   } else if (context.loginState.success) {
-    var successMessage = context.loginState.successMessage || 'If that email is registered, a magic link is on the way.';
+    var successMessage = context.loginState.successMessage || 'If that email is registered, a sign-in link is on the way.';
     statusHTML =
       '<div class="billing-status visible success">' +
       escapeHTML(successMessage) +
-      '<br><br><strong>Don\'t see it?</strong> <a href="#" data-portal-action="resend-magic-link">Send a new link</a>.' +
+      '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.' +
       '</div>';
   }
   return (
-    '<section class="intro-card">' +
-      '<div class="account-panel-kicker">Pulse Account</div>' +
-      '<h1>Sign in to Pulse Account</h1>' +
-      '<p>Use one commercial email address to get into workspaces, MSP access, billing, license recovery, refunds, and privacy actions.</p>' +
-    '</section>' +
-    '<section class="billing-section billing-section-auth">' +
-      '<div class="billing-panel visible auth-panel">' +
-        '<h3>Sign in</h3>' +
-        '<p>Enter the commercial email address for your Pulse account. I will send a magic link so you can open Pulse Account without managing a password.</p>' +
-        '<div class="form-group">' +
-          '<label for="portal-login-email">Email address</label>' +
-          '<input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' +
-          escapeAttr(context.loginState.emailValue || '') +
-          '" data-portal-input="login-email">' +
+    '<section class="portal-auth-shell">' +
+      '<div class="portal-auth-intro">' +
+        '<div class="account-panel-kicker">Pulse Account</div>' +
+        '<h1>Sign in to Pulse Account</h1>' +
+        '<p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p>' +
+        '<div class="portal-auth-scope-list" aria-label="Pulse Account scope">' +
+          renderAuthScopeRow('Workspaces', 'Open hosted workspaces and review lifecycle state.') +
+          renderAuthScopeRow('Access', 'Review account access and manage roles when permitted.') +
+          renderAuthScopeRow('Billing', 'Open hosted billing or self-hosted commercial tools when they apply.') +
         '</div>' +
-        '<div class="form-actions">' +
-          '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
-          (context.loginState.request.pending ? 'Sending…' : 'Send magic link') +
-          '</button>' +
-          '<a class="btn-secondary link-button" href="' + escapeAttr(context.signupPath) + '">Create an account</a>' +
-        '</div>' +
-        statusHTML +
       '</div>' +
+      '<section class="portal-auth-panel" aria-labelledby="portal-auth-title">' +
+        '<div class="portal-auth-card">' +
+          '<div class="account-panel-kicker">Sign in</div>' +
+          '<h2 id="portal-auth-title">Email sign-in link</h2>' +
+          '<p>Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.</p>' +
+          '<div class="form-group portal-auth-form-group">' +
+            '<label for="portal-login-email">Commercial email</label>' +
+            '<input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' +
+            escapeAttr(context.loginState.emailValue || '') +
+            '" data-portal-input="login-email">' +
+          '</div>' +
+          '<div class="form-actions portal-auth-actions">' +
+            '<button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' +
+            (context.loginState.request.pending ? 'Sending…' : 'Send sign-in link') +
+            '</button>' +
+          '</div>' +
+          '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>' +
+          statusHTML +
+        '</div>' +
+      '</section>' +
     '</section>'
   );
 }

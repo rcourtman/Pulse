@@ -491,6 +491,11 @@ tree and rebuild the committed bundle instead of editing embedded script or CSS
 blobs directly. Coordination between account-shell modules should stay inside
 that owned runtime boundary as well, rather than drifting back to
 document-wide custom events or browser-global runtime objects.
+The same frontend seam owns the signed-out account surface too: `/portal`
+before auth must render as the same calm account product, not as a leftover
+marketing block plus a generic form card. The primary sign-in action should be
+obvious, supporting account scope should stay precise, and the auth surface
+should use the same flat, restrained visual system as the signed-in shell.
 
 ### Post-lane follow-on
 

@@ -911,6 +911,11 @@ Navigation chrome, account framing, and overview panels must stay visually
 quieter than the active task surface, with flatter light treatment and
 list-first task presentation instead of dark ornamental rails or nested
 explanatory cards.
+That same owned shell also owns the signed-out visual posture: the unauthenticated
+`/portal` page must read like the same product boundary, not a leftover
+marketing block plus a generic login card. The auth surface should present one
+obvious sign-in action, precise account-scope rows, and the same restrained
+flat system as the signed-in account shell.
 The same shell/runtime boundary must also stay honest to hosted-account
 permissions: when the current role is view-only, `Workspaces`, `Access`, and
 hosted `Billing` copy must not advertise create, roster-mutation, or hosted

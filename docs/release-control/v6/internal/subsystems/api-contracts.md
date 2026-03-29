@@ -391,6 +391,10 @@ decorative dashboard chrome; lighter shell framing; list/detail and row-based
 task presentation; restrained accent use; and hierarchy driven by spacing,
 typography, and dividers rather than dense pills, stacked metrics, or
 ornamental side rails competing with the active task.
+That same typed page contract also applies before auth: the signed-out portal
+surface must keep one obvious sign-in action plus precise account-scope
+presentation, instead of falling back to a separate marketing-like hero and
+generic login card that drifts away from the owned account shell model.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime
 objects, document-wide render events, or untyped embedded asset edits.

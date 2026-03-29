@@ -213,7 +213,7 @@ describe('portal app', function() {
         body: JSON.stringify({ email: 'buyer@example.com', target: 'portal' }),
       })
     );
-    expect(document.getElementById('portal-app-root')?.textContent).toContain('If that email is registered, a magic link is on the way.');
+    expect(document.getElementById('portal-app-root')?.textContent).toContain('If that email is registered, a sign-in link is on the way.');
   });
 
   it('completes the retrieve-license flow through the real authenticated app shell', async function() {

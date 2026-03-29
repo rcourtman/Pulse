@@ -3782,6 +3782,184 @@ header .logout-btn,
 .portal-support-link:hover {
   text-decoration: underline;
 }
+.portal-auth-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 24px;
+  align-items: start;
+  min-height: calc(100vh - 140px);
+}
+.portal-auth-intro,
+.portal-auth-card {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--panel);
+}
+.portal-auth-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 30px 32px;
+}
+.portal-auth-intro h1 {
+  margin: 0;
+  max-width: 12ch;
+  font-family: var(--font-display);
+  font-size: 56px;
+  line-height: 0.94;
+  letter-spacing: -0.06em;
+  color: var(--ink);
+}
+.portal-auth-intro p {
+  margin: 0;
+  max-width: 60ch;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+.portal-auth-scope-list {
+  display: grid;
+  gap: 0;
+  margin-top: 6px;
+}
+.portal-auth-scope-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.portal-auth-scope-row h3,
+.portal-auth-card h2 {
+  margin: 0;
+  color: var(--ink);
+}
+.portal-auth-scope-row h3 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+.portal-auth-scope-row p {
+  margin: 0;
+  max-width: none;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.portal-auth-panel {
+  position: sticky;
+  top: 84px;
+}
+.portal-auth-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px;
+}
+.portal-auth-card h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.045em;
+}
+.portal-auth-card > p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+.portal-auth-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.portal-auth-form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.portal-auth-form-group input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  box-shadow: none;
+}
+.portal-auth-form-group input::placeholder {
+  color: #8a94a3;
+}
+.portal-auth-form-group input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.12);
+}
+.portal-auth-actions {
+  margin-top: 2px;
+}
+.portal-auth-actions .btn-primary {
+  min-width: 160px;
+}
+.portal-auth-secondary-action {
+  margin: -4px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.portal-auth-secondary-action a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.portal-auth-secondary-action a:hover {
+  text-decoration: underline;
+}
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.form-group label {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+}
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  box-shadow: none;
+}
+.form-group textarea {
+  min-height: 120px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  resize: vertical;
+}
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: #8a94a3;
+}
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(11, 87, 208, 0.12);
+}
 @media (max-width: 960px) {
   .main {
     padding: 16px 16px 40px;
@@ -3815,8 +3993,28 @@ header .logout-btn,
   .workspace-operations-shell,
   .access-shell,
   .billing-shell,
+  .portal-auth-shell,
   .portal-support-layout {
     grid-template-columns: 1fr;
+  }
+  .portal-auth-shell {
+    min-height: 0;
+  }
+  .portal-auth-panel {
+    position: static;
+    order: -1;
+  }
+  .portal-auth-intro,
+  .portal-auth-card {
+    padding: 22px 22px 24px;
+  }
+  .portal-auth-intro h1 {
+    max-width: 9ch;
+    font-size: 42px;
+  }
+  .portal-auth-scope-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
   .portal-account-context {
     gap: 16px;
@@ -3882,5 +4080,23 @@ header .logout-btn,
   }
   .portal-account-context-summary {
     grid-template-columns: 1fr;
+  }
+  .portal-auth-intro,
+  .portal-auth-card {
+    padding: 18px 18px 20px;
+  }
+  .portal-auth-intro h1,
+  .portal-auth-card h2 {
+    font-size: 24px;
+    line-height: 1.08;
+  }
+  .portal-auth-intro p,
+  .portal-auth-scope-row p,
+  .portal-auth-card > p {
+    font-size: 14px;
+  }
+  .portal-auth-actions .btn-primary {
+    width: 100%;
+    justify-content: center;
   }
 }

@@ -682,7 +682,11 @@ describe('shell view', function() {
 
     expect(errorHTML).toContain('value="buyer@example.com"');
     expect(errorHTML).toContain('Invalid email');
-    expect(successHTML).toContain('If that email is registered, a magic link is on the way.');
+    expect(errorHTML).toContain('portal-auth-shell');
+    expect(errorHTML).toContain('Email sign-in link');
+    expect(errorHTML).toContain('Commercial email');
+    expect(errorHTML).toContain('Send sign-in link');
+    expect(successHTML).toContain('If that email is registered, a sign-in link is on the way.');
     expect(successHTML).toContain('data-portal-action="resend-magic-link"');
   });
 
