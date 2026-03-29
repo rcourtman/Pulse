@@ -171,7 +171,7 @@ describe('shell view', function() {
     expect(html).toContain('Beta Workspace');
     expect(html).toContain('Gamma Workspace');
     expect(html).toContain('Needs attention');
-    expect(html).toContain('ready</span>');
+    expect(html).toContain('1 workspace ready to use');
     expect(html).toContain('Unhealthy</span>');
     expect(html).toContain('Checking</span>');
     expect(html).toContain('Ready');
@@ -207,15 +207,21 @@ describe('shell view', function() {
     expect(html).toContain('data-can-manage="true"');
     expect(html).toContain('Remove stale access');
     expect(html).toContain('data-action="workspace-action"');
-    expect(html).toContain('Hosted billing');
-    expect(html).toContain('Hosted only');
+    expect(html).toContain('Hosted billing attached');
+    expect(html).toContain('Hosted billing only');
     expect(html).toContain('Use this billing surface only for hosted billing on your hosted workspace accounts.');
     expect(html).toContain('Escalation only');
+    expect(html).toContain('Open Workspaces, Access, or Billing first');
+    expect(html).toContain('Email support');
+    expect(html).toContain('Hosted workspace or access');
     expect(html).toContain('Workspace or access path failed');
+    expect(html).toContain('Open Workspaces');
+    expect(html).toContain('Open Access');
     expect(html).toContain('Hosted billing path failed');
     expect(html).toContain('Send these details');
     expect(html).toContain('What to send');
     expect(html).toContain('Open billing');
+    expect(html).not.toContain('Hosted only');
     expect(html).not.toContain('Self-hosted tools');
     expect(html).not.toContain('Self-hosted billing');
     expect(html).not.toContain('Pick the self-hosted job');
@@ -259,7 +265,7 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Self-hosted tools');
+    expect(html).toContain('Self-hosted billing available');
     expect(html).toContain('Self-hosted billing');
     expect(html).toContain('Pick the self-hosted job');
     expect(html).toContain('Use hosted billing first when the request belongs to a hosted workspace account.');
@@ -398,15 +404,17 @@ describe('shell view', function() {
     expect(html).toContain('Hosted billing is attached here, but an owner or admin must open it.');
     expect(html).toContain('Escalation only after the review, owner/admin, or billing path is exhausted.');
     expect(html).toContain('Use support only when the same Workspaces review, Access review, owner/admin, or hosted Billing path has already stopped you.');
-    expect(html).toContain('Owner/admin first');
+    expect(html).toContain('Review Workspaces or Access, or contact owner/admin first');
+    expect(html).toContain('Email support');
+    expect(html).toContain('Hosted workspace or access');
     expect(html).toContain('Hosted review or owner/admin path failed');
     expect(html).toContain('Review the same workspace or roster here, then have an owner or admin run the blocked change before you escalate.');
     expect(html).toContain('Review the same task');
     expect(html).toContain('Use Workspaces to confirm workspace state and Access to confirm the current roster before you escalate.');
     expect(html).toContain('Name the blocked owner/admin action');
     expect(html).toContain('Include the account, workspace, and the lifecycle or access change that still needs an owner or admin.');
-    expect(html).toContain('Review workspaces');
-    expect(html).toContain('Review access');
+    expect(html).toContain('Open Workspaces');
+    expect(html).toContain('Open Access');
     expect(html).toContain('Hosted billing or owner/admin path failed');
     expect(html).toContain('Use this route only after the affected hosted account still needs an owner or admin to finish hosted billing and that path still cannot complete cleanly.');
     expect(html).toContain('Say whether the failed path was hosted billing and whether the account still needed an owner or admin to open it.');
@@ -636,14 +644,16 @@ describe('shell view', function() {
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.');
     expect(html).toContain('Escalate with the same self-hosted billing path and the exact failed step.');
     expect(html).toContain('Billing');
+    expect(html).toContain('Self-hosted billing available');
+    expect(html).toContain('Open Billing first');
+    expect(html).toContain('Email support');
     expect(html).toContain('Use support only when the Billing path has already stopped you.');
     expect(html).toContain('Self-hosted billing path failed');
     expect(html).toContain('Purchase email');
-    expect(html).not.toContain('No hosted billing attached');
+    expect(html).toContain('No hosted billing attached');
     expect(html).not.toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
     expect(html).not.toContain('Workspace or access path failed');
-    expect(html).not.toContain('Open workspaces');
-    expect(html).not.toContain('Open access');
+    expect(html).not.toContain('Hosted workspace or access');
     expect(html).not.toContain('Self-hosted commercial services');
   });
 

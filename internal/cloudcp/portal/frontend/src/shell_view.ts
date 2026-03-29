@@ -57,12 +57,20 @@ function workspaceCountLabel(count: number): string {
   return count === 1 ? '1 workspace' : String(count) + ' workspaces';
 }
 
+function workspaceTotalChipLabel(count: number): string {
+  return count === 1 ? '1 workspace total' : String(count) + ' workspaces total';
+}
+
 function reviewWorkspaceHeadline(count: number): string {
   return count === 1 ? '1 workspace needs review' : String(count) + ' workspaces need review';
 }
 
 function readyWorkspaceHeadline(count: number): string {
   return count === 1 ? '1 workspace is ready to use' : String(count) + ' workspaces are ready to use';
+}
+
+function readyWorkspaceSectionChipLabel(count: number): string {
+  return count === 1 ? '1 workspace ready to use' : String(count) + ' workspaces ready to use';
 }
 
 function reviewWorkspaceChipLabel(count: number): string {
@@ -75,6 +83,10 @@ function readyWorkspaceChipLabel(count: number): string {
 
 function suspendedWorkspaceChipLabel(count: number): string {
   return count === 1 ? '1 suspended workspace' : String(count) + ' suspended workspaces';
+}
+
+function suspendedWorkspaceSectionChipLabel(count: number): string {
+  return count === 1 ? '1 workspace suspended' : String(count) + ' workspaces suspended';
 }
 
 function overviewNavBadgeLabel(hosted: boolean, attentionCount: number, readyCount: number): string {
@@ -99,6 +111,24 @@ function billingNavBadgeLabel(hostedBillingCount: number): string {
 
 function supportNavBadgeLabel(): string {
   return 'Escalation only';
+}
+
+function billingHeaderChipLabels(hostedBillingCount: number, showSelfHostedCommercial: boolean): string[] {
+  return [
+    hostedBillingCount > 0 ? 'Hosted billing attached' : 'No hosted billing attached',
+    showSelfHostedCommercial ? 'Self-hosted billing available' : 'Hosted billing only',
+  ];
+}
+
+function supportSectionChipLabels(hasHostedAccounts: boolean, hostedViewOnly: boolean, supportEmail: string): string[] {
+  if (hasHostedAccounts) {
+    return [
+      'Escalation only',
+      hostedViewOnly ? 'Review Workspaces or Access, or contact owner/admin first' : 'Open Workspaces, Access, or Billing first',
+      supportEmail ? 'Email support' : 'Support route',
+    ];
+  }
+  return ['Escalation only', 'Open Billing first', supportEmail ? 'Email support' : 'Support route'];
 }
 
 function hasHostedAccounts(accounts: PortalAccountSummary[]): boolean {
@@ -974,9 +1004,9 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
             '<h3>Workspaces</h3>' +
             '<p>' + escapeHTML(sectionCopy) + '</p>' +
             renderSectionContextChips([
-              String(workspaces.length) + ' total',
-              String(readyCount) + ' ready',
-              String(suspendedCount) + ' suspended',
+              workspaceTotalChipLabel(workspaces.length),
+              readyWorkspaceSectionChipLabel(readyCount),
+              suspendedWorkspaceSectionChipLabel(suspendedCount),
             ]) +
           '</div>' +
           '<div class="account-stage-header-actions">' + workspaceHeaderActions + '</div>' +
@@ -1216,13 +1246,11 @@ function renderSupportSection(context: ShellViewContext): string {
         ? 'Use support only when the Workspaces, Access, or Billing path has already stopped you.'
         : 'Use support only when the Workspaces, Access, or hosted Billing path has already stopped you.'))
     : 'Use support only when the Billing path has already stopped you.';
-  var supportChips = hasHostedAccounts
-    ? ['Escalation only', hostedViewOnly ? 'Owner/admin first' : (showSelfHostedCommercial ? 'Bring context' : 'Hosted only'), supportEmail ? 'Email' : 'Support']
-    : ['Escalation only', 'Billing only', supportEmail ? 'Email' : 'Support'];
+  var supportChips = supportSectionChipLabels(hasHostedAccounts, hostedViewOnly, supportEmail);
   var routeCards = hasHostedAccounts
     ? (
       '<div class="portal-support-route-card">' +
-        '<div class="account-panel-kicker">Hosted path</div>' +
+        '<div class="account-panel-kicker">Hosted workspace or access</div>' +
         '<h3>' + (hostedViewOnly ? 'Hosted review or owner/admin path failed' : 'Workspace or access path failed') + '</h3>' +
         '<p>' + (hostedViewOnly
           ? 'Go back to the hosted task first. Review the same workspace or roster here, then have an owner or admin run the blocked change before you escalate.'
@@ -1236,13 +1264,13 @@ function renderSupportSection(context: ShellViewContext): string {
             : 'Include the account, workspace, and failed action so support inherits the same request.') + '</span></div>' +
         '</div>' +
         '<div class="portal-support-actions">' +
-          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">' + (hostedViewOnly ? 'Review workspaces' : 'Open workspaces') + '</button>' +
-          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">' + (hostedViewOnly ? 'Review access' : 'Open access') + '</button>' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Open Workspaces</button>' +
+          '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Open Access</button>' +
           '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a>' +
         '</div>' +
       '</div>' +
       '<div class="portal-support-route-card">' +
-        '<div class="account-panel-kicker">Billing path</div>' +
+        '<div class="account-panel-kicker">' + (showSelfHostedCommercial ? 'Billing' : 'Hosted billing') + '</div>' +
         '<h3>' + (hostedViewOnly
           ? (showSelfHostedCommercial ? 'Billing or owner/admin path failed' : 'Hosted billing or owner/admin path failed')
           : (showSelfHostedCommercial ? 'Billing path failed' : 'Hosted billing path failed')) + '</h3>' +
@@ -1277,7 +1305,7 @@ function renderSupportSection(context: ShellViewContext): string {
     )
     : (
       '<div class="portal-support-route-card">' +
-        '<div class="account-panel-kicker">Billing path</div>' +
+        '<div class="account-panel-kicker">Self-hosted billing</div>' +
         '<h3>Self-hosted billing path failed</h3>' +
         '<p>Use this route only after a self-hosted billing, license, refund, or privacy job has failed to complete cleanly.</p>' +
         '<div class="portal-support-points">' +
@@ -1396,10 +1424,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
               '<div>' +
                 '<div class="account-panel-kicker">Billing</div>' +
                 '<h2>Billing</h2>' +
-                renderSectionContextChips([
-                  hostedBillingCount > 0 ? 'Hosted billing' : 'No hosted billing',
-                  showSelfHostedCommercial ? 'Self-hosted tools' : 'Hosted only',
-                ]) +
+                renderSectionContextChips(billingHeaderChipLabels(hostedBillingCount, showSelfHostedCommercial)) +
               '</div>' +
               '<div class="billing-note">' + billingNote + '</div>' +
             '</div>' +
