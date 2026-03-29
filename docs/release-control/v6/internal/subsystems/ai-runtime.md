@@ -174,6 +174,10 @@ history, and chat sessions must not keep legacy plaintext files on the runtime
 primary path once the process can read them. Plaintext AI persistence files may
 only serve as migration input and must be rewritten immediately into
 encrypted-at-rest storage on load.
+That same config-persistence boundary also owns fixed runtime file paths: the
+resolved data directory must be normalized once and fixed AI/runtime filenames
+must rejoin through the shared storage-path helper instead of raw
+`filepath.Join(dataDir, "...")` construction.
 That same persistence boundary also governs AI memory package storage roots:
 fixed store files such as change history, incident memory, and remediation
 history must resolve through normalized owned data directories and fixed

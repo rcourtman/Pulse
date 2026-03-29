@@ -18,6 +18,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/notifications"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -87,6 +88,132 @@ type alertScheduleFieldPresence struct {
 	NotifyOnResolve *bool `json:"notifyOnResolve"`
 }
 
+type resolvedConfigPersistencePaths struct {
+	alertFile            string
+	emailFile            string
+	webhookFile          string
+	appriseFile          string
+	nodesFile            string
+	trueNASFile          string
+	systemFile           string
+	ssoFile              string
+	apiTokensFile        string
+	aiFile               string
+	aiFindingsFile       string
+	aiPatrolRunsFile     string
+	aiUsageHistoryFile   string
+	agentProfilesFile    string
+	agentAssignmentsFile string
+	aiChatSessionsFile   string
+	orgFile              string
+	relayFile            string
+}
+
+func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPersistencePaths, error) {
+	normalizedConfigDir, err := securityutil.NormalizeStorageDir(ResolveRuntimeDataDir(configDir))
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve config directory: %w", err)
+	}
+
+	resolveLeaf := func(leaf string) (string, error) {
+		return securityutil.JoinStorageLeaf(normalizedConfigDir, leaf)
+	}
+
+	alertFile, err := resolveLeaf("alerts.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve alerts.json: %w", err)
+	}
+	emailFile, err := resolveLeaf("email.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve email.enc: %w", err)
+	}
+	webhookFile, err := resolveLeaf("webhooks.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve webhooks.enc: %w", err)
+	}
+	appriseFile, err := resolveLeaf("apprise.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve apprise.enc: %w", err)
+	}
+	nodesFile, err := resolveLeaf("nodes.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve nodes.enc: %w", err)
+	}
+	trueNASFile, err := resolveLeaf("truenas.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve truenas.enc: %w", err)
+	}
+	systemFile, err := resolveLeaf("system.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve system.json: %w", err)
+	}
+	ssoFile, err := resolveLeaf("sso.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve sso.enc: %w", err)
+	}
+	apiTokensFile, err := resolveLeaf("api_tokens.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve api_tokens.json: %w", err)
+	}
+	aiFile, err := resolveLeaf("ai.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai.enc: %w", err)
+	}
+	aiFindingsFile, err := resolveLeaf("ai_findings.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai_findings.json: %w", err)
+	}
+	aiPatrolRunsFile, err := resolveLeaf("ai_patrol_runs.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai_patrol_runs.json: %w", err)
+	}
+	aiUsageHistoryFile, err := resolveLeaf("ai_usage_history.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai_usage_history.json: %w", err)
+	}
+	agentProfilesFile, err := resolveLeaf("agent_profiles.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve agent_profiles.json: %w", err)
+	}
+	agentAssignmentsFile, err := resolveLeaf("agent_profile_assignments.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve agent_profile_assignments.json: %w", err)
+	}
+	aiChatSessionsFile, err := resolveLeaf("ai_chat_sessions.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai_chat_sessions.json: %w", err)
+	}
+	orgFile, err := resolveLeaf("org.json")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve org.json: %w", err)
+	}
+	relayFile, err := resolveLeaf("relay.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve relay.enc: %w", err)
+	}
+
+	return normalizedConfigDir, resolvedConfigPersistencePaths{
+		alertFile:            alertFile,
+		emailFile:            emailFile,
+		webhookFile:          webhookFile,
+		appriseFile:          appriseFile,
+		nodesFile:            nodesFile,
+		trueNASFile:          trueNASFile,
+		systemFile:           systemFile,
+		ssoFile:              ssoFile,
+		apiTokensFile:        apiTokensFile,
+		aiFile:               aiFile,
+		aiFindingsFile:       aiFindingsFile,
+		aiPatrolRunsFile:     aiPatrolRunsFile,
+		aiUsageHistoryFile:   aiUsageHistoryFile,
+		agentProfilesFile:    agentProfilesFile,
+		agentAssignmentsFile: agentAssignmentsFile,
+		aiChatSessionsFile:   aiChatSessionsFile,
+		orgFile:              orgFile,
+		relayFile:            relayFile,
+	}, nil
+}
+
 // NewConfigPersistence creates a new config persistence manager.
 // The process terminates if encryption cannot be initialized to avoid
 // writing secrets to disk in plaintext.
@@ -102,40 +229,43 @@ func NewConfigPersistence(configDir string) *ConfigPersistence {
 }
 
 func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
-	configDir = ResolveRuntimeDataDir(configDir)
+	resolvedConfigDir, resolvedPaths, err := resolveConfigPersistencePaths(configDir)
+	if err != nil {
+		return nil, err
+	}
 
 	// Initialize crypto manager
-	cryptoMgr, err := crypto.NewCryptoManagerAt(configDir)
+	cryptoMgr, err := crypto.NewCryptoManagerAt(resolvedConfigDir)
 	if err != nil {
 		return nil, err
 	}
 
 	cp := &ConfigPersistence{
-		configDir:            configDir,
-		alertFile:            filepath.Join(configDir, "alerts.json"),
-		emailFile:            filepath.Join(configDir, "email.enc"),
-		webhookFile:          filepath.Join(configDir, "webhooks.enc"),
-		appriseFile:          filepath.Join(configDir, "apprise.enc"),
-		nodesFile:            filepath.Join(configDir, "nodes.enc"),
-		trueNASFile:          filepath.Join(configDir, "truenas.enc"),
-		systemFile:           filepath.Join(configDir, "system.json"),
-		ssoFile:              filepath.Join(configDir, "sso.enc"),
-		apiTokensFile:        filepath.Join(configDir, "api_tokens.json"),
-		aiFile:               filepath.Join(configDir, "ai.enc"),
-		aiFindingsFile:       filepath.Join(configDir, "ai_findings.json"),
-		aiPatrolRunsFile:     filepath.Join(configDir, "ai_patrol_runs.json"),
-		aiUsageHistoryFile:   filepath.Join(configDir, "ai_usage_history.json"),
-		agentProfilesFile:    filepath.Join(configDir, "agent_profiles.json"),
-		agentAssignmentsFile: filepath.Join(configDir, "agent_profile_assignments.json"),
-		aiChatSessionsFile:   filepath.Join(configDir, "ai_chat_sessions.json"),
-		orgFile:              filepath.Join(configDir, "org.json"),
-		relayFile:            filepath.Join(configDir, "relay.enc"),
+		configDir:            resolvedConfigDir,
+		alertFile:            resolvedPaths.alertFile,
+		emailFile:            resolvedPaths.emailFile,
+		webhookFile:          resolvedPaths.webhookFile,
+		appriseFile:          resolvedPaths.appriseFile,
+		nodesFile:            resolvedPaths.nodesFile,
+		trueNASFile:          resolvedPaths.trueNASFile,
+		systemFile:           resolvedPaths.systemFile,
+		ssoFile:              resolvedPaths.ssoFile,
+		apiTokensFile:        resolvedPaths.apiTokensFile,
+		aiFile:               resolvedPaths.aiFile,
+		aiFindingsFile:       resolvedPaths.aiFindingsFile,
+		aiPatrolRunsFile:     resolvedPaths.aiPatrolRunsFile,
+		aiUsageHistoryFile:   resolvedPaths.aiUsageHistoryFile,
+		agentProfilesFile:    resolvedPaths.agentProfilesFile,
+		agentAssignmentsFile: resolvedPaths.agentAssignmentsFile,
+		aiChatSessionsFile:   resolvedPaths.aiChatSessionsFile,
+		orgFile:              resolvedPaths.orgFile,
+		relayFile:            resolvedPaths.relayFile,
 		crypto:               cryptoMgr,
 		fs:                   defaultFileSystem{},
 	}
 
 	log.Debug().
-		Str("configDir", configDir).
+		Str("configDir", resolvedConfigDir).
 		Str("systemFile", cp.systemFile).
 		Str("nodesFile", cp.nodesFile).
 		Bool("encryptionEnabled", cryptoMgr != nil).
