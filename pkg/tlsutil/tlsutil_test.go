@@ -37,6 +37,21 @@ func TestFingerprintVerifier_NormalizesFingerprint(t *testing.T) {
 	}
 }
 
+func TestPeerCertificateCaptureTLSConfigRequiresPeerCertificate(t *testing.T) {
+	config := PeerCertificateCaptureTLSConfig()
+	if !config.InsecureSkipVerify {
+		t.Fatal("PeerCertificateCaptureTLSConfig should enable custom verification mode")
+	}
+	if config.VerifyPeerCertificate == nil {
+		t.Fatal("PeerCertificateCaptureTLSConfig should install a peer-certificate verifier")
+	}
+
+	err := config.VerifyPeerCertificate(nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "no certificates") {
+		t.Fatalf("expected missing-certificate error, got %v", err)
+	}
+}
+
 func TestFingerprintVerifier_NoCertificates(t *testing.T) {
 	config := FingerprintVerifier("aabbccdd")
 
@@ -103,6 +118,9 @@ func TestCreateHTTPClient_InsecureMode(t *testing.T) {
 
 	if !transport.TLSClientConfig.InsecureSkipVerify {
 		t.Error("InsecureSkipVerify should be true in insecure mode")
+	}
+	if transport.TLSClientConfig.VerifyPeerCertificate == nil {
+		t.Fatal("insecure mode should still validate peer certificate structure")
 	}
 }
 

@@ -198,15 +198,14 @@ func (l *SQLiteLogger) Log(event Event) error {
 	}
 
 	// Also log to zerolog for real-time visibility
-	logEvent := log.With().
+	logContext := log.With().
 		Str("audit_id", event.ID).
 		Str("event", event.EventType).
 		Str("user", event.User).
 		Str("ip", event.IP).
 		Str("path", event.Path).
-		Time("timestamp", event.Timestamp).
-		Str("details", event.Details).
-		Logger()
+		Time("timestamp", event.Timestamp)
+	logEvent := appendRealtimeAuditDetailFields(logContext, event.Details).Logger()
 
 	if event.Success {
 		logEvent.Info().Msg("Audit event")

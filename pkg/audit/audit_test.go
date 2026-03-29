@@ -1,8 +1,14 @@
 package audit
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
 )
 
 func TestConsoleLogger_Log(t *testing.T) {
@@ -89,6 +95,30 @@ func TestConsoleLogger_Webhooks(t *testing.T) {
 
 	if err := logger.UpdateWebhookURLs([]string{"https://example.com"}); err != nil {
 		t.Fatalf("UpdateWebhookURLs returned error: %v", err)
+	}
+}
+
+func TestAppendRealtimeAuditDetailFields(t *testing.T) {
+	const details = "Authorization header token=top-secret"
+
+	sum := sha256.Sum256([]byte(details))
+	expected := hex.EncodeToString(sum[:])
+	var buf bytes.Buffer
+	logger := appendRealtimeAuditDetailFields(zerolog.New(&buf).With(), details).Logger()
+	logger.Info().Str("check", "value").Msg("audit")
+
+	var payload map[string]any
+	if err := json.Unmarshal(bytes.TrimSpace(buf.Bytes()), &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if _, ok := payload["details"]; ok {
+		t.Fatalf("expected raw details to be omitted, got %v", payload["details"])
+	}
+	if payload["details_redacted"] != true {
+		t.Fatalf("expected details_redacted=true, got %v", payload["details_redacted"])
+	}
+	if payload["details_sha256"] != expected {
+		t.Fatalf("details_sha256=%v, want %s", payload["details_sha256"], expected)
 	}
 }
 

@@ -14,6 +14,29 @@ import (
 	"time"
 )
 
+func verifyPresentedPeerCertificates(rawCerts [][]byte, _ [][]*x509.Certificate) error {
+	if len(rawCerts) == 0 {
+		return fmt.Errorf("no certificates presented by server")
+	}
+
+	for i, rawCert := range rawCerts {
+		if _, err := x509.ParseCertificate(rawCert); err != nil {
+			return fmt.Errorf("failed to parse peer certificate %d: %w", i, err)
+		}
+	}
+	return nil
+}
+
+// PeerCertificateCaptureTLSConfig accepts any parseable peer certificate so discovery
+// and TOFU fingerprint workflows can inspect TLS identity material without relying on
+// blanket InsecureSkipVerify alone.
+func PeerCertificateCaptureTLSConfig() *tls.Config {
+	return &tls.Config{
+		InsecureSkipVerify:    true,
+		VerifyPeerCertificate: verifyPresentedPeerCertificates,
+	}
+}
+
 // FetchFingerprint connects to a host and returns the SHA256 fingerprint of its TLS certificate.
 // This is used for TOFU (Trust On First Use) when discovering cluster peers.
 // The host should be in the format "hostname:port" or "https://hostname:port".
@@ -33,14 +56,13 @@ func FetchFingerprint(host string) (string, error) {
 		targetHost = targetHost + ":8006"
 	}
 
-	// Create a TLS connection with InsecureSkipVerify to fetch the cert
+	// Create a TLS connection that explicitly accepts parseable peer certificates
+	// for fingerprint capture without relying on blanket skip-verify alone.
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	conn, err := tls.DialWithDialer(dialer, "tcp", targetHost, &tls.Config{
-		InsecureSkipVerify: true,
-	})
+	conn, err := tls.DialWithDialer(dialer, "tcp", targetHost, PeerCertificateCaptureTLSConfig())
 	if err != nil {
 		return "", fmt.Errorf("failed to connect to %s: %w", targetHost, err)
 	}
@@ -114,8 +136,8 @@ func CreateHTTPClientWithTimeout(verifySSL bool, fingerprint string, timeout tim
 	}
 
 	if !verifySSL && fingerprint == "" {
-		// Insecure mode - skip all verification
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		// Explicit opt-out mode still requires the peer to present parseable certificates.
+		transport.TLSClientConfig = PeerCertificateCaptureTLSConfig()
 	} else if fingerprint != "" {
 		// Fingerprint verification mode
 		transport.TLSClientConfig = FingerprintVerifier(fingerprint)

@@ -407,7 +407,11 @@ func TestSendTLS_ConnectionError(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendTLS("invalid.host.test:465", []byte("test"))
+	addresses, err := manager.resolveEmailAddresses()
+	if err != nil {
+		t.Fatalf("resolveEmailAddresses() error = %v", err)
+	}
+	err = manager.sendTLS("invalid.host.test:465", []byte("test"), addresses)
 
 	if err == nil {
 		t.Error("expected TLS dial error")
@@ -428,7 +432,11 @@ func TestSendStartTLS_ConnectionError(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendStartTLS("invalid.host.test:587", []byte("test"))
+	addresses, err := manager.resolveEmailAddresses()
+	if err != nil {
+		t.Fatalf("resolveEmailAddresses() error = %v", err)
+	}
+	err = manager.sendStartTLS("invalid.host.test:587", []byte("test"), addresses)
 
 	if err == nil {
 		t.Error("expected TCP dial error")
@@ -449,7 +457,11 @@ func TestSendPlain_ConnectionError(t *testing.T) {
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendPlain("invalid.host.test:25", []byte("test"))
+	addresses, err := manager.resolveEmailAddresses()
+	if err != nil {
+		t.Fatalf("resolveEmailAddresses() error = %v", err)
+	}
+	err = manager.sendPlain("invalid.host.test:25", []byte("test"), addresses)
 
 	if err == nil {
 		t.Error("expected TCP dial error")
@@ -509,6 +521,46 @@ func TestSanitizeEmailHeaderValue(t *testing.T) {
 
 	if got != want {
 		t.Fatalf("sanitizeEmailHeaderValue() = %q, want %q", got, want)
+	}
+}
+
+func TestSendEmailOnceRejectsInvalidFromAddress(t *testing.T) {
+	config := EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			SMTPHost: "invalid.host.test",
+			SMTPPort: 587,
+			From:     "sender@example.com\r\nBcc: attacker@example.com",
+			To:       []string{"recipient@example.com"},
+		},
+	}
+
+	manager := NewEnhancedEmailManager(config)
+	err := manager.sendEmailOnce("Test Subject", "<p>HTML Body</p>", "Text Body")
+	if err == nil {
+		t.Fatal("expected invalid from address error")
+	}
+	if !strings.Contains(err.Error(), "invalid from address") {
+		t.Fatalf("expected from-address validation error, got %v", err)
+	}
+}
+
+func TestSendViaProviderRejectsInvalidRecipientAddress(t *testing.T) {
+	config := EmailProviderConfig{
+		EmailConfig: EmailConfig{
+			SMTPHost: "invalid.host.test",
+			SMTPPort: 587,
+			From:     "sender@example.com",
+			To:       []string{"recipient@example.com\r\nCc: attacker@example.com"},
+		},
+	}
+
+	manager := NewEnhancedEmailManager(config)
+	err := manager.sendViaProvider([]byte("test"))
+	if err == nil {
+		t.Fatal("expected invalid recipient address error")
+	}
+	if !strings.Contains(err.Error(), "invalid recipient address") {
+		t.Fatalf("expected recipient validation error, got %v", err)
 	}
 }
 
@@ -581,11 +633,16 @@ func TestSendPlain_Success(t *testing.T) {
 	}()
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendPlain("ignored:25", []byte("Test Message"))
+	addresses, err := manager.resolveEmailAddresses()
+	if err != nil {
+		t.Fatalf("resolveEmailAddresses() error = %v", err)
+	}
+	err = manager.sendPlain("ignored:25", []byte("Test Message"), addresses)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 }
+
 func TestSendTLS_Success(t *testing.T) {
 	// We don't need a real TLS server here. This is an error-path sanity check that
 	// exercises the TLS dialer logic without binding ports (which can be blocked in CI).
@@ -596,12 +653,18 @@ func TestSendTLS_Success(t *testing.T) {
 			SMTPHost: "invalid.host.test",
 			SMTPPort: 1,
 			TLS:      true,
+			From:     "sender@example.com",
+			To:       []string{"recipient@example.com"},
 		},
 		SkipTLSVerify: true,
 	}
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendTLS(addr, []byte("test"))
+	addresses, err := manager.resolveEmailAddresses()
+	if err != nil {
+		t.Fatalf("resolveEmailAddresses() error = %v", err)
+	}
+	err = manager.sendTLS(addr, []byte("test"), addresses)
 	// It will still fail because we aren't running a real TLS server here,
 	// but we can verify it reaches the TLS dialer.
 	if err == nil {
@@ -618,6 +681,8 @@ func TestSendStartTLS_Success(t *testing.T) {
 			SMTPHost: "smtp.example.com",
 			SMTPPort: 587,
 			StartTLS: true,
+			From:     "sender@example.com",
+			To:       []string{"recipient@example.com"},
 		},
 		SkipTLSVerify: true,
 	}
@@ -662,7 +727,11 @@ func TestSendStartTLS_Success(t *testing.T) {
 	}()
 
 	manager := NewEnhancedEmailManager(config)
-	err := manager.sendStartTLS("ignored:587", []byte("Test Message"))
+	addresses, err := manager.resolveEmailAddresses()
+	if err != nil {
+		t.Fatalf("resolveEmailAddresses() error = %v", err)
+	}
+	err = manager.sendStartTLS("ignored:587", []byte("Test Message"), addresses)
 	// Should fail at TLS upgrade because mock server doesn't actually do TLS
 	if err == nil {
 		t.Error("expected STARTTLS upgrade error")

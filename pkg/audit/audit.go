@@ -9,10 +9,13 @@
 package audit
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -135,6 +138,18 @@ func Log(eventType, user, ip, path string, success bool, details string) {
 	}
 }
 
+func appendRealtimeAuditDetailFields(ctx zerolog.Context, details string) zerolog.Context {
+	if details == "" {
+		return ctx
+	}
+
+	sum := sha256.Sum256([]byte(details))
+	return ctx.
+		Bool("details_redacted", true).
+		Int("details_len", len(details)).
+		Str("details_sha256", hex.EncodeToString(sum[:]))
+}
+
 // ConsoleLogger implements Logger by writing to zerolog.
 // This is the default implementation used by the OSS version.
 type ConsoleLogger struct{}
@@ -146,15 +161,14 @@ func NewConsoleLogger() *ConsoleLogger {
 
 // Log writes an audit event to zerolog.
 func (c *ConsoleLogger) Log(event Event) error {
-	logEvent := log.With().
+	logContext := log.With().
 		Str("audit_id", event.ID).
 		Str("event", event.EventType).
 		Str("user", event.User).
 		Str("ip", event.IP).
 		Str("path", event.Path).
-		Time("timestamp", event.Timestamp).
-		Str("details", event.Details).
-		Logger()
+		Time("timestamp", event.Timestamp)
+	logEvent := appendRealtimeAuditDetailFields(logContext, event.Details).Logger()
 
 	if event.Success {
 		logEvent.Info().Msg("Audit event")

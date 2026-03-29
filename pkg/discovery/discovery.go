@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/rcourtman/pulse-go-rewrite/pkg/discovery/envdetect"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 // DiscoveredServer represents a discovered Proxmox/PBS/PMG server
@@ -141,7 +142,7 @@ func NewScannerWithProfile(profile *envdetect.EnvironmentProfile) *Scanner {
 	clonedProfile.Policy = policy
 
 	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		TLSClientConfig: tlsutil.PeerCertificateCaptureTLSConfig(),
 		MaxIdleConns:    100,
 		MaxConnsPerHost: max(policy.MaxConcurrent, 10),
 	}
@@ -1227,7 +1228,7 @@ func (s *Scanner) performTLSProbe(ctx context.Context, address string) (*tls.Con
 	}
 
 	dialer := &net.Dialer{Timeout: timeout}
-	tlsConn, err := tls.DialWithDialer(dialer, "tcp", address, &tls.Config{InsecureSkipVerify: true})
+	tlsConn, err := tls.DialWithDialer(dialer, "tcp", address, tlsutil.PeerCertificateCaptureTLSConfig())
 	if err == nil {
 		state := tlsConn.ConnectionState()
 		tlsConn.Close()

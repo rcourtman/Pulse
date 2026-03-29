@@ -249,6 +249,66 @@ func TestCheckServerRetrievesVersion(t *testing.T) {
 	}
 }
 
+func TestNewScannerWithProfileAcceptsSelfSignedProxmoxProbe(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/version":
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Proxmox-Product", "Proxmox Backup Server")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": map[string]string{
+					"version": "2.4.1",
+					"release": "1",
+				},
+			})
+		case "/api2/json/nodes":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"data": []map[string]string{{"node": "pbs-alpha"}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	host, portStr, err := net.SplitHostPort(ts.Listener.Addr().String())
+	if err != nil {
+		t.Fatalf("SplitHostPort: %v", err)
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		t.Fatalf("Atoi: %v", err)
+	}
+
+	profile := &envdetect.EnvironmentProfile{
+		Policy:   envdetect.DefaultScanPolicy(),
+		Metadata: map[string]string{},
+	}
+	profile.Policy.DialTimeout = time.Second
+	profile.Policy.HTTPTimeout = time.Second
+
+	scanner := NewScannerWithProfile(profile)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	probe := scanner.ProbeProxmoxService(ctx, host, port)
+	if probe == nil || !probe.Positive {
+		t.Fatalf("expected self-signed probe to succeed, got %+v", probe)
+	}
+	if probe.PrimaryProduct != ProductPBS {
+		t.Fatalf("expected product %q, got %q", ProductPBS, probe.PrimaryProduct)
+	}
+	if probe.Version != "2.4.1" {
+		t.Fatalf("expected version 2.4.1, got %q", probe.Version)
+	}
+	if got := scanner.fetchNodeHostname(ctx, host, port); got != "pbs-alpha" {
+		t.Fatalf("fetchNodeHostname() = %q, want %q", got, "pbs-alpha")
+	}
+}
+
 func startTLSServerOn(t *testing.T, addr string, handler http.Handler) *httptest.Server {
 	t.Helper()
 

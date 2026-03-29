@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strconv"
 	"strings"
@@ -69,6 +70,82 @@ func sanitizeEmailHeaderValue(value string) string {
 	clean := strings.ReplaceAll(value, "\r", " ")
 	clean = strings.ReplaceAll(clean, "\n", " ")
 	return strings.TrimSpace(clean)
+}
+
+type resolvedEmailAddresses struct {
+	from    *mail.Address
+	to      []*mail.Address
+	replyTo *mail.Address
+}
+
+func resolveEmailAddress(fieldName, value string) (*mail.Address, error) {
+	addr, err := mail.ParseAddress(strings.TrimSpace(value))
+	if err != nil {
+		return nil, fmt.Errorf("invalid %s address %q: %w", fieldName, value, err)
+	}
+	return addr, nil
+}
+
+func resolveRecipientAddresses(values []string) ([]*mail.Address, error) {
+	if len(values) == 0 {
+		return nil, fmt.Errorf("at least one recipient address is required")
+	}
+
+	resolved := make([]*mail.Address, 0, len(values))
+	for i, value := range values {
+		addr, err := resolveEmailAddress("recipient", value)
+		if err != nil {
+			return nil, fmt.Errorf("recipient %d: %w", i+1, err)
+		}
+		resolved = append(resolved, addr)
+	}
+	return resolved, nil
+}
+
+func (e *EnhancedEmailManager) resolveEmailAddresses() (resolvedEmailAddresses, error) {
+	from, err := resolveEmailAddress("from", e.config.From)
+	if err != nil {
+		return resolvedEmailAddresses{}, err
+	}
+
+	to, err := resolveRecipientAddresses(e.config.To)
+	if err != nil {
+		return resolvedEmailAddresses{}, err
+	}
+
+	var replyTo *mail.Address
+	if strings.TrimSpace(e.config.ReplyTo) != "" {
+		replyTo, err = resolveEmailAddress("reply-to", e.config.ReplyTo)
+		if err != nil {
+			return resolvedEmailAddresses{}, err
+		}
+	}
+
+	return resolvedEmailAddresses{
+		from:    from,
+		to:      to,
+		replyTo: replyTo,
+	}, nil
+}
+
+func formatHeaderAddresses(addresses []*mail.Address) string {
+	if len(addresses) == 0 {
+		return ""
+	}
+
+	formatted := make([]string, 0, len(addresses))
+	for _, addr := range addresses {
+		formatted = append(formatted, addr.String())
+	}
+	return strings.Join(formatted, ", ")
+}
+
+func envelopeRecipients(addresses []*mail.Address) []string {
+	recipients := make([]string, 0, len(addresses))
+	for _, addr := range addresses {
+		recipients = append(recipients, addr.Address)
+	}
+	return recipients
 }
 
 // negotiateAuth queries the server for supported AUTH mechanisms after EHLO
@@ -203,13 +280,18 @@ func (e *EnhancedEmailManager) checkRateLimit() error {
 
 // sendEmailOnce sends a single email
 func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string) error {
+	addresses, err := e.resolveEmailAddresses()
+	if err != nil {
+		return err
+	}
+
 	// Build message with enhanced headers
 	boundary := fmt.Sprintf("===============%d==", time.Now().UnixNano())
 
-	msg := fmt.Sprintf("From: %s\r\n", sanitizeEmailHeaderValue(e.config.From))
-	msg += fmt.Sprintf("To: %s\r\n", sanitizeEmailHeaderValue(strings.Join(e.config.To, ", ")))
-	if e.config.ReplyTo != "" {
-		msg += fmt.Sprintf("Reply-To: %s\r\n", sanitizeEmailHeaderValue(e.config.ReplyTo))
+	msg := fmt.Sprintf("From: %s\r\n", addresses.from.String())
+	msg += fmt.Sprintf("To: %s\r\n", formatHeaderAddresses(addresses.to))
+	if addresses.replyTo != nil {
+		msg += fmt.Sprintf("Reply-To: %s\r\n", addresses.replyTo.String())
 	}
 	msg += fmt.Sprintf("Subject: %s\r\n", sanitizeEmailHeaderValue(subject))
 	msg += fmt.Sprintf("Date: %s\r\n", time.Now().Format(time.RFC1123Z))
@@ -237,11 +319,19 @@ func (e *EnhancedEmailManager) sendEmailOnce(subject, htmlBody, textBody string)
 	msg += fmt.Sprintf("--%s--\r\n", boundary)
 
 	// Send based on provider configuration
-	return e.sendViaProvider([]byte(msg))
+	return e.sendViaProviderWithAddresses([]byte(msg), addresses)
 }
 
 // sendViaProvider sends email using provider-specific settings
 func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
+	addresses, err := e.resolveEmailAddresses()
+	if err != nil {
+		return err
+	}
+	return e.sendViaProviderWithAddresses(msg, addresses)
+}
+
+func (e *EnhancedEmailManager) sendViaProviderWithAddresses(msg []byte, addresses resolvedEmailAddresses) error {
 	addr := net.JoinHostPort(e.config.SMTPHost, strconv.Itoa(e.config.SMTPPort))
 
 	// Special handling for specific providers
@@ -270,16 +360,16 @@ func (e *EnhancedEmailManager) sendViaProvider(msg []byte) error {
 
 	// Send with TLS configuration — auth is negotiated after connection
 	if e.config.TLS || e.config.SMTPPort == 465 {
-		return e.sendTLS(addr, msg)
+		return e.sendTLS(addr, msg, addresses)
 	} else if e.config.StartTLS {
-		return e.sendStartTLS(addr, msg)
+		return e.sendStartTLS(addr, msg, addresses)
 	} else {
-		return e.sendPlain(addr, msg)
+		return e.sendPlain(addr, msg, addresses)
 	}
 }
 
 // sendTLS sends email over TLS connection
-func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
+func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte, addresses resolvedEmailAddresses) error {
 	tlsConfig := &tls.Config{
 		ServerName:         e.config.SMTPHost,
 		InsecureSkipVerify: e.config.SkipTLSVerify,
@@ -316,11 +406,11 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 		}
 	}
 
-	if err = client.Mail(e.config.From); err != nil {
+	if err = client.Mail(addresses.from.Address); err != nil {
 		return fmt.Errorf("MAIL FROM failed: %w", err)
 	}
 
-	for _, to := range e.config.To {
+	for _, to := range envelopeRecipients(addresses.to) {
 		if err = client.Rcpt(to); err != nil {
 			return fmt.Errorf("RCPT TO failed for %s: %w", to, err)
 		}
@@ -345,7 +435,7 @@ func (e *EnhancedEmailManager) sendTLS(addr string, msg []byte) error {
 }
 
 // sendStartTLS sends email using STARTTLS
-func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte) error {
+func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte, addresses resolvedEmailAddresses) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
 	conn, err := smtpDialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
@@ -386,11 +476,11 @@ func (e *EnhancedEmailManager) sendStartTLS(addr string, msg []byte) error {
 		}
 	}
 
-	if err = client.Mail(e.config.From); err != nil {
+	if err = client.Mail(addresses.from.Address); err != nil {
 		return fmt.Errorf("MAIL FROM failed: %w", err)
 	}
 
-	for _, to := range e.config.To {
+	for _, to := range envelopeRecipients(addresses.to) {
 		if err = client.Rcpt(to); err != nil {
 			return fmt.Errorf("RCPT TO failed for %s: %w", to, err)
 		}
@@ -477,7 +567,7 @@ func (e *EnhancedEmailManager) TestConnection() error {
 }
 
 // sendPlain sends email over plain SMTP connection with timeout
-func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte) error {
+func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte, addresses resolvedEmailAddresses) error {
 	// Use DialTimeout to prevent hanging on unreachable servers
 	conn, err := smtpDialTimeout("tcp", addr, 10*time.Second)
 	if err != nil {
@@ -506,11 +596,11 @@ func (e *EnhancedEmailManager) sendPlain(addr string, msg []byte) error {
 		}
 	}
 
-	if err = client.Mail(e.config.From); err != nil {
+	if err = client.Mail(addresses.from.Address); err != nil {
 		return fmt.Errorf("MAIL FROM failed: %w", err)
 	}
 
-	for _, to := range e.config.To {
+	for _, to := range envelopeRecipients(addresses.to) {
 		if err = client.Rcpt(to); err != nil {
 			return fmt.Errorf("RCPT TO failed for %s: %w", to, err)
 		}

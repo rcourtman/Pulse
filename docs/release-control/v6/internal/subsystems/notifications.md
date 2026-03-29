@@ -115,6 +115,10 @@ normalization. Server URLs must be validated as absolute HTTP(S) endpoints
 without userinfo before request construction, and the `/notify` plus optional
 config-key path must append to the canonical server base instead of being
 rebuilt through raw string concatenation in local delivery code.
+That same delivery boundary also owns SMTP mailbox normalization. `From`,
+recipient, and `Reply-To` inputs must be parsed as canonical mailboxes before
+headers or SMTP envelope commands are constructed, so notification delivery
+cannot treat raw config strings as header fragments or `RCPT TO` input.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with
