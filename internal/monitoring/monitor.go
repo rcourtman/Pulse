@@ -142,6 +142,13 @@ type MonitorSupplementalRecordsProvider interface {
 	SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord
 }
 
+// MonitorPhysicalDiskTemperatureHistoryProvider optionally exposes source-native
+// physical-disk temperature history through the canonical monitoring chart
+// boundary when Pulse's own stored history is shallow.
+type MonitorPhysicalDiskTemperatureHistoryProvider interface {
+	PhysicalDiskTemperatureHistory(m *Monitor, orgID string, duration time.Duration) map[string][]MetricPoint
+}
+
 func getNodeDisplayName(instance *config.PVEInstance, nodeName string) string {
 	baseName := strings.TrimSpace(nodeName)
 	if baseName == "" {

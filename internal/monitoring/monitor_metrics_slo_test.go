@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -27,6 +29,8 @@ const (
 	SLONodeChartBatchP95               = 35 * time.Millisecond
 	SLOGuestChartBatchGitHubActionsP95 = 220 * time.Millisecond
 	SLONodeChartBatchGitHubActionsP95  = 140 * time.Millisecond
+	SLOPhysicalDiskChartFallbackP95    = 30 * time.Millisecond
+	SLOPhysicalDiskChartFallbackGHA    = 120 * time.Millisecond
 
 	monitoringSLOIterations = 120
 )
@@ -225,6 +229,69 @@ func TestSLO_GetNodeMetricsForChartBatch(t *testing.T) {
 	target := effectiveMonitoringSLOTarget(SLONodeChartBatchP95, SLONodeChartBatchGitHubActionsP95)
 	p95 := monitoringPercentile(latencies, 0.95)
 	t.Logf("GetNodeMetricsForChartBatch(20×5×240) p50=%v p95=%v p99=%v SLO=%v",
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
+
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
+	}
+}
+
+func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testing.T) {
+	skipMonitoringSLOUnderRace(t)
+	suppressMonitoringTestLogs(t)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-1",
+				Node:        "truenas-main",
+				DevPath:     "/dev/sda",
+				Model:       "Seagate Exos X18",
+				Serial:      "SERIAL-DISK-1",
+				Temperature: 34,
+				LastChecked: now,
+			},
+		},
+	})
+	monitor.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+	monitor.supplementalProviders = map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+		unifiedresources.SourceTrueNAS: &stubDiskTemperatureHistoryProvider{
+			history: map[string][]MetricPoint{
+				"SERIAL-DISK-1": {
+					{Timestamp: now.Add(-2 * time.Hour), Value: 29},
+					{Timestamp: now.Add(-1 * time.Hour), Value: 31},
+					{Timestamp: now, Value: 34},
+				},
+			},
+		},
+	}
+
+	sanity := monitor.GetPhysicalDiskTemperatureCharts(4 * time.Hour)
+	entry, ok := sanity["SERIAL-DISK-1"]
+	if !ok {
+		t.Fatalf("sanity: expected chart entry for canonical disk metric id, got %#v", sanity)
+	}
+	if len(entry.Temperature) != 3 {
+		t.Fatalf("sanity: expected native history points instead of padded fallback, got %+v", entry.Temperature)
+	}
+
+	latencies := measureMonitoringLatencies(t, func() {
+		result := monitor.GetPhysicalDiskTemperatureCharts(4 * time.Hour)
+		entry, ok := result["SERIAL-DISK-1"]
+		if !ok {
+			t.Fatalf("expected chart entry for canonical disk metric id, got %#v", result)
+		}
+		if len(entry.Temperature) != 3 {
+			t.Fatalf("expected native history points instead of padded fallback, got %+v", entry.Temperature)
+		}
+	})
+
+	target := effectiveMonitoringSLOTarget(SLOPhysicalDiskChartFallbackP95, SLOPhysicalDiskChartFallbackGHA)
+	p95 := monitoringPercentile(latencies, 0.95)
+	t.Logf("GetPhysicalDiskTemperatureCharts(native-history fallback) p50=%v p95=%v p99=%v SLO=%v",
 		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
 
 	if p95 > target {

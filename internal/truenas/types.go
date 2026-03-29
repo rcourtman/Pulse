@@ -81,6 +81,13 @@ type DiskTemperatureAggregate struct {
 	MaxCelsius float64
 }
 
+// TimeSeriesPoint stores one provider-native metric point before it is mapped
+// onto the canonical monitoring/chart surface.
+type TimeSeriesPoint struct {
+	Timestamp time.Time
+	Value     float64
+}
+
 // Alert mirrors a TrueNAS alert listing entry.
 type Alert struct {
 	ID        string

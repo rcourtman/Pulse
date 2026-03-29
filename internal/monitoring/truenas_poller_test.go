@@ -249,6 +249,80 @@ func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerPhysicalDiskTemperatureHistoryUsesTenantScopedProvider(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	fixtures := truenas.DefaultFixtures()
+	now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
+	fetcher := &controllableTrueNASHistoryFetcher{
+		snapshot: &fixtures,
+		history: map[string][]truenas.TimeSeriesPoint{
+			"sda": {
+				{Timestamp: now.Add(-2 * time.Hour), Value: 30},
+				{Timestamp: now.Add(-1 * time.Hour), Value: 32},
+				{Timestamp: now, Value: 34},
+			},
+		},
+	}
+	provider := truenas.NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(nil, time.Minute, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{
+		"conn-1": provider,
+	}
+
+	history := poller.PhysicalDiskTemperatureHistory(nil, "default", 4*time.Hour)
+	points, ok := history["ZL0A1234"]
+	if !ok {
+		t.Fatalf("expected canonical metric resource id ZL0A1234, got %#v", history)
+	}
+	if len(points) != 3 || points[len(points)-1].Value != 34 {
+		t.Fatalf("unexpected tenant-scoped disk history: %+v", points)
+	}
+}
+
+type controllableTrueNASHistoryFetcher struct {
+	snapshot *truenas.FixtureSnapshot
+	history  map[string][]truenas.TimeSeriesPoint
+}
+
+func (s *controllableTrueNASHistoryFetcher) Fetch(context.Context) (*truenas.FixtureSnapshot, error) {
+	if s == nil || s.snapshot == nil {
+		return nil, nil
+	}
+	copied := *s.snapshot
+	copied.Disks = append([]truenas.Disk(nil), s.snapshot.Disks...)
+	copied.Pools = append([]truenas.Pool(nil), s.snapshot.Pools...)
+	copied.Datasets = append([]truenas.Dataset(nil), s.snapshot.Datasets...)
+	copied.Alerts = append([]truenas.Alert(nil), s.snapshot.Alerts...)
+	copied.Apps = append([]truenas.App(nil), s.snapshot.Apps...)
+	copied.ZFSSnapshots = append([]truenas.ZFSSnapshot(nil), s.snapshot.ZFSSnapshots...)
+	copied.ReplicationTasks = append([]truenas.ReplicationTask(nil), s.snapshot.ReplicationTasks...)
+	return &copied, nil
+}
+
+func (s *controllableTrueNASHistoryFetcher) DiskTemperatureHistory(_ context.Context, identifiers []string, _ time.Duration) (map[string][]truenas.TimeSeriesPoint, error) {
+	result := make(map[string][]truenas.TimeSeriesPoint)
+	for _, identifier := range identifiers {
+		points, ok := s.history[identifier]
+		if !ok || len(points) == 0 {
+			continue
+		}
+		copied := make([]truenas.TimeSeriesPoint, len(points))
+		copy(copied, points)
+		result[identifier] = copied
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
+}
+
 type pollerControlFetcher struct {
 	snapshot   *truenas.FixtureSnapshot
 	startCalls []string

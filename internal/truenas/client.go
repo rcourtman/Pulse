@@ -348,6 +348,27 @@ func (c *Client) GetDiskTemperatures(ctx context.Context) (map[string]int, error
 	return c.getDiskTemperaturesWithFallback(ctx, nil)
 }
 
+// GetDiskTemperatureHistory returns recent disk temperature series by TrueNAS
+// disk identifier using the native reporting API.
+func (c *Client) GetDiskTemperatureHistory(ctx context.Context, identifiers []string, duration time.Duration) (map[string][]TimeSeriesPoint, error) {
+	identifiers = dedupeStrings(identifiers)
+	if len(identifiers) == 0 {
+		return nil, fmt.Errorf("truenas disk temperature history requires disk identifiers")
+	}
+
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+	return rpc.getDiskTemperatureHistory(ctx, identifiers, duration)
+}
+
 func (c *Client) getDiskTemperaturesWithFallback(ctx context.Context, identifiers []string) (map[string]int, error) {
 	var response any
 	restErr := c.getJSON(ctx, http.MethodGet, "/disk/temperatures", &response)
@@ -1378,6 +1399,43 @@ func (c *trueNASRPCClient) getDiskTemperatureAggregates(ctx context.Context, ide
 	return parseDiskTemperatureAggregates(response, windowDays), nil
 }
 
+func (c *trueNASRPCClient) getDiskTemperatureHistory(ctx context.Context, identifiers []string, duration time.Duration) (map[string][]TimeSeriesPoint, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+	identifiers = dedupeStrings(identifiers)
+	if len(identifiers) == 0 {
+		return nil, fmt.Errorf("truenas rpc disk temperature history query requires at least one identifier")
+	}
+	if duration <= 0 {
+		duration = 24 * time.Hour
+	}
+
+	end := time.Now().Unix()
+	start := end - int64(duration.Seconds())
+	if start <= 0 {
+		start = end
+	}
+
+	graphs := make([]map[string]any, 0, len(identifiers))
+	for _, identifier := range identifiers {
+		graphs = append(graphs, map[string]any{
+			"name":       "disktemp",
+			"identifier": identifier,
+		})
+	}
+
+	response, err := c.getReportingDataWithQuery(ctx, graphs, map[string]any{
+		"aggregate": false,
+		"start":     start,
+		"end":       end,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return parseReportingDiskTemperatureHistory(response), nil
+}
+
 func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
@@ -1392,15 +1450,29 @@ func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[st
 		start = end
 	}
 
-	var response []trueNASReportingGetDataResponse
+	return c.getReportingDataWithQuery(ctx, graphs, map[string]any{
+		"aggregate": true,
+		"start":     start,
+		"end":       end,
+	})
+}
+
+func (c *trueNASRPCClient) getReportingDataWithQuery(ctx context.Context, graphs []map[string]any, query map[string]any) ([]trueNASReportingGetDataResponse, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+	if len(graphs) == 0 {
+		return nil, fmt.Errorf("truenas reporting query requires at least one graph")
+	}
+	if len(query) == 0 {
+		return nil, fmt.Errorf("truenas reporting query requires options")
+	}
+
 	params := []any{
 		graphs,
-		map[string]any{
-			"aggregate": true,
-			"start":     start,
-			"end":       end,
-		},
+		query,
 	}
+	var response []trueNASReportingGetDataResponse
 	if err := c.call(ctx, "reporting.get_data", params, &response); err != nil {
 		return nil, err
 	}
@@ -1615,6 +1687,41 @@ func parseReportingDiskTemperatures(responses []trueNASReportingGetDataResponse)
 	return temperatures
 }
 
+func parseReportingDiskTemperatureHistory(responses []trueNASReportingGetDataResponse) map[string][]TimeSeriesPoint {
+	if len(responses) == 0 {
+		return nil
+	}
+
+	history := make(map[string][]TimeSeriesPoint)
+	for _, response := range responses {
+		if strings.TrimSpace(strings.ToLower(response.Name)) != "disktemp" {
+			continue
+		}
+
+		identifier := readStringAny(map[string]any{"identifier": response.Identifier}, "identifier")
+		if identifier == "" {
+			continue
+		}
+
+		points := make([]TimeSeriesPoint, 0, len(response.Data))
+		for _, raw := range response.Data {
+			timestamp, value, ok := parseReportingSeriesPoint(raw, response.Legend)
+			if !ok || timestamp.IsZero() {
+				continue
+			}
+			points = append(points, TimeSeriesPoint{Timestamp: timestamp, Value: value})
+		}
+		if len(points) == 0 {
+			continue
+		}
+		history[identifier] = points
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
+}
+
 func parseDiskTemperatureAggregates(raw any, defaultWindowDays int) map[string]DiskTemperatureAggregate {
 	if defaultWindowDays <= 0 {
 		defaultWindowDays = defaultDiskTemperatureAggregateWindowDays
@@ -1701,6 +1808,96 @@ func readFloatValueAny(record map[string]any, keys ...string) (float64, bool) {
 		}
 	}
 	return 0, false
+}
+
+func parseReportingSeriesPoint(raw any, legends []string) (time.Time, float64, bool) {
+	switch typed := raw.(type) {
+	case []any:
+		if len(typed) < 2 {
+			return time.Time{}, 0, false
+		}
+		timestamp, ok := parseReportingTimestampAny(typed[0])
+		if !ok {
+			return time.Time{}, 0, false
+		}
+		if parsed, ok := parseFloat64Any(typed[1]); ok {
+			return timestamp, parsed, true
+		}
+		values := extractReportingLegendFloatValues(typed[1:], legends)
+		for _, legend := range legends {
+			if value, ok := values[legend]; ok {
+				return timestamp, value, true
+			}
+		}
+	case map[string]any:
+		timestamp, ok := parseReportingTimestampAny(
+			firstNonNilMapValue(typed, "timestamp", "time", "ts", "x"),
+		)
+		if !ok {
+			return time.Time{}, 0, false
+		}
+		values := extractReportingLegendFloatValues(typed, legends)
+		for _, legend := range legends {
+			if value, ok := values[legend]; ok {
+				return timestamp, value, true
+			}
+		}
+		if value, ok := readFloatValueAny(typed, "value", "y", "temperature"); ok {
+			return timestamp, value, true
+		}
+	}
+	return time.Time{}, 0, false
+}
+
+func firstNonNilMapValue(record map[string]any, keys ...string) any {
+	for _, key := range keys {
+		if value, ok := record[key]; ok && value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func parseReportingTimestampAny(raw any) (time.Time, bool) {
+	switch typed := raw.(type) {
+	case time.Time:
+		if typed.IsZero() {
+			return time.Time{}, false
+		}
+		return typed.UTC(), true
+	case string:
+		trimmed := strings.TrimSpace(typed)
+		if trimmed == "" {
+			return time.Time{}, false
+		}
+		if parsed, err := time.Parse(time.RFC3339, trimmed); err == nil {
+			return parsed.UTC(), true
+		}
+		if integer, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+			return unixReportingTimestamp(integer), true
+		}
+	case json.Number:
+		if integer, err := typed.Int64(); err == nil {
+			return unixReportingTimestamp(integer), true
+		}
+		if value, err := typed.Float64(); err == nil {
+			return unixReportingTimestamp(int64(math.Round(value))), true
+		}
+	default:
+		if value, ok := parseFloat64Any(raw); ok {
+			return unixReportingTimestamp(int64(math.Round(value))), true
+		}
+	}
+	return time.Time{}, false
+}
+
+func unixReportingTimestamp(value int64) time.Time {
+	switch {
+	case value >= 1_000_000_000_000:
+		return time.UnixMilli(value).UTC()
+	default:
+		return time.Unix(value, 0).UTC()
+	}
 }
 
 func readIntValueAny(record map[string]any, keys ...string) int {

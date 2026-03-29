@@ -38,10 +38,11 @@ func (s *closableStubFetcher) Close() {
 }
 
 type controllableStubFetcher struct {
-	snapshot   *FixtureSnapshot
-	startCalls []string
-	stopCalls  []string
-	logReads   []appLogReadCall
+	snapshot    *FixtureSnapshot
+	startCalls  []string
+	stopCalls   []string
+	logReads    []appLogReadCall
+	diskHistory map[string][]TimeSeriesPoint
 }
 
 type appLogReadCall struct {
@@ -90,6 +91,26 @@ func (s *controllableStubFetcher) ReadAppLogs(_ context.Context, appName, contai
 		{Timestamp: "2026-03-29T18:00:00Z", Data: "ready"},
 		{Timestamp: "2026-03-29T18:01:00Z", Data: "serving"},
 	}, nil
+}
+
+func (s *controllableStubFetcher) DiskTemperatureHistory(_ context.Context, identifiers []string, _ time.Duration) (map[string][]TimeSeriesPoint, error) {
+	if len(s.diskHistory) == 0 {
+		return nil, nil
+	}
+	result := make(map[string][]TimeSeriesPoint)
+	for _, identifier := range identifiers {
+		points, ok := s.diskHistory[identifier]
+		if !ok || len(points) == 0 {
+			continue
+		}
+		copied := make([]TimeSeriesPoint, len(points))
+		copy(copied, points)
+		result[identifier] = copied
+	}
+	if len(result) == 0 {
+		return nil, nil
+	}
+	return result, nil
 }
 
 func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
@@ -757,4 +778,38 @@ func TestRecordsProjectDiskTemperatureAggregatesIntoCanonicalMetadata(t *testing
 	}
 
 	t.Fatal("expected sda physical disk record")
+}
+
+func TestProviderPhysicalDiskTemperatureHistoryUsesCanonicalMetricIDs(t *testing.T) {
+	fixtures := DefaultFixtures()
+	now := time.Date(2026, 3, 29, 20, 0, 0, 0, time.UTC)
+	fetcher := &controllableStubFetcher{
+		snapshot: &fixtures,
+		diskHistory: map[string][]TimeSeriesPoint{
+			"sda": {
+				{Timestamp: now.Add(-2 * time.Hour), Value: 30},
+				{Timestamp: now.Add(-1 * time.Hour), Value: 32},
+				{Timestamp: now, Value: 34},
+			},
+		},
+	}
+	provider := NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	history, err := provider.PhysicalDiskTemperatureHistory(context.Background(), 4*time.Hour)
+	if err != nil {
+		t.Fatalf("PhysicalDiskTemperatureHistory() error = %v", err)
+	}
+	points, ok := history["ZL0A1234"]
+	if !ok {
+		t.Fatalf("expected canonical disk metric id ZL0A1234, got keys %#v", history)
+	}
+	if len(points) != 3 {
+		t.Fatalf("expected 3 temperature history points, got %+v", points)
+	}
+	if points[len(points)-1].Value != 34 {
+		t.Fatalf("expected latest point value 34, got %+v", points)
+	}
 }

@@ -9,6 +9,27 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
+type stubDiskTemperatureHistoryProvider struct {
+	history map[string][]MetricPoint
+}
+
+func (s *stubDiskTemperatureHistoryProvider) SupplementalRecords(*Monitor, string) []unifiedresources.IngestRecord {
+	return nil
+}
+
+func (s *stubDiskTemperatureHistoryProvider) PhysicalDiskTemperatureHistory(*Monitor, string, time.Duration) map[string][]MetricPoint {
+	if len(s.history) == 0 {
+		return nil
+	}
+	result := make(map[string][]MetricPoint, len(s.history))
+	for resourceID, points := range s.history {
+		copied := make([]MetricPoint, len(points))
+		copy(copied, points)
+		result[resourceID] = copied
+	}
+	return result
+}
+
 func newChartFallbackTestMonitor(t *testing.T) *Monitor {
 	t.Helper()
 
@@ -188,6 +209,55 @@ func TestGetPhysicalDiskTemperatureCharts_UsesUnifiedReadStateDiskViews(t *testi
 		if point.Value != 42 {
 			t.Fatalf("expected canonical disk temperature 42 in padded series, got %.2f", point.Value)
 		}
+	}
+}
+
+func TestGetPhysicalDiskTemperatureCharts_UsesNativeHistoryWhenStoreCoverageShallow(t *testing.T) {
+	t.Parallel()
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-1",
+				Node:        "truenas-main",
+				Instance:    "",
+				DevPath:     "/dev/sda",
+				Model:       "Seagate Exos X18",
+				Serial:      "SERIAL-DISK-1",
+				Temperature: 34,
+				LastChecked: time.Now().UTC(),
+			},
+		},
+	})
+
+	now := time.Now().UTC().Truncate(time.Second)
+	monitor := &Monitor{
+		state:         models.NewState(),
+		resourceStore: unifiedresources.NewMonitorAdapter(registry),
+		supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: &stubDiskTemperatureHistoryProvider{
+				history: map[string][]MetricPoint{
+					"SERIAL-DISK-1": {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 29},
+						{Timestamp: now.Add(-1 * time.Hour), Value: 31},
+						{Timestamp: now, Value: 34},
+					},
+				},
+			},
+		},
+	}
+
+	charts := monitor.GetPhysicalDiskTemperatureCharts(4 * time.Hour)
+	entry, ok := charts["SERIAL-DISK-1"]
+	if !ok {
+		t.Fatalf("expected chart entry for canonical disk metric id, got %#v", charts)
+	}
+	if len(entry.Temperature) != 3 {
+		t.Fatalf("expected native history points instead of padded fallback, got %+v", entry.Temperature)
+	}
+	if entry.Temperature[0].Value != 29 || entry.Temperature[len(entry.Temperature)-1].Value != 34 {
+		t.Fatalf("expected native history values to win, got %+v", entry.Temperature)
 	}
 }
 

@@ -207,6 +207,38 @@ func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	}
 }
 
+func TestUnifiedPhysicalDiskMetricsAllowNativeHistoryProviders(t *testing.T) {
+	monitorData, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	monitorSource := string(monitorData)
+	monitorSnippets := []string{
+		"type MonitorPhysicalDiskTemperatureHistoryProvider interface {",
+		`PhysicalDiskTemperatureHistory(m *Monitor, orgID string, duration time.Duration) map[string][]MetricPoint`,
+	}
+	for _, snippet := range monitorSnippets {
+		if !strings.Contains(monitorSource, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+
+	pollerData, err := os.ReadFile("truenas_poller.go")
+	if err != nil {
+		t.Fatalf("failed to read truenas_poller.go: %v", err)
+	}
+	pollerSource := string(pollerData)
+	pollerSnippets := []string{
+		"func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string, duration time.Duration) map[string][]MetricPoint {",
+		"entry.provider.PhysicalDiskTemperatureHistory(ctx, duration)",
+	}
+	for _, snippet := range pollerSnippets {
+		if !strings.Contains(pollerSource, snippet) {
+			t.Fatalf("truenas_poller.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestTrueNASSystemTelemetryUsesCanonicalHostTemperatureModel(t *testing.T) {
 	clientData, err := os.ReadFile(filepath.Join("..", "truenas", "client.go"))
 	if err != nil {

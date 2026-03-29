@@ -23,6 +23,8 @@ import (
 
 const defaultTrueNASPollInterval = 60 * time.Second
 
+const defaultTrueNASHistoryReadTimeout = 10 * time.Second
+
 // TrueNASPoller manages periodic polling of configured TrueNAS connections.
 type TrueNASPoller struct {
 	multiTenant     *config.MultiTenantPersistence
@@ -445,6 +447,59 @@ func (p *TrueNASPoller) GetCurrentRecords() []unifiedresources.IngestRecord {
 // provider contract.
 func (p *TrueNASPoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
 	return p.GetCurrentRecordsForOrg(orgID)
+}
+
+// PhysicalDiskTemperatureHistory exposes native TrueNAS disk temperature
+// history through the canonical monitoring chart boundary.
+func (p *TrueNASPoller) PhysicalDiskTemperatureHistory(_ *Monitor, orgID string, duration time.Duration) map[string][]MetricPoint {
+	if p == nil || !truenas.IsFeatureEnabled() {
+		return nil
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	entries := p.providerEntriesForOrg(orgID)
+	if len(entries) == 0 {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTrueNASHistoryReadTimeout)
+	defer cancel()
+
+	history := make(map[string][]MetricPoint)
+	for _, entry := range entries {
+		nativeHistory, err := entry.provider.PhysicalDiskTemperatureHistory(ctx, duration)
+		if err != nil {
+			log.Warn().
+				Str("component", "truenas_poller").
+				Str("action", "disk_temperature_history").
+				Str("org_id", orgID).
+				Str("connection_id", strings.TrimSpace(entry.connectionID)).
+				Err(err).
+				Msg("TrueNAS poller failed to read native disk temperature history")
+			continue
+		}
+		for resourceID, points := range nativeHistory {
+			if strings.TrimSpace(resourceID) == "" || len(points) == 0 {
+				continue
+			}
+			converted := make([]MetricPoint, len(points))
+			for i, point := range points {
+				converted[i] = MetricPoint{
+					Timestamp: point.Timestamp,
+					Value:     point.Value,
+				}
+			}
+			history[resourceID] = converted
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
 }
 
 // SnapshotOwnedSources declares source-native ingest ownership for legacy

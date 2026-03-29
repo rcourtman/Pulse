@@ -763,6 +763,78 @@ func TestGetDisksIncludesDiskTemperatureAggregatesFromRPC(t *testing.T) {
 	}
 }
 
+func TestGetDiskTemperatureHistoryUsesReportingRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		historyReq := readRPCRequest(t, conn)
+		if historyReq.Method != "reporting.get_data" {
+			t.Fatalf("expected reporting.get_data, got %q", historyReq.Method)
+		}
+		params, ok := historyReq.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("unexpected history params: %#v", historyReq.Params)
+		}
+		graphs, ok := params[0].([]any)
+		if !ok || len(graphs) != 1 {
+			t.Fatalf("unexpected history graphs: %#v", params[0])
+		}
+		graph, ok := graphs[0].(map[string]any)
+		if !ok {
+			t.Fatalf("unexpected history graph entry: %#v", graphs[0])
+		}
+		if got := readStringAny(graph, "name"); got != "disktemp" {
+			t.Fatalf("expected disktemp graph, got %q", got)
+		}
+		if got := readStringAny(graph, "identifier"); got != "sda" {
+			t.Fatalf("expected sda identifier, got %q", got)
+		}
+		query, ok := params[1].(map[string]any)
+		if !ok {
+			t.Fatalf("unexpected history query: %#v", params[1])
+		}
+		if aggregate := query["aggregate"]; aggregate != false {
+			t.Fatalf("expected aggregate=false for history query, got %#v", aggregate)
+		}
+
+		now := time.Now().UTC().Truncate(time.Second)
+		writeRPCResult(t, conn, historyReq.ID, []map[string]any{{
+			"name":       "disktemp",
+			"identifier": "sda",
+			"legend":     []string{"temperature"},
+			"data": []any{
+				[]any{now.Add(-2 * time.Hour).Unix(), 30.0},
+				[]any{now.Add(-1 * time.Hour).Unix(), 31.5},
+				[]any{now.Unix(), 33.0},
+			},
+			"aggregations": map[string]any{},
+			"start":        now.Add(-2 * time.Hour).Unix(),
+			"end":          now.Unix(),
+		}})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	history, err := client.GetDiskTemperatureHistory(context.Background(), []string{"sda"}, 4*time.Hour)
+	if err != nil {
+		t.Fatalf("GetDiskTemperatureHistory() error = %v", err)
+	}
+	points, ok := history["sda"]
+	if !ok {
+		t.Fatalf("expected history for sda, got %#v", history)
+	}
+	if len(points) != 3 {
+		t.Fatalf("expected 3 history points, got %+v", points)
+	}
+	if points[0].Value != 30.0 || points[2].Value != 33.0 {
+		t.Fatalf("unexpected history values: %+v", points)
+	}
+}
+
 func TestClientHandlesHTTPAndDecodeErrors(t *testing.T) {
 	t.Run("non-2xx response", func(t *testing.T) {
 		server := newMockServer(t, map[string]apiResponse{

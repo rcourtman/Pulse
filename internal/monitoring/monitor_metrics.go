@@ -215,6 +215,7 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		resourceIDs[i] = d.resourceID
 	}
 	batchMetrics := m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration)
+	nativeHistory := m.nativePhysicalDiskTemperatureHistory(duration)
 
 	// Phase 3: Build result entries.
 	result := make(map[string]DiskChartEntry, len(disks))
@@ -223,6 +224,13 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 		if resMetrics, ok := batchMetrics[d.resourceID]; ok {
 			if pts, found := resMetrics["smart_temp"]; found {
 				tempPoints = pts
+			}
+		}
+		if nativePoints, ok := nativeHistory[d.resourceID]; ok {
+			nativePoints = lttb(nativePoints, chartDownsampleTarget)
+			if chartSeriesCoverageSpan(nativePoints) > chartSeriesCoverageSpan(tempPoints) &&
+				(!hasSufficientChartSeriesCoverage(tempPoints, duration) || len(tempPoints) < 2) {
+				tempPoints = nativePoints
 			}
 		}
 
@@ -246,6 +254,41 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 	}
 
 	return result
+}
+
+func (m *Monitor) nativePhysicalDiskTemperatureHistory(duration time.Duration) map[string][]MetricPoint {
+	providers := m.supplementalProviderSnapshot()
+	if len(providers) == 0 {
+		return nil
+	}
+
+	orgID := "default"
+	if m != nil {
+		if trimmed := strings.TrimSpace(m.GetOrgID()); trimmed != "" {
+			orgID = trimmed
+		}
+	}
+
+	history := make(map[string][]MetricPoint)
+	for _, provider := range providers {
+		historyProvider, ok := provider.(MonitorPhysicalDiskTemperatureHistoryProvider)
+		if !ok {
+			continue
+		}
+		nativeHistory := historyProvider.PhysicalDiskTemperatureHistory(m, orgID, duration)
+		for resourceID, points := range nativeHistory {
+			if strings.TrimSpace(resourceID) == "" || len(points) == 0 {
+				continue
+			}
+			if existing, ok := history[resourceID]; !ok || chartSeriesCoverageSpan(points) > chartSeriesCoverageSpan(existing) {
+				history[resourceID] = points
+			}
+		}
+	}
+	if len(history) == 0 {
+		return nil
+	}
+	return history
 }
 
 func (m *Monitor) currentMetricsTargetStore() MetricsTargetResourceStore {

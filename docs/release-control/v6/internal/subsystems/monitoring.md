@@ -245,6 +245,13 @@ physical-disk resources such as TrueNAS disks into the shared `disk`
 metrics-store contract via the existing SMART-temperature writer, so physical
 disk charts and disk-health consumers read one history path instead of a
 TrueNAS-only temperature cache.
+That same boundary now also owns native disk-history fallback when Pulse's own
+history is shallow. `internal/truenas/client.go`,
+`internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and
+`internal/monitoring/monitor_metrics.go` must route TrueNAS `disktemp`
+reporting history through the shared physical-disk chart path, so canonical
+disk charts can render real provider-backed history instead of flat padding
+after restarts or immediately after onboarding.
 That same monitoring boundary now also owns modern TrueNAS app workload
 telemetry. `internal/truenas/client.go`, `internal/truenas/provider.go`, and
 `internal/monitoring/monitor.go` must ingest `app.stats` through the official

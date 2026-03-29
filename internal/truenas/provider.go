@@ -56,6 +56,10 @@ type appReadFetcher interface {
 	ReadAppLogs(ctx context.Context, appName, containerID string, tailLines int) ([]AppLogLine, error)
 }
 
+type physicalDiskHistoryFetcher interface {
+	DiskTemperatureHistory(ctx context.Context, identifiers []string, duration time.Duration) (map[string][]TimeSeriesPoint, error)
+}
+
 // APIFetcher loads snapshots from the live TrueNAS API client.
 type APIFetcher struct {
 	Client *Client
@@ -96,6 +100,13 @@ func (f *APIFetcher) ReadAppLogs(ctx context.Context, appName, containerID strin
 		return nil, fmt.Errorf("truenas api fetcher client is nil")
 	}
 	return f.Client.GetAppLogs(ctx, appName, containerID, tailLines)
+}
+
+func (f *APIFetcher) DiskTemperatureHistory(ctx context.Context, identifiers []string, duration time.Duration) (map[string][]TimeSeriesPoint, error) {
+	if f == nil || f.Client == nil {
+		return nil, fmt.Errorf("truenas api fetcher client is nil")
+	}
+	return f.Client.GetDiskTemperatureHistory(ctx, identifiers, duration)
 }
 
 // FixtureFetcher loads snapshots from static fixture data.
@@ -253,6 +264,67 @@ func (p *Provider) GetAppConfig(_ context.Context, appID string) (*AppConfigResu
 		result.Host = strings.TrimSpace(snapshot.System.Hostname)
 	}
 	return result, nil
+}
+
+// PhysicalDiskTemperatureHistory returns canonical physical-disk temperature
+// series keyed by the shared physical-disk metrics resource IDs.
+func (p *Provider) PhysicalDiskTemperatureHistory(ctx context.Context, duration time.Duration) (map[string][]TimeSeriesPoint, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas provider is nil")
+	}
+	historyFetcher, ok := p.fetcher.(physicalDiskHistoryFetcher)
+	if !ok {
+		return nil, fmt.Errorf("truenas provider fetcher does not support physical disk history")
+	}
+
+	snapshot := p.Snapshot()
+	if snapshot == nil {
+		return nil, fmt.Errorf("truenas provider has no cached snapshot")
+	}
+
+	identifiers := make([]string, 0, len(snapshot.Disks))
+	metricIDsByIdentifier := make(map[string]string, len(snapshot.Disks)*3)
+	for _, disk := range snapshot.Disks {
+		metricID := trueNASDiskMetricResourceID(disk)
+		if metricID == "" {
+			continue
+		}
+		if name := strings.TrimSpace(disk.Name); name != "" {
+			identifiers = append(identifiers, name)
+		}
+		for _, key := range trueNASDiskHistoryLookupKeys(disk) {
+			if _, exists := metricIDsByIdentifier[key]; !exists {
+				metricIDsByIdentifier[key] = metricID
+			}
+		}
+	}
+	identifiers = dedupeStrings(identifiers)
+	if len(identifiers) == 0 {
+		return nil, nil
+	}
+
+	nativeHistory, err := historyFetcher.DiskTemperatureHistory(ctx, identifiers, duration)
+	if err != nil {
+		return nil, err
+	}
+	if len(nativeHistory) == 0 {
+		return nil, nil
+	}
+
+	historyByMetricID := make(map[string][]TimeSeriesPoint, len(nativeHistory))
+	for identifier, points := range nativeHistory {
+		metricID := metricIDsByIdentifier[strings.TrimSpace(identifier)]
+		if metricID == "" || len(points) == 0 {
+			continue
+		}
+		copied := make([]TimeSeriesPoint, len(points))
+		copy(copied, points)
+		historyByMetricID[metricID] = copied
+	}
+	if len(historyByMetricID) == 0 {
+		return nil, nil
+	}
+	return historyByMetricID, nil
 }
 
 // Close releases resources held by the active fetcher, if supported.
@@ -1334,6 +1406,32 @@ func temperatureAggregateMetaFromTrueNASDisk(disk Disk) *unifiedresources.Temper
 		AvgCelsius: aggregate.AvgCelsius,
 		MaxCelsius: aggregate.MaxCelsius,
 	}
+}
+
+func trueNASDiskHistoryLookupKeys(disk Disk) []string {
+	return dedupeStrings([]string{
+		strings.TrimSpace(disk.Name),
+		strings.TrimSpace(disk.ID),
+		strings.TrimSpace(disk.Serial),
+	})
+}
+
+func trueNASDiskMetricResourceID(disk Disk) string {
+	devPath := ""
+	if name := strings.TrimSpace(disk.Name); name != "" {
+		devPath = "/dev/" + name
+	}
+	meta := &unifiedresources.PhysicalDiskMeta{
+		DevPath:   devPath,
+		Serial:    strings.TrimSpace(disk.Serial),
+		DiskType:  strings.TrimSpace(disk.Transport),
+		SizeBytes: disk.SizeBytes,
+	}
+	fallback := strings.TrimSpace(disk.ID)
+	if fallback == "" {
+		fallback = strings.TrimSpace(disk.Name)
+	}
+	return unifiedresources.PhysicalDiskMetaMetricID(meta, fallback)
 }
 
 func parentPoolFromDataset(datasetName string) string {
