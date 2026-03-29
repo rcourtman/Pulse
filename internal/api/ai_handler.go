@@ -76,6 +76,7 @@ type AIService interface {
 // AIHandler handles all AI endpoints using direct AI integration
 type AIHandler struct {
 	stateMu            sync.RWMutex
+	approvalStoreMu    sync.Mutex
 	mtPersistence      *config.MultiTenantPersistence
 	mtMonitor          *monitoring.MultiTenantMonitor
 	defaultConfig      *config.Config
@@ -93,6 +94,9 @@ type AIHandler struct {
 	unifiedStores      map[string]*unified.UnifiedStore
 	readState          unifiedresources.ReadState
 	recoveryManager    *recoverymanager.Manager
+	approvalStore      *approval.Store
+	approvalStoreDir   string
+	approvalStoreStop  context.CancelFunc
 }
 
 // newChatService is the factory function for creating the AI service.
@@ -510,6 +514,59 @@ func (h *AIHandler) SetMultiTenantMonitor(mtm *monitoring.MultiTenantMonitor) {
 	h.mtMonitor = mtm
 }
 
+func (h *AIHandler) ensureApprovalStore(dataDir string) {
+	if strings.TrimSpace(dataDir) == "" {
+		return
+	}
+
+	h.approvalStoreMu.Lock()
+	defer h.approvalStoreMu.Unlock()
+
+	if h.approvalStore != nil && h.approvalStoreDir == dataDir {
+		approval.SetStore(h.approvalStore)
+		return
+	}
+
+	if h.approvalStoreStop != nil {
+		h.approvalStoreStop()
+		h.approvalStoreStop = nil
+	}
+
+	approvalStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:        dataDir,
+		DefaultTimeout: 5 * time.Minute,
+		MaxApprovals:   100,
+	})
+	if err != nil {
+		h.approvalStore = nil
+		h.approvalStoreDir = ""
+		approval.SetStore(nil)
+		log.Warn().Err(err).Msg("Failed to create approval store, approvals will not be persisted")
+		return
+	}
+
+	cleanupCtx, cleanupCancel := context.WithCancel(context.Background())
+	approvalStore.StartCleanup(cleanupCtx)
+	approval.SetStore(approvalStore)
+	h.approvalStore = approvalStore
+	h.approvalStoreDir = dataDir
+	h.approvalStoreStop = cleanupCancel
+	log.Info().Str("data_dir", dataDir).Msg("Approval store initialized")
+}
+
+func (h *AIHandler) clearApprovalStore() {
+	h.approvalStoreMu.Lock()
+	defer h.approvalStoreMu.Unlock()
+
+	if h.approvalStoreStop != nil {
+		h.approvalStoreStop()
+		h.approvalStoreStop = nil
+	}
+	h.approvalStore = nil
+	h.approvalStoreDir = ""
+	approval.SetStore(nil)
+}
+
 // Start initializes and starts the AI chat service.
 // The monitor parameter provides state snapshots to the chat service (satisfies chat.StateProvider).
 func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) error {
@@ -561,19 +618,8 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 	h.servicesMu.Unlock()
 	h.applyServiceInitializer(context.WithValue(context.Background(), OrgIDContextKey, orgID), svc)
 
-	// Initialize approval store for command approval workflow
-	approvalStore, err := approval.NewStore(approval.StoreConfig{
-		DataDir:        dataDir,
-		DefaultTimeout: 5 * time.Minute,
-		MaxApprovals:   100,
-	})
-	if err != nil {
-		log.Warn().Err(err).Msg("Failed to create approval store, approvals will not be persisted")
-	} else {
-		approval.SetStore(approvalStore)
-		approvalStore.StartCleanup(ctx)
-		log.Info().Str("data_dir", dataDir).Msg("Approval store initialized")
-	}
+	// Initialize approval store for command approval workflow.
+	h.ensureApprovalStore(dataDir)
 
 	log.Info().Msg("Pulse AI started (direct integration)")
 	return nil
@@ -581,6 +627,7 @@ func (h *AIHandler) Start(ctx context.Context, monitor *monitoring.Monitor) erro
 
 // Stop stops the AI chat service
 func (h *AIHandler) Stop(ctx context.Context) error {
+	defer h.clearApprovalStore()
 	if svc := h.getDefaultService(); svc != nil {
 		return svc.Stop(ctx)
 	}
@@ -592,34 +639,61 @@ func (h *AIHandler) Stop(ctx context.Context) error {
 func (h *AIHandler) Restart(ctx context.Context) error {
 	// Load fresh config from persistence to get latest settings
 	newCfg := h.loadAIConfig(ctx)
-
 	svc := h.getDefaultService()
+
+	if newCfg == nil || !newCfg.Enabled {
+		h.clearApprovalStore()
+		if svc == nil {
+			return nil
+		}
+		return svc.Restart(ctx, newCfg)
+	}
+
+	// If enabled but not started yet, recover the monitor and bootstrap now.
 	if svc == nil {
-		return nil
+		log.Info().Msg("Starting AI service via restart trigger")
+
+		h.stateMu.RLock()
+		m := h.defaultMonitor
+		mtm := h.mtMonitor
+		h.stateMu.RUnlock()
+
+		if m == nil && mtm != nil {
+			m, _ = mtm.GetMonitor("default")
+		}
+
+		return h.Start(ctx, m)
 	}
 
 	if !svc.IsRunning() {
-		// If not running but enabled, try to start
-		if newCfg != nil && newCfg.Enabled {
-			log.Info().Msg("Starting AI service via restart trigger")
+		log.Info().Msg("Starting AI service via restart trigger")
 
-			// Recover the monitor: prefer cached default-org monitor, fall back to mtMonitor.
-			h.stateMu.RLock()
-			m := h.defaultMonitor
-			mtm := h.mtMonitor
-			h.stateMu.RUnlock()
+		// Recover the monitor: prefer cached default-org monitor, fall back to mtMonitor.
+		h.stateMu.RLock()
+		m := h.defaultMonitor
+		mtm := h.mtMonitor
+		h.stateMu.RUnlock()
 
-			if m == nil && mtm != nil {
-				m, _ = mtm.GetMonitor("default")
-			}
-
-			// Reuse start logic
-			return h.Start(ctx, m)
+		if m == nil && mtm != nil {
+			m, _ = mtm.GetMonitor("default")
 		}
-		return nil // Not running and not enabled, nothing to do
+
+		// Reuse start logic
+		return h.Start(ctx, m)
 	}
 
-	return svc.Restart(ctx, newCfg)
+	if err := svc.Restart(ctx, newCfg); err != nil {
+		return err
+	}
+
+	persistence := h.getPersistence(ctx)
+	if persistence == nil {
+		return nil
+	}
+	dataDir := h.getDataDir(newCfg, persistence.DataDir())
+	h.ensureApprovalStore(dataDir)
+
+	return nil
 }
 
 // IsRunning returns whether AI is running

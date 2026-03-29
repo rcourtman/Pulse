@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/approval"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -258,21 +259,55 @@ func TestStart_Error(t *testing.T) {
 
 func TestRestart(t *testing.T) {
 	mockPersist := new(MockAIPersistence)
+	mockPersist.dataDir = t.TempDir()
 	mockSvc := new(MockAIService)
 	h := newTestAIHandler(nil, mockPersist, nil)
 	h.defaultService = mockSvc
+	prevStore := approval.GetStore()
+	t.Cleanup(func() {
+		h.clearApprovalStore()
+		approval.SetStore(prevStore)
+	})
 
-	aiCfg := &config.AIConfig{}
+	aiCfg := &config.AIConfig{Enabled: true}
 	mockPersist.On("LoadAIConfig").Return(aiCfg, nil)
 	mockSvc.On("IsRunning").Return(true)
 	mockSvc.On("Restart", mock.Anything, aiCfg).Return(nil)
 	err := h.Restart(context.Background())
 	assert.NoError(t, err)
+	assert.NotNil(t, approval.GetStore())
+}
 
-	// Service nil
-	h.defaultService = nil
+func TestRestart_DisabledClearsApprovalStore(t *testing.T) {
+	mockPersist := new(MockAIPersistence)
+	mockSvc := new(MockAIService)
+	h := newTestAIHandler(nil, mockPersist, nil)
+	h.defaultService = mockSvc
+
+	prevStore := approval.GetStore()
+	dataDir := t.TempDir()
+	seedStore, err := approval.NewStore(approval.StoreConfig{
+		DataDir:        dataDir,
+		DefaultTimeout: time.Minute,
+		MaxApprovals:   10,
+	})
+	if err != nil {
+		t.Fatalf("create seed approval store: %v", err)
+	}
+	approval.SetStore(seedStore)
+	h.approvalStore = seedStore
+	h.approvalStoreDir = dataDir
+	t.Cleanup(func() {
+		h.clearApprovalStore()
+		approval.SetStore(prevStore)
+	})
+
+	mockPersist.On("LoadAIConfig").Return(&config.AIConfig{Enabled: false}, nil)
+	mockSvc.On("Restart", mock.Anything, mock.Anything).Return(nil)
+
 	err = h.Restart(context.Background())
 	assert.NoError(t, err)
+	assert.Nil(t, approval.GetStore())
 }
 
 func TestGetService(t *testing.T) {

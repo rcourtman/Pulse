@@ -354,6 +354,37 @@ func TestContract_ApprovalJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ApprovalListResponseJSONSnapshot(t *testing.T) {
+	payload := map[string]any{
+		"approvals": []approval.ApprovalRequest{},
+		"stats": map[string]int{
+			"approved":   0,
+			"denied":     0,
+			"executions": 0,
+			"expired":    0,
+			"pending":    0,
+		},
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal approval list response: %v", err)
+	}
+
+	const want = `{
+		"approvals":[],
+		"stats":{
+			"approved":0,
+			"denied":0,
+			"executions":0,
+			"expired":0,
+			"pending":0
+		}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_HostedSignupResponseJSONSnapshot(t *testing.T) {
 	payload := hostedSignupResponse{
 		OrgID:   "org-123",

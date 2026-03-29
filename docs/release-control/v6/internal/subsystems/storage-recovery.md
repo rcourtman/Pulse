@@ -141,6 +141,12 @@ runtime data-dir authority being replaceable without hangs or leaked state,
 and router teardown must close the exact session, CSRF, and recovery-token
 workers that router initialized instead of assuming a later global auth-store
 binding will clean them up.
+That same shared lifecycle discipline now also applies to Assistant approval
+store cleanup when `internal/api/ai_handler.go` is touched from shared router
+work. Approval persistence must not bind its cleanup loop to one request-scoped
+context and silently disappear after a settings save, because recovery- and
+storage-adjacent runtime proofs depend on the same owned backend lifetime model
+instead of opportunistic request ownership for long-lived background workers.
 That same runtime data-dir authority also assumes file-backed stores keep
 canonical filenames opaque and machine-owned. Recovery-adjacent session,
 knowledge, and discovery records may discover legacy identifier-derived files

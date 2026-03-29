@@ -165,6 +165,7 @@ Own canonical runtime payload shapes between backend and frontend.
 19. Keep mobile onboarding payload reads aligned with the server-owned relay-mobile credential: `internal/api/router_routes_ai_relay.go`, `internal/api/onboarding_handlers.go`, and `internal/api/contract_test.go` must allow the dedicated `relay:mobile:access` scope to reach the governed QR, deep-link, and connection-validation payloads without reintroducing a broader `settings:read` requirement for token-authenticated pairing clients.
 20. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
 21. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume.
+22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
 
 ## Forbidden Paths
 
@@ -2053,3 +2054,11 @@ startup to consume that hosted-aware config path and to refuse caching a
 failed tenant chat service, so tenant-org `/api/ai/status` and
 `/api/ai/sessions` cannot stay wedged behind a stale pre-bootstrap service
 after the lease-backed AI config has been persisted.
+That same shared AI/mobile API contract now also owns approval-list readiness
+for settings-driven enablement. `internal/api/ai_handler.go`,
+`internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and
+`internal/api/contract_test.go` must keep the governed approvals-list surface
+on its empty-list payload once AI is enabled, even when the first enablement
+happens after process startup. A post-boot settings save may not leave that
+surface on `503 Approval store not initialized` just because the direct AI
+runtime had not previously started.

@@ -11,9 +11,71 @@ const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789a
 const DEFAULT_E2E_USERNAME = 'admin';
 const DEFAULT_E2E_PASSWORD = 'adminadminadmin';
 const DEFAULT_E2E_PRIMARY_API_TOKEN = '1111111111111111111111111111111111111111111111111111111111111111';
+const DEFAULT_LOCAL_BACKEND_VARIANT = 'core';
+const SUPPORTED_LOCAL_BACKEND_VARIANTS = new Set(['core', 'enterprise']);
 
 const trim = (value) => String(value || '').trim();
 const buildScopedPathSegment = (value) => String(value).replace(/[^A-Za-z0-9._-]+/g, '-');
+
+function resolveManagedLocalBackendVariant(env = process.env) {
+  const requestedVariant = trim(env.PULSE_E2E_LOCAL_BACKEND_VARIANT).toLowerCase();
+  if (requestedVariant === '') {
+    return DEFAULT_LOCAL_BACKEND_VARIANT;
+  }
+  if (!SUPPORTED_LOCAL_BACKEND_VARIANTS.has(requestedVariant)) {
+    throw new Error(
+      `Unsupported managed local backend variant ${JSON.stringify(requestedVariant)}. Supported variants: ${Array.from(SUPPORTED_LOCAL_BACKEND_VARIANTS).join(', ')}`,
+    );
+  }
+  return requestedVariant;
+}
+
+function buildManagedLocalBackendBinaryConfig(env, repoRoot) {
+  const backendVariant = resolveManagedLocalBackendVariant(env);
+  if (backendVariant === 'enterprise') {
+    const enterpriseRepoRoot = trim(env.PULSE_E2E_LOCAL_BACKEND_ENTERPRISE_REPO)
+      || path.resolve(repoRoot, '..', 'pulse-enterprise');
+    return {
+      backendVariant,
+      binaryPath: trim(env.PULSE_E2E_LOCAL_BACKEND_BINARY)
+        || path.join(repoRoot, 'tmp', 'integration-local-backend', 'bin', 'pulse-enterprise'),
+      binaryBuildLockPath: path.join(repoRoot, 'tmp', 'locks', 'managed-local-backend-binary-enterprise.lock'),
+      binaryBuildCwd: enterpriseRepoRoot,
+      binaryBuildArgs: ['build', '-buildvcs=false', '-o', '__OUTPUT__', './cmd/pulse-enterprise'],
+      binarySourceRoots: [
+        path.join(enterpriseRepoRoot, 'cmd'),
+        path.join(enterpriseRepoRoot, 'internal'),
+        path.join(enterpriseRepoRoot, 'test'),
+        path.join(repoRoot, 'cmd'),
+        path.join(repoRoot, 'internal'),
+        path.join(repoRoot, 'pkg'),
+      ],
+      binaryManifestPaths: [
+        path.join(enterpriseRepoRoot, 'go.mod'),
+        path.join(enterpriseRepoRoot, 'go.sum'),
+        path.join(repoRoot, 'go.mod'),
+        path.join(repoRoot, 'go.sum'),
+      ],
+    };
+  }
+
+  return {
+    backendVariant,
+    binaryPath: trim(env.PULSE_E2E_LOCAL_BACKEND_BINARY) || path.join(repoRoot, 'pulse'),
+    binaryBuildLockPath: path.join(repoRoot, 'tmp', 'locks', 'managed-local-backend-binary.lock'),
+    binaryBuildCwd: repoRoot,
+    binaryBuildArgs: ['build', '-o', '__OUTPUT__', './cmd/pulse'],
+    binarySourceRoots: [
+      path.join(repoRoot, 'cmd'),
+      path.join(repoRoot, 'internal'),
+      path.join(repoRoot, 'pkg'),
+    ],
+    binaryManifestPaths: [
+      path.join(repoRoot, 'go.mod'),
+      path.join(repoRoot, 'go.sum'),
+    ],
+  };
+}
 
 function resolveManagedLocalBackendRunId(env) {
   const explicitRunId = trim(env.PULSE_E2E_RUN_ID);
@@ -31,6 +93,7 @@ function resolveManagedLocalBackendRunId(env) {
 
 export function buildManagedLocalBackendState(env = process.env) {
   const repoRoot = getRepoRoot();
+  const binaryConfig = buildManagedLocalBackendBinaryConfig(env, repoRoot);
   const port = trim(env.PULSE_E2E_LOCAL_BACKEND_PORT) || '8765';
   const metricsPort = trim(env.PULSE_E2E_LOCAL_BACKEND_METRICS_PORT) || '0';
   const host = trim(env.PULSE_E2E_LOCAL_BACKEND_HOST) || '127.0.0.1';
@@ -44,6 +107,7 @@ export function buildManagedLocalBackendState(env = process.env) {
 
   return {
     managedLocalBackend: true,
+    backendVariant: binaryConfig.backendVariant,
     repoRoot,
     port,
     metricsPort,
@@ -54,8 +118,12 @@ export function buildManagedLocalBackendState(env = process.env) {
     logPath: path.join(rootDir, 'pulse.log'),
     pidPath: path.join(rootDir, 'pulse.pid'),
     billingStatePath: path.join(rootDir, 'data', 'billing.json'),
-    binaryPath: trim(env.PULSE_E2E_LOCAL_BACKEND_BINARY) || path.join(repoRoot, 'pulse'),
-    binaryBuildLockPath: path.join(repoRoot, 'tmp', 'locks', 'managed-local-backend-binary.lock'),
+    binaryPath: binaryConfig.binaryPath,
+    binaryBuildLockPath: binaryConfig.binaryBuildLockPath,
+    binaryBuildCwd: binaryConfig.binaryBuildCwd,
+    binaryBuildArgs: binaryConfig.binaryBuildArgs,
+    binarySourceRoots: binaryConfig.binarySourceRoots,
+    binaryManifestPaths: binaryConfig.binaryManifestPaths,
     frontendRoot: path.join(repoRoot, 'frontend-modern'),
     embeddedFrontendDistPath: path.join(repoRoot, 'internal', 'api', 'frontend-modern', 'dist'),
   };
@@ -275,7 +343,9 @@ export async function shouldBuildManagedLocalBackendBinary(state) {
     return true;
   }
 
-  const sourceRoots = ['cmd', 'internal', 'pkg'].map((segment) => path.join(state.repoRoot, segment));
+  const sourceRoots = Array.isArray(state.binarySourceRoots) && state.binarySourceRoots.length > 0
+    ? state.binarySourceRoots
+    : ['cmd', 'internal', 'pkg'].map((segment) => path.join(state.repoRoot, segment));
   let newestSourceMtime = 0;
   for (const sourceRoot of sourceRoots) {
     newestSourceMtime = Math.max(newestSourceMtime, await collectNewestGoMtime(sourceRoot));
@@ -286,9 +356,13 @@ export async function shouldBuildManagedLocalBackendBinary(state) {
     await collectNewestTreeMtime(state.embeddedFrontendDistPath),
   );
 
-  for (const manifestName of ['go.mod', 'go.sum']) {
+  const manifestPaths = Array.isArray(state.binaryManifestPaths) && state.binaryManifestPaths.length > 0
+    ? state.binaryManifestPaths
+    : ['go.mod', 'go.sum'].map((manifestName) => path.join(state.repoRoot, manifestName));
+
+  for (const manifestPath of manifestPaths) {
     try {
-      const manifestStats = await fs.stat(path.join(state.repoRoot, manifestName));
+      const manifestStats = await fs.stat(manifestPath);
       newestSourceMtime = Math.max(newestSourceMtime, manifestStats.mtimeMs);
     } catch {
       // ignore missing manifest files
@@ -328,13 +402,18 @@ async function ensureBackendBinary(state, logger) {
         return;
       }
 
-      logger.log(`[integration] Building local backend binary at ${state.binaryPath}`);
+      logger.log(`[integration] Building ${state.backendVariant || 'core'} local backend binary at ${state.binaryPath}`);
       const temporaryBinaryPath = `${state.binaryPath}.${process.pid}.tmp`;
+      const binaryBuildCwd = state.binaryBuildCwd || state.repoRoot;
+      const binaryBuildArgs = Array.isArray(state.binaryBuildArgs) && state.binaryBuildArgs.length > 0
+        ? state.binaryBuildArgs.map((arg) => (arg === '__OUTPUT__' ? temporaryBinaryPath : arg))
+        : ['build', '-o', temporaryBinaryPath, './cmd/pulse'];
+      await fs.mkdir(path.dirname(temporaryBinaryPath), { recursive: true });
       await fs.rm(temporaryBinaryPath, { force: true });
       try {
         await new Promise((resolve, reject) => {
-          const child = spawn('go', ['build', '-o', temporaryBinaryPath, './cmd/pulse'], {
-            cwd: state.repoRoot,
+          const child = spawn('go', binaryBuildArgs, {
+            cwd: binaryBuildCwd,
             stdio: 'inherit',
           });
           child.on('error', reject);
@@ -476,6 +555,7 @@ export async function startManagedLocalBackend({
 
     const runtimeState = {
       managedLocalBackend: true,
+      backendVariant: state.backendVariant,
       baseURL: state.baseURL,
       pid: child.pid,
       dataDir: state.dataDir,

@@ -146,6 +146,14 @@ the request runs under a hosted tenant org with no org-local billing lease,
 the same AI runtime path must inherit the default hosted lease for bootstrap
 and quickstart-credit reads so tenant-scoped Chat, Patrol, and AI Settings
 stay aligned with the machine-owned hosted entitlement state.
+That same runtime boundary also owns approval-store lifecycle in
+`internal/api/ai_handler.go`. Settings-driven enablement and restart must be
+able to cold-start the direct AI runtime, initialize approval persistence, and
+leave `/api/ai/approvals` ready for mobile and remediation flows even when AI
+was disabled at process boot. The approval cleanup loop must follow owned AI
+runtime lifetime rather than an HTTP request context, and approval persistence
+may fail closed only when AI is actually disabled instead of because runtime
+enablement happened after startup.
 The same ownership includes the Pulse query tool schema under
 `internal/ai/tools/`: topology-query input names must stay canonical inside
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`

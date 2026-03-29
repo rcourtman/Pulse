@@ -207,6 +207,12 @@ relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup
 surfaces do not observe a tenant-org Pulse Assistant state that disagrees
 with the machine-owned hosted entitlement already backing the same instance.
+That same shared dependency now also assumes settings-driven AI enablement can
+cold-start the direct Assistant runtime and approval persistence without a
+prior chat session. Lifecycle-adjacent mobile pairing and setup flows depend
+on `/api/ai/approvals` becoming ready from the first governed settings save,
+not only after some earlier process-start or chat-start side effect has
+already initialized the approval store.
 That same shared dependency now also assumes hosted cloud handoff makes tenant
 org access real before browser lifecycle continues. Lifecycle-adjacent opens
 into hosted workspaces may depend on `internal/api/cloud_handoff_handlers.go`,
