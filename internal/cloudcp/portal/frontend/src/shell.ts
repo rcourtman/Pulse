@@ -14,7 +14,7 @@ export interface ShellDeps {
 export function installShell(deps: ShellDeps): void {
   function revealActiveNavLink(activeLink: HTMLElement | null) {
     if (!activeLink) return;
-    var group = activeLink.closest('.portal-shell-nav-group') as HTMLElement | null;
+    var group = activeLink.closest('.portal-tab-bar') as HTMLElement | null;
     if (!group || group.scrollWidth <= group.clientWidth) return;
     if (typeof activeLink.scrollIntoView === 'function') {
       activeLink.scrollIntoView({ block: 'nearest', inline: 'center' });
@@ -33,7 +33,7 @@ export function installShell(deps: ShellDeps): void {
       var button = node as HTMLElement;
       var isActive = button.getAttribute('data-shell-section') === activeSection;
       button.classList.toggle('active', isActive);
-      if (isActive && button.classList.contains('portal-shell-nav-link')) {
+      if (isActive && button.classList.contains('portal-tab')) {
         activeLink = button;
       }
     });

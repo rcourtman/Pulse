@@ -404,9 +404,12 @@ through a versioned href so new portal icon revisions bypass browser cache on
 deploy instead of waiting for asset expiry.
 That same typed overview contract must also preserve a calm, flat account-tool
 visual posture across all portal scenarios: no gradients, heavy shadows, or
-decorative dashboard chrome; lighter shell framing; list/detail and row-based
-task presentation; restrained accent use; and hierarchy driven by spacing,
-typography, and dividers rather than dense pills, stacked metrics, or
+decorative dashboard chrome. The shell uses a compact identity bar (account name,
+role, kind) and a horizontal tab bar for Workspaces, Access, Billing, and
+Support. Content panels render directly below the tab bar without redundant
+page headers, summary strips, or fact chips. Section block headers render the
+account name and inline actions only. Hierarchy is driven by spacing,
+typography, and 1px borders rather than cards, pills, stacked metrics, or
 ornamental side rails competing with the active task.
 That same typed page contract also applies before auth: the signed-out portal
 surface must keep one obvious sign-in action plus precise account-scope

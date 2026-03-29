@@ -296,59 +296,34 @@ function accountContextLeadCopy(account: PortalAccountSummary): string {
     : 'Open workspaces and review access here. Account changes require an owner or admin.';
 }
 
-function renderAccountContextStrip(account: PortalAccountSummary): string {
-  return (
-    '<section class="portal-account-context">' +
-      '<div class="portal-account-context-copy">' +
-        '<div class="portal-account-context-meta">' +
-          '<span class="account-eyebrow">Pulse Account</span>' +
-          '<span class="portal-account-context-separator">•</span>' +
-          '<span class="portal-account-context-access">' + escapeHTML(accountKindLabel(account)) + '</span>' +
-        '</div>' +
-        '<div class="portal-account-context-row portal-account-context-row-title">' +
-          '<h2>' + escapeHTML(account.name) + '</h2>' +
-        '</div>' +
-        '<p>' + escapeHTML(accountContextRoleMeta(account)) + '</p>' +
-      '</div>' +
-    '</section>'
-  );
-}
-
-function renderPortalContextStrip(accounts: PortalAccountSummary[], showSelfHostedCommercial: boolean): string {
+function renderIdentityBar(accounts: PortalAccountSummary[], showSelfHostedCommercial: boolean): string {
   if (accounts.length === 1) {
-    return renderAccountContextStrip(accounts[0]);
+    var account = accounts[0];
+    return (
+      '<div class="portal-identity-bar">' +
+        '<h2>' + escapeHTML(account.name) + '</h2>' +
+        '<span class="portal-identity-sep">·</span>' +
+        '<span>' + escapeHTML(portalRoleLabel(account.role)) + '</span>' +
+        '<span class="portal-identity-sep">·</span>' +
+        '<span>' + escapeHTML(accountKindLabel(account)) + '</span>' +
+      '</div>'
+    );
   }
   if (accounts.length > 1) {
     return (
-      '<section class="portal-account-context">' +
-        '<div class="portal-account-context-copy">' +
-          '<div class="portal-account-context-meta">' +
-            '<span class="account-eyebrow">Pulse Account</span>' +
-            '<span class="portal-account-context-separator">•</span>' +
-            '<span class="portal-account-context-access">' + escapeHTML(accounts.length === 1 ? '1 hosted account' : String(accounts.length) + ' hosted accounts') + '</span>' +
-          '</div>' +
-          '<div class="portal-account-context-row portal-account-context-row-title">' +
-            '<h2>Hosted accounts</h2>' +
-          '</div>' +
-          '<p>Workspaces, access, and billing by account.</p>' +
-        '</div>' +
-      '</section>'
+      '<div class="portal-identity-bar">' +
+        '<h2>Pulse Account</h2>' +
+        '<span class="portal-identity-sep">·</span>' +
+        '<span>' + String(accounts.length) + ' accounts</span>' +
+      '</div>'
     );
   }
   return (
-    '<section class="portal-account-context">' +
-      '<div class="portal-account-context-copy">' +
-        '<div class="portal-account-context-meta">' +
-          '<span class="account-eyebrow">Billing account</span>' +
-          '<span class="portal-account-context-separator">•</span>' +
-          '<span class="portal-account-context-access">' + escapeHTML(showSelfHostedCommercial ? 'Self-hosted commercial' : 'Commercial account') + '</span>' +
-        '</div>' +
-        '<div class="portal-account-context-row portal-account-context-row-title">' +
-          '<h2>Billing</h2>' +
-        '</div>' +
-        '<p>Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.</p>' +
-      '</div>' +
-    '</section>'
+    '<div class="portal-identity-bar">' +
+      '<h2>Pulse Account</h2>' +
+      '<span class="portal-identity-sep">·</span>' +
+      '<span>' + escapeHTML(showSelfHostedCommercial ? 'Self-hosted billing' : 'Billing') + '</span>' +
+    '</div>'
   );
 }
 
@@ -387,30 +362,15 @@ function visibleShellSections(bootstrap: PortalBootstrapData): ShellNavEntry[] {
   return primaryShellSections(bootstrap).concat(utilityShellSections(bootstrap));
 }
 
-function shellSectionButton(
-  section: PortalShellSection,
-  activeSection: PortalShellSection,
-  title: string,
-  variant: 'primary' | 'utility'
-): string {
-  return (
-    '<button class="portal-shell-nav-link portal-shell-nav-link-' + variant + (activeSection === section ? ' active' : '') + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '">' +
-      '<span class="portal-shell-nav-row">' +
-        '<span class="portal-shell-nav-label">' + title + '</span>' +
-      '</span>' +
-    '</button>'
-  );
-}
-
-function renderShellNavigation(bootstrap: PortalBootstrapData, activeSection: PortalShellSection): string {
+function renderTabBar(bootstrap: PortalBootstrapData, activeSection: PortalShellSection): string {
   var sections = visibleShellSections(bootstrap);
   return (
-    '<nav class="portal-shell-nav" aria-label="Pulse Account sections">' +
-      '<div class="portal-shell-nav-group portal-shell-nav-group-primary">' +
-        sections.map(function(entry) {
-          return shellSectionButton(entry.section, activeSection, entry.title, entry.section === 'support' ? 'utility' : 'primary');
-        }).join('') +
-      '</div>' +
+    '<nav class="portal-tab-bar" aria-label="Pulse Account sections">' +
+      sections.map(function(entry) {
+        var isActive = activeSection === entry.section;
+        var cls = 'portal-tab' + (isActive ? ' active' : '') + (entry.section === 'support' ? ' portal-tab-utility' : '');
+        return '<button class="' + cls + '" type="button" data-shell-action="activate-section" data-shell-section="' + entry.section + '">' + entry.title + '</button>';
+      }).join('') +
     '</nav>'
   );
 }
@@ -827,12 +787,8 @@ function renderShellOverviewSection(context: ShellViewContext): string {
 function renderPageHeader(kicker: string, title: string, copy: string, summaryHTML = ''): string {
   return (
     '<div class="portal-page-header">' +
-      '<div>' +
-        '<div class="account-panel-kicker">' + escapeHTML(kicker) + '</div>' +
-        '<h2>' + escapeHTML(title) + '</h2>' +
-        '<p>' + escapeHTML(copy) + '</p>' +
-      '</div>' +
-      summaryHTML +
+      '<h2>' + escapeHTML(title) + '</h2>' +
+      (copy ? '<p>' + escapeHTML(copy) + '</p>' : '') +
     '</div>'
   );
 }
@@ -844,14 +800,9 @@ function renderAccountBlockHeader(
   copy = ''
 ): string {
   return (
-    '<div class="portal-account-block-header">' +
-      '<div class="portal-account-block-copy">' +
-        '<div class="account-panel-kicker">' + escapeHTML(accountKindLabel(account)) + '</div>' +
-        '<h3>' + escapeHTML(account.name) + '</h3>' +
-        renderFactLine('portal-account-block-facts', [accountContextRoleMeta(account)].concat(facts)) +
-        (copy ? '<p>' + escapeHTML(copy) + '</p>' : '') +
-      '</div>' +
-      (actionsHTML ? '<div class="portal-account-block-actions">' + actionsHTML + '</div>' : '') +
+    '<div class="portal-section-header">' +
+      '<h3>' + escapeHTML(account.name) + '</h3>' +
+      (actionsHTML ? '<div>' + actionsHTML + '</div>' : '') +
     '</div>'
   );
 }
@@ -1260,7 +1211,7 @@ function renderBillingTaskPanel(title: string, copy: string, panelID: string, bo
 
 function renderSupportSection(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
-  var hasHostedAccounts = accounts.length > 0;
+  var isHosted = accounts.length > 0;
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
   var supportEmail = context.bootstrap.support_email || '';
   var canManageHostedTasks = false;
@@ -1270,17 +1221,15 @@ function renderSupportSection(context: ShellViewContext): string {
       break;
     }
   }
-  var hostedViewOnly = hasHostedAccounts && !canManageHostedTasks;
-  var supportLead = supportLeadCopy(hasHostedAccounts, hostedViewOnly, showSelfHostedCommercial);
-  var supportChips = supportSectionChipLabels(hasHostedAccounts, hostedViewOnly, supportEmail);
-  var retryCopy = hasHostedAccounts
+  var hostedViewOnly = isHosted && !canManageHostedTasks;
+  var retryCopy = isHosted
     ? (
       hostedViewOnly
         ? 'Review Workspaces or Access first. If billing is involved, hand it to an owner or admin before you escalate.'
         : 'Retry the same Workspaces, Access, or Billing step before you escalate.'
     )
     : 'Retry the same Billing step before you escalate.';
-  var supportActions = hasHostedAccounts
+  var supportActions = isHosted
     ? (
       '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Workspaces</button>' +
       '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button>' +
@@ -1289,18 +1238,14 @@ function renderSupportSection(context: ShellViewContext): string {
     : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
   return (
     '<section class="portal-support-panel">' +
-      renderPageHeader(
-        'Support',
-        'Support',
-        supportLead,
-        renderFactLine('portal-page-facts', supportChips)
-      ) +
+      '<h2>Support</h2>' +
+      '<p>Use Support only after the self-service path fails.</p>' +
       '<div class="portal-support-simple">' +
         '<div class="portal-support-simple-card">' +
           '<div class="portal-support-simple-list">' +
             '<div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div>' +
-            '<div class="portal-support-simple-row"><strong>Path</strong><span>' + escapeHTML(supportRunbookPathCopy(hasHostedAccounts, hostedViewOnly, showSelfHostedCommercial)) + '</span></div>' +
-            '<div class="portal-support-simple-row"><strong>Account or email</strong><span>' + escapeHTML(supportRunbookAccountCopy(hasHostedAccounts, showSelfHostedCommercial)) + '</span></div>' +
+            '<div class="portal-support-simple-row"><strong>Path</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial)) + '</span></div>' +
+            '<div class="portal-support-simple-row"><strong>Account or email</strong><span>' + escapeHTML(supportRunbookAccountCopy(isHosted, showSelfHostedCommercial)) + '</span></div>' +
             '<div class="portal-support-simple-row"><strong>Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' +
           '</div>' +
           '<div class="portal-support-simple-actions">' +
@@ -1340,10 +1285,6 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   })
     ? preferredSection
     : (shellSections[0] ? shellSections[0].section : 'billing');
-  var allWorkspaces = collectWorkspaces(accounts);
-  var hostedBillingCount = accounts.filter(function(account) {
-    return account.has_billing;
-  }).length;
   var billingNote = hosted
     ? (showSelfHostedCommercial
       ? 'Hosted billing by account. Self-hosted purchases stay separate below.'
@@ -1374,31 +1315,14 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   return (
     '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
       '<div class="portal-shell-main">' +
-        renderPortalContextStrip(accounts, showSelfHostedCommercial) +
-        renderShellNavigation(context.bootstrap, activeSection) +
+        renderIdentityBar(accounts, showSelfHostedCommercial) +
+        renderTabBar(context.bootstrap, activeSection) +
         (hosted
           ? (
             '<section class="portal-content-panel portal-content-panel-workspaces">' +
-              renderPageHeader(
-                'Workspaces',
-                'Workspaces',
-                'Open a workspace or manage lifecycle by account.',
-                renderSummaryStrip([
-                  { label: 'Accounts', value: String(accounts.length) },
-                  { label: 'Workspaces', value: String(allWorkspaces.length) },
-                  { label: 'Ready', value: String(countReadyWorkspaces(allWorkspaces)) },
-                  { label: 'Needs review', value: String(attentionWorkspaces(allWorkspaces).length) },
-                  { label: 'Suspended', value: String(countWorkspacesByState(allWorkspaces, 'suspended')) },
-                ])
-              ) +
               workspacesContent +
             '</section>' +
             '<section class="portal-content-panel portal-content-panel-access">' +
-              renderPageHeader(
-                'Access',
-                'Access',
-                'Review the roster or open one access task by account.'
-              ) +
               accessContent +
             '</section>' +
             '<section class="portal-content-panel portal-content-panel-overview">' +
@@ -1407,33 +1331,22 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
           )
           : '') +
         '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
-          renderPageHeader(
-            'Billing',
-            'Billing',
-            billingNote,
-            renderSummaryStrip([
-              { label: 'Hosted billing', value: String(hostedBillingCount) },
-              { label: 'Self-hosted tasks', value: showSelfHostedCommercial ? 'Available' : 'Not attached' },
-            ])
-          ) +
           (hosted ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : '') +
           (showSelfHostedCommercial
             ? ('<div class="billing-shell billing-shell-idle">' +
             '<div class="billing-shell-main">' +
               '<div class="billing-shell-main-head">' +
-                '<div class="account-panel-kicker">Self-hosted billing</div>' +
-                '<h3>Pick the self-hosted job</h3>' +
-                '<p>Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.</p>' +
+                '<h3>Self-hosted billing</h3>' +
+                '<p>Use self-hosted billing only for self-hosted purchases.</p>' +
               '</div>' +
               '<div class="billing-action-list">' +
-                renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
-                renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Licenses', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                renderBillingActionRow('open-refund-billing', 'Refund requests', 'Refunds', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
-                renderBillingActionRow('open-data-billing', 'Data and privacy', 'Privacy', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']) +
+                renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Open', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+                renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Open', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                renderBillingActionRow('open-refund-billing', 'Refund requests', 'Open', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
+                renderBillingActionRow('open-data-billing', 'Data and privacy', 'Open', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']) +
               '</div>' +
               '<div class="billing-inline-support">' +
-                '<div class="account-panel-kicker">Escalation only</div>' +
-                '<h4>Use Support only after Billing fails</h4>' +
+                '<h4>Support</h4>' +
                 '<p>' + selfHostedBillingEscalationCopy + '</p>' +
                 '<div class="billing-inline-support-actions">' +
                   '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +

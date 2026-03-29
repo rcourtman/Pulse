@@ -53,7 +53,7 @@ describe('shell runtime', function() {
 
     installShell({ store: store });
 
-    var navGroup = document.querySelector('.portal-shell-nav-group') as HTMLElement | null;
+    var navGroup = document.querySelector('.portal-tab-bar') as HTMLElement | null;
     expect(navGroup).not.toBeNull();
     if (!navGroup) return;
 
@@ -73,7 +73,7 @@ describe('shell runtime', function() {
     scrollIntoView.mockClear();
     store.setActiveShellSection('access');
 
-    var activeLink = document.querySelector('.portal-shell-nav-link.active') as HTMLElement | null;
+    var activeLink = document.querySelector('.portal-tab.active') as HTMLElement | null;
     expect(activeLink?.getAttribute('data-shell-section')).toBe('access');
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'center' });
@@ -100,7 +100,7 @@ describe('shell runtime', function() {
 
     installShell({ store: store });
 
-    var activeLink = document.querySelector('.portal-shell-nav-link.active') as HTMLElement | null;
+    var activeLink = document.querySelector('.portal-tab.active') as HTMLElement | null;
     expect(activeLink?.getAttribute('data-shell-section')).toBe('workspaces');
   });
 });
