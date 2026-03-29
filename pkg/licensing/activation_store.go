@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
 // ActivationStateFileName is the name of the encrypted activation state file.
@@ -36,11 +35,18 @@ func (p *Persistence) SaveActivationState(state *ActivationState) error {
 		return fmt.Errorf("encrypt activation state: %w", err)
 	}
 
-	if err := ensurePersistenceOwnerOnlyDir(p.configDir); err != nil {
+	configDir, err := normalizePersistenceConfigDir(p.configDir)
+	if err != nil {
+		return fmt.Errorf("resolve config directory: %w", err)
+	}
+	if err := ensurePersistenceOwnerOnlyDir(configDir); err != nil {
 		return fmt.Errorf("secure config directory: %w", err)
 	}
 
-	statePath := filepath.Join(p.configDir, ActivationStateFileName)
+	statePath, err := resolvePersistencePath(configDir, ActivationStateFileName)
+	if err != nil {
+		return fmt.Errorf("resolve activation state file path: %w", err)
+	}
 	encoded := base64.StdEncoding.EncodeToString(encrypted)
 
 	if err := writeOwnerOnlyPersistenceFileAtomic(statePath, []byte(encoded)); err != nil {
@@ -53,7 +59,10 @@ func (p *Persistence) SaveActivationState(state *ActivationState) error {
 // LoadActivationState reads and decrypts the activation state from disk.
 // Returns nil, nil if no activation state file exists.
 func (p *Persistence) LoadActivationState() (*ActivationState, error) {
-	statePath := filepath.Join(p.configDir, ActivationStateFileName)
+	statePath, err := resolvePersistencePath(p.configDir, ActivationStateFileName)
+	if err != nil {
+		return nil, fmt.Errorf("resolve activation state file path: %w", err)
+	}
 
 	encoded, err := readBoundedPersistenceRegularFile(statePath, maxLicenseFileSize)
 	if err != nil {
@@ -99,8 +108,11 @@ func (p *Persistence) LoadActivationState() (*ActivationState, error) {
 
 // ClearActivationState removes the activation state file from disk.
 func (p *Persistence) ClearActivationState() error {
-	statePath := filepath.Join(p.configDir, ActivationStateFileName)
-	err := os.Remove(statePath)
+	statePath, err := resolvePersistencePath(p.configDir, ActivationStateFileName)
+	if err != nil {
+		return fmt.Errorf("resolve activation state file path: %w", err)
+	}
+	err = os.Remove(statePath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("delete activation state file: %w", err)
 	}
@@ -109,7 +121,10 @@ func (p *Persistence) ClearActivationState() error {
 
 // ActivationStateExists checks if an activation state file exists on disk.
 func (p *Persistence) ActivationStateExists() bool {
-	statePath := filepath.Join(p.configDir, ActivationStateFileName)
+	statePath, err := resolvePersistencePath(p.configDir, ActivationStateFileName)
+	if err != nil {
+		return false
+	}
 	info, err := os.Lstat(statePath)
 	if err != nil {
 		return false

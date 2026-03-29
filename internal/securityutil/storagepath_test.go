@@ -1,6 +1,25 @@
 package securityutil
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
+
+func TestNormalizeStorageDir(t *testing.T) {
+	dir, err := NormalizeStorageDir("  /tmp/pulse/../pulse  ")
+	if err != nil {
+		t.Fatalf("NormalizeStorageDir() error = %v", err)
+	}
+	if dir != filepath.Clean("/tmp/pulse/../pulse") {
+		t.Fatalf("NormalizeStorageDir() = %q", dir)
+	}
+}
+
+func TestNormalizeStorageDirRejectsBlank(t *testing.T) {
+	if _, err := NormalizeStorageDir(" \t "); err == nil {
+		t.Fatal("expected blank storage dir to be rejected")
+	}
+}
 
 func TestJoinStorageLeaf(t *testing.T) {
 	path, err := JoinStorageLeaf("/tmp/pulse", "session.json")

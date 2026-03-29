@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 )
@@ -67,26 +68,45 @@ func historyIdentityKey(alert *Alert) string {
 	return alert.ID
 }
 
+func resolveHistoryStoragePaths(dataDir string) (resolvedDataDir string, historyFile string, backupFile string, err error) {
+	resolvedDataDir, err = securityutil.NormalizeStorageDir(dataDir)
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolve history data directory: %w", err)
+	}
+
+	historyFile, err = securityutil.JoinStorageLeaf(resolvedDataDir, HistoryFileName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolve history file path: %w", err)
+	}
+	backupFile, err = securityutil.JoinStorageLeaf(resolvedDataDir, HistoryBackupFileName)
+	if err != nil {
+		return "", "", "", fmt.Errorf("resolve history backup file path: %w", err)
+	}
+
+	return resolvedDataDir, historyFile, backupFile, nil
+}
+
 // NewHistoryManager creates a new history manager
 func NewHistoryManager(dataDir string) *HistoryManager {
-	if dataDir == "" {
-		dataDir = utils.GetDataDir()
+	resolvedDataDir, historyFile, backupFile, err := resolveHistoryStoragePaths(utils.ResolveDataDir(dataDir))
+	if err != nil {
+		panic(fmt.Sprintf("invalid alert history storage paths for %q: %v", dataDir, err))
 	}
 
 	hm := &HistoryManager{
-		dataDir:      dataDir,
-		historyFile:  filepath.Join(dataDir, HistoryFileName),
-		backupFile:   filepath.Join(dataDir, HistoryBackupFileName),
+		dataDir:      resolvedDataDir,
+		historyFile:  historyFile,
+		backupFile:   backupFile,
 		history:      make([]HistoryEntry, 0),
 		saveInterval: 5 * time.Minute,
 		stopChan:     make(chan struct{}),
 	}
 
 	// Ensure data directory exists
-	if err := os.MkdirAll(dataDir, alertsDirPerm); err != nil {
-		log.Error().Err(err).Str("dir", dataDir).Msg("Failed to create data directory")
-	} else if err := os.Chmod(dataDir, alertsDirPerm); err != nil {
-		log.Warn().Err(err).Str("dir", dataDir).Msg("Failed to harden history directory permissions")
+	if err := os.MkdirAll(resolvedDataDir, alertsDirPerm); err != nil {
+		log.Error().Err(err).Str("dir", resolvedDataDir).Msg("Failed to create data directory")
+	} else if err := os.Chmod(resolvedDataDir, alertsDirPerm); err != nil {
+		log.Warn().Err(err).Str("dir", resolvedDataDir).Msg("Failed to harden history directory permissions")
 	}
 
 	// Load existing history

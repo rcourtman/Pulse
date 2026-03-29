@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 const (
@@ -38,6 +40,27 @@ var (
 
 func isMissingPersistencePathError(err error) bool {
 	return errors.Is(err, os.ErrNotExist) || errors.Is(err, syscall.ENOTDIR)
+}
+
+func normalizePersistenceConfigDir(configDir string) (string, error) {
+	normalizedConfigDir, err := securityutil.NormalizeStorageDir(configDir)
+	if err != nil {
+		return "", errors.New("config directory cannot be empty")
+	}
+	return normalizedConfigDir, nil
+}
+
+func resolvePersistencePath(configDir string, leaf string) (string, error) {
+	normalizedConfigDir, err := normalizePersistenceConfigDir(configDir)
+	if err != nil {
+		return "", err
+	}
+
+	path, err := securityutil.JoinStorageLeaf(normalizedConfigDir, leaf)
+	if err != nil {
+		return "", fmt.Errorf("resolve persistence path for %q: %w", leaf, err)
+	}
+	return path, nil
 }
 
 func ensurePersistenceOwnerOnlyDir(dir string) error {
@@ -133,13 +156,13 @@ type Persistence struct {
 // It tries to use a persistent key stored in configDir first, then falls back
 // to machine-id for backwards compatibility with existing installations.
 func NewPersistence(configDir string) (*Persistence, error) {
-	configDir = strings.TrimSpace(configDir)
-	if configDir == "" {
-		return nil, errors.New("config directory cannot be empty")
+	normalizedConfigDir, err := normalizePersistenceConfigDir(configDir)
+	if err != nil {
+		return nil, err
 	}
 
 	// Try to load persistent key from config directory first
-	persistentKey, err := loadPersistentKey(configDir)
+	persistentKey, err := loadPersistentKey(normalizedConfigDir)
 	if err != nil && !isMissingPersistencePathError(err) {
 		return nil, fmt.Errorf("failed to load persistent key: %w", err)
 	}
@@ -157,7 +180,7 @@ func NewPersistence(configDir string) (*Persistence, error) {
 	}
 
 	return &Persistence{
-		configDir:     configDir,
+		configDir:     normalizedConfigDir,
 		encryptionKey: encryptionKey,
 		machineID:     machineID,
 	}, nil
@@ -165,7 +188,10 @@ func NewPersistence(configDir string) (*Persistence, error) {
 
 // loadPersistentKey attempts to load the persistent encryption key from disk.
 func loadPersistentKey(configDir string) (string, error) {
-	keyPath := filepath.Join(configDir, PersistentKeyFileName)
+	keyPath, err := resolvePersistencePath(configDir, PersistentKeyFileName)
+	if err != nil {
+		return "", err
+	}
 	data, err := readBoundedPersistenceRegularFile(keyPath, maxPersistentKeyFileSize)
 	if err != nil {
 		return "", err
@@ -180,9 +206,16 @@ func loadPersistentKey(configDir string) (string, error) {
 // ensurePersistentKey creates a persistent encryption key if one doesn't exist.
 // Returns the key (existing or newly created).
 func (p *Persistence) ensurePersistentKey() (string, error) {
-	keyPath := filepath.Join(p.configDir, PersistentKeyFileName)
+	configDir, err := normalizePersistenceConfigDir(p.configDir)
+	if err != nil {
+		return "", err
+	}
+	keyPath, err := resolvePersistencePath(configDir, PersistentKeyFileName)
+	if err != nil {
+		return "", err
+	}
 
-	if err := ensurePersistenceOwnerOnlyDir(p.configDir); err != nil {
+	if err := ensurePersistenceOwnerOnlyDir(configDir); err != nil {
 		return "", fmt.Errorf("failed to secure config directory: %w", err)
 	}
 
@@ -261,11 +294,18 @@ func (p *Persistence) SaveWithGracePeriod(licenseKey string, gracePeriodEnd *int
 		return fmt.Errorf("failed to encrypt license: %w", err)
 	}
 
-	if err := ensurePersistenceOwnerOnlyDir(p.configDir); err != nil {
+	configDir, err := normalizePersistenceConfigDir(p.configDir)
+	if err != nil {
+		return err
+	}
+	if err := ensurePersistenceOwnerOnlyDir(configDir); err != nil {
 		return fmt.Errorf("failed to secure config directory: %w", err)
 	}
 
-	licensePath := filepath.Join(p.configDir, LicenseFileName)
+	licensePath, err := resolvePersistencePath(configDir, LicenseFileName)
+	if err != nil {
+		return fmt.Errorf("resolve license file path: %w", err)
+	}
 	encoded := base64.StdEncoding.EncodeToString(encrypted)
 
 	if err := writeOwnerOnlyPersistenceFileAtomic(licensePath, []byte(encoded)); err != nil {
@@ -288,7 +328,10 @@ func (p *Persistence) Load() (string, error) {
 // It tries to decrypt with the current encryption key first, then falls back
 // to machine-id for backwards compatibility with existing installations.
 func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
-	licensePath := filepath.Join(p.configDir, LicenseFileName)
+	licensePath, err := resolvePersistencePath(p.configDir, LicenseFileName)
+	if err != nil {
+		return PersistedLicense{}, fmt.Errorf("resolve license file path: %w", err)
+	}
 
 	encoded, err := readBoundedPersistenceRegularFile(licensePath, maxLicenseFileSize)
 	if err != nil {
@@ -340,8 +383,11 @@ func (p *Persistence) LoadWithMetadata() (PersistedLicense, error) {
 
 // Delete removes the saved license file.
 func (p *Persistence) Delete() error {
-	licensePath := filepath.Join(p.configDir, LicenseFileName)
-	err := os.Remove(licensePath)
+	licensePath, err := resolvePersistencePath(p.configDir, LicenseFileName)
+	if err != nil {
+		return fmt.Errorf("resolve license file path: %w", err)
+	}
+	err = os.Remove(licensePath)
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to delete license file: %w", err)
 	}
@@ -350,7 +396,10 @@ func (p *Persistence) Delete() error {
 
 // Exists checks if a saved license exists.
 func (p *Persistence) Exists() bool {
-	licensePath := filepath.Join(p.configDir, LicenseFileName)
+	licensePath, err := resolvePersistencePath(p.configDir, LicenseFileName)
+	if err != nil {
+		return false
+	}
 	info, err := os.Lstat(licensePath)
 	if err != nil {
 		return false

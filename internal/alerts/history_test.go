@@ -14,18 +14,49 @@ func newTestHistoryManager(t *testing.T) *HistoryManager {
 	t.Helper()
 
 	tempDir := t.TempDir()
+	resolvedDataDir, historyFile, backupFile, err := resolveHistoryStoragePaths(tempDir)
+	if err != nil {
+		t.Fatalf("resolveHistoryStoragePaths(%q) error = %v", tempDir, err)
+	}
 
 	// Create minimal HistoryManager without starting goroutines
 	hm := &HistoryManager{
-		dataDir:      tempDir,
-		historyFile:  filepath.Join(tempDir, HistoryFileName),
-		backupFile:   filepath.Join(tempDir, HistoryBackupFileName),
+		dataDir:      resolvedDataDir,
+		historyFile:  historyFile,
+		backupFile:   backupFile,
 		history:      make([]HistoryEntry, 0),
 		saveInterval: 5 * time.Minute,
 		stopChan:     make(chan struct{}),
 	}
 
 	return hm
+}
+
+func TestResolveHistoryStoragePathsCanonicalizesDataDir(t *testing.T) {
+	baseDir := t.TempDir()
+	inputDir := "  " + filepath.Join(baseDir, "nested", "..", "history") + string(os.PathSeparator) + ".  "
+
+	resolvedDataDir, historyFile, backupFile, err := resolveHistoryStoragePaths(inputDir)
+	if err != nil {
+		t.Fatalf("resolveHistoryStoragePaths() error = %v", err)
+	}
+
+	wantDir := filepath.Clean(filepath.Join(baseDir, "nested", "..", "history") + string(os.PathSeparator) + ".")
+	if resolvedDataDir != wantDir {
+		t.Fatalf("resolvedDataDir = %q, want %q", resolvedDataDir, wantDir)
+	}
+	if historyFile != filepath.Join(wantDir, HistoryFileName) {
+		t.Fatalf("historyFile = %q, want %q", historyFile, filepath.Join(wantDir, HistoryFileName))
+	}
+	if backupFile != filepath.Join(wantDir, HistoryBackupFileName) {
+		t.Fatalf("backupFile = %q, want %q", backupFile, filepath.Join(wantDir, HistoryBackupFileName))
+	}
+}
+
+func TestResolveHistoryStoragePathsRejectsBlankDir(t *testing.T) {
+	if _, _, _, err := resolveHistoryStoragePaths(" \t "); err == nil {
+		t.Fatal("expected blank history data dir to be rejected")
+	}
 }
 
 func TestGetStats_EmptyHistory(t *testing.T) {

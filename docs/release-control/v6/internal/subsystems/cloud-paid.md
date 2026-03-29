@@ -162,6 +162,14 @@ key and grace-period metadata in runtime state, but a legacy plaintext
 `license.enc` may only serve as migration input. Once it can be read,
 canonical persistence must rewrite encrypted storage immediately on load
 instead of treating plaintext licensing state as a valid steady-state path.
+That same local-persistence boundary also owns the filesystem path contract for
+commercial secrets at rest. `pkg/licensing/persistence.go` and
+`pkg/licensing/activation_store.go` must normalize the owned config directory
+once and resolve only the fixed `.license-key`, `license.enc`, and
+`activation.enc` leaves through the shared storage-path helper before any
+filesystem read, write, rename, stat, or delete. Future licensing persistence
+changes must not bypass that resolver with raw `filepath.Join(configDir, ...)`
+joins or introduce caller-controlled persistence filenames.
 Hosted entitlement-source loading follows the same rule: `DatabaseSource` must
 normalize persisted Cloud/MSP plan aliases and legacy limit keys before runtime
 evaluation, but it must not fabricate a canonical `plan_version` from bare

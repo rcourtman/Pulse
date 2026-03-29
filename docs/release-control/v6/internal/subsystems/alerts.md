@@ -44,6 +44,7 @@ operator-facing alert routing behavior for live runtime alerts.
 22. `frontend-modern/src/utils/alertTabsPresentation.ts`
 23. `frontend-modern/src/utils/alertThresholdsPresentation.ts`
 24. `frontend-modern/src/utils/alertThresholdsSectionPresentation.ts`
+25. `internal/alerts/history.go`
 
 ## Shared Boundaries
 
@@ -54,6 +55,7 @@ operator-facing alert routing behavior for live runtime alerts.
 1. Add new alert rule kinds in `internal/alerts/specs/`
 2. Add typed collector/builders in `internal/alerts/alerts.go`
 3. Add identity/persistence updates through canonical alert helpers only
+4. Add or change alert history persistence through `internal/alerts/history.go` using normalized owned storage roots and fixed storage leaves only
 
 ## Forbidden Paths
 
@@ -73,6 +75,14 @@ operator-facing alert routing behavior for live runtime alerts.
 Canonical alert identity and evaluation are the live runtime model. Remaining
 legacy references should exist only in explicit migration or negative test
 boundaries.
+
+Alert history persistence is also part of that canonical boundary. The history
+manager may choose the owned runtime data directory, but it must normalize that
+directory once and then resolve only the fixed `alert-history.json` and
+`alert-history.backup.json` leaves through the shared storage-path helper
+before any filesystem read, write, rename, or delete. Future history-persistence
+changes must not reintroduce raw `filepath.Join(dataDir, ...)` joins from
+caller-supplied directories or ad hoc history filenames.
 
 Notification transport, provider delivery, queue safety, and notification API
 transport now live under the explicit `notifications` subsystem inside the

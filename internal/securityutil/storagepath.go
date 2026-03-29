@@ -14,11 +14,21 @@ func HashedStorageName(id string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// JoinStorageLeaf joins an already-owned storage directory with a validated leaf filename.
-func JoinStorageLeaf(dir, leaf string) (string, error) {
+// NormalizeStorageDir trims and canonicalizes an already-owned storage directory path.
+func NormalizeStorageDir(dir string) (string, error) {
 	trimmedDir := strings.TrimSpace(dir)
 	if trimmedDir == "" {
 		return "", fmt.Errorf("storage directory is required")
+	}
+
+	return filepath.Clean(trimmedDir), nil
+}
+
+// JoinStorageLeaf joins an already-owned storage directory with a validated leaf filename.
+func JoinStorageLeaf(dir, leaf string) (string, error) {
+	normalizedDir, err := NormalizeStorageDir(dir)
+	if err != nil {
+		return "", err
 	}
 
 	name := strings.TrimSpace(leaf)
@@ -35,5 +45,5 @@ func JoinStorageLeaf(dir, leaf string) (string, error) {
 		return "", fmt.Errorf("storage leaf must not contain path separators")
 	}
 
-	return filepath.Join(trimmedDir, name), nil
+	return filepath.Join(normalizedDir, name), nil
 }

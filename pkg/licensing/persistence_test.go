@@ -289,6 +289,27 @@ func TestPersistenceEnforcesOwnerOnlyPermissions(t *testing.T) {
 	}
 }
 
+func TestResolvePersistencePathCanonicalizesConfigDir(t *testing.T) {
+	baseDir := t.TempDir()
+	inputDir := "  " + filepath.Join(baseDir, "nested", "..", "licensing") + string(os.PathSeparator) + ".  "
+
+	path, err := resolvePersistencePath(inputDir, LicenseFileName)
+	if err != nil {
+		t.Fatalf("resolvePersistencePath() error = %v", err)
+	}
+
+	wantDir := filepath.Clean(filepath.Join(baseDir, "nested", "..", "licensing") + string(os.PathSeparator) + ".")
+	if path != filepath.Join(wantDir, LicenseFileName) {
+		t.Fatalf("resolvePersistencePath() = %q, want %q", path, filepath.Join(wantDir, LicenseFileName))
+	}
+}
+
+func TestResolvePersistencePathRejectsBlankConfigDir(t *testing.T) {
+	if _, err := resolvePersistencePath(" \t ", LicenseFileName); err == nil {
+		t.Fatal("expected blank config dir to be rejected")
+	}
+}
+
 func TestNewPersistenceRejectsSymlinkPersistentKey(t *testing.T) {
 	tmpDir := t.TempDir()
 	target := filepath.Join(tmpDir, "key-target")
