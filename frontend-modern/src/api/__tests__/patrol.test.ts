@@ -81,6 +81,15 @@ describe('patrol api', () => {
       healthy: true,
       last_patrol_at: '2026-03-12T09:30:00Z',
       last_activity_at: '2026-03-12T09:59:00Z',
+      trigger_status: {
+        running: true,
+        pending_triggers: 2,
+        current_interval_ms: 300000,
+        recent_events: 6,
+        is_busy_mode: true,
+        alert_triggers_enabled: true,
+        anomaly_triggers_enabled: false,
+      },
     } as any);
 
     await expect(getPatrolStatus()).resolves.toMatchObject({
@@ -88,6 +97,11 @@ describe('patrol api', () => {
       healthy: true,
       last_patrol_at: '2026-03-12T09:30:00Z',
       last_activity_at: '2026-03-12T09:59:00Z',
+      trigger_status: {
+        pending_triggers: 2,
+        is_busy_mode: true,
+        anomaly_triggers_enabled: false,
+      },
     });
   });
 

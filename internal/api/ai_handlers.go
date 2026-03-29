@@ -2161,13 +2161,15 @@ type AISettingsResponse struct {
 	AuthMethod     string `json:"auth_method"`     // "api_key" or "oauth"
 	OAuthConnected bool   `json:"oauth_connected"` // true if OAuth tokens are configured
 	// Patrol settings for token efficiency
-	PatrolIntervalMinutes      int                   `json:"patrol_interval_minutes"`       // Patrol interval in minutes (0 = disabled)
-	PatrolEnabled              bool                  `json:"patrol_enabled"`                // true if patrol is enabled
-	PatrolAutoFix              bool                  `json:"patrol_auto_fix"`               // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis     bool                  `json:"alert_triggered_analysis"`      // true if AI analyzes when alerts fire
-	PatrolEventTriggersEnabled bool                  `json:"patrol_event_triggers_enabled"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
-	UseProactiveThresholds     bool                  `json:"use_proactive_thresholds"`      // true if patrol warns before thresholds (false = use exact thresholds)
-	AvailableModels            []providers.ModelInfo `json:"available_models"`              // List of models for current provider
+	PatrolIntervalMinutes        int                   `json:"patrol_interval_minutes"`         // Patrol interval in minutes (0 = disabled)
+	PatrolEnabled                bool                  `json:"patrol_enabled"`                  // true if patrol is enabled
+	PatrolAutoFix                bool                  `json:"patrol_auto_fix"`                 // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis       bool                  `json:"alert_triggered_analysis"`        // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled   bool                  `json:"patrol_event_triggers_enabled"`   // Legacy aggregate flag; true when any scoped Patrol trigger source is enabled
+	PatrolAlertTriggersEnabled   bool                  `json:"patrol_alert_triggers_enabled"`   // true if alert-driven scoped Patrol triggers are enabled
+	PatrolAnomalyTriggersEnabled bool                  `json:"patrol_anomaly_triggers_enabled"` // true if anomaly-driven scoped Patrol triggers are enabled
+	UseProactiveThresholds       bool                  `json:"use_proactive_thresholds"`        // true if patrol warns before thresholds (false = use exact thresholds)
+	AvailableModels              []providers.ModelInfo `json:"available_models"`                // List of models for current provider
 	// Multi-provider credentials - shows which providers are configured
 	AnthropicConfigured  bool     `json:"anthropic_configured"`      // true if Anthropic API key or OAuth is set
 	OpenAIConfigured     bool     `json:"openai_configured"`         // true if OpenAI API key is set
@@ -2223,12 +2225,14 @@ type AISettingsUpdateRequest struct {
 	CustomContext *string `json:"custom_context,omitempty"` // user-provided infrastructure context
 	AuthMethod    *string `json:"auth_method,omitempty"`    // "api_key" or "oauth"
 	// Patrol settings for token efficiency
-	PatrolIntervalMinutes      *int  `json:"patrol_interval_minutes,omitempty"`       // Custom interval in minutes (0 = disabled, minimum 10)
-	PatrolEnabled              *bool `json:"patrol_enabled,omitempty"`                // true if patrol is enabled
-	PatrolAutoFix              *bool `json:"patrol_auto_fix,omitempty"`               // true if patrol can auto-fix issues
-	AlertTriggeredAnalysis     *bool `json:"alert_triggered_analysis,omitempty"`      // true if AI analyzes when alerts fire
-	PatrolEventTriggersEnabled *bool `json:"patrol_event_triggers_enabled,omitempty"` // true if event-driven patrol triggers (alerts, anomalies) are enabled
-	UseProactiveThresholds     *bool `json:"use_proactive_thresholds,omitempty"`      // true if patrol warns before thresholds (default: false = exact thresholds)
+	PatrolIntervalMinutes        *int  `json:"patrol_interval_minutes,omitempty"`         // Custom interval in minutes (0 = disabled, minimum 10)
+	PatrolEnabled                *bool `json:"patrol_enabled,omitempty"`                  // true if patrol is enabled
+	PatrolAutoFix                *bool `json:"patrol_auto_fix,omitempty"`                 // true if patrol can auto-fix issues
+	AlertTriggeredAnalysis       *bool `json:"alert_triggered_analysis,omitempty"`        // true if AI analyzes when alerts fire
+	PatrolEventTriggersEnabled   *bool `json:"patrol_event_triggers_enabled,omitempty"`   // Legacy aggregate update; applies to both scoped Patrol trigger sources
+	PatrolAlertTriggersEnabled   *bool `json:"patrol_alert_triggers_enabled,omitempty"`   // true if alert-driven scoped Patrol triggers are enabled
+	PatrolAnomalyTriggersEnabled *bool `json:"patrol_anomaly_triggers_enabled,omitempty"` // true if anomaly-driven scoped Patrol triggers are enabled
+	UseProactiveThresholds       *bool `json:"use_proactive_thresholds,omitempty"`        // true if patrol warns before thresholds (default: false = exact thresholds)
 	// Multi-provider credentials
 	AnthropicAPIKey  *string `json:"anthropic_api_key,omitempty"`  // Set Anthropic API key
 	OpenAIAPIKey     *string `json:"openai_api_key,omitempty"`     // Set OpenAI API key
@@ -2304,6 +2308,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 
 	// Determine if running in demo mode
 	isDemo := mockmode.IsEnabled()
+	triggerSettings := settings.GetPatrolEventTriggerSettings()
 
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled || isDemo,
@@ -2316,13 +2321,15 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 		AuthMethod:     authMethod,
 		OAuthConnected: settings.OAuthAccessToken != "",
 		// Patrol settings
-		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
-		PatrolEnabled:              settings.PatrolEnabled,
-		PatrolAutoFix:              settings.PatrolAutoFix,
-		AlertTriggeredAnalysis:     settings.AlertTriggeredAnalysis,
-		PatrolEventTriggersEnabled: settings.PatrolEventTriggersEnabled,
-		UseProactiveThresholds:     settings.UseProactiveThresholds,
-		AvailableModels:            nil, // Now populated via /api/ai/models endpoint
+		PatrolIntervalMinutes:        settings.PatrolIntervalMinutes,
+		PatrolEnabled:                settings.PatrolEnabled,
+		PatrolAutoFix:                settings.PatrolAutoFix,
+		AlertTriggeredAnalysis:       settings.AlertTriggeredAnalysis,
+		PatrolEventTriggersEnabled:   triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
+		PatrolAlertTriggersEnabled:   triggerSettings.AlertTriggersEnabled,
+		PatrolAnomalyTriggersEnabled: triggerSettings.AnomalyTriggersEnabled,
+		UseProactiveThresholds:       settings.UseProactiveThresholds,
+		AvailableModels:              nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
@@ -2570,9 +2577,24 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.AlertTriggeredAnalysis = *req.AlertTriggeredAnalysis
 	}
 
-	// Handle event-triggered patrols toggle
+	// Handle legacy aggregate event-triggered patrol toggle
 	if req.PatrolEventTriggersEnabled != nil {
-		settings.PatrolEventTriggersEnabled = *req.PatrolEventTriggersEnabled
+		settings.SetPatrolEventTriggersEnabled(*req.PatrolEventTriggersEnabled)
+	}
+
+	// Handle split scoped patrol trigger toggles
+	if req.PatrolAlertTriggersEnabled != nil || req.PatrolAnomalyTriggersEnabled != nil {
+		triggerSettings := settings.GetPatrolEventTriggerSettings()
+		if req.PatrolAlertTriggersEnabled != nil {
+			triggerSettings.AlertTriggersEnabled = *req.PatrolAlertTriggersEnabled
+		}
+		if req.PatrolAnomalyTriggersEnabled != nil {
+			triggerSettings.AnomalyTriggersEnabled = *req.PatrolAnomalyTriggersEnabled
+		}
+		settings.SetPatrolEventTriggerSettings(
+			triggerSettings.AlertTriggersEnabled,
+			triggerSettings.AnomalyTriggersEnabled,
+		)
 	}
 
 	// Handle request timeout (for slow hardware)
@@ -2691,25 +2713,28 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	if authMethod == "" {
 		authMethod = string(config.AuthMethodAPIKey)
 	}
+	triggerSettings := settings.GetPatrolEventTriggerSettings()
 
 	// Return updated settings
 	response := AISettingsResponse{
-		Enabled:                    settings.Enabled,
-		Model:                      settings.GetModel(),
-		ChatModel:                  settings.ChatModel,
-		PatrolModel:                settings.PatrolModel,
-		AutoFixModel:               settings.AutoFixModel,
-		Configured:                 settings.IsConfigured(),
-		CustomContext:              settings.CustomContext,
-		AuthMethod:                 authMethod,
-		OAuthConnected:             settings.OAuthAccessToken != "",
-		PatrolIntervalMinutes:      settings.PatrolIntervalMinutes,
-		PatrolEnabled:              settings.PatrolEnabled,
-		PatrolAutoFix:              settings.PatrolAutoFix,
-		AlertTriggeredAnalysis:     settings.AlertTriggeredAnalysis,
-		PatrolEventTriggersEnabled: settings.PatrolEventTriggersEnabled,
-		UseProactiveThresholds:     settings.UseProactiveThresholds,
-		AvailableModels:            nil, // Now populated via /api/ai/models endpoint
+		Enabled:                      settings.Enabled,
+		Model:                        settings.GetModel(),
+		ChatModel:                    settings.ChatModel,
+		PatrolModel:                  settings.PatrolModel,
+		AutoFixModel:                 settings.AutoFixModel,
+		Configured:                   settings.IsConfigured(),
+		CustomContext:                settings.CustomContext,
+		AuthMethod:                   authMethod,
+		OAuthConnected:               settings.OAuthAccessToken != "",
+		PatrolIntervalMinutes:        settings.PatrolIntervalMinutes,
+		PatrolEnabled:                settings.PatrolEnabled,
+		PatrolAutoFix:                settings.PatrolAutoFix,
+		AlertTriggeredAnalysis:       settings.AlertTriggeredAnalysis,
+		PatrolEventTriggersEnabled:   triggerSettings.AlertTriggersEnabled || triggerSettings.AnomalyTriggersEnabled,
+		PatrolAlertTriggersEnabled:   triggerSettings.AlertTriggersEnabled,
+		PatrolAnomalyTriggersEnabled: triggerSettings.AnomalyTriggersEnabled,
+		UseProactiveThresholds:       settings.UseProactiveThresholds,
+		AvailableModels:              nil, // Now populated via /api/ai/models endpoint
 		// Multi-provider configuration
 		AnthropicConfigured:    settings.HasProvider(config.AIProviderAnthropic),
 		OpenAIConfigured:       settings.HasProvider(config.AIProviderOpenAI),
@@ -4712,6 +4737,7 @@ type PatrolStatusResponse struct {
 	Enabled          bool                  `json:"enabled"`
 	LastPatrolAt     *time.Time            `json:"last_patrol_at,omitempty"`
 	LastActivityAt   *time.Time            `json:"last_activity_at,omitempty"`
+	TriggerStatus    *ai.TriggerStatus     `json:"trigger_status,omitempty"`
 	NextPatrolAt     *time.Time            `json:"next_patrol_at,omitempty"`
 	LastDurationMs   int64                 `json:"last_duration_ms"`
 	ResourcesChecked int                   `json:"resources_checked"`
@@ -4818,6 +4844,7 @@ func (h *AISettingsHandler) HandleGetPatrolStatus(w http.ResponseWriter, r *http
 		Enabled:                    status.Enabled,
 		LastPatrolAt:               status.LastPatrolAt,
 		LastActivityAt:             status.LastActivityAt,
+		TriggerStatus:              status.TriggerStatus,
 		NextPatrolAt:               status.NextPatrolAt,
 		LastDurationMs:             status.LastDuration.Milliseconds(),
 		ResourcesChecked:           status.ResourcesChecked,

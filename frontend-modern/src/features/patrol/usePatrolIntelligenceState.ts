@@ -46,6 +46,8 @@ interface AISettings {
   patrol_enabled?: boolean;
   model?: string;
   alert_triggered_analysis?: boolean;
+  patrol_alert_triggers_enabled?: boolean;
+  patrol_anomaly_triggers_enabled?: boolean;
   patrol_event_triggers_enabled?: boolean;
   patrol_auto_fix?: boolean;
   auto_fix_model?: string;
@@ -79,7 +81,8 @@ export function usePatrolIntelligenceState() {
   const [isTogglingPatrol, setIsTogglingPatrol] = createSignal(false);
   const [isTriggeringPatrol, setIsTriggeringPatrol] = createSignal(false);
   const [alertTriggeredAnalysis, setAlertTriggeredAnalysis] = createSignal<boolean>(false);
-  const [patrolEventTriggers, setPatrolEventTriggers] = createSignal<boolean>(true);
+  const [patrolAlertTriggers, setPatrolAlertTriggers] = createSignal<boolean>(true);
+  const [patrolAnomalyTriggers, setPatrolAnomalyTriggers] = createSignal<boolean>(true);
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [selectedRun, setSelectedRun] = createSignal<PatrolRunRecord | null>(null);
 
@@ -208,7 +211,9 @@ export function usePatrolIntelligenceState() {
       setPatrolInterval(data.patrol_interval_minutes ?? 360);
       setPatrolEnabledLocal(data.patrol_enabled ?? true);
       setAlertTriggeredAnalysis(!alertAnalysisLocked() && data.alert_triggered_analysis !== false);
-      setPatrolEventTriggers(data.patrol_event_triggers_enabled !== false);
+      const legacyEventTriggersEnabled = data.patrol_event_triggers_enabled !== false;
+      setPatrolAlertTriggers(data.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled);
+      setPatrolAnomalyTriggers(data.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled);
     } catch (err) {
       console.error('Failed to load AI settings:', err);
     }
@@ -338,20 +343,39 @@ export function usePatrolIntelligenceState() {
     }
   }
 
-  async function handlePatrolEventTriggersChange(enabled: boolean) {
+  async function handlePatrolAlertTriggersChange(enabled: boolean) {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
-    const previous = patrolEventTriggers();
-    setPatrolEventTriggers(enabled);
+    const previous = patrolAlertTriggers();
+    setPatrolAlertTriggers(enabled);
     try {
       await apiFetchJSON('/api/settings/ai/update', {
         method: 'PUT',
-        body: JSON.stringify({ patrol_event_triggers_enabled: enabled }),
+        body: JSON.stringify({ patrol_alert_triggers_enabled: enabled }),
       });
     } catch (err) {
-      console.error('Failed to update event-triggered patrols:', err);
-      setPatrolEventTriggers(previous);
-      notificationStore.error('Failed to update event triggers setting');
+      console.error('Failed to update alert-triggered patrols:', err);
+      setPatrolAlertTriggers(previous);
+      notificationStore.error('Failed to update alert-triggered Patrol setting');
+    } finally {
+      setIsUpdatingSettings(false);
+    }
+  }
+
+  async function handlePatrolAnomalyTriggersChange(enabled: boolean) {
+    if (isUpdatingSettings()) return;
+    setIsUpdatingSettings(true);
+    const previous = patrolAnomalyTriggers();
+    setPatrolAnomalyTriggers(enabled);
+    try {
+      await apiFetchJSON('/api/settings/ai/update', {
+        method: 'PUT',
+        body: JSON.stringify({ patrol_anomaly_triggers_enabled: enabled }),
+      });
+    } catch (err) {
+      console.error('Failed to update anomaly-triggered patrols:', err);
+      setPatrolAnomalyTriggers(previous);
+      notificationStore.error('Failed to update anomaly-triggered Patrol setting');
     } finally {
       setIsUpdatingSettings(false);
     }
@@ -703,7 +727,8 @@ export function usePatrolIntelligenceState() {
     handleAutonomyChange,
     handleIntervalChange,
     handleModelChange,
-    handlePatrolEventTriggersChange,
+    handlePatrolAlertTriggersChange,
+    handlePatrolAnomalyTriggersChange,
     handleRunPatrol,
     handleStartTrial,
     handleTogglePatrol,
@@ -719,7 +744,8 @@ export function usePatrolIntelligenceState() {
     loadAllData,
     manualRunRequested,
     patrolEnabledLocal,
-    patrolEventTriggers,
+    patrolAlertTriggers,
+    patrolAnomalyTriggers,
     patrolInterval,
     patrolModel,
     patrolRunHistory,

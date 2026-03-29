@@ -25,6 +25,11 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     ),
   );
   const scheduleOptions = createMemo(() => buildPatrolScheduleOptions(state.patrolInterval()));
+  const selectedScheduleLabel = createMemo(
+    () =>
+      scheduleOptions().find((option) => option.value === state.patrolInterval())?.label ??
+      `${state.patrolInterval()} minutes`,
+  );
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
   );
@@ -347,19 +352,49 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     </div>
                   </Show>
 
+                  <div class="rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2.5">
+                    <p class="text-[11px] font-medium text-base-content">
+                      Full patrols run on the {selectedScheduleLabel().toLowerCase()} schedule.
+                    </p>
+                    <p class="mt-1 text-[11px] leading-tight text-muted">
+                      Alert and anomaly triggers run targeted scoped checks that update{' '}
+                      <span class="font-medium text-base-content">Last activity</span> without
+                      resetting <span class="font-medium text-base-content">Last full patrol</span>.
+                    </p>
+                  </div>
+
                   <div class="flex items-start justify-between gap-3">
                     <div class="flex-1">
                       <label class="text-sm font-medium text-base-content">
-                        Event-Triggered Patrols
+                        Alert-Triggered Patrols
                       </label>
                       <p class="text-[11px] text-muted mt-0.5 leading-tight">
-                        Run extra patrols when alerts fire or anomalies are detected.
+                        Run scoped Patrol checks when alerts fire or clear.
                       </p>
                     </div>
                     <Toggle
-                      checked={state.patrolEventTriggers()}
+                      checked={state.patrolAlertTriggers()}
                       onChange={(e) =>
-                        state.handlePatrolEventTriggersChange(e.currentTarget.checked)
+                        state.handlePatrolAlertTriggersChange(e.currentTarget.checked)
+                      }
+                      disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
+                    />
+                  </div>
+
+                  <div class="flex items-start justify-between gap-3">
+                    <div class="flex-1">
+                      <label class="text-sm font-medium text-base-content">
+                        Anomaly-Triggered Patrols
+                      </label>
+                      <p class="text-[11px] text-muted mt-0.5 leading-tight">
+                        Run scoped Patrol checks when learned baselines detect high-signal
+                        anomalies.
+                      </p>
+                    </div>
+                    <Toggle
+                      checked={state.patrolAnomalyTriggers()}
+                      onChange={(e) =>
+                        state.handlePatrolAnomalyTriggersChange(e.currentTarget.checked)
                       }
                       disabled={state.isUpdatingSettings() || !state.patrolEnabledLocal()}
                     />

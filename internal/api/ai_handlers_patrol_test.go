@@ -116,3 +116,59 @@ func TestAISettingsHandler_PatrolEnabled_ResponseReflectsToggleImmediately(t *te
 		}
 	}
 }
+
+func TestAISettingsHandler_PatrolTriggerSettings_SplitAndLegacyCompatibility(t *testing.T) {
+	t.Parallel()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	{
+		body, _ := json.Marshal(AISettingsUpdateRequest{
+			PatrolAlertTriggersEnabled:   ptr(false),
+			PatrolAnomalyTriggersEnabled: ptr(true),
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("split PUT status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("split decode: %v", err)
+		}
+		if resp.PatrolAlertTriggersEnabled {
+			t.Fatal("expected alert-triggered patrols to be disabled")
+		}
+		if !resp.PatrolAnomalyTriggersEnabled {
+			t.Fatal("expected anomaly-triggered patrols to stay enabled")
+		}
+		if !resp.PatrolEventTriggersEnabled {
+			t.Fatal("expected legacy aggregate toggle to remain true while one trigger source stays enabled")
+		}
+	}
+
+	{
+		body, _ := json.Marshal(AISettingsUpdateRequest{
+			PatrolEventTriggersEnabled: ptr(false),
+		})
+		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleUpdateAISettings(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("legacy PUT status = %d, body=%s", rec.Code, rec.Body.String())
+		}
+
+		var resp AISettingsResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("legacy decode: %v", err)
+		}
+		if resp.PatrolAlertTriggersEnabled || resp.PatrolAnomalyTriggersEnabled || resp.PatrolEventTriggersEnabled {
+			t.Fatalf("expected legacy aggregate toggle to disable both scoped trigger sources, got %+v", resp)
+		}
+	}
+}

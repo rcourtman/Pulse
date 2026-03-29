@@ -691,6 +691,48 @@ func TestNewDefaultAIConfig(t *testing.T) {
 	if !config.AlertTriggeredAnalysis {
 		t.Error("Default alert triggered analysis should be enabled")
 	}
+	if !config.PatrolAlertTriggersEnabled {
+		t.Error("Default alert-triggered patrols should be enabled")
+	}
+	if !config.PatrolAnomalyTriggersEnabled {
+		t.Error("Default anomaly-triggered patrols should be enabled")
+	}
+}
+
+func TestAIConfig_PatrolEventTriggerSettings(t *testing.T) {
+	t.Run("legacy aggregate enables both scoped trigger sources", func(t *testing.T) {
+		cfg := &AIConfig{
+			Enabled:                    true,
+			PatrolEventTriggersEnabled: true,
+		}
+
+		settings := cfg.GetPatrolEventTriggerSettings()
+		if !settings.AlertTriggersEnabled || !settings.AnomalyTriggersEnabled {
+			t.Fatalf("expected both scoped trigger sources to inherit from legacy aggregate, got %+v", settings)
+		}
+		if !cfg.IsPatrolAlertTriggersEnabled() || !cfg.IsPatrolAnomalyTriggersEnabled() {
+			t.Fatal("expected runtime helpers to treat both scoped trigger sources as enabled")
+		}
+	})
+
+	t.Run("normalize syncs legacy aggregate with split trigger settings", func(t *testing.T) {
+		cfg := &AIConfig{
+			Enabled:                      true,
+			PatrolEventTriggersEnabled:   false,
+			PatrolAlertTriggersEnabled:   true,
+			PatrolAnomalyTriggersEnabled: false,
+		}
+
+		if !cfg.NormalizePatrolEventTriggerSettings() {
+			t.Fatal("expected normalization to rewrite the legacy aggregate field")
+		}
+		if !cfg.PatrolEventTriggersEnabled {
+			t.Fatal("expected legacy aggregate field to reflect enabled split settings")
+		}
+		if !cfg.IsPatrolEventTriggersEnabled() {
+			t.Fatal("expected aggregate runtime helper to stay enabled when one source remains enabled")
+		}
+	})
 }
 
 func TestAIConfig_GetRequestTimeout(t *testing.T) {

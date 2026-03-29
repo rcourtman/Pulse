@@ -96,6 +96,7 @@ type PatrolStatus struct {
 	Enabled          bool               `json:"enabled"`
 	LastPatrolAt     *time.Time         `json:"last_patrol_at,omitempty"`   // Last completed full patrol
 	LastActivityAt   *time.Time         `json:"last_activity_at,omitempty"` // Last completed Patrol activity of any kind
+	TriggerStatus    *TriggerStatus     `json:"trigger_status,omitempty"`
 	NextPatrolAt     *time.Time         `json:"next_patrol_at,omitempty"`
 	LastDuration     time.Duration      `json:"last_duration_ms"`
 	ResourcesChecked int                `json:"resources_checked"`
@@ -410,8 +411,8 @@ type PatrolService struct {
 	forecastProvider     ForecastProvider     // For trend forecasts
 
 	// Event-driven patrol triggers (Phase 7)
-	triggerManager       *TriggerManager // For event-driven patrol scheduling
-	eventTriggersEnabled bool            // When false, event-driven triggers (alerts, anomalies) are rejected
+	triggerManager     *TriggerManager          // For event-driven patrol scheduling
+	eventTriggerConfig PatrolEventTriggerConfig // Canonical scoped patrol trigger preferences
 
 	// Unified intelligence facade - aggregates all subsystems for unified view
 	intelligence *Intelligence
@@ -601,16 +602,19 @@ type PatrolStreamEvent struct {
 // NewPatrolService creates a new patrol service
 func NewPatrolService(aiService *Service, stateProvider StateProvider) *PatrolService {
 	return &PatrolService{
-		aiService:            aiService,
-		stateProvider:        stateProvider,
-		config:               DefaultPatrolConfig(),
-		findings:             NewFindingsStore(),
-		thresholds:           DefaultPatrolThresholds(),
-		eventTriggersEnabled: true,
-		stopCh:               make(chan struct{}),
-		runHistoryStore:      NewPatrolRunHistoryStore(MaxPatrolRunHistory),
-		streamSubscribers:    make(map[chan PatrolStreamEvent]*streamSubscriber),
-		streamPhase:          "idle",
-		adHocTrigger:         make(chan *alerts.Alert, 10), // Buffer triggers
+		aiService:     aiService,
+		stateProvider: stateProvider,
+		config:        DefaultPatrolConfig(),
+		findings:      NewFindingsStore(),
+		thresholds:    DefaultPatrolThresholds(),
+		eventTriggerConfig: PatrolEventTriggerConfig{
+			AlertTriggersEnabled:   true,
+			AnomalyTriggersEnabled: true,
+		},
+		stopCh:            make(chan struct{}),
+		runHistoryStore:   NewPatrolRunHistoryStore(MaxPatrolRunHistory),
+		streamSubscribers: make(map[chan PatrolStreamEvent]*streamSubscriber),
+		streamPhase:       "idle",
+		adHocTrigger:      make(chan *alerts.Alert, 10), // Buffer triggers
 	}
 }

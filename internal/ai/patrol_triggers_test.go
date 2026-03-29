@@ -389,6 +389,9 @@ func TestGetStatus(t *testing.T) {
 	if status.CurrentInterval != expectedMs {
 		t.Errorf("expected current interval %dms, got %dms", expectedMs, status.CurrentInterval)
 	}
+	if !status.AlertTriggersEnabled || !status.AnomalyTriggersEnabled {
+		t.Fatalf("expected both scoped trigger sources to default on, got %+v", status)
+	}
 }
 
 // --- Start / Stop ---
@@ -418,6 +421,38 @@ func TestStartStop(t *testing.T) {
 
 	// Double stop should be a no-op
 	tm.Stop()
+}
+
+func TestTriggerPatrol_RejectsDisabledAlertTriggerSource(t *testing.T) {
+	tm := NewTriggerManager(DefaultTriggerManagerConfig())
+	tm.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   false,
+		AnomalyTriggersEnabled: true,
+	})
+
+	if accepted := tm.TriggerPatrol(PatrolScope{
+		Priority:    triggerPriorityAlertFired,
+		Reason:      TriggerReasonAlertFired,
+		ResourceIDs: []string{"res-1"},
+	}); accepted {
+		t.Fatal("expected alert-driven patrol trigger to be rejected when alert source is disabled")
+	}
+}
+
+func TestTriggerPatrol_RejectsDisabledAnomalyTriggerSource(t *testing.T) {
+	tm := NewTriggerManager(DefaultTriggerManagerConfig())
+	tm.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   true,
+		AnomalyTriggersEnabled: false,
+	})
+
+	if accepted := tm.TriggerPatrol(PatrolScope{
+		Priority:    triggerPriorityAnomaly,
+		Reason:      TriggerReasonAnomalyDetected,
+		ResourceIDs: []string{"res-1"},
+	}); accepted {
+		t.Fatal("expected anomaly-driven patrol trigger to be rejected when anomaly source is disabled")
+	}
 }
 
 // --- Scope factory functions ---

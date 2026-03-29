@@ -147,6 +147,22 @@ func TestPatrolService_TriggerPatrolForAlert(t *testing.T) {
 	}
 }
 
+func TestPatrolService_TriggerPatrolForAlert_RespectsAlertTriggerConfig(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	ps.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   false,
+		AnomalyTriggersEnabled: true,
+	})
+
+	tm := NewTriggerManager(TriggerManagerConfig{MaxPendingTriggers: 1})
+	ps.SetTriggerManager(tm)
+
+	ps.TriggerPatrolForAlert(&alerts.Alert{ID: "a2", Type: "cpu", ResourceID: "node1"})
+	if tm.GetPendingCount() != 0 {
+		t.Fatalf("expected alert-driven patrol to be skipped when alert trigger source is disabled")
+	}
+}
+
 func TestPatrolService_RunTargetedPatrol_Disabled(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	ps.config.Enabled = false

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { PatrolRunRecord } from '@/api/patrol';
 import {
+  formatPatrolActivityBreakdown,
+  getPatrolActivityBreakdown,
   getPatrolRunKindLabel,
   getPatrolRunCoverageSummary,
   getPatrolRunResourcesHeading,
@@ -109,6 +111,108 @@ describe('patrolRunPresentation', () => {
         effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
       }),
     ).toBe('Checked 0 of 2 scoped resources');
+  });
+
+  it('summarizes today activity by full patrol versus trigger source', () => {
+    const summary = getPatrolActivityBreakdown(
+      [
+        {
+          id: 'full-1',
+          started_at: '2026-03-12T08:00:00Z',
+          completed_at: '2026-03-12T08:05:00Z',
+          duration_ms: 300000,
+          type: 'patrol',
+          resources_checked: 58,
+          nodes_checked: 0,
+          guests_checked: 0,
+          docker_checked: 0,
+          storage_checked: 0,
+          hosts_checked: 0,
+          pbs_checked: 0,
+          pmg_checked: 0,
+          kubernetes_checked: 0,
+          new_findings: 1,
+          existing_findings: 0,
+          rejected_findings: 0,
+          resolved_findings: 0,
+          auto_fix_count: 0,
+          findings_summary: 'ok',
+          finding_ids: [],
+          error_count: 0,
+          status: 'healthy',
+          triage_flags: 0,
+          tool_call_count: 0,
+        },
+        {
+          id: 'alert-1',
+          started_at: '2026-03-12T09:00:00Z',
+          completed_at: '2026-03-12T09:01:00Z',
+          duration_ms: 60000,
+          type: 'scoped',
+          trigger_reason: 'alert_fired',
+          resources_checked: 1,
+          nodes_checked: 0,
+          guests_checked: 0,
+          docker_checked: 0,
+          storage_checked: 0,
+          hosts_checked: 0,
+          pbs_checked: 0,
+          pmg_checked: 0,
+          kubernetes_checked: 0,
+          new_findings: 0,
+          existing_findings: 0,
+          rejected_findings: 0,
+          resolved_findings: 0,
+          auto_fix_count: 0,
+          findings_summary: 'ok',
+          finding_ids: [],
+          error_count: 0,
+          status: 'healthy',
+          triage_flags: 0,
+          tool_call_count: 0,
+        },
+        {
+          id: 'anomaly-1',
+          started_at: '2026-03-12T10:00:00Z',
+          completed_at: '2026-03-12T10:01:00Z',
+          duration_ms: 60000,
+          type: 'scoped',
+          trigger_reason: 'anomaly',
+          resources_checked: 1,
+          nodes_checked: 0,
+          guests_checked: 0,
+          docker_checked: 0,
+          storage_checked: 0,
+          hosts_checked: 0,
+          pbs_checked: 0,
+          pmg_checked: 0,
+          kubernetes_checked: 0,
+          new_findings: 2,
+          existing_findings: 0,
+          rejected_findings: 0,
+          resolved_findings: 0,
+          auto_fix_count: 0,
+          findings_summary: 'ok',
+          finding_ids: [],
+          error_count: 0,
+          status: 'healthy',
+          triage_flags: 0,
+          tool_call_count: 0,
+        },
+      ] satisfies PatrolRunRecord[],
+      new Date('2026-03-12T12:00:00Z'),
+    );
+
+    expect(summary).toMatchObject({
+      totalRuns: 3,
+      fullPatrols: 1,
+      alertTriggeredRuns: 1,
+      anomalyTriggeredRuns: 1,
+      newFindings: 3,
+    });
+    expect(formatPatrolActivityBreakdown(summary)).toBe(
+      '1 full, 1 alert-triggered, 1 anomaly-triggered',
+    );
   });
 
   it('returns canonical patrol run loading and unavailable copy', () => {

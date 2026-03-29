@@ -1,6 +1,7 @@
+import { createSignal } from 'solid-js';
 import { cleanup, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PatrolRunRecord } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolTriggerStatus } from '@/api/patrol';
 import { PatrolStatusBar } from '../PatrolStatusBar';
 
 const getPatrolRunHistoryMock = vi.hoisted(() => vi.fn<() => Promise<PatrolRunRecord[]>>());
@@ -281,5 +282,190 @@ describe('PatrolStatusBar', () => {
 
     expect(screen.getByText('Run in progress')).toBeInTheDocument();
     expect(screen.queryByText('Patrol Running')).not.toBeInTheDocument();
+  });
+
+  it('shows a same-day activity breakdown and scoped trigger state when Patrol is noisy', async () => {
+    const referenceDay = new Date();
+    const atTime = (hour: number, minute: number) =>
+      new Date(
+        referenceDay.getFullYear(),
+        referenceDay.getMonth(),
+        referenceDay.getDate(),
+        hour,
+        minute,
+        0,
+      ).toISOString();
+
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-alert',
+        started_at: atTime(10, 0),
+        completed_at: atTime(10, 1),
+        duration_ms: 60000,
+        type: 'scoped',
+        trigger_reason: 'alert_fired',
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'ok',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+      {
+        id: 'run-anomaly',
+        started_at: atTime(9, 0),
+        completed_at: atTime(9, 1),
+        duration_ms: 60000,
+        type: 'scoped',
+        trigger_reason: 'anomaly',
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'ok',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+      {
+        id: 'run-full',
+        started_at: atTime(8, 0),
+        completed_at: atTime(8, 5),
+        duration_ms: 300000,
+        type: 'patrol',
+        resources_checked: 58,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'ok',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+
+    render(() => (
+      <PatrolStatusBar
+        refreshTrigger={1}
+        triggerStatus={{
+          running: true,
+          pending_triggers: 4,
+          current_interval_ms: 300000,
+          recent_events: 6,
+          is_busy_mode: true,
+          alert_triggers_enabled: true,
+          anomaly_triggers_enabled: false,
+        }}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Breakdown: 1 full, 1 alert-triggered, 1 anomaly-triggered'),
+      ).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText('Scoped triggers: 4 queued · busy mode · anomalies off'),
+    ).toBeInTheDocument();
+  });
+
+  it('updates scoped trigger status when trigger data arrives after the initial render', async () => {
+    getPatrolRunHistoryMock.mockResolvedValue([
+      {
+        id: 'run-busy-scoped',
+        started_at: '2026-03-12T10:00:00Z',
+        completed_at: '2026-03-12T10:01:00Z',
+        duration_ms: 60000,
+        type: 'scoped',
+        trigger_reason: 'alert_fired',
+        resources_checked: 1,
+        nodes_checked: 0,
+        guests_checked: 0,
+        docker_checked: 0,
+        storage_checked: 0,
+        hosts_checked: 0,
+        pbs_checked: 0,
+        pmg_checked: 0,
+        kubernetes_checked: 0,
+        new_findings: 0,
+        existing_findings: 0,
+        rejected_findings: 0,
+        resolved_findings: 0,
+        auto_fix_count: 0,
+        findings_summary: 'ok',
+        finding_ids: [],
+        error_count: 0,
+        status: 'healthy',
+        triage_flags: 0,
+        tool_call_count: 0,
+      },
+    ]);
+
+    const [triggerStatus, setTriggerStatus] = createSignal<PatrolTriggerStatus | undefined>(
+      undefined,
+    );
+
+    render(() => <PatrolStatusBar refreshTrigger={1} triggerStatus={triggerStatus()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Recent activity')).toBeInTheDocument();
+    });
+
+    expect(screen.queryByText(/Scoped triggers:/)).not.toBeInTheDocument();
+
+    setTriggerStatus({
+      running: true,
+      pending_triggers: 4,
+      current_interval_ms: 300000,
+      recent_events: 6,
+      is_busy_mode: true,
+      alert_triggers_enabled: true,
+      anomaly_triggers_enabled: false,
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Scoped triggers: 4 queued · busy mode · anomalies off'),
+      ).toBeInTheDocument();
+    });
   });
 });

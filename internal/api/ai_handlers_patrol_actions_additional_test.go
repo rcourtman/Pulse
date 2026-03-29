@@ -216,6 +216,39 @@ func TestHandleGetPatrolStatus_DistinguishesLastFullPatrolFromLastActivity(t *te
 	}
 }
 
+func TestHandleGetPatrolStatus_ExposesScopedTriggerStatus(t *testing.T) {
+	handler, patrol, _, _ := setupAIHandlerWithPatrol(t)
+	patrol.SetTriggerManager(ai.NewTriggerManager(ai.DefaultTriggerManagerConfig()))
+	patrol.SetEventTriggerConfig(ai.PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   false,
+		AnomalyTriggersEnabled: true,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if resp.TriggerStatus == nil {
+		t.Fatal("expected trigger_status to be populated")
+	}
+	if resp.TriggerStatus.AlertTriggersEnabled {
+		t.Fatal("expected alert trigger source to report disabled")
+	}
+	if !resp.TriggerStatus.AnomalyTriggersEnabled {
+		t.Fatal("expected anomaly trigger source to report enabled")
+	}
+}
+
 func TestPatrolActionHandlers_NoAIService_ReturnStructuredServiceUnavailable(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}

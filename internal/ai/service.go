@@ -969,7 +969,10 @@ func (s *Service) StartPatrol(ctx context.Context) {
 	patrolCfg.AnalyzeStorage = cfg.PatrolAnalyzeStorage
 	patrol.SetConfig(patrolCfg)
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
-	patrol.SetEventTriggersEnabled(cfg.IsPatrolEventTriggersEnabled())
+	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   cfg.IsPatrolAlertTriggersEnabled(),
+		AnomalyTriggersEnabled: cfg.IsPatrolAnomalyTriggersEnabled(),
+	})
 	patrol.Start(ctx)
 
 	// Configure alert-triggered analyzer (also Pro-only)
@@ -1066,7 +1069,10 @@ func (s *Service) ReconfigurePatrol() {
 	patrol.SetProactiveMode(cfg.UseProactiveThresholds)
 
 	// Update event-driven patrol trigger gate
-	patrol.SetEventTriggersEnabled(cfg.IsPatrolEventTriggersEnabled())
+	patrol.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   cfg.IsPatrolAlertTriggersEnabled(),
+		AnomalyTriggersEnabled: cfg.IsPatrolAnomalyTriggersEnabled(),
+	})
 
 	log.Info().
 		Bool("enabled", patrolCfg.Enabled).

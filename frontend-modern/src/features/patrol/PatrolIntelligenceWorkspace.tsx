@@ -37,6 +37,7 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
         refreshTrigger={state.activityRefreshTrigger()}
         runtimeState={state.runtimeState()}
         blockedReason={state.blockedReason()}
+        triggerStatus={state.patrolStatus()?.trigger_status}
       />
 
       <div class="flex items-center gap-1 border-b border-border">

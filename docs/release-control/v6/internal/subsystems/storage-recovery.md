@@ -166,6 +166,13 @@ router or config-system files move under storage- or recovery-adjacent work,
 telemetry preview and install-ID reset routes must keep reusing the canonical
 system-settings boundary and the server-owned telemetry runtime instead of
 being treated as generic storage/recovery transport fallout.
+That same shared `internal/api/ai_handlers.go` dependency also now assumes
+Patrol-specific AI settings and status transport stay isolated from
+storage/recovery product state. When shared AI handlers add split Patrol
+trigger-source fields, scoped-activity recency, or queued-trigger status,
+recovery queries, storage links, and recovery-adjacent setup flows must treat
+those as Patrol-only runtime facts rather than inheriting them as recovery
+verification or storage-health transport.
 That same shared helper layer also now assumes the Pulse Mobile relay runtime
 credential reaches only the explicit backend-owned route inventory, so
 storage- and recovery-adjacent transport work cannot accidentally widen that

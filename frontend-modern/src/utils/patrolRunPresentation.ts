@@ -7,6 +7,17 @@ export interface PatrolRunStatusPresentation {
   label: string;
 }
 
+export interface PatrolActivityBreakdown {
+  totalRuns: number;
+  fullPatrols: number;
+  verificationChecks: number;
+  alertTriggeredRuns: number;
+  anomalyTriggeredRuns: number;
+  alertClearedRuns: number;
+  otherScopedRuns: number;
+  newFindings: number;
+}
+
 function formatResourceCount(count: number, qualifier?: string): string {
   const normalized = Math.max(0, count || 0);
   const qualifierPrefix = qualifier ? `${qualifier} ` : '';
@@ -18,6 +29,17 @@ function normalizePatrolRunType(type: string | undefined): string {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '_');
+}
+
+function isFullPatrolRunType(type: string | undefined): boolean {
+  switch (normalizePatrolRunType(type)) {
+    case '':
+    case 'full':
+    case 'patrol':
+      return true;
+    default:
+      return false;
+  }
 }
 
 function normalizePatrolRunStatus(status: PatrolRunStatus | string | undefined): string {
@@ -99,13 +121,99 @@ export function getPatrolRunKindLabel(type: string | undefined): string {
       return 'Scoped run';
     case 'verification':
       return 'Verification check';
-    case '':
-    case 'full':
-    case 'patrol':
-      return 'Full patrol';
     default:
-      return 'Patrol run';
+      return isFullPatrolRunType(type) ? 'Full patrol' : 'Patrol run';
   }
+}
+
+function isSameLocalDay(timestamp: string | undefined, referenceDate: Date): boolean {
+  if (!timestamp) return false;
+  const value = new Date(timestamp);
+  if (Number.isNaN(value.getTime())) return false;
+  return (
+    value.getFullYear() === referenceDate.getFullYear() &&
+    value.getMonth() === referenceDate.getMonth() &&
+    value.getDate() === referenceDate.getDate()
+  );
+}
+
+export function getPatrolActivityBreakdown(
+  runs: PatrolRunRecord[],
+  referenceDate: Date = new Date(),
+): PatrolActivityBreakdown {
+  return runs.reduce<PatrolActivityBreakdown>(
+    (summary, run) => {
+      if (!isSameLocalDay(run.started_at, referenceDate)) {
+        return summary;
+      }
+
+      summary.totalRuns += 1;
+      summary.newFindings += Math.max(0, run.new_findings || 0);
+
+      if (isFullPatrolRunType(run.type)) {
+        summary.fullPatrols += 1;
+        return summary;
+      }
+
+      switch (normalizePatrolRunType(run.type)) {
+        case 'verification':
+          summary.verificationChecks += 1;
+          return summary;
+      }
+
+      switch (normalizePatrolRunType(run.trigger_reason)) {
+        case 'alert_fired':
+          summary.alertTriggeredRuns += 1;
+          break;
+        case 'anomaly':
+          summary.anomalyTriggeredRuns += 1;
+          break;
+        case 'alert_cleared':
+          summary.alertClearedRuns += 1;
+          break;
+        default:
+          summary.otherScopedRuns += 1;
+          break;
+      }
+
+      return summary;
+    },
+    {
+      totalRuns: 0,
+      fullPatrols: 0,
+      verificationChecks: 0,
+      alertTriggeredRuns: 0,
+      anomalyTriggeredRuns: 0,
+      alertClearedRuns: 0,
+      otherScopedRuns: 0,
+      newFindings: 0,
+    },
+  );
+}
+
+function formatCountLabel(count: number, label: string): string {
+  return `${count} ${label}`;
+}
+
+export function formatPatrolActivityBreakdown(summary: PatrolActivityBreakdown): string {
+  const segments: string[] = [];
+  if (summary.fullPatrols > 0) segments.push(formatCountLabel(summary.fullPatrols, 'full'));
+  if (summary.alertTriggeredRuns > 0) {
+    segments.push(formatCountLabel(summary.alertTriggeredRuns, 'alert-triggered'));
+  }
+  if (summary.anomalyTriggeredRuns > 0) {
+    segments.push(formatCountLabel(summary.anomalyTriggeredRuns, 'anomaly-triggered'));
+  }
+  if (summary.alertClearedRuns > 0) {
+    segments.push(formatCountLabel(summary.alertClearedRuns, 'alert-cleared'));
+  }
+  if (summary.verificationChecks > 0) {
+    segments.push(formatCountLabel(summary.verificationChecks, 'verification'));
+  }
+  if (summary.otherScopedRuns > 0) {
+    segments.push(formatCountLabel(summary.otherScopedRuns, 'other scoped'));
+  }
+  return segments.join(', ');
 }
 
 export function getPatrolRunCoverageSummary(

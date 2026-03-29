@@ -140,12 +140,23 @@ export interface FindingsSummary {
 export type LicenseStatus = 'none' | 'active' | 'expired' | 'grace_period';
 export type PatrolRuntimeState = 'unavailable' | 'disabled' | 'running' | 'blocked' | 'active';
 
+export interface PatrolTriggerStatus {
+  running: boolean;
+  pending_triggers: number;
+  current_interval_ms: number;
+  recent_events: number;
+  is_busy_mode: boolean;
+  alert_triggers_enabled: boolean;
+  anomaly_triggers_enabled: boolean;
+}
+
 export interface PatrolStatus {
   runtime_state: PatrolRuntimeState;
   running: boolean;
   enabled: boolean;
   last_patrol_at?: string;
   last_activity_at?: string;
+  trigger_status?: PatrolTriggerStatus;
   next_patrol_at?: string;
   last_duration_ms: number;
   resources_checked: number;

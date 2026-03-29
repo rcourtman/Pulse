@@ -1070,6 +1070,12 @@ That same shell rule also owns Patrol recency labels. Shared Patrol header and
 status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
 transport fact and use `Last activity` for scoped or verification work instead
 of collapsing both timestamps back into a generic `Last run` label.
+That same Patrol shell should make scoped trigger policy legible without
+another navigation step. `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
+should present alert-triggered and anomaly-triggered Patrol toggles as distinct
+controls, and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`
+should render compact activity breakdown and scoped-trigger-state copy from the
+shared transport rather than leaving busy Patrol periods as unexplained noise.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

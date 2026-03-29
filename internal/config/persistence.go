@@ -1760,6 +1760,8 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	settings.NormalizePatrolEventTriggerSettings()
+
 	if err := c.EnsureConfigDir(); err != nil {
 		return fmt.Errorf("prepare config directory for ai config: %w", err)
 	}
@@ -1828,6 +1830,35 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		}
 	}
 
+	_, alertTriggerFieldPresent := legacyRaw["patrol_alert_triggers_enabled"]
+	_, anomalyTriggerFieldPresent := legacyRaw["patrol_anomaly_triggers_enabled"]
+	legacyEventTriggerFieldRaw, legacyEventTriggerFieldPresent := legacyRaw["patrol_event_triggers_enabled"]
+	migratedPatrolTriggerFields := false
+	if alertTriggerFieldPresent || anomalyTriggerFieldPresent {
+		// Transitional configs could persist only the enabled split flag when false
+		// values were omitted from disk. Once either canonical split field exists,
+		// treat any missing sibling as an explicit false rather than inheriting the
+		// legacy aggregate toggle back into the split model.
+		if !alertTriggerFieldPresent {
+			settings.PatrolAlertTriggersEnabled = false
+			migratedPatrolTriggerFields = true
+		}
+		if !anomalyTriggerFieldPresent {
+			settings.PatrolAnomalyTriggersEnabled = false
+			migratedPatrolTriggerFields = true
+		}
+	} else if legacyEventTriggerFieldPresent {
+		legacyEnabled, _ := decodeOptionalJSONBool(legacyEventTriggerFieldRaw)
+		settings.PatrolAlertTriggersEnabled = legacyEnabled
+		settings.PatrolAnomalyTriggersEnabled = legacyEnabled
+		migratedPatrolTriggerFields = true
+	}
+	if alertTriggerFieldPresent || anomalyTriggerFieldPresent || legacyEventTriggerFieldPresent {
+		if settings.NormalizePatrolEventTriggerSettings() {
+			migratedPatrolTriggerFields = true
+		}
+	}
+
 	migratedLegacyFields := applyLegacyAIConfigFields(settings, legacyRaw)
 	migratedControlLevel := false
 	if settings.ControlLevel == "suggest" {
@@ -1835,7 +1866,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		migratedControlLevel = true
 	}
 
-	if migratedPlaintext || migratedLegacyFields || migratedControlLevel {
+	if migratedPlaintext || migratedLegacyFields || migratedControlLevel || migratedPatrolTriggerFields {
 		jsonData, err := json.Marshal(*settings)
 		if err != nil {
 			return nil, fmt.Errorf("marshal ai config migration rewrite: %w", err)
@@ -1846,6 +1877,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		log.Info().
 			Str("control_level", settings.ControlLevel).
 			Bool("legacy_fields_migrated", migratedLegacyFields).
+			Bool("patrol_trigger_fields_migrated", migratedPatrolTriggerFields).
 			Bool("plaintext_migrated", migratedPlaintext).
 			Msg("Migrated AI configuration")
 	}

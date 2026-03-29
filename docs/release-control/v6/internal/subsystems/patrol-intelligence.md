@@ -239,11 +239,26 @@ recent-activity strip, not a second health verdict: when Patrol is active it
 should report recent run activity, run kind, latest run result, and run-count
 context instead of emitting another green/amber all-clear headline that can
 drift from the governed assessment summary above it.
+That same activity strip should explain noisy Patrol behavior concretely. When
+same-day history shows a mix of full sweeps, verification checks, and scoped
+alert- or anomaly-triggered patrols, the strip should expose a compact
+breakdown of those run categories instead of leaving operators to infer why
+Patrol looked busy from an undifferentiated run count alone.
+The same operational layer should also surface scoped-trigger state directly.
+If Patrol has queued scoped work, is in busy mode, or has one scoped trigger
+source disabled, the status bar should state that as factual runtime context
+instead of forcing operators to cross-reference hidden settings or infer it
+from missing runs.
 That recent-activity copy also has to remain intelligible in compact or
 plain-text renders: the latest-run segment must keep an explicit textual
 separator between run kind and result, so degraded entries read as
 `Scoped run · error` rather than collapsing into concatenated strings like
 `Scoped runerror`.
+Those runtime facts must stay aligned with Patrol configuration copy. The
+header settings surface should expose alert-triggered and anomaly-triggered
+scoped patrols as separate controls, with the legacy aggregate event-trigger
+toggle treated as compatibility-only transport rather than the primary product
+model.
 The findings empty state must also stay subordinate to the Patrol header and
 assessment shell rather than mirroring their timing metadata. In the primary
 Patrol page, `frontend-modern/src/components/AI/FindingsPanel.tsx` should

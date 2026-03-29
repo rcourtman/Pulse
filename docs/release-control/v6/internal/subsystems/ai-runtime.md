@@ -539,6 +539,11 @@ The Patrol status payload must keep that same scope distinction explicit in its
 own recency fields. `last_patrol_at` is reserved for the most recent completed
 full Patrol run, while scoped runs and fix-verification checks advance
 `last_activity_at` without pretending a full verification sweep just happened.
+That same runtime contract also owns scoped trigger source policy. Alert- and
+anomaly-triggered Patrol work are independent runtime gates; the canonical AI
+settings model must preserve them separately, and runtime status must expose
+which scoped sources are enabled plus whether queued scoped work or busy-mode
+acceleration is currently active.
 That same runtime boundary also owns which Patrol work counts toward
 full-patrol cadence gates. Community-tier or other full-run limits must key
 off completed full sweeps only; recent scoped or verification activity may

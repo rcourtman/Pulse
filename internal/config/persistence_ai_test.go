@@ -232,6 +232,46 @@ func TestPersistence_AIConfig_MigratesLegacyProviderAndAPIKey(t *testing.T) {
 	assert.Equal(t, ControlLevelAutonomous, saved.ControlLevel)
 }
 
+func TestPersistence_AIConfig_MigratesLegacyPatrolEventTriggerToggle(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewConfigPersistence(tempDir)
+
+	legacy := map[string]interface{}{
+		"enabled":                       true,
+		"patrol_event_triggers_enabled": false,
+	}
+
+	data, err := json.Marshal(legacy)
+	require.NoError(t, err)
+	if p.crypto != nil {
+		data, err = p.crypto.Encrypt(data)
+		require.NoError(t, err)
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(tempDir, "ai.enc"), data, 0o600))
+
+	loaded, err := p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.False(t, loaded.PatrolAlertTriggersEnabled)
+	assert.False(t, loaded.PatrolAnomalyTriggersEnabled)
+	assert.False(t, loaded.PatrolEventTriggersEnabled)
+}
+
+func TestPersistence_AIConfig_NormalizesGranularPatrolTriggerSettingsOnSave(t *testing.T) {
+	tempDir := t.TempDir()
+	p := NewConfigPersistence(tempDir)
+
+	cfg := NewDefaultAIConfig()
+	cfg.SetPatrolEventTriggerSettings(true, false)
+	cfg.PatrolEventTriggersEnabled = false
+	require.NoError(t, p.SaveAIConfig(*cfg))
+
+	loaded, err := p.LoadAIConfig()
+	require.NoError(t, err)
+	assert.True(t, loaded.PatrolAlertTriggersEnabled)
+	assert.False(t, loaded.PatrolAnomalyTriggersEnabled)
+	assert.True(t, loaded.PatrolEventTriggersEnabled)
+}
+
 func TestPersistence_PatrolRunHistory(t *testing.T) {
 	tempDir := t.TempDir()
 	p := NewConfigPersistence(tempDir)

@@ -220,6 +220,12 @@ setup or router work touches shared `internal/api/` files, telemetry preview
 and install-ID reset routes must keep reusing the canonical system-settings
 trust boundary and server-owned telemetry runtime instead of borrowing agent
 lifecycle proof or state ownership just because the same router surface moved.
+That same shared `internal/api/ai_handlers.go` dependency also now assumes
+Patrol-specific settings and status expansions stay Patrol-owned. When shared
+AI handlers add split scoped-trigger fields, recency labels, or trigger-state
+transport for Patrol, lifecycle-adjacent setup and fleet surfaces must treat
+those payloads as Patrol-only runtime context and must not reinterpret them as
+agent install readiness, enrollment health, or fleet-control state.
 That same shared `internal/api/` dependency also now assumes SSO test and
 metadata-preview routes fail closed on validated outbound URL handling.
 Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those

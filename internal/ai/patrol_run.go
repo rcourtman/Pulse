@@ -1547,6 +1547,10 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 		IntervalMs:       intervalMs,
 		BlockedReason:    p.lastBlockedReason,
 	}
+	if p.triggerManager != nil {
+		triggerStatus := p.triggerManager.GetStatus()
+		status.TriggerStatus = &triggerStatus
+	}
 
 	if p.quickstartCredits != nil {
 		status.QuickstartCreditsRemaining = p.quickstartCredits.CreditsRemaining()
@@ -2341,12 +2345,14 @@ func (p *PatrolService) TriggerPatrolForAlert(alert *alerts.Alert) {
 
 	p.mu.RLock()
 	triggerManager := p.triggerManager
-	eventTriggersEnabled := p.eventTriggersEnabled
+	eventTriggerConfig := p.eventTriggerConfig
 	p.mu.RUnlock()
 
-	// Gate: skip if event-driven triggers are disabled
-	if !eventTriggersEnabled {
-		log.Debug().Str("alert_identifier", alert.ID).Msg("alert-triggered patrol skipped: event triggers disabled")
+	// Gate: skip if alert-driven scoped patrols are disabled
+	if !eventTriggerConfig.AlertTriggersEnabled {
+		log.Debug().
+			Str("alert_identifier", alert.ID).
+			Msg("alert-triggered patrol skipped: alert trigger source disabled")
 		return
 	}
 

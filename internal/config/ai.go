@@ -15,6 +15,12 @@ const (
 	AuthMethodOAuth AuthMethod = "oauth"
 )
 
+// PatrolEventTriggerSettings describes which event sources may enqueue scoped patrol runs.
+type PatrolEventTriggerSettings struct {
+	AlertTriggersEnabled   bool
+	AnomalyTriggersEnabled bool
+}
+
 // AIConfig holds AI feature configuration
 // This is stored in ai.enc (encrypted) in the config directory
 type AIConfig struct {
@@ -54,8 +60,12 @@ type AIConfig struct {
 	// Alert-triggered AI analysis - analyze specific resources when alerts fire
 	AlertTriggeredAnalysis bool `json:"alert_triggered_analysis"` // Enable AI analysis when alerts fire (token-efficient)
 
-	// Event-triggered patrols - run extra patrols when alerts fire or anomalies are detected
-	PatrolEventTriggersEnabled bool `json:"patrol_event_triggers_enabled"` // Enable event-driven patrol triggers (alerts, anomalies)
+	// Event-triggered patrols - run extra patrols when alerts fire or anomalies are detected.
+	// The legacy aggregate flag is retained for compatibility; the canonical model is now split
+	// between alert-triggered and anomaly-triggered scoped patrol preferences.
+	PatrolEventTriggersEnabled   bool `json:"patrol_event_triggers_enabled"`
+	PatrolAlertTriggersEnabled   bool `json:"patrol_alert_triggers_enabled"`
+	PatrolAnomalyTriggersEnabled bool `json:"patrol_anomaly_triggers_enabled"`
 
 	// Request timeout - how long to wait for AI responses (default: 300s / 5 min)
 	// Increase this for slow hardware running local models (e.g., Ollama on low-power devices)
@@ -155,7 +165,9 @@ func NewDefaultAIConfig() *AIConfig {
 		// Alert-triggered analysis is highly token-efficient - enabled by default
 		AlertTriggeredAnalysis: true,
 		// Event-triggered patrols enabled by default (alerts, anomalies trigger extra patrols)
-		PatrolEventTriggersEnabled: true,
+		PatrolEventTriggersEnabled:   true,
+		PatrolAlertTriggersEnabled:   true,
+		PatrolAnomalyTriggersEnabled: true,
 	}
 }
 
@@ -437,12 +449,102 @@ func (c *AIConfig) IsAlertTriggeredAnalysisEnabled() bool {
 	return c.AlertTriggeredAnalysis
 }
 
+func (c *AIConfig) patrolEventTriggerPreferences() (bool, bool) {
+	if c == nil {
+		return false, false
+	}
+
+	alertEnabled := c.PatrolAlertTriggersEnabled
+	anomalyEnabled := c.PatrolAnomalyTriggersEnabled
+
+	// Compatibility: older callers and persisted configs may still use only the
+	// legacy aggregate flag. When neither granular preference is enabled but the
+	// legacy flag is on, treat both trigger sources as enabled.
+	if !alertEnabled && !anomalyEnabled && c.PatrolEventTriggersEnabled {
+		return true, true
+	}
+
+	return alertEnabled, anomalyEnabled
+}
+
+// GetPatrolEventTriggerSettings returns the persisted scoped patrol trigger preferences
+// without applying the AI master-switch gating used by runtime checks.
+func (c *AIConfig) GetPatrolEventTriggerSettings() PatrolEventTriggerSettings {
+	alertEnabled, anomalyEnabled := c.patrolEventTriggerPreferences()
+	return PatrolEventTriggerSettings{
+		AlertTriggersEnabled:   alertEnabled,
+		AnomalyTriggersEnabled: anomalyEnabled,
+	}
+}
+
+// NormalizePatrolEventTriggerSettings synchronizes the legacy aggregate field with the
+// canonical split trigger preferences.
+func (c *AIConfig) NormalizePatrolEventTriggerSettings() bool {
+	if c == nil {
+		return false
+	}
+
+	settings := c.GetPatrolEventTriggerSettings()
+	changed := false
+	if c.PatrolAlertTriggersEnabled != settings.AlertTriggersEnabled {
+		c.PatrolAlertTriggersEnabled = settings.AlertTriggersEnabled
+		changed = true
+	}
+	if c.PatrolAnomalyTriggersEnabled != settings.AnomalyTriggersEnabled {
+		c.PatrolAnomalyTriggersEnabled = settings.AnomalyTriggersEnabled
+		changed = true
+	}
+	aggregateEnabled := settings.AlertTriggersEnabled || settings.AnomalyTriggersEnabled
+	if c.PatrolEventTriggersEnabled != aggregateEnabled {
+		c.PatrolEventTriggersEnabled = aggregateEnabled
+		changed = true
+	}
+	return changed
+}
+
+// SetPatrolEventTriggersEnabled updates both scoped patrol trigger sources together.
+func (c *AIConfig) SetPatrolEventTriggersEnabled(enabled bool) {
+	if c == nil {
+		return
+	}
+	c.PatrolAlertTriggersEnabled = enabled
+	c.PatrolAnomalyTriggersEnabled = enabled
+	c.PatrolEventTriggersEnabled = enabled
+}
+
+// SetPatrolEventTriggerSettings updates the canonical scoped patrol trigger preferences.
+func (c *AIConfig) SetPatrolEventTriggerSettings(alertEnabled, anomalyEnabled bool) {
+	if c == nil {
+		return
+	}
+	c.PatrolAlertTriggersEnabled = alertEnabled
+	c.PatrolAnomalyTriggersEnabled = anomalyEnabled
+	c.PatrolEventTriggersEnabled = alertEnabled || anomalyEnabled
+}
+
 // IsPatrolEventTriggersEnabled returns true if event-driven patrol triggers (alerts, anomalies) are enabled
 func (c *AIConfig) IsPatrolEventTriggersEnabled() bool {
 	if !c.Enabled {
 		return false
 	}
-	return c.PatrolEventTriggersEnabled
+	settings := c.GetPatrolEventTriggerSettings()
+	return settings.AlertTriggersEnabled || settings.AnomalyTriggersEnabled
+}
+
+// IsPatrolAlertTriggersEnabled returns true if alert-triggered scoped patrols are enabled.
+func (c *AIConfig) IsPatrolAlertTriggersEnabled() bool {
+	if !c.Enabled {
+		return false
+	}
+	return c.GetPatrolEventTriggerSettings().AlertTriggersEnabled
+}
+
+// IsPatrolAnomalyTriggersEnabled returns true if anomaly-triggered scoped patrols are enabled.
+func (c *AIConfig) IsPatrolAnomalyTriggersEnabled() bool {
+	if !c.Enabled {
+		return false
+	}
+	return c.GetPatrolEventTriggerSettings().AnomalyTriggersEnabled
 }
 
 // GetRequestTimeout returns the timeout duration for AI requests

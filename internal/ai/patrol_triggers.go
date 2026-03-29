@@ -13,6 +13,12 @@ import (
 // TriggerReason describes why a patrol was triggered
 type TriggerReason string
 
+// PatrolEventTriggerConfig controls which event sources may enqueue scoped patrol runs.
+type PatrolEventTriggerConfig struct {
+	AlertTriggersEnabled   bool `json:"alert_triggers_enabled"`
+	AnomalyTriggersEnabled bool `json:"anomaly_triggers_enabled"`
+}
+
 // Trigger priority values control which scoped patrol runs first when multiple are queued.
 const (
 	triggerPriorityManual       = 100 // User-initiated patrols run first
@@ -107,8 +113,9 @@ type TriggerManager struct {
 	recentEvents    []time.Time
 	eventWindow     time.Duration
 
-	// Event trigger gating - when false, event-driven triggers (alert_fired, alert_cleared, anomaly) are rejected
-	eventTriggersEnabled bool
+	// Event trigger gating - event-driven reasons are checked against the per-source
+	// scoped patrol trigger configuration.
+	eventTriggerConfig PatrolEventTriggerConfig
 
 	// Callback to execute patrol
 	onTrigger func(ctx context.Context, scope PatrolScope)
@@ -172,8 +179,11 @@ func NewTriggerManager(cfg TriggerManagerConfig) *TriggerManager {
 		eventWindow:          cfg.EventWindow,
 		recentEvents:         make([]time.Time, 0),
 		pendingTriggers:      make([]PatrolScope, 0),
-		eventTriggersEnabled: true,
-		stopCh:               make(chan struct{}),
+		eventTriggerConfig: PatrolEventTriggerConfig{
+			AlertTriggersEnabled:   true,
+			AnomalyTriggersEnabled: true,
+		},
+		stopCh: make(chan struct{}),
 	}
 }
 
@@ -319,13 +329,24 @@ func (tm *TriggerManager) processPendingTriggers(ctx context.Context) {
 	callback(ctx, trigger)
 }
 
-// SetEventTriggersEnabled controls whether event-driven triggers (alert_fired, alert_cleared, anomaly)
-// are accepted. When disabled, only manual, scheduled, startup, user_action, and verification triggers pass through.
-func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
+// SetEventTriggerConfig controls which event-driven trigger sources (alerts, anomalies)
+// are accepted. Manual, scheduled, startup, user_action, and verification triggers are unaffected.
+func (tm *TriggerManager) SetEventTriggerConfig(cfg PatrolEventTriggerConfig) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	tm.eventTriggersEnabled = enabled
-	log.Info().Bool("enabled", enabled).Msg("patrol event triggers updated")
+	tm.eventTriggerConfig = cfg
+	log.Info().
+		Bool("alert_triggers_enabled", cfg.AlertTriggersEnabled).
+		Bool("anomaly_triggers_enabled", cfg.AnomalyTriggersEnabled).
+		Msg("patrol event trigger config updated")
+}
+
+// SetEventTriggersEnabled is a compatibility wrapper for the legacy aggregate toggle.
+func (tm *TriggerManager) SetEventTriggersEnabled(enabled bool) {
+	tm.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   enabled,
+		AnomalyTriggersEnabled: enabled,
+	})
 }
 
 // isEventDrivenTrigger returns true for trigger reasons that are event-driven
@@ -339,17 +360,30 @@ func isEventDrivenTrigger(reason TriggerReason) bool {
 	}
 }
 
+func (cfg PatrolEventTriggerConfig) allows(reason TriggerReason) bool {
+	switch reason {
+	case TriggerReasonAlertFired, TriggerReasonAlertCleared:
+		return cfg.AlertTriggersEnabled
+	case TriggerReasonAnomalyDetected:
+		return cfg.AnomalyTriggersEnabled
+	default:
+		return true
+	}
+}
+
 // TriggerPatrol queues a patrol run with the given scope
 // Returns true if the trigger was accepted, false if rate limited or queue full
 func (tm *TriggerManager) TriggerPatrol(scope PatrolScope) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 
-	// Gate event-driven triggers when disabled
-	if !tm.eventTriggersEnabled && isEventDrivenTrigger(scope.Reason) {
+	// Gate event-driven triggers according to the canonical scoped trigger config
+	if isEventDrivenTrigger(scope.Reason) && !tm.eventTriggerConfig.allows(scope.Reason) {
 		log.Debug().
 			Str("reason", string(scope.Reason)).
-			Msg("event-driven patrol trigger rejected: event triggers disabled")
+			Bool("alert_triggers_enabled", tm.eventTriggerConfig.AlertTriggersEnabled).
+			Bool("anomaly_triggers_enabled", tm.eventTriggerConfig.AnomalyTriggersEnabled).
+			Msg("event-driven patrol trigger rejected by trigger config")
 		return false
 	}
 
@@ -448,11 +482,13 @@ func (tm *TriggerManager) GetPendingCount() int {
 
 // TriggerStatus returns the current status of the trigger manager
 type TriggerStatus struct {
-	Running         bool  `json:"running"`
-	PendingTriggers int   `json:"pending_triggers"`
-	CurrentInterval int64 `json:"current_interval_ms"` // Milliseconds (converted from time.Duration)
-	RecentEvents    int   `json:"recent_events"`
-	IsBusyMode      bool  `json:"is_busy_mode"`
+	Running                bool  `json:"running"`
+	PendingTriggers        int   `json:"pending_triggers"`
+	CurrentInterval        int64 `json:"current_interval_ms"` // Milliseconds (converted from time.Duration)
+	RecentEvents           int   `json:"recent_events"`
+	IsBusyMode             bool  `json:"is_busy_mode"`
+	AlertTriggersEnabled   bool  `json:"alert_triggers_enabled"`
+	AnomalyTriggersEnabled bool  `json:"anomaly_triggers_enabled"`
 }
 
 // GetStatus returns the current status
@@ -467,11 +503,13 @@ func (tm *TriggerManager) GetStatus() TriggerStatus {
 	tm.updateAdaptiveInterval()
 
 	return TriggerStatus{
-		Running:         tm.running,
-		PendingTriggers: len(tm.pendingTriggers),
-		CurrentInterval: int64(tm.currentInterval / time.Millisecond),
-		RecentEvents:    len(tm.recentEvents),
-		IsBusyMode:      len(tm.recentEvents) >= tm.busyThreshold,
+		Running:                tm.running,
+		PendingTriggers:        len(tm.pendingTriggers),
+		CurrentInterval:        int64(tm.currentInterval / time.Millisecond),
+		RecentEvents:           len(tm.recentEvents),
+		IsBusyMode:             len(tm.recentEvents) >= tm.busyThreshold,
+		AlertTriggersEnabled:   tm.eventTriggerConfig.AlertTriggersEnabled,
+		AnomalyTriggersEnabled: tm.eventTriggerConfig.AnomalyTriggersEnabled,
 	}
 }
 

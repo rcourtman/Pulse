@@ -598,16 +598,24 @@ func (p *PatrolService) GetTriggerManager() *TriggerManager {
 	return p.triggerManager
 }
 
-// SetEventTriggersEnabled controls whether event-driven patrol triggers (alert_fired, alert_cleared, anomaly)
-// are accepted. Propagates the setting to both PatrolService and the TriggerManager.
-func (p *PatrolService) SetEventTriggersEnabled(enabled bool) {
+// SetEventTriggerConfig updates the canonical scoped patrol trigger preferences and
+// propagates them to the TriggerManager.
+func (p *PatrolService) SetEventTriggerConfig(cfg PatrolEventTriggerConfig) {
 	p.mu.Lock()
-	p.eventTriggersEnabled = enabled
+	p.eventTriggerConfig = cfg
 	tm := p.triggerManager
 	p.mu.Unlock()
 	if tm != nil {
-		tm.SetEventTriggersEnabled(enabled)
+		tm.SetEventTriggerConfig(cfg)
 	}
+}
+
+// SetEventTriggersEnabled is a compatibility wrapper for the legacy aggregate toggle.
+func (p *PatrolService) SetEventTriggersEnabled(enabled bool) {
+	p.SetEventTriggerConfig(PatrolEventTriggerConfig{
+		AlertTriggersEnabled:   enabled,
+		AnomalyTriggersEnabled: enabled,
+	})
 }
 
 // SetQuickstartCredits sets the quickstart credit manager for free hosted patrol runs.
