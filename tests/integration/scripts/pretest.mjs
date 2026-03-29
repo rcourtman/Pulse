@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 import http from 'node:http';
+import https from 'node:https';
+import { pathToFileURL } from 'node:url';
 import { resolveComposeInvocation } from './compose-command.mjs';
 import { applyRequestedEntitlementProfile } from './entitlement-bootstrap.mjs';
 import { startManagedLocalBackend } from './managed-local-backend.mjs';
@@ -34,6 +36,7 @@ const shouldSkipDocker = truthy(process.env.PULSE_E2E_SKIP_DOCKER);
 const shouldSkipPlaywrightInstall = truthy(process.env.PULSE_E2E_SKIP_PLAYWRIGHT_INSTALL);
 const shouldUseManagedLocalBackend = truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND);
 const shouldUseManagedDevRuntime = truthy(process.env.PULSE_E2E_USE_HOT_DEV);
+const shouldUseInsecureTLS = truthy(process.env.PULSE_E2E_INSECURE_TLS);
 
 const DEFAULT_E2E_BOOTSTRAP_TOKEN = '0123456789abcdef0123456789abcdef0123456789abcdef';
 if (!process.env.PULSE_E2E_BOOTSTRAP_TOKEN) {
@@ -62,15 +65,59 @@ const canRun = async (command, args) => {
   }
 };
 
+let curlAvailabilityPromise;
+const hasCurl = async () => {
+  if (!curlAvailabilityPromise) {
+    curlAvailabilityPromise = canRun('curl', ['--version']);
+  }
+  return curlAvailabilityPromise;
+};
 
-const waitForHealth = async (healthURL, timeoutMs = 120_000) => {
+export const resolveHealthCheckStrategy = async (
+  healthURL,
+  { useInsecureTLS = shouldUseInsecureTLS, hasCurlFn = hasCurl } = {},
+) => {
+  const parsedURL = new URL(healthURL);
+  if (!['http:', 'https:'].includes(parsedURL.protocol)) {
+    throw new Error(`Unsupported health-check protocol for ${healthURL}`);
+  }
+
+  if (parsedURL.protocol === 'https:' && useInsecureTLS) {
+    if (!await hasCurlFn()) {
+      throw new Error('PULSE_E2E_INSECURE_TLS requires curl for scoped HTTPS health checks');
+    }
+    return { mode: 'curl', parsedURL };
+  }
+
+  return {
+    mode: parsedURL.protocol === 'https:' ? 'https' : 'http',
+    parsedURL,
+  };
+};
+
+export const waitForHealth = async (
+  healthURL,
+  timeoutMs = 120_000,
+  { useInsecureTLS = shouldUseInsecureTLS, hasCurlFn = hasCurl, runCommand = run } = {},
+) => {
   console.log(`[pretest] Waiting for ${healthURL} to become healthy...`);
   const startedAt = Date.now();
   let attempt = 0;
+  const strategy = await resolveHealthCheckStrategy(healthURL, { useInsecureTLS, hasCurlFn });
 
-  const checkHealth = () => {
+  const checkHealth = async () => {
+    if (strategy.mode === 'curl') {
+      try {
+        await runCommand('curl', ['-fsSk', '--max-time', '5', healthURL], { stdio: 'ignore' });
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    const requestModule = strategy.mode === 'https' ? https : http;
     return new Promise((resolve) => {
-      const req = http.get(healthURL, (res) => {
+      const req = requestModule.get(healthURL, (res) => {
         res.resume(); // Consume response data to free up memory
         resolve(res.statusCode >= 200 && res.statusCode < 300);
       });
@@ -98,66 +145,71 @@ const waitForHealth = async (healthURL, timeoutMs = 120_000) => {
   throw new Error(`Timed out waiting for ${healthURL} after ${attempt} attempts`);
 };
 
-
-if (truthy(process.env.PULSE_E2E_INSECURE_TLS)) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
-
-if (!shouldSkipPlaywrightInstall) {
-  await run(npxCmd, ['playwright', 'install', 'chromium']);
-}
-
-await clearRuntimeState();
-
-if (shouldUseManagedDevRuntime) {
-  await startManagedDevRuntime();
-  process.exit(0);
-}
-
-if (shouldUseManagedLocalBackend) {
-  await startManagedLocalBackend();
-  process.exit(0);
-}
-
-if (shouldSkipDocker) {
-  console.log('[integration] PULSE_E2E_SKIP_DOCKER enabled, skipping docker compose up');
-  await applyRequestedEntitlementProfile();
-  process.exit(0);
-}
-
-console.log('[pretest] Starting docker compose...');
-try {
-  const compose = await resolveComposeInvocation(canRun);
-  console.log(`[pretest] Using ${compose.label} command`);
-  await run(compose.command, compose.args);
-  console.log('[pretest] Docker compose completed successfully');
-} catch (error) {
-  console.error('[pretest] Docker compose failed:', error.message);
-  // Try to get container logs for debugging
-  try {
-    await run('docker', ['logs', 'pulse-test-server'], { stdio: 'inherit' });
-  } catch {
-    // ignore
+export const main = async () => {
+  if (!shouldSkipPlaywrightInstall) {
+    await run(npxCmd, ['playwright', 'install', 'chromium']);
   }
-  process.exit(1);
-}
 
-const baseURL = (process.env.PULSE_BASE_URL || 'http://localhost:7655').replace(/\/+$/, '');
-console.log(`[pretest] Waiting for health check at ${baseURL}/api/health...`);
+  await clearRuntimeState();
 
-try {
-  await waitForHealth(`${baseURL}/api/health`);
-  console.log('[pretest] Health check passed!');
-  await applyRequestedEntitlementProfile();
-} catch (error) {
-  console.error('[pretest] Health check failed:', error.message);
-  // Try to get container logs for debugging
-  console.log('[pretest] Attempting to retrieve container logs...');
-  try {
-    console.log('[pretest] === pulse-test-server logs ===');
-    await run('docker', ['logs', 'pulse-test-server'], { stdio: 'inherit' });
-  } catch {
-    console.log('[pretest] Could not retrieve pulse-test-server logs');
+  if (shouldUseManagedDevRuntime) {
+    await startManagedDevRuntime();
+    process.exit(0);
   }
-  process.exit(1);
+
+  if (shouldUseManagedLocalBackend) {
+    await startManagedLocalBackend();
+    process.exit(0);
+  }
+
+  if (shouldSkipDocker) {
+    console.log('[integration] PULSE_E2E_SKIP_DOCKER enabled, skipping docker compose up');
+    await applyRequestedEntitlementProfile();
+    process.exit(0);
+  }
+
+  console.log('[pretest] Starting docker compose...');
+  try {
+    const compose = await resolveComposeInvocation(canRun);
+    console.log(`[pretest] Using ${compose.label} command`);
+    await run(compose.command, compose.args);
+    console.log('[pretest] Docker compose completed successfully');
+  } catch (error) {
+    console.error('[pretest] Docker compose failed:', error.message);
+    // Try to get container logs for debugging
+    try {
+      await run('docker', ['logs', 'pulse-test-server'], { stdio: 'inherit' });
+    } catch {
+      // ignore
+    }
+    process.exit(1);
+  }
+
+  const baseURL = (process.env.PULSE_BASE_URL || 'http://localhost:7655').replace(/\/+$/, '');
+  console.log(`[pretest] Waiting for health check at ${baseURL}/api/health...`);
+
+  try {
+    await waitForHealth(`${baseURL}/api/health`);
+    console.log('[pretest] Health check passed!');
+    await applyRequestedEntitlementProfile();
+  } catch (error) {
+    console.error('[pretest] Health check failed:', error.message);
+    // Try to get container logs for debugging
+    console.log('[pretest] Attempting to retrieve container logs...');
+    try {
+      console.log('[pretest] === pulse-test-server logs ===');
+      await run('docker', ['logs', 'pulse-test-server'], { stdio: 'inherit' });
+    } catch {
+      console.log('[pretest] Could not retrieve pulse-test-server logs');
+    }
+    process.exit(1);
+  }
+};
+
+const isDirectInvocation = process.argv[1]
+  ? import.meta.url === pathToFileURL(process.argv[1]).href
+  : false;
+
+if (isDirectInvocation) {
+  await main();
 }
