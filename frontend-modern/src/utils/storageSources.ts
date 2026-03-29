@@ -2,7 +2,14 @@ import type { Storage } from '@/types/api';
 import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
-export type StorageSourceTone = 'slate' | 'orange' | 'indigo' | 'rose' | 'violet' | 'cyan';
+export type StorageSourceTone =
+  | 'slate'
+  | 'orange'
+  | 'indigo'
+  | 'rose'
+  | 'violet'
+  | 'cyan'
+  | 'blue';
 
 export interface StorageSourceOption {
   key: string;
@@ -21,6 +28,7 @@ const STORAGE_SOURCE_TONES: Record<string, StorageSourceTone> = {
   'proxmox-pbs': 'indigo',
   'proxmox-pmg': 'rose',
   ceph: 'violet',
+  truenas: 'blue',
   kubernetes: 'cyan',
 };
 
@@ -39,7 +47,14 @@ const PROXMOX_STORAGE_TYPES = new Set([
   'btrfs',
 ]);
 
-const STORAGE_SOURCE_ORDER = ['proxmox-pve', 'proxmox-pbs', 'ceph', 'kubernetes', 'proxmox-pmg'];
+const STORAGE_SOURCE_ORDER = [
+  'proxmox-pve',
+  'proxmox-pbs',
+  'ceph',
+  'truenas',
+  'kubernetes',
+  'proxmox-pmg',
+];
 
 const slugifySource = (value: string): string =>
   value
@@ -131,7 +146,7 @@ export const buildStorageSourceOptionsFromKeys = (
 };
 
 export const DEFAULT_STORAGE_SOURCE_OPTIONS: StorageSourceOption[] =
-  buildStorageSourceOptionsFromKeys(['proxmox-pve', 'proxmox-pbs', 'ceph']);
+  buildStorageSourceOptionsFromKeys(['proxmox-pve', 'proxmox-pbs', 'ceph', 'truenas']);
 
 export const buildStorageSourceOptions = (storageList: Storage[]): StorageSourceOption[] =>
   buildStorageSourceOptionsFromKeys(storageList.map((storage) => resolveStorageSourceKey(storage)));

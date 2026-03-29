@@ -15,7 +15,7 @@ describe('useStorageFilterState', () => {
       { id: 'node-2', label: 'tower' },
     ]);
     const [selectedNodeId, setSelectedNodeId] = createSignal('node-1');
-    const [sourceOptions] = createSignal(['all', 'proxmox-pve', 'agent']);
+    const [sourceOptions] = createSignal(['all', 'truenas', 'proxmox-pve', 'agent']);
     const [healthFilter, setHealthFilter] = createSignal<'all' | NormalizedHealth>('all');
     const [groupBy] = createSignal<StorageGroupKey>('node');
 
@@ -36,6 +36,7 @@ describe('useStorageFilterState', () => {
     expect(result.sourceFilterOptions()).toEqual([
       { key: 'all', label: 'All Sources', tone: 'slate' },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
+      { key: 'truenas', label: 'TrueNAS', tone: 'blue' },
       { key: 'agent', label: 'Agent', tone: 'slate' },
     ]);
     expect(result.nodeFilterOptions()).toEqual([

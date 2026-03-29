@@ -1,6 +1,5 @@
 import type { NormalizedHealth, StorageRecord } from './models';
-import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
-import { normalizeStorageSourceKey } from '@/utils/storageSources';
+import { normalizeStorageSourceKey, orderStorageSourceKeys } from '@/utils/storageSources';
 import {
   getStorageRecordActionSummary,
   getStorageRecordContent,
@@ -75,9 +74,9 @@ export const matchesStorageRecordNode = (
 };
 
 export const buildStorageSourceOptions = (records: StorageRecord[]): string[] => {
-  const values = Array.from(
-    new Set(records.map((record) => normalizeStorageSourceKey(record.source.platform))),
-  ).sort((a, b) => getSourcePlatformLabel(a).localeCompare(getSourcePlatformLabel(b)));
+  const values = orderStorageSourceKeys(
+    records.map((record) => normalizeStorageSourceKey(record.source.platform)),
+  ).filter((key) => key !== 'all');
   return ['all', ...values];
 };
 

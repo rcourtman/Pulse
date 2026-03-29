@@ -48,4 +48,39 @@ describe('useStorageFilterToolbarModel', () => {
     expect(statusFilter()).toBe('all');
     expect(sourceFilter()).toBe('all');
   });
+
+  it('keeps storage source options reactive for restored route state', () => {
+    const [search, setSearch] = createSignal('');
+    const [sortKey, setSortKey] = createSignal('priority');
+    const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
+    const [sourceOptions, setSourceOptions] = createSignal([
+      { key: 'all', label: 'All Sources', tone: 'slate' as const },
+    ]);
+
+    const { result } = renderHook(() =>
+      useStorageFilterToolbarModel({
+        search,
+        setSearch,
+        sortKey,
+        setSortKey,
+        sortDirection,
+        setSortDirection,
+        sourceOptions,
+      }),
+    );
+
+    expect(result.sourceOptions()).toEqual([{ key: 'all', label: 'All Sources', tone: 'slate' }]);
+
+    setSourceOptions([
+      { key: 'all', label: 'All Sources', tone: 'slate' },
+      { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
+      { key: 'truenas', label: 'TrueNAS', tone: 'blue' },
+    ]);
+
+    expect(result.sourceOptions()).toEqual([
+      { key: 'all', label: 'All Sources', tone: 'slate' },
+      { key: 'proxmox-pve', label: 'PVE', tone: 'orange' },
+      { key: 'truenas', label: 'TrueNAS', tone: 'blue' },
+    ]);
+  });
 });

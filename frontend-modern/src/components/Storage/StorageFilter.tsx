@@ -1,4 +1,4 @@
-import { Component, Show, type JSX } from 'solid-js';
+import { Component, For, Show, type JSX } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
   FilterDivider,
@@ -51,7 +51,7 @@ interface StorageFilterProps {
   setStatusFilter?: (value: StorageStatusFilter) => void;
   sourceFilter?: () => string;
   setSourceFilter?: (value: string) => void;
-  sourceOptions?: StorageSourceOption[];
+  sourceOptions?: () => StorageSourceOption[];
   // Slot for page-specific filters (e.g., view toggle, node selector).
   leadingFilters?: JSX.Element;
   // Column visibility (optional)
@@ -173,9 +173,9 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             onChange={(e) => props.setSourceFilter!(e.currentTarget.value)}
             selectClass={STORAGE_FILTER_COMPACT_SELECT_CLASS}
           >
-            {sourceOptions().map((option: StorageSourceOption) => (
-              <option value={option.key}>{option.label}</option>
-            ))}
+            <For each={sourceOptions()}>
+              {(option: StorageSourceOption) => <option value={option.key}>{option.label}</option>}
+            </For>
           </LabeledFilterSelect>
           <FilterDivider />
         </Show>

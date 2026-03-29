@@ -79,7 +79,7 @@ const Storage: Component = () => {
         setStatusFilter={setStorageFilterStatus}
         sourceFilter={sourceFilter}
         setSourceFilter={setSourceFilter}
-        sourceOptions={sourceFilterOptions()}
+        sourceOptions={sourceFilterOptions}
         nodeFilterOptions={nodeFilterOptions()}
         selectedNodeId={selectedNodeId}
         setSelectedNodeId={setSelectedNodeId}

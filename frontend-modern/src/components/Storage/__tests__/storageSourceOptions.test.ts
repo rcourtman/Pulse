@@ -73,8 +73,15 @@ describe('storageSourceOptions', () => {
       label: 'PBS',
       tone: 'indigo',
     });
+    expect(getStorageSourceOption('truenas')).toMatchObject({
+      key: 'truenas',
+      label: 'TrueNAS',
+      tone: 'blue',
+    });
     expect(
-      buildStorageSourceOptionsFromKeys(['all', 'pbs', 'ceph']).map((option) => option.key),
-    ).toEqual(['all', 'proxmox-pbs', 'ceph']);
+      buildStorageSourceOptionsFromKeys(['all', 'truenas', 'pbs', 'ceph']).map(
+        (option) => option.key,
+      ),
+    ).toEqual(['all', 'proxmox-pbs', 'ceph', 'truenas']);
   });
 });

@@ -31,7 +31,7 @@ type StorageControlsProps = {
   setStatusFilter: (value: StorageStatusFilter) => void;
   sourceFilter: () => string;
   setSourceFilter: (value: string) => void;
-  sourceOptions: StorageSourceOption[];
+  sourceOptions: () => StorageSourceOption[];
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;

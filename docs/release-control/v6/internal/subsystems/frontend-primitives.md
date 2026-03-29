@@ -689,6 +689,12 @@ when filter options materialize asynchronously. `LabeledFilterSelect` must keep
 the caller-owned `value` visibly selected after option children arrive so
 dashboard, recovery, and other canonical filter bars do not drop their active
 selection until the operator reopens the control.
+That same boundary also owns live option propagation through shared page-control
+composition. Callers such as storage and recovery must pass source/filter
+option collections through reactive accessors instead of snapshot arrays when
+those options depend on post-load unified-resource state, so the shared toolbar
+can reconcile late-arriving options and preserved route selections without
+requiring page-local reset hacks.
 When those workspace tabs need an embedded control-bar treatment, they should
 still stay on the one canonical `frontend-modern/src/components/shared/Subtabs.tsx`
 primitive and reuse the established shell, list, and button class pattern

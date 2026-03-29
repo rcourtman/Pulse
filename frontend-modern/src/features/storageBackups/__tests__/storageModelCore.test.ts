@@ -62,8 +62,23 @@ describe('storageModelCore', () => {
           adapterId: 'resource-storage',
         },
       }),
+      makeRecord({
+        id: 'storage-3',
+        name: 'tank',
+        source: {
+          platform: 'truenas',
+          family: 'storage',
+          origin: 'resource',
+          adapterId: 'resource-storage',
+        },
+      }),
     ];
-    expect(buildStorageSourceOptions(records)).toEqual(['all', 'proxmox-pbs', 'proxmox-pve']);
+    expect(buildStorageSourceOptions(records)).toEqual([
+      'all',
+      'proxmox-pve',
+      'proxmox-pbs',
+      'truenas',
+    ]);
     expect(matchesStorageRecordSearch(makeRecord(), 'tank')).toBe(true);
     expect(matchesStorageRecordSearch(makeRecord(), 'missing')).toBe(false);
   });

@@ -751,6 +751,87 @@ describe('Storage', () => {
     });
   });
 
+  it('restores canonical TrueNAS source filters from the storage route', async () => {
+    nodeResources = [
+      {
+        id: 'truenas-main',
+        type: 'agent',
+        name: 'TrueNAS Main',
+        displayName: 'TrueNAS Main',
+        platformId: 'truenas-main',
+        platformType: 'truenas',
+        sourceType: 'hybrid',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        canonicalIdentity: { hostname: 'truenas-main' },
+        platformData: { sources: ['agent', 'truenas'] },
+      } as Resource,
+      {
+        id: 'pve-main',
+        type: 'agent',
+        name: 'PVE Main',
+        displayName: 'PVE Main',
+        platformId: 'cluster-main',
+        platformType: 'proxmox-pve',
+        sourceType: 'hybrid',
+        status: 'online',
+        uptime: 1000,
+        lastSeen: Date.now(),
+        canonicalIdentity: { hostname: 'pve-main' },
+        platformData: { proxmox: { instance: 'cluster-main' }, sources: ['agent', 'proxmox-pve'] },
+      } as Resource,
+    ];
+    hookResources = [
+      buildStorageResource('storage-truenas-display', 'tank', 'truenas-main', {
+        platformId: 'truenas-1',
+        platformType: 'truenas',
+        parentId: 'truenas-main',
+        parentName: 'truenas-main',
+        includePlatformNode: false,
+        storageType: 'zfs-pool',
+        storage: {
+          platform: 'truenas',
+          type: 'zfs-pool',
+          topology: 'pool',
+          isZfs: true,
+        },
+      }),
+      buildStorageResource('storage-pve-main', 'local-zfs', 'pve-main', {
+        parentId: 'pve-main',
+        parentName: 'pve-main',
+        includePlatformNode: false,
+        storage: {
+          platform: 'proxmox-pve',
+          type: 'zfspool',
+          topology: 'pool',
+          isZfs: true,
+        },
+      }),
+    ];
+    mockLocationSearch = '?source=truenas&node=truenas-main';
+
+    render(() => <Storage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Source')).toHaveValue('truenas');
+    });
+
+    expect(screen.getByLabelText('Node')).toHaveValue('truenas-main');
+    expect(
+      Array.from(screen.getByLabelText('Source').querySelectorAll('option')).map((option) => ({
+        value: option.value,
+        label: option.textContent,
+      })),
+    ).toEqual([
+      { value: 'all', label: 'All Sources' },
+      { value: 'proxmox-pve', label: 'PVE' },
+      { value: 'truenas', label: 'TrueNAS' },
+    ]);
+    expect(screen.getByText('tank')).toBeInTheDocument();
+    expect(screen.queryByText('local-zfs')).not.toBeInTheDocument();
+  });
+
   it('canonicalizes whitespace-padded resource deep-links without dropping other params', async () => {
     hookResources = [
       buildStorageResource('storage-ceph-link', 'Ceph-Link-Store', 'pve1', {

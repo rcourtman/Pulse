@@ -31,7 +31,7 @@ type UseStorageFilterToolbarModelOptions = {
   sourceFilter?: Accessor<string | undefined>;
   setSourceFilter?: (value: string) => void;
   sortOptions?: StorageOption[];
-  sourceOptions?: StorageSourceOption[];
+  sourceOptions?: Accessor<StorageSourceOption[] | undefined>;
 };
 
 export const useStorageFilterToolbarModel = (options: UseStorageFilterToolbarModelOptions) => {
@@ -60,7 +60,9 @@ export const useStorageFilterToolbarModel = (options: UseStorageFilterToolbarMod
   );
 
   const sortOptions = createMemo(() => options.sortOptions ?? []);
-  const sourceOptions = createMemo(() => options.sourceOptions ?? DEFAULT_STORAGE_SOURCE_OPTIONS);
+  const sourceOptions = createMemo(
+    () => options.sourceOptions?.() ?? DEFAULT_STORAGE_SOURCE_OPTIONS,
+  );
   const sortDirectionTitle = createMemo(() =>
     getStorageSortDirectionTitle(options.sortDirection()),
   );
