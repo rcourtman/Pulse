@@ -738,7 +738,8 @@ prefer a single support line over filling the card just because there is room.
 Those support rows should also stay signal-driven. Recovery summary cards
 should omit zero-value or low-value support rows like `Primary Item` or `Peak
 Day` when they do not materially improve operator triage, so the top strip
-stays closer to storage's orientation-first rhythm.
+stays closer to the fast-scan rhythm used by the infrastructure and workloads
+surfaces.
 That same summary-scan rule should also trim derivative rows that restate the
 headline instead of adding a new operator question. `Freshness` should not add
 an extra `<24h` row under a `fresh in 24h` headline, `Coverage` should not
@@ -751,6 +752,11 @@ expressed as short metric rows. Recovery summary cards should stay on the
 shared monitoring-card rhythm of one dominant metric plus compact supporting
 rows rather than reviving bespoke visual telemetry that makes the strip read
 heavier than the rest of Pulse.
+That same scan rule should also use the summary header for the first, obvious
+recovery counts. The header should carry total protected items plus the top
+healthy/attention cues in the same way other Pulse monitoring summaries expose
+their first read, while the `Posture` card focuses on the composition of the
+attention state instead of repeating the same healthy count again.
 That same differentiation rule applies across cards too. `Posture` and
 `Freshness` should not lead with the same stale/attention headline; the
 freshness card should emphasize recent successful coverage such as fresh-in-24h

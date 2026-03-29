@@ -465,6 +465,8 @@ describe('Recovery', () => {
 
     const summary = await screen.findByTestId('recovery-summary');
     expect(within(summary).getByText('Coverage')).toBeInTheDocument();
+    expect(within(summary).getByText(/\d+ protected items/i)).toBeInTheDocument();
+    expect(within(summary).getByText(/\d+ attention/i)).toBeInTheDocument();
     expect(within(summary).queryByText('Primary Item')).not.toBeInTheDocument();
     expect(within(summary).getByText(/item types/i)).toBeInTheDocument();
     expect(within(summary).getAllByText(/platforms/i).length).toBeGreaterThan(0);

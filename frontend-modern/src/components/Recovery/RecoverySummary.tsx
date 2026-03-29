@@ -66,13 +66,6 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     () => {
       const rows: Array<{ label: string; value: string | number; valueClass?: string }> = [];
       const failedCount = postureSummary().failed + postureSummary().neverSucceeded;
-      if (healthyCount() > 0) {
-        rows.push({
-          label: 'Healthy',
-          value: healthyCount(),
-          valueClass: 'text-emerald-600 dark:text-emerald-400',
-        });
-      }
       if (failedCount > 0) {
         rows.push({
           label: 'Failed',
@@ -96,6 +89,12 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           label: 'Running',
           value: postureSummary().running,
           valueClass: 'text-blue-600 dark:text-blue-400',
+        });
+      } else if (healthyCount() > 0) {
+        rows.push({
+          label: 'Healthy',
+          value: healthyCount(),
+          valueClass: 'text-emerald-600 dark:text-emerald-400',
         });
       }
       return rows.slice(0, 2);
@@ -162,7 +161,19 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     <Show when={hasRollups()}>
       <SummaryPanel
         headerLeft={
-          <span class="font-medium text-base-content">{summary().total} protected items</span>
+          <>
+            <span class="font-medium text-base-content">{summary().total} protected items</span>
+            <Show when={healthyCount() > 0}>
+              <span class="text-emerald-600 dark:text-emerald-400">
+                {healthyCount()} healthy
+              </span>
+            </Show>
+            <Show when={attentionCount() > 0}>
+              <span class="text-amber-600 dark:text-amber-400">
+                {attentionCount()} attention
+              </span>
+            </Show>
+          </>
         }
         timeRange={props.timeRange()}
         onTimeRangeChange={props.onTimeRangeChange ? handleTimeRangeChange : undefined}
