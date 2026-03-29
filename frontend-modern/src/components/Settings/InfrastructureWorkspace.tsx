@@ -5,7 +5,7 @@ import { Subtabs } from '@/components/shared/Subtabs';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { InfrastructureInstallPanel } from './InfrastructureInstallPanel';
 import { InfrastructureReportingPanel } from './InfrastructureReportingPanel';
-import { ProxmoxSettingsPanel } from './ProxmoxSettingsPanel';
+import { PlatformConnectionsWorkspace } from './PlatformConnectionsWorkspace';
 import {
   INFRASTRUCTURE_WORKSPACE_TABS,
   buildInfrastructureWorkspacePath,
@@ -21,7 +21,7 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
   const location = useLocation();
   const activeView = createMemo(() => getInfrastructureWorkspaceViewFromPath(location.pathname));
   const installPath = createMemo(() => buildInfrastructureWorkspacePath('install'));
-  const directPath = createMemo(() => buildInfrastructureWorkspacePath('direct'));
+  const platformsPath = createMemo(() => buildInfrastructureWorkspacePath('platforms'));
 
   const openView = (view: InfrastructureWorkspaceView) =>
     navigate(buildInfrastructureWorkspacePath(view));
@@ -34,16 +34,16 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
             <h3 class="text-base font-semibold text-base-content">Connect your first system</h3>
             <p class="text-sm text-muted">
               Start with Install on a host to connect the first machine you want Pulse to monitor.
-              If you already know you want a direct integration instead, go straight to Direct
-              Proxmox.
+              If you already know you want an API-backed platform integration instead, go straight
+              to Platform connections.
             </p>
           </div>
           <div class="grid gap-3 lg:grid-cols-3">
             <div class="rounded-md border border-border bg-surface px-4 py-3">
               <p class="text-xs font-semibold uppercase tracking-wide text-muted">1. Choose path</p>
               <p class="mt-1 text-sm text-base-content">
-                Install Pulse on a host first, or use Direct Proxmox if that is the system you are
-                connecting.
+                Install Pulse on a host first, or open Platform connections for systems Pulse
+                should poll through their own APIs.
               </p>
             </div>
             <div class="rounded-md border border-border bg-surface px-4 py-3">
@@ -51,8 +51,8 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
                 2. Generate access
               </p>
               <p class="mt-1 text-sm text-base-content">
-                Create the install token Pulse expects for the first monitored host, then copy the
-                generated command.
+                Create the install token Pulse expects for the first monitored host, or add the API
+                credentials Pulse should store for platform-backed systems.
               </p>
             </div>
             <div class="rounded-md border border-border bg-surface px-4 py-3">
@@ -79,14 +79,16 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
             </button>
             <button
               type="button"
-              onClick={() => navigate(directPath())}
+              onClick={() => navigate(platformsPath())}
               class={`inline-flex items-center justify-center rounded-md px-4 py-2 text-sm font-medium transition-colors ${
-                activeView() === 'direct'
+                activeView() === 'platforms'
                   ? 'bg-emerald-600 text-white'
                   : 'border border-border bg-surface text-base-content hover:bg-surface-hover'
               }`}
             >
-              {activeView() === 'direct' ? 'Direct Proxmox selected' : 'Open Direct Proxmox'}
+              {activeView() === 'platforms'
+                ? 'Platform connections selected'
+                : 'Open Platform connections'}
             </button>
           </div>
           <p class="text-sm text-muted">
@@ -112,14 +114,14 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
           <InfrastructureInstallPanel />
         </Match>
 
-        <Match when={activeView() === 'direct'}>
-          <ProxmoxSettingsPanel {...props} embedded />
+        <Match when={activeView() === 'platforms'}>
+          <PlatformConnectionsWorkspace {...props} />
         </Match>
 
         <Match when={activeView() === 'inventory'}>
           <InfrastructureReportingPanel
             {...props}
-            onManageDirectConnections={() => openView('direct')}
+            onManageDirectConnections={() => openView('platforms')}
           />
         </Match>
       </Switch>

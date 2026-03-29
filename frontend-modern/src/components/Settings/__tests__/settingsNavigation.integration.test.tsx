@@ -6,7 +6,7 @@ import { getSettingsTabSaveBehavior } from '../settingsTabSaveBehavior';
 import { updateDisableLocalUpgradeMetricsSetting } from '@/stores/systemSettings';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/proxmox',
+  proxmox: '/settings/infrastructure/platforms/proxmox',
   'infrastructure-operations': '/settings/infrastructure/install',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',

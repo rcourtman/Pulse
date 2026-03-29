@@ -163,6 +163,78 @@ func (h *TrueNASHandlers) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleUpdate replaces a configured TrueNAS connection by ID while preserving
+// unchanged masked secrets from the stored record.
+func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
+	if !h.featureEnabled(w) {
+		return
+	}
+	if mock.IsMockEnabled() {
+		writeErrorResponse(w, http.StatusForbidden, "mock_mode_enabled", "Cannot modify connections in mock mode", nil)
+		return
+	}
+
+	connectionID, ok := trueNASConnectionIDFromPath(r.URL.Path)
+	if !ok {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_connection_id", "Connection ID is required", nil)
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
+
+	var instance config.TrueNASInstance
+	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	instance.ID = connectionID
+	instance.Name = strings.TrimSpace(instance.Name)
+	instance.Host = strings.TrimSpace(instance.Host)
+	instance.APIKey = strings.TrimSpace(instance.APIKey)
+	instance.Username = strings.TrimSpace(instance.Username)
+	instance.Password = strings.TrimSpace(instance.Password)
+	instance.Fingerprint = strings.TrimSpace(instance.Fingerprint)
+
+	persistence := h.persistenceForRequest(w, r.Context())
+	if persistence == nil {
+		return
+	}
+
+	instances, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "truenas_load_failed", "Failed to load TrueNAS configuration", map[string]string{"error": err.Error()})
+		return
+	}
+
+	index := -1
+	for i := range instances {
+		if strings.TrimSpace(instances[i].ID) == connectionID {
+			index = i
+			break
+		}
+	}
+	if index < 0 {
+		writeErrorResponse(w, http.StatusNotFound, "truenas_not_found", "Connection not found", nil)
+		return
+	}
+
+	instance.PreserveMaskedSecrets(instances[index])
+	if err := instance.Validate(); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+
+	instances[index] = instance
+	if err := persistence.SaveTrueNASConfig(instances); err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "truenas_save_failed", "Failed to save TrueNAS configuration", map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, instance.Redacted())
+}
+
 // HandleTestConnection validates connectivity for a proposed TrueNAS connection.
 func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if !h.featureEnabled(w) {

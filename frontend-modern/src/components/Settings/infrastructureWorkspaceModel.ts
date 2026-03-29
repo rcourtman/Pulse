@@ -1,4 +1,4 @@
-export type InfrastructureWorkspaceView = 'install' | 'direct' | 'inventory';
+export type InfrastructureWorkspaceView = 'install' | 'platforms' | 'inventory';
 
 export interface InfrastructureWorkspaceTabDefinition {
   id: InfrastructureWorkspaceView;
@@ -13,9 +13,9 @@ export const INFRASTRUCTURE_WORKSPACE_TABS: readonly InfrastructureWorkspaceTabD
     path: '/settings/infrastructure/install',
   },
   {
-    id: 'direct',
-    label: 'Direct Proxmox',
-    path: '/settings/infrastructure/proxmox',
+    id: 'platforms',
+    label: 'Platform connections',
+    path: '/settings/infrastructure/platforms',
   },
   {
     id: 'inventory',
@@ -27,8 +27,13 @@ export const INFRASTRUCTURE_WORKSPACE_TABS: readonly InfrastructureWorkspaceTabD
 export function getInfrastructureWorkspaceViewFromPath(
   pathname: string,
 ): InfrastructureWorkspaceView {
-  if (pathname.startsWith('/settings/infrastructure/proxmox')) {
-    return 'direct';
+  if (
+    pathname.startsWith('/settings/infrastructure/platforms') ||
+    pathname.startsWith('/settings/infrastructure/proxmox') ||
+    pathname.startsWith('/settings/infrastructure/api') ||
+    pathname.startsWith('/settings/infrastructure/truenas')
+  ) {
+    return 'platforms';
   }
   if (pathname.startsWith('/settings/infrastructure/operations')) {
     return 'inventory';

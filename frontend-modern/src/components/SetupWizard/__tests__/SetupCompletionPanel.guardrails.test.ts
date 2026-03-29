@@ -31,6 +31,9 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('What to expect');
     expect(setupCompletionPanelSource).toContain('First host first');
     expect(setupCompletionPanelSource).toContain('Start with one host, then add more systems later from the same install workspace.');
+    expect(setupCompletionPanelSource).toContain(
+      'Platform connections remains available for API-backed platforms like Proxmox and TrueNAS when you need it.',
+    );
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
     expect(setupCompletionPanelSource).not.toContain('Agent Metrics');
     expect(setupCompletionPanelSource).not.toContain('ProxmoxIcon');

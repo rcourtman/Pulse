@@ -149,8 +149,10 @@ assembly branch.
    when inventory is empty, `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
    and `frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`
    must send operators directly to `/settings/infrastructure/install`, name
-   first-host install as the default next step, and keep Direct Proxmox as the
-   explicit alternative instead of regressing to generic settings-root CTAs.
+   first-host install as the default next step, and keep `Platform connections`
+   as the explicit API-backed alternative for Proxmox, TrueNAS, and future
+   provider-backed platforms instead of regressing to generic settings-root
+   CTAs or provider-specific one-off routes.
 
 ## Current State
 

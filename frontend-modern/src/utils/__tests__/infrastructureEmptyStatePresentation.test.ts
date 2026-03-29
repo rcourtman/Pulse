@@ -10,7 +10,7 @@ describe('infrastructureEmptyStatePresentation', () => {
     expect(getInfrastructureEmptyState()).toEqual({
       title: 'No infrastructure resources yet',
       description:
-        'Start by opening Settings → Infrastructure → Install on a host and adding the first system you want Pulse to monitor. If you prefer a direct Proxmox connection instead, use Direct Proxmox.',
+        'Start by opening Settings → Infrastructure → Install on a host and adding the first system you want Pulse to monitor. If you prefer an API-backed platform integration instead, use Platform connections.',
       actionLabel: 'Open Infrastructure Install',
     });
   });

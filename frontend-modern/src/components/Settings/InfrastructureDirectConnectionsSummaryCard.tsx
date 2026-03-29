@@ -18,7 +18,8 @@ export const InfrastructureDirectConnectionsSummaryCard: Component<
           <div>
             <h3 class="text-base font-semibold text-base-content">Direct Proxmox connections</h3>
             <p class="text-sm text-muted">
-              Review fallback direct coverage separately from agent-managed hosts.
+              Review fallback Proxmox coverage separately from agent-managed hosts, then open the
+              shared platform-connections workspace for Proxmox and TrueNAS integrations.
             </p>
           </div>
           <button
@@ -26,7 +27,7 @@ export const InfrastructureDirectConnectionsSummaryCard: Component<
             onClick={props.onManageDirectConnections}
             class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
           >
-            Manage direct connections
+            Open platform connections
           </button>
         </div>
 

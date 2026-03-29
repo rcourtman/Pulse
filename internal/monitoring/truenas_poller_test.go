@@ -626,6 +626,55 @@ func TestTrueNASPollerConcurrentConfigChange(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerRebindsProviderWhenConnectionConfigChanges(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	first := newTrueNASMockServer(t, "config-rebind-one")
+	second := newTrueNASMockServer(t, "config-rebind-two")
+	t.Cleanup(first.Close)
+	t.Cleanup(second.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "config-rebind", first.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() initial error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return pollerProviderCount(poller) == 1 && first.RequestCount() >= 5
+	}, "expected initial TrueNAS connection to poll before config change")
+
+	updated := trueNASInstanceForServer(t, connection.ID, second.URL(), true)
+	updated.Name = connection.Name
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{updated}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() updated error = %v", err)
+	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return pollerProviderCount(poller) == 1 && second.RequestCount() >= 5
+	}, "expected provider to rebind to updated TrueNAS endpoint")
+
+	firstCountAfterRebind := first.RequestCount()
+	noPollDeadline := time.Now().Add(200 * time.Millisecond)
+	waitForCondition(t, 500*time.Millisecond, func() bool {
+		return time.Now().After(noPollDeadline) && first.RequestCount() == firstCountAfterRebind
+	}, "expected replaced TrueNAS endpoint to stop receiving poll requests")
+
+	poller.Stop()
+	if hasTrueNASHostForOrg(poller, "default", "config-rebind-one") {
+		t.Fatal("expected old TrueNAS host to be replaced after config rebind")
+	}
+	if !hasTrueNASHostForOrg(poller, "default", "config-rebind-two") {
+		t.Fatal("expected updated TrueNAS host to be ingested after config rebind")
+	}
+}
+
 func TestTrueNASPollerSkipsDisabledConnections(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)

@@ -33,6 +33,7 @@ truth for live infrastructure data.
 9. `internal/monitoring/connected_infrastructure.go`
 10. `internal/monitoring/reload.go`
 11. `docker-entrypoint.sh`
+12. `internal/monitoring/truenas_poller.go`
 
 ## Shared Boundaries
 
@@ -214,3 +215,8 @@ Proxmox `rootfs` bytes because dataset-level `rootfs` can materially
 under-report ZFS-backed node capacity and usage. Proxmox `rootfs` and `/nodes`
 disk values remain fallback sources only when no linked host disk truth is
 available.
+TrueNAS monitoring ownership now also includes provider rebind semantics in
+`internal/monitoring/truenas_poller.go`. When a stored TrueNAS connection's
+host, auth, TLS, or fingerprint settings change, the poller must replace the
+live provider instance instead of keeping stale connection state in memory
+until the process restarts.

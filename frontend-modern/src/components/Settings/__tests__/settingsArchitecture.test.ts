@@ -7,12 +7,15 @@ import settingsShellSource from '../SettingsPageShell.tsx?raw';
 import settingsHeaderMetaSource from '../settingsHeaderMeta.ts?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
+import platformConnectionsWorkspaceSource from '../PlatformConnectionsWorkspace.tsx?raw';
+import platformConnectionsModelSource from '../platformConnectionsModel.ts?raw';
 import infrastructureInstallPanelSource from '../InfrastructureInstallPanel.tsx?raw';
 import infrastructureInstallerSectionSource from '../InfrastructureInstallerSection.tsx?raw';
 import infrastructureOperationsControllerSource from '../InfrastructureOperationsController.tsx?raw';
 import infrastructureOperationsModelSource from '../infrastructureOperationsModel.tsx?raw';
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructureDirectConnectionsSummaryCardSource from '../InfrastructureDirectConnectionsSummaryCard.tsx?raw';
+import trueNASSettingsPanelSource from '../TrueNASSettingsPanel.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDetails.tsx?raw';
 import infrastructureIgnoredRowDetailsSource from '../InfrastructureIgnoredRowDetails.tsx?raw';
@@ -27,6 +30,7 @@ import nodeModalSource from '../NodeModal.tsx?raw';
 import infrastructureInstallStateSource from '../useInfrastructureInstallState.tsx?raw';
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
+import trueNASSettingsStateSource from '../useTrueNASSettingsPanelState.ts?raw';
 import infrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
 import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
 import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
@@ -164,9 +168,13 @@ const extractedModules = [
   '../BackupTransferDialogs.tsx',
   '../InfrastructureOperationsController.tsx',
   '../infrastructureOperationsModel.tsx',
+  '../PlatformConnectionsWorkspace.tsx',
+  '../platformConnectionsModel.ts',
+  '../TrueNASSettingsPanel.tsx',
   '../useInfrastructureInstallState.tsx',
   '../useInfrastructureOperationsState.tsx',
   '../useInfrastructureReportingState.tsx',
+  '../useTrueNASSettingsPanelState.ts',
   '../infrastructureSettingsModel.ts',
   '../useInfrastructureConfiguredNodesState.ts',
   '../useInfrastructureDiscoveryRuntimeState.ts',
@@ -855,7 +863,15 @@ describe('Settings architecture guardrails', () => {
     );
     expect(infrastructureWorkspaceSource).not.toContain('createEffect(() =>');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureInstallPanel');
+    expect(infrastructureWorkspaceSource).toContain('PlatformConnectionsWorkspace');
     expect(infrastructureWorkspaceSource).toContain('InfrastructureReportingPanel');
+    expect(platformConnectionsWorkspaceSource).toContain('./platformConnectionsModel');
+    expect(platformConnectionsWorkspaceSource).toContain('./ProxmoxSettingsPanel');
+    expect(platformConnectionsWorkspaceSource).toContain('./TrueNASSettingsPanel');
+    expect(platformConnectionsModelSource).toContain('export const PLATFORM_CONNECTIONS_TABS');
+    expect(platformConnectionsModelSource).toContain(
+      "export function getPlatformConnectionsViewFromPath",
+    );
     expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
     expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsStateProvider');
@@ -885,6 +901,9 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureOperationsStateSource).toContain(
       'export const useInfrastructureOperationsContext',
     );
+    expect(trueNASSettingsPanelSource).toContain('./useTrueNASSettingsPanelState');
+    expect(trueNASSettingsStateSource).toContain('@/api/truenas');
+    expect(trueNASSettingsStateSource).toContain('export function useTrueNASSettingsPanelState');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInstallerSection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInventorySection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderStopMonitoringDialog =');
@@ -913,7 +932,9 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
       'Direct Proxmox connections',
     );
-    expect(infrastructureDirectConnectionsSummaryCardSource).toContain('Manage direct connections');
+    expect(infrastructureDirectConnectionsSummaryCardSource).toContain(
+      'Open platform connections',
+    );
     expect(infrastructureInstallPanelSource).not.toContain('<PageHeader');
     expect(infrastructureReportingPanelSource).not.toContain('<PageHeader');
   });
@@ -1322,7 +1343,7 @@ describe('Settings architecture guardrails', () => {
       'actively reporting',
     );
     expect(SETTINGS_HEADER_META['infrastructure-operations'].description).toBe(
-      `Bring infrastructure into Pulse, manage direct Proxmox connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
     );
   });
 

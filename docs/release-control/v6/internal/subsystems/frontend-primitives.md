@@ -228,6 +228,12 @@ work extends shared components instead of creating new local variants.
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
+16. Keep infrastructure settings-shell API alternatives on the shared shell
+    contract. `InfrastructureWorkspace.tsx`, `settingsHeaderMeta.ts`,
+    `settingsNavigationModel.ts`, and shared empty-state/setup guidance must
+    present `Platform connections` as the canonical API-backed alternative for
+    Proxmox, TrueNAS, and future provider integrations instead of reviving
+    top-level `Direct Proxmox` wording or shell-local provider routes.
 
 ## Current State
 
@@ -1066,6 +1072,10 @@ That same summary shell should also surface verification scope from the
 owning run-history contract. Operators should be able to see, inside the same
 summary surface, whether Patrol recently completed a full verification pass or
 whether recent activity was limited to scoped/erroring patrol runs.
+When the same governed run-history contract shows a recent full patrol plus
+same-day scoped follow-up work, that summary shell should also carry a compact
+activity-mix explanation rather than forcing operators to infer why Patrol
+looked busy from a separate activity strip alone.
 That same shell rule also owns Patrol recency labels. Shared Patrol header and
 status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
 transport fact and use `Last activity` for scoped or verification work instead
@@ -1472,3 +1482,10 @@ reference cases, and
 `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
 locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
+The same shared settings-shell boundary now also owns the API-backed
+alternative path inside Infrastructure Operations. `InfrastructureWorkspace.tsx`,
+`settingsHeaderMeta.ts`, `settingsNavigationModel.ts`,
+`dashboardEmptyStatePresentation.ts`, and adjacent setup guidance must treat
+`Platform connections` as the canonical API-backed alternative for Proxmox,
+TrueNAS, and future provider integrations instead of reviving top-level
+`Direct Proxmox` wording or shell-local provider routes.

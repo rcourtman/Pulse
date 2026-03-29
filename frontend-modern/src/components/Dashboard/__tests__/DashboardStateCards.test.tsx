@@ -22,7 +22,7 @@ describe('DashboardStateCards', () => {
         dashboardInfrastructureEmptyState={() => ({
           title: 'No infrastructure hosts connected',
           description:
-            'To start using Pulse, first add your infrastructure in Settings → Infrastructure → Install on a host. If you want to connect Proxmox directly instead, use Settings → Infrastructure → Direct Proxmox.',
+            'To start using Pulse, first add your infrastructure in Settings → Infrastructure → Install on a host. If you want an API-backed platform integration instead, use Settings → Infrastructure → Platform connections.',
           actionLabel: 'Open infrastructure setup',
         })}
         dashboardLoadingState={() => ({

@@ -9,6 +9,12 @@ import (
 
 const trueNASSensitiveMask = "********"
 
+// IsTrueNASSensitiveMask reports whether the value is the redacted placeholder
+// used by the TrueNAS settings API.
+func IsTrueNASSensitiveMask(value string) bool {
+	return strings.TrimSpace(value) == trueNASSensitiveMask
+}
+
 // TrueNASInstance represents a configured TrueNAS endpoint.
 type TrueNASInstance struct {
 	ID                 string `json:"id"`
@@ -70,4 +76,18 @@ func (t *TrueNASInstance) Redacted() TrueNASInstance {
 		redacted.Password = trueNASSensitiveMask
 	}
 	return redacted
+}
+
+// PreserveMaskedSecrets restores stored credentials when an update payload uses
+// the API redaction placeholder for unchanged secret fields.
+func (t *TrueNASInstance) PreserveMaskedSecrets(existing TrueNASInstance) {
+	if t == nil {
+		return
+	}
+	if IsTrueNASSensitiveMask(t.APIKey) {
+		t.APIKey = existing.APIKey
+	}
+	if IsTrueNASSensitiveMask(t.Password) {
+		t.Password = existing.Password
+	}
 }

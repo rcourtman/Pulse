@@ -16,7 +16,7 @@ import {
 import { isFeatureLocked, isTabLocked } from '../settingsFeatureGates';
 
 const canonicalTabPaths = {
-  proxmox: '/settings/infrastructure/proxmox',
+  proxmox: '/settings/infrastructure/platforms/proxmox',
   'infrastructure-operations': '/settings/infrastructure/install',
   'system-general': '/settings/system-general',
   'system-network': '/settings/system-network',
@@ -75,13 +75,19 @@ describe('settingsNavigationModel', () => {
       '/settings/infrastructure/install',
     );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/pve')).toBe(
-      '/settings/infrastructure/proxmox/pve',
+      '/settings/infrastructure/platforms/proxmox/pve',
     );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/api')).toBe(
-      '/settings/infrastructure/proxmox',
+      '/settings/infrastructure/platforms/proxmox',
     );
     expect(resolveCanonicalSettingsPath('/settings/infrastructure/api/pve')).toBe(
-      '/settings/infrastructure/proxmox/pve',
+      '/settings/infrastructure/platforms/proxmox/pve',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/proxmox')).toBe(
+      '/settings/infrastructure/platforms/proxmox',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/infrastructure/truenas')).toBe(
+      '/settings/infrastructure/platforms/truenas',
     );
     expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe(
       '/settings/security/api',
@@ -157,9 +163,9 @@ describe('settingsNavigationModel', () => {
       ['/settings/infrastructure/api/pve', 'pve'],
       ['/settings/infrastructure/api/pbs', 'pbs'],
       ['/settings/infrastructure/api/pmg', 'pmg'],
-      ['/settings/infrastructure/proxmox/pve', 'pve'],
-      ['/settings/infrastructure/proxmox/pbs', 'pbs'],
-      ['/settings/infrastructure/proxmox/pmg', 'pmg'],
+      ['/settings/infrastructure/platforms/proxmox/pve', 'pve'],
+      ['/settings/infrastructure/platforms/proxmox/pbs', 'pbs'],
+      ['/settings/infrastructure/platforms/proxmox/pmg', 'pmg'],
       ['/settings/infrastructure', null],
       ['/settings/infrastructure/operations', null],
     ];
@@ -169,17 +175,17 @@ describe('settingsNavigationModel', () => {
   });
 
   it('maps settings agent keys to canonical platform types, labels, and paths', () => {
-    expect(settingsAgentPath('pve')).toBe('/settings/infrastructure/proxmox/pve');
+    expect(settingsAgentPath('pve')).toBe('/settings/infrastructure/platforms/proxmox/pve');
     expect(settingsAgentPlatformType('pve')).toBe('proxmox-pve');
     expect(settingsAgentLabel('pve')).toBe('Proxmox VE');
     expect(settingsAgentNodeLabel('pve')).toBe('Proxmox VE node');
 
-    expect(settingsAgentPath('pbs')).toBe('/settings/infrastructure/proxmox/pbs');
+    expect(settingsAgentPath('pbs')).toBe('/settings/infrastructure/platforms/proxmox/pbs');
     expect(settingsAgentPlatformType('pbs')).toBe('proxmox-pbs');
     expect(settingsAgentLabel('pbs')).toBe('Proxmox Backup Server');
     expect(settingsAgentNodeLabel('pbs')).toBe('Proxmox Backup Server');
 
-    expect(settingsAgentPath('pmg')).toBe('/settings/infrastructure/proxmox/pmg');
+    expect(settingsAgentPath('pmg')).toBe('/settings/infrastructure/platforms/proxmox/pmg');
     expect(settingsAgentPlatformType('pmg')).toBe('proxmox-pmg');
     expect(settingsAgentLabel('pmg')).toBe('Proxmox Mail Gateway');
     expect(settingsAgentNodeLabel('pmg')).toBe('Proxmox Mail Gateway');
@@ -196,8 +202,13 @@ describe('settingsNavigationModel', () => {
   });
 
   it('treats proxmox deep links as infrastructure aliases', () => {
-    expect(deriveTabFromPath('/settings/infrastructure/proxmox')).toBe('infrastructure-operations');
-    expect(deriveTabFromPath('/settings/infrastructure/proxmox/pve')).toBe(
+    expect(deriveTabFromPath('/settings/infrastructure/platforms')).toBe(
+      'infrastructure-operations',
+    );
+    expect(deriveTabFromPath('/settings/infrastructure/platforms/proxmox')).toBe(
+      'infrastructure-operations',
+    );
+    expect(deriveTabFromPath('/settings/infrastructure/platforms/proxmox/pve')).toBe(
       'infrastructure-operations',
     );
     expect(deriveTabFromPath('/settings/infrastructure/api/pve')).toBe(

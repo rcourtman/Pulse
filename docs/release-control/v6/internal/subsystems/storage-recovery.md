@@ -79,6 +79,7 @@ querying, and the operator-facing storage health presentation layer.
 18. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so storage- and recovery-adjacent transport surfaces do not treat the mobile relay credential as a general AI scope bundle.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
+21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows.
 
 ## Forbidden Paths
 
@@ -1511,3 +1512,8 @@ connection-validation reads, so hosted recovery/support flows that hand a
 paired device back into onboarding do not need to escalate the mobile token to
 the broader settings-read privilege just to fetch the canonical bootstrap
 payload.
+That same adjacent `internal/api/` boundary also owns provider-backed recovery
+onboarding. Storage and recovery may consume resulting TrueNAS snapshots and
+replication points, but connection CRUD, masked-secret preservation on update,
+and platform polling setup must stay on the adjacent platform-connections
+contract instead of being rebuilt as storage/recovery-local connection flows.

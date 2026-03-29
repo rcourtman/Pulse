@@ -118,6 +118,13 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('renderStopMonitoringDialog');
     expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
     expect(infrastructureInstallStateSource).toContain('MonitoringAPI.getState()');
+    expect(infrastructureInstallStateSource).toContain('./platformConnectionsModel');
+    expect(infrastructureInstallStateSource).toContain(
+      "navigate(buildPlatformConnectionsPath('proxmox'))",
+    );
+    expect(infrastructureInstallStateSource).not.toContain(
+      "navigate('/settings/infrastructure/proxmox')",
+    );
     expect(infrastructureReportingStateSource).toContain(
       'export const useInfrastructureReportingState',
     );

@@ -142,8 +142,10 @@ management, and fleet control surfaces.
 5. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    must route the primary CTA into `/settings/infrastructure/install`, frame
-   that route as the first-host install step, and present Direct Proxmox as
-   the named alternative rather than leaving post-setup next actions implicit.
+   that route as the first-host install step, and present `Platform
+   connections` as the named API-backed alternative for Proxmox, TrueNAS, and
+   future provider integrations rather than leaving post-setup next actions
+   implicit.
 6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical
@@ -422,9 +424,10 @@ prefill assembly.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must tell a new
 Pulse user to start with `Install on a host` to add the first monitored
-system, while still presenting `Direct Proxmox` as the explicit alternative
-path instead of leaving first-session install guidance implicit in generic
-settings-shell prose.
+system, while still presenting `Platform connections` as the explicit
+API-backed alternative path instead of leaving first-session install guidance
+implicit in generic settings-shell prose or retreating to one provider's name
+as the primary alternative.
 When that infrastructure workspace needs to redirect operators to the Pulse Pro
 surface for billing, monitored-system limits, or license status, it must
 consume the settings-owned referral copy from

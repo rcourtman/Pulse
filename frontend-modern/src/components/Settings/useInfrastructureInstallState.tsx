@@ -17,6 +17,7 @@ import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
+import { buildPlatformConnectionsPath } from './platformConnectionsModel';
 import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
@@ -471,7 +472,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
   });
 
   const openDirectProxmoxSetup = () => {
-    navigate('/settings/infrastructure/proxmox');
+    navigate(buildPlatformConnectionsPath('proxmox'));
   };
 
   const openDashboard = () => {

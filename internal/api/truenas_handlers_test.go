@@ -251,6 +251,94 @@ func TestTrueNASHandlers_HandleDelete_RemovesAndHandlesUnknownID(t *testing.T) {
 	}
 }
 
+func TestTrueNASHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+
+	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:                 "alpha",
+			Name:               "old-name",
+			Host:               "old.local",
+			Port:               443,
+			APIKey:             "super-secret",
+			UseHTTPS:           true,
+			InsecureSkipVerify: false,
+			Enabled:            true,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"id":                 "ignored-id",
+		"name":               "new-name",
+		"host":               "new.local",
+		"port":               8443,
+		"apiKey":             "********",
+		"useHttps":           true,
+		"insecureSkipVerify": true,
+		"enabled":            true,
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/alpha", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdate(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var updated config.TrueNASInstance
+	if err := json.NewDecoder(rec.Body).Decode(&updated); err != nil {
+		t.Fatalf("decode update response: %v", err)
+	}
+	if updated.ID != "alpha" {
+		t.Fatalf("expected path ID to win, got %q", updated.ID)
+	}
+	if updated.APIKey != "********" {
+		t.Fatalf("expected api key to remain redacted, got %q", updated.APIKey)
+	}
+
+	stored, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		t.Fatalf("load persisted config: %v", err)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("expected 1 stored instance, got %d", len(stored))
+	}
+	if stored[0].Host != "new.local" || stored[0].Port != 8443 {
+		t.Fatalf("expected updated endpoint to persist, got %+v", stored[0])
+	}
+	if stored[0].APIKey != "super-secret" {
+		t.Fatalf("expected masked api key to preserve stored secret, got %q", stored[0].APIKey)
+	}
+	if !stored[0].InsecureSkipVerify {
+		t.Fatalf("expected insecureSkipVerify update to persist")
+	}
+}
+
+func TestTrueNASHandlers_HandleUpdate_UnknownID(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+
+	handler, _, _ := newTrueNASHandlersForTest(t, nil)
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"host":   "missing.local",
+		"apiKey": "secret",
+	})
+
+	req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/missing", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdate(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 

@@ -71,7 +71,10 @@ const LEGACY_AGENTS_PREFIX = '/settings/workloads';
 const LEGACY_DOCKER_PREFIX = '/settings/workloads/docker';
 const INFRASTRUCTURE_INSTALL_PREFIX = '/settings/infrastructure/install';
 const INFRASTRUCTURE_OPERATIONS_PREFIX = '/settings/infrastructure/operations';
-const PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
+const PLATFORM_CONNECTIONS_PREFIX = '/settings/infrastructure/platforms';
+const TRUENAS_PREFIX = `${PLATFORM_CONNECTIONS_PREFIX}/truenas`;
+const PROXMOX_PREFIX = `${PLATFORM_CONNECTIONS_PREFIX}/proxmox`;
+const LEGACY_PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
 const LEGACY_PROXMOX_API_PREFIX = '/settings/infrastructure/api';
 const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
 const SECURITY_API_PREFIX = '/settings/security/api';
@@ -128,11 +131,20 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === LEGACY_INFRASTRUCTURE_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
+  if (normalizedPath === PLATFORM_CONNECTIONS_PREFIX) {
+    return PLATFORM_CONNECTIONS_PREFIX;
+  }
   if (normalizedPath === LEGACY_DOCKER_PREFIX) {
     return settingsTabPath(DEFAULT_SETTINGS_TAB);
   }
   if (normalizedPath === LEGACY_PROXMOX_API_PREFIX) {
     return PROXMOX_PREFIX;
+  }
+  if (normalizedPath === LEGACY_PROXMOX_PREFIX) {
+    return PROXMOX_PREFIX;
+  }
+  if (normalizedPath === '/settings/infrastructure/truenas') {
+    return TRUENAS_PREFIX;
   }
   if (normalizedPath === `${LEGACY_INFRASTRUCTURE_PREFIX}/pve`) {
     return `${PROXMOX_PREFIX}/pve`;
@@ -152,6 +164,15 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === `${LEGACY_PROXMOX_API_PREFIX}/pmg`) {
     return `${PROXMOX_PREFIX}/pmg`;
   }
+  if (normalizedPath === `${LEGACY_PROXMOX_PREFIX}/pve`) {
+    return `${PROXMOX_PREFIX}/pve`;
+  }
+  if (normalizedPath === `${LEGACY_PROXMOX_PREFIX}/pbs`) {
+    return `${PROXMOX_PREFIX}/pbs`;
+  }
+  if (normalizedPath === `${LEGACY_PROXMOX_PREFIX}/pmg`) {
+    return `${PROXMOX_PREFIX}/pmg`;
+  }
   if (normalizedPath === LEGACY_INTEGRATIONS_API_PREFIX) {
     return SECURITY_API_PREFIX;
   }
@@ -167,11 +188,17 @@ export function deriveTabFromPath(path: string): SettingsTab {
   if (canonicalPath === '/settings') return DEFAULT_SETTINGS_TAB;
   if (
     canonicalPath === INFRASTRUCTURE_INSTALL_PREFIX ||
+    canonicalPath === PLATFORM_CONNECTIONS_PREFIX ||
     canonicalPath === INFRASTRUCTURE_OPERATIONS_PREFIX
   ) {
     return 'infrastructure-operations';
   }
-  if (canonicalPath.includes(PROXMOX_PREFIX) || canonicalPath.includes(LEGACY_PROXMOX_API_PREFIX))
+  if (
+    canonicalPath.includes(PROXMOX_PREFIX) ||
+    canonicalPath.includes(TRUENAS_PREFIX) ||
+    canonicalPath.includes(LEGACY_PROXMOX_PREFIX) ||
+    canonicalPath.includes(LEGACY_PROXMOX_API_PREFIX)
+  )
     return 'infrastructure-operations';
 
   if (canonicalPath.includes('/settings/system-general')) return 'system-general';

@@ -71,7 +71,7 @@ const UNIFIED_RESOURCE_GUIDANCE = {
   inventoryFacts: [
     'Start with one host, then add more systems later from the same install workspace.',
     'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
-    'Direct Proxmox stays available as an alternative path when you need it.',
+    'Platform connections remains available for API-backed platforms like Proxmox and TrueNAS when you need it.',
   ],
 } as const;
 

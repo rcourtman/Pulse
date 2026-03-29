@@ -529,6 +529,13 @@ export history endpoints live in `internal/api/activity_audit_handlers.go` and
 `internal/api/router_routes_licensing.go`, and the contract tests now pin their
 response shapes so the execution trail remains queryable through the governed
 API surface rather than only through the underlying store.
+The infrastructure platform-connections contract now also owns TrueNAS
+connection CRUD under `internal/api/truenas_handlers.go` and
+`internal/api/router_routes_registration.go`. `/api/truenas/connections`
+must stay the canonical API-backed platform boundary for listing, creating,
+updating, deleting, and testing TrueNAS integrations, and `PUT` updates must
+preserve masked secrets (`********`) instead of clearing stored API keys or
+passwords when operators edit non-secret fields from the settings surface.
 The monitored-system ledger contract now also carries a canonical grouping
 explanation payload. `/api/license/monitored-system-ledger` must expose the
 shared monitored-system explanation summary, sanitized grouping reasons, and

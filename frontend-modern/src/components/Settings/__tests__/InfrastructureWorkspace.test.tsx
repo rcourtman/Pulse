@@ -23,8 +23,8 @@ vi.mock('../InfrastructureReportingPanel', () => ({
   InfrastructureReportingPanel: () => <div data-testid="agent-profiles">profiles</div>,
 }));
 
-vi.mock('../ProxmoxSettingsPanel', () => ({
-  ProxmoxSettingsPanel: () => <div data-testid="proxmox-settings">direct</div>,
+vi.mock('../PlatformConnectionsWorkspace', () => ({
+  PlatformConnectionsWorkspace: () => <div data-testid="platform-connections">platforms</div>,
 }));
 
 describe('InfrastructureWorkspace', () => {
@@ -59,7 +59,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Connect your first system')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Start with Install on a host to connect the first machine you want Pulse to monitor. If you already know you want a direct integration instead, go straight to Direct Proxmox.',
+        'Start with Install on a host to connect the first machine you want Pulse to monitor. If you already know you want an API-backed platform integration instead, go straight to Platform connections.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('1. Choose path')).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('InfrastructureWorkspace', () => {
       'aria-selected',
       'true',
     );
-    expect(screen.getByRole('tab', { name: 'Direct Proxmox' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Platform connections' })).toHaveAttribute(
       'aria-selected',
       'false',
     );
@@ -83,23 +83,23 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('unified-agents')).toBeInTheDocument();
   });
 
-  it('uses the shared subtabs to switch to direct proxmox', () => {
+  it('uses the shared subtabs to switch to platform connections', () => {
     renderWorkspace();
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Direct Proxmox' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Platform connections' }));
 
-    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/proxmox');
+    expect(navigateSpy).toHaveBeenCalledWith('/settings/infrastructure/platforms');
   });
 
-  it('renders the direct workspace from the router pathname', () => {
-    mockPathname = '/settings/infrastructure/proxmox';
+  it('renders the platform workspace from the router pathname', () => {
+    mockPathname = '/settings/infrastructure/platforms';
     renderWorkspace();
 
-    expect(screen.getByRole('tab', { name: 'Direct Proxmox' })).toHaveAttribute(
+    expect(screen.getByRole('tab', { name: 'Platform connections' })).toHaveAttribute(
       'aria-selected',
       'true',
     );
-    expect(screen.getByTestId('proxmox-settings')).toBeInTheDocument();
+    expect(screen.getByTestId('platform-connections')).toBeInTheDocument();
   });
 
   it('keeps the reporting route available for established operators', () => {
@@ -113,18 +113,18 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByTestId('agent-profiles')).toBeInTheDocument();
   });
 
-  it('uses the guided workspace actions to open install and direct paths', () => {
+  it('uses the guided workspace actions to open install and platform paths', () => {
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('button', { name: 'Install on a host selected' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Open Direct Proxmox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
 
     expect(navigateSpy).toHaveBeenNthCalledWith(1, '/settings/infrastructure/install');
-    expect(navigateSpy).toHaveBeenNthCalledWith(2, '/settings/infrastructure/proxmox');
+    expect(navigateSpy).toHaveBeenNthCalledWith(2, '/settings/infrastructure/platforms');
   });
 
-  it('returns to the base settings route when switching away from direct proxmox', () => {
-    mockPathname = '/settings/infrastructure/proxmox';
+  it('returns to the base settings route when switching away from platform connections', () => {
+    mockPathname = '/settings/infrastructure/platforms';
     renderWorkspace();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Install on a host' }));

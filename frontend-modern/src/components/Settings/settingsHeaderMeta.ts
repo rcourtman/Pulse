@@ -11,7 +11,7 @@ export const SETTINGS_HEADER_META: SettingsHeaderMetaMap = {
   'infrastructure-operations': {
     title: 'Infrastructure Operations',
     description:
-      `Bring infrastructure into Pulse, manage direct Proxmox connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
+      `Bring infrastructure into Pulse, manage API-backed platform connections, and control which systems are actively reporting. ${SELF_HOSTED_PRO_BILLING_PRESENTATION.infrastructureRouteReferral}`,
   },
   'system-general': {
     title: 'General',

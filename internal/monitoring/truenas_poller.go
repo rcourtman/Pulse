@@ -29,6 +29,8 @@ type TrueNASPoller struct {
 	mu              sync.Mutex
 	// providersByOrg is keyed by orgID, then connection ID.
 	providersByOrg map[string]map[string]*truenas.Provider
+	// configsByOrg is keyed by orgID, then connection ID.
+	configsByOrg map[string]map[string]config.TrueNASInstance
 	// cachedRecordsByOrg is keyed by orgID, then connection ID.
 	cachedRecordsByOrg map[string]map[string][]unifiedresources.IngestRecord
 	cancel             context.CancelFunc
@@ -49,6 +51,7 @@ func NewTrueNASPoller(multiTenant *config.MultiTenantPersistence, interval time.
 		multiTenant:        multiTenant,
 		recoveryManager:    recoveryManager,
 		providersByOrg:     make(map[string]map[string]*truenas.Provider),
+		configsByOrg:       make(map[string]map[string]config.TrueNASInstance),
 		cachedRecordsByOrg: make(map[string]map[string][]unifiedresources.IngestRecord),
 		stopped:            stopped,
 		interval:           interval,
@@ -216,12 +219,16 @@ func (p *TrueNASPoller) syncConnections() {
 		if p.providersByOrg[orgID] == nil {
 			p.providersByOrg[orgID] = make(map[string]*truenas.Provider)
 		}
+		if p.configsByOrg[orgID] == nil {
+			p.configsByOrg[orgID] = make(map[string]config.TrueNASInstance)
+		}
 		if p.cachedRecordsByOrg[orgID] == nil {
 			p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
 		}
 
 		for connID, instance := range byConn {
-			if _, exists := p.providersByOrg[orgID][connID]; exists {
+			existingProvider, exists := p.providersByOrg[orgID][connID]
+			if exists && !trueNASProviderConfigChanged(p.configsByOrg[orgID][connID], instance) {
 				continue
 			}
 
@@ -246,7 +253,11 @@ func (p *TrueNASPoller) syncConnections() {
 				continue
 			}
 
+			if existingProvider != nil {
+				existingProvider.Close()
+			}
 			p.providersByOrg[orgID][connID] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
+			p.configsByOrg[orgID][connID] = instance
 		}
 	}
 
@@ -260,6 +271,9 @@ func (p *TrueNASPoller) syncConnections() {
 					provider.Close()
 				}
 				delete(providers, connID)
+				if p.configsByOrg[orgID] != nil {
+					delete(p.configsByOrg[orgID], connID)
+				}
 				if p.cachedRecordsByOrg[orgID] != nil {
 					delete(p.cachedRecordsByOrg[orgID], connID)
 				}
@@ -270,6 +284,9 @@ func (p *TrueNASPoller) syncConnections() {
 					provider.Close()
 				}
 				delete(providers, connID)
+				if p.configsByOrg[orgID] != nil {
+					delete(p.configsByOrg[orgID], connID)
+				}
 				if p.cachedRecordsByOrg[orgID] != nil {
 					delete(p.cachedRecordsByOrg[orgID], connID)
 				}
@@ -278,6 +295,7 @@ func (p *TrueNASPoller) syncConnections() {
 
 		if len(providers) == 0 {
 			delete(p.providersByOrg, orgID)
+			delete(p.configsByOrg, orgID)
 			delete(p.cachedRecordsByOrg, orgID)
 		}
 	}
@@ -482,6 +500,17 @@ func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresour
 	cloned := make([]unifiedresources.IngestRecord, len(records))
 	copy(cloned, records)
 	return cloned
+}
+
+func trueNASProviderConfigChanged(previous, next config.TrueNASInstance) bool {
+	return strings.TrimSpace(previous.Host) != strings.TrimSpace(next.Host) ||
+		previous.Port != next.Port ||
+		strings.TrimSpace(previous.APIKey) != strings.TrimSpace(next.APIKey) ||
+		strings.TrimSpace(previous.Username) != strings.TrimSpace(next.Username) ||
+		strings.TrimSpace(previous.Password) != strings.TrimSpace(next.Password) ||
+		previous.UseHTTPS != next.UseHTTPS ||
+		previous.InsecureSkipVerify != next.InsecureSkipVerify ||
+		strings.TrimSpace(previous.Fingerprint) != strings.TrimSpace(next.Fingerprint)
 }
 
 // classifyTrueNASError wraps a TrueNAS API error in MonitorError for metrics classification.
