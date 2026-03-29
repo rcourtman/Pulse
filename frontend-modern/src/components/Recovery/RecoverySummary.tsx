@@ -43,20 +43,20 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     if (attentionCount() > 0) {
       return {
         value: attentionCount(),
-        label: 'need attention',
+        label: 'attention',
         valueClass: 'text-amber-600 dark:text-amber-400',
       };
     }
     if (postureSummary().running > 0) {
       return {
         value: postureSummary().running,
-        label: 'currently running',
+        label: 'running',
         valueClass: 'text-blue-600 dark:text-blue-400',
       };
     }
     return {
       value: healthyCount(),
-      label: 'healthy items',
+      label: 'healthy',
       valueClass: 'text-emerald-600 dark:text-emerald-400',
     };
   });
@@ -108,32 +108,11 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     if (!latestLabel) return undefined;
     return <span class="ml-auto truncate text-xs text-muted">{latestLabel}</span>;
   });
-  const headerStatusCue = createMemo(() => {
-    if (attentionCount() > 0) {
-      return (
-        <span class="text-amber-600 dark:text-amber-400">
-          {attentionCount()} attention
-        </span>
-      );
-    }
-    if (healthyCount() > 0) {
-      return (
-        <span class="text-emerald-600 dark:text-emerald-400">
-          {healthyCount()} healthy
-        </span>
-      );
-    }
-    return undefined;
-  });
-
   return (
     <Show when={hasRollups()}>
       <SummaryPanel
         headerLeft={
-          <>
-            <span class="font-medium text-base-content">{summary().total} protected items</span>
-            <Show when={headerStatusCue()}>{headerStatusCue()}</Show>
-          </>
+          <span class="font-medium text-base-content">{summary().total} protected items</span>
         }
         timeRange={props.timeRange()}
         onTimeRangeChange={props.onTimeRangeChange ? handleTimeRangeChange : undefined}
@@ -185,7 +164,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="text-xl font-semibold tabular-nums text-base-content">
                 {itemCoverage().itemTypeCount}
               </div>
-              <div class="text-[11px] text-muted">item types</div>
+              <div class="text-[11px] text-muted">types</div>
             </div>
           </div>
         </SummaryMetricCard>
@@ -202,7 +181,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
               <div class="text-xl font-semibold tabular-nums text-base-content">
                 {activity().totalEvents}
               </div>
-              <div class="text-[11px] text-muted">recovery points</div>
+              <div class="text-[11px] text-muted">points</div>
             </div>
           </div>
         </SummaryMetricCard>

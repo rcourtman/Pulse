@@ -754,6 +754,10 @@ stale, and footprint telemetry in multiple stacked readouts inside one card.
 Recovery summary cards should keep one dominant metric with one short support
 band so the strip scans at the same speed as infrastructure and workloads
 instead of behaving like a recovery-only executive summary.
+That same card-headline rule should keep the helper label terse too. Recovery
+headline captions should prefer short monitoring terms like `attention`,
+`healthy`, `running`, `types`, or `points` over sentence-like helper copy that
+makes the strip feel more bespoke than storage or workloads.
 That support band should stay genuinely short, ideally one compact support line
 and only occasionally two, so the operator can scan the summary as orientation
 instead of reading each card like a dense checklist.
@@ -776,13 +780,10 @@ expressed as short metric rows. Recovery summary cards should stay on the
 shared monitoring-card rhythm of one dominant metric plus compact supporting
 rows rather than reviving bespoke visual telemetry that makes the strip read
 heavier than the rest of Pulse.
-That same scan rule should also use the summary header for the first, obvious
-recovery counts. The header should carry total protected items plus one top
-status cue, not a second copy of the full posture breakdown. When recovery has
-attention-state items, the header should surface that attention cue; otherwise
-it may carry the healthy cue. The `Posture` card then owns the composition of
-the posture state instead of having the header and card repeat both healthy and
-attention counts at once.
+That same scan rule should also keep the summary header to orientation rather
+than another status rail. The header should carry total protected items only;
+the `Posture` card owns the attention-versus-healthy composition so the strip
+does not repeat the same posture cue both above and inside the cards.
 That same differentiation rule applies across cards too. `Posture` and
 `Freshness` should not lead with the same stale/attention headline; the
 freshness card should emphasize recent successful coverage such as fresh-in-24h
