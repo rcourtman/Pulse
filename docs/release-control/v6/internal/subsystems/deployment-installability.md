@@ -146,6 +146,11 @@ authority for temp, backup, and cleanup behavior: `manager.go` must resolve
 its working directories through the shared runtime data-dir helper instead of
 rebuilding `PULSE_DATA_DIR` plus `/etc/pulse` fallback logic inside each
 update stage.
+That same boundary also owns outbound update transport safety: env-configured
+update server bases must normalize to absolute HTTP(S) URLs without userinfo,
+and release API, feed, download, and checksum requests must resolve from
+validated URL objects instead of raw string concatenation or request creation
+from unchecked inputs.
 That same boundary also governs install.sh rollback restore targets:
 `adapter_installsh.go` may not hardcode `/etc/pulse` for rollback safety
 backups or config restore, and must derive the rollback config directory

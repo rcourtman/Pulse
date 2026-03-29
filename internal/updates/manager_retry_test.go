@@ -169,6 +169,67 @@ func TestGetLatestReleaseForChannelRetriesTransientStatus(t *testing.T) {
 	}
 }
 
+func TestGetLatestReleaseForChannelRejectsUpdateServerUserinfo(t *testing.T) {
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("1.0.0")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	t.Setenv("PULSE_UPDATE_SERVER", "https://user:pass@example.com/proxy")
+
+	_, err = manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !strings.Contains(err.Error(), "userinfo") {
+		t.Fatalf("expected userinfo validation error, got %v", err)
+	}
+}
+
+func TestGetLatestReleaseForChannelPreservesUpdateServerBasePath(t *testing.T) {
+	setRetrySettingsForTest(t, 2, time.Millisecond, 5*time.Millisecond)
+
+	releases := []ReleaseInfo{
+		{
+			TagName:    "v9.9.9",
+			Prerelease: false,
+		},
+	}
+
+	var hits int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/proxy/repos/example/pulse-fork/releases" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		atomic.AddInt32(&hits, 1)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(releases)
+	}))
+	defer server.Close()
+
+	t.Setenv("PULSE_GITHUB_REPO", "example/pulse-fork")
+	t.Setenv("PULSE_UPDATE_SERVER", server.URL+"/proxy")
+
+	manager := NewManager(&config.Config{UpdateChannel: "stable"})
+	currentVer, err := ParseVersion("1.0.0")
+	if err != nil {
+		t.Fatalf("ParseVersion: %v", err)
+	}
+
+	release, err := manager.getLatestReleaseForChannel(context.Background(), "stable", currentVer)
+	if err != nil {
+		t.Fatalf("getLatestReleaseForChannel error: %v", err)
+	}
+	if release.TagName != "v9.9.9" {
+		t.Fatalf("release tag = %s, want v9.9.9", release.TagName)
+	}
+	if got := atomic.LoadInt32(&hits); got != 1 {
+		t.Fatalf("request count = %d, want 1", got)
+	}
+}
+
 func TestGetLatestReleaseForChannelDoesNotRetryNonRetryableStatus(t *testing.T) {
 	setRetrySettingsForTest(t, 3, time.Millisecond, 5*time.Millisecond)
 

@@ -12,6 +12,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -73,6 +75,7 @@ var (
 
 const (
 	defaultUpdateReleaseRepo string = "rcourtman/Pulse"
+	defaultUpdateAPIBaseURL  string = "https://api.github.com"
 	maxReleaseFeedBytes      int64  = 1 << 20   // 1 MiB
 	maxChecksumFileBytes     int64  = 1 << 20   // 1 MiB
 	maxUpdateDownloadBytes   int64  = 512 << 20 // 512 MiB
@@ -94,8 +97,38 @@ func updateReleaseAPIPath() string {
 	return fmt.Sprintf("/repos/%s/releases", updateReleaseRepo())
 }
 
+func updateReleaseAPIBaseURL() string {
+	baseURL := strings.TrimSpace(os.Getenv("PULSE_UPDATE_SERVER"))
+	if baseURL == "" {
+		return defaultUpdateAPIBaseURL
+	}
+	return baseURL
+}
+
+func resolveUpdateReleaseAPIURL() (*url.URL, error) {
+	baseURL, err := securityutil.NormalizeHTTPBaseURL(updateReleaseAPIBaseURL(), "https")
+	if err != nil {
+		return nil, fmt.Errorf("invalid update server base URL: %w", err)
+	}
+
+	target, err := securityutil.ResolveRelativeURL(baseURL, updateReleaseAPIPath())
+	if err != nil {
+		return nil, fmt.Errorf("build update release URL: %w", err)
+	}
+
+	return target, nil
+}
+
 func updateReleaseFeedURL() string {
 	return fmt.Sprintf("https://github.com/%s/releases.atom", updateReleaseRepo())
+}
+
+func resolveUpdateReleaseFeedURL() (*url.URL, error) {
+	target, err := securityutil.NormalizeAbsoluteHTTPURL(updateReleaseFeedURL())
+	if err != nil {
+		return nil, fmt.Errorf("invalid update release feed URL: %w", err)
+	}
+	return target, nil
 }
 
 func updateReleaseMigrationURL() string {
@@ -650,25 +683,13 @@ func (m *Manager) getLatestReleaseForChannel(ctx context.Context, channel string
 		Bool("isPrerelease", currentVer.IsPrerelease()).
 		Msg("Checking for updates")
 
-	// GitHub API URL (can be overridden for testing)
-	// Always fetch all releases so we can do version-aware filtering
-	baseURL := os.Getenv("PULSE_UPDATE_SERVER")
-	if baseURL == "" {
-		baseURL = "https://api.github.com"
-	}
-	url := baseURL + updateReleaseAPIPath()
-
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	releasesURL, err := resolveUpdateReleaseAPIURL()
 	if err != nil {
-		return nil, fmt.Errorf("build releases request for channel %q: %w", channel, err)
+		return nil, fmt.Errorf("resolve releases request for channel %q: %w", channel, err)
 	}
-
-	// Add headers
-	req.Header.Set("Accept", "application/vnd.github.v3+json")
-	req.Header.Set("User-Agent", "Pulse-Update-Checker")
 
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := m.getWithRetry(ctx, client, url, map[string]string{
+	resp, err := m.getWithRetry(ctx, client, releasesURL, map[string]string{
 		"Accept":     "application/vnd.github.v3+json",
 		"User-Agent": "Pulse-Update-Checker",
 	}, "fetch GitHub releases")
@@ -860,7 +881,10 @@ func (m *Manager) resolveChannel(requested string, currentInfo *VersionInfo) str
 // This is used as a fallback when the API is rate-limited, as the Atom feed
 // doesn't count against API rate limits.
 func (m *Manager) getLatestReleaseFromFeed(ctx context.Context, channel string) (*ReleaseInfo, error) {
-	feedURL := updateReleaseFeedURL()
+	feedURL, err := resolveUpdateReleaseFeedURL()
+	if err != nil {
+		return nil, fmt.Errorf("resolve release feed URL: %w", err)
+	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := m.getWithRetry(ctx, client, feedURL, map[string]string{
@@ -1088,17 +1112,21 @@ func sleepWithContext(ctx context.Context, delay time.Duration) error {
 	}
 }
 
-func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url string, headers map[string]string, operation string) (*http.Response, error) {
+func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, target *url.URL, headers map[string]string, operation string) (*http.Response, error) {
 	if client == nil {
 		client = &http.Client{Timeout: 30 * time.Second}
+	}
+	if target == nil {
+		return nil, fmt.Errorf("target URL is required")
 	}
 
 	if updateHTTPAttempts < 1 {
 		updateHTTPAttempts = 1
 	}
 
+	targetURL := target.String()
 	for attempt := 1; attempt <= updateHTTPAttempts; attempt++ {
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodGet, target, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -1118,7 +1146,7 @@ func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url str
 				Int("maxAttempts", updateHTTPAttempts).
 				Dur("retryIn", delay).
 				Str("operation", operation).
-				Str("url", url).
+				Str("url", targetURL).
 				Msg("Transient update request error; retrying")
 			if err := sleepWithContext(ctx, delay); err != nil {
 				return nil, err
@@ -1137,7 +1165,7 @@ func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url str
 				Int("maxAttempts", updateHTTPAttempts).
 				Dur("retryIn", delay).
 				Str("operation", operation).
-				Str("url", url).
+				Str("url", targetURL).
 				Msg("Transient update HTTP status; retrying")
 
 			if err := sleepWithContext(ctx, delay); err != nil {
@@ -1153,20 +1181,25 @@ func (m *Manager) getWithRetry(ctx context.Context, client *http.Client, url str
 }
 
 // downloadFile downloads a file from URL to dest
-func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, error) {
-	client := &http.Client{Timeout: 5 * time.Minute}
-	resp, err := m.getWithRetry(ctx, client, url, nil, "download file")
+func (m *Manager) downloadFile(ctx context.Context, rawURL, dest string) (int64, error) {
+	downloadURL, err := securityutil.NormalizeAbsoluteHTTPURL(rawURL)
 	if err != nil {
-		return 0, fmt.Errorf("download %q: %w", url, err)
+		return 0, fmt.Errorf("download %q: %w", rawURL, err)
+	}
+
+	client := &http.Client{Timeout: 5 * time.Minute}
+	resp, err := m.getWithRetry(ctx, client, downloadURL, nil, "download file")
+	if err != nil {
+		return 0, fmt.Errorf("download %q: %w", rawURL, err)
 	}
 	defer func() {
 		if closeErr := resp.Body.Close(); closeErr != nil {
-			log.Warn().Err(closeErr).Str("url", url).Msg("Failed to close download response body")
+			log.Warn().Err(closeErr).Str("url", downloadURL.String()).Msg("Failed to close download response body")
 		}
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("download %q: status %d", url, resp.StatusCode)
+		return 0, fmt.Errorf("download %q: status %d", rawURL, resp.StatusCode)
 	}
 	if updateHTTPAttempts < 1 {
 		updateHTTPAttempts = 1
@@ -1201,9 +1234,10 @@ func (m *Manager) downloadFile(ctx context.Context, url, dest string) (int64, er
 
 // verifyChecksum downloads and verifies the SHA256 checksum of a file
 func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath string) error {
-	// Try to find checksum file URL by deriving from tarball URL
-	// Example: pulse-v4.22.0-linux-amd64.tar.gz -> SHA256SUMS or checksums.txt
-	baseURL := tarballURL[:strings.LastIndex(tarballURL, "/")+1]
+	tarballTarget, err := securityutil.NormalizeAbsoluteHTTPURL(tarballURL)
+	if err != nil {
+		return fmt.Errorf("invalid tarball URL %q: %w", tarballURL, err)
+	}
 
 	// Common checksum file names used in GitHub releases
 	checksumNames := []string{"SHA256SUMS", "checksums.txt", "SHA256SUMS.txt"}
@@ -1215,11 +1249,11 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 
 	// Try each checksum filename
 	for _, name := range checksumNames {
-		checksumURL := baseURL + name
+		checksumURL := tarballTarget.ResolveReference(&url.URL{Path: name})
 
 		resp, err := m.getWithRetry(ctx, client, checksumURL, nil, "download checksum manifest")
 		if err != nil {
-			log.Debug().Err(err).Str("url", checksumURL).Msg("Failed to create checksum request")
+			log.Debug().Err(err).Str("url", checksumURL.String()).Msg("Failed to create checksum request")
 			continue
 		}
 		defer resp.Body.Close()
@@ -1245,7 +1279,7 @@ func (m *Manager) verifyChecksum(ctx context.Context, tarballURL, tarballPath st
 			break
 		}
 
-		log.Debug().Int("status", resp.StatusCode).Str("url", checksumURL).Msg("Non-OK checksum response, trying next")
+		log.Debug().Int("status", resp.StatusCode).Str("url", checksumURL.String()).Msg("Non-OK checksum response, trying next")
 		resp.Body.Close()
 	}
 
