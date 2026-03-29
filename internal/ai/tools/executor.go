@@ -165,6 +165,37 @@ type UpdatesProvider interface {
 	IsUpdateActionsEnabled() bool
 }
 
+// AppContainerActionRequest describes a canonical control action against an
+// API-backed app-container resource.
+type AppContainerActionRequest struct {
+	OrgID       string
+	ResourceID  string
+	ProviderUID string
+	Name        string
+	Host        string
+	Platform    string
+	Action      string
+}
+
+// AppContainerActionResult captures the post-action view of an app-container
+// after a native provider operation completes.
+type AppContainerActionResult struct {
+	ResourceID  string
+	ProviderUID string
+	Name        string
+	Host        string
+	Platform    string
+	Action      string
+	Status      string
+	Output      string
+}
+
+// AppContainerActionProvider executes canonical actions for API-backed
+// app-container resources such as TrueNAS-managed applications.
+type AppContainerActionProvider interface {
+	ExecuteAction(ctx context.Context, req AppContainerActionRequest) (*AppContainerActionResult, error)
+}
+
 // DiscoveryProvider provides AI-powered infrastructure discovery
 type DiscoveryProvider interface {
 	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
@@ -368,8 +399,9 @@ type ExecutorConfig struct {
 	DiscoveryProvider DiscoveryProvider
 
 	// Optional providers - unified resources
-	UnifiedResourceProvider UnifiedResourceProvider
-	ActionAuditStore        unifiedresources.ResourceStore
+	UnifiedResourceProvider    UnifiedResourceProvider
+	AppContainerActionProvider AppContainerActionProvider
+	ActionAuditStore           unifiedresources.ResourceStore
 	// Optional typed read access to current infrastructure state.
 	// When provided, tool handlers should prefer this over models.StateSnapshot iteration.
 	ReadState unifiedresources.ReadState
@@ -419,8 +451,9 @@ type PulseToolExecutor struct {
 	discoveryProvider DiscoveryProvider
 
 	// Unified resources provider
-	unifiedResourceProvider UnifiedResourceProvider
-	actionAuditStore        unifiedresources.ResourceStore
+	unifiedResourceProvider    UnifiedResourceProvider
+	appContainerActionProvider AppContainerActionProvider
+	actionAuditStore           unifiedresources.ResourceStore
 	// Typed state reader. Nil means "legacy-only": tools must fall back to StateSnapshot access.
 	readState unifiedresources.ReadState
 
@@ -483,23 +516,24 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		connectionHealth:       cfg.ConnectionHealth,
 		recoveryPointsProvider: cfg.RecoveryPointsProvider,
 
-		guestConfigProvider:      cfg.GuestConfigProvider,
-		diskHealthProvider:       cfg.DiskHealthProvider,
-		updatesProvider:          cfg.UpdatesProvider,
-		metadataUpdater:          cfg.MetadataUpdater,
-		findingsManager:          cfg.FindingsManager,
-		agentProfileManager:      cfg.AgentProfileManager,
-		incidentRecorderProvider: cfg.IncidentRecorderProvider,
-		eventCorrelatorProvider:  cfg.EventCorrelatorProvider,
-		knowledgeStoreProvider:   cfg.KnowledgeStoreProvider,
-		discoveryProvider:        cfg.DiscoveryProvider,
-		unifiedResourceProvider:  cfg.UnifiedResourceProvider,
-		actionAuditStore:         cfg.ActionAuditStore,
-		readState:                cfg.ReadState,
-		controlLevel:             cfg.ControlLevel,
-		protectedGuests:          cfg.ProtectedGuests,
-		orgID:                    normalizeExecutorOrgID(cfg.OrgID),
-		registry:                 NewToolRegistry(),
+		guestConfigProvider:        cfg.GuestConfigProvider,
+		diskHealthProvider:         cfg.DiskHealthProvider,
+		updatesProvider:            cfg.UpdatesProvider,
+		metadataUpdater:            cfg.MetadataUpdater,
+		findingsManager:            cfg.FindingsManager,
+		agentProfileManager:        cfg.AgentProfileManager,
+		incidentRecorderProvider:   cfg.IncidentRecorderProvider,
+		eventCorrelatorProvider:    cfg.EventCorrelatorProvider,
+		knowledgeStoreProvider:     cfg.KnowledgeStoreProvider,
+		discoveryProvider:          cfg.DiscoveryProvider,
+		unifiedResourceProvider:    cfg.UnifiedResourceProvider,
+		appContainerActionProvider: cfg.AppContainerActionProvider,
+		actionAuditStore:           cfg.ActionAuditStore,
+		readState:                  cfg.ReadState,
+		controlLevel:               cfg.ControlLevel,
+		protectedGuests:            cfg.ProtectedGuests,
+		orgID:                      normalizeExecutorOrgID(cfg.OrgID),
+		registry:                   NewToolRegistry(),
 	}
 
 	// Auto-wire backup, replication, and connection health adapters from
@@ -696,6 +730,12 @@ func (e *PulseToolExecutor) SetUnifiedResourceProvider(provider UnifiedResourceP
 	e.unifiedResourceProvider = provider
 }
 
+// SetAppContainerActionProvider sets the provider used for canonical native
+// app-container control actions.
+func (e *PulseToolExecutor) SetAppContainerActionProvider(provider AppContainerActionProvider) {
+	e.appContainerActionProvider = provider
+}
+
 // SetActionAuditStore sets the durable store used to persist action audit and lifecycle events.
 func (e *PulseToolExecutor) SetActionAuditStore(store unifiedresources.ResourceStore) {
 	e.actionAuditStore = store
@@ -771,7 +811,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_read":
 		return e.agentServer != nil
 	case "pulse_control":
-		return e.agentServer != nil && e.hasReadState()
+		return (e.agentServer != nil || e.appContainerActionProvider != nil) && e.hasReadState()
 	case "pulse_file_edit":
 		return e.agentServer != nil
 	case "pulse_discovery":

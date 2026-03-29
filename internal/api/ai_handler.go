@@ -66,6 +66,7 @@ type AIService interface {
 	SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)
 	SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)
 	SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider)
+	SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
 }

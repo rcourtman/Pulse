@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,22 +21,26 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_control",
-			Description: `WRITE operations: control VMs/containers (start/stop/restart/delete) or execute state-modifying commands. For read-only operations use pulse_read. For Docker use pulse_docker.`,
+			Description: `WRITE operations: control canonical resources (VMs, system containers, supported app-containers) or execute state-modifying commands. For read-only operations use pulse_read. For Docker-only workflows use pulse_docker.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
 					"type": {
 						Type:        "string",
-						Description: "Control type: guest or command",
-						Enum:        []string{"guest", "command"},
+						Description: "Control type: guest, resource, or command",
+						Enum:        []string{"guest", "resource", "command"},
 					},
 					"guest_id": {
 						Type:        "string",
 						Description: "For guest: VMID or name",
 					},
+					"resource_id": {
+						Type:        "string",
+						Description: "For resource: discovered resource name or canonical resource ID from pulse_query",
+					},
 					"action": {
 						Type:        "string",
-						Description: "For guest: start, stop, shutdown, restart, delete",
+						Description: "For guest/resource: start, stop, shutdown, restart, delete (availability depends on resource type)",
 						Enum:        []string{"start", "stop", "shutdown", "restart", "delete"},
 					},
 					"command": {
@@ -71,11 +76,239 @@ func (e *PulseToolExecutor) executeControl(ctx context.Context, args map[string]
 	switch controlType {
 	case "guest":
 		return e.executeControlGuest(ctx, args)
+	case "resource":
+		return e.executeControlResource(ctx, args)
 	case "command":
 		return e.executeRunCommand(ctx, args)
 	default:
-		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: guest, command", controlType)), nil
+		return NewErrorResult(fmt.Errorf("unknown type: %s. Use: guest, resource, command", controlType)), nil
 	}
+}
+
+func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
+	resourceRef, _ := args["resource_id"].(string)
+	resourceRef = strings.TrimSpace(resourceRef)
+	action, _ := args["action"].(string)
+	action = strings.TrimSpace(action)
+	approvalID, _ := args["_approval_id"].(string)
+	approvalID = strings.TrimSpace(approvalID)
+
+	if resourceRef == "" {
+		return NewErrorResult(fmt.Errorf("resource_id is required")), nil
+	}
+	if action == "" {
+		return NewErrorResult(fmt.Errorf("action is required")), nil
+	}
+
+	validation := e.validateResolvedResource(resourceRef, action, true)
+	if validation.IsBlocked() {
+		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
+	}
+	if validation.Resource == nil {
+		if validation.ErrorMsg != "" {
+			return NewErrorResult(errors.New(validation.ErrorMsg)), nil
+		}
+		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Use pulse_query to find it first", resourceRef)), nil
+	}
+	if validation.ErrorMsg != "" {
+		log.Warn().
+			Str("resource", resourceRef).
+			Str("action", action).
+			Str("validation_error", validation.ErrorMsg).
+			Msg("[ControlResource] Continuing with discovered resource despite validation warning")
+	}
+
+	resolved := validation.Resource
+	switch resolved.GetKind() {
+	case "vm", "system-container":
+		guestArgs := map[string]interface{}{
+			"guest_id": resolvedResourceControlIdentity(resolved, resourceRef),
+			"action":   action,
+		}
+		if force, ok := args["force"].(bool); ok {
+			guestArgs["force"] = force
+		}
+		if approvalID != "" {
+			guestArgs["_approval_id"] = approvalID
+		}
+		return e.executeControlGuest(ctx, guestArgs)
+
+	case "app-container":
+		switch strings.ToLower(strings.TrimSpace(resolved.GetAdapter())) {
+		case "docker":
+			dockerArgs := map[string]interface{}{
+				"container": resolvedResourceControlIdentity(resolved, resourceRef),
+				"host":      strings.TrimSpace(resolved.GetTargetHost()),
+				"operation": action,
+			}
+			if approvalID != "" {
+				dockerArgs["_approval_id"] = approvalID
+			}
+			return e.executeDockerControl(ctx, dockerArgs)
+		case "truenas":
+			return e.executeNativeAppContainerControl(ctx, resolved, action, approvalID)
+		default:
+			return NewErrorResult(fmt.Errorf("resource '%s' uses unsupported control adapter %q", resourceRef, resolved.GetAdapter())), nil
+		}
+	}
+
+	return NewErrorResult(fmt.Errorf("resource '%s' of kind %q is not controllable through pulse_control type=resource", resourceRef, resolved.GetKind())), nil
+}
+
+func (e *PulseToolExecutor) executeNativeAppContainerControl(ctx context.Context, resource ResolvedResourceInfo, action string, approvalID string) (CallToolResult, error) {
+	if resource == nil {
+		return NewErrorResult(fmt.Errorf("resolved resource is nil")), nil
+	}
+	if e.appContainerActionProvider == nil {
+		return NewErrorResult(fmt.Errorf("native app-container control provider is not available")), nil
+	}
+
+	validActions := map[string]bool{"start": true, "stop": true, "restart": true}
+	if !validActions[action] {
+		return NewErrorResult(fmt.Errorf("invalid app-container action: %s. Use start, stop, or restart", action)), nil
+	}
+	if e.controlLevel == ControlLevelReadOnly {
+		return NewTextResult("Resource control actions are not available in read-only mode."), nil
+	}
+
+	resourceName := resolvedResourceDisplayName(resource)
+	resourceHost := strings.TrimSpace(resource.GetTargetHost())
+	command := fmt.Sprintf("truenas app %s %s", action, resourceName)
+	if resourceHost != "" {
+		command = fmt.Sprintf("%s on %s", command, resourceHost)
+	}
+	approvalTargetType := "app-container"
+	approvalTargetID := strings.TrimSpace(resource.GetResourceID())
+	if approvalTargetID == "" {
+		approvalTargetID = strings.TrimSpace(resource.GetProviderUID())
+	}
+
+	preApproved := consumeApprovalWithValidation(map[string]interface{}{"_approval_id": approvalID}, e.orgID, command, approvalTargetType, approvalTargetID)
+	decision := agentexec.PolicyAllow
+	if e.policy != nil {
+		decision = e.policy.Evaluate(command)
+		if decision == agentexec.PolicyBlock {
+			return NewTextResult(formatPolicyBlocked(command, "This action is blocked by security policy")), nil
+		}
+	}
+	requiresApproval := !e.isAutonomous && (e.controlLevel == ControlLevelControlled || decision == agentexec.PolicyRequireApproval)
+
+	if !preApproved && decision == agentexec.PolicyRequireApproval && !e.isAutonomous {
+		approvalID = createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, resourceName, fmt.Sprintf("%s app-container %s", action, resourceName))
+		return NewTextResult(formatAppContainerApprovalNeeded(resourceName, resourceHost, action, command, approvalID)), nil
+	}
+	if !preApproved && e.controlLevel == ControlLevelControlled {
+		approvalID = createApprovalRecordForOrg(e.orgID, command, approvalTargetType, approvalTargetID, resourceName, fmt.Sprintf("%s app-container %s", action, resourceName))
+		return NewTextResult(formatAppContainerApprovalNeeded(resourceName, resourceHost, action, command, approvalID)), nil
+	}
+
+	var actionResult *AppContainerActionResult
+	executionResult, err := e.executeNativeActionWithAudit(
+		ctx,
+		"pulse_control",
+		strings.TrimSpace(resource.GetResourceID()),
+		approvalID,
+		requiresApproval,
+		map[string]any{
+			"action":      action,
+			"kind":        resource.GetKind(),
+			"providerUid": resource.GetProviderUID(),
+			"host":        resourceHost,
+			"platform":    "truenas",
+			"approvalId":  approvalID,
+			"requestedBy": "pulse_control",
+		},
+		"pulse_control",
+		fmt.Sprintf("%s app-container %s", action, resourceName),
+		func(ctx context.Context) (*unifiedresources.ExecutionResult, error) {
+			result, err := e.appContainerActionProvider.ExecuteAction(ctx, AppContainerActionRequest{
+				OrgID:       e.orgID,
+				ResourceID:  strings.TrimSpace(resource.GetResourceID()),
+				ProviderUID: strings.TrimSpace(resource.GetProviderUID()),
+				Name:        resourceName,
+				Host:        resourceHost,
+				Platform:    "truenas",
+				Action:      action,
+			})
+			if err != nil {
+				return nil, err
+			}
+			actionResult = result
+			return &unifiedresources.ExecutionResult{
+				Success: true,
+				Output:  strings.TrimSpace(result.Output),
+			}, nil
+		},
+	)
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	if actionResult == nil {
+		actionResult = &AppContainerActionResult{
+			ResourceID:  strings.TrimSpace(resource.GetResourceID()),
+			ProviderUID: strings.TrimSpace(resource.GetProviderUID()),
+			Name:        resourceName,
+			Host:        resourceHost,
+			Platform:    "truenas",
+			Action:      action,
+			Output:      strings.TrimSpace(executionResult.Output),
+		}
+	}
+	if strings.TrimSpace(actionResult.Output) == "" {
+		actionResult.Output = strings.TrimSpace(executionResult.Output)
+	}
+
+	response := map[string]interface{}{
+		"success":       executionResult.Success,
+		"type":          "resource",
+		"resource_id":   actionResult.ResourceID,
+		"resource":      actionResult.Name,
+		"resource_type": resource.GetKind(),
+		"provider_uid":  actionResult.ProviderUID,
+		"platform":      actionResult.Platform,
+		"host":          actionResult.Host,
+		"action":        actionResult.Action,
+		"status":        actionResult.Status,
+		"output":        actionResult.Output,
+		"verification": map[string]interface{}{
+			"ok":              executionResult.Success,
+			"method":          "provider_refresh",
+			"observed_status": actionResult.Status,
+		},
+	}
+	return NewJSONResultWithIsError(response, !executionResult.Success), nil
+}
+
+func resolvedResourceControlIdentity(resource ResolvedResourceInfo, fallback string) string {
+	if resource == nil {
+		return strings.TrimSpace(fallback)
+	}
+	if providerUID := strings.TrimSpace(resource.GetProviderUID()); providerUID != "" {
+		return providerUID
+	}
+	for _, alias := range resource.GetAliases() {
+		alias = strings.TrimSpace(alias)
+		if alias != "" {
+			return alias
+		}
+	}
+	return strings.TrimSpace(fallback)
+}
+
+func resolvedResourceDisplayName(resource ResolvedResourceInfo) string {
+	if resource == nil {
+		return ""
+	}
+	aliases := resource.GetAliases()
+	if len(aliases) > 0 {
+		if name := strings.TrimSpace(aliases[0]); name != "" {
+			return name
+		}
+	}
+	if providerUID := strings.TrimSpace(resource.GetProviderUID()); providerUID != "" {
+		return providerUID
+	}
+	return strings.TrimSpace(resource.GetResourceID())
 }
 
 func (e *PulseToolExecutor) executeRunCommand(ctx context.Context, args map[string]interface{}) (CallToolResult, error) {
@@ -1299,6 +1532,22 @@ func formatDockerApprovalNeeded(name, host, action, command, approvalID string) 
 		"approval_id":    approvalID,
 		"container_name": name,
 		"docker_host":    host,
+		"action":         action,
+		"command":        command,
+		"how_to_approve": "Click the approval button in the chat to execute this action.",
+		"do_not_retry":   true,
+	}
+	b, _ := json.Marshal(payload)
+	return "APPROVAL_REQUIRED: " + string(b)
+}
+
+func formatAppContainerApprovalNeeded(name, host, action, command, approvalID string) string {
+	payload := map[string]interface{}{
+		"type":           "approval_required",
+		"approval_id":    approvalID,
+		"resource_name":  name,
+		"resource_host":  host,
+		"resource_type":  "app-container",
 		"action":         action,
 		"command":        command,
 		"how_to_approve": "Click the approval button in the chat to execute this action.",

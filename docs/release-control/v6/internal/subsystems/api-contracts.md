@@ -580,6 +580,13 @@ must stay the canonical API-backed platform boundary for listing, creating,
 updating, deleting, and testing TrueNAS integrations, and `PUT` updates must
 preserve masked secrets (`********`) instead of clearing stored API keys or
 passwords when operators edit non-secret fields from the settings surface.
+That same backend API boundary now also owns the negative space around
+assistant control. Wiring native TrueNAS app actions into
+`internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend
+helpers must not introduce a parallel public `/api/truenas/apps/...` control
+surface; provider-backed app control for Pulse Assistant stays behind the
+shared AI runtime tool contract unless this API contract changes in the same
+slice.
 The monitored-system ledger contract now also carries a canonical grouping
 explanation payload. `/api/license/monitored-system-ledger` must expose the
 shared monitored-system explanation summary, sanitized grouping reasons, and

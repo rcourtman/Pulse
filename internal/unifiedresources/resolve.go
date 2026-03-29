@@ -93,31 +93,17 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 
 	// Check Docker containers — flat list, resolve parent host.
 	// Docker CONTAINER lookups DO rewrite TargetHost to the backing guest name.
-	for _, container := range rs.DockerContainers() {
-		if container == nil {
+	for _, resource := range appContainerResourcesFromReadState(rs) {
+		if !appContainerResourceMatches(resource, name) {
 			continue
 		}
-		if container.Name() == name {
-			loc := models.ResourceLocation{
-				Found:        true,
-				Name:         name,
-				ResourceType: "app-container",
-			}
-			// Find the parent Docker host to populate the routing chain.
-			parentID := container.ParentID()
-			for _, dh := range rs.DockerHosts() {
-				if dh == nil {
-					continue
-				}
-				if dh.ID() == parentID {
-					loc.DockerHostName = dh.Hostname()
-					loc.TargetHost = dh.Hostname()
-					resolveDockerHostParent(rs, dh.Hostname(), dh.HostSourceID(), true, &loc)
-					break
-				}
-			}
-			return loc
+		loc := models.ResourceLocation{
+			Found:        true,
+			Name:         name,
+			ResourceType: "app-container",
 		}
+		populateAppContainerLocation(rs, resource, &loc)
+		return loc
 	}
 
 	// Check generic Hosts (Windows/Linux via Pulse Unified Agent).
@@ -269,4 +255,124 @@ func resolveDockerHostParent(rs ReadState, hostname, sourceID string, rewriteTar
 		}
 	}
 	loc.DockerHostType = "standalone"
+}
+
+type appContainerResourceGetter interface {
+	GetByType(ResourceType) []Resource
+}
+
+type appContainerResourceLister interface {
+	ListByType(ResourceType) []Resource
+}
+
+func appContainerResourcesFromReadState(rs ReadState) []Resource {
+	if rs == nil {
+		return nil
+	}
+	if getter, ok := any(rs).(appContainerResourceGetter); ok {
+		return getter.GetByType(ResourceTypeAppContainer)
+	}
+	if lister, ok := any(rs).(appContainerResourceLister); ok {
+		return lister.ListByType(ResourceTypeAppContainer)
+	}
+
+	containers := rs.DockerContainers()
+	if len(containers) == 0 {
+		return nil
+	}
+	resources := make([]Resource, 0, len(containers))
+	for _, container := range containers {
+		if container == nil || container.r == nil {
+			continue
+		}
+		resources = append(resources, cloneResource(container.r))
+	}
+	return resources
+}
+
+func appContainerResourceMatches(resource Resource, name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(resource.Name), name) || strings.EqualFold(strings.TrimSpace(resource.ID), name) {
+		return true
+	}
+	if resource.Docker != nil && strings.EqualFold(strings.TrimSpace(resource.Docker.ContainerID), name) {
+		return true
+	}
+	if resource.Canonical != nil {
+		for _, alias := range resource.Canonical.Aliases {
+			if strings.EqualFold(strings.TrimSpace(alias), name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func appContainerResourceHost(resource Resource) string {
+	if host := strings.TrimSpace(resource.ParentName); host != "" {
+		return host
+	}
+	if resource.Docker != nil {
+		if host := strings.TrimSpace(resource.Docker.Hostname); host != "" {
+			return host
+		}
+	}
+	if resource.TrueNAS != nil {
+		if host := strings.TrimSpace(resource.TrueNAS.Hostname); host != "" {
+			return host
+		}
+	}
+	for _, host := range resource.Identity.Hostnames {
+		host = strings.TrimSpace(host)
+		if host != "" {
+			return host
+		}
+	}
+	return ""
+}
+
+func populateAppContainerLocation(rs ReadState, resource Resource, loc *models.ResourceLocation) {
+	if loc == nil {
+		return
+	}
+	hostName := appContainerResourceHost(resource)
+	if hostName == "" {
+		return
+	}
+	loc.TargetHost = hostName
+
+	if !appContainerUsesDockerRouting(resource) {
+		return
+	}
+
+	loc.DockerHostName = hostName
+	hostSourceID := hostName
+	if resource.ParentID != nil {
+		if parentID := strings.TrimSpace(*resource.ParentID); parentID != "" {
+			hostSourceID = parentID
+		}
+	}
+	resolveDockerHostParent(rs, hostName, hostSourceID, true, loc)
+}
+
+func appContainerUsesDockerRouting(resource Resource) bool {
+	if resourceHasTagCaseInsensitive(resource, "truenas") {
+		return false
+	}
+	if resource.Docker != nil {
+		return true
+	}
+	return resourceHasTagCaseInsensitive(resource, "docker")
+}
+
+func resourceHasTagCaseInsensitive(resource Resource, needle string) bool {
+	for _, tag := range resource.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag), needle) {
+			return true
+		}
+	}
+	return false
 }

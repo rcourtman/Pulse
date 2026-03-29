@@ -902,6 +902,43 @@ func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 	}
 }
 
+func TestExecuteGetResource_RegistersTrueNASAppContainerForCanonicalControl(t *testing.T) {
+	provider := newTrueNASUnifiedQueryProvider(t)
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+	})
+	executor.SetResolvedContext(resolved)
+
+	_, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"resource_id":   "nextcloud",
+	})
+	if err != nil {
+		t.Fatalf("get app-container: unexpected error: %v", err)
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("Nextcloud")
+	if !found {
+		t.Fatal("expected resolved context to include TrueNAS app by alias")
+	}
+	if info.GetAdapter() != "truenas" {
+		t.Fatalf("expected truenas adapter, got %q", info.GetAdapter())
+	}
+	if info.GetTargetHost() != "truenas-main" {
+		t.Fatalf("expected truenas-main target host, got %q", info.GetTargetHost())
+	}
+	allowed := strings.Join(info.GetAllowedActions(), ",")
+	for _, action := range []string{"query", "get", "start", "stop", "restart"} {
+		if !strings.Contains(allowed, action) {
+			t.Fatalf("expected allowed actions to include %q, got %v", action, info.GetAllowedActions())
+		}
+	}
+}
+
 func TestExecuteQuerySurfacesIncludeGovernedMetadata(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{

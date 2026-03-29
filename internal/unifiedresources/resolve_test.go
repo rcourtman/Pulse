@@ -2,6 +2,7 @@ package unifiedresources
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -169,6 +170,98 @@ func TestResolveResource_DockerHost(t *testing.T) {
 	if loc.DockerHostType != "standalone" {
 		t.Fatalf("expected standalone, got %q", loc.DockerHostType)
 	}
+}
+
+func TestResolveResource_TrueNASAppDoesNotUseDockerRouting(t *testing.T) {
+	rr := newTrueNASAppRegistryFixture()
+
+	loc := ResolveResource(rr, "Nextcloud")
+	if !loc.Found || loc.ResourceType != "app-container" {
+		t.Fatalf("expected TrueNAS app-container, got found=%v type=%q", loc.Found, loc.ResourceType)
+	}
+	if loc.TargetHost != "truenas-main" {
+		t.Fatalf("expected target host truenas-main, got %q", loc.TargetHost)
+	}
+	if loc.DockerHostName != "" || loc.DockerHostType != "" {
+		t.Fatalf("expected TrueNAS app to avoid docker routing, got docker_host=%q type=%q", loc.DockerHostName, loc.DockerHostType)
+	}
+}
+
+func TestLookupResolvedResource_TrueNASAppUsesCanonicalAppContainerSet(t *testing.T) {
+	rr := newTrueNASAppRegistryFixture()
+
+	loc := ResolveResource(rr, "Nextcloud")
+	resource := lookupResolvedResource(rr, loc)
+	if resource == nil {
+		t.Fatal("expected resolved resource for TrueNAS app")
+	}
+	if resource.Type != ResourceTypeAppContainer {
+		t.Fatalf("expected app-container resource, got %q", resource.Type)
+	}
+	if resource.TrueNAS == nil {
+		t.Fatalf("expected TrueNAS metadata on resolved resource, got %+v", resource)
+	}
+	if resource.Name != "Nextcloud" {
+		t.Fatalf("expected canonical app name Nextcloud, got %q", resource.Name)
+	}
+}
+
+func newTrueNASAppRegistryFixture() *ResourceRegistry {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+	hostID := "agent:truenas-main"
+	hostSourceID := "truenas-system:truenas-main"
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: hostSourceID,
+			Resource: Resource{
+				ID:        hostID,
+				Type:      ResourceTypeAgent,
+				Name:      "truenas-main",
+				Status:    StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Agent: &AgentData{
+					Hostname: "truenas-main",
+					Platform: "truenas",
+				},
+				TrueNAS: &TrueNASData{Hostname: "truenas-main"},
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"truenas-main"}},
+		},
+		{
+			SourceID:       "app:nextcloud",
+			ParentSourceID: hostSourceID,
+			Resource: Resource{
+				ID:         "app-container:truenas-main:nextcloud",
+				Type:       ResourceTypeAppContainer,
+				Name:       "Nextcloud",
+				Status:     StatusOnline,
+				LastSeen:   now,
+				UpdatedAt:  now,
+				ParentID:   stringPtr(hostID),
+				ParentName: "truenas-main",
+				Docker: &DockerData{
+					ContainerID: "nextcloud",
+					Hostname:    "truenas-main",
+				},
+				TrueNAS: &TrueNASData{Hostname: "truenas-main"},
+				Canonical: &CanonicalIdentity{
+					DisplayName: "Nextcloud",
+					Hostname:    "truenas-main",
+					PrimaryID:   "nextcloud",
+					Aliases:     []string{"Nextcloud", "nextcloud"},
+				},
+				Tags: []string{"truenas", "app"},
+			},
+			Identity: ResourceIdentity{Hostnames: []string{"truenas-main"}},
+		},
+	})
+	return rr
+}
+
+func stringPtr(value string) *string {
+	return &value
 }
 
 func TestResolveResource_Host(t *testing.T) {

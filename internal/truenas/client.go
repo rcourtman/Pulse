@@ -460,6 +460,43 @@ func (c *Client) GetAppStats(ctx context.Context) (map[string]AppStats, error) {
 	return rpc.readAppStatsEvent(ctx, defaultAppStatsIntervalSeconds)
 }
 
+// StartApp requests that TrueNAS start the named app through the canonical
+// JSON-RPC control path.
+func (c *Client) StartApp(ctx context.Context, appID string) error {
+	return c.executeAppAction(ctx, "app.start", appID)
+}
+
+// StopApp requests that TrueNAS stop the named app through the canonical
+// JSON-RPC control path.
+func (c *Client) StopApp(ctx context.Context, appID string) error {
+	return c.executeAppAction(ctx, "app.stop", appID)
+}
+
+func (c *Client) executeAppAction(ctx context.Context, method, appID string) error {
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return fmt.Errorf("truenas app id is required")
+	}
+
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return err
+	}
+	if err := rpc.call(ctx, method, []any{appID}, nil); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetZFSSnapshots returns a best-effort list of ZFS snapshots.
 //
 // NOTE: TrueNAS exposes multiple snapshot APIs across versions. We intentionally parse the

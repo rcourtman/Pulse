@@ -80,6 +80,7 @@ querying, and the operator-facing storage health presentation layer.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
 21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows.
+22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
 
 ## Forbidden Paths
 
@@ -1517,3 +1518,9 @@ onboarding. Storage and recovery may consume resulting TrueNAS snapshots and
 replication points, but connection CRUD, masked-secret preservation on update,
 and platform polling setup must stay on the adjacent platform-connections
 contract instead of being rebuilt as storage/recovery-local connection flows.
+That same shared boundary also owns the line between recovery data and
+assistant control. Backend-native TrueNAS app actions may refresh the poller
+and recovery ingest after a control event, but storage and recovery surfaces
+must continue to consume the resulting canonical recovery points instead of
+growing a second recovery-local control transport or action-specific payload
+contract.

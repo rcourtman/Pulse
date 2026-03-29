@@ -308,7 +308,45 @@ type mockResolvedContext struct {
 }
 
 func (m *mockResolvedContext) AddResolvedResource(reg ResourceRegistration) {
-	// Not implemented for mock
+	if m.resources == nil {
+		m.resources = make(map[string]ResolvedResourceInfo)
+	}
+	if m.aliases == nil {
+		m.aliases = make(map[string]ResolvedResourceInfo)
+	}
+
+	resourceID := strings.TrimSpace(reg.Kind)
+	if providerUID := strings.TrimSpace(reg.ProviderUID); providerUID != "" {
+		resourceID = resourceID + ":" + providerUID
+	}
+	if resourceID == "" {
+		resourceID = strings.TrimSpace(reg.Name)
+	}
+
+	resource := &mockResource{
+		resourceID:     resourceID,
+		resourceType:   reg.Kind,
+		targetHost:     strings.TrimSpace(reg.HostName),
+		agentID:        strings.TrimSpace(reg.HostUID),
+		providerUID:    strings.TrimSpace(reg.ProviderUID),
+		kind:           reg.Kind,
+		aliases:        append([]string(nil), reg.Aliases...),
+		allowedActions: nil,
+	}
+	if len(reg.Executors) > 0 {
+		resource.adapter = strings.TrimSpace(reg.Executors[0].Adapter)
+		resource.allowedActions = append([]string(nil), reg.Executors[0].Actions...)
+		resource.node = strings.TrimSpace(reg.Executors[0].ExecutorID)
+	}
+
+	m.resources[resourceID] = resource
+	for _, alias := range append([]string{reg.Name, resourceID}, reg.Aliases...) {
+		alias = strings.TrimSpace(alias)
+		if alias == "" {
+			continue
+		}
+		m.aliases[alias] = resource
+	}
 }
 
 func (m *mockResolvedContext) GetResolvedResourceByID(resourceID string) (ResolvedResourceInfo, bool) {

@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
@@ -493,6 +494,91 @@ func (p *TrueNASPoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources
 	return records
 }
 
+// ControlApp executes a canonical TrueNAS app action for one tenant-scoped
+// API-backed app-container resource and refreshes the cached records afterward.
+func (p *TrueNASPoller) ControlApp(ctx context.Context, orgID, host, appID, action string) (*truenas.App, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas poller is nil")
+	}
+	if !truenas.IsFeatureEnabled() {
+		return nil, fmt.Errorf("truenas integration is disabled")
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+	host = strings.TrimSpace(host)
+	appID = strings.TrimSpace(appID)
+	action = strings.ToLower(strings.TrimSpace(action))
+	if appID == "" {
+		return nil, fmt.Errorf("truenas app id is required")
+	}
+
+	type providerEntry struct {
+		connectionID string
+		provider     *truenas.Provider
+	}
+
+	p.mu.Lock()
+	entries := make([]providerEntry, 0, len(p.providersByOrg[orgID]))
+	for connectionID, provider := range p.providersByOrg[orgID] {
+		if provider == nil {
+			continue
+		}
+		entries = append(entries, providerEntry{
+			connectionID: connectionID,
+			provider:     provider,
+		})
+	}
+	p.mu.Unlock()
+
+	for _, entry := range entries {
+		currentSnapshot := entry.provider.Snapshot()
+		currentApp, ok := findTrueNASAppSnapshot(currentSnapshot, host, appID)
+		if !ok {
+			continue
+		}
+
+		var nextSnapshot *truenas.FixtureSnapshot
+		var err error
+		switch action {
+		case "start", "stop":
+			nextSnapshot, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), action)
+		case "restart":
+			if trueNASAppRunning(currentApp) {
+				if _, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), "stop"); err != nil {
+					return nil, err
+				}
+			}
+			nextSnapshot, err = entry.provider.ControlApp(ctx, trueNASAppCanonicalID(*currentApp), "start")
+		default:
+			return nil, fmt.Errorf("unsupported truenas app action %q", action)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		records := entry.provider.Records()
+		p.mu.Lock()
+		if p.cachedRecordsByOrg[orgID] == nil {
+			p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
+		}
+		p.cachedRecordsByOrg[orgID][entry.connectionID] = cloneIngestRecords(records)
+		p.mu.Unlock()
+		p.ingestRecoveryPoints(ctx, orgID, entry.connectionID, entry.provider)
+
+		if updatedApp, ok := findTrueNASAppSnapshot(nextSnapshot, host, appID); ok {
+			appCopy := *updatedApp
+			return &appCopy, nil
+		}
+		appCopy := *currentApp
+		return &appCopy, nil
+	}
+
+	return nil, fmt.Errorf("truenas app %q was not found for org %q", appID, orgID)
+}
+
 func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresources.IngestRecord {
 	if len(records) == 0 {
 		return nil
@@ -500,6 +586,44 @@ func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresour
 	cloned := make([]unifiedresources.IngestRecord, len(records))
 	copy(cloned, records)
 	return cloned
+}
+
+func findTrueNASAppSnapshot(snapshot *truenas.FixtureSnapshot, host, appID string) (*truenas.App, bool) {
+	if snapshot == nil {
+		return nil, false
+	}
+	if host != "" && !strings.EqualFold(strings.TrimSpace(snapshot.System.Hostname), host) {
+		return nil, false
+	}
+	for i := range snapshot.Apps {
+		app := &snapshot.Apps[i]
+		if strings.EqualFold(trueNASAppCanonicalID(*app), appID) || strings.EqualFold(strings.TrimSpace(app.Name), appID) {
+			return app, true
+		}
+	}
+	return nil, false
+}
+
+func trueNASAppCanonicalID(app truenas.App) string {
+	if id := strings.TrimSpace(app.ID); id != "" {
+		return id
+	}
+	return strings.TrimSpace(app.Name)
+}
+
+func trueNASAppRunning(app *truenas.App) bool {
+	if app == nil {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(app.State), "RUNNING") {
+		return true
+	}
+	for _, container := range app.Containers {
+		if strings.EqualFold(strings.TrimSpace(container.State), "running") {
+			return true
+		}
+	}
+	return false
 }
 
 func trueNASProviderConfigChanged(previous, next config.TrueNASInstance) bool {

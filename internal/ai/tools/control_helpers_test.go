@@ -166,6 +166,17 @@ func TestFormattingHelpers(t *testing.T) {
 		assert.Equal(t, "docker restart web", payload["command"])
 		assert.Equal(t, "id-3", payload["approval_id"])
 	})
+
+	t.Run("formatAppContainerApprovalNeeded", func(t *testing.T) {
+		payload := decodePayload(t, formatAppContainerApprovalNeeded("Nextcloud", "truenas-main", "restart", "truenas app restart Nextcloud on truenas-main", "id-4"), "APPROVAL_REQUIRED: ")
+		assert.Equal(t, "approval_required", payload["type"])
+		assert.Equal(t, "Nextcloud", payload["resource_name"])
+		assert.Equal(t, "truenas-main", payload["resource_host"])
+		assert.Equal(t, "app-container", payload["resource_type"])
+		assert.Equal(t, "restart", payload["action"])
+		assert.Equal(t, "truenas app restart Nextcloud on truenas-main", payload["command"])
+		assert.Equal(t, "id-4", payload["approval_id"])
+	})
 }
 
 func decodePayload(t *testing.T, value, prefix string) map[string]interface{} {

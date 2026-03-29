@@ -47,6 +47,11 @@ type fetcherCloser interface {
 	Close()
 }
 
+type appActionFetcher interface {
+	StartApp(ctx context.Context, appID string) error
+	StopApp(ctx context.Context, appID string) error
+}
+
 // APIFetcher loads snapshots from the live TrueNAS API client.
 type APIFetcher struct {
 	Client *Client
@@ -66,6 +71,20 @@ func (f *APIFetcher) Close() {
 		return
 	}
 	f.Client.Close()
+}
+
+func (f *APIFetcher) StartApp(ctx context.Context, appID string) error {
+	if f == nil || f.Client == nil {
+		return fmt.Errorf("truenas api fetcher client is nil")
+	}
+	return f.Client.StartApp(ctx, appID)
+}
+
+func (f *APIFetcher) StopApp(ctx context.Context, appID string) error {
+	if f == nil || f.Client == nil {
+		return fmt.Errorf("truenas api fetcher client is nil")
+	}
+	return f.Client.StopApp(ctx, appID)
 }
 
 // FixtureFetcher loads snapshots from static fixture data.
@@ -136,6 +155,36 @@ func (p *Provider) Refresh(ctx context.Context) error {
 	p.lastSnapshot = copyFixtureSnapshot(snapshot)
 	p.mu.Unlock()
 	return nil
+}
+
+// ControlApp executes a native start/stop action against a TrueNAS app and
+// refreshes the cached snapshot so downstream readers observe canonical state.
+func (p *Provider) ControlApp(ctx context.Context, appID, action string) (*FixtureSnapshot, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas provider is nil")
+	}
+	executor, ok := p.fetcher.(appActionFetcher)
+	if !ok {
+		return nil, fmt.Errorf("truenas provider fetcher does not support app control")
+	}
+
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "start":
+		if err := executor.StartApp(ctx, appID); err != nil {
+			return nil, err
+		}
+	case "stop":
+		if err := executor.StopApp(ctx, appID); err != nil {
+			return nil, err
+		}
+	default:
+		return nil, fmt.Errorf("unsupported truenas app action %q", action)
+	}
+
+	if err := p.Refresh(ctx); err != nil {
+		return nil, err
+	}
+	return p.Snapshot(), nil
 }
 
 // Close releases resources held by the active fetcher, if supported.
@@ -337,15 +386,16 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			SourceID:       appSourceID(app.ID),
 			ParentSourceID: systemSourceID,
 			Resource: unifiedresources.Resource{
-				Type:       unifiedresources.ResourceTypeAppContainer,
-				Technology: "docker",
-				Name:       appDisplayName(app),
-				Status:     statusFromApp(app),
-				LastSeen:   collectedAt,
-				UpdatedAt:  collectedAt,
-				Metrics:    metrics,
-				Docker:     dockerMeta,
-				Tags:       appTags(app),
+				Type:         unifiedresources.ResourceTypeAppContainer,
+				Technology:   "docker",
+				Name:         appDisplayName(app),
+				Status:       statusFromApp(app),
+				LastSeen:     collectedAt,
+				UpdatedAt:    collectedAt,
+				Metrics:      metrics,
+				Docker:       dockerMeta,
+				Capabilities: truenasAppCapabilities(),
+				Tags:         appTags(app),
 			},
 			Identity: unifiedresources.ResourceIdentity{
 				Hostnames: dedupeStrings([]string{appDisplayName(app)}),
@@ -968,6 +1018,35 @@ func statusFromApp(app App) unifiedresources.ResourceStatus {
 		return unifiedresources.StatusOffline
 	default:
 		return unifiedresources.StatusUnknown
+	}
+}
+
+func truenasAppCapabilities() []unifiedresources.ResourceCapability {
+	return []unifiedresources.ResourceCapability{
+		{
+			Name:                 "start",
+			Type:                 unifiedresources.CapabilityTypeCommon,
+			Description:          "Start the TrueNAS-managed application.",
+			MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+			Platform:             "truenas",
+			InternalHandler:      "app.start",
+		},
+		{
+			Name:                 "stop",
+			Type:                 unifiedresources.CapabilityTypeCommon,
+			Description:          "Stop the TrueNAS-managed application.",
+			MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+			Platform:             "truenas",
+			InternalHandler:      "app.stop",
+		},
+		{
+			Name:                 "restart",
+			Type:                 unifiedresources.CapabilityTypeCommon,
+			Description:          "Restart the TrueNAS-managed application using canonical stop/start semantics.",
+			MinimumApprovalLevel: unifiedresources.ApprovalAdmin,
+			Platform:             "truenas",
+			InternalHandler:      "app.restart",
+		},
 	}
 }
 

@@ -280,6 +280,40 @@ func TestGetAppsEnrichesStatsFromRPC(t *testing.T) {
 	}
 }
 
+func TestStartAndStopAppUseRPCMethods(t *testing.T) {
+	var rpcCalls int
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		rpcCalls++
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		actionReq := readRPCRequest(t, conn)
+		expectedMethod := "app.start"
+		if rpcCalls == 2 {
+			expectedMethod = "app.stop"
+		}
+		if actionReq.Method != expectedMethod {
+			t.Fatalf("expected %s, got %q", expectedMethod, actionReq.Method)
+		}
+		writeRPCResult(t, conn, actionReq.ID, true)
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	if err := client.StartApp(context.Background(), "nextcloud"); err != nil {
+		t.Fatalf("StartApp() error = %v", err)
+	}
+	if err := client.StopApp(context.Background(), "nextcloud"); err != nil {
+		t.Fatalf("StopApp() error = %v", err)
+	}
+	if rpcCalls != 2 {
+		t.Fatalf("expected two RPC app-action sessions, got %d", rpcCalls)
+	}
+}
+
 func TestGetSystemTelemetryFromRPC(t *testing.T) {
 	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
 		authReq := readRPCRequest(t, conn)

@@ -37,23 +37,24 @@ type AgentServer interface {
 
 // MCP provider type aliases for external use
 type (
-	MCPAlertProvider           = tools.AlertProvider
-	MCPFindingsProvider        = tools.FindingsProvider
-	MCPBaselineProvider        = tools.BaselineProvider
-	MCPPatternProvider         = tools.PatternProvider
-	MCPMetricsHistoryProvider  = tools.MetricsHistoryProvider
-	MCPBackupProvider          = tools.BackupProvider
-	MCPGuestConfigProvider     = tools.GuestConfigProvider
-	MCPDiskHealthProvider      = tools.DiskHealthProvider
-	MCPUpdatesProvider         = tools.UpdatesProvider
-	AgentProfileManager        = tools.AgentProfileManager
-	FindingsManager            = tools.FindingsManager
-	MetadataUpdater            = tools.MetadataUpdater
-	IncidentRecorderProvider   = tools.IncidentRecorderProvider
-	EventCorrelatorProvider    = tools.EventCorrelatorProvider
-	KnowledgeStoreProvider     = tools.KnowledgeStoreProvider
-	MCPDiscoveryProvider       = tools.DiscoveryProvider
-	MCPUnifiedResourceProvider = tools.UnifiedResourceProvider
+	MCPAlertProvider              = tools.AlertProvider
+	MCPFindingsProvider           = tools.FindingsProvider
+	MCPBaselineProvider           = tools.BaselineProvider
+	MCPPatternProvider            = tools.PatternProvider
+	MCPMetricsHistoryProvider     = tools.MetricsHistoryProvider
+	MCPBackupProvider             = tools.BackupProvider
+	MCPGuestConfigProvider        = tools.GuestConfigProvider
+	MCPDiskHealthProvider         = tools.DiskHealthProvider
+	MCPUpdatesProvider            = tools.UpdatesProvider
+	MCPAppContainerActionProvider = tools.AppContainerActionProvider
+	AgentProfileManager           = tools.AgentProfileManager
+	FindingsManager               = tools.FindingsManager
+	MetadataUpdater               = tools.MetadataUpdater
+	IncidentRecorderProvider      = tools.IncidentRecorderProvider
+	EventCorrelatorProvider       = tools.EventCorrelatorProvider
+	KnowledgeStoreProvider        = tools.KnowledgeStoreProvider
+	MCPDiscoveryProvider          = tools.DiscoveryProvider
+	MCPUnifiedResourceProvider    = tools.UnifiedResourceProvider
 )
 
 // Config holds service configuration
@@ -1230,6 +1231,14 @@ func (s *Service) SetUnifiedResourceProvider(provider tools.UnifiedResourceProvi
 	defer s.mu.Unlock()
 	if s.executor != nil {
 		s.executor.SetUnifiedResourceProvider(provider)
+	}
+}
+
+func (s *Service) SetAppContainerActionProvider(provider MCPAppContainerActionProvider) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.executor != nil {
+		s.executor.SetAppContainerActionProvider(provider)
 	}
 }
 

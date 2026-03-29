@@ -428,6 +428,11 @@ and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint
 reachability state, discovery-prefill defaults, and variant copy stay on the
 same governed lifecycle surface instead of drifting into card-local strings or
 prefill assembly.
+That same platform-connections boundary also defines the agent-optional rule
+for API-backed platforms. TrueNAS may surface Assistant control and runtime
+insight through the backend-owned platform connection and polling path, but
+adjacent lifecycle flows must not start treating a unified-agent install as
+the required bootstrap for provider-backed TrueNAS operations.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must tell a new
 Pulse user to start with `Install on a host` to add the first monitored

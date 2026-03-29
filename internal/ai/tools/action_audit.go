@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -136,6 +137,94 @@ func (e *PulseToolExecutor) executeCommandWithAudit(
 	return result, err
 }
 
+func (e *PulseToolExecutor) executeNativeActionWithAudit(
+	ctx context.Context,
+	capabilityName string,
+	resourceID string,
+	approvalID string,
+	requiresApproval bool,
+	params map[string]any,
+	requestedBy string,
+	reason string,
+	execute func(context.Context) (*unifiedresources.ExecutionResult, error),
+) (*unifiedresources.ExecutionResult, error) {
+	actionID := uuid.NewString()
+	requestCorrelationID := strings.TrimSpace(approvalID)
+	if requestCorrelationID == "" {
+		requestCorrelationID = actionID
+	}
+
+	now := time.Now().UTC()
+	plan := unifiedresources.ActionPlan{
+		ActionID:         actionID,
+		RequestID:        requestCorrelationID,
+		Allowed:          true,
+		RequiresApproval: requiresApproval,
+		ApprovalPolicy: func() unifiedresources.ActionApprovalLevel {
+			if requiresApproval {
+				return unifiedresources.ApprovalAdmin
+			}
+			return unifiedresources.ApprovalNone
+		}(),
+		PlannedAt:       now,
+		ExpiresAt:       now.Add(5 * time.Minute),
+		ResourceVersion: "",
+		PolicyVersion:   "",
+		PlanHash:        actionPlanHashForParams(actionID, requestCorrelationID, capabilityName, resourceID, params, reason),
+		Message:         reason,
+	}
+
+	record := unifiedresources.ActionAuditRecord{
+		ID:        actionID,
+		CreatedAt: now,
+		UpdatedAt: now,
+		State:     unifiedresources.ActionStateExecuting,
+		Request: unifiedresources.ActionRequest{
+			RequestID:      requestCorrelationID,
+			ResourceID:     strings.TrimSpace(resourceID),
+			CapabilityName: capabilityName,
+			Params:         cloneActionParams(params),
+			Reason:         reason,
+			RequestedBy:    requestedBy,
+		},
+		Plan: plan,
+	}
+	record.Approvals = approvalRecordsForID(approvalID)
+
+	e.recordActionLifecycle(actionID, unifiedresources.ActionStatePlanned, requestedBy, reason)
+	e.recordActionLifecycle(actionID, unifiedresources.ActionStateExecuting, requestedBy, "dispatching native resource action")
+	e.recordActionAudit(record)
+
+	result, err := execute(ctx)
+	finalState := unifiedresources.ActionStateCompleted
+	finalMessage := "native resource action completed"
+	executionResult := &unifiedresources.ExecutionResult{Success: true}
+
+	if err != nil {
+		finalState = unifiedresources.ActionStateFailed
+		finalMessage = err.Error()
+		executionResult.Success = false
+		executionResult.ErrorMessage = err.Error()
+	} else if result != nil {
+		executionResult = result
+		if !result.Success {
+			finalState = unifiedresources.ActionStateFailed
+			finalMessage = strings.TrimSpace(result.ErrorMessage)
+			if finalMessage == "" {
+				finalMessage = "native resource action failed"
+			}
+		}
+	}
+
+	record.State = finalState
+	record.UpdatedAt = time.Now().UTC()
+	record.Result = executionResult
+	e.recordActionAudit(record)
+	e.recordActionLifecycle(actionID, finalState, requestedBy, finalMessage)
+
+	return executionResult, err
+}
+
 func (e *PulseToolExecutor) recordActionAudit(record unifiedresources.ActionAuditRecord) {
 	if e == nil || e.actionAuditStore == nil {
 		return
@@ -181,6 +270,57 @@ func actionPlanHash(actionID, requestID, capabilityName, resourceID string, payl
 		reason,
 	}, "|")))
 	return hex.EncodeToString(sum[:])
+}
+
+func actionPlanHashForParams(actionID, requestID, capabilityName, resourceID string, params map[string]any, reason string) string {
+	encoded, _ := json.Marshal(cloneActionParams(params))
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		actionID,
+		requestID,
+		capabilityName,
+		strings.TrimSpace(resourceID),
+		string(encoded),
+		reason,
+	}, "|")))
+	return hex.EncodeToString(sum[:])
+}
+
+func cloneActionParams(params map[string]any) map[string]any {
+	if len(params) == 0 {
+		return nil
+	}
+	cloned := make(map[string]any, len(params))
+	for key, value := range params {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func approvalRecordsForID(approvalID string) []unifiedresources.ActionApprovalRecord {
+	approvalID = strings.TrimSpace(approvalID)
+	if approvalID == "" {
+		return nil
+	}
+	store := approval.GetStore()
+	if store == nil {
+		return nil
+	}
+	req, ok := store.GetApproval(approvalID)
+	if !ok || req == nil {
+		return nil
+	}
+
+	record := unifiedresources.ActionApprovalRecord{
+		Actor:     strings.TrimSpace(req.DecidedBy),
+		Method:    unifiedresources.MethodAPI,
+		Timestamp: approvalTimestamp(req),
+		Outcome:   unifiedresources.OutcomeApproved,
+		Reason:    strings.TrimSpace(req.Context),
+	}
+	if req.Status == approval.StatusDenied {
+		record.Outcome = unifiedresources.OutcomeRejected
+	}
+	return []unifiedresources.ActionApprovalRecord{record}
 }
 
 func approvalTimestamp(req *approval.ApprovalRequest) time.Time {

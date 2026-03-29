@@ -249,6 +249,85 @@ func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 	}
 }
 
+type pollerControlFetcher struct {
+	snapshot   *truenas.FixtureSnapshot
+	startCalls []string
+	stopCalls  []string
+}
+
+func (f *pollerControlFetcher) Fetch(context.Context) (*truenas.FixtureSnapshot, error) {
+	if f == nil {
+		return nil, nil
+	}
+	return copyTrueNASSnapshot(f.snapshot), nil
+}
+
+func (f *pollerControlFetcher) StartApp(_ context.Context, appID string) error {
+	f.startCalls = append(f.startCalls, appID)
+	for i := range f.snapshot.Apps {
+		if f.snapshot.Apps[i].ID == appID {
+			f.snapshot.Apps[i].State = "RUNNING"
+			if len(f.snapshot.Apps[i].Containers) > 0 {
+				f.snapshot.Apps[i].Containers[0].State = "running"
+			}
+		}
+	}
+	return nil
+}
+
+func (f *pollerControlFetcher) StopApp(_ context.Context, appID string) error {
+	f.stopCalls = append(f.stopCalls, appID)
+	for i := range f.snapshot.Apps {
+		if f.snapshot.Apps[i].ID == appID {
+			f.snapshot.Apps[i].State = "STOPPED"
+			if len(f.snapshot.Apps[i].Containers) > 0 {
+				f.snapshot.Apps[i].Containers[0].State = "stopped"
+			}
+		}
+	}
+	return nil
+}
+
+func TestTrueNASPollerControlAppRefreshesCachedRecords(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	fixtures := truenas.DefaultFixtures()
+	for i := range fixtures.Apps {
+		if fixtures.Apps[i].ID == "nextcloud" {
+			fixtures.Apps[i].State = "STOPPED"
+			if len(fixtures.Apps[i].Containers) > 0 {
+				fixtures.Apps[i].Containers[0].State = "stopped"
+			}
+		}
+	}
+
+	fetcher := &pollerControlFetcher{snapshot: &fixtures}
+	provider := truenas.NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{"conn-1": provider}
+	poller.cachedRecordsByOrg["default"] = map[string][]unifiedresources.IngestRecord{"conn-1": provider.Records()}
+
+	app, err := poller.ControlApp(context.Background(), "default", "truenas-main", "nextcloud", "start")
+	if err != nil {
+		t.Fatalf("ControlApp() error = %v", err)
+	}
+	if app == nil || app.State != "RUNNING" {
+		t.Fatalf("expected RUNNING app after control, got %+v", app)
+	}
+	if len(fetcher.startCalls) != 1 || fetcher.startCalls[0] != "nextcloud" {
+		t.Fatalf("expected start call for nextcloud, got %+v", fetcher.startCalls)
+	}
+	if got := len(poller.cachedRecordsByOrg["default"]["conn-1"]); got == 0 {
+		t.Fatal("expected refreshed cached records after app control")
+	}
+}
+
 func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
@@ -297,6 +376,44 @@ func TestTrueNASPollerHandlesConnectionAddRemove(t *testing.T) {
 	if !hasTrueNASHostForOrg(poller, "default", "nas-two") {
 		t.Fatal("expected second host resources to be ingested")
 	}
+}
+
+func copyTrueNASSnapshot(snapshot *truenas.FixtureSnapshot) *truenas.FixtureSnapshot {
+	if snapshot == nil {
+		return nil
+	}
+	cloned := *snapshot
+	cloned.Pools = append([]truenas.Pool(nil), snapshot.Pools...)
+	cloned.Datasets = append([]truenas.Dataset(nil), snapshot.Datasets...)
+	cloned.Disks = append([]truenas.Disk(nil), snapshot.Disks...)
+	cloned.Alerts = append([]truenas.Alert(nil), snapshot.Alerts...)
+	cloned.ZFSSnapshots = append([]truenas.ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
+	cloned.ReplicationTasks = append([]truenas.ReplicationTask(nil), snapshot.ReplicationTasks...)
+	if snapshot.System.TemperatureCelsius != nil {
+		cloned.System.TemperatureCelsius = make(map[string]float64, len(snapshot.System.TemperatureCelsius))
+		for key, value := range snapshot.System.TemperatureCelsius {
+			cloned.System.TemperatureCelsius[key] = value
+		}
+	}
+	if len(snapshot.Apps) > 0 {
+		cloned.Apps = make([]truenas.App, len(snapshot.Apps))
+		for i, app := range snapshot.Apps {
+			appCopy := app
+			appCopy.UsedHostIPs = append([]string(nil), app.UsedHostIPs...)
+			appCopy.UsedPorts = append([]truenas.AppPort(nil), app.UsedPorts...)
+			appCopy.Volumes = append([]truenas.AppVolume(nil), app.Volumes...)
+			appCopy.Images = append([]string(nil), app.Images...)
+			appCopy.Networks = append([]truenas.AppNetwork(nil), app.Networks...)
+			appCopy.Containers = append([]truenas.AppContainer(nil), app.Containers...)
+			if app.Stats != nil {
+				statsCopy := *app.Stats
+				statsCopy.Interfaces = append([]truenas.AppInterfaceStats(nil), app.Stats.Interfaces...)
+				appCopy.Stats = &statsCopy
+			}
+			cloned.Apps[i] = appCopy
+		}
+	}
+	return &cloned
 }
 
 func TestTrueNASPollerAPITimeout(t *testing.T) {

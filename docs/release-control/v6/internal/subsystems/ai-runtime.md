@@ -151,6 +151,13 @@ The same ownership includes the Pulse query tool schema under
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`
 cannot reintroduce parallel legacy aliases once the backend query contract is
 renamed.
+That same AI tool ownership now also includes canonical resource-native
+control. `internal/ai/tools/executor.go`,
+`internal/ai/tools/tools_control.go`, and `internal/api/router.go` must keep
+API-backed control actions such as TrueNAS app start/stop/restart on the
+shared `pulse_control` tool with `type="resource"` and native audited
+execution, instead of adding provider-local control tools or bypassing the
+shared approval and policy model.
 That same AI tool ownership also applies to recovery-backed storage reads.
 When `internal/ai/tools/adapters.go` returns recovery points with malformed
 persisted metadata omitted at the shared recovery-store boundary, the storage

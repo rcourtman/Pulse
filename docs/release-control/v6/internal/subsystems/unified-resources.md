@@ -1072,6 +1072,14 @@ The same governed lookup boundary now also owns policy-aware resolved context:
 downstream consumers that need routing plus canonical policy metadata must use
 the unified-resource resolution context instead of rescanning typed views or
 re-deriving AI redaction rules locally.
+That same resolved-context boundary now also owns cross-platform app-container
+routing. `internal/unifiedresources/resolve.go`,
+`internal/unifiedresources/resolve_context.go`, and
+`internal/ai/tools/tools_query.go` must register TrueNAS-backed canonical
+`app-container` resources into the same resolved-context model as Docker app
+containers while preserving adapter-specific routing. Reusing shared
+`DockerData` for workload metadata must not misclassify a TrueNAS app as a
+Docker-routed control target.
 
 Typed view accessors for linked topology IDs must also return canonical
 trimmed values. Callers must not observe `" node-99 "` or `" agent-123 "`

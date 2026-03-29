@@ -2330,6 +2330,113 @@ func canonicalAppContainerHost(resource unifiedresources.Resource) string {
 	return ""
 }
 
+func guestExecutorActions() []string {
+	return []string{"query", "get", "logs", "console", "exec", "start", "stop", "shutdown", "restart", "delete"}
+}
+
+func canonicalAppContainerAdapter(resource unifiedresources.Resource) string {
+	switch canonicalResourcePlatform(resource) {
+	case "docker":
+		return "docker"
+	case "truenas":
+		return "truenas"
+	default:
+		return strings.TrimSpace(canonicalResourcePlatform(resource))
+	}
+}
+
+func canonicalCapabilityActions(resource unifiedresources.Resource) []string {
+	seen := make(map[string]struct{})
+	actions := make([]string, 0, len(resource.Capabilities))
+	for _, capability := range resource.Capabilities {
+		name := strings.ToLower(strings.TrimSpace(capability.Name))
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		actions = append(actions, name)
+	}
+	return actions
+}
+
+func appendUniqueStrings(base []string, values ...string) []string {
+	seen := make(map[string]struct{}, len(base))
+	for _, value := range base {
+		key := strings.TrimSpace(value)
+		if key == "" {
+			continue
+		}
+		seen[key] = struct{}{}
+	}
+	for _, value := range values {
+		key := strings.TrimSpace(value)
+		if key == "" {
+			continue
+		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		base = append(base, key)
+	}
+	return base
+}
+
+func canonicalAppContainerActions(resource unifiedresources.Resource) []string {
+	actions := []string{"query", "get"}
+	switch canonicalResourcePlatform(resource) {
+	case "docker":
+		actions = append(actions, "logs", "exec", "restart", "stop", "start")
+	case "truenas":
+		actions = append(actions, "restart", "stop", "start")
+	}
+	return appendUniqueStrings(actions, canonicalCapabilityActions(resource)...)
+}
+
+func resolvedAppContainerRegistration(resource unifiedresources.Resource) (ResourceRegistration, bool) {
+	containerID := strings.TrimSpace(canonicalAppContainerID(resource))
+	name := strings.TrimSpace(resourceDisplayName(resource))
+	host := strings.TrimSpace(canonicalAppContainerHost(resource))
+	adapter := strings.TrimSpace(canonicalAppContainerAdapter(resource))
+	if containerID == "" || name == "" || host == "" || adapter == "" {
+		return ResourceRegistration{}, false
+	}
+
+	aliases := appendUniqueStrings(nil, name, containerID, strings.TrimSpace(resource.ID))
+	if adapter == "docker" && len(containerID) > 12 {
+		aliases = appendUniqueStrings(aliases, containerID[:12])
+	}
+
+	reg := ResourceRegistration{
+		Kind:        "app-container",
+		ProviderUID: containerID,
+		Name:        name,
+		Aliases:     aliases,
+		HostUID:     host,
+		HostName:    host,
+		Executors: []ExecutorRegistration{{
+			ExecutorID: host,
+			Adapter:    adapter,
+			Actions:    canonicalAppContainerActions(resource),
+			Priority:   10,
+		}},
+	}
+
+	switch adapter {
+	case "docker":
+		reg.LocationChain = []string{"docker-host:" + host, "docker:" + name}
+	case "truenas":
+		reg.LocationChain = []string{"system:" + host, "app:" + name}
+	default:
+		reg.LocationChain = []string{"app-container:" + name}
+	}
+
+	return reg, true
+}
+
 func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, connected map[string]bool) SystemSummary {
 	return SystemSummary{
 		ID:             strings.TrimSpace(resource.ID),
@@ -3681,7 +3788,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 					Executors: []ExecutorRegistration{{
 						ExecutorID: vm.Node(),
 						Adapter:    "qm",
-						Actions:    []string{"query", "get", "logs", "console"},
+						Actions:    guestExecutorActions(),
 						Priority:   10,
 					}},
 				})
@@ -3736,7 +3843,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 					Executors: []ExecutorRegistration{{
 						ExecutorID: ct.Node(),
 						Adapter:    "pct",
-						Actions:    []string{"query", "get", "logs", "console", "exec"},
+						Actions:    guestExecutorActions(),
 						Priority:   10,
 					}},
 				})
@@ -3823,44 +3930,8 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 					}
 				}
 
-				if response.Platform == "docker" {
-					hostUID := ""
-					if resource.ParentID != nil {
-						hostUID = strings.TrimSpace(*resource.ParentID)
-					}
-					hostName := response.Host
-					if hostUID == "" {
-						hostUID = hostName
-					}
-					if hostName == "" {
-						hostName = hostUID
-					}
-					executorID := hostName
-					if executorID == "" {
-						executorID = hostUID
-					}
-					aliases := []string{response.Name, containerID, strings.TrimSpace(resource.ID)}
-					if len(containerID) > 12 {
-						aliases = append(aliases, containerID[:12])
-					}
-					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
-						Kind:        "app-container",
-						ProviderUID: containerID,
-						Name:        response.Name,
-						Aliases:     aliases,
-						HostUID:     hostUID,
-						HostName:    hostName,
-						LocationChain: []string{
-							"docker-host:" + hostName,
-							"docker:" + response.Name,
-						},
-						Executors: []ExecutorRegistration{{
-							ExecutorID: executorID,
-							Adapter:    "docker",
-							Actions:    []string{"query", "get", "logs", "exec", "restart", "stop", "start"},
-							Priority:   10,
-						}},
-					})
+				if reg, ok := resolvedAppContainerRegistration(resource); ok {
+					e.registerResolvedResourceWithExplicitAccess(reg)
 				}
 				return NewJSONResult(response.NormalizeCollections()), nil
 			}
@@ -4746,7 +4817,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Executors: []ExecutorRegistration{{
 					ExecutorID: match.Node,
 					Adapter:    "qm",
-					Actions:    []string{"query", "get", "logs", "console"},
+					Actions:    guestExecutorActions(),
 					Priority:   10,
 				}},
 			}
@@ -4764,7 +4835,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Executors: []ExecutorRegistration{{
 					ExecutorID: match.Node,
 					Adapter:    "pct",
-					Actions:    []string{"query", "get", "logs", "console", "exec"},
+					Actions:    guestExecutorActions(),
 					Priority:   10,
 				}},
 			}
@@ -4799,6 +4870,14 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 					ExecutorID: match.Host,
 					Adapter:    "docker",
 					Actions:    []string{"query", "get", "logs", "exec", "restart", "stop", "start"},
+					Priority:   10,
+				}}
+			} else if match.Platform == "truenas" {
+				reg.LocationChain = []string{"system:" + match.Host, "app:" + match.Name}
+				reg.Executors = []ExecutorRegistration{{
+					ExecutorID: match.Host,
+					Adapter:    "truenas",
+					Actions:    []string{"query", "get", "restart", "stop", "start"},
 					Priority:   10,
 				}}
 			}

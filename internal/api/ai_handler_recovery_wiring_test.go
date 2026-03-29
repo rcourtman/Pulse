@@ -8,12 +8,14 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	recoverymanager "github.com/rcourtman/pulse-go-rewrite/internal/recovery/manager"
 )
 
 type capturingAIService struct {
-	running bool
+	running                    bool
+	appContainerActionProvider chat.MCPAppContainerActionProvider
 }
 
 func (s *capturingAIService) Start(ctx context.Context) error { s.running = true; return nil }
@@ -75,8 +77,24 @@ func (s *capturingAIService) SetIncidentRecorderProvider(provider chat.IncidentR
 func (s *capturingAIService) SetEventCorrelatorProvider(provider chat.EventCorrelatorProvider)    {}
 func (s *capturingAIService) SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)             {}
 func (s *capturingAIService) SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider) {}
-func (s *capturingAIService) UpdateControlSettings(cfg *config.AIConfig)                          {}
-func (s *capturingAIService) GetBaseURL() string                                                  { return "" }
+func (s *capturingAIService) SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider) {
+	s.appContainerActionProvider = provider
+}
+func (s *capturingAIService) UpdateControlSettings(cfg *config.AIConfig) {}
+func (s *capturingAIService) GetBaseURL() string                         { return "" }
+
+func TestWireAIChatDependenciesForService_WiresTrueNASAppActionProvider(t *testing.T) {
+	router := &Router{
+		trueNASPoller: monitoring.NewTrueNASPoller(nil, 0, nil),
+	}
+	service := &capturingAIService{}
+
+	router.wireAIChatDependenciesForService(context.Background(), service)
+
+	if service.appContainerActionProvider == nil {
+		t.Fatal("expected TrueNAS app action provider to be wired into AI chat service")
+	}
+}
 
 func TestAIHandlerStart_WiresRecoveryPointsProviderForDefaultChatService(t *testing.T) {
 	oldNewService := newChatService

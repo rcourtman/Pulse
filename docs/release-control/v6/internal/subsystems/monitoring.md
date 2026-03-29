@@ -245,6 +245,12 @@ canonical `app-container` metrics contract, and sync them into the existing
 guest metrics-history/store path. Pulse must not add a TrueNAS-only charts
 path or treat API-backed app workloads as second-class compared with native
 Docker reports.
+That same monitoring boundary now also owns canonical TrueNAS app control
+refresh semantics. `internal/truenas/provider.go` and
+`internal/monitoring/truenas_poller.go` must execute native app start/stop
+actions through the owned TrueNAS runtime and refresh cached records and
+recovery ingest immediately afterward, so assistant-driven app control does
+not rely on stale provider state or ad hoc config-local action paths.
 That same monitoring boundary now also owns API-backed TrueNAS system
 telemetry for the top-level NAS host. `internal/truenas/client.go` must ingest
 `reporting.realtime` through the official `/api/current` JSON-RPC websocket

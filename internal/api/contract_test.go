@@ -65,6 +65,19 @@ func TestContract_WebSocketTrustedProxyHostedOrigin(t *testing.T) {
 	conn.Close()
 }
 
+func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testing.T) {
+	router := &Router{
+		trueNASPoller: monitoring.NewTrueNASPoller(nil, 0, nil),
+	}
+	service := &capturingAIService{}
+
+	router.wireAIChatDependenciesForService(context.Background(), service)
+
+	if service.appContainerActionProvider == nil {
+		t.Fatal("expected TrueNAS app action provider to be wired into AI chat dependencies")
+	}
+}
+
 func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {
 	called := make(chan struct{}, 1)
 	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

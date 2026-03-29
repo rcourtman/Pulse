@@ -76,12 +76,9 @@ func lookupResolvedResource(rs ReadState, loc models.ResourceLocation) *Resource
 		}
 
 	case "app-container":
-		for _, container := range rs.DockerContainers() {
-			if container == nil {
-				continue
-			}
-			if container.Name() == name {
-				return cloneResourcePtr(container.r)
+		for _, resource := range appContainerResourcesFromReadState(rs) {
+			if appContainerResourceMatches(resource, name) {
+				return cloneResourcePtr(&resource)
 			}
 		}
 

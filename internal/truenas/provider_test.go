@@ -37,6 +37,42 @@ func (s *closableStubFetcher) Close() {
 	s.closeCalls++
 }
 
+type controllableStubFetcher struct {
+	snapshot   *FixtureSnapshot
+	startCalls []string
+	stopCalls  []string
+}
+
+func (s *controllableStubFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
+	return copyFixtureSnapshot(s.snapshot), nil
+}
+
+func (s *controllableStubFetcher) StartApp(_ context.Context, appID string) error {
+	s.startCalls = append(s.startCalls, appID)
+	for i := range s.snapshot.Apps {
+		if s.snapshot.Apps[i].ID == appID {
+			s.snapshot.Apps[i].State = "RUNNING"
+			if len(s.snapshot.Apps[i].Containers) > 0 {
+				s.snapshot.Apps[i].Containers[0].State = "running"
+			}
+		}
+	}
+	return nil
+}
+
+func (s *controllableStubFetcher) StopApp(_ context.Context, appID string) error {
+	s.stopCalls = append(s.stopCalls, appID)
+	for i := range s.snapshot.Apps {
+		if s.snapshot.Apps[i].ID == appID {
+			s.snapshot.Apps[i].State = "STOPPED"
+			if len(s.snapshot.Apps[i].Containers) > 0 {
+				s.snapshot.Apps[i].Containers[0].State = "stopped"
+			}
+		}
+	}
+	return nil
+}
+
 func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
 	fixtures := DefaultFixtures()
 	fetcher := &FixtureFetcher{Snapshot: fixtures}
@@ -113,6 +149,41 @@ func TestProviderRefreshUpdatesLastSnapshot(t *testing.T) {
 	}
 	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 {
 		t.Fatalf("unexpected cached counts: pools=%d datasets=%d", len(snapshot.Pools), len(snapshot.Datasets))
+	}
+}
+
+func TestProviderControlAppUsesFetcherAndRefreshesSnapshot(t *testing.T) {
+	fixtures := DefaultFixtures()
+	for i := range fixtures.Apps {
+		if fixtures.Apps[i].ID == "nextcloud" {
+			fixtures.Apps[i].State = "STOPPED"
+			if len(fixtures.Apps[i].Containers) > 0 {
+				fixtures.Apps[i].Containers[0].State = "stopped"
+			}
+		}
+	}
+
+	fetcher := &controllableStubFetcher{snapshot: &fixtures}
+	provider := NewLiveProvider(fetcher)
+
+	snapshot, err := provider.ControlApp(context.Background(), "nextcloud", "start")
+	if err != nil {
+		t.Fatalf("ControlApp(start) error = %v", err)
+	}
+	if len(fetcher.startCalls) != 1 || fetcher.startCalls[0] != "nextcloud" {
+		t.Fatalf("expected start call for nextcloud, got %+v", fetcher.startCalls)
+	}
+	if snapshot == nil {
+		t.Fatal("expected refreshed snapshot after control")
+	}
+	foundRunning := false
+	for _, app := range snapshot.Apps {
+		if app.ID == "nextcloud" && app.State == "RUNNING" {
+			foundRunning = true
+		}
+	}
+	if !foundRunning {
+		t.Fatalf("expected nextcloud to be RUNNING after control, got %+v", snapshot.Apps)
 	}
 }
 
