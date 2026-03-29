@@ -81,6 +81,29 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
           )}
         </Show>
 
+        <Show when={props.platformFilter}>
+          {(platformFilter) => (
+            <LabeledFilterSelect
+              id={platformFilter().id ?? 'dashboard-platform-filter'}
+              label={platformFilter().label ?? 'Platform'}
+              value={platformFilter().value}
+              onChange={(e) => platformFilter().onChange(e.currentTarget.value)}
+              selectClass="min-w-[8rem]"
+            >
+              <For each={platformFilter().options}>
+                {(option) => (
+                  <option
+                    value={option.value}
+                    selected={option.value === platformFilter().value}
+                  >
+                    {option.label}
+                  </option>
+                )}
+              </For>
+            </LabeledFilterSelect>
+          )}
+        </Show>
+
         <Show when={props.namespaceFilter}>
           {(namespaceFilter) => (
             <LabeledFilterSelect

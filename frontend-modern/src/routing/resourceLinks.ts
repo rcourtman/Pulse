@@ -9,6 +9,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 
 export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
+  platform: 'platform',
   runtime: 'runtime',
   context: 'context',
   namespace: 'namespace',
@@ -85,6 +86,7 @@ const firstNonEmpty = (values: Array<string | undefined | null>): string | undef
 
 type WorkloadsLinkOptions = {
   type?: string | null;
+  platform?: string | null;
   runtime?: string | null;
   context?: string | null;
   namespace?: string | null;
@@ -134,6 +136,7 @@ export const parseWorkloadsLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   return {
     type: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.type)),
+    platform: normalizeSourcePlatformQueryValue(params.get(WORKLOADS_QUERY_PARAMS.platform)),
     runtime: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.runtime)),
     context: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.context)),
     namespace: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.namespace)),
@@ -145,12 +148,14 @@ export const parseWorkloadsLinkSearch = (search: string) => {
 export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string => {
   const params = new URLSearchParams();
   const type = normalizeWorkloadsType(options.type);
+  const platform = normalizeSourcePlatformQueryValue(options.platform);
   const runtime = normalizeQueryValue(options.runtime);
   const context = normalizeQueryValue(options.context);
   const namespace = normalizeQueryValue(options.namespace);
   const agent = normalizeQueryValue(options.agent);
   const resource = normalizeQueryValue(options.resource);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
+  if (platform) params.set(WORKLOADS_QUERY_PARAMS.platform, platform);
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
   if (context) params.set(WORKLOADS_QUERY_PARAMS.context, context);
   if (namespace) params.set(WORKLOADS_QUERY_PARAMS.namespace, namespace);
@@ -196,7 +201,10 @@ export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string
 
   if (type === 'app-container') {
     const query = firstNonEmpty([guest.contextLabel, guest.node, guest.instance, guest.name]);
-    return buildInfrastructurePath({ source: 'docker', query });
+    return buildInfrastructurePath({
+      source: guest.platformType === 'truenas' ? 'truenas' : 'docker',
+      query,
+    });
   }
 
   if (type === 'pod') {

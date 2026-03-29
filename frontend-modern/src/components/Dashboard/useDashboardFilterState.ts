@@ -23,6 +23,7 @@ export const useDashboardFilterState = (props: DashboardFilterProps) => {
       viewMode: props.viewMode(),
       statusMode: props.statusMode(),
       hostFilterValue: props.hostFilter?.value,
+      platformFilterValue: props.platformFilter?.value,
       namespaceFilterValue: props.namespaceFilter?.value,
     }),
   );
@@ -34,6 +35,7 @@ export const useDashboardFilterState = (props: DashboardFilterProps) => {
       statusMode: props.statusMode(),
       groupingMode: props.groupingMode(),
       hostFilterValue: props.hostFilter?.value,
+      platformFilterValue: props.platformFilter?.value,
       namespaceFilterValue: props.namespaceFilter?.value,
     }),
   );
@@ -62,6 +64,7 @@ export const useDashboardFilterState = (props: DashboardFilterProps) => {
     props.setGroupingMode(DEFAULT_DASHBOARD_GROUPING_MODE);
 
     props.hostFilter?.onChange('');
+    props.platformFilter?.onChange('');
     props.namespaceFilter?.onChange('');
   };
 

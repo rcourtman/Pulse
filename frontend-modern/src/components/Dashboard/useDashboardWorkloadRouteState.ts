@@ -18,6 +18,7 @@ export interface DashboardWorkloadRouteStateOptions {
 
 export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteStateOptions) {
   const [selectedNode, setSelectedNode] = createSignal<string | null>(null);
+  const [selectedPlatform, setSelectedPlatform] = createSignal<string | null>(null);
   const [selectedKubernetesContext, setSelectedKubernetesContext] = createSignal<string | null>(
     null,
   );
@@ -56,6 +57,7 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
   const resetWorkloadRouteFilters = () => {
     setSelectedNode(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedNode);
     setSelectedHostHint(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedHostHint);
+    setSelectedPlatform(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedPlatform);
     setSelectedKubernetesContext(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedKubernetesContext);
     setSelectedKubernetesNamespace(
       DASHBOARD_WORKLOAD_ROUTE_RESET_STATE.selectedKubernetesNamespace,
@@ -72,8 +74,10 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     selectedKubernetesContext,
     selectedKubernetesNamespace,
     selectedNode,
+    selectedPlatform,
     setContainerRuntime,
     setSelectedHostHint,
+    setSelectedPlatform,
     setSelectedKubernetesContext,
     setSelectedKubernetesNamespace,
     setSelectedNode,
@@ -89,10 +93,12 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     isWorkloadsRoute,
     viewMode,
     containerRuntime,
+    selectedPlatform,
     selectedNode,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
     setContainerRuntime,
+    setSelectedPlatform,
     setSelectedKubernetesContext,
     handleNodeSelect,
     setSelectedKubernetesNamespace,
@@ -105,6 +111,8 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     kubernetesContextOptions,
     kubernetesNamespaceOptions,
     namespaceFilterConfig,
+    platformFilterConfig,
+    platformOptions,
     workloadNodeOptions,
   } = filterOptions;
 
@@ -118,13 +126,17 @@ export function useDashboardWorkloadRouteState(options: DashboardWorkloadRouteSt
     kubernetesContextOptions,
     kubernetesNamespaceOptions,
     namespaceFilterConfig,
+    platformFilterConfig,
+    platformOptions,
     resetWorkloadRouteFilters,
     selectedHostHint,
     selectedKubernetesContext,
     selectedKubernetesNamespace,
     selectedNode,
+    selectedPlatform,
     setContainerRuntime,
     setSelectedNode,
+    setSelectedPlatform,
     setSelectedKubernetesContext,
     setSelectedKubernetesNamespace,
     setViewMode,

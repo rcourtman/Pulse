@@ -4,6 +4,7 @@ import {
   buildDashboardContainerRuntimeFilterConfig,
   buildDashboardHostFilterConfig,
   buildDashboardNamespaceFilterConfig,
+  buildDashboardPlatformFilterConfig,
 } from '../dashboardWorkloadFilterConfigModel';
 
 describe('dashboardWorkloadFilterConfigModel', () => {
@@ -100,5 +101,30 @@ describe('dashboardWorkloadFilterConfigModel', () => {
         onChange,
       }),
     ).toBeUndefined();
+  });
+
+  it('builds platform filter config when multiple platform scopes exist', () => {
+    const onChange = vi.fn();
+
+    expect(
+      buildDashboardPlatformFilterConfig({
+        isWorkloadsRoute: true,
+        selectedPlatform: 'truenas',
+        platformOptions: [
+          { value: 'docker', label: 'Containers' },
+          { value: 'truenas', label: 'TrueNAS' },
+        ],
+        onChange,
+      }),
+    ).toMatchObject({
+      id: 'workloads-platform-filter',
+      label: 'Platform',
+      value: 'truenas',
+      options: [
+        { value: '', label: 'All platforms' },
+        { value: 'docker', label: 'Containers' },
+        { value: 'truenas', label: 'TrueNAS' },
+      ],
+    });
   });
 });

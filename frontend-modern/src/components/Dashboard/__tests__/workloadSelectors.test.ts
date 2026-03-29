@@ -218,6 +218,36 @@ describe('workloadSelectors', () => {
       });
       expect(withK8sContext.map((g) => g.name)).toEqual(['k8s-a']);
     });
+
+    it('filters workloads by canonical platform type', () => {
+      const guests = [
+        makeGuest(1, {
+          name: 'nextcloud',
+          type: 'app-container',
+          workloadType: 'app-container',
+          platformType: 'truenas',
+        }),
+        makeGuest(2, {
+          name: 'grafana',
+          type: 'app-container',
+          workloadType: 'app-container',
+          platformType: 'docker',
+        }),
+      ];
+
+      const result = filterWorkloads({
+        guests,
+        viewMode: 'app-container',
+        statusMode: 'all',
+        searchTerm: '',
+        selectedNode: null,
+        selectedHostHint: null,
+        selectedPlatform: 'truenas',
+        selectedKubernetesContext: null,
+      });
+
+      expect(result.map((guest) => guest.name)).toEqual(['nextcloud']);
+    });
   });
 
   describe('createWorkloadSortComparator', () => {

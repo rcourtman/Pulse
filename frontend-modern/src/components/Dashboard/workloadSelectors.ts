@@ -2,6 +2,7 @@ import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
+import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
 import { resolveWorkloadType } from '@/utils/workloads';
 import { getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
@@ -13,6 +14,7 @@ export interface FilterWorkloadsParams {
   searchTerm: string;
   selectedNode: string | null;
   selectedHostHint: string | null;
+  selectedPlatform?: string | null;
   selectedKubernetesContext: string | null;
   selectedKubernetesNamespace?: string | null;
   containerRuntime?: string | null;
@@ -40,6 +42,7 @@ export const filterWorkloads = ({
   searchTerm,
   selectedNode,
   selectedHostHint,
+  selectedPlatform,
   selectedKubernetesContext,
   selectedKubernetesNamespace,
   containerRuntime,
@@ -77,6 +80,13 @@ export const filterWorkloads = ({
 
   if (viewMode !== 'all') {
     guests = guests.filter((g) => resolveWorkloadType(g) === viewMode);
+  }
+
+  const normalizedPlatform = normalizeSourcePlatformQueryValue(selectedPlatform);
+  if (normalizedPlatform) {
+    guests = guests.filter(
+      (g) => normalizeSourcePlatformQueryValue(g.platformType || '') === normalizedPlatform,
+    );
   }
 
   const normalizedRuntime = (containerRuntime || '').trim().toLowerCase();

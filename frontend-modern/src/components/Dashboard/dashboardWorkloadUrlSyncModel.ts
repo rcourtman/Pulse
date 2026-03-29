@@ -10,6 +10,7 @@ import { normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
 export interface DashboardWorkloadUrlParams {
   type: string;
+  platform: string;
   runtime: string;
   context: string;
   namespace: string;
@@ -27,6 +28,7 @@ interface DashboardManagedWorkloadsNavigateTargetOptions {
   containerRuntime: string;
   currentSearch: string;
   selectedHostHint: string | null;
+  selectedPlatform: string | null;
   selectedKubernetesContext: string | null;
   selectedKubernetesNamespace: string | null;
   selectedNode: string | null;
@@ -83,6 +85,7 @@ export const resolveDashboardManagedWorkloadsNavigateTarget = ({
   containerRuntime,
   currentSearch,
   selectedHostHint,
+  selectedPlatform,
   selectedKubernetesContext,
   selectedKubernetesNamespace,
   selectedNode,
@@ -91,6 +94,7 @@ export const resolveDashboardManagedWorkloadsNavigateTarget = ({
   const currentParams = new URLSearchParams(currentSearch);
   const nextParams = new URLSearchParams(currentSearch);
   const nextType = viewMode === 'all' ? '' : viewMode;
+  const nextPlatform = selectedPlatform ?? '';
   const nextRuntime = viewMode === 'app-container' ? containerRuntime.trim() : '';
   const nextContext = viewMode === 'pod' ? (selectedKubernetesContext ?? '') : '';
   const nextNamespace = viewMode === 'pod' ? (selectedKubernetesNamespace ?? '') : '';
@@ -98,6 +102,7 @@ export const resolveDashboardManagedWorkloadsNavigateTarget = ({
 
   const managedPath = buildWorkloadsPath({
     type: nextType || null,
+    platform: nextPlatform || null,
     runtime: nextRuntime || null,
     context: nextContext || null,
     namespace: nextNamespace || null,
@@ -105,6 +110,7 @@ export const resolveDashboardManagedWorkloadsNavigateTarget = ({
   });
   const managedUrl = new URL(managedPath, 'http://pulse.local');
   nextParams.delete(WORKLOADS_QUERY_PARAMS.type);
+  nextParams.delete(WORKLOADS_QUERY_PARAMS.platform);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.runtime);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.context);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.namespace);

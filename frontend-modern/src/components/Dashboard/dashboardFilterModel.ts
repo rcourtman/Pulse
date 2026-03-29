@@ -37,6 +37,7 @@ export interface DashboardFilterProps {
     onColumnReset?: () => void;
   };
   hostFilter?: DashboardToolbarFilterConfig;
+  platformFilter?: DashboardToolbarFilterConfig;
   namespaceFilter?: DashboardToolbarFilterConfig;
   containerRuntimeFilter?: DashboardToolbarFilterConfig;
   chartsCollapsed?: () => boolean;
@@ -48,6 +49,7 @@ export interface CountActiveDashboardFiltersOptions {
   viewMode: ViewMode;
   statusMode: DashboardStatusMode;
   hostFilterValue?: string;
+  platformFilterValue?: string;
   namespaceFilterValue?: string;
 }
 
@@ -70,6 +72,7 @@ export const countActiveDashboardFilters = (
   if (options.viewMode !== DEFAULT_DASHBOARD_VIEW_MODE) count++;
   if (options.statusMode !== DEFAULT_DASHBOARD_STATUS_MODE) count++;
   if ((options.hostFilterValue ?? '') !== '') count++;
+  if ((options.platformFilterValue ?? '') !== '') count++;
   if ((options.namespaceFilterValue ?? '') !== '') count++;
 
   return count;

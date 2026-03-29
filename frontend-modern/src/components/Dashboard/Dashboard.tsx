@@ -83,6 +83,7 @@ export function Dashboard(props: DashboardProps) {
           containerRuntimeFilter={state.containerRuntimeFilterConfig()}
           hostFilter={state.hostFilterConfig()}
           namespaceFilter={state.namespaceFilterConfig()}
+          platformFilter={state.platformFilterConfig()}
         />
       </Show>
 

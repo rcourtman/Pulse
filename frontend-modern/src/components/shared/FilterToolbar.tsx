@@ -1,4 +1,4 @@
-import { Component, For, JSX, Show, splitProps } from 'solid-js';
+import { Component, For, JSX, Show, createEffect, onCleanup, splitProps } from 'solid-js';
 import ListFilterIcon from 'lucide-solid/icons/list-filter';
 import { segmentedButtonClass } from '@/utils/segmentedButton';
 
@@ -228,14 +228,47 @@ export const LabeledFilterSelect: Component<LabeledFilterSelectProps> = (props) 
     'children',
     'groupClass',
     'selectClass',
+    'value',
   ]);
+  let selectRef: HTMLSelectElement | undefined;
   const selectId = typeof selectProps.id === 'string' ? selectProps.id : undefined;
+
+  createEffect(() => {
+    const nextValue = local.value;
+    if (!selectRef || typeof nextValue !== 'string') return;
+    const applyValue = () => {
+      if (!selectRef) return;
+      let matched = false;
+      for (const option of Array.from(selectRef.options)) {
+        const shouldSelect = option.value === nextValue;
+        if (option.selected !== shouldSelect) {
+          option.selected = shouldSelect;
+        }
+        matched ||= shouldSelect;
+      }
+      if (!matched && selectRef.value !== nextValue) {
+        selectRef.value = nextValue;
+      }
+    };
+
+    applyValue();
+
+    const observer = new MutationObserver(() => applyValue());
+    observer.observe(selectRef, { childList: true, subtree: true });
+    onCleanup(() => observer.disconnect());
+  });
+
   return (
     <div class={`${filterGroupClass} ${local.groupClass ?? ''}`.trim()}>
       <label for={selectId} class={filterLabelClass}>
         {local.label}
       </label>
-      <select {...selectProps} class={`${filterSelectClass} ${local.selectClass ?? ''}`.trim()}>
+      <select
+        {...selectProps}
+        ref={selectRef}
+        value={local.value}
+        class={`${filterSelectClass} ${local.selectClass ?? ''}`.trim()}
+      >
         {local.children}
       </select>
     </div>

@@ -5,12 +5,14 @@ import type { DashboardToolbarFilterConfig } from './dashboardFilterModel';
 import {
   buildDashboardContainerRuntimeOptions,
   buildDashboardKubernetesContextOptions,
+  buildDashboardPlatformOptions,
   buildDashboardKubernetesNamespaceOptions,
   buildDashboardWorkloadNodeOptions,
 } from './dashboardWorkloadRouteModel';
 import {
   buildDashboardContainerRuntimeFilterConfig,
   buildDashboardHostFilterConfig,
+  buildDashboardPlatformFilterConfig,
   buildDashboardNamespaceFilterConfig,
 } from './dashboardWorkloadFilterConfigModel';
 
@@ -19,10 +21,12 @@ interface DashboardWorkloadFilterOptionsOptions {
   isWorkloadsRoute: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
   containerRuntime: Accessor<string>;
+  selectedPlatform: Accessor<string | null>;
   selectedNode: Accessor<string | null>;
   selectedKubernetesContext: Accessor<string | null>;
   selectedKubernetesNamespace: Accessor<string | null>;
   setContainerRuntime: (value: string) => void;
+  setSelectedPlatform: (value: string | null) => void;
   setSelectedKubernetesContext: (value: string | null) => void;
   handleNodeSelect: (nodeId: string | null, nodeType: 'pve' | 'pbs' | 'pmg' | null) => void;
   setSelectedKubernetesNamespace: (value: string | null) => void;
@@ -50,6 +54,10 @@ export function useDashboardWorkloadFilterOptions(
     buildDashboardContainerRuntimeOptions(options.allGuests()),
   );
 
+  const platformOptions = createMemo(() =>
+    buildDashboardPlatformOptions(options.allGuests(), options.viewMode()),
+  );
+
   const containerRuntimeFilterConfig = createMemo<DashboardToolbarFilterConfig | undefined>(() =>
     buildDashboardContainerRuntimeFilterConfig({
       isWorkloadsRoute: options.isWorkloadsRoute(),
@@ -57,6 +65,15 @@ export function useDashboardWorkloadFilterOptions(
       containerRuntime: options.containerRuntime(),
       runtimeOptions: containerRuntimeOptions(),
       onChange: (value) => options.setContainerRuntime(value),
+    }),
+  );
+
+  const platformFilterConfig = createMemo<DashboardToolbarFilterConfig | undefined>(() =>
+    buildDashboardPlatformFilterConfig({
+      isWorkloadsRoute: options.isWorkloadsRoute(),
+      selectedPlatform: options.selectedPlatform(),
+      platformOptions: platformOptions(),
+      onChange: (value) => options.setSelectedPlatform(value || null),
     }),
   );
 
@@ -90,6 +107,8 @@ export function useDashboardWorkloadFilterOptions(
     kubernetesContextOptions,
     kubernetesNamespaceOptions,
     namespaceFilterConfig,
+    platformFilterConfig,
+    platformOptions,
     workloadNodeOptions,
   } as const;
 }

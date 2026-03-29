@@ -1,6 +1,7 @@
-import { cleanup, render, screen } from '@solidjs/testing-library';
+import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
+import { For, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { FilterHeader, FilterSegmentedControl } from './FilterToolbar';
+import { FilterHeader, FilterSegmentedControl, LabeledFilterSelect } from './FilterToolbar';
 import toggleSource from './Toggle.tsx?raw';
 import toggleModelSource from './toggleModel.ts?raw';
 import toggleStateSource from './useToggleState.ts?raw';
@@ -59,5 +60,36 @@ describe('FilterHeader', () => {
     expect(toggleModelSource).toContain('getToggleTrackClass');
     expect(toggleModelSource).toContain('getToggleKnobClass');
     expect(toggleModelSource).toContain('ToggleChangeEvent');
+  });
+
+  it('keeps controlled select state when options materialize asynchronously', async () => {
+    const [options, setOptions] = createSignal<{ value: string; label: string }[]>([]);
+
+    render(() => (
+      <>
+        <button
+          type="button"
+          onClick={() =>
+            setOptions([
+              { value: 'all', label: 'All platforms' },
+              { value: 'truenas', label: 'TrueNAS' },
+            ])
+          }
+        >
+          Load options
+        </button>
+        <LabeledFilterSelect label="Platform" value="truenas" data-testid="platform-filter">
+          <For each={options()}>{(option) => <option value={option.value}>{option.label}</option>}</For>
+        </LabeledFilterSelect>
+      </>
+    ));
+
+    const select = screen.getByTestId('platform-filter') as HTMLSelectElement;
+    expect(select.value).toBe('');
+
+    screen.getByRole('button', { name: 'Load options' }).click();
+
+    await waitFor(() => expect(select.value).toBe('truenas'));
+    expect(screen.getByRole('option', { name: 'TrueNAS' }).selected).toBe(true);
   });
 });

@@ -22,6 +22,7 @@ describe('useDashboardFilterState', () => {
     const [sortKey, setSortKey] = createSignal('cpu');
     const [sortDirection, setSortDirection] = createSignal('desc');
     const hostOnChange = vi.fn();
+    const platformOnChange = vi.fn();
     const namespaceOnChange = vi.fn();
     const runtimeOnChange = vi.fn();
 
@@ -42,6 +43,11 @@ describe('useDashboardFilterState', () => {
           options: [{ value: 'host-1', label: 'Host 1' }],
           onChange: hostOnChange,
         },
+        platformFilter: {
+          value: 'truenas',
+          options: [{ value: 'truenas', label: 'TrueNAS' }],
+          onChange: platformOnChange,
+        },
         namespaceFilter: {
           value: 'ns-1',
           options: [{ value: 'ns-1', label: 'NS 1' }],
@@ -55,7 +61,7 @@ describe('useDashboardFilterState', () => {
       }),
     );
 
-    expect(result.activeFilterCount()).toBe(5);
+    expect(result.activeFilterCount()).toBe(6);
     expect(result.showReset()).toBe(true);
     expect(result.showToolbarFilters()).toBe(true);
     expect(result.filtersOpen()).toBe(false);
@@ -74,6 +80,7 @@ describe('useDashboardFilterState', () => {
     expect(sortKey()).toBe('type');
     expect(sortDirection()).toBe('asc');
     expect(hostOnChange).toHaveBeenCalledWith('');
+    expect(platformOnChange).toHaveBeenCalledWith('');
     expect(namespaceOnChange).toHaveBeenCalledWith('');
     expect(runtimeOnChange).not.toHaveBeenCalled();
   });

@@ -234,6 +234,16 @@ org-scope switching, and metadata refresh, and
 owns workload-route synchronization, deep-link normalization, and route-scoped
 filter contracts. Future dashboard hot-path changes must extend through those
 owners instead of accreting back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`.
+That same route-owned filter contract now also includes canonical workload
+`platform` scoping for API-backed runtimes. Dashboard URL-sync, filter-option
+assembly, and workload drill-down routes must preserve
+`platform=<owned-source-key>` for surfaces such as TrueNAS app-containers,
+while treating host or cluster identity as secondary scope instead of
+collapsing those routes back to generic agent-only semantics. The derived
+workload hot path must also tolerate transient async route/data gaps by
+treating missing filtered-workload collections as empty until the route and
+resource snapshots converge, rather than crashing the dashboard between sync
+phases.
 The shared infrastructure table hot path now also treats operator-facing
 resource identity as a protected boundary: sorting, searching, summary-series
 matching, and row titles on the infrastructure page must use the canonical

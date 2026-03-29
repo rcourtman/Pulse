@@ -5,6 +5,7 @@ import {
   buildDashboardContainerRuntimeOptions,
   buildDashboardKubernetesContextOptions,
   buildDashboardKubernetesNamespaceOptions,
+  buildDashboardPlatformOptions,
   buildDashboardWorkloadNodeOptions,
   deserializeDashboardWorkloadViewMode,
 } from '../dashboardWorkloadRouteModel';
@@ -114,6 +115,37 @@ describe('dashboardWorkloadRouteModel', () => {
         }),
       ]),
     ).toEqual(['containerd', 'docker']);
+  });
+
+  it('builds canonical platform options from visible workload platforms', () => {
+    expect(
+      buildDashboardPlatformOptions(
+        [
+          makeGuest({
+            id: 'app-a',
+            type: 'app-container',
+            workloadType: 'app-container',
+            platformType: 'truenas',
+          }),
+          makeGuest({
+            id: 'app-b',
+            type: 'app-container',
+            workloadType: 'app-container',
+            platformType: 'docker',
+          }),
+          makeGuest({
+            id: 'pod-a',
+            type: 'pod',
+            workloadType: 'pod',
+            platformType: 'kubernetes',
+          }),
+        ],
+        'app-container',
+      ),
+    ).toEqual([
+      { value: 'docker', label: 'Containers' },
+      { value: 'truenas', label: 'TrueNAS' },
+    ]);
   });
 
   it('builds kubernetes namespace options with the selected context scope applied', () => {

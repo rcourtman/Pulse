@@ -47,18 +47,25 @@ const resolveDockerWorkloadsHint = (resource: Resource): string | undefined =>
 export const buildWorkloadsHref = (resource: Resource): string | null => {
   if (resource.type === 'k8s-cluster' || resource.type === 'k8s-node') {
     const context = resolveKubernetesContext(resource);
-    return buildWorkloadsPath({ type: 'pod', context });
+    return buildWorkloadsPath({ type: 'pod', platform: 'kubernetes', context });
   }
 
   if (resource.type === 'docker-host') {
     const agent = resolveDockerWorkloadsHint(resource);
-    return buildWorkloadsPath({ type: 'app-container', agent });
+    return buildWorkloadsPath({ type: 'app-container', platform: 'docker', agent });
   }
 
   if (resource.type === 'agent') {
     const agent = resolveHostHint(resource);
+    if (resource.platformType === 'truenas') {
+      return buildWorkloadsPath({ type: 'app-container', platform: 'truenas', agent });
+    }
     if (hasDockerWorkloadsScope(resource)) {
-      return buildWorkloadsPath({ type: 'app-container', agent: resolveDockerWorkloadsHint(resource) });
+      return buildWorkloadsPath({
+        type: 'app-container',
+        platform: 'docker',
+        agent: resolveDockerWorkloadsHint(resource),
+      });
     }
     return buildWorkloadsPath({ agent });
   }

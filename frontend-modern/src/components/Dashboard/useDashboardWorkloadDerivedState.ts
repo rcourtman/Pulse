@@ -43,12 +43,14 @@ interface DashboardWorkloadDerivedStateOptions {
 export function useDashboardWorkloadDerivedState(
   options: DashboardWorkloadDerivedStateOptions,
 ) {
+  const filteredGuests = createMemo<WorkloadGuest[]>(() => options.filteredGuests() ?? []);
+
   const workloadsSummaryVisibleIds = createMemo<string[]>(() =>
-    options.filteredGuests().map((guest) => getCanonicalWorkloadId(guest)),
+    filteredGuests().map((guest) => getCanonicalWorkloadId(guest)),
   );
 
   const workloadsSummaryFallbackCounts = createMemo(() => {
-    const guests = options.filteredGuests();
+    const guests = filteredGuests();
     const running = guests.filter(
       (guest) => guest.status === 'running' || guest.status === 'online',
     ).length;
@@ -60,7 +62,7 @@ export function useDashboardWorkloadDerivedState(
   });
 
   const workloadsSummaryFallbackSnapshots = createMemo<WorkloadSummarySnapshot[]>(() =>
-    options.filteredGuests().map((guest) => {
+    filteredGuests().map((guest) => {
       const guestId = getCanonicalWorkloadId(guest);
       const memoryUsage = workloadMetricPercent(guest.memory?.usage);
       let diskUsage = workloadMetricPercent(guest.disk?.usage);
@@ -118,7 +120,7 @@ export function useDashboardWorkloadDerivedState(
 
   const groupedGuests = createMemo(() =>
     groupWorkloads(
-      options.filteredGuests(),
+      filteredGuests(),
       options.groupingMode(),
       options.guestSortComparator(),
     ),
@@ -159,7 +161,7 @@ export function useDashboardWorkloadDerivedState(
   });
 
   const groupedWindowing = useGroupedTableWindowing({
-    totalRowCount: () => options.filteredGuests().length,
+    totalRowCount: () => filteredGuests().length,
     revealIndex: revealGuestIndex,
   });
 
@@ -213,20 +215,20 @@ export function useDashboardWorkloadDerivedState(
     groupedWindowing.isWindowed()
       ? Math.max(
           0,
-          (options.filteredGuests().length - groupedWindowing.endIndex()) * 32,
+          (filteredGuests().length - groupedWindowing.endIndex()) * 32,
         )
       : 0,
   );
 
   useDashboardWorkloadViewportSync({
-    filteredGuestCount: () => options.filteredGuests().length,
+    filteredGuestCount: () => filteredGuests().length,
     groupedWindowing,
     rowHeight: DASHBOARD_TABLE_ESTIMATED_ROW_HEIGHT,
     tableBodyRef: options.tableBodyRef,
   });
 
-  const totalStats = createMemo(() => computeWorkloadStats(options.filteredGuests()));
-  const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(options.filteredGuests()));
+  const totalStats = createMemo(() => computeWorkloadStats(filteredGuests()));
+  const workloadIOEmphasis = createMemo(() => computeWorkloadIOEmphasis(filteredGuests()));
 
   return {
     bottomSpacerHeight,

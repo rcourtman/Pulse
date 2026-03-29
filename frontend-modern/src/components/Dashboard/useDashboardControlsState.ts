@@ -23,6 +23,7 @@ interface DashboardControlsStateOptions {
   containerRuntime: Accessor<string>;
   resetWorkloadRouteFilters: () => void;
   selectedHostHint: Accessor<string | null>;
+  selectedPlatform: Accessor<string | null>;
   selectedKubernetesContext: Accessor<string | null>;
   selectedKubernetesNamespace: Accessor<string | null>;
   selectedNode: Accessor<string | null>;
@@ -138,6 +139,7 @@ export function useDashboardControlsState(options: DashboardControlsStateOptions
         sortDirection() !== DEFAULT_DASHBOARD_SORT_DIRECTION ||
         options.selectedNode() !== null ||
         options.selectedHostHint() !== null ||
+        options.selectedPlatform() !== null ||
         options.selectedKubernetesContext() !== null ||
         options.selectedKubernetesNamespace() !== null ||
         options.containerRuntime().trim() !== '' ||

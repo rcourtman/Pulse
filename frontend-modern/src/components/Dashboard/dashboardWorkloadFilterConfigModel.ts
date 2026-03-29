@@ -33,6 +33,32 @@ export const buildDashboardContainerRuntimeFilterConfig = ({
   };
 };
 
+interface DashboardPlatformFilterConfigOptions {
+  isWorkloadsRoute: boolean;
+  selectedPlatform: string | null;
+  platformOptions: DashboardToolbarFilterConfig['options'];
+  onChange: (value: string) => void;
+}
+
+export const buildDashboardPlatformFilterConfig = ({
+  isWorkloadsRoute,
+  selectedPlatform,
+  platformOptions,
+  onChange,
+}: DashboardPlatformFilterConfigOptions): DashboardToolbarFilterConfig | undefined => {
+  if (!isWorkloadsRoute) return undefined;
+  if (platformOptions.length === 0) return undefined;
+  if (platformOptions.length === 1 && !(selectedPlatform || '').trim()) return undefined;
+
+  return {
+    id: 'workloads-platform-filter',
+    label: 'Platform',
+    value: selectedPlatform ?? '',
+    options: [{ value: '', label: 'All platforms' }, ...platformOptions],
+    onChange,
+  };
+};
+
 interface DashboardHostFilterConfigOptions {
   isWorkloadsRoute: boolean;
   viewMode: ViewMode;

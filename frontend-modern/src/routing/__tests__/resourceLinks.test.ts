@@ -47,17 +47,19 @@ describe('resource link routing contract', () => {
   it('builds and parses workloads query params', () => {
     const href = buildWorkloadsPath({
       type: 'k8s',
+      platform: 'kubernetes',
       context: 'cluster-a',
       agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
     });
     expect(href).toBe(
-      '/workloads?type=pod&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
+      '/workloads?type=pod&platform=kubernetes&context=cluster-a&agent=worker-1&resource=cluster-a%3Aworker-1%3A101',
     );
 
     const parsed = parseWorkloadsLinkSearch(href.slice('/workloads'.length));
     expect(parsed).toEqual({
       type: 'pod',
+      platform: 'kubernetes',
       runtime: '',
       context: 'cluster-a',
       namespace: '',
@@ -66,6 +68,7 @@ describe('resource link routing contract', () => {
     });
 
     expect(WORKLOADS_QUERY_PARAMS.type).toBe('type');
+    expect(WORKLOADS_QUERY_PARAMS.platform).toBe('platform');
     expect(WORKLOADS_QUERY_PARAMS.runtime).toBe('runtime');
     expect(WORKLOADS_QUERY_PARAMS.context).toBe('context');
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
@@ -74,11 +77,11 @@ describe('resource link routing contract', () => {
   });
 
   it('canonicalizes legacy workloads type aliases when building links', () => {
-    expect(buildWorkloadsPath({ type: 'docker', agent: 'runtime-1' })).toBe(
-      '/workloads?type=app-container&agent=runtime-1',
+    expect(buildWorkloadsPath({ type: 'docker', platform: 'docker', agent: 'runtime-1' })).toBe(
+      '/workloads?type=app-container&platform=docker&agent=runtime-1',
     );
-    expect(buildWorkloadsPath({ type: 'kubernetes', context: 'cluster-a' })).toBe(
-      '/workloads?type=pod&context=cluster-a',
+    expect(buildWorkloadsPath({ type: 'kubernetes', platform: 'kubernetes', context: 'cluster-a' })).toBe(
+      '/workloads?type=pod&platform=kubernetes&context=cluster-a',
     );
   });
 
@@ -137,10 +140,23 @@ describe('resource link routing contract', () => {
       baseGuest({
         type: 'app-container',
         workloadType: 'app-container',
+        platformType: 'docker',
         contextLabel: 'docker-host-1',
       }),
     );
     expect(href).toBe('/infrastructure?source=docker&q=docker-host-1');
+  });
+
+  it('maps TrueNAS app-container workloads to the TrueNAS infrastructure source', () => {
+    const href = buildInfrastructureHrefForWorkload(
+      baseGuest({
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'truenas',
+        contextLabel: 'truenas-main',
+      }),
+    );
+    expect(href).toBe('/infrastructure?source=truenas&q=truenas-main');
   });
 
   it('maps pod workloads to kubernetes infrastructure source with cluster query', () => {

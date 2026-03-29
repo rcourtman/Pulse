@@ -684,6 +684,11 @@ search-row, filter-row, and inline-leading-slot layout surface. Monitoring
 pages that need workspace tabs or count chips next to search should route that
 through the shared `searchLeading` slot instead of recreating a second local
 header strip above the control bar.
+That same shared filter-toolbar boundary also owns controlled select continuity
+when filter options materialize asynchronously. `LabeledFilterSelect` must keep
+the caller-owned `value` visibly selected after option children arrive so
+dashboard, recovery, and other canonical filter bars do not drop their active
+selection until the operator reopens the control.
 When those workspace tabs need an embedded control-bar treatment, they should
 still stay on the one canonical `frontend-modern/src/components/shared/Subtabs.tsx`
 primitive and reuse the established shell, list, and button class pattern

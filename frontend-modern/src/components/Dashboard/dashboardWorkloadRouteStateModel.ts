@@ -4,6 +4,7 @@ export const deserializeDashboardContainerRuntime = (raw: unknown): string =>
 export const DASHBOARD_WORKLOAD_ROUTE_RESET_STATE = {
   selectedNode: null,
   selectedHostHint: null,
+  selectedPlatform: null,
   selectedKubernetesContext: null,
   selectedKubernetesNamespace: null,
   containerRuntime: '',

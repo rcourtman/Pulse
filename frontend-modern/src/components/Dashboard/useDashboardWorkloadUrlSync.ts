@@ -25,11 +25,13 @@ export interface DashboardWorkloadUrlSyncOptions {
   containerRuntimeOptions: Accessor<string[]>;
   kubernetesNamespaceOptions: Accessor<string[]>;
   selectedHostHint: Accessor<string | null>;
+  selectedPlatform: Accessor<string | null>;
   selectedKubernetesContext: Accessor<string | null>;
   selectedKubernetesNamespace: Accessor<string | null>;
   selectedNode: Accessor<string | null>;
   setContainerRuntime: Setter<string>;
   setSelectedHostHint: Setter<string | null>;
+  setSelectedPlatform: Setter<string | null>;
   setSelectedKubernetesContext: Setter<string | null>;
   setSelectedKubernetesNamespace: Setter<string | null>;
   setSelectedNode: Setter<string | null>;
@@ -51,6 +53,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   const [handledContextParam, setHandledContextParam] = createSignal('');
   const [handledNamespaceParam, setHandledNamespaceParam] = createSignal('');
   const [handledAgentParam, setHandledAgentParam] = createSignal('');
+  const [handledPlatformParam, setHandledPlatformParam] = createSignal('');
 
   let pendingUrlSyncHandle: number | null = null;
   let pendingUrlSyncPath: string | null = null;
@@ -166,6 +169,31 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   });
 
   createEffect(() => {
+    const normalized = workloadUrlParams().platform;
+    const currentSelected = options.selectedPlatform();
+
+    if (normalized) {
+      if (currentSelected !== normalized) {
+        options.setSelectedPlatform(normalized);
+      }
+      if (!options.showFilters()) {
+        options.setShowFilters(true);
+      }
+      if (handledPlatformParam() !== normalized) {
+        setHandledPlatformParam(normalized);
+      }
+      return;
+    }
+
+    if (currentSelected !== null) {
+      options.setSelectedPlatform(null);
+    }
+    if (handledPlatformParam() !== '') {
+      setHandledPlatformParam('');
+    }
+  });
+
+  createEffect(() => {
     const normalized = workloadUrlParams().context;
     if (normalized === handledContextParam()) return;
 
@@ -255,9 +283,11 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
     const urlContext = parsed.context;
     const urlNamespace = parsed.namespace;
     const urlAgent = parsed.agent;
+    const urlPlatform = parsed.platform;
     const urlResource = parsed.resource;
 
     if (handledTypeParam() !== urlType) return;
+    if (handledPlatformParam() !== urlPlatform) return;
     if (handledRuntimeParam() !== urlRuntime) return;
     if (handledContextParam() !== urlContext) return;
     if (handledNamespaceParam() !== urlNamespace) return;
@@ -272,6 +302,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
       selectedKubernetesNamespace: options.selectedKubernetesNamespace(),
       selectedNode: options.selectedNode(),
       selectedHostHint: options.selectedHostHint(),
+      selectedPlatform: options.selectedPlatform(),
     });
     if (nextPath) {
       scheduleUrlSyncNavigate(nextPath);

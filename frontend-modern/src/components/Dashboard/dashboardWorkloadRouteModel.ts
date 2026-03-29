@@ -1,5 +1,6 @@
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { normalizeWorkloadViewModeParam, resolveWorkloadType } from '@/utils/workloads';
+import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
 import type { DashboardFilterSelectOption } from './dashboardFilterModel';
 import { getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
 
@@ -82,3 +83,16 @@ export const buildDashboardContainerRuntimeOptions = (guests: WorkloadGuest[]): 
   }
   return Array.from(runtimes).sort((a, b) => a.localeCompare(b));
 };
+
+export const buildDashboardPlatformOptions = (
+  guests: WorkloadGuest[],
+  viewMode: ViewMode,
+): DashboardFilterSelectOption[] =>
+  buildSourcePlatformOptions(
+    guests
+      .filter((guest) => viewMode === 'all' || resolveWorkloadType(guest) === viewMode)
+      .map((guest) => guest.platformType || ''),
+  ).map((option) => ({
+    value: option.key,
+    label: option.label,
+  }));

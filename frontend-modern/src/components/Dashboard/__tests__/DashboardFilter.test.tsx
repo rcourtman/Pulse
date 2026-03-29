@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, cleanup, fireEvent } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { DashboardFilter } from '../DashboardFilter';
-import type { DashboardFilterProps } from '../dashboardFilterModel';
+import {
+  DEFAULT_DASHBOARD_SORT_KEY,
+  type DashboardFilterProps,
+} from '../dashboardFilterModel';
 
 // Mock useBreakpoint — hoist so tests can control isMobile
 const { isMobileMock } = vi.hoisted(() => {
@@ -197,6 +201,7 @@ describe('DashboardFilter', () => {
 
     it('resets all filters when clicked', () => {
       const hostOnChange = vi.fn();
+      const platformOnChange = vi.fn();
       const namespaceOnChange = vi.fn();
       const props = makeProps({
         search: vi.fn(() => 'test'),
@@ -210,6 +215,14 @@ describe('DashboardFilter', () => {
             { value: 'host-1', label: 'Host 1' },
           ],
           onChange: hostOnChange,
+        },
+        platformFilter: {
+          value: 'truenas',
+          options: [
+            { value: '', label: 'All platforms' },
+            { value: 'truenas', label: 'TrueNAS' },
+          ],
+          onChange: platformOnChange,
         },
         namespaceFilter: {
           value: 'ns-1',
@@ -225,12 +238,13 @@ describe('DashboardFilter', () => {
       fireEvent.click(screen.getByText('Reset'));
 
       expect(props.setSearch).toHaveBeenCalledWith('');
-      expect(props.setSortKey).toHaveBeenCalledWith('name');
+      expect(props.setSortKey).toHaveBeenCalledWith(DEFAULT_DASHBOARD_SORT_KEY);
       expect(props.setSortDirection).toHaveBeenCalledWith('asc');
       expect(props.setViewMode).toHaveBeenCalledWith('all');
       expect(props.setStatusMode).toHaveBeenCalledWith('all');
       expect(props.setGroupingMode).toHaveBeenCalledWith('grouped');
       expect(hostOnChange).toHaveBeenCalledWith('');
+      expect(platformOnChange).toHaveBeenCalledWith('');
       expect(namespaceOnChange).toHaveBeenCalledWith('');
     });
 
@@ -324,6 +338,65 @@ describe('DashboardFilter', () => {
       });
       render(() => <DashboardFilter {...props} />);
       expect(screen.getByText('Node')).toBeInTheDocument();
+    });
+  });
+
+  describe('platform filter', () => {
+    it('renders when platformFilter prop is provided', () => {
+      const props = makeProps({
+        platformFilter: {
+          value: '',
+          options: [
+            { value: '', label: 'All platforms' },
+            { value: 'truenas', label: 'TrueNAS' },
+          ],
+          onChange: vi.fn(),
+        },
+      });
+      render(() => <DashboardFilter {...props} />);
+      expect(screen.getByLabelText('Platform')).toBeInTheDocument();
+    });
+
+    it('calls onChange when platform selection changes', () => {
+      const onChange = vi.fn();
+      const props = makeProps({
+        platformFilter: {
+          value: '',
+          options: [
+            { value: '', label: 'All platforms' },
+            { value: 'truenas', label: 'TrueNAS' },
+          ],
+          onChange,
+        },
+      });
+      render(() => <DashboardFilter {...props} />);
+      fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
+      expect(onChange).toHaveBeenCalledWith('truenas');
+    });
+
+    it('keeps the controlled platform value when async options arrive later', () => {
+      const baseProps = makeProps();
+      const [platformOptions, setPlatformOptions] = createSignal([
+        { value: '', label: 'All platforms' },
+      ]);
+
+      render(() => (
+        <DashboardFilter
+          {...baseProps}
+          platformFilter={{
+            value: 'truenas',
+            options: platformOptions(),
+            onChange: vi.fn(),
+          }}
+        />
+      ));
+
+      setPlatformOptions([
+        { value: '', label: 'All platforms' },
+        { value: 'truenas', label: 'TrueNAS' },
+      ]);
+
+      expect(screen.getByLabelText('Platform')).toHaveValue('truenas');
     });
   });
 

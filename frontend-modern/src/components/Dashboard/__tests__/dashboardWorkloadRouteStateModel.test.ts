@@ -18,6 +18,7 @@ describe('dashboardWorkloadRouteStateModel', () => {
     expect(DASHBOARD_WORKLOAD_ROUTE_RESET_STATE).toEqual({
       selectedNode: null,
       selectedHostHint: null,
+      selectedPlatform: null,
       selectedKubernetesContext: null,
       selectedKubernetesNamespace: null,
       containerRuntime: '',

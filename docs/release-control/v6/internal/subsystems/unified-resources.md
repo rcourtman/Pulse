@@ -501,6 +501,14 @@ workload-to-infrastructure href builder used by dashboard row and drawer
 consumers. Future workload-to-resource navigation changes must extend through
 that shared routing contract instead of reintroducing dashboard-local path
 builders.
+That same routing contract now also owns canonical `/workloads` platform
+scoping. Shared workloads links, dashboard URL-sync state, and infrastructure
+drill-down helpers must preserve `platform=<owned-source-key>` for API-backed
+workloads such as TrueNAS app-containers instead of collapsing those routes
+back to generic agent or Docker-only semantics when host telemetry is also
+present. Runtime-local filters like `agent` or cluster context may still be
+added as secondary scope, but the canonical platform query must remain the
+first-class route boundary for shared workload navigation.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`,
