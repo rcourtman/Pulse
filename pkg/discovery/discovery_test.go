@@ -309,6 +309,69 @@ func TestNewScannerWithProfileAcceptsSelfSignedProxmoxProbe(t *testing.T) {
 	}
 }
 
+func TestNewScannerWithProfile_UsesSecureSharedHTTPClient(t *testing.T) {
+	t.Parallel()
+
+	profile := &envdetect.EnvironmentProfile{
+		Policy:   envdetect.DefaultScanPolicy(),
+		Metadata: map[string]string{},
+	}
+
+	scanner := NewScannerWithProfile(profile)
+	transport, ok := scanner.httpClient.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", scanner.httpClient.Transport)
+	}
+	if transport.TLSClientConfig != nil {
+		t.Fatal("expected shared scanner client to use default secure TLS verification")
+	}
+}
+
+func TestScannerHTTPClientForTLSState_UsesFingerprintPinning(t *testing.T) {
+	t.Parallel()
+
+	ts := httptest.NewTLSServer(http.NotFoundHandler())
+	defer ts.Close()
+
+	leaf, err := x509.ParseCertificate(ts.TLS.Certificates[0].Certificate[0])
+	if err != nil {
+		t.Fatalf("ParseCertificate: %v", err)
+	}
+
+	scanner := NewScannerWithProfile(&envdetect.EnvironmentProfile{
+		Policy:   envdetect.DefaultScanPolicy(),
+		Metadata: map[string]string{},
+	})
+
+	if got := scanner.httpClientForTLSState(nil); got != scanner.httpClient {
+		t.Fatal("expected nil TLS state to reuse shared scanner client")
+	}
+
+	client := scanner.httpClientForTLSState(&tls.ConnectionState{
+		PeerCertificates: []*x509.Certificate{leaf},
+	})
+	if client == scanner.httpClient {
+		t.Fatal("expected pinned TLS state to allocate a dedicated client")
+	}
+
+	transport, ok := client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("expected *http.Transport, got %T", client.Transport)
+	}
+	if transport.TLSClientConfig == nil || transport.TLSClientConfig.VerifyPeerCertificate == nil {
+		t.Fatal("expected pinned client to install fingerprint verification")
+	}
+	if err := transport.TLSClientConfig.VerifyPeerCertificate([][]byte{leaf.Raw}, nil); err != nil {
+		t.Fatalf("expected fingerprint verifier to accept captured leaf certificate: %v", err)
+	}
+
+	mismatchedRaw := append([]byte(nil), leaf.Raw...)
+	mismatchedRaw[len(mismatchedRaw)-1] ^= 0xff
+	if err := transport.TLSClientConfig.VerifyPeerCertificate([][]byte{mismatchedRaw}, nil); err == nil {
+		t.Fatal("expected fingerprint verifier to reject a different certificate")
+	}
+}
+
 func startTLSServerOn(t *testing.T, addr string, handler http.Handler) *httptest.Server {
 	t.Helper()
 

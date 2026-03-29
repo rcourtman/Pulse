@@ -2,7 +2,10 @@ package discovery
 
 import (
 	"context"
+	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -142,7 +145,6 @@ func NewScannerWithProfile(profile *envdetect.EnvironmentProfile) *Scanner {
 	clonedProfile.Policy = policy
 
 	transport := &http.Transport{
-		TLSClientConfig: tlsutil.PeerCertificateCaptureTLSConfig(),
 		MaxIdleConns:    100,
 		MaxConnsPerHost: max(policy.MaxConcurrent, 10),
 	}
@@ -157,6 +159,28 @@ func NewScannerWithProfile(profile *envdetect.EnvironmentProfile) *Scanner {
 		profile:    clonedProfile,
 		httpClient: client,
 	}
+}
+
+func fingerprintFromCertificates(certs []*x509.Certificate) string {
+	if len(certs) == 0 || certs[0] == nil || len(certs[0].Raw) == 0 {
+		return ""
+	}
+
+	fingerprint := sha256.Sum256(certs[0].Raw)
+	return hex.EncodeToString(fingerprint[:])
+}
+
+func (s *Scanner) httpClientForTLSState(state *tls.ConnectionState) *http.Client {
+	if state == nil {
+		return s.httpClient
+	}
+
+	fingerprint := fingerprintFromCertificates(state.PeerCertificates)
+	if fingerprint == "" {
+		return s.httpClient
+	}
+
+	return tlsutil.CreateHTTPClientWithTimeout(true, fingerprint, s.policy.HTTPTimeout)
 }
 
 // ServerCallback is called when a server is discovered
@@ -927,7 +951,9 @@ func (s *Scanner) probeProxmoxService(ctx context.Context, ip string, port int) 
 		return result
 	}
 
-	versionFinding, version, release := s.probeVersionEndpoint(ctx, address)
+	httpClient := s.httpClientForTLSState(tlsState)
+
+	versionFinding, version, release := s.probeVersionEndpoint(ctx, httpClient, address)
 	result.recordEndpoint(versionFinding)
 	result.VersionStatus = versionFinding.Status
 	result.VersionError = versionFinding.Error
@@ -935,7 +961,7 @@ func (s *Scanner) probeProxmoxService(ctx context.Context, ip string, port int) 
 	result.Release = release
 	result.Headers = cloneHeader(versionFinding.Headers)
 
-	s.applyProductMatchers(ctx, address, result)
+	s.applyProductMatchers(ctx, httpClient, address, result)
 
 	if strings.TrimSpace(result.Version) == "" {
 		result.Version = "Unknown"
@@ -955,11 +981,11 @@ func (s *Scanner) probeProxmoxService(ctx context.Context, ip string, port int) 
 	return result
 }
 
-func (s *Scanner) applyProductMatchers(ctx context.Context, address string, result *ProxmoxProbeResult) {
+func (s *Scanner) applyProductMatchers(ctx context.Context, httpClient *http.Client, address string, result *ProxmoxProbeResult) {
 	applySharedHeuristics(result)
 	applyPVEHeuristics(result)
-	s.applyPMGHeuristics(ctx, address, result)
-	s.applyPBSHeuristics(ctx, address, result)
+	s.applyPMGHeuristics(ctx, httpClient, address, result)
+	s.applyPBSHeuristics(ctx, httpClient, address, result)
 }
 
 func applySharedHeuristics(result *ProxmoxProbeResult) {
@@ -1042,7 +1068,7 @@ func applyPVEHeuristics(result *ProxmoxProbeResult) {
 	}
 }
 
-func (s *Scanner) applyPMGHeuristics(ctx context.Context, address string, result *ProxmoxProbeResult) {
+func (s *Scanner) applyPMGHeuristics(ctx context.Context, httpClient *http.Client, address string, result *ProxmoxProbeResult) {
 	versionFinding, _ := result.endpointFinding("api2/json/version")
 	hasPMGSignal := false
 
@@ -1081,7 +1107,7 @@ func (s *Scanner) applyPMGHeuristics(ctx context.Context, address string, result
 
 	for _, endpoint := range pmgEndpoints {
 		if _, ok := result.EndpointFindings[endpoint.Path]; !ok {
-			finding := s.probeAPIEndpoint(ctx, address, endpoint.Path)
+			finding := s.probeAPIEndpoint(ctx, httpClient, address, endpoint.Path)
 			result.recordEndpoint(finding)
 		}
 
@@ -1101,7 +1127,7 @@ func (s *Scanner) applyPMGHeuristics(ctx context.Context, address string, result
 	}
 }
 
-func (s *Scanner) applyPBSHeuristics(ctx context.Context, address string, result *ProxmoxProbeResult) {
+func (s *Scanner) applyPBSHeuristics(ctx context.Context, httpClient *http.Client, address string, result *ProxmoxProbeResult) {
 	if result.Port != 8007 {
 		return
 	}
@@ -1156,7 +1182,7 @@ func (s *Scanner) applyPBSHeuristics(ctx context.Context, address string, result
 
 	for _, endpoint := range pbsEndpoints {
 		if _, ok := result.EndpointFindings[endpoint.Path]; !ok {
-			finding := s.probeAPIEndpoint(ctx, address, endpoint.Path)
+			finding := s.probeAPIEndpoint(ctx, httpClient, address, endpoint.Path)
 			result.recordEndpoint(finding)
 		}
 
@@ -1193,12 +1219,19 @@ func defaultProductsForPort(port int) []string {
 
 func (s *Scanner) fetchNodeHostname(ctx context.Context, ip string, port int) string {
 	address := net.JoinHostPort(ip, strconv.Itoa(port))
+	tlsState, reachable, _ := s.performTLSProbe(ctx, address)
+	if !reachable {
+		return ""
+	}
+
+	httpClient := s.httpClientForTLSState(tlsState)
+
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://%s/api2/json/nodes", address), nil)
 	if err != nil {
 		return ""
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return ""
 	}
@@ -1247,7 +1280,7 @@ func (s *Scanner) performTLSProbe(ctx context.Context, address string) (*tls.Con
 	return nil, true, err
 }
 
-func (s *Scanner) probeVersionEndpoint(ctx context.Context, address string) (EndpointProbeFinding, string, string) {
+func (s *Scanner) probeVersionEndpoint(ctx context.Context, httpClient *http.Client, address string) (EndpointProbeFinding, string, string) {
 	const endpoint = "api2/json/version"
 
 	finding := EndpointProbeFinding{Endpoint: endpoint}
@@ -1257,7 +1290,7 @@ func (s *Scanner) probeVersionEndpoint(ctx context.Context, address string) (End
 		return finding, "", ""
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		finding.Error = err
 		return finding, "", ""
@@ -1292,7 +1325,7 @@ func (s *Scanner) probeVersionEndpoint(ctx context.Context, address string) (End
 	return finding, payload.Data.Version, payload.Data.Release
 }
 
-func (s *Scanner) probeAPIEndpoint(ctx context.Context, address, endpoint string) EndpointProbeFinding {
+func (s *Scanner) probeAPIEndpoint(ctx context.Context, httpClient *http.Client, address, endpoint string) EndpointProbeFinding {
 	finding := EndpointProbeFinding{Endpoint: endpoint}
 
 	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://%s/%s", address, endpoint), nil)
@@ -1301,7 +1334,7 @@ func (s *Scanner) probeAPIEndpoint(ctx context.Context, address, endpoint string
 		return finding
 	}
 
-	resp, err := s.httpClient.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		finding.Error = err
 		return finding

@@ -13,5 +13,5 @@ func (s *Scanner) ProbeProxmoxService(ctx context.Context, ip string, port int) 
 }
 
 func (s *Scanner) ProbeAPIEndpoint(ctx context.Context, address, endpoint string) EndpointProbeFinding {
-	return s.probeAPIEndpoint(ctx, address, endpoint)
+	return s.probeAPIEndpoint(ctx, s.httpClient, address, endpoint)
 }
