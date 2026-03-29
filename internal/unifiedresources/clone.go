@@ -289,8 +289,17 @@ func clonePhysicalDiskMeta(in *PhysicalDiskMeta) *PhysicalDiskMeta {
 		return nil
 	}
 	out := *in
+	out.TemperatureAggregate = cloneTemperatureAggregateMeta(in.TemperatureAggregate)
 	out.SMART = cloneSMARTMeta(in.SMART)
 	out.Risk = clonePhysicalDiskRisk(in.Risk)
+	return &out
+}
+
+func cloneTemperatureAggregateMeta(in *TemperatureAggregateMeta) *TemperatureAggregateMeta {
+	if in == nil {
+		return nil
+	}
+	out := *in
 	return &out
 }
 

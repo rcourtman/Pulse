@@ -29,6 +29,8 @@ const defaultRealtimeIntervalSeconds = 2
 
 const defaultAppStatsIntervalSeconds = defaultRealtimeIntervalSeconds
 
+const defaultDiskTemperatureAggregateWindowDays = 7
+
 const defaultAppLogInitialWait = 2 * time.Second
 
 const defaultAppLogIdleWait = 250 * time.Millisecond
@@ -295,9 +297,14 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 	if err := c.getJSON(ctx, http.MethodGet, "/disk", &response); err != nil {
 		return nil, err
 	}
-	temperatures, err := c.getDiskTemperaturesWithFallback(ctx, diskReportingIdentifiers(response))
+	identifiers := diskReportingIdentifiers(response)
+	temperatures, err := c.getDiskTemperaturesWithFallback(ctx, identifiers)
 	if err != nil {
 		temperatures = nil
+	}
+	aggregates, err := c.getDiskTemperatureAggregates(ctx, identifiers, defaultDiskTemperatureAggregateWindowDays)
+	if err != nil {
+		aggregates = nil
 	}
 
 	disks := make([]Disk, 0, len(response))
@@ -319,16 +326,17 @@ func (c *Client) GetDisks(ctx context.Context) ([]Disk, error) {
 		}
 
 		disks = append(disks, Disk{
-			ID:          diskID,
-			Name:        strings.TrimSpace(item.Name),
-			Pool:        strings.TrimSpace(item.Pool),
-			Status:      strings.TrimSpace(item.Status),
-			Model:       strings.TrimSpace(item.Model),
-			Serial:      strings.TrimSpace(item.Serial),
-			SizeBytes:   item.Size,
-			Temperature: temperatureForTrueNASDisk(temperatures, item),
-			Transport:   strings.ToLower(strings.TrimSpace(item.Bus)),
-			Rotational:  rotational,
+			ID:                   diskID,
+			Name:                 strings.TrimSpace(item.Name),
+			Pool:                 strings.TrimSpace(item.Pool),
+			Status:               strings.TrimSpace(item.Status),
+			Model:                strings.TrimSpace(item.Model),
+			Serial:               strings.TrimSpace(item.Serial),
+			SizeBytes:            item.Size,
+			Temperature:          temperatureForTrueNASDisk(temperatures, item),
+			TemperatureAggregate: temperatureAggregateForTrueNASDisk(aggregates, item),
+			Transport:            strings.ToLower(strings.TrimSpace(item.Bus)),
+			Rotational:           rotational,
 		})
 	}
 
@@ -411,6 +419,25 @@ func (c *Client) getDiskTemperaturesFromReporting(ctx context.Context, identifie
 		return nil, err
 	}
 	return rpc.getDiskTemperatures(ctx, identifiers)
+}
+
+func (c *Client) getDiskTemperatureAggregates(ctx context.Context, identifiers []string, windowDays int) (map[string]DiskTemperatureAggregate, error) {
+	identifiers = dedupeStrings(identifiers)
+	if len(identifiers) == 0 {
+		return nil, fmt.Errorf("truenas disk temperature aggregates require disk identifiers")
+	}
+
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := &trueNASRPCClient{conn: conn, nextID: 1}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+	return rpc.getDiskTemperatureAggregates(ctx, identifiers, windowDays)
 }
 
 // GetAlerts returns active and dismissed TrueNAS alerts.
@@ -836,6 +863,26 @@ func temperatureForTrueNASDisk(temperatures map[string]int, item diskResponse) i
 		}
 	}
 	return 0
+}
+
+func temperatureAggregateForTrueNASDisk(aggregates map[string]DiskTemperatureAggregate, item diskResponse) DiskTemperatureAggregate {
+	if len(aggregates) == 0 {
+		return DiskTemperatureAggregate{}
+	}
+	keys := []string{
+		strings.TrimSpace(item.Name),
+		strings.TrimSpace(item.Identifier),
+		strings.TrimSpace(item.Serial),
+	}
+	for _, key := range keys {
+		if key == "" {
+			continue
+		}
+		if aggregate, ok := aggregates[key]; ok {
+			return aggregate
+		}
+	}
+	return DiskTemperatureAggregate{}
 }
 
 func parseDiskTemperatures(raw any) map[string]int {
@@ -1312,6 +1359,25 @@ func (c *trueNASRPCClient) getDiskTemperatures(ctx context.Context, identifiers 
 	return parseReportingDiskTemperatures(response), nil
 }
 
+func (c *trueNASRPCClient) getDiskTemperatureAggregates(ctx context.Context, identifiers []string, windowDays int) (map[string]DiskTemperatureAggregate, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+	identifiers = dedupeStrings(identifiers)
+	if len(identifiers) == 0 {
+		return nil, fmt.Errorf("truenas rpc disk temperature aggregate query requires at least one identifier")
+	}
+	if windowDays <= 0 {
+		windowDays = defaultDiskTemperatureAggregateWindowDays
+	}
+
+	var response any
+	if err := c.call(ctx, "disk.temperature_agg", []any{identifiers, windowDays}, &response); err != nil {
+		return nil, err
+	}
+	return parseDiskTemperatureAggregates(response, windowDays), nil
+}
+
 func (c *trueNASRPCClient) getReportingData(ctx context.Context, graphs []map[string]any) ([]trueNASReportingGetDataResponse, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
@@ -1547,6 +1613,123 @@ func parseReportingDiskTemperatures(responses []trueNASReportingGetDataResponse)
 		return nil
 	}
 	return temperatures
+}
+
+func parseDiskTemperatureAggregates(raw any, defaultWindowDays int) map[string]DiskTemperatureAggregate {
+	if defaultWindowDays <= 0 {
+		defaultWindowDays = defaultDiskTemperatureAggregateWindowDays
+	}
+
+	aggregates := make(map[string]DiskTemperatureAggregate)
+	switch typed := raw.(type) {
+	case map[string]any:
+		for identifier, entry := range typed {
+			aggregate, ok := parseDiskTemperatureAggregateEntry(entry, defaultWindowDays)
+			if !ok {
+				continue
+			}
+			aggregates[strings.TrimSpace(identifier)] = aggregate
+		}
+	case []any:
+		for _, entry := range typed {
+			record, ok := entry.(map[string]any)
+			if !ok {
+				continue
+			}
+			identifier := readStringAny(record, "identifier", "name", "disk", "disk_name", "diskName")
+			if identifier == "" {
+				continue
+			}
+			aggregate, ok := parseDiskTemperatureAggregateEntry(record, defaultWindowDays)
+			if !ok {
+				continue
+			}
+			aggregates[identifier] = aggregate
+		}
+	}
+	if len(aggregates) == 0 {
+		return nil
+	}
+	return aggregates
+}
+
+func parseDiskTemperatureAggregateEntry(raw any, defaultWindowDays int) (DiskTemperatureAggregate, bool) {
+	record, ok := raw.(map[string]any)
+	if !ok {
+		return DiskTemperatureAggregate{}, false
+	}
+
+	aggRecord := record
+	for _, key := range []string{"aggregations", "aggregation", "stats", "temperature_agg", "temperatureAgg"} {
+		if nested := readMapAny(record, key); len(nested) > 0 {
+			aggRecord = nested
+			break
+		}
+	}
+
+	minimum, okMinimum := readFloatValueAny(aggRecord, "min", "minimum", "low")
+	average, okAverage := readFloatValueAny(aggRecord, "avg", "average", "mean")
+	maximum, okMaximum := readFloatValueAny(aggRecord, "max", "maximum", "high")
+	if !okMinimum && !okAverage && !okMaximum {
+		return DiskTemperatureAggregate{}, false
+	}
+
+	windowDays := readIntValueAny(record, "days", "window_days", "windowDays")
+	if windowDays <= 0 {
+		windowDays = readIntValueAny(aggRecord, "days", "window_days", "windowDays")
+	}
+	if windowDays <= 0 {
+		windowDays = defaultWindowDays
+	}
+
+	return DiskTemperatureAggregate{
+		WindowDays: windowDays,
+		MinCelsius: minimum,
+		AvgCelsius: average,
+		MaxCelsius: maximum,
+	}, true
+}
+
+func readFloatValueAny(record map[string]any, keys ...string) (float64, bool) {
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok {
+			continue
+		}
+		if parsed, ok := parseFloat64Any(value); ok {
+			return parsed, true
+		}
+	}
+	return 0, false
+}
+
+func readIntValueAny(record map[string]any, keys ...string) int {
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok {
+			continue
+		}
+		switch typed := value.(type) {
+		case int:
+			return typed
+		case int64:
+			return int(typed)
+		case float64:
+			return int(math.Round(typed))
+		case json.Number:
+			if integer, err := typed.Int64(); err == nil {
+				return int(integer)
+			}
+			if floatValue, err := typed.Float64(); err == nil {
+				return int(math.Round(floatValue))
+			}
+		case string:
+			if parsed, err := strconv.Atoi(strings.TrimSpace(typed)); err == nil {
+				return parsed
+			}
+		}
+	}
+	return 0
 }
 
 func extractReportingLegendFloatValues(raw any, legends []string) map[string]float64 {

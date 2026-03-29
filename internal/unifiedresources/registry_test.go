@@ -99,6 +99,61 @@ func TestResourceRegistry_ListByType_Empty(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_MergesPhysicalDiskTemperatureAggregate(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "disk-sda",
+			Resource: Resource{
+				Type:     ResourceTypePhysicalDisk,
+				Name:     "sda",
+				Status:   StatusOnline,
+				LastSeen: now,
+				PhysicalDisk: &PhysicalDiskMeta{
+					DevPath:     "/dev/sda",
+					Model:       "Seagate Exos X18",
+					Serial:      "SER-A",
+					DiskType:    "sata",
+					SizeBytes:   1_000_000,
+					Health:      "PASSED",
+					Temperature: 34,
+					Wearout:     -1,
+					TemperatureAggregate: &TemperatureAggregateMeta{
+						WindowDays: 7,
+						MinCelsius: 29.0,
+						AvgCelsius: 32.7,
+						MaxCelsius: 38.0,
+					},
+				},
+			},
+			Identity: ResourceIdentity{MachineID: "SER-A"},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 physical disk, got %d", len(disks))
+	}
+	aggregate := disks[0].PhysicalDisk.TemperatureAggregate
+	if aggregate == nil {
+		t.Fatalf("expected temperature aggregate on merged disk record: %+v", disks[0].PhysicalDisk)
+	}
+	if aggregate.WindowDays != 7 || aggregate.MinCelsius != 29.0 || aggregate.AvgCelsius != 32.7 || aggregate.MaxCelsius != 38.0 {
+		t.Fatalf("unexpected merged temperature aggregate: %+v", aggregate)
+	}
+
+	aggregate.MaxCelsius = 99.0
+	got, ok := rr.Get(disks[0].ID)
+	if !ok || got == nil || got.PhysicalDisk == nil || got.PhysicalDisk.TemperatureAggregate == nil {
+		t.Fatalf("expected stored physical disk record, got %+v", got)
+	}
+	if got.PhysicalDisk.TemperatureAggregate.MaxCelsius != 38.0 {
+		t.Fatalf("expected registry clone isolation for temperature aggregate, got %+v", got.PhysicalDisk.TemperatureAggregate)
+	}
+}
+
 func TestResourceRegistryClonesCarryPolicyMetadata(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 17, 12, 0, 0, 0, time.UTC)

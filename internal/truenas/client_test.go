@@ -627,6 +627,7 @@ func TestGetDiskTemperaturesFallsBackToReportingRPC(t *testing.T) {
 }
 
 func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *testing.T) {
+	connectionCount := 0
 	server := newMockServerWithRPC(t, map[string]apiResponse{
 		"/api/v2.0/disk": {
 			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
@@ -642,23 +643,41 @@ func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *te
 		}
 		writeRPCResult(t, conn, authReq.ID, true)
 
-		temperatureReq := readRPCRequest(t, conn)
-		if temperatureReq.Method != "reporting.get_data" {
-			t.Fatalf("expected reporting.get_data, got %q", temperatureReq.Method)
-		}
-		writeRPCResult(t, conn, temperatureReq.ID, []map[string]any{{
-			"name":       "disktemp",
-			"identifier": "sda",
-			"legend":     []string{"temperature"},
-			"aggregations": map[string]any{
-				"mean": map[string]any{
-					"temperature": 43.2,
+		connectionCount++
+		request := readRPCRequest(t, conn)
+		switch connectionCount {
+		case 1:
+			if request.Method != "reporting.get_data" {
+				t.Fatalf("expected reporting.get_data, got %q", request.Method)
+			}
+			writeRPCResult(t, conn, request.ID, []map[string]any{{
+				"name":       "disktemp",
+				"identifier": "sda",
+				"legend":     []string{"temperature"},
+				"aggregations": map[string]any{
+					"mean": map[string]any{
+						"temperature": 43.2,
+					},
 				},
-			},
-			"data":  []any{},
-			"start": time.Now().Add(-5 * time.Minute).Unix(),
-			"end":   time.Now().Unix(),
-		}})
+				"data":  []any{},
+				"start": time.Now().Add(-5 * time.Minute).Unix(),
+				"end":   time.Now().Unix(),
+			}})
+		case 2:
+			if request.Method != "disk.temperature_agg" {
+				t.Fatalf("expected disk.temperature_agg, got %q", request.Method)
+			}
+			writeRPCResult(t, conn, request.ID, map[string]any{
+				"sda": map[string]any{
+					"min":         39.0,
+					"avg":         41.6,
+					"max":         45.0,
+					"window_days": 7,
+				},
+			})
+		default:
+			t.Fatalf("unexpected extra websocket connection %d", connectionCount)
+		}
 	})
 	t.Cleanup(server.Close)
 
@@ -672,6 +691,75 @@ func TestGetDisksFallsBackToReportingRPCWhenTemperatureEndpointUnavailable(t *te
 	}
 	if got := disks[0].Temperature; got != 43 {
 		t.Fatalf("expected reporting fallback temperature 43, got %+v", disks[0])
+	}
+	if got := disks[0].TemperatureAggregate.MaxCelsius; got != 45.0 {
+		t.Fatalf("expected aggregate max 45.0, got %+v", disks[0].TemperatureAggregate)
+	}
+}
+
+func TestGetDisksIncludesDiskTemperatureAggregatesFromRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, map[string]apiResponse{
+		"/api/v2.0/disk": {
+			body: `[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`,
+		},
+		"/api/v2.0/disk/temperatures": {
+			body: `{"sda":34}`,
+		},
+	}, nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		aggregateReq := readRPCRequest(t, conn)
+		if aggregateReq.Method != "disk.temperature_agg" {
+			t.Fatalf("expected disk.temperature_agg, got %q", aggregateReq.Method)
+		}
+		params, ok := aggregateReq.Params.([]any)
+		if !ok || len(params) != 2 {
+			t.Fatalf("unexpected aggregate params: %#v", aggregateReq.Params)
+		}
+		identifiers, ok := params[0].([]any)
+		if !ok || len(identifiers) != 1 {
+			t.Fatalf("unexpected aggregate identifiers: %#v", params[0])
+		}
+		if got := strings.TrimSpace(fmt.Sprint(identifiers[0])); got != "sda" {
+			t.Fatalf("expected sda identifier, got %q", got)
+		}
+		if got := int(readFloatAny(map[string]any{"value": params[1]}, "value")); got != defaultDiskTemperatureAggregateWindowDays {
+			t.Fatalf("expected window %d, got %#v", defaultDiskTemperatureAggregateWindowDays, params[1])
+		}
+		writeRPCResult(t, conn, aggregateReq.ID, map[string]any{
+			"sda": map[string]any{
+				"min":         29.0,
+				"avg":         32.8,
+				"max":         38.0,
+				"window_days": 7,
+			},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	disks, err := client.GetDisks(context.Background())
+	if err != nil {
+		t.Fatalf("GetDisks() error = %v", err)
+	}
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 disk, got %d", len(disks))
+	}
+	if got := disks[0].TemperatureAggregate.WindowDays; got != 7 {
+		t.Fatalf("expected aggregate window 7, got %+v", disks[0].TemperatureAggregate)
+	}
+	if got := disks[0].TemperatureAggregate.MinCelsius; got != 29.0 {
+		t.Fatalf("expected aggregate min 29.0, got %+v", disks[0].TemperatureAggregate)
+	}
+	if got := disks[0].TemperatureAggregate.AvgCelsius; got != 32.8 {
+		t.Fatalf("expected aggregate avg 32.8, got %+v", disks[0].TemperatureAggregate)
+	}
+	if got := disks[0].TemperatureAggregate.MaxCelsius; got != 38.0 {
+		t.Fatalf("expected aggregate max 38.0, got %+v", disks[0].TemperatureAggregate)
 	}
 }
 

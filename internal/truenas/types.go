@@ -59,16 +59,26 @@ type Dataset struct {
 
 // Disk mirrors a TrueNAS disk listing entry.
 type Disk struct {
-	ID          string
-	Name        string
-	Pool        string
-	Status      string
-	Model       string
-	Serial      string
-	SizeBytes   int64
-	Temperature int
-	Transport   string
-	Rotational  bool
+	ID                   string
+	Name                 string
+	Pool                 string
+	Status               string
+	Model                string
+	Serial               string
+	SizeBytes            int64
+	Temperature          int
+	TemperatureAggregate DiskTemperatureAggregate
+	Transport            string
+	Rotational           bool
+}
+
+// DiskTemperatureAggregate stores recent aggregate disk-temperature history
+// derived from the native TrueNAS disk.temperature_agg API.
+type DiskTemperatureAggregate struct {
+	WindowDays int
+	MinCelsius float64
+	AvgCelsius float64
+	MaxCelsius float64
 }
 
 // Alert mirrors a TrueNAS alert listing entry.

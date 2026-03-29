@@ -125,6 +125,23 @@ func TestResourceRelationshipFieldsDefaultToNil(t *testing.T) {
 	}
 }
 
+func TestPhysicalDiskTemperatureAggregateDefaultsToNil(t *testing.T) {
+	meta := PhysicalDiskMeta{}
+	if meta.TemperatureAggregate != nil {
+		t.Fatalf("TemperatureAggregate should default to nil, got %+v", meta.TemperatureAggregate)
+	}
+
+	meta.TemperatureAggregate = &TemperatureAggregateMeta{
+		WindowDays: 7,
+		MinCelsius: 29.0,
+		AvgCelsius: 32.7,
+		MaxCelsius: 38.0,
+	}
+	if meta.TemperatureAggregate.WindowDays != 7 || meta.TemperatureAggregate.MaxCelsius != 38.0 {
+		t.Fatalf("unexpected temperature aggregate assignment: %+v", meta.TemperatureAggregate)
+	}
+}
+
 func TestIsUnsupportedLegacyResourceIDAlias(t *testing.T) {
 	tests := []struct {
 		name string

@@ -725,3 +725,36 @@ func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
 		t.Fatalf("expected hot disk critical risk, got %+v", diskRecord.Resource.PhysicalDisk.Risk)
 	}
 }
+
+func TestRecordsProjectDiskTemperatureAggregatesIntoCanonicalMetadata(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	provider := NewProvider(DefaultFixtures())
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	for _, record := range records {
+		if record.Resource.Type != unifiedresources.ResourceTypePhysicalDisk || record.Resource.Name != "sda" {
+			continue
+		}
+		if record.Resource.PhysicalDisk == nil {
+			t.Fatal("expected canonical physical-disk metadata")
+		}
+		aggregate := record.Resource.PhysicalDisk.TemperatureAggregate
+		if aggregate == nil {
+			t.Fatalf("expected temperature aggregate on canonical physical disk: %+v", record.Resource.PhysicalDisk)
+		}
+		if aggregate.WindowDays != 7 || aggregate.MinCelsius != 29.0 || aggregate.AvgCelsius != 32.7 || aggregate.MaxCelsius != 38.0 {
+			t.Fatalf("unexpected canonical disk temperature aggregate: %+v", aggregate)
+		}
+		return
+	}
+
+	t.Fatal("expected sda physical disk record")
+}

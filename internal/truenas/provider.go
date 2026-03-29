@@ -490,16 +490,17 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				LastSeen:  collectedAt,
 				UpdatedAt: collectedAt,
 				PhysicalDisk: &unifiedresources.PhysicalDiskMeta{
-					DevPath:     "/dev/" + disk.Name,
-					Model:       disk.Model,
-					Serial:      disk.Serial,
-					DiskType:    disk.Transport,
-					SizeBytes:   disk.SizeBytes,
-					Health:      healthFromDisk(disk),
-					Temperature: disk.Temperature,
-					Wearout:     -1,
-					RPM:         rpmFromDisk(disk),
-					Risk:        unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
+					DevPath:              "/dev/" + disk.Name,
+					Model:                disk.Model,
+					Serial:               disk.Serial,
+					DiskType:             disk.Transport,
+					SizeBytes:            disk.SizeBytes,
+					Health:               healthFromDisk(disk),
+					Temperature:          disk.Temperature,
+					TemperatureAggregate: temperatureAggregateMetaFromTrueNASDisk(disk),
+					Wearout:              -1,
+					RPM:                  rpmFromDisk(disk),
+					Risk:                 unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
 				},
 				Tags:      []string{"truenas", "disk", disk.Transport},
 				Incidents: incidents,
@@ -1320,6 +1321,19 @@ func rpmFromDisk(disk Disk) int {
 		return 7200
 	}
 	return 0
+}
+
+func temperatureAggregateMetaFromTrueNASDisk(disk Disk) *unifiedresources.TemperatureAggregateMeta {
+	aggregate := disk.TemperatureAggregate
+	if aggregate.WindowDays <= 0 && aggregate.MinCelsius <= 0 && aggregate.AvgCelsius <= 0 && aggregate.MaxCelsius <= 0 {
+		return nil
+	}
+	return &unifiedresources.TemperatureAggregateMeta{
+		WindowDays: aggregate.WindowDays,
+		MinCelsius: aggregate.MinCelsius,
+		AvgCelsius: aggregate.AvgCelsius,
+		MaxCelsius: aggregate.MaxCelsius,
+	}
 }
 
 func parentPoolFromDataset(datasetName string) string {

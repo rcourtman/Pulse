@@ -233,6 +233,12 @@ That same monitoring boundary now also owns live TrueNAS disk temperatures.
 project those readings into the canonical physical-disk model and risk path
 instead of leaving temperature telemetry agent-only or adding a TrueNAS-local
 presentation shim.
+That same boundary now also owns recent aggregate TrueNAS disk temperature
+history. `internal/truenas/client.go` must ingest `disk.temperature_agg`, and
+`internal/truenas/provider.go` must project the returned min/avg/max readings
+onto the shared `physicalDisk.temperatureAggregate` contract so disk-health
+consumers can reuse one canonical metadata shape instead of inventing a
+TrueNAS-only history payload.
 That same boundary now also owns the canonical disk-history write path for
 API-backed disks. `internal/monitoring/monitor.go` must sync non-native
 physical-disk resources such as TrueNAS disks into the shared `disk`

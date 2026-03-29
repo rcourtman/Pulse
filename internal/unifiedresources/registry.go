@@ -1056,6 +1056,9 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 	if incoming.Temperature > 0 && (merged.Temperature == 0 || incoming.SMART != nil || merged.SMART == nil) {
 		merged.Temperature = incoming.Temperature
 	}
+	if incoming.TemperatureAggregate != nil {
+		merged.TemperatureAggregate = cloneTemperatureAggregateMeta(incoming.TemperatureAggregate)
+	}
 	if incoming.RPM > 0 {
 		merged.RPM = incoming.RPM
 	}

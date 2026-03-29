@@ -164,6 +164,11 @@ populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read
 the same disk-health contract instead of inventing a provider-local temperature
 surface.
+That same canonical disk contract now also owns recent aggregate temperature
+history. When a provider such as TrueNAS can supply `disk.temperature_agg`
+min/avg/max readings, it must project those onto
+`physicalDisk.temperatureAggregate` instead of introducing a provider-local
+history blob or a parallel disk-temperature presentation model.
 TrueNAS-managed applications now follow the same canonical workload rule. One
 TrueNAS app instance from `app.query` must project as one canonical
 `app-container` resource under `SourceTrueNAS`, reusing the shared workload and

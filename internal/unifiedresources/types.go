@@ -315,22 +315,32 @@ type ResourceIncident struct {
 
 // PhysicalDiskMeta contains physical disk-specific metadata.
 type PhysicalDiskMeta struct {
-	DevPath      string            `json:"devPath"`
-	Model        string            `json:"model,omitempty"`
-	Serial       string            `json:"serial,omitempty"`
-	WWN          string            `json:"wwn,omitempty"`
-	DiskType     string            `json:"diskType"` // nvme, sata, sas
-	SizeBytes    int64             `json:"sizeBytes"`
-	Health       string            `json:"health"`      // PASSED, FAILED, UNKNOWN
-	Wearout      int               `json:"wearout"`     // 0-100, -1 unavailable
-	Temperature  int               `json:"temperature"` // Celsius
-	RPM          int               `json:"rpm"`
-	Used         string            `json:"used,omitempty"`
-	StorageRole  string            `json:"storageRole,omitempty"`
-	StorageGroup string            `json:"storageGroup,omitempty"`
-	StorageState string            `json:"storageState,omitempty"`
-	SMART        *SMARTMeta        `json:"smart,omitempty"`
-	Risk         *PhysicalDiskRisk `json:"risk,omitempty"`
+	DevPath              string                    `json:"devPath"`
+	Model                string                    `json:"model,omitempty"`
+	Serial               string                    `json:"serial,omitempty"`
+	WWN                  string                    `json:"wwn,omitempty"`
+	DiskType             string                    `json:"diskType"` // nvme, sata, sas
+	SizeBytes            int64                     `json:"sizeBytes"`
+	Health               string                    `json:"health"`      // PASSED, FAILED, UNKNOWN
+	Wearout              int                       `json:"wearout"`     // 0-100, -1 unavailable
+	Temperature          int                       `json:"temperature"` // Celsius
+	TemperatureAggregate *TemperatureAggregateMeta `json:"temperatureAggregate,omitempty"`
+	RPM                  int                       `json:"rpm"`
+	Used                 string                    `json:"used,omitempty"`
+	StorageRole          string                    `json:"storageRole,omitempty"`
+	StorageGroup         string                    `json:"storageGroup,omitempty"`
+	StorageState         string                    `json:"storageState,omitempty"`
+	SMART                *SMARTMeta                `json:"smart,omitempty"`
+	Risk                 *PhysicalDiskRisk         `json:"risk,omitempty"`
+}
+
+// TemperatureAggregateMeta stores recent aggregate temperature history for a
+// resource sensor where the provider can supply min/avg/max readings.
+type TemperatureAggregateMeta struct {
+	WindowDays int     `json:"windowDays,omitempty"`
+	MinCelsius float64 `json:"minCelsius,omitempty"`
+	AvgCelsius float64 `json:"avgCelsius,omitempty"`
+	MaxCelsius float64 `json:"maxCelsius,omitempty"`
 }
 
 type StorageRisk struct {
