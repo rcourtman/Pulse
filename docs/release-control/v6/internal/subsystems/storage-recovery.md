@@ -771,10 +771,12 @@ shared monitoring-card rhythm of one dominant metric plus compact supporting
 rows rather than reviving bespoke visual telemetry that makes the strip read
 heavier than the rest of Pulse.
 That same scan rule should also use the summary header for the first, obvious
-recovery counts. The header should carry total protected items plus the top
-healthy/attention cues in the same way other Pulse monitoring summaries expose
-their first read, while the `Posture` card focuses on the composition of the
-attention state instead of repeating the same healthy count again.
+recovery counts. The header should carry total protected items plus one top
+status cue, not a second copy of the full posture breakdown. When recovery has
+attention-state items, the header should surface that attention cue; otherwise
+it may carry the healthy cue. The `Posture` card then owns the composition of
+the posture state instead of having the header and card repeat both healthy and
+attention counts at once.
 That same differentiation rule applies across cards too. `Posture` and
 `Freshness` should not lead with the same stale/attention headline; the
 freshness card should emphasize recent successful coverage such as fresh-in-24h

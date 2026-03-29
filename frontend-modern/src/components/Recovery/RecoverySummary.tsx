@@ -108,6 +108,23 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     if (!latestLabel) return undefined;
     return <span class="ml-auto truncate text-xs text-muted">{latestLabel}</span>;
   });
+  const headerStatusCue = createMemo(() => {
+    if (attentionCount() > 0) {
+      return (
+        <span class="text-amber-600 dark:text-amber-400">
+          {attentionCount()} attention
+        </span>
+      );
+    }
+    if (healthyCount() > 0) {
+      return (
+        <span class="text-emerald-600 dark:text-emerald-400">
+          {healthyCount()} healthy
+        </span>
+      );
+    }
+    return undefined;
+  });
 
   return (
     <Show when={hasRollups()}>
@@ -115,16 +132,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         headerLeft={
           <>
             <span class="font-medium text-base-content">{summary().total} protected items</span>
-            <Show when={healthyCount() > 0}>
-              <span class="text-emerald-600 dark:text-emerald-400">
-                {healthyCount()} healthy
-              </span>
-            </Show>
-            <Show when={attentionCount() > 0}>
-              <span class="text-amber-600 dark:text-amber-400">
-                {attentionCount()} attention
-              </span>
-            </Show>
+            <Show when={headerStatusCue()}>{headerStatusCue()}</Show>
           </>
         }
         timeRange={props.timeRange()}
