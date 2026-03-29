@@ -180,6 +180,12 @@ provider-local host surface. API-backed `reporting.realtime` telemetry must
 project onto that same canonical `agent` contract as live metrics and metrics
 targets, using the shared `agent:<id>` in-memory key and `agent` history store
 path instead of adding a TrueNAS-only host history lane.
+AI discovery and query surfaces now follow the same rule. Assistant runtime
+paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
+canonical `agent`, `app-container`, `storage`, and `physical-disk` resources
+through those shared contracts, filtering dataset-topology storage children
+out of any `storage-pool` presentation instead of inventing TrueNAS-local
+assistant types or mislabeling datasets as pools.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

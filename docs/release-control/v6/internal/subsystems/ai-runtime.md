@@ -266,6 +266,16 @@ canonical `policy` and `ai_safe_summary` fields derived from unified resources,
 and deterministic knowledge extraction must prefer those governed summaries
 when policy redaction covers aliases, hostnames, or platform IDs instead of
 persisting raw resource labels into cached AI facts.
+That same `pulse_query` boundary now also owns canonical resource coverage for
+API-backed platforms such as TrueNAS. The runtime must expose canonical
+`system`, `app-container`, `storage-pool`, and `physical-disk` views through
+the shared unified-resource model instead of falling back to Proxmox- or
+Docker-local enumerations when a platform projects onto canonical host,
+storage, disk, or workload contracts.
+Unified AI context should follow the same rule: storage summaries may mention
+canonical storage pools and physical disks that need attention, but must not
+mislabel lower-topology storage resources such as TrueNAS datasets as
+top-level pools.
 That same requirement includes `pulse_query action=config`: guest-config
 payloads must carry canonical resource policy metadata, and config-fact
 extraction must not persist raw guest hostnames when governed redaction covers

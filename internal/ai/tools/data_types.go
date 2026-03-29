@@ -156,10 +156,14 @@ type FeatureFlags struct {
 
 // InfrastructureResponse is returned by pulse_list_infrastructure
 type InfrastructureResponse struct {
+	Systems        []SystemSummary        `json:"systems"`
 	Nodes          []NodeSummary          `json:"nodes"`
 	VMs            []VMSummary            `json:"vms"`
 	Containers     []ContainerSummary     `json:"containers"`
+	AppContainers  []AppContainerSummary  `json:"app_containers"`
 	DockerHosts    []DockerHostSummary    `json:"docker_hosts"`
+	StoragePools   []StoragePoolSummary   `json:"storage_pools"`
+	PhysicalDisks  []PhysicalDiskSummary  `json:"physical_disks"`
 	K8sClusters    []K8sClusterSummary    `json:"k8s_clusters"`
 	K8sNodes       []K8sNodeSummary       `json:"k8s_nodes"`
 	K8sPods        []K8sPodSummary        `json:"k8s_pods"`
@@ -173,6 +177,9 @@ func EmptyInfrastructureResponse() InfrastructureResponse {
 }
 
 func (r InfrastructureResponse) NormalizeCollections() InfrastructureResponse {
+	if r.Systems == nil {
+		r.Systems = []SystemSummary{}
+	}
 	if r.Nodes == nil {
 		r.Nodes = []NodeSummary{}
 	}
@@ -182,8 +189,17 @@ func (r InfrastructureResponse) NormalizeCollections() InfrastructureResponse {
 	if r.Containers == nil {
 		r.Containers = []ContainerSummary{}
 	}
+	if r.AppContainers == nil {
+		r.AppContainers = []AppContainerSummary{}
+	}
 	if r.DockerHosts == nil {
 		r.DockerHosts = []DockerHostSummary{}
+	}
+	if r.StoragePools == nil {
+		r.StoragePools = []StoragePoolSummary{}
+	}
+	if r.PhysicalDisks == nil {
+		r.PhysicalDisks = []PhysicalDiskSummary{}
 	}
 	if r.K8sClusters == nil {
 		r.K8sClusters = []K8sClusterSummary{}
@@ -229,9 +245,24 @@ type ResourceMatch struct {
 	Node           string `json:"node,omitempty"`           // Hypervisor node this resource is on
 	NodeHasAgent   bool   `json:"node_has_agent,omitempty"` // True if the node has a connected agent
 	Host           string `json:"host,omitempty"`           // Docker host for docker containers
+	Platform       string `json:"platform,omitempty"`
 	VMID           int    `json:"vmid,omitempty"`
 	Image          string `json:"image,omitempty"`
 	AgentConnected bool   `json:"agent_connected,omitempty"` // True if this specific resource has a connected agent
+}
+
+// SystemSummary is a summarized infrastructure system for list responses.
+type SystemSummary struct {
+	GovernedResourceMetadata
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Status         string  `json:"status"`
+	Platform       string  `json:"platform,omitempty"`
+	ChildCount     int     `json:"child_count,omitempty"`
+	AgentConnected bool    `json:"agent_connected,omitempty"`
+	CPU            float64 `json:"cpu_percent,omitempty"`
+	Memory         float64 `json:"memory_percent,omitempty"`
+	Disk           float64 `json:"disk_percent,omitempty"`
 }
 
 // NodeSummary is a summarized node for list responses
@@ -293,6 +324,21 @@ type DockerContainerSummary struct {
 	Health string `json:"health,omitempty"`
 }
 
+// AppContainerSummary is a summarized canonical app container for list responses.
+type AppContainerSummary struct {
+	GovernedResourceMetadata
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	Status   string  `json:"status"`
+	Host     string  `json:"host,omitempty"`
+	Platform string  `json:"platform,omitempty"`
+	Image    string  `json:"image,omitempty"`
+	Health   string  `json:"health,omitempty"`
+	CPU      float64 `json:"cpu_percent,omitempty"`
+	Memory   float64 `json:"memory_percent,omitempty"`
+	Disk     float64 `json:"disk_percent,omitempty"`
+}
+
 // K8sClusterSummary is a summarized Kubernetes cluster for list responses
 type K8sClusterSummary struct {
 	GovernedResourceMetadata
@@ -346,10 +392,14 @@ type K8sDeploymentSummary struct {
 
 // TotalCounts for infrastructure response
 type TotalCounts struct {
+	Systems        int `json:"systems"`
 	Nodes          int `json:"nodes"`
 	VMs            int `json:"vms"`
 	Containers     int `json:"containers"`
+	AppContainers  int `json:"app_containers"`
 	DockerHosts    int `json:"docker_hosts"`
+	StoragePools   int `json:"storage_pools"`
+	PhysicalDisks  int `json:"physical_disks"`
 	K8sClusters    int `json:"k8s_clusters"`
 	K8sNodes       int `json:"k8s_nodes"`
 	K8sPods        int `json:"k8s_pods"`
@@ -613,6 +663,7 @@ type ResourceResponse struct {
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
 	Status          string            `json:"status"`
+	Platform        string            `json:"platform,omitempty"`
 	Node            string            `json:"node,omitempty"`
 	Host            string            `json:"host,omitempty"`
 	CPU             ResourceCPU       `json:"cpu"`

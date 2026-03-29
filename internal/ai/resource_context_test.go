@@ -573,6 +573,18 @@ func TestBuildUnifiedResourceContextIncludesTrueNASResources(t *testing.T) {
 	if !strings.Contains(got, "TrueNAS Systems") {
 		t.Fatalf("expected context to include TrueNAS section, got %q", got)
 	}
+	if !strings.Contains(got, "### Storage") {
+		t.Fatalf("expected context to include storage section, got %q", got)
+	}
+	if !strings.Contains(got, "Storage Pools") {
+		t.Fatalf("expected context to include storage pools section, got %q", got)
+	}
+	if !strings.Contains(got, "Physical Disks Needing Attention") {
+		t.Fatalf("expected context to include disk attention section, got %q", got)
+	}
+	if strings.Contains(got, "tank/apps") {
+		t.Fatalf("expected storage pool section to exclude dataset names, got %q", got)
+	}
 	if !strings.Contains(got, "agent resource; status warning; sources truenas") {
 		t.Fatalf("expected context to include governed truenas summary, got %q", got)
 	}

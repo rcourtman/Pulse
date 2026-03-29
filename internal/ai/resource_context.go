@@ -360,6 +360,88 @@ func (s *Service) buildUnifiedResourceContextForModel(destinationModel string) s
 			}
 		}
 
+		storagePools := make([]unifiedresources.Resource, 0)
+		for _, resource := range unifiedresources.RefreshCanonicalMetadataSlice(urp.GetByType(unifiedresources.ResourceTypeStorage)) {
+			if resource.Storage != nil && strings.EqualFold(strings.TrimSpace(resource.Storage.Topology), "dataset") {
+				continue
+			}
+			storagePools = append(storagePools, resource)
+		}
+		physicalDisks := unifiedresources.RefreshCanonicalMetadataSlice(urp.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+		if len(storagePools) > 0 || len(physicalDisks) > 0 {
+			sections = append(sections, "\n### Storage")
+
+			if len(storagePools) > 0 {
+				sort.Slice(storagePools, func(i, j int) bool {
+					return strings.ToLower(unifiedresources.ResourceDisplayName(storagePools[i])) < strings.ToLower(unifiedresources.ResourceDisplayName(storagePools[j]))
+				})
+				sections = append(sections, "\n**Storage Pools:**")
+				for _, pool := range storagePools {
+					diskPercent := 0.0
+					if pool.Metrics != nil {
+						diskPercent = unifiedMetricPercent(pool.Metrics.Disk)
+					}
+
+					poolType := ""
+					if pool.Storage != nil && strings.TrimSpace(pool.Storage.Type) != "" {
+						poolType = pool.Storage.Type
+					}
+					usage := ""
+					if diskPercent > 0 {
+						usage = fmt.Sprintf(", Usage: %.1f%%", diskPercent)
+					}
+					typeLabel := ""
+					if poolType != "" {
+						typeLabel = fmt.Sprintf(" (%s)", poolType)
+					}
+
+					sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
+						unifiedresources.ResourcePolicyLabel(pool.Name, pool.AISafeSummary, pool.Policy), typeLabel, usage, pool.Status))
+				}
+			}
+
+			if len(physicalDisks) > 0 {
+				attention := make([]unifiedresources.Resource, 0)
+				for _, disk := range physicalDisks {
+					health := ""
+					temperature := 0
+					if disk.PhysicalDisk != nil {
+						health = strings.ToUpper(strings.TrimSpace(disk.PhysicalDisk.Health))
+						temperature = disk.PhysicalDisk.Temperature
+					}
+					if disk.Status != unifiedresources.StatusOnline || (health != "" && health != "PASSED" && health != "UNKNOWN") || temperature >= 50 {
+						attention = append(attention, disk)
+					}
+				}
+
+				if len(attention) > 0 {
+					sort.Slice(attention, func(i, j int) bool {
+						return strings.ToLower(unifiedresources.ResourceDisplayName(attention[i])) < strings.ToLower(unifiedresources.ResourceDisplayName(attention[j]))
+					})
+					sections = append(sections, "\n**Physical Disks Needing Attention:**")
+					for _, disk := range attention {
+						health := ""
+						temperature := ""
+						if disk.PhysicalDisk != nil {
+							if value := strings.TrimSpace(disk.PhysicalDisk.Health); value != "" {
+								health = value
+							}
+							if disk.PhysicalDisk.Temperature > 0 {
+								temperature = fmt.Sprintf(", Temp: %dC", disk.PhysicalDisk.Temperature)
+							}
+						}
+						healthSummary := ""
+						if health != "" {
+							healthSummary = fmt.Sprintf(" (%s)", health)
+						}
+
+						sections = append(sections, fmt.Sprintf("- **%s**%s%s [%s]",
+							unifiedresources.ResourcePolicyLabel(disk.Name, disk.AISafeSummary, disk.Policy), healthSummary, temperature, disk.Status))
+					}
+				}
+			}
+		}
+
 		activeAlerts := make([]AlertInfo, 0)
 		if ap != nil {
 			activeAlerts = ap.GetActiveAlerts()

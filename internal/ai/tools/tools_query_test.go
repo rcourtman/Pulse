@@ -8,6 +8,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -232,6 +233,32 @@ func (m *mockGuestConfigProvider) GetGuestConfig(guestType, instance, node strin
 	return m.config, nil
 }
 
+type registryUnifiedQueryProvider struct {
+	*unifiedresources.ResourceRegistry
+}
+
+func (p *registryUnifiedQueryProvider) GetByType(t unifiedresources.ResourceType) []unifiedresources.Resource {
+	return p.ListByType(t)
+}
+
+func newTrueNASUnifiedQueryProvider(t *testing.T) *registryUnifiedQueryProvider {
+	t.Helper()
+
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	registry := unifiedresources.NewRegistry(nil)
+	records := truenas.NewDefaultProvider().Records()
+	if len(records) == 0 {
+		t.Fatal("expected TrueNAS fixture records")
+	}
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+	return &registryUnifiedQueryProvider{ResourceRegistry: registry}
+}
+
 func TestCanonicalQueryListType_StrictV6Tokens(t *testing.T) {
 	if got := canonicalQueryListType("k8s-pods"); got != "k8s-pods" {
 		t.Fatalf("canonicalQueryListType(k8s-pods) = %q, want k8s-pods", got)
@@ -241,6 +268,15 @@ func TestCanonicalQueryListType_StrictV6Tokens(t *testing.T) {
 	}
 	if got := canonicalQueryListType("kubernetes-clusters"); got != "kubernetes-clusters" {
 		t.Fatalf("canonicalQueryListType(kubernetes-clusters) = %q, want kubernetes-clusters", got)
+	}
+	if got := canonicalQueryListType("system"); got != "systems" {
+		t.Fatalf("canonicalQueryListType(system) = %q, want systems", got)
+	}
+	if got := canonicalQueryListType("storage-pool"); got != "storage-pools" {
+		t.Fatalf("canonicalQueryListType(storage-pool) = %q, want storage-pools", got)
+	}
+	if got := canonicalQueryListType("physical-disk"); got != "physical-disks" {
+		t.Fatalf("canonicalQueryListType(physical-disk) = %q, want physical-disks", got)
 	}
 }
 
@@ -262,6 +298,15 @@ func TestCanonicalQuerySearchType_StrictV6Tokens(t *testing.T) {
 	}
 	if got := canonicalQuerySearchType("docker_host"); got != "docker_host" {
 		t.Fatalf("canonicalQuerySearchType(docker_host) = %q, want docker_host", got)
+	}
+	if got := canonicalQuerySearchType("systems"); got != "system" {
+		t.Fatalf("canonicalQuerySearchType(systems) = %q, want system", got)
+	}
+	if got := canonicalQuerySearchType("storage-pools"); got != "storage-pool" {
+		t.Fatalf("canonicalQuerySearchType(storage-pools) = %q, want storage-pool", got)
+	}
+	if got := canonicalQuerySearchType("physical-disks"); got != "physical-disk" {
+		t.Fatalf("canonicalQuerySearchType(physical-disks) = %q, want physical-disk", got)
 	}
 }
 
@@ -700,6 +745,163 @@ func TestExecuteGetResource(t *testing.T) {
 	}
 }
 
+func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
+	provider := newTrueNASUnifiedQueryProvider(t)
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+	})
+
+	listSystems, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type": "systems",
+	})
+	if err != nil {
+		t.Fatalf("list systems: unexpected error: %v", err)
+	}
+	var systemsResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(listSystems.Content[0].Text), &systemsResp); err != nil {
+		t.Fatalf("decode systems response: %v", err)
+	}
+	if len(systemsResp.Systems) != 1 {
+		t.Fatalf("expected one TrueNAS system, got %+v", systemsResp.Systems)
+	}
+	if systemsResp.Systems[0].Platform != "truenas" || systemsResp.Systems[0].Name != "truenas-main" {
+		t.Fatalf("unexpected system summary: %+v", systemsResp.Systems[0])
+	}
+
+	listApps, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type": "app-containers",
+	})
+	if err != nil {
+		t.Fatalf("list app containers: unexpected error: %v", err)
+	}
+	var appsResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(listApps.Content[0].Text), &appsResp); err != nil {
+		t.Fatalf("decode app container response: %v", err)
+	}
+	if len(appsResp.AppContainers) == 0 {
+		t.Fatal("expected canonical app containers from TrueNAS fixtures")
+	}
+	foundNextcloud := false
+	for _, app := range appsResp.AppContainers {
+		if app.Name != "Nextcloud" {
+			continue
+		}
+		foundNextcloud = true
+		if app.Platform != "truenas" || app.Host != "truenas-main" || app.ID != "nextcloud" {
+			t.Fatalf("unexpected Nextcloud summary: %+v", app)
+		}
+	}
+	if !foundNextcloud {
+		t.Fatalf("expected Nextcloud in app containers, got %+v", appsResp.AppContainers)
+	}
+
+	listPools, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type": "storage-pools",
+	})
+	if err != nil {
+		t.Fatalf("list storage pools: unexpected error: %v", err)
+	}
+	var poolsResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(listPools.Content[0].Text), &poolsResp); err != nil {
+		t.Fatalf("decode storage pools response: %v", err)
+	}
+	if len(poolsResp.StoragePools) != 3 {
+		t.Fatalf("expected only top-level pools, got %+v", poolsResp.StoragePools)
+	}
+	for _, pool := range poolsResp.StoragePools {
+		if strings.Contains(pool.Name, "/") {
+			t.Fatalf("expected storage-pools list to exclude datasets, got %+v", poolsResp.StoragePools)
+		}
+	}
+
+	listDisks, err := executor.executeListInfrastructure(context.Background(), map[string]interface{}{
+		"type": "physical-disks",
+	})
+	if err != nil {
+		t.Fatalf("list physical disks: unexpected error: %v", err)
+	}
+	var disksResp InfrastructureResponse
+	if err := json.Unmarshal([]byte(listDisks.Content[0].Text), &disksResp); err != nil {
+		t.Fatalf("decode physical disks response: %v", err)
+	}
+	if len(disksResp.PhysicalDisks) == 0 {
+		t.Fatal("expected physical disks from TrueNAS fixtures")
+	}
+	foundHotDisk := false
+	for _, disk := range disksResp.PhysicalDisks {
+		if disk.DevPath != "/dev/sdc" {
+			continue
+		}
+		foundHotDisk = true
+		if disk.Node != "truenas-main" || disk.Health == "" {
+			t.Fatalf("unexpected canonical disk summary: %+v", disk)
+		}
+	}
+	if !foundHotDisk {
+		t.Fatalf("expected sdc disk in list response, got %+v", disksResp.PhysicalDisks)
+	}
+
+	searchPool, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "archive",
+		"type":  "storage-pool",
+	})
+	if err != nil {
+		t.Fatalf("search storage pools: unexpected error: %v", err)
+	}
+	var searchResp ResourceSearchResponse
+	if err := json.Unmarshal([]byte(searchPool.Content[0].Text), &searchResp); err != nil {
+		t.Fatalf("decode storage-pool search response: %v", err)
+	}
+	if len(searchResp.Matches) != 1 || searchResp.Matches[0].Type != "storage-pool" || searchResp.Matches[0].Name != "archive" || searchResp.Matches[0].Platform != "truenas" {
+		t.Fatalf("unexpected storage-pool search response: %+v", searchResp.Matches)
+	}
+
+	searchDisk, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "sdc",
+		"type":  "physical-disk",
+	})
+	if err != nil {
+		t.Fatalf("search physical disks: unexpected error: %v", err)
+	}
+	searchResp = ResourceSearchResponse{}
+	if err := json.Unmarshal([]byte(searchDisk.Content[0].Text), &searchResp); err != nil {
+		t.Fatalf("decode physical-disk search response: %v", err)
+	}
+	if len(searchResp.Matches) != 1 || searchResp.Matches[0].Type != "physical-disk" || searchResp.Matches[0].Platform != "truenas" || searchResp.Matches[0].Host != "truenas-main" {
+		t.Fatalf("unexpected physical-disk search response: %+v", searchResp.Matches)
+	}
+
+	getSystem, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "system",
+		"resource_id":   "truenas-main",
+	})
+	if err != nil {
+		t.Fatalf("get system: unexpected error: %v", err)
+	}
+	var systemRes ResourceResponse
+	if err := json.Unmarshal([]byte(getSystem.Content[0].Text), &systemRes); err != nil {
+		t.Fatalf("decode system resource: %v", err)
+	}
+	if systemRes.Type != "system" || systemRes.Platform != "truenas" || systemRes.Host != "truenas-main" {
+		t.Fatalf("unexpected canonical system resource: %+v", systemRes)
+	}
+
+	getApp, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"resource_id":   "nextcloud",
+	})
+	if err != nil {
+		t.Fatalf("get app-container: unexpected error: %v", err)
+	}
+	var appRes ResourceResponse
+	if err := json.Unmarshal([]byte(getApp.Content[0].Text), &appRes); err != nil {
+		t.Fatalf("decode app resource: %v", err)
+	}
+	if appRes.Type != "app-container" || appRes.Name != "Nextcloud" || appRes.Platform != "truenas" || appRes.Host != "truenas-main" {
+		t.Fatalf("unexpected canonical app resource: %+v", appRes)
+	}
+}
+
 func TestExecuteQuerySurfacesIncludeGovernedMetadata(t *testing.T) {
 	state := models.StateSnapshot{
 		Nodes: []models.Node{
@@ -936,11 +1138,11 @@ func TestExecuteListInfrastructurePaginationAndDockerFilter(t *testing.T) {
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &dockerResp); err != nil {
 		t.Fatalf("decode docker response: %v", err)
 	}
-	if len(dockerResp.DockerHosts) != 1 || dockerResp.DockerHosts[0].Hostname != "dock1" {
-		t.Fatalf("unexpected docker hosts: %+v", dockerResp.DockerHosts)
+	if len(dockerResp.AppContainers) != 1 || dockerResp.AppContainers[0].Name != "app" {
+		t.Fatalf("unexpected app containers: %+v", dockerResp.AppContainers)
 	}
-	if len(dockerResp.DockerHosts[0].Containers) != 1 || dockerResp.DockerHosts[0].Containers[0].State != "running" {
-		t.Fatalf("unexpected docker containers: %+v", dockerResp.DockerHosts[0].Containers)
+	if dockerResp.AppContainers[0].Host != "dock1" || dockerResp.AppContainers[0].Status != "running" || dockerResp.AppContainers[0].Platform != "docker" {
+		t.Fatalf("unexpected app container summary: %+v", dockerResp.AppContainers[0])
 	}
 }
 
@@ -1131,7 +1333,7 @@ func TestInfrastructureResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 		t.Fatalf("decode empty infrastructure response: %v", err)
 	}
 
-	for _, key := range []string{"nodes", "vms", "containers", "docker_hosts", "k8s_clusters", "k8s_nodes", "k8s_pods", "k8s_deployments"} {
+	for _, key := range []string{"systems", "nodes", "vms", "containers", "app_containers", "docker_hosts", "storage_pools", "physical_disks", "k8s_clusters", "k8s_nodes", "k8s_pods", "k8s_deployments"} {
 		values, ok := decoded[key].([]any)
 		if !ok || len(values) != 0 {
 			t.Fatalf("expected %s to serialize as an empty array, got %T (%v)", key, decoded[key], decoded[key])

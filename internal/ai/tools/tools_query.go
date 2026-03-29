@@ -2006,7 +2006,7 @@ func (e *PulseToolExecutor) registerQueryTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_query",
-			Description: `Query and search infrastructure resources. Start here to find resources by name. Actions: search, get, config, topology, list, health.`,
+			Description: `Query and search canonical infrastructure resources. Start here to discover systems, workloads, storage, and disks by name. Actions: search, get, config, topology, list, health.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -2021,8 +2021,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type: 'vm', 'system-container', 'app-container', 'node' (for action: get, config, search)",
-						Enum:        []string{"vm", "system-container", "app-container", "node"},
+						Description: "Resource type. For get: 'system', 'vm', 'system-container', 'app-container'. For config: 'vm' or 'system-container'. For search: use type or resource_type with canonical values.",
+						Enum:        []string{"system", "vm", "system-container", "app-container", "node", "docker-host", "storage-pool", "physical-disk"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -2030,8 +2030,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"type": {
 						Type:        "string",
-						Description: "Filter by type (for action: list): 'nodes', 'vms', 'system-containers', 'app-containers', 'kubernetes', 'k8s-clusters', 'k8s-nodes', 'k8s-pods', 'k8s-deployments'",
-						Enum:        []string{"nodes", "vms", "system-containers", "app-containers", "kubernetes", "k8s-clusters", "k8s-nodes", "k8s-pods", "k8s-deployments"},
+						Description: "Filter by type (for action: list/search): 'systems', 'nodes', 'vms', 'system-containers', 'app-containers', 'docker-hosts', 'storage-pools', 'physical-disks', 'kubernetes', 'k8s-clusters', 'k8s-nodes', 'k8s-pods', 'k8s-deployments'",
+						Enum:        []string{"systems", "nodes", "vms", "system-containers", "app-containers", "docker-hosts", "storage-pools", "physical-disks", "kubernetes", "k8s-clusters", "k8s-nodes", "k8s-pods", "k8s-deployments"},
 					},
 					"status": {
 						Type:        "string",
@@ -2114,6 +2114,8 @@ func canonicalQueryResourceType(resourceType string) string {
 
 func canonicalQueryListType(filterType string) string {
 	switch strings.ToLower(strings.TrimSpace(filterType)) {
+	case "system":
+		return "systems"
 	case "node":
 		return "nodes"
 	case "vm":
@@ -2122,6 +2124,12 @@ func canonicalQueryListType(filterType string) string {
 		return "system-containers"
 	case "app-container":
 		return "app-containers"
+	case "docker-host":
+		return "docker-hosts"
+	case "storage-pool":
+		return "storage-pools"
+	case "physical-disk":
+		return "physical-disks"
 	case "k8s-cluster", "k8s-clusters":
 		return "k8s-clusters"
 	case "k8s-node", "k8s-nodes":
@@ -2146,10 +2154,18 @@ func canonicalQueryTopologyInclude(include string) string {
 
 func canonicalQuerySearchType(typeFilter string) string {
 	switch strings.ToLower(strings.TrimSpace(typeFilter)) {
+	case "systems":
+		return "system"
 	case "system-containers":
 		return "system-container"
 	case "app-containers":
 		return "app-container"
+	case "docker-hosts":
+		return "docker-host"
+	case "storage-pools":
+		return "storage-pool"
+	case "physical-disks":
+		return "physical-disk"
 	case "docker-host":
 		return "docker-host"
 	default:
@@ -2203,6 +2219,253 @@ func governedQueryMetadataFromResolvedResource(resource *unifiedresources.Resour
 		Policy:        policy,
 		AISafeSummary: aiSafeSummary,
 	}
+}
+
+func metricPercent(value *unifiedresources.MetricValue) float64 {
+	if value == nil {
+		return 0
+	}
+	return value.Percent
+}
+
+func metricUsedGB(value *unifiedresources.MetricValue) float64 {
+	if value == nil || value.Used == nil {
+		return 0
+	}
+	return float64(*value.Used) / (1024 * 1024 * 1024)
+}
+
+func metricTotalGB(value *unifiedresources.MetricValue) float64 {
+	if value == nil || value.Total == nil {
+		return 0
+	}
+	return float64(*value.Total) / (1024 * 1024 * 1024)
+}
+
+func canonicalResourcePlatform(resource unifiedresources.Resource) string {
+	switch {
+	case resource.TrueNAS != nil || resourceHasTag(resource, "truenas"):
+		return "truenas"
+	case resource.Proxmox != nil:
+		return "proxmox"
+	case resource.Docker != nil:
+		return "docker"
+	case resource.Agent != nil && strings.TrimSpace(resource.Agent.Platform) != "":
+		return strings.ToLower(strings.TrimSpace(resource.Agent.Platform))
+	default:
+		return ""
+	}
+}
+
+func resourceHasTag(resource unifiedresources.Resource, needle string) bool {
+	for _, tag := range resource.Tags {
+		if strings.EqualFold(strings.TrimSpace(tag), needle) {
+			return true
+		}
+	}
+	return false
+}
+
+func resourceDisplayName(resource unifiedresources.Resource) string {
+	if name := unifiedresources.ResourceDisplayName(resource); name != "" {
+		return name
+	}
+	return strings.TrimSpace(resource.Name)
+}
+
+func resourceHostCandidates(resource unifiedresources.Resource) []string {
+	candidates := []string{resourceDisplayName(resource)}
+	if resource.Agent != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.Agent.Hostname))
+	}
+	if resource.TrueNAS != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.TrueNAS.Hostname))
+	}
+	if resource.Docker != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.Docker.Hostname))
+	}
+	if resource.Proxmox != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.Proxmox.NodeName))
+	}
+	candidates = append(candidates, resource.Identity.Hostnames...)
+	return candidates
+}
+
+func resourceAgentConnected(resource unifiedresources.Resource, connected map[string]bool) bool {
+	for _, candidate := range resourceHostCandidates(resource) {
+		key := strings.TrimSpace(candidate)
+		if key == "" {
+			continue
+		}
+		if connected[key] {
+			return true
+		}
+	}
+	return false
+}
+
+func canonicalAppContainerID(resource unifiedresources.Resource) string {
+	if resource.Docker != nil && strings.TrimSpace(resource.Docker.ContainerID) != "" {
+		return strings.TrimSpace(resource.Docker.ContainerID)
+	}
+	return strings.TrimSpace(resource.ID)
+}
+
+func canonicalAppContainerState(resource unifiedresources.Resource) string {
+	if resource.Docker != nil && strings.TrimSpace(resource.Docker.ContainerState) != "" {
+		return strings.TrimSpace(resource.Docker.ContainerState)
+	}
+	return string(resource.Status)
+}
+
+func canonicalAppContainerHost(resource unifiedresources.Resource) string {
+	if host := strings.TrimSpace(resource.ParentName); host != "" {
+		return host
+	}
+	for _, candidate := range resource.Identity.Hostnames {
+		if strings.TrimSpace(candidate) != "" {
+			return strings.TrimSpace(candidate)
+		}
+	}
+	return ""
+}
+
+func canonicalSystemSummaryFromResource(resource unifiedresources.Resource, connected map[string]bool) SystemSummary {
+	return SystemSummary{
+		ID:             strings.TrimSpace(resource.ID),
+		Name:           resourceDisplayName(resource),
+		Status:         string(resource.Status),
+		Platform:       canonicalResourcePlatform(resource),
+		ChildCount:     resource.ChildCount,
+		AgentConnected: resourceAgentConnected(resource, connected),
+		CPU:            metricPercent(resourceMetric(resource, "cpu")),
+		Memory:         metricPercent(resourceMetric(resource, "memory")),
+		Disk:           metricPercent(resourceMetric(resource, "disk")),
+	}
+}
+
+func canonicalAppContainerSummaryFromResource(resource unifiedresources.Resource) AppContainerSummary {
+	health := ""
+	image := ""
+	if resource.Docker != nil {
+		health = strings.TrimSpace(resource.Docker.Health)
+		image = strings.TrimSpace(resource.Docker.Image)
+	}
+	return AppContainerSummary{
+		ID:       canonicalAppContainerID(resource),
+		Name:     resourceDisplayName(resource),
+		Status:   canonicalAppContainerState(resource),
+		Host:     canonicalAppContainerHost(resource),
+		Platform: canonicalResourcePlatform(resource),
+		Image:    image,
+		Health:   health,
+		CPU:      metricPercent(resourceMetric(resource, "cpu")),
+		Memory:   metricPercent(resourceMetric(resource, "memory")),
+		Disk:     metricPercent(resourceMetric(resource, "disk")),
+	}
+}
+
+func canonicalStoragePoolResources(provider UnifiedResourceProvider) []unifiedresources.Resource {
+	if provider == nil {
+		return []unifiedresources.Resource{}
+	}
+
+	storagePoolResources := make([]unifiedresources.Resource, 0)
+	for _, resource := range sortedResourcesByName(provider.GetByType(unifiedresources.ResourceTypeStorage)) {
+		if resource.Storage != nil && strings.EqualFold(strings.TrimSpace(resource.Storage.Topology), "dataset") {
+			continue
+		}
+		storagePoolResources = append(storagePoolResources, resource)
+	}
+	return storagePoolResources
+}
+
+func canonicalPhysicalDiskHost(resource unifiedresources.Resource) string {
+	for _, candidate := range resource.Identity.Hostnames {
+		if candidate = strings.TrimSpace(candidate); candidate != "" {
+			return candidate
+		}
+	}
+	return strings.TrimSpace(resource.ParentName)
+}
+
+func physicalDiskSummaryFromResource(resource unifiedresources.Resource) PhysicalDiskSummary {
+	pd := resource.PhysicalDisk
+	summary := PhysicalDiskSummary{
+		ID:          resource.ID,
+		Node:        canonicalPhysicalDiskHost(resource),
+		DevPath:     "",
+		Model:       "",
+		Serial:      "",
+		WWN:         "",
+		Type:        "",
+		SizeBytes:   0,
+		Health:      "",
+		Used:        "",
+		LastChecked: resource.LastSeen,
+	}
+	if pd == nil {
+		return summary
+	}
+	summary.DevPath = pd.DevPath
+	summary.Model = pd.Model
+	summary.Serial = pd.Serial
+	summary.WWN = pd.WWN
+	summary.Type = pd.DiskType
+	summary.SizeBytes = pd.SizeBytes
+	summary.Health = pd.Health
+	summary.Used = pd.Used
+	if pd.Wearout >= 0 {
+		wearout := pd.Wearout
+		summary.Wearout = &wearout
+	}
+	if pd.Temperature > 0 {
+		temp := pd.Temperature
+		summary.Temperature = &temp
+	}
+	if pd.RPM > 0 {
+		rpm := pd.RPM
+		summary.RPM = &rpm
+	}
+	return summary
+}
+
+func resourceMetric(resource unifiedresources.Resource, kind string) *unifiedresources.MetricValue {
+	if resource.Metrics == nil {
+		return nil
+	}
+	switch kind {
+	case "cpu":
+		return resource.Metrics.CPU
+	case "memory":
+		return resource.Metrics.Memory
+	case "disk":
+		return resource.Metrics.Disk
+	default:
+		return nil
+	}
+}
+
+func sortedResourcesByName(resources []unifiedresources.Resource) []unifiedresources.Resource {
+	sorted := append([]unifiedresources.Resource(nil), resources...)
+	sort.Slice(sorted, func(i, j int) bool {
+		return strings.ToLower(resourceDisplayName(sorted[i])) < strings.ToLower(resourceDisplayName(sorted[j]))
+	})
+	return sorted
+}
+
+func matchesCanonicalResourceID(resource unifiedresources.Resource, resourceID string) bool {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(resource.ID), resourceID) {
+		return true
+	}
+	if strings.EqualFold(resourceDisplayName(resource), resourceID) {
+		return true
+	}
+	return false
 }
 
 // executeQuery routes to the appropriate query handler based on action
@@ -2277,16 +2540,43 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 		}
 	}
 
+	systemResources := []unifiedresources.Resource{}
+	appContainerResources := []unifiedresources.Resource{}
+	storagePoolResources := []unifiedresources.Resource{}
+	physicalDiskResources := []unifiedresources.Resource{}
+	if e.unifiedResourceProvider != nil {
+		systemResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAgent))
+		appContainerResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAppContainer))
+		physicalDiskResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+		storagePoolResources = canonicalStoragePoolResources(e.unifiedResourceProvider)
+	}
+
 	response := EmptyInfrastructureResponse()
 	response.Total = TotalCounts{
+		Systems:        len(systemResources),
 		Nodes:          len(rs.Nodes()),
 		VMs:            len(rs.VMs()),
 		Containers:     len(rs.Containers()),
+		AppContainers:  len(appContainerResources),
 		DockerHosts:    len(rs.DockerHosts()),
+		StoragePools:   len(storagePoolResources),
+		PhysicalDisks:  len(physicalDiskResources),
 		K8sClusters:    len(rs.K8sClusters()),
 		K8sNodes:       len(rs.K8sNodes()),
 		K8sPods:        len(rs.Pods()),
 		K8sDeployments: len(rs.K8sDeployments()),
+	}
+	if response.Total.Systems == 0 {
+		response.Total.Systems = len(rs.Nodes()) + len(rs.Hosts()) + len(rs.DockerHosts())
+	}
+	if response.Total.AppContainers == 0 {
+		response.Total.AppContainers = len(rs.DockerContainers())
+	}
+	if response.Total.StoragePools == 0 {
+		response.Total.StoragePools = len(rs.StoragePools())
+	}
+	if response.Total.PhysicalDisks == 0 {
+		response.Total.PhysicalDisks = len(rs.PhysicalDisks())
 	}
 
 	totalMatches := 0
@@ -2311,6 +2601,39 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			continue
 		}
 		podCountByCluster[normalizeClusterKey(pod.ClusterName())]++
+	}
+
+	dockerHostsByID := make(map[string]*unifiedresources.DockerHostView)
+	for _, host := range rs.DockerHosts() {
+		if host == nil {
+			continue
+		}
+		dockerHostsByID[host.ID()] = host
+	}
+
+	// Systems
+	if filterType == "" || filterType == "systems" {
+		count := 0
+		for _, resource := range systemResources {
+			if !statusMatchesFilter(string(resource.Status), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.Systems) >= limit {
+				count++
+				continue
+			}
+			summary := canonicalSystemSummaryFromResource(resource, connectedAgentHostnames)
+			summary.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID)
+			response.Systems = append(response.Systems, summary)
+			count++
+		}
+		if filterType == "systems" {
+			totalMatches = count
+		}
 	}
 
 	// Nodes
@@ -2403,8 +2726,82 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 		}
 	}
 
-	// Docker hosts
+	// App containers
 	if filterType == "" || filterType == "app-containers" {
+		count := 0
+		for _, resource := range appContainerResources {
+			status := canonicalAppContainerState(resource)
+			if !statusMatchesFilter(status, filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.AppContainers) >= limit {
+				count++
+				continue
+			}
+
+			summary := canonicalAppContainerSummaryFromResource(resource)
+			summary.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID, canonicalAppContainerID(resource))
+			response.AppContainers = append(response.AppContainers, summary)
+			count++
+		}
+		if len(appContainerResources) == 0 {
+			for _, container := range rs.DockerContainers() {
+				if container == nil {
+					continue
+				}
+				state := strings.TrimSpace(container.ContainerState())
+				if state == "" {
+					state = string(container.Status())
+				}
+				if !statusMatchesFilter(state, filterStatus) {
+					continue
+				}
+				if count < offset {
+					count++
+					continue
+				}
+				if len(response.AppContainers) >= limit {
+					count++
+					continue
+				}
+
+				hostName := ""
+				if host := dockerHostsByID[strings.TrimSpace(container.ParentID())]; host != nil {
+					hostName = strings.TrimSpace(host.Hostname())
+					if hostName == "" {
+						hostName = strings.TrimSpace(host.Name())
+					}
+				}
+				containerID := strings.TrimSpace(container.ContainerID())
+				if containerID == "" {
+					containerID = strings.TrimSpace(container.ID())
+				}
+				response.AppContainers = append(response.AppContainers, AppContainerSummary{
+					GovernedResourceMetadata: governance.Resolve(container.Name(), container.ID(), containerID),
+					ID:                       containerID,
+					Name:                     container.Name(),
+					Status:                   state,
+					Host:                     hostName,
+					Platform:                 "docker",
+					Image:                    container.Image(),
+					Health:                   container.Health(),
+					CPU:                      container.CPUPercent(),
+					Memory:                   container.MemoryPercent(),
+				})
+				count++
+			}
+		}
+		if filterType == "app-containers" {
+			totalMatches = count
+		}
+	}
+
+	// Docker hosts
+	if filterType == "" || filterType == "docker-hosts" {
 		containersByHost := make(map[string][]*unifiedresources.DockerContainerView)
 		for _, container := range rs.DockerContainers() {
 			if container == nil {
@@ -2470,7 +2867,53 @@ func (e *PulseToolExecutor) executeListInfrastructure(_ context.Context, args ma
 			response.DockerHosts = append(response.DockerHosts, dockerHost)
 			count++
 		}
-		if filterType == "app-containers" {
+		if filterType == "docker-hosts" {
+			totalMatches = count
+		}
+	}
+
+	// Storage pools
+	if filterType == "" || filterType == "storage-pools" {
+		count := 0
+		for _, resource := range storagePoolResources {
+			if !statusMatchesFilter(string(resource.Status), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.StoragePools) >= limit {
+				count++
+				continue
+			}
+			response.StoragePools = append(response.StoragePools, storagePoolSummaryFromResource(resource))
+			count++
+		}
+		if filterType == "storage-pools" {
+			totalMatches = count
+		}
+	}
+
+	// Physical disks
+	if filterType == "" || filterType == "physical-disks" {
+		count := 0
+		for _, resource := range physicalDiskResources {
+			if !statusMatchesFilter(string(resource.Status), filterStatus) {
+				continue
+			}
+			if count < offset {
+				count++
+				continue
+			}
+			if len(response.PhysicalDisks) >= limit {
+				count++
+				continue
+			}
+			response.PhysicalDisks = append(response.PhysicalDisks, physicalDiskSummaryFromResource(resource))
+			count++
+		}
+		if filterType == "physical-disks" {
 			totalMatches = count
 		}
 	}
@@ -3151,6 +3594,52 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	governance := newGovernedQueryMetadataResolver(rs)
 
 	switch resourceType {
+	case "system":
+		if e.unifiedResourceProvider != nil {
+			for _, resource := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAgent) {
+				if !matchesCanonicalResourceID(resource, resourceID) {
+					continue
+				}
+				response := EmptyResourceResponse()
+				response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID)
+				response.Type = "system"
+				response.ID = strings.TrimSpace(resource.ID)
+				response.Name = resourceDisplayName(resource)
+				response.Status = string(resource.Status)
+				response.Platform = canonicalResourcePlatform(resource)
+				response.CPU = ResourceCPU{
+					Percent: metricPercent(resourceMetric(resource, "cpu")),
+				}
+				response.Memory = ResourceMemory{
+					Percent: metricPercent(resourceMetric(resource, "memory")),
+					UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
+					TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
+				}
+				if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
+					response.Disk = &ResourceDisk{
+						Percent: metricPercent(diskMetric),
+						UsedGB:  metricUsedGB(diskMetric),
+						TotalGB: metricTotalGB(diskMetric),
+					}
+				}
+				response.Tags = append([]string{}, resource.Tags...)
+				if resource.Agent != nil {
+					response.OS = strings.TrimSpace(resource.Agent.OSName)
+					response.Host = strings.TrimSpace(resource.Agent.Hostname)
+					response.CPU.Cores = resource.Agent.CPUCount
+				}
+				if response.Host == "" && resource.TrueNAS != nil {
+					response.Host = strings.TrimSpace(resource.TrueNAS.Hostname)
+				}
+				return NewJSONResult(response.NormalizeCollections()), nil
+			}
+		}
+		return NewJSONResult(map[string]interface{}{
+			"error":       "not_found",
+			"resource_id": resourceID,
+			"type":        "system",
+		}), nil
+
 	case "vm":
 		for _, vm := range rs.VMs() {
 			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
@@ -3262,6 +3751,121 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "app-container":
+		if e.unifiedResourceProvider != nil {
+			for _, resource := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAppContainer) {
+				containerID := canonicalAppContainerID(resource)
+				if !strings.EqualFold(containerID, strings.TrimSpace(resourceID)) &&
+					!strings.EqualFold(resourceDisplayName(resource), strings.TrimSpace(resourceID)) &&
+					!strings.EqualFold(strings.TrimSpace(resource.ID), strings.TrimSpace(resourceID)) &&
+					!strings.HasPrefix(strings.ToLower(containerID), strings.ToLower(strings.TrimSpace(resourceID))) {
+					continue
+				}
+
+				response := EmptyResourceResponse()
+				response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID, containerID)
+				response.Type = "app-container"
+				response.ID = containerID
+				response.Name = resourceDisplayName(resource)
+				response.Status = canonicalAppContainerState(resource)
+				response.Platform = canonicalResourcePlatform(resource)
+				response.Host = canonicalAppContainerHost(resource)
+				response.CPU = ResourceCPU{
+					Percent: metricPercent(resourceMetric(resource, "cpu")),
+				}
+				response.Memory = ResourceMemory{
+					Percent: metricPercent(resourceMetric(resource, "memory")),
+					UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
+					TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
+				}
+				if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
+					response.Disk = &ResourceDisk{
+						Percent: metricPercent(diskMetric),
+						UsedGB:  metricUsedGB(diskMetric),
+						TotalGB: metricTotalGB(diskMetric),
+					}
+				}
+				response.Tags = append([]string{}, resource.Tags...)
+				if resource.Docker != nil {
+					response.Image = strings.TrimSpace(resource.Docker.Image)
+					response.Health = strings.TrimSpace(resource.Docker.Health)
+					response.RestartCount = resource.Docker.RestartCount
+					response.Labels = resource.Docker.Labels
+					if update := resource.Docker.UpdateStatus; update != nil && update.UpdateAvailable {
+						response.UpdateAvailable = true
+					}
+					for _, p := range resource.Docker.Ports {
+						response.Ports = append(response.Ports, PortInfo{
+							Private:  p.PrivatePort,
+							Public:   p.PublicPort,
+							Protocol: p.Protocol,
+							IP:       p.IP,
+						})
+					}
+					for _, n := range resource.Docker.Networks {
+						addresses := make([]string, 0, 2)
+						if n.IPv4 != "" {
+							addresses = append(addresses, n.IPv4)
+						}
+						if n.IPv6 != "" {
+							addresses = append(addresses, n.IPv6)
+						}
+						response.Networks = append(response.Networks, NetworkInfo{
+							Name:      n.Name,
+							Addresses: addresses,
+						})
+					}
+					for _, m := range resource.Docker.Mounts {
+						response.Mounts = append(response.Mounts, MountInfo{
+							Source:      m.Source,
+							Destination: m.Destination,
+							ReadWrite:   !strings.EqualFold(strings.TrimSpace(m.Mode), "ro"),
+						})
+					}
+				}
+
+				if response.Platform == "docker" {
+					hostUID := ""
+					if resource.ParentID != nil {
+						hostUID = strings.TrimSpace(*resource.ParentID)
+					}
+					hostName := response.Host
+					if hostUID == "" {
+						hostUID = hostName
+					}
+					if hostName == "" {
+						hostName = hostUID
+					}
+					executorID := hostName
+					if executorID == "" {
+						executorID = hostUID
+					}
+					aliases := []string{response.Name, containerID, strings.TrimSpace(resource.ID)}
+					if len(containerID) > 12 {
+						aliases = append(aliases, containerID[:12])
+					}
+					e.registerResolvedResourceWithExplicitAccess(ResourceRegistration{
+						Kind:        "app-container",
+						ProviderUID: containerID,
+						Name:        response.Name,
+						Aliases:     aliases,
+						HostUID:     hostUID,
+						HostName:    hostName,
+						LocationChain: []string{
+							"docker-host:" + hostName,
+							"docker:" + response.Name,
+						},
+						Executors: []ExecutorRegistration{{
+							ExecutorID: executorID,
+							Adapter:    "docker",
+							Actions:    []string{"query", "get", "logs", "exec", "restart", "stop", "start"},
+							Priority:   10,
+						}},
+					})
+				}
+				return NewJSONResult(response.NormalizeCollections()), nil
+			}
+		}
+
 		dockerHostsByID := make(map[string]*unifiedresources.DockerHostView)
 		for _, host := range rs.DockerHosts() {
 			if host == nil {
@@ -3407,7 +4011,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	default:
-		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'vm', 'system-container', or 'app-container'", resourceTypeRaw)), nil
+		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'system', 'vm', 'system-container', or 'app-container'", resourceTypeRaw)), nil
 	}
 }
 
@@ -3669,14 +4273,17 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 
 	allowedTypes := map[string]bool{
 		"":                 true,
+		"system":           true,
 		"node":             true,
 		"vm":               true,
 		"system-container": true,
 		"app-container":    true,
 		"docker-host":      true,
+		"storage-pool":     true,
+		"physical-disk":    true,
 	}
 	if !allowedTypes[typeFilter] {
-		return NewErrorResult(fmt.Errorf("invalid type: %s. Use node, vm, system-container, app-container, or docker-host", typeFilter)), nil
+		return NewErrorResult(fmt.Errorf("invalid type: %s. Use system, node, vm, system-container, app-container, docker-host, storage-pool, or physical-disk", typeFilter)), nil
 	}
 
 	// normalizeForSearch replaces common separators with spaces and splits at
@@ -3751,6 +4358,17 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		dockerHostsByID[host.ID()] = host
 	}
 
+	systemResources := []unifiedresources.Resource{}
+	appContainerResources := []unifiedresources.Resource{}
+	storagePoolResources := []unifiedresources.Resource{}
+	physicalDiskResources := []unifiedresources.Resource{}
+	if e.unifiedResourceProvider != nil {
+		systemResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAgent))
+		appContainerResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAppContainer))
+		physicalDiskResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
+		storagePoolResources = canonicalStoragePoolResources(e.unifiedResourceProvider)
+	}
+
 	// Build a set of connected agent hostnames for quick lookup
 	connectedAgentHostnames := make(map[string]bool)
 	if e.agentServer != nil {
@@ -3773,6 +4391,28 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 		matches = append(matches, match)
 		total++
+	}
+
+	if typeFilter == "" || typeFilter == "system" {
+		for _, resource := range systemResources {
+			status := string(resource.Status)
+			if !statusMatchesFilter(status, statusFilter) {
+				continue
+			}
+			candidates := append(resourceHostCandidates(resource), resource.ID, canonicalResourcePlatform(resource))
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+			addMatch(ResourceMatch{
+				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID),
+				Type:                     "system",
+				ID:                       resource.ID,
+				Name:                     resourceDisplayName(resource),
+				Status:                   status,
+				Platform:                 canonicalResourcePlatform(resource),
+				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+			})
+		}
 	}
 
 	if typeFilter == "" || typeFilter == "node" {
@@ -3889,6 +4529,49 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	}
 
 	if typeFilter == "" || typeFilter == "app-container" {
+		for _, resource := range appContainerResources {
+			status := canonicalAppContainerState(resource)
+			if !statusMatchesFilter(status, statusFilter) {
+				continue
+			}
+
+			containerID := canonicalAppContainerID(resource)
+			candidates := []string{
+				resourceDisplayName(resource),
+				resource.ID,
+				containerID,
+				canonicalAppContainerHost(resource),
+				canonicalResourcePlatform(resource),
+			}
+			if resource.Docker != nil {
+				candidates = append(candidates, resource.Docker.Image)
+				for key, value := range resource.Docker.Labels {
+					candidates = append(candidates, key, value)
+				}
+				for _, network := range resource.Docker.Networks {
+					candidates = append(candidates, network.IPv4, network.IPv6, network.Name)
+				}
+			}
+			candidates = append(candidates, resource.Tags...)
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+
+			summary := canonicalAppContainerSummaryFromResource(resource)
+			addMatch(ResourceMatch{
+				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID, containerID),
+				Type:                     "app-container",
+				ID:                       summary.ID,
+				Name:                     summary.Name,
+				Status:                   summary.Status,
+				Host:                     summary.Host,
+				Platform:                 summary.Platform,
+				Image:                    summary.Image,
+			})
+		}
+	}
+
+	if (typeFilter == "" || typeFilter == "app-container") && len(appContainerResources) == 0 {
 		for _, container := range rs.DockerContainers() {
 			if container == nil {
 				continue
@@ -3941,6 +4624,71 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
+	if typeFilter == "" || typeFilter == "storage-pool" {
+		for _, resource := range storagePoolResources {
+			status := string(resource.Status)
+			if !statusMatchesFilter(status, statusFilter) {
+				continue
+			}
+			candidates := []string{
+				resourceDisplayName(resource),
+				resource.ID,
+				canonicalResourcePlatform(resource),
+			}
+			if resource.Storage != nil {
+				candidates = append(candidates, resource.Storage.Type, resource.Storage.Content, resource.Storage.Path)
+			}
+			candidates = append(candidates, resource.Tags...)
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+			addMatch(ResourceMatch{
+				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID),
+				Type:                     "storage-pool",
+				ID:                       resource.ID,
+				Name:                     resourceDisplayName(resource),
+				Status:                   status,
+				Host:                     strings.TrimSpace(resource.ParentName),
+				Platform:                 canonicalResourcePlatform(resource),
+			})
+		}
+	}
+
+	if typeFilter == "" || typeFilter == "physical-disk" {
+		for _, resource := range physicalDiskResources {
+			status := string(resource.Status)
+			if !statusMatchesFilter(status, statusFilter) {
+				continue
+			}
+			summary := physicalDiskSummaryFromResource(resource)
+			candidates := []string{
+				resourceDisplayName(resource),
+				resource.ID,
+				summary.DevPath,
+				summary.Model,
+				summary.Serial,
+				summary.WWN,
+				summary.Type,
+				summary.Node,
+				strings.TrimSpace(resource.ParentName),
+				canonicalResourcePlatform(resource),
+			}
+			candidates = append(candidates, resource.Tags...)
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+			addMatch(ResourceMatch{
+				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID, summary.Serial, summary.DevPath),
+				Type:                     "physical-disk",
+				ID:                       resource.ID,
+				Name:                     resourceDisplayName(resource),
+				Status:                   status,
+				Host:                     summary.Node,
+				Platform:                 canonicalResourcePlatform(resource),
+			})
+		}
+	}
+
 	response := EmptyResourceSearchResponse()
 	response.Query = query
 	response.Matches = matches
@@ -3960,6 +4708,15 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		var reg ResourceRegistration
 
 		switch match.Type {
+		case "system":
+			reg = ResourceRegistration{
+				Kind:        "system",
+				ProviderUID: match.ID,
+				Name:        match.Name,
+				Aliases:     []string{match.Name, match.ID},
+				HostUID:     match.ID,
+				HostName:    match.Name,
+			}
 		case "node":
 			reg = ResourceRegistration{
 				Kind:          "node",
@@ -4029,19 +4786,39 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 			}
 		case "app-container":
 			reg = ResourceRegistration{
-				Kind:          "app-container",
-				ProviderUID:   match.ID, // Docker container ID
-				Name:          match.Name,
-				Aliases:       []string{match.Name, match.ID},
-				HostUID:       match.Host,
-				HostName:      match.Host,
-				LocationChain: []string{"docker-host:" + match.Host, "docker:" + match.Name},
-				Executors: []ExecutorRegistration{{
+				Kind:        "app-container",
+				ProviderUID: match.ID, // Stable container/app provider ID
+				Name:        match.Name,
+				Aliases:     []string{match.Name, match.ID},
+				HostUID:     match.Host,
+				HostName:    match.Host,
+			}
+			if match.Platform == "docker" {
+				reg.LocationChain = []string{"docker-host:" + match.Host, "docker:" + match.Name}
+				reg.Executors = []ExecutorRegistration{{
 					ExecutorID: match.Host,
 					Adapter:    "docker",
 					Actions:    []string{"query", "get", "logs", "exec", "restart", "stop", "start"},
 					Priority:   10,
-				}},
+				}}
+			}
+		case "storage-pool":
+			reg = ResourceRegistration{
+				Kind:        "storage-pool",
+				ProviderUID: match.ID,
+				Name:        match.Name,
+				Aliases:     []string{match.Name, match.ID},
+				HostUID:     match.Host,
+				HostName:    match.Host,
+			}
+		case "physical-disk":
+			reg = ResourceRegistration{
+				Kind:        "physical-disk",
+				ProviderUID: match.ID,
+				Name:        match.Name,
+				Aliases:     []string{match.Name, match.ID},
+				HostUID:     match.Host,
+				HostName:    match.Host,
 			}
 		default:
 			continue // Skip unknown types
