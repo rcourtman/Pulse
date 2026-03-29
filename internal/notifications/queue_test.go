@@ -97,9 +97,48 @@ func TestNewNotificationQueue_WhitespaceDataDirUsesDefault(t *testing.T) {
 	}
 	defer func() { _ = nq.Stop() }()
 
-	expectedDBPath := filepath.Join(utils.GetDataDir(), "notifications", "notification_queue.db")
+	expectedDBPath := filepath.Join(utils.GetDataDir(), notificationQueueDirName, notificationQueueFileName)
 	if nq.dbPath != expectedDBPath {
 		t.Fatalf("expected db path %q, got %q", expectedDBPath, nq.dbPath)
+	}
+}
+
+func TestResolveNotificationQueuePathCanonicalizesExplicitDataDir(t *testing.T) {
+	rawDataDir := filepath.Join(t.TempDir(), "queue", "..", "queue", ".")
+
+	resolvedDir, dbPath, err := resolveNotificationQueuePath(rawDataDir)
+	if err != nil {
+		t.Fatalf("resolveNotificationQueuePath() error = %v", err)
+	}
+
+	expectedDir := filepath.Clean(rawDataDir)
+	if resolvedDir != expectedDir {
+		t.Fatalf("resolved dir = %q, want %q", resolvedDir, expectedDir)
+	}
+
+	expectedDBPath := filepath.Join(expectedDir, notificationQueueFileName)
+	if dbPath != expectedDBPath {
+		t.Fatalf("db path = %q, want %q", dbPath, expectedDBPath)
+	}
+}
+
+func TestResolveNotificationQueuePathWhitespaceUsesDefaultNotificationsDir(t *testing.T) {
+	dataDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", dataDir)
+
+	resolvedDir, dbPath, err := resolveNotificationQueuePath("   \t  ")
+	if err != nil {
+		t.Fatalf("resolveNotificationQueuePath() error = %v", err)
+	}
+
+	expectedDir := filepath.Join(utils.GetDataDir(), notificationQueueDirName)
+	if resolvedDir != expectedDir {
+		t.Fatalf("resolved dir = %q, want %q", resolvedDir, expectedDir)
+	}
+
+	expectedDBPath := filepath.Join(expectedDir, notificationQueueFileName)
+	if dbPath != expectedDBPath {
+		t.Fatalf("db path = %q, want %q", dbPath, expectedDBPath)
 	}
 }
 

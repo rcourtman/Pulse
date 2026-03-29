@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
 	_ "modernc.org/sqlite"
@@ -24,6 +24,8 @@ const defaultQueueMaxAttempts = 3
 const (
 	notificationAuditAlertIdentifiersColumn       = "alert_identifiers"
 	legacyNotificationAuditAlertIdentifiersColumn = "alert_ids"
+	notificationQueueDirName                      = "notifications"
+	notificationQueueFileName                     = "notification_queue.db"
 )
 
 // NotificationQueueStatus represents the status of a queued notification
@@ -88,6 +90,29 @@ func queueSQLiteDSN(path string) string {
 	}.Encode()
 }
 
+func resolveNotificationQueuePath(dataDir string) (string, string, error) {
+	normalizedDir := strings.TrimSpace(dataDir)
+	if normalizedDir == "" {
+		defaultDir, err := securityutil.JoinStorageLeaf(utils.GetDataDir(), notificationQueueDirName)
+		if err != nil {
+			return "", "", fmt.Errorf("resolve default notification queue dir: %w", err)
+		}
+		normalizedDir = defaultDir
+	}
+
+	normalizedDir, err := securityutil.NormalizeStorageDir(normalizedDir)
+	if err != nil {
+		return "", "", fmt.Errorf("normalize notification queue dir: %w", err)
+	}
+
+	dbPath, err := securityutil.JoinStorageLeaf(normalizedDir, notificationQueueFileName)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve notification queue db path: %w", err)
+	}
+
+	return normalizedDir, dbPath, nil
+}
+
 func newNotificationQueueFromDSN(dbPath, dsn string) (*NotificationQueue, error) {
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
@@ -138,19 +163,17 @@ func newNotificationQueueFromDSN(dbPath, dsn string) (*NotificationQueue, error)
 
 // NewNotificationQueue creates a new persistent notification queue.
 func NewNotificationQueue(dataDir string) (*NotificationQueue, error) {
-	dataDir = strings.TrimSpace(dataDir)
-	if dataDir == "" {
-		dataDir = filepath.Join(utils.GetDataDir(), "notifications")
+	resolvedDataDir, dbPath, err := resolveNotificationQueuePath(dataDir)
+	if err != nil {
+		return nil, err
 	}
-	dataDir = filepath.Clean(dataDir)
 
 	// Queue data includes alert payload/context and destination configuration;
 	// keep it owner-only by default.
-	if err := os.MkdirAll(dataDir, 0700); err != nil {
+	if err := os.MkdirAll(resolvedDataDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create notification queue directory: %w", err)
 	}
 
-	dbPath := filepath.Join(dataDir, "notification_queue.db")
 	return newNotificationQueueFromDSN(dbPath, queueSQLiteDSN(dbPath))
 }
 
