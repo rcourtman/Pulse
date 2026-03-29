@@ -37,6 +37,57 @@
     }
   }
 
+  // src/workspace_presentation.ts
+  function workspaceHealthState(workspace) {
+    if (workspace.health_status === "healthy" || workspace.health_status === "checking" || workspace.health_status === "unhealthy") {
+      return workspace.health_status;
+    }
+    if (workspace.healthy) return "healthy";
+    if (workspace.last_health_check) return "unhealthy";
+    return "checking";
+  }
+  function workspaceStatusCopy(workspace) {
+    var status = workspaceHealthState(workspace);
+    var state = String(workspace.state || "");
+    if (state === "suspended") return "This workspace is suspended.";
+    if (state === "failed") return "This workspace is in a failed state.";
+    if (status === "healthy") return "Latest health check is healthy.";
+    if (status === "unhealthy") return "Latest health check is unhealthy.";
+    return "Latest health check is still pending.";
+  }
+  function workspaceHealthLabel(workspace) {
+    var status = workspaceHealthState(workspace);
+    if (status === "healthy") return "Healthy";
+    if (status === "unhealthy") return "Unhealthy";
+    return "Checking";
+  }
+  function workspaceRowNote(workspace) {
+    var status = workspaceHealthState(workspace);
+    var state = String(workspace.state || "");
+    if (state === "suspended") return "Suspended";
+    if (state === "failed") return "Failed";
+    if (status === "healthy") return "Ready";
+    if (status === "unhealthy") return "Unhealthy";
+    return "Health check pending";
+  }
+  function workspaceGuidanceCopy(workspace) {
+    var status = workspaceHealthState(workspace);
+    var state = String(workspace.state || "");
+    if (state === "active" && status === "healthy") {
+      return "This workspace is active. Open it from the workspace list, or suspend it here if you intend to take it out of service.";
+    }
+    if (state === "active" && status === "checking") {
+      return "This workspace is active. The latest health check is still pending.";
+    }
+    if (status === "unhealthy") {
+      return "The latest health check is unhealthy. Review the current state before suspending or deleting this workspace.";
+    }
+    if (state === "suspended") {
+      return "This workspace is suspended. The remaining lifecycle action here is deletion.";
+    }
+    return "Review the current lifecycle state before taking action on this workspace.";
+  }
+
   // src/account_view.ts
   function getElement(id) {
     return document.getElementById(id);
@@ -51,36 +102,11 @@
   function workspaceActionLabel(workspace) {
     return workspace.state === "active" ? "Suspend workspace" : "Delete workspace";
   }
-  function workspaceSummary(workspace) {
-    if (workspace.health_status === "healthy") return "Live updates and health checks are currently good.";
-    if (workspace.health_status === "unhealthy") return "This workspace needs attention before it is trustworthy.";
-    return "This workspace is still waiting on a completed health check.";
-  }
-  function workspaceHealthLabel(workspace) {
-    if (workspace.health_status === "healthy") return "Healthy";
-    if (workspace.health_status === "unhealthy") return "Needs attention";
-    return "Checking";
-  }
   function workspaceCreatedLabel(workspace) {
     if (!workspace.created_at) return "Unknown";
     var date = new Date(workspace.created_at);
     if (Number.isNaN(date.getTime())) return "Unknown";
     return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
-  }
-  function workspaceGuidance(workspace) {
-    if (workspace.state === "active" && workspace.health_status === "healthy") {
-      return "This workspace looks ready for normal use. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.";
-    }
-    if (workspace.state === "active" && workspace.health_status === "checking") {
-      return "This workspace is active but still waiting on a completed health check. Review it before you treat the account status as settled.";
-    }
-    if (workspace.health_status === "unhealthy") {
-      return "This workspace needs review before it is treated as trustworthy. Use the management action only when you intend to suspend or remove it from the workspace list.";
-    }
-    if (workspace.state === "suspended") {
-      return "This workspace is already suspended. The remaining lifecycle action here is deletion, so treat it as a deliberate irreversible step.";
-    }
-    return "Review the lifecycle state before taking the next explicit action for this workspace.";
   }
   function workspaceMeta(workspace) {
     var parts = [workspace.state];
@@ -148,11 +174,11 @@
     }
     title.textContent = workspace.display_name;
     meta.textContent = workspaceMeta(workspace);
-    summary.textContent = workspaceSummary(workspace);
+    summary.textContent = workspaceStatusCopy(workspace);
     health.textContent = workspaceHealthLabel(workspace);
     lifecycle.textContent = workspace.state ? workspace.state.charAt(0).toUpperCase() + workspace.state.slice(1) : "Unknown";
     created.textContent = workspaceCreatedLabel(workspace);
-    guidance.textContent = workspaceGuidance(workspace);
+    guidance.textContent = workspaceGuidanceCopy(workspace);
     actionButton.textContent = workspaceActionLabel(workspace);
     actionButton.disabled = entry.manageWorkspace.pending;
     actionButton.setAttribute("data-workspace-id", workspace.id);
@@ -1938,14 +1964,6 @@
     if (Number.isNaN(date.getTime())) return "";
     return date.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
   }
-  function workspaceHealthState(workspace) {
-    if (workspace.health_status === "healthy" || workspace.health_status === "checking" || workspace.health_status === "unhealthy") {
-      return workspace.health_status;
-    }
-    if (workspace.healthy) return "healthy";
-    if (workspace.last_health_check) return "unhealthy";
-    return "checking";
-  }
   function accountKindLabel(account) {
     if (account.kind === "msp") return "MSP account";
     if (account.kind === "cloud") return "Cloud account";
@@ -2026,12 +2044,12 @@
   function healthBadgeHTML(workspace) {
     var status = workspaceHealthState(workspace);
     if (status === "healthy") {
-      return '<span class="badge badge-healthy">Healthy</span>';
+      return '<span class="badge badge-healthy">' + escapeHTML(workspaceHealthLabel(workspace)) + "</span>";
     }
     if (status === "unhealthy") {
-      return '<span class="badge badge-unhealthy">Needs attention</span>';
+      return '<span class="badge badge-unhealthy">' + escapeHTML(workspaceHealthLabel(workspace)) + "</span>";
     }
-    return '<span class="badge badge-checking">Checking</span>';
+    return '<span class="badge badge-checking">' + escapeHTML(workspaceHealthLabel(workspace)) + "</span>";
   }
   function renderBillingActionRow(id, kicker, title, actionLabel, description, panelID, focusID, highlights) {
     var meta = highlights.join(" \u2022 ");
@@ -2042,24 +2060,6 @@
     return '<div class="section-context-strip">' + chips.map(function(chip) {
       return '<span class="section-context-chip">' + escapeHTML(chip) + "</span>";
     }).join("") + "</div>";
-  }
-  function workspaceStatusCopy(workspace) {
-    var status = workspaceHealthState(workspace);
-    var state = String(workspace.state || "");
-    if (state === "suspended") return "This workspace is suspended.";
-    if (state === "failed") return "This workspace is in a failed state.";
-    if (status === "healthy") return "Latest health check is healthy.";
-    if (status === "unhealthy") return "Latest health check is unhealthy.";
-    return "Latest health check is still pending.";
-  }
-  function workspaceRowNote(workspace) {
-    var status = workspaceHealthState(workspace);
-    var state = String(workspace.state || "");
-    if (state === "suspended") return "Suspended until you resume it";
-    if (state === "failed") return "Review this workspace before treating it as stable";
-    if (status === "healthy") return "Ready to use";
-    if (status === "unhealthy") return "Review this workspace before treating it as stable";
-    return "Awaiting a completed health check";
   }
   function attentionWorkspaces(workspaces) {
     var results = [];
@@ -2153,7 +2153,7 @@
         }
       }
     }
-    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Start with the job you need to finish: workspace work, access, billing, then escalation." : "Use billing tools first and escalate only when the self-serve path stops.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "What needs attention, what is ready, and the next obvious action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", supportNavCopy(hosted, canManage), supportEmail ? "Email" : "Help") + "</div></aside>";
+    return '<aside class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-header"><div class="portal-shell-nav-eyebrow">Pulse Account</div><div class="portal-shell-nav-title">Account tasks</div><div class="portal-shell-nav-support">' + (hosted ? "Workspaces, Access, Billing, then Support." : "Billing first. Support only after the billing path fails.") + '</div></div><div class="portal-shell-nav-group">' + shellSectionButton("overview", activeSection, "01", "Overview", "Review status, ready workspaces, and the next action.", attentionCount > 0 ? String(attentionCount) + " review" : hosted ? String(readyWorkspaces) + " ready" : "Summary") + shellSectionButton("workspaces", activeSection, "02", "Workspaces", workspaceNavCopy(hosted, canManage), hosted ? String(readyWorkspaces) + " ready" : "Unavailable") + shellSectionButton("access", activeSection, "03", "Access", accessNavCopy(hosted, canManage), hosted ? canManage ? "Manage" : "View" : "Unavailable") + shellSectionButton("billing", activeSection, "04", "Billing", billingNavCopy(hostedBillingCount, canManageHostedBilling), hostedBillingCount > 0 ? hostedBillingCount > 1 ? "Hosted +" : "Hosted" : "Self-hosted") + shellSectionButton("support", activeSection, "05", "Support", supportNavCopy(hosted, canManage), supportEmail ? "Email" : "Help") + "</div></aside>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
@@ -2266,48 +2266,48 @@
     var hostedViewOnly = accounts.length > 0 && !accessAccount;
     if (attention.length) {
       title = "Review workspace health";
-      description = attention.length > 1 ? "Open Workspaces and resolve the pending health or lifecycle questions before you do anything else." : "Start in Workspaces with " + attention[0].workspace.display_name + " before you do anything else.";
+      description = attention.length > 1 ? "Open Workspaces. Review each failed or pending workspace before taking another account action." : "Open Workspaces. Review " + attention[0].workspace.display_name + " before taking another account action.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
       secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>' : "";
     } else if (ready.length) {
-      title = "Open the next workspace";
-      description = accounts.length > 1 ? "The clearest next step is to open " + ready[0].workspace.display_name + " in " + ready[0].account.name + " and continue the actual work there." : "The most obvious next step is to open a ready workspace and continue the actual work there.";
+      title = "Open workspace";
+      description = accounts.length > 1 ? "Open " + ready[0].workspace.display_name + " in " + ready[0].account.name + "." : "Open the ready workspace.";
       primaryAction = renderWorkspaceHandoffForm(ready[0].account.id, ready[0].workspace.id, accountAPIBasePath, "Open " + ready[0].workspace.display_name, "btn-primary btn-compact");
       secondaryAction = ready.length > 1 ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">See all workspaces</button>' : "";
     } else if (creatableAccount) {
-      title = "Create the next workspace";
-      description = "There is no ready workspace yet, so the next clear action is to create one in " + creatableAccount.name + ".";
+      title = "Create workspace";
+      description = "No workspace is ready. Create a workspace in " + creatableAccount.name + ".";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(creatableAccount.id) + '">Create workspace</button>';
       secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Manage access</button>';
     } else if (billingAccount) {
-      title = "Handle billing in its own place";
-      description = "Operational work is clear, so the next separate task is billing if that is what you came here to change.";
+      title = "Open billing";
+      description = "Use Billing for invoices, payment methods, or subscription changes.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
       secondaryAction = accessAccount ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>' : "";
     } else if (!accounts.length) {
       title = "Open billing";
-      description = "No hosted workspace is attached, so the next obvious action is Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.";
+      description = "Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
     } else if (hostedViewOnly) {
       if (totalWorkspaces > 0) {
         title = "Review workspace state";
-        description = "No workspace is ready right now. Open Workspaces to review current state, then hand off any lifecycle or billing change to an owner or admin.";
+        description = "No workspace is ready. Open Workspaces to review current state, then hand off changes to an owner or admin.";
         primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="workspaces">Review workspaces</button>';
         secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
       } else {
         title = "Review who can act";
-        description = showSelfHostedCommercial ? "No hosted workspace is attached yet. Review Access to see who can manage this hosted account, or use Billing only when the task is self-hosted." : "No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.";
+        description = showSelfHostedCommercial ? "No hosted workspace is attached. Review Access to see who can manage this hosted account, or use Billing for self-hosted tasks." : "No hosted workspace is attached yet. Review Access to see who can create or manage the first workspace on this account.";
         primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Review access</button>';
         secondaryAction = showSelfHostedCommercial ? '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>' : "";
       }
     } else if (accessAccount) {
-      title = "Handle access in its own place";
-      description = "If the next task is people or roles, keep it in Access instead of mixing it into routine workspace work.";
+      title = "Open access";
+      description = "Use Access for invites, role changes, or access removal.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="access">Open access</button>';
       secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
     } else {
-      title = "Choose the right task path";
-      description = "If this is an access change, go to Access. If it is a billing or license issue, go to Billing. Support is only for escalation.";
+      title = "Open billing or support";
+      description = "Use Billing for commercial work. Use Support only after the billing path fails.";
       primaryAction = '<button class="btn-primary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="billing">Open billing</button>';
       secondaryAction = '<button class="btn-secondary btn-compact" type="button" data-shell-action="activate-section" data-shell-section="support">Escalate</button>';
     }
@@ -2341,7 +2341,7 @@
     var readyCount = countReadyWorkspaces(workspaces);
     var suspendedCount = countWorkspacesByState(workspaces, "suspended");
     var sectionCopy = account.can_manage ? "Open a workspace, review lifecycle state, or create a new one without mixing in access or billing work." : "Open a workspace and review current state here. An owner or admin must create or change hosted workspaces.";
-    var workspaceListSummary = account.can_manage ? "Open a workspace to work in it. Use the lifecycle view only when you are reviewing state or making account-level changes." : "Open a workspace to do the actual work. An owner or admin must handle lifecycle or creation changes.";
+    var workspaceListSummary = account.can_manage ? "Open a workspace to work in it. Use the lifecycle view only when you are reviewing state or making account-level changes." : "Open a workspace here. An owner or admin must handle lifecycle or creation changes.";
     var workspaceManagement = "";
     var addWorkspaceForm = "";
     var workspaceHeaderActions = "";
@@ -2407,7 +2407,7 @@
     var supportChips = hasHostedAccounts2 ? ["Escalation only", hostedViewOnly ? "Owner/admin first" : showSelfHostedCommercial ? "Bring context" : "Hosted only", supportEmail ? "Email" : "Support"] : ["Escalation only", "Billing only", supportEmail ? "Email" : "Support"];
     var routeCards = hasHostedAccounts2 ? '<div class="portal-support-route-card"><div class="account-panel-kicker">Hosted path</div><h3>' + (hostedViewOnly ? "Hosted review or owner/admin path failed" : "Workspace or access path failed") + "</h3><p>" + (hostedViewOnly ? "Go back to the hosted task first. Review the same workspace or roster here, then have an owner or admin run the blocked change before you escalate." : "Go back to the hosted task first. Escalate only when the same workspace or access path still cannot finish the job.") + '</p><div class="portal-support-points"><div class="portal-support-point"><strong>' + (hostedViewOnly ? "Review the same task" : "Start from the same task") + "</strong><span>" + (hostedViewOnly ? "Use Workspaces to confirm workspace state and Access to confirm the current roster before you escalate." : "Use Workspaces for lifecycle issues and Access for roster issues before you escalate.") + '</span></div><div class="portal-support-point"><strong>' + (hostedViewOnly ? "Name the blocked owner/admin action" : "Keep the hosted context intact") + "</strong><span>" + (hostedViewOnly ? "Include the account, workspace, and the lifecycle or access change that still needs an owner or admin." : "Include the account, workspace, and failed action so support inherits the same request.") + '</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">' + (hostedViewOnly ? "Review workspaces" : "Open workspaces") + '</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">' + (hostedViewOnly ? "Review access" : "Open access") + '</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + '</a></div></div><div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>' + (hostedViewOnly ? showSelfHostedCommercial ? "Billing or owner/admin path failed" : "Hosted billing or owner/admin path failed" : showSelfHostedCommercial ? "Billing path failed" : "Hosted billing path failed") + "</h3><p>" + (hostedViewOnly ? showSelfHostedCommercial ? "Use this route only after the relevant billing job has failed, or the affected hosted account still needs an owner or admin to finish hosted billing." : "Use this route only after the affected hosted account still needs an owner or admin to finish hosted billing and that path still cannot complete cleanly." : showSelfHostedCommercial ? "Use this route only after hosted billing or one self-hosted billing job has failed to complete cleanly." : "Use this route only after hosted billing has failed to complete cleanly.") + '</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Say whether the failed path was hosted billing, licenses, refunds, or privacy, and whether hosted billing still needed an owner or admin." : "Say whether the failed path was hosted billing and whether the account still needed an owner or admin to open it." : showSelfHostedCommercial ? "Say whether the failed path was hosted billing, licenses, refunds, or privacy." : "Say whether the failed path was hosted billing.") + '</span></div><div class="portal-support-point"><strong>Keep the request intact</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Bring the same account or billing email and the failed owner/admin or billing step instead of reopening the story." : "Bring the same hosted account and the failed billing or owner/admin step instead of reopening the story." : showSelfHostedCommercial ? "Bring the same account or billing email and the failed action instead of reopening the story." : "Bring the same hosted account and the failed billing action instead of reopening the story.") + '</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div>" : '<div class="portal-support-route-card"><div class="account-panel-kicker">Billing path</div><h3>Self-hosted billing path failed</h3><p>Use this route only after a self-hosted billing, license, refund, or privacy job has failed to complete cleanly.</p><div class="portal-support-points"><div class="portal-support-point"><strong>Name the billing job</strong><span>Say whether the failed path was billing, licenses, refunds, or privacy.</span></div><div class="portal-support-point"><strong>Keep the purchase context intact</strong><span>Bring the same commercial email and the failed action instead of reopening the story.</span></div></div><div class="portal-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Open billing</button><a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div>";
     var runbookSteps = hasHostedAccounts2 ? '<div class="portal-support-runbook-step"><strong>1. Failed path</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Say whether the blocked path was Workspaces review, Access review, owner/admin hosted change, hosted billing, licenses, refunds, or privacy." : "Say whether the blocked path was Workspaces review, Access review, owner/admin hosted change, or hosted billing." : showSelfHostedCommercial ? "Say whether the blocked path was Workspaces, Access, hosted billing, licenses, refunds, or privacy." : "Say whether the blocked path was Workspaces, Access, or hosted billing.") + '</span></div><div class="portal-support-runbook-step"><strong>2. Account or email</strong><span>' + (hostedViewOnly ? showSelfHostedCommercial ? "Include the hosted account and workspace for the blocked review or owner/admin path, or the commercial billing email for self-hosted work." : "Include the hosted account and workspace or hosted billing account that still needed owner/admin action." : showSelfHostedCommercial ? "Include the hosted account and workspace when relevant, or the commercial billing email for self-hosted work." : "Include the hosted account and workspace or hosted billing account that the failed path belongs to.") + '</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' : '<div class="portal-support-runbook-step"><strong>1. Billing job</strong><span>Say whether the blocked path was billing, licenses, refunds, or privacy.</span></div><div class="portal-support-runbook-step"><strong>2. Purchase email</strong><span>Include the commercial billing email used for the self-hosted purchase.</span></div><div class="portal-support-runbook-step"><strong>3. Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>';
-    return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Escalation only</h2><p>' + escapeHTML(supportLead) + "</p>" + renderSectionContextChips(supportChips) + '<div class="portal-support-layout"><div class="portal-support-route-grid">' + routeCards + '</div><div class="portal-support-runbook"><div class="account-panel-kicker">What to send</div><h3>Keep the escalation short</h3><p>Support should inherit the same request, not reconstruct it from scratch.</p><div class="portal-support-runbook-list">' + runbookSteps + "</div></div></div></section>";
+    return '<section class="portal-support-panel"><div class="account-panel-kicker">Support</div><h2>Escalation only</h2><p>' + escapeHTML(supportLead) + "</p>" + renderSectionContextChips(supportChips) + '<div class="portal-support-layout"><div class="portal-support-route-grid">' + routeCards + '</div><div class="portal-support-runbook"><div class="account-panel-kicker">What to send</div><h3>Send these details</h3><p>Send the failed path, account or email, and failed action.</p><div class="portal-support-runbook-list">' + runbookSteps + "</div></div></div></section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {

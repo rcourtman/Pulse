@@ -370,6 +370,11 @@ That same typed overview contract must also stay fact-first: overview copy may
 not synthesize urgency or health verdicts such as `Nothing urgent` or
 `Healthy now`, and must instead render concrete counts, explicit workspace
 state, and next-action routing from the owned runtime payload.
+That same typed portal runtime contract must also keep task and status copy
+literal across the account surface: customer-facing wording may not use
+commentary such as `obvious`, `actual work`, `trustworthy`, or `settled` when
+the runtime already knows the concrete state, action, or failure being
+rendered.
 That same typed overview contract must also preserve a sharp, high-density enterprise visual aesthetic (e.g. Cloudflare/GCP density standards) across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, rigorous visual language with standard 256px sidebars, Inter-grade typography, clean text-transform rules, and cleanly unboxed typography without excessive pills or stacked metrics.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime

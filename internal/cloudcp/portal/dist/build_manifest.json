@@ -1,5 +1,5 @@
 {
-  "source_hash": "90be82b1835d65ae5df2bf6c5793071dd69a2cb4f9ee855356e9ce0e375f7ac1",
+  "source_hash": "21a6dc0fc99f359ec17be255e817006a957679e26097181db88399b969d7aadf",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
@@ -40,6 +40,8 @@
     "src/store.test.ts",
     "src/store.ts",
     "src/styles.css",
-    "src/types.ts"
+    "src/types.ts",
+    "src/workspace_presentation.test.ts",
+    "src/workspace_presentation.ts"
   ]
 }

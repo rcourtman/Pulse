@@ -261,6 +261,10 @@ Core rules:
     verdicts such as `Nothing urgent` or `Healthy now`; it must report
     concrete counts, explicit workspace state, and the next action directly
     from the owned runtime truth.
+40. Portal task and status copy must stay literal. Customer-facing copy may
+    not rely on commentary such as `obvious`, `actual work`, `trustworthy`,
+    or `settled` when the runtime already knows the concrete state, action,
+    or failure being shown.
 
 ## Screen Model
 

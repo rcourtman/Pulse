@@ -136,7 +136,7 @@ describe('shell view', function() {
     expect(html).toContain('Billing');
     expect(html).toContain('Support');
     expect(html).toContain('Account tasks');
-    expect(html).toContain('What needs attention, what is ready, and the next obvious action.');
+    expect(html).toContain('Review status, ready workspaces, and the next action.');
     expect(html).toContain('1 account');
     expect(html).toContain('3 workspaces');
     expect(html).toContain('1 ready workspace');
@@ -172,9 +172,9 @@ describe('shell view', function() {
     expect(html).toContain('Gamma Workspace');
     expect(html).toContain('Needs attention');
     expect(html).toContain('ready</span>');
-    expect(html).toContain('Needs attention</span>');
+    expect(html).toContain('Unhealthy</span>');
     expect(html).toContain('Checking</span>');
-    expect(html).toContain('Ready to use');
+    expect(html).toContain('Ready');
     expect(html).toContain('This workspace is in a failed state.');
     expect(html).toContain('Latest health check is still pending.');
     expect(html).toContain('/api/accounts/acct_1/tenants/ws_active/handoff');
@@ -213,7 +213,7 @@ describe('shell view', function() {
     expect(html).toContain('Escalation only');
     expect(html).toContain('Workspace or access path failed');
     expect(html).toContain('Hosted billing path failed');
-    expect(html).toContain('Keep the escalation short');
+    expect(html).toContain('Send these details');
     expect(html).toContain('What to send');
     expect(html).toContain('Open billing');
     expect(html).not.toContain('Self-hosted tools');
@@ -568,7 +568,7 @@ describe('shell view', function() {
     );
 
     expect(html).toContain('Review workspace state');
-    expect(html).toContain('Open Workspaces to review current state, then hand off any lifecycle or billing change to an owner or admin.');
+    expect(html).toContain('Open Workspaces to review current state, then hand off changes to an owner or admin.');
     expect(html).toContain('Review workspaces');
     expect(html).toContain('Review access');
     expect(html).not.toContain('Choose the right task path');
@@ -710,11 +710,11 @@ describe('shell view', function() {
       })
     );
 
-    expect(html).toContain('Suspended until you resume it');
+    expect(html).toContain('Suspended');
     expect(html).toContain('0 workspaces need review');
     expect(html).toContain('0 workspaces are ready to use');
     expect(html).toContain('Every hosted workspace is suspended right now.');
-    expect(html).toContain('Create the next workspace');
+    expect(html).toContain('Create workspace');
     expect(html).toContain('1 workspace is suspended and excluded from routine use until you resume it.');
   });
 

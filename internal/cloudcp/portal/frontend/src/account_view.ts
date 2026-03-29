@@ -7,6 +7,7 @@ import type {
   PortalWorkspaceSummary,
 } from './types';
 import { normalizePortalRole, portalRoleCapabilityCopy, portalRoleLabel } from './account_roles';
+import { workspaceGuidanceCopy, workspaceHealthLabel, workspaceStatusCopy } from './workspace_presentation';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
@@ -27,39 +28,11 @@ function workspaceActionLabel(workspace: PortalWorkspaceSummary): string {
   return workspace.state === 'active' ? 'Suspend workspace' : 'Delete workspace';
 }
 
-function workspaceSummary(workspace: PortalWorkspaceSummary): string {
-  if (workspace.health_status === 'healthy') return 'Live updates and health checks are currently good.';
-  if (workspace.health_status === 'unhealthy') return 'This workspace needs attention before it is trustworthy.';
-  return 'This workspace is still waiting on a completed health check.';
-}
-
-function workspaceHealthLabel(workspace: PortalWorkspaceSummary): string {
-  if (workspace.health_status === 'healthy') return 'Healthy';
-  if (workspace.health_status === 'unhealthy') return 'Needs attention';
-  return 'Checking';
-}
-
 function workspaceCreatedLabel(workspace: PortalWorkspaceSummary): string {
   if (!workspace.created_at) return 'Unknown';
   var date = new Date(workspace.created_at);
   if (Number.isNaN(date.getTime())) return 'Unknown';
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function workspaceGuidance(workspace: PortalWorkspaceSummary): string {
-  if (workspace.state === 'active' && workspace.health_status === 'healthy') {
-    return 'This workspace looks ready for normal use. Use the fleet table to open it, or suspend it here if you are intentionally taking it out of service.';
-  }
-  if (workspace.state === 'active' && workspace.health_status === 'checking') {
-    return 'This workspace is active but still waiting on a completed health check. Review it before you treat the account status as settled.';
-  }
-  if (workspace.health_status === 'unhealthy') {
-    return 'This workspace needs review before it is treated as trustworthy. Use the management action only when you intend to suspend or remove it from the workspace list.';
-  }
-  if (workspace.state === 'suspended') {
-    return 'This workspace is already suspended. The remaining lifecycle action here is deletion, so treat it as a deliberate irreversible step.';
-  }
-  return 'Review the lifecycle state before taking the next explicit action for this workspace.';
 }
 
 function workspaceMeta(workspace: PortalWorkspaceSummary): string {
@@ -133,11 +106,11 @@ export function renderWorkspaceManagement(account: PortalAccountSummary, entry: 
 
   title.textContent = workspace.display_name;
   meta.textContent = workspaceMeta(workspace);
-  summary.textContent = workspaceSummary(workspace);
+  summary.textContent = workspaceStatusCopy(workspace);
   health.textContent = workspaceHealthLabel(workspace);
   lifecycle.textContent = workspace.state ? workspace.state.charAt(0).toUpperCase() + workspace.state.slice(1) : 'Unknown';
   created.textContent = workspaceCreatedLabel(workspace);
-  guidance.textContent = workspaceGuidance(workspace);
+  guidance.textContent = workspaceGuidanceCopy(workspace);
   actionButton.textContent = workspaceActionLabel(workspace);
   actionButton.disabled = entry.manageWorkspace.pending;
   actionButton.setAttribute('data-workspace-id', workspace.id);
