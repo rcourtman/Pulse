@@ -46,6 +46,7 @@ type portalPageAccount struct {
 // portalPageData is passed to the portal HTML template.
 type portalPageData struct {
 	Nonce         string
+	FaviconHref   string
 	Styles        template.CSS
 	ShellScript   template.JS
 	BootstrapJSON template.JS
@@ -67,7 +68,7 @@ var errPortalAuthRequired = errors.New("portal auth required")
 // Route: GET /portal
 //   - No session or invalid session -> shows a magic-link login form
 //   - Valid session -> shows workspace list with management actions
-func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup) http.HandlerFunc {
+func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, faviconHref string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -85,9 +86,9 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, 
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			renderPortalPage(w, nonce, BuildBootstrapData(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts)))
+			renderPortalPage(w, nonce, faviconHref, BuildBootstrapData(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts)))
 		case errors.Is(err, errPortalAuthRequired):
-			renderPortalPage(w, nonce, BuildAnonymousBootstrapData())
+			renderPortalPage(w, nonce, faviconHref, BuildAnonymousBootstrapData())
 		default:
 			log.Error().Err(err).Msg("cloudcp.portal.page: validate session")
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -246,7 +247,7 @@ func workspaceHealthStatus(healthy bool, lastHealthCheck *time.Time) string {
 	return "unhealthy"
 }
 
-func renderPortalPage(w http.ResponseWriter, nonce string, bootstrapData BootstrapData) {
+func renderPortalPage(w http.ResponseWriter, nonce string, faviconHref string, bootstrapData BootstrapData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	bootstrapJSON, err := MarshalBootstrapJSON(bootstrapData)
@@ -256,6 +257,7 @@ func renderPortalPage(w http.ResponseWriter, nonce string, bootstrapData Bootstr
 	}
 	if err := portalPageTmpl.Execute(w, portalPageData{
 		Nonce:         nonce,
+		FaviconHref:   faviconHref,
 		Styles:        portalStyles,
 		ShellScript:   portalShellScript,
 		BootstrapJSON: bootstrapJSON,

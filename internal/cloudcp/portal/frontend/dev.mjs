@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { context } from 'esbuild';
 
 import { createPortalBuildOptions, frontendRoot } from './build_config.mjs';
@@ -10,6 +11,7 @@ const previewHost = process.env.PULSE_PORTAL_PREVIEW_HOST || '127.0.0.1';
 const previewPort = Number(process.env.PULSE_PORTAL_PREVIEW_PORT || '8765');
 const previewScenarios = ['managed', 'readonly', 'selfhosted', 'empty'];
 const previewFaviconSVG = fs.readFileSync(path.join(frontendRoot, '..', '..', 'favicon.svg'), 'utf8');
+const previewFaviconHref = '/favicon.svg?v=' + createHash('sha256').update(previewFaviconSVG).digest('hex').slice(0, 16);
 
 function iso(value) {
   return new Date(value).toISOString();
@@ -253,7 +255,7 @@ function buildPreviewHTML(assets, bootstrap, previewToast) {
         '<meta charset="utf-8">' +
         '<meta name="viewport" content="width=device-width, initial-scale=1">' +
         '<title>Pulse Account Preview</title>' +
-        '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' +
+        '<link rel="icon" href="' + previewFaviconHref + '" type="image/svg+xml">' +
         '<style>' + assets.css + '</style>' +
       '</head>' +
       '<body>' +

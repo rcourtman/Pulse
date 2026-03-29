@@ -270,7 +270,10 @@ instance, but local portal design work must not depend on redeploying
 That same preview/runtime boundary also owns shared browser chrome such as the
 portal favicon: the local preview must serve the same `/favicon.svg` asset as
 the real control-plane route so icon changes can be reviewed locally before
-deployment instead of appearing only after a live push.
+deployment instead of appearing only after a live push. The portal page itself
+must also reference that shared favicon through a versioned href so updated
+icon revisions bypass browser cache on deploy instead of waiting for asset
+expiry.
 That same frontend delivery boundary must keep the account portal visual language sharp and high-density, avoiding gradients, heavy shadows, and decorative SaaS styling in favor of a clean, restrained, Cloudflare/GCP-grade baseline with flat inline workspace action rows and text-driven unboxed metadata instead of pills and absolutely inline row actions.
 That same portal delivery boundary also owns the checked-in embedded bundle in
 `internal/cloudcp/portal/dist/`. Visual or interaction changes are not

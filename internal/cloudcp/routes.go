@@ -257,5 +257,5 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
-	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry, portalCommercialLookup))))
+	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref()))))
 }

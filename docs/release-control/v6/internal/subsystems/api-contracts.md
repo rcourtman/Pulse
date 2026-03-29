@@ -381,6 +381,10 @@ action or state (`Manage access`, `Hosted billing attached`, `Email support`,
 generic alert labels. Support copy is part of the same typed contract:
 escalation surfaces must render short literal path/account/action wording
 instead of longer procedural prose.
+That same typed portal page contract also owns favicon cache-busting: the
+rendered `<link rel="icon">` must point at the shared `/favicon.svg` asset
+through a versioned href so new portal icon revisions bypass browser cache on
+deploy instead of waiting for asset expiry.
 That same typed overview contract must also preserve a sharp, high-density enterprise visual aesthetic (e.g. Cloudflare/GCP density standards) across all portal scenarios, removing gradients and heavy box-shadows to ensure a calm, rigorous visual language with standard 256px sidebars, Inter-grade typography, clean text-transform rules, and cleanly unboxed typography without excessive pills or stacked metrics.
 plus a package-local `tsc --noEmit` gate, so future account-shell work should
 extend the typed source boundary instead of reviving opaque global runtime

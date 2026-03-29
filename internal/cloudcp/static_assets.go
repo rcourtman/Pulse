@@ -1,12 +1,23 @@
 package cloudcp
 
 import (
+	"crypto/sha256"
 	_ "embed"
+	"encoding/hex"
 	"net/http"
 )
 
 //go:embed favicon.svg
 var controlPlaneFaviconSVG []byte
+
+var controlPlaneFaviconVersion = func() string {
+	sum := sha256.Sum256(controlPlaneFaviconSVG)
+	return hex.EncodeToString(sum[:8])
+}()
+
+func controlPlaneFaviconHref() string {
+	return "/favicon.svg?v=" + controlPlaneFaviconVersion
+}
 
 func handleControlPlaneFaviconSVG(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

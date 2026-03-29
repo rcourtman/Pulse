@@ -46,7 +46,7 @@ func doRequest(t *testing.T, h http.Handler, req *http.Request) *httptest.Respon
 func renderPortalHTML(t *testing.T, bootstrap BootstrapData) string {
 	t.Helper()
 	rec := httptest.NewRecorder()
-	renderPortalPage(rec, "test-nonce", bootstrap)
+	renderPortalPage(rec, "test-nonce", "/favicon.svg?v=test-favicon", bootstrap)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("renderPortalPage returned %d", rec.Code)
 	}
@@ -782,7 +782,7 @@ func TestPortalPageTemplate_AccountServicesRendered(t *testing.T) {
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
-		`<link rel="icon" href="/favicon.svg" type="image/svg+xml">`,
+		`<link rel="icon" href="/favicon.svg?v=test-favicon" type="image/svg+xml">`,
 		`id="portal-user-info"`,
 		`id="portal-app-root"`,
 		`id="pulse-account-bootstrap"`,
@@ -1133,7 +1133,7 @@ func TestPortalPageTemplate_UsesPulseAccountBrandingWhenSignedOut(t *testing.T) 
 
 	mustContain := []string{
 		"<title>Pulse Account</title>",
-		`<link rel="icon" href="/favicon.svg" type="image/svg+xml">`,
+		`<link rel="icon" href="/favicon.svg?v=test-favicon" type="image/svg+xml">`,
 		"Pulse Account",
 		`id="portal-app-root"`,
 		"Enter the commercial email address for your Pulse account.",

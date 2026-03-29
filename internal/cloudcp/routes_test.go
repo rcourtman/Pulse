@@ -141,6 +141,9 @@ func TestRegisterRoutes_FaviconRouteParity(t *testing.T) {
 	if got := icoRec.Header().Get("Location"); got != "/favicon.svg" {
 		t.Fatalf("GET /favicon.ico location=%q, want %q", got, "/favicon.svg")
 	}
+	if got := controlPlaneFaviconHref(); !strings.HasPrefix(got, "/favicon.svg?v=") {
+		t.Fatalf("controlPlaneFaviconHref=%q, want versioned favicon href", got)
+	}
 }
 
 func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
