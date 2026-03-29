@@ -36,6 +36,34 @@ func guestLookupKey(instanceName, nodeName string, vmid int) string {
 	return fmt.Sprintf("%s|%s|%d", strings.TrimSpace(instanceName), strings.TrimSpace(nodeName), vmid)
 }
 
+func namespaceLikelyMatchesProxmoxLocation(namespace, value string) bool {
+	namespace = strings.TrimSpace(namespace)
+	value = strings.TrimSpace(value)
+	if namespace == "" || value == "" {
+		return false
+	}
+
+	normalize := func(s string) string {
+		var b strings.Builder
+		for _, r := range strings.ToLower(s) {
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
+	}
+
+	ns := normalize(namespace)
+	location := normalize(value)
+	if ns == "" || location == "" {
+		return false
+	}
+	if ns == location {
+		return true
+	}
+	return strings.HasSuffix(location, ns) || strings.HasSuffix(ns, location)
+}
+
 func preferredPBSBackupSubjectName(comment, vmid string) string {
 	comment = strings.TrimSpace(comment)
 	vmid = strings.TrimSpace(vmid)
@@ -56,6 +84,52 @@ func preferredPBSBackupSubjectName(comment, vmid string) string {
 		}
 	}
 	return comment
+}
+
+func selectPBSGuestCandidate(backup models.PBSBackup, candidates []GuestCandidate) (GuestCandidate, bool) {
+	if len(candidates) == 0 {
+		return GuestCandidate{}, false
+	}
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+
+	matched := candidates
+	if namespace := strings.TrimSpace(backup.Namespace); namespace != "" {
+		filtered := make([]GuestCandidate, 0, len(matched))
+		for _, candidate := range matched {
+			if namespaceLikelyMatchesProxmoxLocation(namespace, candidate.InstanceName) ||
+				namespaceLikelyMatchesProxmoxLocation(namespace, candidate.NodeName) {
+				filtered = append(filtered, candidate)
+			}
+		}
+		if len(filtered) == 1 {
+			return filtered[0], true
+		}
+		if len(filtered) > 1 {
+			matched = filtered
+		}
+	}
+
+	if preferredName := strings.ToLower(strings.TrimSpace(preferredPBSBackupSubjectName(backup.Comment, backup.VMID))); preferredName != "" {
+		filtered := make([]GuestCandidate, 0, len(matched))
+		for _, candidate := range matched {
+			if strings.ToLower(strings.TrimSpace(candidate.DisplayName)) == preferredName {
+				filtered = append(filtered, candidate)
+			}
+		}
+		if len(filtered) == 1 {
+			return filtered[0], true
+		}
+		if len(filtered) > 1 {
+			matched = filtered
+		}
+	}
+
+	if len(matched) == 1 {
+		return matched[0], true
+	}
+	return GuestCandidate{}, false
 }
 
 func proxmoxSubjectRef(resourceType unifiedresources.ResourceType, info GuestInfo, instanceName, nodeName string, vmid int, sourceID string) *recovery.ExternalRef {
@@ -353,9 +427,9 @@ func FromPBSBackups(backups []models.PBSBackup, candidatesByKey map[string][]Gue
 		var subjectRID string
 		var subjectRef *recovery.ExternalRef
 
-		// Link to a unified resource only when we have a single unambiguous guest match.
-		if len(candidates) == 1 {
-			c := candidates[0]
+		// Link to a unified resource when the candidate set is already singular or can be
+		// disambiguated by PBS namespace / guest label without guessing across guest collisions.
+		if c, ok := selectPBSGuestCandidate(b, candidates); ok {
 			subjectRID = unifiedresources.SourceSpecificID(c.ResourceType, unifiedresources.SourceProxmox, c.SourceID)
 			subjectRef = proxmoxSubjectRef(c.ResourceType, GuestInfo{Name: c.DisplayName, ResourceType: c.ResourceType, SourceID: c.SourceID}, c.InstanceName, c.NodeName, c.VMID, c.SourceID)
 		} else {

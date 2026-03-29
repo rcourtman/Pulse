@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestStore_UpsertAndList(t *testing.T) {
@@ -284,6 +285,370 @@ func TestStore_OpenBackfillsLegacyNumericPBSSubjectLabels(t *testing.T) {
 	}
 	if rollups[0].Display == nil || rollups[0].Display.SubjectLabel != "pulse-v4-prod" {
 		t.Fatalf("ListRollups() display = %#v, want backfilled subject label pulse-v4-prod", rollups[0].Display)
+	}
+}
+
+func TestStore_OpenBackfillsLegacyProxmoxGuestSubjectKeys(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	legacyTime := time.Date(2026, 3, 4, 4, 3, 10, 0, time.UTC)
+	currentTime := time.Date(2026, 3, 29, 3, 3, 31, 0, time.UTC)
+	currentRID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeSystemContainer,
+		unifiedresources.SourceProxmox,
+		"system-container-fb42a70d89bd20a6",
+	)
+
+	points := []recovery.RecoveryPoint{
+		{
+			ID:                "pbs-backup-legacy-lxc-id",
+			Provider:          recovery.ProviderProxmoxPBS,
+			Kind:              recovery.KindBackup,
+			Mode:              recovery.ModeRemote,
+			Outcome:           recovery.OutcomeSuccess,
+			StartedAt:         &legacyTime,
+			CompletedAt:       &legacyTime,
+			SubjectResourceID: "lxc-fb42a70d89bd20a6",
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-lxc",
+				Namespace: "delly",
+				Name:      "debian-go",
+				ID:        "delly:minipc:112",
+				Class:     "minipc",
+			},
+			Details: map[string]any{
+				"backupType": "ct",
+				"comment":    "debian-go",
+				"vmid":       "112",
+			},
+		},
+		{
+			ID:                "pbs-backup-current-canonical-id",
+			Provider:          recovery.ProviderProxmoxPBS,
+			Kind:              recovery.KindBackup,
+			Mode:              recovery.ModeRemote,
+			Outcome:           recovery.OutcomeSuccess,
+			StartedAt:         &currentTime,
+			CompletedAt:       &currentTime,
+			SubjectResourceID: currentRID,
+			SubjectRef: &recovery.ExternalRef{
+				Type:      "proxmox-lxc",
+				Namespace: "delly",
+				Name:      "debian-go",
+				ID:        "system-container-fb42a70d89bd20a6",
+				Class:     "minipc",
+			},
+			Details: map[string]any{
+				"backupType": "ct",
+				"comment":    "debian-go",
+				"vmid":       "112",
+			},
+		},
+	}
+
+	if err := store.UpsertPoints(context.Background(), points); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points
+		 SET subject_key = CASE
+		   WHEN id = ? THEN ?
+		   WHEN id = ? THEN ?
+		   ELSE subject_key
+		 END
+		 WHERE id IN (?, ?)`,
+		points[0].ID,
+		"res:lxc-fb42a70d89bd20a6",
+		points[1].ID,
+		"res:system-container-fb42a70d89bd20a6",
+		points[0].ID,
+		points[1].ID,
+	); err != nil {
+		t.Fatalf("degrade legacy proxmox subject keys: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	rollups, total, err := reopened.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v", err)
+	}
+	if total != 1 || len(rollups) != 1 {
+		t.Fatalf("ListRollups() total=%d len=%d, want 1/1", total, len(rollups))
+	}
+	if rollups[0].LastSuccessAt == nil || !rollups[0].LastSuccessAt.Equal(currentTime) {
+		t.Fatalf("LastSuccessAt = %v, want %v", rollups[0].LastSuccessAt, currentTime)
+	}
+	if rollups[0].SubjectResourceID != currentRID {
+		t.Fatalf("SubjectResourceID = %q, want %q", rollups[0].SubjectResourceID, currentRID)
+	}
+	if rollups[0].Display == nil || rollups[0].Display.SubjectLabel != "debian-go" {
+		t.Fatalf("Display = %#v, want subject label debian-go", rollups[0].Display)
+	}
+}
+
+func TestStore_UpsertPointsRelinksHistoricalProxmoxPBSGuestIdentity(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+
+	linkedTime := time.Date(2026, 2, 23, 2, 30, 19, 0, time.UTC)
+	currentTime := time.Date(2026, 3, 29, 1, 30, 13, 0, time.UTC)
+	currentRID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeSystemContainer,
+		unifiedresources.SourceProxmox,
+		"pi:pi:140",
+	)
+
+	linked := recovery.RecoveryPoint{
+		ID:                "pbs-linked-pulse-v4-prod",
+		Provider:          recovery.ProviderProxmoxPBS,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeRemote,
+		Outcome:           recovery.OutcomeSuccess,
+		StartedAt:         &linkedTime,
+		CompletedAt:       &linkedTime,
+		SubjectResourceID: currentRID,
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "proxmox-lxc",
+			Namespace: "pi",
+			Name:      "pulse-v4-prod",
+			ID:        "pi:pi:140",
+			Class:     "pi",
+		},
+		Details: map[string]any{
+			"backupType": "ct",
+			"comment":    "pulse-v4-prod, pi, 140",
+			"namespace":  "pimox",
+			"vmid":       "140",
+		},
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{linked}); err != nil {
+		t.Fatalf("UpsertPoints(linked) error = %v", err)
+	}
+
+	unresolved := recovery.RecoveryPoint{
+		ID:          "pbs-unresolved-pulse-v4-prod",
+		Provider:    recovery.ProviderProxmoxPBS,
+		Kind:        recovery.KindBackup,
+		Mode:        recovery.ModeRemote,
+		Outcome:     recovery.OutcomeSuccess,
+		StartedAt:   &currentTime,
+		CompletedAt: &currentTime,
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "proxmox-lxc",
+			Namespace: "pbs-docker",
+			Name:      "pulse-v4-prod",
+			ID:        "140",
+		},
+		Details: map[string]any{
+			"backupType": "ct",
+			"comment":    "pulse-v4-prod, pi, 140",
+			"namespace":  "pimox",
+			"vmid":       "140",
+		},
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{unresolved}); err != nil {
+		t.Fatalf("UpsertPoints(unresolved) error = %v", err)
+	}
+
+	points, total, err := store.ListPoints(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListPoints() error = %v", err)
+	}
+	if total != 2 || len(points) != 2 {
+		t.Fatalf("ListPoints() total=%d len=%d, want 2/2", total, len(points))
+	}
+
+	var newest recovery.RecoveryPoint
+	for _, point := range points {
+		if point.ID == unresolved.ID {
+			newest = point
+			break
+		}
+	}
+	if newest.ID == "" {
+		t.Fatalf("failed to find upserted unresolved point in ListPoints(): %#v", points)
+	}
+	if newest.SubjectResourceID != currentRID {
+		t.Fatalf("SubjectResourceID = %q, want %q", newest.SubjectResourceID, currentRID)
+	}
+	if newest.SubjectRef == nil || newest.SubjectRef.Class != "pi" || newest.SubjectRef.Namespace != "pi" {
+		t.Fatalf("SubjectRef = %#v, want linked pi guest ref", newest.SubjectRef)
+	}
+
+	rollups, rollupTotal, err := store.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v", err)
+	}
+	if rollupTotal != 1 || len(rollups) != 1 {
+		t.Fatalf("ListRollups() total=%d len=%d, want 1/1", rollupTotal, len(rollups))
+	}
+	if rollups[0].LastSuccessAt == nil || !rollups[0].LastSuccessAt.Equal(currentTime) {
+		t.Fatalf("LastSuccessAt = %v, want %v", rollups[0].LastSuccessAt, currentTime)
+	}
+	if rollups[0].SubjectResourceID != currentRID {
+		t.Fatalf("SubjectResourceID = %q, want %q", rollups[0].SubjectResourceID, currentRID)
+	}
+}
+
+func TestStore_OpenBackfillsLegacyUnresolvedProxmoxPBSGuestRows(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "recovery.db")
+
+	store, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+
+	linkedTime := time.Date(2026, 2, 23, 2, 30, 19, 0, time.UTC)
+	currentTime := time.Date(2026, 3, 29, 1, 30, 13, 0, time.UTC)
+	currentRID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeSystemContainer,
+		unifiedresources.SourceProxmox,
+		"pi:pi:140",
+	)
+
+	linked := recovery.RecoveryPoint{
+		ID:                "pbs-linked-pulse-v4-prod",
+		Provider:          recovery.ProviderProxmoxPBS,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeRemote,
+		Outcome:           recovery.OutcomeSuccess,
+		StartedAt:         &linkedTime,
+		CompletedAt:       &linkedTime,
+		SubjectResourceID: currentRID,
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "proxmox-lxc",
+			Namespace: "pi",
+			Name:      "pulse-v4-prod",
+			ID:        "pi:pi:140",
+			Class:     "pi",
+		},
+		Details: map[string]any{
+			"backupType": "ct",
+			"comment":    "pulse-v4-prod, pi, 140",
+			"namespace":  "pimox",
+			"vmid":       "140",
+		},
+	}
+	unresolved := recovery.RecoveryPoint{
+		ID:                "pbs-unresolved-pulse-v4-prod",
+		Provider:          recovery.ProviderProxmoxPBS,
+		Kind:              recovery.KindBackup,
+		Mode:              recovery.ModeRemote,
+		Outcome:           recovery.OutcomeSuccess,
+		StartedAt:         &currentTime,
+		CompletedAt:       &currentTime,
+		SubjectResourceID: currentRID,
+		SubjectRef: &recovery.ExternalRef{
+			Type:      "proxmox-lxc",
+			Namespace: "pi",
+			Name:      "pulse-v4-prod",
+			ID:        "pi:pi:140",
+			Class:     "pi",
+		},
+		Details: map[string]any{
+			"backupType": "ct",
+			"comment":    "pulse-v4-prod, pi, 140",
+			"namespace":  "pimox",
+			"vmid":       "140",
+		},
+	}
+	if err := store.UpsertPoints(context.Background(), []recovery.RecoveryPoint{linked, unresolved}); err != nil {
+		t.Fatalf("UpsertPoints() error = %v", err)
+	}
+
+	degradedRef := recovery.ExternalRef{
+		Type:      "proxmox-lxc",
+		Namespace: "pbs-docker",
+		Name:      "pulse-v4-prod",
+		ID:        "140",
+	}
+	degradedRefJSON, err := json.Marshal(degradedRef)
+	if err != nil {
+		t.Fatalf("json.Marshal(degradedRef): %v", err)
+	}
+
+	if _, err := store.db.ExecContext(
+		context.Background(),
+		`UPDATE recovery_points
+		 SET subject_key = ?,
+		     subject_resource_id = '',
+		     subject_ref_json = ?,
+		     subject_label = ?,
+		     subject_type = ?,
+		     item_type = ?,
+		     cluster_label = ?,
+		     node_host_label = '',
+		     namespace_label = ?,
+		     entity_id_label = ?
+		 WHERE id = ?`,
+		recovery.SubjectKey(recovery.ProviderProxmoxPBS, "", &degradedRef),
+		string(degradedRefJSON),
+		"pulse-v4-prod",
+		"proxmox-lxc",
+		"system-container",
+		"pbs-docker",
+		"pimox",
+		"140",
+		unresolved.ID,
+	); err != nil {
+		t.Fatalf("degrade unresolved legacy pbs row: %v", err)
+	}
+
+	if err := store.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	reopened, err := Open(dbPath)
+	if err != nil {
+		t.Fatalf("reopen Open() error = %v", err)
+	}
+	t.Cleanup(func() { _ = reopened.Close() })
+
+	rollups, total, err := reopened.ListRollups(context.Background(), recovery.ListPointsOptions{Page: 1, Limit: 50})
+	if err != nil {
+		t.Fatalf("ListRollups() error = %v", err)
+	}
+	if total != 1 || len(rollups) != 1 {
+		t.Fatalf("ListRollups() total=%d len=%d, want 1/1", total, len(rollups))
+	}
+	if rollups[0].LastSuccessAt == nil || !rollups[0].LastSuccessAt.Equal(currentTime) {
+		t.Fatalf("LastSuccessAt = %v, want %v", rollups[0].LastSuccessAt, currentTime)
+	}
+	if rollups[0].SubjectResourceID != currentRID {
+		t.Fatalf("SubjectResourceID = %q, want %q", rollups[0].SubjectResourceID, currentRID)
+	}
+	if rollups[0].Display == nil || rollups[0].Display.ClusterLabel != "pi" || rollups[0].Display.NodeHostLabel != "pi" {
+		t.Fatalf("Display = %#v, want linked pi identity after reopen backfill", rollups[0].Display)
 	}
 }
 

@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestDeriveIndex(t *testing.T) {
@@ -558,6 +560,128 @@ func TestSubjectKey(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSubjectKey_CanonicalizesProxmoxLinkedGuestAliases(t *testing.T) {
+	t.Parallel()
+
+	expectedContainerRID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeSystemContainer,
+		unifiedresources.SourceProxmox,
+		"system-container-fb42a70d89bd20a6",
+	)
+
+	tests := []struct {
+		name              string
+		subjectResourceID string
+		subjectRef        *ExternalRef
+		expected          string
+	}{
+		{
+			name:              "current canonical hashed container id stays stable",
+			subjectResourceID: expectedContainerRID,
+			subjectRef: &ExternalRef{
+				Type:      "proxmox-lxc",
+				Namespace: "delly",
+				Name:      "debian-go",
+				ID:        "system-container-fb42a70d89bd20a6",
+				Class:     "minipc",
+			},
+			expected: "res:" + expectedContainerRID,
+		},
+		{
+			name:              "legacy raw container source id is re-keyed to canonical hash",
+			subjectResourceID: "system-container-fb42a70d89bd20a6",
+			subjectRef: &ExternalRef{
+				Type:      "proxmox-lxc",
+				Namespace: "delly",
+				Name:      "debian-go",
+				ID:        "delly:minipc:112",
+				Class:     "minipc",
+			},
+			expected: "res:" + expectedContainerRID,
+		},
+		{
+			name:              "legacy lxc-prefixed id is normalized before hashing",
+			subjectResourceID: "lxc-fb42a70d89bd20a6",
+			subjectRef: &ExternalRef{
+				Type:      "proxmox-lxc",
+				Namespace: "delly",
+				Name:      "debian-go",
+				ID:        "delly:minipc:112",
+				Class:     "minipc",
+			},
+			expected: "res:" + expectedContainerRID,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := SubjectKey(ProviderProxmoxPBS, tc.subjectResourceID, tc.subjectRef)
+			if got != tc.expected {
+				t.Fatalf("SubjectKey() = %q, want %q", got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestSubjectKey_ProxmoxExternalGuestIgnoresNameDrift(t *testing.T) {
+	t.Parallel()
+
+	first := SubjectKey(ProviderProxmoxPBS, "", &ExternalRef{
+		Type:      "proxmox-lxc",
+		Namespace: "pbs-docker",
+		Name:      "socat",
+		ID:        "900",
+	})
+	second := SubjectKey(ProviderProxmoxPBS, "", &ExternalRef{
+		Type:      "proxmox-lxc",
+		Namespace: "pbs-docker",
+		Name:      "900",
+		ID:        "900",
+	})
+
+	if first == "" || second == "" {
+		t.Fatalf("expected proxmox external guest keys to be present, got %q and %q", first, second)
+	}
+	if first != second {
+		t.Fatalf("SubjectKey() should ignore proxmox external guest name drift, got %q vs %q", first, second)
+	}
+}
+
+func TestProxmoxPBSGuestContinuityKey(t *testing.T) {
+	t.Parallel()
+
+	got := ProxmoxPBSGuestContinuityKey("pulse-v4-prod", "system-container", "pimox", "140")
+	want := "proxmox-pbs-guest:system-container:pimox:140:pulse-v4-prod"
+	if got != want {
+		t.Fatalf("ProxmoxPBSGuestContinuityKey() = %q, want %q", got, want)
+	}
+
+	if got := ProxmoxPBSGuestContinuityKey("140", "system-container", "pimox", "140"); got != "" {
+		t.Fatalf("numeric-only label continuity key = %q, want empty", got)
+	}
+
+	point := RecoveryPoint{
+		ID:       "pbs-backup-140",
+		Provider: ProviderProxmoxPBS,
+		SubjectRef: &ExternalRef{
+			Type:      "proxmox-lxc",
+			Namespace: "pbs-docker",
+			Name:      "pulse-v4-prod",
+			ID:        "140",
+		},
+		Details: map[string]any{
+			"backupType": "ct",
+			"comment":    "pulse-v4-prod, pi, 140",
+			"namespace":  "pimox",
+			"vmid":       "140",
+		},
+	}
+
+	if got := ProxmoxPBSGuestContinuityKeyForPoint(point); got != want {
+		t.Fatalf("ProxmoxPBSGuestContinuityKeyForPoint() = %q, want %q", got, want)
 	}
 }
 

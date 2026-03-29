@@ -269,6 +269,19 @@ dependency order. When a persisted `recovery.db` predates columns such as
 running query paths that reference them, so opening a legacy store backfills
 cleanly instead of returning `500` from `/api/recovery/points` or
 `/api/recovery/rollups` during schema initialization.
+That same recovery-store key boundary must keep `subject_key` genuinely stable
+across ingest generations. Protected rollups must not split one Proxmox guest
+into stale and fresh rows just because older points stored legacy linked IDs
+like `lxc-*` or raw source IDs while newer points carry hashed canonical
+resource IDs, and proxmox guest external keys must ignore display-name churn so
+renaming a backup comment does not fork the protected inventory from recent
+event history. That same store-owned continuity contract also applies when
+Proxmox PBS guest points temporarily lose unified-resource linkage or drift
+between historical PBS namespaces: if recovery history already proves one
+canonical linked guest identity for the same friendly label, guest type, and
+VMID/CTID, the store must relink later unresolved PBS points and backfill older
+split rows onto that canonical protected item instead of leaving protected
+inventory freshness to disagree with recovery events.
 That same hook-boundary normalization also owns the runtime recovery display
 model. Canonical recovery points and rollups must expose `display.itemLabel`
 and `display.itemType` to recovery consumers, while legacy transport fields

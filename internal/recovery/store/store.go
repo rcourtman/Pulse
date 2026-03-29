@@ -39,6 +39,241 @@ type Store struct {
 	lastPrune time.Time
 }
 
+type historicalSubjectIdentity struct {
+	subjectResourceID string
+	subjectRef        *recovery.ExternalRef
+	tsMs              int64
+}
+
+func cloneExternalRef(ref *recovery.ExternalRef) *recovery.ExternalRef {
+	if ref == nil {
+		return nil
+	}
+	cloned := &recovery.ExternalRef{
+		Type:      strings.TrimSpace(ref.Type),
+		Namespace: strings.TrimSpace(ref.Namespace),
+		Name:      strings.TrimSpace(ref.Name),
+		UID:       strings.TrimSpace(ref.UID),
+		ID:        strings.TrimSpace(ref.ID),
+		Class:     strings.TrimSpace(ref.Class),
+	}
+	if len(ref.Extra) > 0 {
+		cloned.Extra = make(map[string]string, len(ref.Extra))
+		for k, v := range ref.Extra {
+			cloned.Extra[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		}
+	}
+	return cloned
+}
+
+func pointLatestMillis(p recovery.RecoveryPoint) int64 {
+	if p.CompletedAt != nil {
+		return p.CompletedAt.UTC().UnixMilli()
+	}
+	if p.StartedAt != nil {
+		return p.StartedAt.UTC().UnixMilli()
+	}
+	return 0
+}
+
+func isLikelyUnresolvedProxmoxPBSGuestRef(ref *recovery.ExternalRef) bool {
+	if ref == nil {
+		return true
+	}
+	if strings.TrimSpace(ref.Class) != "" {
+		return false
+	}
+
+	id := strings.TrimSpace(ref.ID)
+	if id == "" {
+		return true
+	}
+	if strings.Contains(id, ":") {
+		return false
+	}
+	if strings.HasPrefix(id, "vm-") || strings.HasPrefix(id, "system-container-") || strings.HasPrefix(id, "lxc-") {
+		return false
+	}
+	return true
+}
+
+func historicalSubjectIdentityFromPoint(p recovery.RecoveryPoint) (string, historicalSubjectIdentity) {
+	key := recovery.ProxmoxPBSGuestContinuityKeyForPoint(p)
+	if key == "" {
+		return "", historicalSubjectIdentity{}
+	}
+	rid := strings.TrimSpace(p.SubjectResourceID)
+	if rid == "" {
+		return "", historicalSubjectIdentity{}
+	}
+	return key, historicalSubjectIdentity{
+		subjectResourceID: rid,
+		subjectRef:        cloneExternalRef(p.SubjectRef),
+		tsMs:              pointLatestMillis(p),
+	}
+}
+
+func adoptHistoricalProxmoxPBSGuestIdentity(
+	p *recovery.RecoveryPoint,
+	identities map[string]historicalSubjectIdentity,
+	looseIdentities map[string]historicalSubjectIdentity,
+) {
+	if p == nil || (len(identities) == 0 && len(looseIdentities) == 0) {
+		return
+	}
+	if strings.TrimSpace(string(p.Provider)) != string(recovery.ProviderProxmoxPBS) {
+		return
+	}
+
+	key := recovery.ProxmoxPBSGuestContinuityKeyForPoint(*p)
+	identity, ok := identities[key]
+	if !ok {
+		idx := recovery.DeriveIndex(*p)
+		looseKey := recovery.ProxmoxPBSGuestLooseContinuityKey(
+			idx.SubjectLabel,
+			idx.ItemType,
+			idx.EntityIDLabel,
+		)
+		identity, ok = looseIdentities[looseKey]
+	}
+	if !ok || strings.TrimSpace(identity.subjectResourceID) == "" {
+		return
+	}
+	if strings.TrimSpace(p.SubjectResourceID) != "" && !isLikelyUnresolvedProxmoxPBSGuestRef(p.SubjectRef) {
+		return
+	}
+
+	p.SubjectResourceID = identity.subjectResourceID
+	if identity.subjectRef != nil {
+		p.SubjectRef = cloneExternalRef(identity.subjectRef)
+	}
+}
+
+func (s *Store) loadHistoricalProxmoxPBSGuestIdentities(ctx context.Context) (map[string]historicalSubjectIdentity, map[string]historicalSubjectIdentity, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			subject_resource_id,
+			subject_ref_json,
+			subject_label,
+			item_type,
+			namespace_label,
+			entity_id_label,
+			completed_at_ms,
+			started_at_ms,
+			updated_at_ms
+		FROM recovery_points
+		WHERE provider = 'proxmox-pbs'
+		  AND subject_resource_id IS NOT NULL
+		  AND TRIM(subject_resource_id) != ''
+	`)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	identities := make(map[string]historicalSubjectIdentity)
+	looseCandidates := make(map[string][]historicalSubjectIdentity)
+	for rows.Next() {
+		var (
+			subjectRID    string
+			subjectRefRaw sql.NullString
+			subjectLabel  sql.NullString
+			itemType      sql.NullString
+			namespace     sql.NullString
+			entityID      sql.NullString
+			completedAtMs sql.NullInt64
+			startedAtMs   sql.NullInt64
+			updatedAtMs   sql.NullInt64
+		)
+		if err := rows.Scan(
+			&subjectRID,
+			&subjectRefRaw,
+			&subjectLabel,
+			&itemType,
+			&namespace,
+			&entityID,
+			&completedAtMs,
+			&startedAtMs,
+			&updatedAtMs,
+		); err != nil {
+			return nil, nil, err
+		}
+
+		key := recovery.ProxmoxPBSGuestContinuityKey(
+			subjectLabel.String,
+			itemType.String,
+			namespace.String,
+			entityID.String,
+		)
+		if key == "" {
+			continue
+		}
+		looseKey := recovery.ProxmoxPBSGuestLooseContinuityKey(
+			subjectLabel.String,
+			itemType.String,
+			entityID.String,
+		)
+
+		var subjectRef recovery.ExternalRef
+		_ = unmarshalJSON(subjectRefRaw, &subjectRef)
+		var refPtr *recovery.ExternalRef
+		if strings.TrimSpace(subjectRef.Type) != "" {
+			refPtr = &subjectRef
+		}
+
+		tsMs := updatedAtMs.Int64
+		if completedAtMs.Valid && completedAtMs.Int64 > tsMs {
+			tsMs = completedAtMs.Int64
+		}
+		if startedAtMs.Valid && startedAtMs.Int64 > tsMs {
+			tsMs = startedAtMs.Int64
+		}
+
+		current, exists := identities[key]
+		if exists && current.tsMs > tsMs {
+			continue
+		}
+		identities[key] = historicalSubjectIdentity{
+			subjectResourceID: strings.TrimSpace(subjectRID),
+			subjectRef:        cloneExternalRef(refPtr),
+			tsMs:              tsMs,
+		}
+		if looseKey != "" {
+			looseCandidates[looseKey] = append(looseCandidates[looseKey], historicalSubjectIdentity{
+				subjectResourceID: strings.TrimSpace(subjectRID),
+				subjectRef:        cloneExternalRef(refPtr),
+				tsMs:              tsMs,
+			})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+
+	looseIdentities := make(map[string]historicalSubjectIdentity)
+	for key, candidates := range looseCandidates {
+		seen := make(map[string]historicalSubjectIdentity)
+		for _, candidate := range candidates {
+			rid := strings.TrimSpace(candidate.subjectResourceID)
+			if rid == "" {
+				continue
+			}
+			current, exists := seen[rid]
+			if !exists || current.tsMs < candidate.tsMs {
+				seen[rid] = candidate
+			}
+		}
+		if len(seen) != 1 {
+			continue
+		}
+		for _, candidate := range seen {
+			looseIdentities[key] = candidate
+		}
+	}
+
+	return identities, looseIdentities, nil
+}
+
 func ensureOwnerOnlyDir(dir string) error {
 	if err := os.MkdirAll(dir, privateDirPerm); err != nil {
 		return err
@@ -124,6 +359,9 @@ func Open(dbPath string) (*Store, error) {
 	// Best-effort backfill for deployments that wrote points before index columns existed.
 	// This should never block startup; missing backfills only affect filter UX.
 	_ = store.BackfillIndex(context.Background())
+	// Best-effort backfill for PBS guest rows that predate canonical historical continuity.
+	// This should never block startup; missing backfills only affect protected-item accuracy.
+	_ = store.BackfillHistoricalProxmoxPBSGuestIdentity(context.Background())
 	if err := hardenSQLiteArtifacts(dbPath); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("failed to secure recovery db files: %w", err)
@@ -334,14 +572,82 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 		ctx = context.Background()
 	}
 
-	// Fast path: resource-linked keys can be derived directly in SQL.
-	_, _ = s.db.ExecContext(ctx, `
-		UPDATE recovery_points
-		SET subject_key = 'res:' || subject_resource_id
-		WHERE (subject_key IS NULL OR subject_key = '')
-		  AND subject_resource_id IS NOT NULL
-		  AND TRIM(subject_resource_id) != ''
+	// Subject keys own rollup truth, so proxmox guest rows need canonical Go-side normalization
+	// even when a subject key already exists in the DB.
+	const maxBackfillRows = 5000
+
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, provider, subject_key, subject_resource_id, subject_ref_json
+		FROM recovery_points
+		WHERE
+			(subject_key IS NULL OR subject_key = '') OR
+			provider IN ('proxmox-pve', 'proxmox-pbs')
+		LIMIT `+fmt.Sprint(maxBackfillRows)+`
 	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type subjectRow struct {
+		id         string
+		provider   string
+		subjectKey sql.NullString
+		rid        string
+		refRaw     sql.NullString
+	}
+
+	subjectItems := make([]subjectRow, 0, 256)
+	for rows.Next() {
+		var item subjectRow
+		if err := rows.Scan(&item.id, &item.provider, &item.subjectKey, &item.rid, &item.refRaw); err != nil {
+			return err
+		}
+		subjectItems = append(subjectItems, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if len(subjectItems) > 0 {
+		tx, err := s.db.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		stmt, err := tx.PrepareContext(ctx, "UPDATE recovery_points SET subject_key = ? WHERE id = ?")
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+
+		for _, item := range subjectItems {
+			var ref recovery.ExternalRef
+			_ = unmarshalJSON(item.refRaw, &ref) // best-effort
+			var refPtr *recovery.ExternalRef
+			if strings.TrimSpace(ref.Type) != "" {
+				refPtr = &ref
+			}
+
+			key := recovery.SubjectKey(
+				recovery.Provider(strings.TrimSpace(item.provider)),
+				strings.TrimSpace(item.rid),
+				refPtr,
+			)
+			if strings.TrimSpace(key) == "" || strings.TrimSpace(item.subjectKey.String) == key {
+				continue
+			}
+			if _, err := stmt.ExecContext(ctx, key, item.id); err != nil {
+				return err
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+
 	_, _ = s.db.ExecContext(ctx, `
 		UPDATE recovery_points
 		SET repository_key = 'res:' || repository_resource_id
@@ -350,8 +656,7 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 		  AND TRIM(repository_resource_id) != ''
 	`)
 
-	// External refs require JSON decode + hashing in Go. Keep it bounded.
-	const maxBackfillRows = 2000
+	// External repository refs require JSON decode + hashing in Go. Keep it bounded.
 
 	backfillExternal := func(selectSQL string, targetCol string, keyFn func(provider recovery.Provider, rid string, ref *recovery.ExternalRef) string) error {
 		rows, err := s.db.QueryContext(ctx, selectSQL)
@@ -416,19 +721,6 @@ func (s *Store) BackfillKeys(ctx context.Context) error {
 		}
 		return nil
 	}
-
-	_ = backfillExternal(
-		`
-			SELECT id, provider, subject_resource_id, subject_ref_json
-			FROM recovery_points
-			WHERE (subject_key IS NULL OR subject_key = '')
-			LIMIT `+fmt.Sprint(maxBackfillRows)+`
-		`,
-		"subject_key",
-		func(provider recovery.Provider, rid string, ref *recovery.ExternalRef) string {
-			return recovery.SubjectKey(provider, rid, ref)
-		},
-	)
 
 	_ = backfillExternal(
 		`
@@ -553,6 +845,11 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 
 	s.maybePrune(ctx)
 
+	proxmoxPBSIdentities, proxmoxPBSLooseIdentities, err := s.loadHistoricalProxmoxPBSGuestIdentities(ctx)
+	if err != nil {
+		return err
+	}
+
 	nowMs := time.Now().UTC().UnixMilli()
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -613,6 +910,8 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 	defer stmt.Close()
 
 	for _, p := range points {
+		adoptHistoricalProxmoxPBSGuestIdentity(&p, proxmoxPBSIdentities, proxmoxPBSLooseIdentities)
+
 		id := strings.TrimSpace(p.ID)
 		if id == "" {
 			continue
@@ -645,7 +944,7 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 
 		subjectRID := strings.TrimSpace(p.SubjectResourceID)
 		repoRID := strings.TrimSpace(p.RepositoryResourceID)
-		subjectKey := recovery.SubjectKey(p.Provider, subjectRID, p.SubjectRef)
+		subjectKey := recovery.SubjectKeyForPoint(p)
 		repoKey := recovery.RepositoryKey(p.Provider, repoRID, p.RepositoryRef)
 		idx := recovery.DeriveIndex(p)
 
@@ -687,6 +986,216 @@ func (s *Store) UpsertPoints(ctx context.Context, points []recovery.RecoveryPoin
 			strings.TrimSpace(idx.DetailsSummary),
 			nowMs,
 			nowMs,
+		); err != nil {
+			return err
+		}
+
+		if key, identity := historicalSubjectIdentityFromPoint(p); key != "" {
+			current, exists := proxmoxPBSIdentities[key]
+			if !exists || current.tsMs <= identity.tsMs {
+				proxmoxPBSIdentities[key] = identity
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// BackfillHistoricalProxmoxPBSGuestIdentity relinks older or unresolved PBS guest rows to the
+// strongest known linked identity when the same namespace/type/vmid/label has already been seen.
+func (s *Store) BackfillHistoricalProxmoxPBSGuestIdentity(ctx context.Context) error {
+	if err := s.ensureInitialized(); err != nil {
+		return err
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	identities, looseIdentities, err := s.loadHistoricalProxmoxPBSGuestIdentities(ctx)
+	if err != nil {
+		return err
+	}
+	if len(identities) == 0 && len(looseIdentities) == 0 {
+		return nil
+	}
+
+	const maxBackfillRows = 5000
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT
+			id, provider, kind, mode, outcome,
+			subject_resource_id, repository_resource_id,
+			subject_ref_json, repository_ref_json, details_json,
+			subject_label, item_type, namespace_label, entity_id_label
+		FROM recovery_points
+		WHERE provider = 'proxmox-pbs'
+		LIMIT `+fmt.Sprint(maxBackfillRows)+`
+	`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type item struct {
+		id             string
+		provider       string
+		kind           string
+		mode           string
+		outcome        string
+		subjectRID     sql.NullString
+		repositoryRID  sql.NullString
+		subjectRefRaw  sql.NullString
+		repositoryRaw  sql.NullString
+		detailsRaw     sql.NullString
+		subjectLabel   sql.NullString
+		itemType       sql.NullString
+		namespaceLabel sql.NullString
+		entityIDLabel  sql.NullString
+	}
+
+	items := make([]item, 0, 256)
+	for rows.Next() {
+		var r item
+		if err := rows.Scan(
+			&r.id,
+			&r.provider,
+			&r.kind,
+			&r.mode,
+			&r.outcome,
+			&r.subjectRID,
+			&r.repositoryRID,
+			&r.subjectRefRaw,
+			&r.repositoryRaw,
+			&r.detailsRaw,
+			&r.subjectLabel,
+			&r.itemType,
+			&r.namespaceLabel,
+			&r.entityIDLabel,
+		); err != nil {
+			return err
+		}
+		items = append(items, r)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(items) == 0 {
+		return nil
+	}
+
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		UPDATE recovery_points
+		SET
+			subject_key = ?,
+			subject_resource_id = ?,
+			subject_ref_json = ?,
+			subject_label = ?,
+			subject_type = ?,
+			item_type = ?,
+			is_workload = ?,
+			cluster_label = ?,
+			node_host_label = ?,
+			namespace_label = ?,
+			entity_id_label = ?,
+			repository_label = ?,
+			details_summary = ?
+		WHERE id = ?
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, item := range items {
+		key := recovery.ProxmoxPBSGuestContinuityKey(
+			item.subjectLabel.String,
+			item.itemType.String,
+			item.namespaceLabel.String,
+			item.entityIDLabel.String,
+		)
+		identity, ok := identities[key]
+		if !ok {
+			looseKey := recovery.ProxmoxPBSGuestLooseContinuityKey(
+				item.subjectLabel.String,
+				item.itemType.String,
+				item.entityIDLabel.String,
+			)
+			identity, ok = looseIdentities[looseKey]
+		}
+		if !ok || strings.TrimSpace(identity.subjectResourceID) == "" {
+			continue
+		}
+
+		var subjectRef recovery.ExternalRef
+		_ = unmarshalJSON(item.subjectRefRaw, &subjectRef)
+		var subjectRefPtr *recovery.ExternalRef
+		if strings.TrimSpace(subjectRef.Type) != "" {
+			subjectRefPtr = &subjectRef
+		}
+
+		currentRID := strings.TrimSpace(item.subjectRID.String)
+		if currentRID == identity.subjectResourceID && !isLikelyUnresolvedProxmoxPBSGuestRef(subjectRefPtr) {
+			continue
+		}
+
+		var repositoryRef recovery.ExternalRef
+		_ = unmarshalJSON(item.repositoryRaw, &repositoryRef)
+		var repositoryRefPtr *recovery.ExternalRef
+		if strings.TrimSpace(repositoryRef.Type) != "" {
+			repositoryRefPtr = &repositoryRef
+		}
+
+		var details map[string]any
+		_ = unmarshalJSON(item.detailsRaw, &details)
+
+		p := recovery.RecoveryPoint{
+			ID:                   strings.TrimSpace(item.id),
+			Provider:             recovery.Provider(strings.TrimSpace(item.provider)),
+			Kind:                 recovery.Kind(strings.TrimSpace(item.kind)),
+			Mode:                 recovery.Mode(strings.TrimSpace(item.mode)),
+			Outcome:              recovery.Outcome(strings.TrimSpace(item.outcome)),
+			SubjectResourceID:    identity.subjectResourceID,
+			RepositoryResourceID: strings.TrimSpace(item.repositoryRID.String),
+			SubjectRef:           cloneExternalRef(identity.subjectRef),
+			RepositoryRef:        repositoryRefPtr,
+			Details:              details,
+		}
+
+		idx := recovery.DeriveIndex(p)
+		isWorkload := 0
+		if idx.IsWorkload {
+			isWorkload = 1
+		}
+
+		subjectRefJSON, err := marshalJSON(p.SubjectRef)
+		if err != nil {
+			return err
+		}
+
+		if _, err := stmt.ExecContext(
+			ctx,
+			recovery.SubjectKeyForPoint(p),
+			p.SubjectResourceID,
+			nullStringToAny(subjectRefJSON),
+			strings.TrimSpace(idx.SubjectLabel),
+			strings.TrimSpace(idx.SubjectType),
+			strings.TrimSpace(idx.ItemType),
+			isWorkload,
+			strings.TrimSpace(idx.ClusterLabel),
+			strings.TrimSpace(idx.NodeHostLabel),
+			strings.TrimSpace(idx.NamespaceLabel),
+			strings.TrimSpace(idx.EntityIDLabel),
+			strings.TrimSpace(idx.RepositoryLabel),
+			strings.TrimSpace(idx.DetailsSummary),
+			p.ID,
 		); err != nil {
 			return err
 		}

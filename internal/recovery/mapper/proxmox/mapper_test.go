@@ -317,3 +317,59 @@ func TestFromPBSBackups_WithCandidates(t *testing.T) {
 		t.Error("expected SubjectResourceID to be set when candidate matches")
 	}
 }
+
+func TestFromPBSBackups_DisambiguatesCandidatesByNamespace(t *testing.T) {
+	backups := []models.PBSBackup{
+		{
+			ID:         "pbs-backup-minipc-ct-112",
+			VMID:       "112",
+			Instance:   "pbs-docker",
+			Namespace:  "minipc",
+			Datastore:  "main",
+			BackupType: "ct",
+			BackupTime: time.Date(2026, 3, 29, 3, 3, 31, 0, time.UTC),
+			Comment:    "debian-go",
+		},
+	}
+
+	candidatesByKey := map[string][]GuestCandidate{
+		"ct:112": {
+			{
+				SourceID:      "system-container-fb42a70d89bd20a6",
+				ResourceType:  unifiedresources.ResourceTypeSystemContainer,
+				DisplayName:   "debian-go",
+				InstanceName:  "delly",
+				NodeName:      "minipc",
+				VMID:          112,
+				BackupTypeKey: "ct",
+			},
+			{
+				SourceID:      "system-container-deadbeefdeadbeef",
+				ResourceType:  unifiedresources.ResourceTypeSystemContainer,
+				DisplayName:   "other-guest",
+				InstanceName:  "other",
+				NodeName:      "pve-b",
+				VMID:          112,
+				BackupTypeKey: "ct",
+			},
+		},
+	}
+
+	result := FromPBSBackups(backups, candidatesByKey)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 point, got %d", len(result))
+	}
+
+	expectedRID := unifiedresources.SourceSpecificID(
+		unifiedresources.ResourceTypeSystemContainer,
+		unifiedresources.SourceProxmox,
+		"system-container-fb42a70d89bd20a6",
+	)
+
+	if got := result[0].SubjectResourceID; got != expectedRID {
+		t.Fatalf("SubjectResourceID = %q, want %q", got, expectedRID)
+	}
+	if result[0].SubjectRef == nil || result[0].SubjectRef.Name != "debian-go" {
+		t.Fatalf("SubjectRef = %#v, want linked debian-go guest", result[0].SubjectRef)
+	}
+}
