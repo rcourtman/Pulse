@@ -211,7 +211,6 @@ header .logout-btn:hover,
   font-weight: 600;
   letter-spacing: 0.05em;
   color: var(--ink-soft);
-  text-transform: uppercase;
 }
 
 .portal-shell-head-kicker,
@@ -274,7 +273,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .portal-shell-head-summary {
@@ -303,7 +301,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .portal-command-strip,
@@ -346,7 +343,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.05em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -434,7 +430,7 @@ header .logout-btn:hover,
   color: var(--ink);
 }
 
-.portal-shell-nav-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-muted); white-space: nowrap; }
+.portal-shell-nav-badge { display: inline-flex; align-items: center; min-height: 20px; padding: 0 7px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: var(--ink-muted); white-space: nowrap; }
 
 .portal-shell-nav-copy {
   display: block;
@@ -541,7 +537,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -667,7 +662,11 @@ header .logout-btn:hover,
 
 .workspace-actions {
   justify-content: flex-end;
-}
+
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  align-items: center;}
 
 .workspace-actions form {
   margin: 0;
@@ -918,7 +917,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1061,7 +1059,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1307,7 +1304,6 @@ header .logout-btn:hover,
 .portal-support-brief-card strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent-strong);
 }
 
@@ -1396,7 +1392,6 @@ header .logout-btn:hover,
 .portal-support-runbook-brief-card strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent-strong);
 }
 
@@ -1422,7 +1417,6 @@ header .logout-btn:hover,
 .portal-support-runbook-section-title {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1441,7 +1435,6 @@ header .logout-btn:hover,
 .portal-support-handoff-note strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1529,7 +1522,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .account-stage-header-actions {
@@ -1597,7 +1589,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1860,7 +1851,6 @@ header .logout-btn:hover,
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1884,7 +1874,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -1939,7 +1928,6 @@ header .logout-btn:hover,
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2013,7 +2001,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .access-task-button.is-active {
@@ -2184,7 +2171,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2265,7 +2251,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .access-inline-role-badge {
@@ -2280,7 +2265,6 @@ header .logout-btn:hover,
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -2311,7 +2295,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .access-list-message {
@@ -2363,7 +2346,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   cursor: pointer;
 }
 
@@ -2402,7 +2384,6 @@ header .logout-btn:hover,
 .access-policy-row strong {
   font-size: 12px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2524,7 +2505,6 @@ header .logout-btn:hover,
 .billing-inline-support-point strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2634,7 +2614,6 @@ header .logout-btn:hover,
 .billing-empty-intro-item strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--accent-strong);
 }
 
@@ -2670,7 +2649,6 @@ header .logout-btn:hover,
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2761,7 +2739,6 @@ header .logout-btn:hover,
   border-radius: 8px;
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .billing-panel {
@@ -2817,7 +2794,6 @@ header .logout-btn:hover,
 .billing-empty-point strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2883,7 +2859,6 @@ header .logout-btn:hover,
 .billing-empty-flow strong {
   font-size: 11px;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-muted);
 }
 
@@ -2991,7 +2966,6 @@ header .logout-btn:hover,
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .badge-role,
@@ -3157,7 +3131,7 @@ header .logout-btn:hover,
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 1024px) {
   header {
     padding: 14px 16px;
     align-items: flex-start;
@@ -3174,6 +3148,7 @@ header .logout-btn:hover,
   .portal-support-route-grid {
     grid-template-columns: 1fr;
   }
+  .portal-shell-layout { display: flex; flex-direction: column; height: auto; min-height: 100vh; }
 
   .portal-support-layout,
   .portal-support-runbook-grid {
