@@ -90,30 +90,6 @@ function suspendedWorkspaceSectionChipLabel(count: number): string {
   return count === 1 ? '1 workspace suspended' : String(count) + ' workspaces suspended';
 }
 
-function overviewNavBadgeLabel(hosted: boolean, attentionCount: number, readyCount: number): string {
-  if (!hosted) return 'Billing available';
-  if (attentionCount > 0) return reviewWorkspaceChipLabel(attentionCount);
-  return readyWorkspaceChipLabel(readyCount);
-}
-
-function workspacesNavBadgeLabel(hosted: boolean, totalWorkspaces: number): string {
-  if (!hosted) return 'Unavailable';
-  return workspaceCountLabel(totalWorkspaces);
-}
-
-function accessNavBadgeLabel(hosted: boolean, canManage: boolean): string {
-  if (!hosted) return 'Unavailable';
-  return canManage ? 'Manage access' : 'View roster';
-}
-
-function billingNavBadgeLabel(hostedBillingCount: number): string {
-  return hostedBillingCount > 0 ? 'Hosted billing' : 'Self-hosted billing';
-}
-
-function supportNavBadgeLabel(): string {
-  return 'Escalation only';
-}
-
 function billingHeaderChipLabels(hostedBillingCount: number, showSelfHostedCommercial: boolean): string[] {
   return [
     hostedBillingCount > 0 ? 'Hosted billing attached' : 'No hosted billing attached',
@@ -347,36 +323,23 @@ function accountContextRoleMeta(account: PortalAccountSummary): string {
 }
 
 function accountContextLeadCopy(account: PortalAccountSummary): string {
-  var accountPrefix = account.kind === 'msp' ? 'Hosted workspace account' : 'Hosted account';
   if (account.can_manage) {
-    return accountPrefix + (account.has_billing
-      ? ' for workspace access, access control, and billing.'
-      : ' for workspace access and access control.');
+    return account.has_billing
+      ? 'Manage workspaces, access, and billing for this account.'
+      : 'Manage workspaces and access for this account.';
   }
-  return accountPrefix + (account.has_billing
-    ? ' where you can open workspaces and review who already has access. An owner or admin handles access changes and billing.'
-    : ' where you can open workspaces and review who already has access. An owner or admin handles account changes.');
-}
-
-function accountContextAccessSummary(account: PortalAccountSummary): string {
-  return account.can_manage ? 'Manage access' : 'View roster';
-}
-
-function accountContextBillingSummary(account: PortalAccountSummary): string {
-  if (!account.has_billing) return 'Not attached';
-  return account.can_manage ? 'Hosted billing attached' : 'Owner/admin required';
+  return account.has_billing
+    ? 'Open workspaces and review access here. Billing and account changes require an owner or admin.'
+    : 'Open workspaces and review access here. Account changes require an owner or admin.';
 }
 
 function renderAccountContextStrip(account: PortalAccountSummary): string {
-  var workspaceLabel = workspaceCountLabel((account.workspaces || []).length);
-  var billingLabel = accountContextBillingSummary(account);
-
   return (
     '<section class="portal-account-context">' +
       '<div class="portal-account-context-copy">' +
         '<div class="portal-account-context-meta">' +
           '<span class="account-eyebrow">' + escapeHTML(accountKindLabel(account)) + '</span>' +
-          '<span class="portal-account-context-separator">/</span>' +
+          '<span class="portal-account-context-separator">•</span>' +
           '<span class="portal-account-context-access">' + escapeHTML(accountContextRoleMeta(account)) + '</span>' +
         '</div>' +
         '<div class="portal-account-context-row portal-account-context-row-title">' +
@@ -384,68 +347,99 @@ function renderAccountContextStrip(account: PortalAccountSummary): string {
         '</div>' +
         '<p>' + escapeHTML(accountContextLeadCopy(account)) + '</p>' +
       '</div>' +
-      '<div class="portal-account-context-summary">' +
-        '<div class="portal-account-context-stat">' +
-          '<span>Access</span>' +
-          '<strong>' + escapeHTML(accountContextAccessSummary(account)) + '</strong>' +
+    '</section>'
+  );
+}
+
+function renderPortalContextStrip(accounts: PortalAccountSummary[], showSelfHostedCommercial: boolean): string {
+  if (accounts.length === 1) {
+    return renderAccountContextStrip(accounts[0]);
+  }
+  if (accounts.length > 1) {
+    return (
+      '<section class="portal-account-context">' +
+        '<div class="portal-account-context-copy">' +
+          '<div class="portal-account-context-meta">' +
+            '<span class="account-eyebrow">Pulse Account</span>' +
+            '<span class="portal-account-context-separator">•</span>' +
+            '<span class="portal-account-context-access">' + escapeHTML(accounts.length === 1 ? '1 hosted account' : String(accounts.length) + ' hosted accounts') + '</span>' +
+          '</div>' +
+          '<div class="portal-account-context-row portal-account-context-row-title">' +
+            '<h2>Accounts</h2>' +
+          '</div>' +
+          '<p>Open workspaces, review access, and handle billing from one account surface.</p>' +
         '</div>' +
-        '<div class="portal-account-context-stat">' +
-          '<span>Workspaces</span>' +
-          '<strong>' + escapeHTML(workspaceLabel) + '</strong>' +
+      '</section>'
+    );
+  }
+  return (
+    '<section class="portal-account-context">' +
+      '<div class="portal-account-context-copy">' +
+        '<div class="portal-account-context-meta">' +
+          '<span class="account-eyebrow">Billing account</span>' +
+          '<span class="portal-account-context-separator">•</span>' +
+          '<span class="portal-account-context-access">' + escapeHTML(showSelfHostedCommercial ? 'Self-hosted commercial' : 'Commercial account') + '</span>' +
         '</div>' +
-        '<div class="portal-account-context-stat">' +
-          '<span>Billing</span>' +
-          '<strong>' + escapeHTML(billingLabel) + '</strong>' +
+        '<div class="portal-account-context-row portal-account-context-row-title">' +
+          '<h2>Billing</h2>' +
         '</div>' +
+        '<p>Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.</p>' +
       '</div>' +
     '</section>'
   );
 }
 
-function shellSectionButton(section: PortalShellSection, activeSection: PortalShellSection, title: string, badge?: string): string {
-  var badgeHTML = badge
-    ? '<span class="portal-shell-nav-badge">' + escapeHTML(badge) + '</span>'
-    : '';
+interface ShellNavEntry {
+  section: PortalShellSection;
+  title: string;
+}
+
+function visibleShellSections(bootstrap: PortalBootstrapData): ShellNavEntry[] {
+  var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
+  var hosted = hasHostedAccounts(accounts);
+  var showSelfHostedCommercial = hasSelfHostedCommercial(bootstrap);
+  var hostedBillingCount = 0;
+  for (var i = 0; i < accounts.length; i += 1) {
+    if (accounts[i].has_billing) {
+      hostedBillingCount += 1;
+    }
+  }
+
+  var sections: ShellNavEntry[] = [];
+  if (hosted) {
+    sections.push({ section: 'workspaces', title: 'Workspaces' });
+    sections.push({ section: 'access', title: 'Access' });
+  }
+  if (hostedBillingCount > 0 || showSelfHostedCommercial) {
+    sections.push({ section: 'billing', title: 'Billing' });
+  }
+  sections.push({ section: 'support', title: 'Support' });
+  if (hosted) {
+    sections.push({ section: 'overview', title: 'Overview' });
+  }
+  return sections;
+}
+
+function shellSectionButton(section: PortalShellSection, activeSection: PortalShellSection, title: string): string {
   return (
     '<button class="portal-shell-nav-link' + (activeSection === section ? ' active' : '') + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '">' +
       '<span class="portal-shell-nav-row">' +
         '<span class="portal-shell-nav-label">' + title + '</span>' +
-        badgeHTML +
       '</span>' +
     '</button>'
   );
 }
 
-function renderShellNavigation(accounts: PortalAccountSummary[], activeSection: PortalShellSection): string {
-  var hosted = hasHostedAccounts(accounts);
-  var workspaces = collectWorkspaces(accounts);
-  var totalWorkspaces = workspaces.length;
-  var readyWorkspaces = countReadyWorkspaces(workspaces);
-  var attentionCount = attentionWorkspaces(workspaces).length;
-  var hostedBillingCount = 0;
-  var canManage = false;
-  for (var i = 0; i < accounts.length; i += 1) {
-    if (accounts[i].can_manage) {
-      canManage = true;
-    }
-    if (accounts[i].has_billing) {
-      hostedBillingCount += 1;
-    }
-  }
+function renderShellNavigation(bootstrap: PortalBootstrapData, activeSection: PortalShellSection): string {
+  var sections = visibleShellSections(bootstrap);
   return (
-    '<aside class="portal-shell-nav" aria-label="Pulse Account sections">' +
-      '<div class="portal-shell-nav-header">' +
-        '<div class="portal-shell-nav-eyebrow">Pulse Account</div>' +
-        '<div class="portal-shell-nav-title">' + (hosted ? 'Account' : 'Billing account') + '</div>' +
-      '</div>' +
+    '<nav class="portal-shell-nav" aria-label="Pulse Account sections">' +
       '<div class="portal-shell-nav-group">' +
-        shellSectionButton('overview', activeSection, 'Overview', overviewNavBadgeLabel(hosted, attentionCount, readyWorkspaces)) +
-        shellSectionButton('workspaces', activeSection, 'Workspaces', workspacesNavBadgeLabel(hosted, totalWorkspaces)) +
-        shellSectionButton('access', activeSection, 'Access', accessNavBadgeLabel(hosted, canManage)) +
-        shellSectionButton('billing', activeSection, 'Billing', billingNavBadgeLabel(hostedBillingCount)) +
-        shellSectionButton('support', activeSection, 'Support', supportNavBadgeLabel()) +
+        sections.map(function(entry) {
+          return shellSectionButton(entry.section, activeSection, entry.title);
+        }).join('') +
       '</div>' +
-    '</aside>'
+    '</nav>'
   );
 }
 
@@ -845,7 +839,7 @@ function renderShellOverviewSection(context: ShellViewContext): string {
         '<div>' +
           '<div class="account-panel-kicker">Overview</div>' +
           '<h3>Current state</h3>' +
-          '<p>Hosted workspace counts and the next available action.</p>' +
+          '<p>Hosted workspace counts, current state, and the next step.</p>' +
           renderSectionContextChips(chips) +
         '</div>' +
       '</div>' +
@@ -1370,7 +1364,13 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-  var activeSection = context.activeSection || preferredPortalShellSection(context.bootstrap);
+  var shellSections = visibleShellSections(context.bootstrap);
+  var preferredSection = context.activeSection || preferredPortalShellSection(context.bootstrap);
+  var activeSection = shellSections.some(function(entry) {
+    return entry.section === preferredSection;
+  })
+    ? preferredSection
+    : (shellSections[0] ? shellSections[0].section : 'billing');
   var hostedBillingCount = accounts.filter(function(account) {
     return account.has_billing;
   }).length;
@@ -1382,108 +1382,121 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var selfHostedBillingEscalationCopy = hosted
     ? 'Escalate with the same hosted billing action or self-hosted path and the exact failed step.'
     : 'Escalate with the same self-hosted billing path and the exact failed step.';
-  var hostedContent = accounts.length
+  var workspacesContent = accounts.length
     ? accounts.map(function(account) {
       return (
         '<section class="account-surface">' +
-          '<div class="account-surface-body">' +
-            renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
-            renderAccountAccessSection(account) +
-          '</div>' +
+          renderAccountWorkspaceSection(account, context.accountAPIBasePath) +
         '</section>'
       );
     }).join('')
-    : renderNoHostedWorkspacesSection() + renderNoHostedAccessSection();
+    : renderNoHostedWorkspacesSection();
+  var accessContent = accounts.length
+    ? accounts.map(function(account) {
+      return (
+        '<section class="account-surface">' +
+          renderAccountAccessSection(account) +
+        '</section>'
+      );
+    }).join('')
+    : renderNoHostedAccessSection();
 
   return (
     '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
-      '<div class="portal-shell-layout">' +
-        renderShellNavigation(accounts, activeSection) +
-        '<div class="portal-shell-main">' +
-          (accounts.length === 1 ? renderAccountContextStrip(accounts[0]) : '') +
-          '<section class="portal-content-panel portal-content-panel-overview">' +
-            renderShellOverviewSection(context) +
-            '<div id="accounts-root">' + hostedContent + '</div>' +
-          '</section>' +
-          '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
-            '<div class="billing-header">' +
-              '<div>' +
-                '<div class="account-panel-kicker">Billing</div>' +
-                '<h2>Billing</h2>' +
-                renderSectionContextChips(billingHeaderChipLabels(hostedBillingCount, showSelfHostedCommercial)) +
-              '</div>' +
-              '<div class="billing-note">' + billingNote + '</div>' +
+      '<div class="portal-shell-main">' +
+        renderPortalContextStrip(accounts, showSelfHostedCommercial) +
+        renderShellNavigation(context.bootstrap, activeSection) +
+        (hosted
+          ? (
+            '<section class="portal-content-panel portal-content-panel-workspaces">' +
+              workspacesContent +
+            '</section>' +
+            '<section class="portal-content-panel portal-content-panel-access">' +
+              accessContent +
+            '</section>' +
+            '<section class="portal-content-panel portal-content-panel-overview">' +
+              renderShellOverviewSection(context) +
+            '</section>'
+          )
+          : '') +
+        '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
+          '<div class="billing-header">' +
+            '<div>' +
+              '<div class="account-panel-kicker">Billing</div>' +
+              '<h2>Billing</h2>' +
+              renderSectionContextChips(billingHeaderChipLabels(hostedBillingCount, showSelfHostedCommercial)) +
             '</div>' +
-            (hosted
-              ? ('<div class="billing-overview-grid">' + renderHostedBillingCards(accounts, showSelfHostedCommercial) + '</div>')
-              : '') +
-            (showSelfHostedCommercial
-              ? ('<div class="billing-shell billing-shell-idle">' +
-              '<div class="billing-shell-main">' +
-                '<div class="billing-shell-main-head">' +
-                  '<div class="account-panel-kicker">Self-hosted billing</div>' +
-                  '<h3>Pick the self-hosted job</h3>' +
-                  '<p>Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.</p>' +
-                '</div>' +
-                '<div class="billing-action-list">' +
-                  renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
-                  renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Licenses', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                  renderBillingActionRow('open-refund-billing', 'Refund requests', 'Refunds', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
-                  renderBillingActionRow('open-data-billing', 'Data and privacy', 'Privacy', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']) +
-                '</div>' +
-                '<div class="billing-inline-support">' +
-                  '<div class="account-panel-kicker">Escalation only</div>' +
-                  '<h4>Use Support only after Billing fails</h4>' +
-                  '<p>' + selfHostedBillingEscalationCopy + '</p>' +
-                  '<div class="billing-inline-support-actions">' +
-                    '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
-                    '<a class="portal-support-link" href="mailto:' +
-                    escapeAttr(context.bootstrap.support_email || '') +
-                    '">' +
-                    escapeHTML(context.bootstrap.support_email || '') +
-                    '</a>' +
-                  '</div>' +
-                '</div>' +
+            '<div class="billing-note">' + billingNote + '</div>' +
+          '</div>' +
+          (hosted
+            ? ('<div class="billing-overview-grid">' + renderHostedBillingCards(accounts, showSelfHostedCommercial) + '</div>')
+            : '') +
+          (showSelfHostedCommercial
+            ? ('<div class="billing-shell billing-shell-idle">' +
+            '<div class="billing-shell-main">' +
+              '<div class="billing-shell-main-head">' +
+                '<div class="account-panel-kicker">Self-hosted billing</div>' +
+                '<h3>Pick the self-hosted job</h3>' +
+                '<p>Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.</p>' +
               '</div>' +
-              '<div class="billing-shell-detail" id="billing-detail-shell" hidden>' +
-                renderBillingTaskPanel(
-                  'Manage subscriptions',
-                  'Open Stripe for self-hosted plan, invoice, and payment changes.',
-                  'manage-billing-panel',
-                  '<div id="manage-billing-root"></div>'
-                ) +
-                renderBillingTaskPanel(
-                  'Retrieve licenses',
-                  'Recover the latest active self-hosted license and invoice link.',
-                  'retrieve-billing-panel',
-                  '<div id="retrieve-billing-root"></div>'
-                ) +
-                renderBillingTaskPanel(
-                  'Refund requests',
-                  'Request a self-serve refund when the purchase is still eligible.',
-                  'refund-billing-panel',
-                  '<div id="refund-billing-root"></div>'
-                ) +
-                renderBillingTaskPanel(
-                  'Data and privacy',
-                  'Request export or deletion for commercial account data.',
-                  'data-billing-panel',
-                  '<div class="subsection"><div id="data-export-root"></div></div>' +
-                  '<div class="subsection"><div id="data-delete-root"></div></div>' +
-                  '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+              '<div class="billing-action-list">' +
+                renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Billing', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+                renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Licenses', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+                renderBillingActionRow('open-refund-billing', 'Refund requests', 'Refunds', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
+                renderBillingActionRow('open-data-billing', 'Data and privacy', 'Privacy', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']) +
+              '</div>' +
+              '<div class="billing-inline-support">' +
+                '<div class="account-panel-kicker">Escalation only</div>' +
+                '<h4>Use Support only after Billing fails</h4>' +
+                '<p>' + selfHostedBillingEscalationCopy + '</p>' +
+                '<div class="billing-inline-support-actions">' +
+                  '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button>' +
+                  '<a class="portal-support-link" href="mailto:' +
                   escapeAttr(context.bootstrap.support_email || '') +
                   '">' +
                   escapeHTML(context.bootstrap.support_email || '') +
-                  '</a>.</div>'
-                ) +
+                  '</a>' +
+                '</div>' +
               '</div>' +
-            '</div>')
-              : '') +
-          '</section>' +
-          '<section class="portal-content-panel portal-content-panel-support">' +
-            renderSupportSection(context) +
-          '</section>' +
-        '</div>' +
+            '</div>' +
+            '<div class="billing-shell-detail" id="billing-detail-shell" hidden>' +
+              renderBillingTaskPanel(
+                'Manage subscriptions',
+                'Open Stripe for self-hosted plan, invoice, and payment changes.',
+                'manage-billing-panel',
+                '<div id="manage-billing-root"></div>'
+              ) +
+              renderBillingTaskPanel(
+                'Retrieve licenses',
+                'Recover the latest active self-hosted license and invoice link.',
+                'retrieve-billing-panel',
+                '<div id="retrieve-billing-root"></div>'
+              ) +
+              renderBillingTaskPanel(
+                'Refund requests',
+                'Request a self-serve refund when the purchase is still eligible.',
+                'refund-billing-panel',
+                '<div id="refund-billing-root"></div>'
+              ) +
+              renderBillingTaskPanel(
+                'Data and privacy',
+                'Request export or deletion for commercial account data.',
+                'data-billing-panel',
+                '<div class="subsection"><div id="data-export-root"></div></div>' +
+                '<div class="subsection"><div id="data-delete-root"></div></div>' +
+                '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+                escapeAttr(context.bootstrap.support_email || '') +
+                '">' +
+                escapeHTML(context.bootstrap.support_email || '') +
+                '</a>.</div>'
+              ) +
+            '</div>' +
+          '</div>')
+            : '') +
+        '</section>' +
+        '<section class="portal-content-panel portal-content-panel-support">' +
+          renderSupportSection(context) +
+        '</section>' +
       '</div>' +
     '</div>'
   );

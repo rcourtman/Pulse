@@ -329,8 +329,10 @@ in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and `Overview` remains available
 as triage instead of acting as the default authenticated landing layer.
 The same account-shape runtime contract must also keep the shell navigation
-honest: unavailable hosted `Workspaces` or `Access` tasks must read as
-unavailable in the nav itself rather than implying live hosted work. `Support` follows the same
+honest: self-hosted-only accounts must drop hosted-only `Workspaces`,
+`Access`, and `Overview` tabs from the primary task row rather than implying
+live hosted work, and any shared fallback surface that still resolves there
+must render an explicit unavailable state. `Support` follows the same
 account-shape runtime contract: self-hosted-only accounts expose only the
 billing escalation path and billing-specific handoff packet, and hosted
 workspace/access escalation controls must not render when no hosted account
@@ -340,6 +342,10 @@ honest for hosted view-only roles: when `can_manage` is false, `Workspaces`,
 `Access`, and hosted `Billing` must stop advertising create, roster-mutation,
 or hosted-billing actions and must instead state that an owner or admin is
 required.
+That same typed shell contract must also keep account context quiet and
+literal: the signed-in shell should render one account-context header with the
+current account title, kind, role, and short orienting copy, not a second
+summary deck competing with the active task surface.
 The same permission contract must also drive hosted `Support`: when
 `can_manage` is false, the support shell may route the user back to
 `Workspaces`, `Access`, or `Billing` only as review and owner/admin handoff
@@ -385,6 +391,11 @@ action or state (`Manage access`, `Hosted billing attached`, `Email support`,
 generic alert labels. Support copy is part of the same typed contract:
 escalation surfaces must render short literal path/account/action wording
 instead of longer procedural prose.
+That same typed `Access` contract must also keep the idle managed roster
+structurally honest: when no remove job is active, the roster remains a
+two-column review surface for operator and role. The third action column
+appears only for the live remove-access job instead of repeating fake idle row
+state.
 That same typed portal page contract also owns favicon cache-busting: the
 rendered `<link rel="icon">` must point at the shared `/favicon.svg` asset
 through a versioned href so new portal icon revisions bypass browser cache on

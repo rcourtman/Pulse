@@ -170,10 +170,11 @@ Core rules:
     with the primary jobs a user came to do.
 16. The signed-in `Overview` must be one shell-level triage surface across the
     current account set, not a repeated per-account dashboard.
-17. When `Workspaces` or `Access` are unavailable, the tab must show an
-    explicit unavailable state that points to the right live task instead of
-    rendering blank space. The shell navigation must stay honest too: it must
-    not badge or describe unavailable hosted tasks as though they are live.
+17. Top-level navigation must stay honest to account shape. Hosted-only tasks
+    that are irrelevant to the current account should be removed from the
+    primary task row instead of rendered as fake live tabs, and any shared
+    fallback surface that still resolves there must render an explicit
+    unavailable state rather than blank space.
 18. `Access` must stay action-first: roster, invite, role change, and remove
     access are the job; view-only users may review the roster but must never
     see live controls that imply they can mutate it. The view-only roster must
@@ -283,6 +284,12 @@ Core rules:
     only accounts should land in `Billing`. `Overview` remains available as a
     precise triage surface, but it must not be the default first impression
     for authenticated users.
+43. The signed-in shell must orient the user with one quiet account-context
+    header and one flat top task row. It must not add a second summary box,
+    sidebar shell, or badge-heavy frame that competes with the active task.
+44. Idle hosted `Access` must stay a plain review roster. The third action
+    column should appear only for the active remove-access job; default and
+    role-change states should stay focused on operator identity plus role.
 
 ## Screen Model
 
@@ -311,8 +318,8 @@ Each signed-in state should render:
    The overview band remains available from navigation, but authenticated
    users should open on the first live task for the current account shape
    rather than landing here by default.
-2. account cards with role, account kind, workspace totals, and account-level
-   fleet status
+2. one quiet account-context header with account kind, role, current account
+   title, and one short orienting sentence
 3. an explicit `Workspaces` area for open, create, and lifecycle actions
 4. an explicit `Access` area for roster, invites, role changes, and removals
    `Access` copy should stay terse and task-led; the section exists to do the
@@ -330,14 +337,14 @@ Each signed-in state should render:
    routes in review-plus-owner/admin-handoff language rather than implying live
    mutation authority.
 7. explicit action groups, not anonymous menu affordances
-8. explicit unavailable-state panels for top-level tasks that are not active
-   for the current account shape
+8. explicit unavailable-state panels only where shared shell logic can still
+   resolve a task that is not live for the current account shape
 9. a compact narrow-screen task switcher that preserves task-first navigation
    without letting navigation chrome dominate the page before the active task,
    while keeping the active task visibly in-frame when the strip scrolls
-10. a compact narrow-screen account context strip that keeps account identity,
-    role, workspace count, and billing state visible without pushing the live
-    task below the fold
+10. a compact narrow-screen account context strip that keeps account identity
+    and role visible without adding a second summary deck ahead of the live
+    task
 
 ## Product-Specific Boundaries
 

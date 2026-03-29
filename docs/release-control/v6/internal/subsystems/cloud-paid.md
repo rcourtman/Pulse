@@ -870,19 +870,20 @@ authenticated Pulse account shell that unifies Cloud tenants, self-hosted
 licenses, billing, recovery, and MSP admin surfaces without creating a
 standalone Relay portal. That shell now also owns two product rules
 explicitly: `Overview` is one shell-level triage surface across the current
-account set rather than a repeated per-account dashboard, and unavailable
-top-level `Workspaces` or `Access` tasks must render an explicit unavailable
-state instead of blank space. The shell navigation must stay honest to that
-same account shape rather than labelling unavailable hosted tasks as though
-they are still live. The same shell also owns action-first task
+account set rather than a repeated per-account dashboard, and the top-level
+task row must stay honest to account shape by removing irrelevant hosted-only
+tasks instead of pretending they are live. Any shared fallback that still
+lands on a non-live task must render an explicit unavailable state instead of
+blank space. The same shell also owns action-first task
 surfaces for `Access`, `Billing`, and `Support`: access mutations must be
 permission-honest and roster-led, billing must reduce to one obvious job at a
 time with hosted billing first when relevant, support must stay a failed-path
 handoff rather than a peer workflow, and phone-width layouts must collapse the
-desktop task sidebar into a compact task strip so the active job remains
+desktop shell into a compact task strip so the active job remains
 primary and visibly in-frame when the strip scrolls. The same narrow-screen
-shell must also compress account identity into a compact summary strip instead
-of repeating a desktop-sized intro block ahead of every task, and lower
+shell must also compress account identity into one compact context strip
+instead of repeating a desktop-sized intro block or second summary box ahead
+of every task, and lower
 workspace job surfaces such as lifecycle review or create-workspace forms must
 be revealed when the user opens them. `Workspaces` must also default to the
 workspace list plus the real task entry points rather than an idle lifecycle
@@ -891,7 +892,10 @@ create-workspace job is active. `Access` follows the same rule: the hosted
 roster must be the default state, while invite, role-change, and remove
 controls appear only when that exact access job is active, and a hosted
 view-only roster must stay a review surface instead of a row-by-row action
-table with fake disabled action state. That same task-first `Access` contract
+table with fake disabled action state. Managed idle `Access` follows that same
+review-first rule: the roster should stay two-column until a remove job is
+active, with the third action column reserved for real remove access work.
+That same task-first `Access` contract
 must also start from bootstrap-owned roster truth: the first hosted roster
 render must come from the portal bootstrap payload itself, with later member
 API reads reserved for refresh and mutation follow-through instead of
@@ -909,8 +913,10 @@ That same owned shell also owns the signed-in visual posture: the portal
 should read like a serious settings/account tool rather than a dashboard.
 Navigation chrome, account framing, and overview panels must stay visually
 quieter than the active task surface, with flatter light treatment and
-list-first task presentation instead of dark ornamental rails or nested
-explanatory cards.
+list-first task presentation instead of dark ornamental rails, sidebars, or
+nested explanatory cards. The signed-in shell should orient the user with one
+quiet account-context header and one flat top task row, not a second summary
+deck competing with the task itself.
 That same owned shell must also open on the first live job instead of the
 summary layer: hosted accounts should land in `Workspaces`, and self-hosted-
 only accounts should land in `Billing`. `Overview` remains part of the shell,

@@ -143,6 +143,10 @@ function countMembersByRole(members: PortalAccessMember[], role: string): number
   return count;
 }
 
+function renderAccessStatsSummary(summary: string, isError: boolean): string {
+  return '<div class="access-stat-summary' + (isError ? ' access-stat-summary-error' : '') + '">' + summary + '</div>';
+}
+
 function accessJobTitle(job: PortalAccessJob): string {
   switch (job) {
     case 'invite':
@@ -177,24 +181,22 @@ function renderAccessStats(accountID: string, entry: PortalAccountUIEntry, canMa
     return;
   }
   if (entry.accessQuery.status === 'loading') {
-    stats.innerHTML =
-      '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value">Loading…</span></div>' +
-      '<div class="access-stat-card"><span class="access-stat-label">Access</span><span class="access-stat-value">' + (canManage ? 'Manage access' : 'View roster') + '</span></div>';
+    stats.innerHTML = renderAccessStatsSummary('Access • ' + (canManage ? 'Manage access' : 'View roster') + ' • Loading roster', false);
     return;
   }
   if (entry.accessQuery.status === 'error') {
-    stats.innerHTML =
-      '<div class="access-stat-card"><span class="access-stat-label">Roster</span><span class="access-stat-value access-stat-error">Load failed</span></div>' +
-      '<div class="access-stat-card"><span class="access-stat-label">Access</span><span class="access-stat-value">' + (canManage ? 'Manage access' : 'View roster') + '</span></div>';
+    stats.innerHTML = renderAccessStatsSummary('Access • ' + (canManage ? 'Manage access' : 'View roster') + ' • Load failed', true);
     return;
   }
 
   var members = entry.accessQuery.data;
-  stats.innerHTML =
-    '<div class="access-stat-card"><span class="access-stat-label">Members</span><span class="access-stat-value">' + String(members.length) + '</span></div>' +
-    '<div class="access-stat-card"><span class="access-stat-label">Owners</span><span class="access-stat-value">' + String(countMembersByRole(members, 'owner')) + '</span></div>' +
-    '<div class="access-stat-card"><span class="access-stat-label">Admins</span><span class="access-stat-value">' + String(countMembersByRole(members, 'admin')) + '</span></div>' +
-    '<div class="access-stat-card"><span class="access-stat-label">Operators</span><span class="access-stat-value">' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')) + '</span></div>';
+  stats.innerHTML = renderAccessStatsSummary(
+    'Members ' + String(members.length) + ' • ' +
+      'Owners ' + String(countMembersByRole(members, 'owner')) + ' • ' +
+      'Admins ' + String(countMembersByRole(members, 'admin')) + ' • ' +
+      'Operators ' + String(countMembersByRole(members, 'tech') + countMembersByRole(members, 'read_only')),
+    false
+  );
 }
 
 function createAccessControlCell(className: string): HTMLDivElement {
@@ -239,17 +241,10 @@ function renderAccessRoleControl(accountID: string, member: PortalAccessMember, 
 }
 
 function renderAccessMemberAction(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob): HTMLElement | null {
-  var group = createAccessControlCell('access-control-cell-access');
-  if (!canManage) {
+  if (!canManage || activeJob !== 'remove') {
     return null;
   }
-  if (activeJob !== 'remove') {
-    var idleText = document.createElement('span');
-    idleText.className = 'access-control-locked';
-    idleText.textContent = activeJob === 'change_role' ? 'Role change' : 'Review only';
-    group.appendChild(idleText);
-    return group;
-  }
+  var group = createAccessControlCell('access-control-cell-access');
   if (normalizePortalRole(member.role) === 'owner' && !isOwner) {
     var lockedText = document.createElement('span');
     lockedText.className = 'access-control-locked';
@@ -271,8 +266,9 @@ function renderAccessMemberAction(accountID: string, member: PortalAccessMember,
 }
 
 function renderAccessMemberRow(accountID: string, member: PortalAccessMember, isOwner: boolean, canManage: boolean, activeJob: PortalAccessJob): HTMLElement {
+  var showActionColumn = canManage && activeJob === 'remove';
   var row = document.createElement('div');
-  row.className = 'access-member-row' + (canManage ? '' : ' access-member-row-readonly');
+  row.className = 'access-member-row' + (showActionColumn ? '' : ' access-member-row-readonly');
 
   var identity = document.createElement('div');
   identity.className = 'access-member-identity';
@@ -307,13 +303,14 @@ function renderAccessMemberRow(accountID: string, member: PortalAccessMember, is
 }
 
 function renderAccessRosterHead(container: HTMLElement, activeJob: PortalAccessJob, canManage: boolean): void {
+  var showActionColumn = canManage && activeJob === 'remove';
   var head = document.createElement('div');
-  head.className = 'access-roster-head' + (canManage ? '' : ' access-roster-head-readonly');
-  head.innerHTML = canManage
+  head.className = 'access-roster-head' + (showActionColumn ? '' : ' access-roster-head-readonly');
+  head.innerHTML = showActionColumn
     ? (
       '<span>Operator</span>' +
-      '<span>' + (activeJob === 'change_role' ? 'New role' : 'Role') + '</span>' +
-      '<span>' + (activeJob === 'remove' ? 'Remove' : 'Action') + '</span>'
+      '<span>Role</span>' +
+      '<span>Remove</span>'
     )
     : (
       '<span>Operator</span>' +

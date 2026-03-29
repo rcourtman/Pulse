@@ -144,7 +144,9 @@ describe('account view', function() {
     );
     expect(document.querySelector('[data-action="change-role"]')).toBeNull();
     expect(document.querySelector('[data-action="remove-member"]')).toBeNull();
-    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Review only');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Operator');
+    expect(document.getElementById('access-list-acct_1')?.textContent).toContain('Role');
+    expect(document.getElementById('access-list-acct_1')?.textContent).not.toContain('Review only');
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('Members');
     expect(document.getElementById('access-stats-acct_1')?.textContent).toContain('2');
   });
