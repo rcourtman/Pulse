@@ -7,11 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,11 +20,13 @@ import (
 type UpdateStatusType string
 
 const (
-	StatusInProgress UpdateStatusType = "in_progress"
-	StatusSuccess    UpdateStatusType = "success"
-	StatusFailed     UpdateStatusType = "failed"
-	StatusRolledBack UpdateStatusType = "rolled_back"
-	StatusCancelled  UpdateStatusType = "cancelled"
+	StatusInProgress            UpdateStatusType = "in_progress"
+	StatusSuccess               UpdateStatusType = "success"
+	StatusFailed                UpdateStatusType = "failed"
+	StatusRolledBack            UpdateStatusType = "rolled_back"
+	StatusCancelled             UpdateStatusType = "cancelled"
+	defaultUpdateHistoryDataDir                  = "/var/lib/pulse"
+	updateHistoryFileName                        = "update-history.jsonl"
 )
 
 // InitiatedBy represents who triggered the update
@@ -90,18 +93,36 @@ type UpdateHistory struct {
 	maxCache int
 }
 
+func resolveUpdateHistoryLogPath(dataDir string) (string, string, error) {
+	normalizedDir := strings.TrimSpace(dataDir)
+	if normalizedDir == "" {
+		normalizedDir = defaultUpdateHistoryDataDir
+	}
+
+	normalizedDir, err := securityutil.NormalizeStorageDir(normalizedDir)
+	if err != nil {
+		return "", "", fmt.Errorf("normalize update history directory: %w", err)
+	}
+
+	logPath, err := securityutil.JoinStorageLeaf(normalizedDir, updateHistoryFileName)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve update history log path: %w", err)
+	}
+
+	return normalizedDir, logPath, nil
+}
+
 // NewUpdateHistory creates a new update history manager
 func NewUpdateHistory(dataDir string) (*UpdateHistory, error) {
-	if dataDir == "" {
-		dataDir = "/var/lib/pulse"
+	resolvedDataDir, logPath, err := resolveUpdateHistoryLogPath(dataDir)
+	if err != nil {
+		return nil, err
 	}
 
 	// Ensure directory exists
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
-		return nil, fmt.Errorf("create update history data directory %q: %w", dataDir, err)
+	if err := os.MkdirAll(resolvedDataDir, 0755); err != nil {
+		return nil, fmt.Errorf("create update history data directory %q: %w", resolvedDataDir, err)
 	}
-
-	logPath := filepath.Join(dataDir, "update-history.jsonl")
 
 	h := &UpdateHistory{
 		logPath:  logPath,

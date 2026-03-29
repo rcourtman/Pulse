@@ -156,6 +156,10 @@ manager: when `internal/updates/manager.go` enumerates already-owned extract,
 temp, backup, or restore directories, it must rejoin discovered entry names
 through the shared storage-path helper instead of rebuilding raw
 `filepath.Join(dir, entry.Name())` paths.
+That same storage boundary also governs update-history persistence:
+`internal/updates/history.go` must normalize its owned data directory and
+resolve the fixed `update-history.jsonl` leaf through the shared storage-path
+helper instead of joining raw caller-provided directory strings.
 That same boundary also governs install.sh rollback restore targets:
 `adapter_installsh.go` may not hardcode `/etc/pulse` for rollback safety
 backups or config restore, and must derive the rollback config directory

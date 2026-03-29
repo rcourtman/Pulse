@@ -28,6 +28,41 @@ func TestNewUpdateHistory(t *testing.T) {
 		}
 	})
 
+	t.Run("canonicalizes explicit data dir", func(t *testing.T) {
+		rawDataDir := filepath.Join(t.TempDir(), "subdir", "..", "nested", ".")
+
+		resolvedDir, logPath, err := resolveUpdateHistoryLogPath("  " + rawDataDir + "  ")
+		if err != nil {
+			t.Fatalf("resolveUpdateHistoryLogPath() error = %v", err)
+		}
+
+		expectedDir := filepath.Clean(rawDataDir)
+		if resolvedDir != expectedDir {
+			t.Fatalf("resolved dir = %q, want %q", resolvedDir, expectedDir)
+		}
+
+		expectedLogPath := filepath.Join(expectedDir, updateHistoryFileName)
+		if logPath != expectedLogPath {
+			t.Fatalf("log path = %q, want %q", logPath, expectedLogPath)
+		}
+	})
+
+	t.Run("whitespace data dir uses default path", func(t *testing.T) {
+		resolvedDir, logPath, err := resolveUpdateHistoryLogPath(" \t ")
+		if err != nil {
+			t.Fatalf("resolveUpdateHistoryLogPath() error = %v", err)
+		}
+
+		if resolvedDir != defaultUpdateHistoryDataDir {
+			t.Fatalf("resolved dir = %q, want %q", resolvedDir, defaultUpdateHistoryDataDir)
+		}
+
+		expectedLogPath := filepath.Join(defaultUpdateHistoryDataDir, updateHistoryFileName)
+		if logPath != expectedLogPath {
+			t.Fatalf("log path = %q, want %q", logPath, expectedLogPath)
+		}
+	})
+
 	t.Run("initializes with empty cache", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		h, err := NewUpdateHistory(tmpDir)
