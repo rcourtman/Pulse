@@ -1143,6 +1143,12 @@ may render friendly string keys, but membership checks against available
 sources must normalize through the shared
 `frontend-modern/src/utils/sourcePlatforms.ts` helper before consulting
 `KnownSourcePlatform` sets.
+That same shared source-platform boundary now also owns TrueNAS-backed hybrid
+resources. When a canonical resource carries both `agent` and `truenas`
+sources, `frontend-modern/src/utils/sourcePlatforms.ts` must still resolve the
+platform as `truenas` and the source mode as `hybrid`, so workload and
+infrastructure consumers do not collapse API-backed TrueNAS systems or apps
+back onto the generic agent path just because host telemetry is also present.
 The route file `frontend-modern/src/pages/Infrastructure.tsx` is now only the
 navigation boundary for that surface; canonical infrastructure filter, search,
 deep-link, and expansion state now live behind the dedicated infrastructure

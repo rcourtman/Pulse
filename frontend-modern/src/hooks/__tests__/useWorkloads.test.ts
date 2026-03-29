@@ -137,6 +137,19 @@ describe('useWorkloads', () => {
         { ...sampleResource, id: 'vm-pve', sources: ['PROXMOX'] },
         { ...sampleResource, id: 'vm-pbs', sources: ['pbs'], name: 'vm-pbs' },
         { ...sampleResource, id: 'vm-pmg', sources: ['pmg'], name: 'vm-pmg' },
+        {
+          ...sampleResource,
+          id: 'truenas-nextcloud',
+          type: 'app-container',
+          name: 'nextcloud',
+          status: 'healthy',
+          sources: ['agent', 'truenas'],
+          parentName: 'truenas-main',
+          docker: {
+            containerId: 'nextcloud-ctr',
+            image: 'ix-nextcloud:latest',
+          },
+        },
       ],
       meta: { totalPages: 1 },
     });
@@ -150,12 +163,13 @@ describe('useWorkloads', () => {
     });
 
     await flushAsync();
-    await waitForWorkloadCount(() => result!.workloads().length, 3);
+    await waitForWorkloadCount(() => result!.workloads().length, 4);
 
     const byName = new Map(result!.workloads().map((workload) => [workload.name, workload]));
     expect(byName.get('vm-101')?.platformType).toBe('proxmox-pve');
     expect(byName.get('vm-pbs')?.platformType).toBe('proxmox-pbs');
     expect(byName.get('vm-pmg')?.platformType).toBe('proxmox-pmg');
+    expect(byName.get('nextcloud')?.platformType).toBe('truenas');
 
     dispose();
   });

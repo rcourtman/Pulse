@@ -74,6 +74,7 @@ describe('sourcePlatforms', () => {
         hasKubernetes: false,
         hasPbs: true,
         hasPmg: false,
+        hasTrueNAS: false,
       });
     });
 
@@ -85,6 +86,19 @@ describe('sourcePlatforms', () => {
         hasKubernetes: false,
         hasPbs: false,
         hasPmg: false,
+        hasTrueNAS: false,
+      });
+    });
+
+    it('tracks TrueNAS as a canonical API-backed platform source', () => {
+      expect(readSourcePlatformFlags(['agent', 'truenas'])).toEqual({
+        hasAgent: true,
+        hasProxmox: false,
+        hasDocker: false,
+        hasKubernetes: false,
+        hasPbs: false,
+        hasPmg: false,
+        hasTrueNAS: true,
       });
     });
   });
@@ -94,6 +108,7 @@ describe('sourcePlatforms', () => {
       expect(resolvePlatformTypeFromSources(['agent', 'docker'])).toBe('docker');
       expect(resolvePlatformTypeFromSources(['agent', 'pbs'])).toBe('proxmox-pbs');
       expect(resolvePlatformTypeFromSources(['pmg', 'docker'])).toBe('proxmox-pmg');
+      expect(resolvePlatformTypeFromSources(['agent', 'truenas'])).toBe('truenas');
       expect(resolvePlatformTypeFromSources(['agent'])).toBe('agent');
       expect(resolvePlatformTypeFromSources(['custom-source'])).toBeUndefined();
     });
@@ -104,6 +119,7 @@ describe('sourcePlatforms', () => {
       expect(resolveSourceTypeFromSources(['agent'])).toBe('agent');
       expect(resolveSourceTypeFromSources(['pve'])).toBe('api');
       expect(resolveSourceTypeFromSources(['agent', 'proxmox'])).toBe('hybrid');
+      expect(resolveSourceTypeFromSources(['agent', 'truenas'])).toBe('hybrid');
       expect(resolveSourceTypeFromSources(['custom-source'])).toBe('api');
     });
   });

@@ -30,6 +30,7 @@ export interface SourcePlatformFlags {
   hasKubernetes: boolean;
   hasPbs: boolean;
   hasPmg: boolean;
+  hasTrueNAS: boolean;
 }
 
 export const SOURCE_PLATFORM_PRESENTATION: Record<KnownSourcePlatform, SourcePlatformPresentation> =
@@ -141,6 +142,7 @@ export const readSourcePlatformFlags = (sources?: string[]): SourcePlatformFlags
     hasKubernetes: false,
     hasPbs: false,
     hasPmg: false,
+    hasTrueNAS: false,
   };
 
   if (!sources || sources.length === 0) {
@@ -167,6 +169,9 @@ export const readSourcePlatformFlags = (sources?: string[]): SourcePlatformFlags
       case 'proxmox-pmg':
         flags.hasPmg = true;
         break;
+      case 'truenas':
+        flags.hasTrueNAS = true;
+        break;
       default:
         break;
     }
@@ -180,8 +185,9 @@ export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType
   if (flags.hasProxmox) return 'proxmox-pve';
   if (flags.hasPbs) return 'proxmox-pbs';
   if (flags.hasPmg) return 'proxmox-pmg';
-  if (flags.hasDocker) return 'docker';
+  if (flags.hasTrueNAS) return 'truenas';
   if (flags.hasKubernetes) return 'kubernetes';
+  if (flags.hasDocker) return 'docker';
   if (flags.hasAgent) return 'agent';
   return undefined;
 };
@@ -189,7 +195,12 @@ export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType
 export const resolveSourceTypeFromSources = (sources?: string[]): SourceType => {
   const flags = readSourcePlatformFlags(sources);
   const hasOther =
-    flags.hasProxmox || flags.hasDocker || flags.hasKubernetes || flags.hasPbs || flags.hasPmg;
+    flags.hasProxmox ||
+    flags.hasDocker ||
+    flags.hasKubernetes ||
+    flags.hasPbs ||
+    flags.hasPmg ||
+    flags.hasTrueNAS;
   if (flags.hasAgent && hasOther) return 'hybrid';
   if (flags.hasAgent) return 'agent';
   return 'api';
