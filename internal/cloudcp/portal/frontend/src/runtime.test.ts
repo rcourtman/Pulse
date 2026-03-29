@@ -25,6 +25,21 @@ describe('portal runtime', function() {
     expect(defaults.bootstrap_path).toBe('/api/account/bootstrap');
   });
 
+  it('keeps local preview API roots intact for harness-driven development', function() {
+    var defaults = createBootstrapDefaults({
+      has_self_hosted_commercial: false,
+      commercial_api_base_url: '/__portal_preview/commercial',
+      bootstrap_path: '/api/portal/bootstrap',
+      account_api_base_path: '/api/accounts',
+      portal_api_base_path: '/api/portal',
+    });
+
+    expect(defaults.commercial_api_base_url).toBe('/__portal_preview/commercial');
+    expect(defaults.bootstrap_path).toBe('/api/portal/bootstrap');
+    expect(defaults.account_api_base_path).toBe('/api/accounts');
+    expect(defaults.portal_api_base_path).toBe('/api/portal');
+  });
+
   it('creates a store from runtime bootstrap input', function() {
     var runtime = createPortalRuntime({
       authenticated: true,

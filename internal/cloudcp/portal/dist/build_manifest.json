@@ -1,9 +1,10 @@
 {
-  "source_hash": "e610c850356380a4b964ccafee42ab51270cd73bd456f7acf2ae51fb49ef09cf",
+  "source_hash": "cf3bd31fad5b412fe2628e9fe834b1d693d86fbb4c34160ff53ad349b7d7fad0",
   "build_inputs": [
     "package.json",
     "tsconfig.json",
     "build.mjs",
+    "build_config.mjs",
     "src/account_controller.test.ts",
     "src/account_controller.ts",
     "src/account_roles.test.ts",

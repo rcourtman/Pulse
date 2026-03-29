@@ -1,18 +1,12 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 import { withExclusiveLock } from '../../../../scripts/exclusive-lock.mjs';
+import { createPortalBuildOptions, distRoot, frontendRoot, manifestPath, repoRoot } from './build_config.mjs';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const frontendRoot = __dirname;
-const repoRoot = path.resolve(frontendRoot, '../../../../');
-const distRoot = path.resolve(frontendRoot, '../dist');
 const lockPath = path.join(repoRoot, 'tmp', 'locks', 'pulse-account-frontend-build.lock');
-const manifestPath = path.join(distRoot, 'build_manifest.json');
 
 async function listSourceInputs(relativeDir) {
   const absoluteDir = path.join(frontendRoot, relativeDir);
@@ -38,6 +32,7 @@ async function getBuildInputs() {
     'package.json',
     'tsconfig.json',
     'build.mjs',
+    'build_config.mjs',
     ...sourceInputs,
   ];
 }
@@ -63,25 +58,7 @@ await withExclusiveLock(
     await fs.rm(path.join(distRoot, 'portal_app.css'), { force: true });
     await fs.rm(manifestPath, { force: true });
 
-    await build({
-      absWorkingDir: frontendRoot,
-      entryPoints: ['src/index.ts'],
-      outfile: path.join(distRoot, 'portal_app.js'),
-      bundle: true,
-      loader: {
-        '.woff2': 'dataurl',
-        '.woff': 'dataurl',
-        '.ttf': 'dataurl',
-        '.otf': 'dataurl',
-      },
-      format: 'iife',
-      platform: 'browser',
-      target: ['es2020'],
-      legalComments: 'none',
-      sourcemap: false,
-      minify: false,
-      logLevel: 'info',
-    });
+    await build(createPortalBuildOptions());
 
     await fs.writeFile(
       manifestPath,

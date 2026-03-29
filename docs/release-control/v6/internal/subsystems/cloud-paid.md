@@ -251,6 +251,14 @@ The top-level authenticated shell is part of that same customer-facing
 boundary: cloud-paid trial prompts may appear in owned commercial surfaces, but
 the app shell must not force a global, persistent Pro trial nudge that
 overrides the primary runtime chrome for every signed-in user.
+The maintained Pulse Account portal frontend is part of that same boundary for
+local development as well as runtime delivery. Styling or interaction work on
+`internal/cloudcp/portal/frontend/` must have a local preview path that uses
+the same frontend build pipeline as the embedded production bundle, while
+serving scenario-backed local portal APIs without requiring a live cloud deploy
+for every iteration. Final verification still belongs on a real control-plane
+instance, but local portal design work must not depend on redeploying
+`cloud.pulserelay.pro` just to see each frontend change.
 That same shell framing also owns user-facing prerelease labeling for
 rc-channel builds. `frontend-modern/src/AppLayout.tsx` may still key off the
 canonical `rc` channel metadata internally, but the visible badge must frame
