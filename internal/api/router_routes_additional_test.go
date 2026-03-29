@@ -386,7 +386,6 @@ func TestRouterAIChatControl(t *testing.T) {
 	t.Run("calls through to ai handler", func(t *testing.T) {
 		mockSvc := &MockAIService{}
 		mockSvc.On("Stop", mock.Anything).Return(nil)
-		mockSvc.On("IsRunning").Return(true)
 		mockSvc.On("Restart", mock.Anything, mock.Anything).Return(nil)
 
 		handler := &AIHandler{}
