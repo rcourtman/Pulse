@@ -176,6 +176,11 @@ export function buildManagedLocalBackendEnv(state, env = process.env) {
     nextEnv.PULSE_E2E_ENTITLEMENT_PROFILE = trim(env.PULSE_E2E_ENTITLEMENT_PROFILE);
   }
 
+  if (trim(env.PULSE_HOSTED_MODE).toLowerCase() === 'true') {
+    nextEnv.PULSE_AUTH_USER = trim(env.PULSE_AUTH_USER) || trim(env.PULSE_E2E_USERNAME) || DEFAULT_E2E_USERNAME;
+    nextEnv.PULSE_AUTH_PASS = trim(env.PULSE_AUTH_PASS) || trim(env.PULSE_E2E_PASSWORD) || DEFAULT_E2E_PASSWORD;
+  }
+
   return nextEnv;
 }
 
@@ -461,10 +466,49 @@ async function readSecurityStatus(baseURL) {
   return response.json();
 }
 
+async function createManagedLocalBackendAPIToken(state, env, logger) {
+  const username = trim(env.PULSE_AUTH_USER) || trim(env.PULSE_E2E_USERNAME) || DEFAULT_E2E_USERNAME;
+  const password = trim(env.PULSE_AUTH_PASS) || trim(env.PULSE_E2E_PASSWORD) || DEFAULT_E2E_PASSWORD;
+  const response = await fetch(`${state.baseURL}/api/security/tokens`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${username}:${password}`).toString('base64')}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: 'Managed local backend primary token',
+      scopes: ['*'],
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Managed local backend token creation failed: HTTP ${response.status} ${await response.text()}`);
+  }
+
+  const payload = await response.json();
+  const rawToken = trim(payload?.token);
+  if (rawToken === '') {
+    throw new Error('Managed local backend token creation response did not include a token');
+  }
+
+  logger.log(`[integration] Created managed local backend API token for ${username}`);
+  return rawToken;
+}
+
 async function ensureManagedLocalBackendSecurity(state, env, logger) {
   const security = await readSecurityStatus(state.baseURL);
   if (security?.hasAuthentication && security?.apiTokenConfigured) {
-    return security;
+    return {
+      security,
+      primaryAPIToken: trim(env.PULSE_E2E_PRIMARY_API_TOKEN) || DEFAULT_E2E_PRIMARY_API_TOKEN,
+    };
+  }
+
+  if (security?.hasAuthentication && !security?.apiTokenConfigured) {
+    const primaryAPIToken = await createManagedLocalBackendAPIToken(state, env, logger);
+    return {
+      security: await readSecurityStatus(state.baseURL),
+      primaryAPIToken,
+    };
   }
 
   const payload = {
@@ -486,7 +530,10 @@ async function ensureManagedLocalBackendSecurity(state, env, logger) {
   }
 
   logger.log(`[integration] Applied quick security setup for managed local backend user ${payload.username}`);
-  return readSecurityStatus(state.baseURL);
+  return {
+    security: await readSecurityStatus(state.baseURL),
+    primaryAPIToken: payload.apiToken,
+  };
 }
 
 async function assertManagedLocalBackendStartupHealthy(state) {
@@ -550,7 +597,7 @@ export async function startManagedLocalBackend({
   try {
     await waitForHealth(`${state.baseURL}/api/health`, child.pid);
     await assertManagedLocalBackendStartupHealthy(state);
-    await ensureManagedLocalBackendSecurity(state, backendEnv, logger);
+    const securityState = await ensureManagedLocalBackendSecurity(state, backendEnv, logger);
     await applyRequestedEntitlementProfile({ env: backendEnv, logger });
 
     const runtimeState = {
@@ -561,7 +608,7 @@ export async function startManagedLocalBackend({
       dataDir: state.dataDir,
       logPath: state.logPath,
       billingStatePath: state.billingStatePath,
-      primaryAPIToken: backendEnv.PULSE_E2E_PRIMARY_API_TOKEN,
+      primaryAPIToken: securityState.primaryAPIToken,
     };
     await writeRuntimeState(runtimeState, env);
     logger.log(`[integration] Started managed local backend at ${state.baseURL} (pid ${child.pid})`);
