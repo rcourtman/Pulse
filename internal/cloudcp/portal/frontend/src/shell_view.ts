@@ -58,9 +58,7 @@ function workspaceCountLabel(count: number): string {
   return count === 1 ? '1 workspace' : String(count) + ' workspaces';
 }
 
-function workspaceTotalChipLabel(count: number): string {
-  return count === 1 ? '1 workspace total' : String(count) + ' workspaces total';
-}
+
 
 function reviewWorkspaceHeadline(count: number): string {
   return count === 1 ? '1 workspace needs review' : String(count) + ' workspaces need review';
@@ -70,9 +68,7 @@ function readyWorkspaceHeadline(count: number): string {
   return count === 1 ? '1 workspace is ready to use' : String(count) + ' workspaces are ready to use';
 }
 
-function readyWorkspaceSectionChipLabel(count: number): string {
-  return count === 1 ? '1 workspace ready to use' : String(count) + ' workspaces ready to use';
-}
+
 
 function reviewWorkspaceChipLabel(count: number): string {
   return count === 1 ? '1 workspace to review' : String(count) + ' workspaces to review';
@@ -86,27 +82,7 @@ function suspendedWorkspaceChipLabel(count: number): string {
   return count === 1 ? '1 suspended workspace' : String(count) + ' suspended workspaces';
 }
 
-function suspendedWorkspaceSectionChipLabel(count: number): string {
-  return count === 1 ? '1 workspace suspended' : String(count) + ' workspaces suspended';
-}
 
-function billingHeaderChipLabels(hostedBillingCount: number, showSelfHostedCommercial: boolean): string[] {
-  return [
-    hostedBillingCount > 0 ? 'Hosted billing attached' : 'No hosted billing attached',
-    showSelfHostedCommercial ? 'Self-hosted billing available' : 'Hosted billing only',
-  ];
-}
-
-function supportSectionChipLabels(hasHostedAccounts: boolean, hostedViewOnly: boolean, supportEmail: string): string[] {
-  if (hasHostedAccounts) {
-    return [
-      'Escalation only',
-      hostedViewOnly ? 'Review Workspaces or Access, or contact owner/admin first' : 'Open Workspaces, Access, or Billing first',
-      supportEmail ? 'Email support' : 'Support route',
-    ];
-  }
-  return ['Escalation only', 'Open Billing first', supportEmail ? 'Email support' : 'Support route'];
-}
 
 function supportLeadCopy(hasHostedAccounts: boolean, hostedViewOnly: boolean, showSelfHostedCommercial: boolean): string {
   if (!hasHostedAccounts) return 'Use Support only after Billing fails.';
@@ -751,30 +727,9 @@ function renderShellOverviewSection(context: ShellViewContext): string {
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var entries = collectOverviewWorkspaceEntries(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-  var totalCount = entries.length;
-  var readyCount = readyOverviewEntries(entries).length;
-  var attentionCount = attentionOverviewEntries(entries).length;
-  var suspendedCount = countWorkspacesByState(collectWorkspaces(accounts), 'suspended');
-  var chips = accounts.length
-    ? [
-      accounts.length === 1 ? '1 account' : String(accounts.length) + ' accounts',
-      workspaceCountLabel(totalCount),
-      readyWorkspaceChipLabel(readyCount),
-      reviewWorkspaceChipLabel(attentionCount),
-      suspendedWorkspaceChipLabel(suspendedCount),
-    ]
-    : ['No hosted account', '0 hosted workspaces', 'Billing available', 'Support only on escalation'];
 
   return (
     '<section class="account-content-panel account-content-panel-overview">' +
-      '<div class="account-stage-header account-stage-header-overview overview-stage-header">' +
-        '<div>' +
-          '<div class="account-panel-kicker">Summary</div>' +
-          '<h3>Current state</h3>' +
-          '<p>Use this summary only when you need a quick account readout.</p>' +
-          renderSectionContextChips(chips) +
-        '</div>' +
-      '</div>' +
       '<div class="overview-task-grid overview-task-grid-compact">' +
         renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) +
         renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) +
@@ -784,43 +739,22 @@ function renderShellOverviewSection(context: ShellViewContext): string {
   );
 }
 
-function renderPageHeader(kicker: string, title: string, copy: string, summaryHTML = ''): string {
-  return (
-    '<div class="portal-page-header">' +
-      '<h2>' + escapeHTML(title) + '</h2>' +
-      (copy ? '<p>' + escapeHTML(copy) + '</p>' : '') +
-    '</div>'
-  );
-}
-
 function renderAccountBlockHeader(
-  account: PortalAccountSummary,
-  facts: string[],
+  _account: PortalAccountSummary,
   actionsHTML = '',
   copy = ''
 ): string {
   return (
-    '<div class="portal-section-header">' +
-      '<h3>' + escapeHTML(account.name) + '</h3>' +
-      (actionsHTML ? '<div>' + actionsHTML + '</div>' : '') +
-    '</div>'
+    (actionsHTML ? '<div class="portal-section-header"><div></div><div>' + actionsHTML + '</div></div>' : '') +
+    (copy ? '<p class="portal-section-copy">' + escapeHTML(copy) + '</p>' : '')
   );
 }
 
 function renderNoHostedWorkspacesSection(): string {
   return (
     '<section class="account-content-panel account-content-panel-workspaces">' +
-      '<div class="account-stage-header">' +
-        '<div>' +
-          '<div class="account-panel-kicker">Workspaces</div>' +
-          '<h3>Workspaces</h3>' +
-          '<p>No hosted workspace is attached to this account.</p>' +
-          renderSectionContextChips(['None attached', 'Billing instead']) +
-        '</div>' +
-      '</div>' +
-      '<div class="empty-state empty-state-spaced">' +
-        '<p>There is nothing to open or manage here yet.</p>' +
-        '<p class="support-copy">Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.</p>' +
+      '<div class="empty-state">' +
+        '<p>No hosted workspaces are attached to this account. Use Billing for self-hosted subscriptions and licenses.</p>' +
       '</div>' +
     '</section>'
   );
@@ -829,17 +763,8 @@ function renderNoHostedWorkspacesSection(): string {
 function renderNoHostedAccessSection(): string {
   return (
     '<section class="account-content-panel account-content-panel-access">' +
-      '<div class="account-stage-header">' +
-        '<div>' +
-          '<div class="account-panel-kicker">Access</div>' +
-          '<h3>Access</h3>' +
-          '<p>No hosted account roster is attached here.</p>' +
-          renderSectionContextChips(['No hosted roster', 'Billing instead']) +
-        '</div>' +
-      '</div>' +
-      '<div class="empty-state empty-state-spaced">' +
-        '<p>There are no hosted roles or invites to manage for this account right now.</p>' +
-        '<p class="support-copy">If the task is commercial access to licenses, refunds, or privacy, stay in Billing.</p>' +
+      '<div class="empty-state">' +
+        '<p>No hosted account roster is attached. Use Billing for commercial access to licenses, refunds, or privacy.</p>' +
       '</div>' +
     '</section>'
   );
@@ -894,9 +819,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
       '" hidden>' +
         '<div class="workspace-management-header">' +
           '<div>' +
-            '<div class="account-panel-kicker">Workspace task</div>' +
-            '<h3>Work on one workspace</h3>' +
-            '<p>Open lifecycle for one workspace, or create a new one. Keep access and billing separate.</p>' +
+            '<h3>Workspace lifecycle</h3>' +
+            '<p>Manage this workspace or create a new one.</p>' +
           '</div>' +
           '<button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' +
           escapeAttr(account.id) +
@@ -910,9 +834,8 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
           '<div class="workspace-management-empty-shell">' +
             '<div class="workspace-management-empty-actions-card">' +
               '<div class="workspace-management-empty-actions-copy">' +
-                '<div class="account-panel-kicker">Create workspace</div>' +
-                '<h4>Open a new hosted workspace</h4>' +
-                '<p>Create one workspace here when you need a new customer or operating boundary.</p>' +
+                '<h4>Create a workspace</h4>' +
+                '<p>Add a new hosted workspace for a customer or operating boundary.</p>' +
               '</div>' +
               addWorkspaceForm +
             '</div>' +
@@ -962,33 +885,24 @@ function renderAccountWorkspaceSection(account: PortalAccountSummary, accountAPI
 
   var workspaceHTML = workspaces.length
     ? '<div class="workspace-list-wrap">' +
-          '<div class="workspace-list-toolbar">' +
-            '<div class="workspace-list-summary">' + escapeHTML(workspaceListSummary) + '</div>' +
-        '</div>' +
-        '<div class="workspace-list-head">' +
-          '<span>Workspace</span>' +
-          '<span>Health</span>' +
-          '<span>Lifecycle</span>' +
-          '<span>Actions</span>' +
-        '</div>' +
-        '<div class="workspace-list">' + workspaces.map(function(workspace) {
-        return renderWorkspaceCard(account, workspace, accountAPIBasePath);
-      }).join('') + '</div>' +
-      '</div>'
-    : '<div class="empty-state"><p>' + escapeHTML(account.can_manage ? 'No hosted workspaces yet. Create one to get started.' : 'No hosted workspaces are attached yet. An owner or admin must create the first one.') + '</p></div>';
+          (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + '</div>' : '') +
+          '<div class="workspace-list-head">' +
+            '<span>Workspace</span>' +
+            '<span>Health</span>' +
+            '<span>Lifecycle</span>' +
+            '<span>Actions</span>' +
+          '</div>' +
+          '<div class="workspace-list">' + workspaces.map(function(workspace) {
+          return renderWorkspaceCard(account, workspace, accountAPIBasePath);
+        }).join('') + '</div>' +
+        '</div>'
+    : '<div class="empty-state">' +
+        '<p>' + escapeHTML(account.can_manage ? 'No hosted workspaces yet. Create one to get started.' : 'No hosted workspaces are attached yet. An owner or admin must create the first one.') + '</p>' +
+        (workspaceHeaderActions ? '<div style="margin-top: 8px">' + workspaceHeaderActions + '</div>' : '') +
+      '</div>';
 
   return (
     '<section class="account-content-panel account-content-panel-workspaces">' +
-      renderAccountBlockHeader(
-        account,
-        [
-          workspaceTotalChipLabel(workspaces.length),
-          readyWorkspaceSectionChipLabel(readyCount),
-          reviewWorkspaceChipLabel(attentionCount),
-          suspendedWorkspaceSectionChipLabel(suspendedCount),
-        ],
-        workspaceHeaderActions
-      ) +
       '<div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' +
         escapeAttr(account.id) +
         '">' +
@@ -1084,14 +998,9 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
       '" data-can-manage="' +
       escapeAttr(account.can_manage ? 'true' : 'false') +
       '">' +
-        renderAccountBlockHeader(
-          account,
-          [account.can_manage ? 'Manage access' : 'Review roster'],
-          accessTaskStrip,
-          account.can_manage
-            ? 'Open one access task at a time, then use the roster below.'
-            : 'Review who can act on this account. An owner or admin must make changes.'
-        ) +
+        (!account.can_manage
+          ? '<p class="portal-section-copy">' + escapeHTML('Review who has access. An owner or admin must make changes.') + '</p>'
+          : '') +
         '<div class="access-management-stats" id="access-stats-' +
         escapeAttr(account.id) +
         '"></div>' +
@@ -1102,7 +1011,6 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
                 '<div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden>' +
                   '<div class="access-task-header">' +
                     '<div>' +
-                      '<div class="account-panel-kicker">Access task</div>' +
                       '<h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4>' +
                       '<p id="access-task-copy-' + escapeAttr(account.id) + '"></p>' +
                     '</div>' +
@@ -1125,12 +1033,9 @@ function renderAccountAccessSection(account: PortalAccountSummary): string {
           '<div class="access-shell-main">' +
             '<div class="access-roster-column">' +
               '<div class="access-roster">' +
-                '<div class="access-panel-heading">' +
-                  '<h4>People on this account</h4>' +
-                  '<p>' + (account.can_manage
-                    ? 'Review the hosted roster here, then open the exact access job you need.'
-                    : 'Review the hosted roster here. An owner or admin must make changes.') + '</p>' +
-                '</div>' +
+                (account.can_manage
+                  ? '<div class="access-roster-toolbar">' + accessTaskStrip + '</div>'
+                  : '') +
                 '<div class="access-roster-list" id="access-list-' +
                 escapeAttr(account.id) +
                 '">' +
@@ -1153,12 +1058,11 @@ function renderHostedBillingCards(accounts: PortalAccountSummary[], showSelfHost
     return (
       '<section class="billing-surface-block billing-surface-block-empty">' +
         '<div class="billing-surface-header">' +
-          '<div class="account-panel-kicker">Hosted billing</div>' +
           '<h3>No hosted billing attached</h3>' +
         '</div>' +
         '<p>' + escapeHTML(showSelfHostedCommercial
-          ? 'Use the self-hosted billing tools below only when the request belongs to a self-hosted purchase.'
-          : 'Hosted invoices, payment methods, and subscription changes are not attached to this account.'
+          ? 'Use self-hosted billing tools below for self-hosted purchases.'
+          : 'Hosted invoices and payment methods are not attached to this account.'
         ) + '</p>' +
       '</section>'
     );
@@ -1167,7 +1071,6 @@ function renderHostedBillingCards(accounts: PortalAccountSummary[], showSelfHost
   return (
     '<section class="billing-surface-block">' +
       '<div class="billing-surface-header">' +
-        '<div class="account-panel-kicker">Hosted billing</div>' +
         '<h3>Hosted billing</h3>' +
       '</div>' +
       '<div class="billing-action-list billing-action-list-surface">' +
@@ -1198,7 +1101,6 @@ function renderBillingTaskPanel(title: string, copy: string, panelID: string, bo
     '<section class="billing-panel" id="' + escapeAttr(panelID) + '" hidden>' +
       '<div class="billing-task-header">' +
         '<div>' +
-          '<div class="account-panel-kicker">Billing task</div>' +
           '<h3>' + escapeHTML(title) + '</h3>' +
           '<p>' + escapeHTML(copy) + '</p>' +
         '</div>' +
@@ -1238,15 +1140,13 @@ function renderSupportSection(context: ShellViewContext): string {
     : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
   return (
     '<section class="portal-support-panel">' +
-      '<h2>Support</h2>' +
-      '<p>Use Support only after the self-service path fails.</p>' +
+      '<p>Use Support only after the self-service path fails. Retry the same step before you escalate.</p>' +
       '<div class="portal-support-simple">' +
         '<div class="portal-support-simple-card">' +
           '<div class="portal-support-simple-list">' +
             '<div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div>' +
-            '<div class="portal-support-simple-row"><strong>Path</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial)) + '</span></div>' +
-            '<div class="portal-support-simple-row"><strong>Account or email</strong><span>' + escapeHTML(supportRunbookAccountCopy(isHosted, showSelfHostedCommercial)) + '</span></div>' +
-            '<div class="portal-support-simple-row"><strong>Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div>' +
+            '<div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial)) + '</span></div>' +
+            '<div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div>' +
           '</div>' +
           '<div class="portal-support-simple-actions">' +
             supportActions +
@@ -1425,7 +1325,6 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
   return (
     '<section class="portal-auth-shell">' +
       '<div class="portal-auth-intro">' +
-        '<div class="account-panel-kicker">Pulse Account</div>' +
         '<h1>Sign in to Pulse Account</h1>' +
         '<p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p>' +
         '<div class="portal-auth-scope-list" aria-label="Pulse Account scope">' +
@@ -1436,7 +1335,6 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
       '</div>' +
       '<section class="portal-auth-panel" aria-labelledby="portal-auth-title">' +
         '<div class="portal-auth-card">' +
-          '<div class="account-panel-kicker">Sign in</div>' +
           '<h2 id="portal-auth-title">Email sign-in link</h2>' +
           '<p>Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.</p>' +
           '<div class="form-group portal-auth-form-group">' +

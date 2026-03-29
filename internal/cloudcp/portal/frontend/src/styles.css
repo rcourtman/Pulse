@@ -158,9 +158,9 @@ header .logout-btn:hover,
 
 /* ── Main container ───────────────────────────────────────────── */
 .main {
-  max-width: 960px;
+  max-width: 800px;
   margin: 0 auto;
-  padding: 24px 24px 64px;
+  padding: 0 24px 64px;
 }
 
 /* ── Portal shell (signed-in) ─────────────────────────────────── */
@@ -170,13 +170,13 @@ header .logout-btn:hover,
   gap: 0;
 }
 
-/* Identity bar */
+/* Identity bar — tighter, no padding top */
 .portal-identity-bar {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  padding: 20px 0 16px;
-  font-size: 14px;
+  padding: 16px 0 12px;
+  font-size: 13px;
   color: var(--ink-secondary);
 }
 
@@ -197,7 +197,7 @@ header .logout-btn:hover,
   align-items: stretch;
   gap: 0;
   border-bottom: 1px solid var(--border);
-  margin-bottom: 24px;
+  margin-bottom: 0;
 }
 
 .portal-tab {
@@ -262,7 +262,9 @@ header .logout-btn:hover,
   display: none !important;
 }
 
-.portal-content-panel { padding: 0; }
+.portal-content-panel {
+  padding: 20px 0 0;
+}
 
 /* ── Section headers ──────────────────────────────────────────── */
 .portal-section-header {
@@ -270,19 +272,26 @@ header .logout-btn:hover,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .portal-section-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
 }
 
 .portal-section-note {
   font-size: 13px;
   color: var(--ink-secondary);
-  margin-bottom: 16px;
+  margin-bottom: 12px;
+}
+
+.portal-section-copy {
+  font-size: 13px;
+  color: var(--ink-secondary);
+  margin: -4px 0 12px;
+  line-height: 1.4;
 }
 
 /* ── Account surface ──────────────────────────────────────────── */
@@ -293,8 +302,8 @@ header .logout-btn:hover,
 }
 
 .account-surface + .account-surface {
-  margin-top: 32px;
-  padding-top: 24px;
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid var(--border);
 }
 
@@ -317,14 +326,19 @@ header .logout-btn:hover,
 }
 
 .workspace-list-toolbar {
-  display: none;
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-muted);
+  background: var(--bg-subtle);
 }
 
 .workspace-list-head {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) 100px 100px 180px;
+  grid-template-columns: minmax(0, 2fr) 80px 80px 160px;
   gap: 8px;
-  padding: 8px 16px;
+  padding: 6px 16px;
   background: var(--bg-subtle);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
@@ -339,10 +353,10 @@ header .logout-btn:hover,
 
 .workspace-row {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) 100px 100px 180px;
+  grid-template-columns: minmax(0, 2fr) 80px 80px 160px;
   gap: 8px;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border-muted);
   background: var(--bg);
   transition: background 60ms ease;
@@ -358,7 +372,7 @@ header .logout-btn:hover,
 .workspace-row-primary {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
 }
 
@@ -406,7 +420,7 @@ header .logout-btn:hover,
 .workspace-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
@@ -416,7 +430,7 @@ header .logout-btn:hover,
 .badge {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 1px 6px;
   border: 1px solid var(--border);
   border-radius: 2em;
   font-size: 12px;
@@ -437,7 +451,7 @@ header .logout-btn:hover,
 .workspace-operations-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .workspace-operations-detail { position: static; }
@@ -704,19 +718,28 @@ header .logout-btn:hover,
 
 .access-roster.state-only { border: none; background: transparent; padding: 0; }
 
+.access-roster-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--border-muted);
+}
+
 .access-panel-heading {
-  padding: 12px 16px 8px;
+  padding: 10px 16px 6px;
 }
 
 .access-panel-heading h4 {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .access-panel-heading p {
-  margin: 4px 0 0;
-  font-size: 13px;
+  margin: 2px 0 0;
+  font-size: 12px;
   color: var(--ink-secondary);
 }
 
@@ -731,7 +754,7 @@ header .logout-btn:hover,
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px 120px;
   gap: 12px;
-  padding: 8px 16px;
+  padding: 6px 16px;
   background: var(--bg-subtle);
   border-bottom: 1px solid var(--border);
   font-size: 12px;
@@ -746,7 +769,7 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) 140px 120px;
   gap: 12px;
   align-items: center;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-top: 1px solid var(--border-muted);
 }
 
@@ -754,7 +777,7 @@ header .logout-btn:hover,
 .access-member-row:first-of-type { border-top: none; }
 .access-member-row:hover { background: var(--bg-subtle); }
 
-.access-member-identity { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.access-member-identity { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .access-member-topline { display: flex; align-items: center; gap: 8px; }
 .access-member-email { font-size: 14px; font-weight: 500; color: var(--ink); }
 .access-member-caption { font-size: 12px; color: var(--ink-muted); }
@@ -778,7 +801,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 24px 16px;
+  padding: 20px 16px;
   color: var(--ink-secondary);
 }
 
@@ -853,13 +876,13 @@ header .logout-btn:hover,
   border-radius: var(--radius);
   background: var(--bg);
   overflow: hidden;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .billing-surface-block-empty { padding: 16px; }
 
 .billing-surface-header {
-  padding: 12px 16px 8px;
+  padding: 10px 16px 6px;
 }
 
 .billing-surface-header h3 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -876,7 +899,7 @@ header .logout-btn:hover,
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 12px 16px;
+  padding: 10px 16px;
   border-top: 1px solid var(--border-muted);
 }
 
@@ -892,32 +915,36 @@ header .logout-btn:hover,
 .billing-shell {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 .billing-shell-main,
 .billing-shell-detail {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 0;
+}
+
+.billing-shell-main {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--bg);
 }
 
 .billing-shell-main-head {
-  padding: 12px;
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border-muted);
 }
 
 .billing-shell-main-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
 .billing-shell-main-head p { margin: 4px 0 0; font-size: 13px; color: var(--ink-secondary); }
 
 .billing-inline-support {
-  padding: 12px;
-  border: 1px solid var(--border-muted);
-  border-radius: var(--radius);
-  background: var(--bg-subtle);
-  margin-top: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border-muted);
+  background: transparent;
+  margin-top: 0;
 }
 
 .billing-inline-support h4 { margin: 0; font-size: 14px; font-weight: 600; }
@@ -1012,10 +1039,10 @@ header .logout-btn:hover,
 
 /* ── Support section ──────────────────────────────────────────── */
 .portal-support-panel {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  background: var(--bg);
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .portal-support-panel h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
@@ -1024,14 +1051,21 @@ header .logout-btn:hover,
 
 .portal-support-simple-card { padding: 0; border: none; background: transparent; }
 
-.portal-support-simple-list { display: flex; flex-direction: column; }
+.portal-support-simple-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
 
 .portal-support-simple-row {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
+  grid-template-columns: 120px minmax(0, 1fr);
   gap: 12px;
-  padding: 10px 0;
+  padding: 8px 16px;
   border-top: 1px solid var(--border-muted);
+  background: var(--bg);
 }
 
 .portal-support-simple-row:first-child { border-top: none; }
@@ -1042,7 +1076,6 @@ header .logout-btn:hover,
   display: flex;
   gap: 8px;
   padding-top: 12px;
-  border-top: 1px solid var(--border-muted);
 }
 
 .portal-support-link { color: var(--accent); font-size: 13px; font-weight: 500; }
@@ -1095,14 +1128,11 @@ header .logout-btn:hover,
 .overview-task-copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .overview-task-actions { display: flex; gap: 8px; margin-top: 4px; }
 
+/* Remove kicker labels — they feel like a custom portal. Use section context instead. */
 .account-panel-kicker,
 .billing-card-kicker,
 .account-eyebrow {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  color: var(--ink-muted);
-  text-transform: uppercase;
+  display: none;
 }
 
 /* ── Empty state ──────────────────────────────────────────────── */
@@ -1208,7 +1238,7 @@ header .logout-btn:hover,
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .portal-page-header h2 { margin: 0; font-size: 16px; font-weight: 600; }
@@ -1276,7 +1306,7 @@ header .logout-btn:hover,
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .main { padding: 16px 16px 48px; }
+  .main { padding: 0 16px 48px; }
 
   .portal-tab-bar { overflow-x: auto; scrollbar-width: none; gap: 0; }
   .portal-tab-bar::-webkit-scrollbar { display: none; }
@@ -1306,7 +1336,7 @@ header .logout-btn:hover,
 
 @media (max-width: 480px) {
   header { padding: 0 12px; }
-  .main { padding: 12px 12px 40px; }
+  .main { padding: 0 12px 40px; }
   .header-account-email { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .portal-identity-bar h2 { font-size: 16px; }
 }
