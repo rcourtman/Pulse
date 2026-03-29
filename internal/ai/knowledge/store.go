@@ -521,7 +521,12 @@ func (s *Store) ListGuests() ([]string, error) {
 		}
 		ext := filepath.Ext(file.Name())
 		if ext == ".json" || ext == ".enc" {
-			knowledge, _, err := s.loadKnowledgeFromPath(filepath.Join(s.dataDir, file.Name()))
+			path, err := securityutil.JoinStorageLeaf(s.dataDir, file.Name())
+			if err != nil {
+				log.Warn().Err(err).Str("file", file.Name()).Msg("skipping invalid knowledge storage leaf while listing guests")
+				continue
+			}
+			knowledge, _, err := s.loadKnowledgeFromPath(path)
 			if err != nil {
 				log.Warn().Err(err).Str("file", file.Name()).Msg("failed to inspect knowledge file while listing guests")
 				continue

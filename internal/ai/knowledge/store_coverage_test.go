@@ -608,6 +608,29 @@ func TestListGuests_ReadDirError(t *testing.T) {
 	}
 }
 
+func TestListGuests_SkipsInvalidStorageLeaf(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewStore(tmpDir)
+	if err != nil {
+		t.Fatalf("create store: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(store.dataDir, `guest\invalid.json`), []byte(`{"guest_id":"bad-guest"}`), 0o600); err != nil {
+		t.Fatalf("write invalid storage leaf: %v", err)
+	}
+	if err := store.SaveNote("guest-valid", "Guest Valid", "vm", "config", "title", "content"); err != nil {
+		t.Fatalf("save valid note: %v", err)
+	}
+
+	guests, err := store.ListGuests()
+	if err != nil {
+		t.Fatalf("ListGuests() error: %v", err)
+	}
+	if len(guests) != 1 || guests[0] != "guest-valid" {
+		t.Fatalf("ListGuests() = %v, want [guest-valid]", guests)
+	}
+}
+
 func TestFormatAllForContext_ListError(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "knowledge-dir")
 	if err != nil {

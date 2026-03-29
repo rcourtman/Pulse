@@ -179,6 +179,10 @@ The same migration-only rule applies to guest knowledge under
 knowledge files may only serve as migration input, and the knowledge store
 must rewrite canonical encrypted-at-rest storage immediately on load instead
 of leaving guest knowledge plaintext on disk until a future note update.
+That same knowledge-store boundary also governs directory scans: when the store
+rejoins discovered knowledge files for reads, it must route those already-owned
+leaves back through the shared storage-path helper instead of rebuilding raw
+`filepath.Join(dataDir, entry.Name())` paths.
 Chat-session and guest-knowledge persistence now also keep canonical on-disk
 names opaque and machine-owned. Legacy identifier-derived filenames may be
 discovered only by inspecting already-owned files for embedded record IDs, and
