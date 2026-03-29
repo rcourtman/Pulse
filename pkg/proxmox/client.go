@@ -46,7 +46,11 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 	// Try as float (handles cpulimit like 1.5)
 	var fl float64
 	if err := json.Unmarshal(data, &fl); err == nil {
-		*f = FlexInt(int(fl))
+		parsed, err := floatToIntTrunc(fl)
+		if err != nil {
+			return err
+		}
+		*f = FlexInt(parsed)
 		return nil
 	}
 
@@ -57,14 +61,70 @@ func (f *FlexInt) UnmarshalJSON(data []byte) error {
 	}
 
 	// Parse string to float first (handles "1.5" format from cpulimit)
-	floatVal, err := strconv.ParseFloat(s, 64)
+	parsed, err := parseFlexibleIntString(s)
 	if err != nil {
 		return err
 	}
 
 	// Convert to int
-	*f = FlexInt(int(floatVal))
+	*f = FlexInt(parsed)
 	return nil
+}
+
+func parseFlexibleIntString(raw string) (int, error) {
+	if strings.ContainsAny(raw, ".eE") {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return 0, err
+		}
+		return floatToIntTrunc(parsed)
+	}
+
+	parsed, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return int64ToInt(parsed)
+}
+
+func int64ToInt(v int64) (int, error) {
+	maxInt := int64(^uint(0) >> 1)
+	minInt := -maxInt - 1
+	if v > maxInt || v < minInt {
+		return 0, fmt.Errorf("integer %d exceeds int range", v)
+	}
+	return int(v), nil
+}
+
+func floatToIntTrunc(v float64) (int, error) {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("non-finite float %v cannot be converted to int", v)
+	}
+	limit := math.Exp2(float64(strconv.IntSize - 1))
+	if v >= limit || v < -limit {
+		return 0, fmt.Errorf("float %v exceeds int range", v)
+	}
+	return int(v), nil
+}
+
+func looksLikeNumericLiteral(raw string) bool {
+	hasDigit := false
+	var prev rune
+	for i, r := range raw {
+		switch {
+		case unicode.IsDigit(r):
+			hasDigit = true
+		case r == '.' || r == 'e' || r == 'E':
+		case r == '+' || r == '-':
+			if i != 0 && prev != 'e' && prev != 'E' {
+				return false
+			}
+		default:
+			return false
+		}
+		prev = r
+	}
+	return hasDigit
 }
 
 func coerceUint64(field string, value interface{}) (uint64, error) {
@@ -1563,10 +1623,7 @@ func parseUint64Flexible(value interface{}) (uint64, error) {
 		}
 		return uint64(v), nil
 	case float64:
-		if v < 0 {
-			return 0, nil
-		}
-		return uint64(v), nil
+		return floatToUint64Trunc(v)
 	case json.Number:
 		return parseUint64Flexible(v.String())
 	case string:
@@ -1586,10 +1643,7 @@ func parseUint64Flexible(value interface{}) (uint64, error) {
 			if err != nil {
 				return 0, err
 			}
-			if f < 0 {
-				return 0, nil
-			}
-			return uint64(f), nil
+			return floatToUint64Trunc(f)
 		}
 		u, err := strconv.ParseUint(s, 10, 64)
 		if err != nil {
@@ -1599,6 +1653,19 @@ func parseUint64Flexible(value interface{}) (uint64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported type %T for uint64 conversion", value)
 	}
+}
+
+func floatToUint64Trunc(v float64) (uint64, error) {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("non-finite float %v cannot be converted to uint64", v)
+	}
+	if v < 0 {
+		return 0, nil
+	}
+	if v >= math.Exp2(64) {
+		return 0, fmt.Errorf("float %v exceeds uint64 range", v)
+	}
+	return uint64(v), nil
 }
 
 type VMIPAddress struct {
@@ -2013,7 +2080,12 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	// Handle wearout field which can be int, string ("N/A"), or null
 	switch v := aux.Wearout.(type) {
 	case float64:
-		d.Wearout = int(v)
+		parsed, err := floatToIntTrunc(v)
+		if err != nil {
+			d.Wearout = wearoutUnknown
+			break
+		}
+		d.Wearout = parsed
 	case string:
 		// Proxmox returns "N/A" or empty string for HDDs/RAID controllers.
 		// Some controllers also return numeric wearout values as strings, so try to parse them.
@@ -2030,7 +2102,12 @@ func (d *Disk) UnmarshalJSON(data []byte) error {
 	// Handle rpm field which can be number, string descriptor ("SSD"/"N/A"), or null
 	switch v := aux.RPM.(type) {
 	case float64:
-		d.RPM = int(v)
+		parsed, err := floatToIntTrunc(v)
+		if err != nil {
+			d.RPM = 0
+			break
+		}
+		d.RPM = parsed
 	case string:
 		trimmed := strings.TrimSpace(v)
 		if trimmed == "" || strings.EqualFold(trimmed, "ssd") || strings.EqualFold(trimmed, "n/a") {
@@ -2080,11 +2157,13 @@ func parseWearoutValue(raw string) int {
 		return parsed
 	}
 
-	if parsed, err := strconv.ParseFloat(cleaned, 64); err == nil {
-		if parsed <= 0 {
-			return int(parsed)
+	if looksLikeNumericLiteral(cleaned) {
+		if parsed, err := strconv.ParseFloat(cleaned, 64); err == nil {
+			if value, convErr := floatToIntTrunc(parsed); convErr == nil {
+				return value
+			}
 		}
-		return int(parsed)
+		return wearoutUnknown
 	}
 
 	var digits strings.Builder

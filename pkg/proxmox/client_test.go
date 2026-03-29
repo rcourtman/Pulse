@@ -7,10 +7,22 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
+
+func platformIntOverflowString() string {
+	if strconv.IntSize == 32 {
+		return "2147483648"
+	}
+	return "9223372036854775808"
+}
+
+func platformIntOverflowFloat() float64 {
+	return math.Exp2(float64(strconv.IntSize - 1))
+}
 
 func TestDiskUnmarshalWearout(t *testing.T) {
 	tests := []struct {
@@ -175,6 +187,20 @@ func TestDiskUnmarshalJSON_UnexpectedRPMType(t *testing.T) {
 		t.Fatalf("unexpected error unmarshalling disk: %v", err)
 	}
 	// Unexpected type should normalize to 0
+	if disk.RPM != 0 {
+		t.Fatalf("rpm: got %d, want 0", disk.RPM)
+	}
+}
+
+func TestDiskUnmarshalJSON_OutOfRangeNumericFieldsNormalize(t *testing.T) {
+	payload := fmt.Sprintf(`{"devpath":"/dev/sda","model":"Example","serial":"123","type":"hdd","health":"OK","wearout":%.0f,"size":1000,"rpm":%.0f}`, platformIntOverflowFloat(), platformIntOverflowFloat())
+	var disk Disk
+	if err := json.Unmarshal([]byte(payload), &disk); err != nil {
+		t.Fatalf("unexpected error unmarshalling disk: %v", err)
+	}
+	if disk.Wearout != wearoutUnknown {
+		t.Fatalf("wearout: got %d, want %d (unknown)", disk.Wearout, wearoutUnknown)
+	}
 	if disk.RPM != 0 {
 		t.Fatalf("rpm: got %d, want 0", disk.RPM)
 	}
@@ -541,6 +567,26 @@ func TestFlexIntUnmarshalJSON(t *testing.T) {
 	}
 }
 
+func TestFlexIntUnmarshalJSONRejectsNonFiniteAndOverflow(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "string NaN", input: `"NaN"`},
+		{name: "string positive infinity", input: `"Infinity"`},
+		{name: "string overflow", input: fmt.Sprintf(`"%s"`, platformIntOverflowString())},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var f FlexInt
+			if err := f.UnmarshalJSON([]byte(tc.input)); err == nil {
+				t.Fatalf("expected error for %s, got nil", tc.input)
+			}
+		})
+	}
+}
+
 func TestParseUint64Flexible(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -565,6 +611,9 @@ func TestParseUint64Flexible(t *testing.T) {
 		{name: "float64 truncates down", value: float64(9.9), want: 9},
 		{name: "float64 negative", value: float64(-1.5), want: 0},
 		{name: "float64 zero", value: float64(0.0), want: 0},
+		{name: "float64 NaN", value: math.NaN(), wantErr: true},
+		{name: "float64 positive infinity", value: math.Inf(1), wantErr: true},
+		{name: "float64 out of range", value: math.Exp2(64), wantErr: true},
 		// json.Number
 		{name: "json.Number integer", value: json.Number("99"), want: 99},
 		{name: "json.Number float", value: json.Number("3.14"), want: 3},
@@ -934,6 +983,8 @@ func TestParseWearoutValue(t *testing.T) {
 		{name: "float value truncated", raw: "81.5", want: 81},
 		{name: "float zero decimal", raw: "90.0", want: 90},
 		{name: "float high precision", raw: "75.999", want: 75},
+		{name: "float non-finite string", raw: "NaN", want: wearoutUnknown},
+		{name: "float overflow string", raw: "9.223372036854776e18", want: wearoutUnknown},
 		{name: "negative float", raw: "-5.5", want: -5},
 		{name: "float zero exactly", raw: "0.0", want: 0},
 		{name: "float negative zero", raw: "-0.0", want: 0},
