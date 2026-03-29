@@ -54,10 +54,10 @@ describe('RecoverySummary', () => {
     ));
 
     expect(screen.getByTestId('recovery-summary')).toBeInTheDocument();
-    expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
-    expect(screen.getByText('Protected Footprint')).toBeInTheDocument();
+    expect(screen.getByText('Posture')).toBeInTheDocument();
+    expect(screen.getByText('Coverage')).toBeInTheDocument();
     expect(screen.getByText('Freshness')).toBeInTheDocument();
-    expect(screen.getByText('Recent History')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
     expect(screen.getAllByText(/attention/i).length).toBeGreaterThan(0);
     expect(screen.getByText(/recovery points/i)).toBeInTheDocument();
     expect(screen.getByText(/item types/i)).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe('RecoverySummary', () => {
     expect(screen.getByText('>7d 1 · Never Succeeded 1')).toBeInTheDocument();
     expect(screen.getByText('fresh in 24h')).toBeInTheDocument();
     expect(screen.getByText('Latest Activity Mar 9')).toBeInTheDocument();
-    expect(screen.getByText('2 protected')).toBeInTheDocument();
+    expect(screen.getByText('2 protected items')).toBeInTheDocument();
     expect(screen.getByText('need attention')).toBeInTheDocument();
     expect(screen.queryByText('protected items')).not.toBeInTheDocument();
     expect(screen.queryByText('Running')).not.toBeInTheDocument();

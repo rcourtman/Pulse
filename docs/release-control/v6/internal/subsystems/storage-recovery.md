@@ -741,18 +741,18 @@ Day` when they do not materially improve operator triage, so the top strip
 stays closer to storage's orientation-first rhythm.
 That same summary-scan rule should also trim derivative rows that restate the
 headline instead of adding a new operator question. `Freshness` should not add
-an extra `<24h` row under a `fresh in 24h` headline, `Protected Footprint`
-should not spend a row repeating a primary-platform label when platform count
-already frames the footprint, and `Recent History` should stay on a short
-activity readout rather than carrying a four-line micro report.
+an extra `<24h` row under a `fresh in 24h` headline, `Coverage` should not
+spend a row repeating a primary-platform label when platform count already
+frames the footprint, and `Activity` should stay on a short activity readout
+rather than carrying a four-line micro report.
 That same summary-card rule should also avoid inline distribution bars or
 dashboard-style subvisualizations inside the cards when the same signal can be
 expressed as short metric rows. Recovery summary cards should stay on the
 shared monitoring-card rhythm of one dominant metric plus compact supporting
 rows rather than reviving bespoke visual telemetry that makes the strip read
 heavier than the rest of Pulse.
-That same differentiation rule applies across cards too. `Recovery Posture`
-and `Freshness` should not lead with the same stale/attention headline; the
+That same differentiation rule applies across cards too. `Posture` and
+`Freshness` should not lead with the same stale/attention headline; the
 freshness card should emphasize recent successful coverage such as fresh-in-24h
 reach, while posture owns the attention-state headline.
 That same density rule should route through the shared summary primitives

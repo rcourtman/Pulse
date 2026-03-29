@@ -154,7 +154,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
     <Show when={hasRollups()}>
       <SummaryPanel
         headerLeft={
-          <span class="font-medium text-base-content">{summary().total} protected</span>
+          <span class="font-medium text-base-content">{summary().total} protected items</span>
         }
         timeRange={props.timeRange()}
         onTimeRangeChange={props.onTimeRangeChange ? handleTimeRangeChange : undefined}
@@ -163,7 +163,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         testId="recovery-summary"
         class="overflow-hidden"
       >
-        <SummaryMetricCard label="Recovery Posture" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard label="Posture" loaded={true} hasData={hasRollups()}>
           <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class={`text-xl font-semibold tabular-nums ${primaryPostureMetric().valueClass}`}>
@@ -191,7 +191,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
           </div>
         </SummaryMetricCard>
 
-        <SummaryMetricCard label="Protected Footprint" loaded={true} hasData={hasRollups()}>
+        <SummaryMetricCard label="Coverage" loaded={true} hasData={hasRollups()}>
           <div class="flex h-full flex-col gap-1.5">
             <div>
               <div class="text-xl font-semibold tabular-nums text-base-content">
@@ -204,7 +204,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         </SummaryMetricCard>
 
         <SummaryMetricCard
-          label="Recent History"
+          label="Activity"
           loaded={props.seriesLoaded()}
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}

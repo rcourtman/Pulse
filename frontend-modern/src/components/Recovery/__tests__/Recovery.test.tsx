@@ -207,7 +207,7 @@ describe('Recovery', () => {
     const recoveryPage = screen.getByTestId('recovery-page');
     const summaryPanel = await screen.findByTestId('recovery-summary');
     expect(summaryPanel).toBeInTheDocument();
-    expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
+    expect(screen.getByText('Posture')).toBeInTheDocument();
     const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
     expect(within(workspaceTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
     expect(within(workspaceTablist).getByRole('tab', { name: 'Recovery events' })).toBeInTheDocument();
@@ -234,7 +234,7 @@ describe('Recovery', () => {
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
     expect(screen.getAllByText(/Page 1 \/ 1/i).length).toBeGreaterThan(0);
-    expect(screen.queryByText(/^2 protected items$/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/^2 protected items$/i)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /recovery events/i })).toHaveAttribute(
       'aria-selected',
       'false',
@@ -464,7 +464,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     const summary = await screen.findByTestId('recovery-summary');
-    expect(within(summary).getByText('Protected Footprint')).toBeInTheDocument();
+    expect(within(summary).getByText('Coverage')).toBeInTheDocument();
     expect(within(summary).queryByText('Primary Item')).not.toBeInTheDocument();
     expect(within(summary).getByText(/item types/i)).toBeInTheDocument();
     expect(within(summary).getAllByText(/platforms/i).length).toBeGreaterThan(0);
