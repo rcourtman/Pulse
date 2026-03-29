@@ -41,6 +41,13 @@ type controllableStubFetcher struct {
 	snapshot   *FixtureSnapshot
 	startCalls []string
 	stopCalls  []string
+	logReads   []appLogReadCall
+}
+
+type appLogReadCall struct {
+	appName     string
+	containerID string
+	tailLines   int
 }
 
 func (s *controllableStubFetcher) Fetch(context.Context) (*FixtureSnapshot, error) {
@@ -71,6 +78,18 @@ func (s *controllableStubFetcher) StopApp(_ context.Context, appID string) error
 		}
 	}
 	return nil
+}
+
+func (s *controllableStubFetcher) ReadAppLogs(_ context.Context, appName, containerID string, tailLines int) ([]AppLogLine, error) {
+	s.logReads = append(s.logReads, appLogReadCall{
+		appName:     appName,
+		containerID: containerID,
+		tailLines:   tailLines,
+	})
+	return []AppLogLine{
+		{Timestamp: "2026-03-29T18:00:00Z", Data: "ready"},
+		{Timestamp: "2026-03-29T18:01:00Z", Data: "serving"},
+	}, nil
 }
 
 func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
@@ -184,6 +203,58 @@ func TestProviderControlAppUsesFetcherAndRefreshesSnapshot(t *testing.T) {
 	}
 	if !foundRunning {
 		t.Fatalf("expected nextcloud to be RUNNING after control, got %+v", snapshot.Apps)
+	}
+}
+
+func TestProviderReadAppLogsUsesCanonicalPrimaryContainer(t *testing.T) {
+	fixtures := DefaultFixtures()
+	fetcher := &controllableStubFetcher{snapshot: &fixtures}
+	provider := NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	result, err := provider.ReadAppLogs(context.Background(), "nextcloud", "", 25)
+	if err != nil {
+		t.Fatalf("ReadAppLogs() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected app log result")
+	}
+	if result.Host != "truenas-main" || result.App.Name != "Nextcloud" {
+		t.Fatalf("unexpected app log result identity: %+v", result)
+	}
+	if result.Container.ServiceName != "nextcloud" || result.Container.ID != "nextcloud-web-1" {
+		t.Fatalf("expected canonical primary container, got %+v", result.Container)
+	}
+	if len(fetcher.logReads) != 1 {
+		t.Fatalf("expected one log read, got %+v", fetcher.logReads)
+	}
+	if call := fetcher.logReads[0]; call.appName != "nextcloud" || call.containerID != "nextcloud-web-1" || call.tailLines != 25 {
+		t.Fatalf("unexpected log read call: %+v", call)
+	}
+}
+
+func TestProviderReadAppLogsSupportsExplicitServiceSelection(t *testing.T) {
+	fixtures := DefaultFixtures()
+	fetcher := &controllableStubFetcher{snapshot: &fixtures}
+	provider := NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	result, err := provider.ReadAppLogs(context.Background(), "nextcloud", "redis", 10)
+	if err != nil {
+		t.Fatalf("ReadAppLogs() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected app log result")
+	}
+	if result.Container.ServiceName != "redis" || result.Container.ID != "nextcloud-redis-1" {
+		t.Fatalf("expected explicit redis container selection, got %+v", result.Container)
+	}
+	if len(fetcher.logReads) != 1 || fetcher.logReads[0].containerID != "nextcloud-redis-1" {
+		t.Fatalf("unexpected log read calls: %+v", fetcher.logReads)
 	}
 }
 

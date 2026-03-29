@@ -28,6 +28,12 @@ const defaultRealtimeIntervalSeconds = 2
 
 const defaultAppStatsIntervalSeconds = defaultRealtimeIntervalSeconds
 
+const defaultAppLogInitialWait = 2 * time.Second
+
+const defaultAppLogIdleWait = 250 * time.Millisecond
+
+const maxAppLogTailLines = 500
+
 // ClientConfig configures the TrueNAS REST API client.
 type ClientConfig struct {
 	Host               string
@@ -472,6 +478,55 @@ func (c *Client) StopApp(ctx context.Context, appID string) error {
 	return c.executeAppAction(ctx, "app.stop", appID)
 }
 
+// GetAppLogs retrieves a bounded tail of one TrueNAS app container log stream
+// through the canonical JSON-RPC event path.
+func (c *Client) GetAppLogs(ctx context.Context, appName, containerID string, tailLines int) ([]AppLogLine, error) {
+	appName = strings.TrimSpace(appName)
+	containerID = strings.TrimSpace(containerID)
+	if appName == "" {
+		return nil, fmt.Errorf("truenas app name is required")
+	}
+	if containerID == "" {
+		return nil, fmt.Errorf("truenas container id is required")
+	}
+	if tailLines <= 0 {
+		tailLines = 100
+	}
+	if tailLines > maxAppLogTailLines {
+		tailLines = maxAppLogTailLines
+	}
+
+	conn, err := c.dialRPC(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = conn.Close() }()
+
+	rpc := trueNASRPCClient{
+		conn:   conn,
+		nextID: 1,
+	}
+	if err := rpc.authenticate(ctx, c.config); err != nil {
+		return nil, err
+	}
+
+	subscriptionArgs := map[string]any{
+		"app_name":     appName,
+		"container_id": containerID,
+		"tail_lines":   tailLines,
+	}
+	subscriptionJSON, err := json.Marshal(subscriptionArgs)
+	if err != nil {
+		return nil, fmt.Errorf("marshal truenas app log subscription: %w", err)
+	}
+	subscriptionName := fmt.Sprintf("app.container_log_follow:%s", string(subscriptionJSON))
+	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
+		return nil, err
+	}
+
+	return rpc.readAppLogEvents(ctx, tailLines)
+}
+
 func (c *Client) executeAppAction(ctx context.Context, method, appID string) error {
 	appID = strings.TrimSpace(appID)
 	if appID == "" {
@@ -830,6 +885,11 @@ type trueNASAppBlkIOStats struct {
 	Write int64 `json:"write"`
 }
 
+type trueNASAppLogNotification struct {
+	Collection string `json:"collection"`
+	Fields     any    `json:"fields"`
+}
+
 type trueNASRealtimeNotification struct {
 	Collection string         `json:"collection"`
 	Fields     map[string]any `json:"fields"`
@@ -1005,6 +1065,140 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 		}
 		return stats, nil
 	}
+}
+
+func (c *trueNASRPCClient) readAppLogEvents(ctx context.Context, tailLines int) ([]AppLogLine, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+	if tailLines <= 0 {
+		tailLines = 100
+	}
+	if tailLines > maxAppLogTailLines {
+		tailLines = maxAppLogTailLines
+	}
+
+	initialDeadline := time.Now().Add(defaultAppLogInitialWait)
+	idleDeadline := time.Time{}
+	lines := make([]AppLogLine, 0, tailLines)
+
+	for {
+		deadline := initialDeadline
+		if !idleDeadline.IsZero() {
+			deadline = idleDeadline
+		}
+		if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+			deadline = ctxDeadline
+		}
+		_ = c.conn.SetReadDeadline(deadline)
+
+		var message trueNASRPCResponse
+		if err := c.conn.ReadJSON(&message); err != nil {
+			if isTimeoutError(err) {
+				return trimAppLogLines(lines, tailLines), nil
+			}
+			return nil, fmt.Errorf("read truenas rpc app.container_log_follow notification: %w", err)
+		}
+		if message.Method == "" {
+			if message.Error != nil {
+				return nil, fmt.Errorf("truenas rpc app.container_log_follow failed: code=%d message=%q", message.Error.Code, strings.TrimSpace(message.Error.Message))
+			}
+			continue
+		}
+		if len(message.Params) == 0 {
+			continue
+		}
+
+		var notification trueNASAppLogNotification
+		if err := json.Unmarshal(message.Params, &notification); err == nil && (notification.Collection != "" || notification.Fields != nil) {
+			if notification.Collection != "" && !strings.HasPrefix(strings.TrimSpace(notification.Collection), "app.container_log_follow") {
+				continue
+			}
+			appended := appendAppLogLines(lines, notification.Fields)
+			if len(appended) > len(lines) {
+				lines = appended
+				if len(lines) >= tailLines {
+					return trimAppLogLines(lines, tailLines), nil
+				}
+				idleDeadline = time.Now().Add(defaultAppLogIdleWait)
+			}
+			continue
+		}
+
+		var raw any
+		if err := json.Unmarshal(message.Params, &raw); err != nil {
+			return nil, fmt.Errorf("decode truenas app.container_log_follow notification: %w", err)
+		}
+		appended := appendAppLogLines(lines, raw)
+		if len(appended) > len(lines) {
+			lines = appended
+			if len(lines) >= tailLines {
+				return trimAppLogLines(lines, tailLines), nil
+			}
+			idleDeadline = time.Now().Add(defaultAppLogIdleWait)
+		}
+	}
+}
+
+func appendAppLogLines(lines []AppLogLine, raw any) []AppLogLine {
+	for _, line := range extractAppLogLines(raw) {
+		if strings.TrimSpace(line.Data) == "" {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func extractAppLogLines(raw any) []AppLogLine {
+	switch typed := raw.(type) {
+	case nil:
+		return nil
+	case []any:
+		var lines []AppLogLine
+		for _, entry := range typed {
+			lines = append(lines, extractAppLogLines(entry)...)
+		}
+		return lines
+	case map[string]any:
+		if fields, ok := typed["fields"]; ok {
+			return extractAppLogLines(fields)
+		}
+		if data, ok := typed["data"]; ok {
+			text := strings.TrimSpace(fmt.Sprint(data))
+			if text == "" || text == "<nil>" {
+				return nil
+			}
+			line := AppLogLine{Data: text}
+			if timestamp, ok := typed["timestamp"]; ok && timestamp != nil {
+				ts := strings.TrimSpace(fmt.Sprint(timestamp))
+				if ts != "" && ts != "<nil>" {
+					line.Timestamp = ts
+				}
+			}
+			return []AppLogLine{line}
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func trimAppLogLines(lines []AppLogLine, tailLines int) []AppLogLine {
+	if len(lines) == 0 {
+		return nil
+	}
+	if tailLines > 0 && len(lines) > tailLines {
+		lines = lines[len(lines)-tailLines:]
+	}
+	out := make([]AppLogLine, len(lines))
+	copy(out, lines)
+	return out
+}
+
+func isTimeoutError(err error) bool {
+	var netErr net.Error
+	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
 func (c *trueNASRPCClient) getSystemTemperatures(ctx context.Context) (map[string]float64, error) {

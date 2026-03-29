@@ -67,6 +67,7 @@ type AIService interface {
 	SetDiscoveryProvider(provider chat.MCPDiscoveryProvider)
 	SetUnifiedResourceProvider(provider chat.MCPUnifiedResourceProvider)
 	SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider)
+	SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider)
 	UpdateControlSettings(cfg *config.AIConfig)
 	GetBaseURL() string
 }

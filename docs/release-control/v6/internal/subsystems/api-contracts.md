@@ -587,6 +587,12 @@ helpers must not introduce a parallel public `/api/truenas/apps/...` control
 surface; provider-backed app control for Pulse Assistant stays behind the
 shared AI runtime tool contract unless this API contract changes in the same
 slice.
+That same negative-space rule also applies to assistant diagnostics. Wiring
+native TrueNAS app log reads into `internal/api/router.go`,
+`internal/api/ai_handler.go`, or adjacent backend helpers must not introduce a
+parallel public `/api/truenas/apps/.../logs` surface; provider-backed app log
+reads for Pulse Assistant stay behind the shared `pulse_read` runtime tool
+contract unless this API contract changes in the same slice.
 The monitored-system ledger contract now also carries a canonical grouping
 explanation payload. `/api/license/monitored-system-ledger` must expose the
 shared monitored-system explanation summary, sanitized grouping reasons, and

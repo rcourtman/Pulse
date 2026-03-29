@@ -131,3 +131,37 @@ func TestInjectRecentContextIfNeeded_PrimaryNameFallback(t *testing.T) {
 		t.Fatalf("expected log instruction to use primary name, got: %s", content)
 	}
 }
+
+func TestInjectRecentContextIfNeeded_UsesResourceIDHintForTrueNASAppLogs(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	resolved := store.GetResolvedContext(session.ID)
+	resource := &ResolvedResource{
+		ResourceID: "app-container:truenas-main:nextcloud",
+		Name:       "Nextcloud",
+		Kind:       "app-container",
+		Node:       "truenas-main",
+		TargetHost: "truenas-main",
+		Adapter:    "truenas",
+	}
+	resolved.AddResourceWithExplicitAccess(resource.Name, resource)
+
+	messages := []Message{{Role: "user", Content: "show its logs"}}
+	service := &Service{}
+	service.injectRecentContextIfNeeded("show its logs", session.ID, messages, store)
+
+	content := messages[0].Content
+	if !strings.Contains(content, "Use resource_id=\"Nextcloud\".") {
+		t.Fatalf("expected resource_id hint, got: %s", content)
+	}
+	if !strings.Contains(content, "Use pulse_read action=logs resource_id=\"Nextcloud\" lines=50.") {
+		t.Fatalf("expected resource-targeted log instruction, got: %s", content)
+	}
+}

@@ -314,6 +314,64 @@ func TestStartAndStopAppUseRPCMethods(t *testing.T) {
 	}
 }
 
+func TestGetAppLogsUsesRPCSubscription(t *testing.T) {
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		subscribeReq := readRPCRequest(t, conn)
+		if subscribeReq.Method != "core.subscribe" {
+			t.Fatalf("expected core.subscribe, got %q", subscribeReq.Method)
+		}
+		params, ok := subscribeReq.Params.([]any)
+		if !ok || len(params) != 1 {
+			t.Fatalf("expected one subscription param, got %#v", subscribeReq.Params)
+		}
+		subscriptionName, _ := params[0].(string)
+		if !strings.HasPrefix(subscriptionName, "app.container_log_follow:") {
+			t.Fatalf("expected app.container_log_follow subscription, got %q", subscriptionName)
+		}
+		if !strings.Contains(subscriptionName, "\"app_name\":\"nextcloud\"") || !strings.Contains(subscriptionName, "\"container_id\":\"nextcloud-web-1\"") {
+			t.Fatalf("expected subscription args for nextcloud-web-1, got %q", subscriptionName)
+		}
+		writeRPCResult(t, conn, subscribeReq.ID, "sub-logs")
+		writeRPCNotification(t, conn, "collection_update", map[string]any{
+			"collection": "app.container_log_follow:{\"app_name\":\"nextcloud\",\"container_id\":\"nextcloud-web-1\",\"tail_lines\":2}",
+			"fields": map[string]any{
+				"data":      "ready",
+				"timestamp": "2026-03-29T18:00:00Z",
+			},
+		})
+		writeRPCNotification(t, conn, "collection_update", map[string]any{
+			"collection": "app.container_log_follow:{\"app_name\":\"nextcloud\",\"container_id\":\"nextcloud-web-1\",\"tail_lines\":2}",
+			"fields": map[string]any{
+				"data":      "serving",
+				"timestamp": "2026-03-29T18:01:00Z",
+			},
+		})
+		time.Sleep(defaultAppLogIdleWait + 100*time.Millisecond)
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	lines, err := client.GetAppLogs(context.Background(), "nextcloud", "nextcloud-web-1", 2)
+	if err != nil {
+		t.Fatalf("GetAppLogs() error = %v", err)
+	}
+	if len(lines) != 2 {
+		t.Fatalf("expected two log lines, got %+v", lines)
+	}
+	if lines[0].Timestamp != "2026-03-29T18:00:00Z" || lines[0].Data != "ready" {
+		t.Fatalf("unexpected first log line: %+v", lines[0])
+	}
+	if lines[1].Data != "serving" {
+		t.Fatalf("unexpected second log line: %+v", lines[1])
+	}
+}
+
 func TestGetSystemTelemetryFromRPC(t *testing.T) {
 	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
 		authReq := readRPCRequest(t, conn)

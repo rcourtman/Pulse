@@ -158,6 +158,13 @@ API-backed control actions such as TrueNAS app start/stop/restart on the
 shared `pulse_control` tool with `type="resource"` and native audited
 execution, instead of adding provider-local control tools or bypassing the
 shared approval and policy model.
+That same AI tool ownership now also includes canonical resource-native
+diagnostics. `internal/ai/tools/tools_read.go`,
+`internal/ai/tools/executor.go`, and `internal/api/router.go` must keep
+API-backed app log reads such as TrueNAS app-container logs on the shared
+`pulse_read` tool with `action="logs"` and `resource_id=<canonical app>`
+instead of requiring `target_host` for non-agent platforms or adding a
+provider-local log-read tool.
 That same AI tool ownership also applies to recovery-backed storage reads.
 When `internal/ai/tools/adapters.go` returns recovery points with malformed
 persisted metadata omitted at the shared recovery-store boundary, the storage
@@ -279,6 +286,11 @@ API-backed platforms such as TrueNAS. The runtime must expose canonical
 the shared unified-resource model instead of falling back to Proxmox- or
 Docker-local enumerations when a platform projects onto canonical host,
 storage, disk, or workload contracts.
+That same runtime contract applies to resource-native diagnostics. When
+resolved context points at an API-backed canonical `app-container` such as a
+TrueNAS app, chat/runtime prompt hints and tool execution must route log reads
+through `resource_id` on `pulse_read` rather than inventing agent-host hints
+for platforms that are not reached through the unified agent.
 Unified AI context should follow the same rule: storage summaries may mention
 canonical storage pools and physical disks that need attention, but must not
 mislabel lower-topology storage resources such as TrueNAS datasets as

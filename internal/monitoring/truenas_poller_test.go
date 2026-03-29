@@ -253,6 +253,13 @@ type pollerControlFetcher struct {
 	snapshot   *truenas.FixtureSnapshot
 	startCalls []string
 	stopCalls  []string
+	logReads   []pollerLogReadCall
+}
+
+type pollerLogReadCall struct {
+	appName     string
+	containerID string
+	tailLines   int
 }
 
 func (f *pollerControlFetcher) Fetch(context.Context) (*truenas.FixtureSnapshot, error) {
@@ -286,6 +293,17 @@ func (f *pollerControlFetcher) StopApp(_ context.Context, appID string) error {
 		}
 	}
 	return nil
+}
+
+func (f *pollerControlFetcher) ReadAppLogs(_ context.Context, appName, containerID string, tailLines int) ([]truenas.AppLogLine, error) {
+	f.logReads = append(f.logReads, pollerLogReadCall{
+		appName:     appName,
+		containerID: containerID,
+		tailLines:   tailLines,
+	})
+	return []truenas.AppLogLine{
+		{Timestamp: "2026-03-29T18:00:00Z", Data: "ready"},
+	}, nil
 }
 
 func TestTrueNASPollerControlAppRefreshesCachedRecords(t *testing.T) {
@@ -325,6 +343,40 @@ func TestTrueNASPollerControlAppRefreshesCachedRecords(t *testing.T) {
 	}
 	if got := len(poller.cachedRecordsByOrg["default"]["conn-1"]); got == 0 {
 		t.Fatal("expected refreshed cached records after app control")
+	}
+}
+
+func TestTrueNASPollerReadAppLogsUsesTenantScopedProvider(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	fixtures := truenas.DefaultFixtures()
+	fetcher := &pollerControlFetcher{snapshot: &fixtures}
+	provider := truenas.NewLiveProvider(fetcher)
+	if err := provider.Refresh(context.Background()); err != nil {
+		t.Fatalf("Refresh() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(nil, 0, nil)
+	poller.providersByOrg["default"] = map[string]*truenas.Provider{"conn-1": provider}
+	poller.cachedRecordsByOrg["default"] = map[string][]unifiedresources.IngestRecord{"conn-1": provider.Records()}
+
+	result, err := poller.ReadAppLogs(context.Background(), "default", "truenas-main", "nextcloud", "", 20)
+	if err != nil {
+		t.Fatalf("ReadAppLogs() error = %v", err)
+	}
+	if result == nil || result.App.Name != "Nextcloud" {
+		t.Fatalf("expected Nextcloud log result, got %+v", result)
+	}
+	if result.Container.ID != "nextcloud-web-1" {
+		t.Fatalf("expected canonical primary container, got %+v", result.Container)
+	}
+	if len(fetcher.logReads) != 1 {
+		t.Fatalf("expected one log read, got %+v", fetcher.logReads)
+	}
+	if call := fetcher.logReads[0]; call.appName != "nextcloud" || call.containerID != "nextcloud-web-1" || call.tailLines != 20 {
+		t.Fatalf("unexpected log read call: %+v", call)
 	}
 }
 

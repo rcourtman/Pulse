@@ -81,6 +81,7 @@ querying, and the operator-facing storage health presentation layer.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
 21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows.
 22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
+23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
 
 ## Forbidden Paths
 
@@ -1524,3 +1525,9 @@ and recovery ingest after a control event, but storage and recovery surfaces
 must continue to consume the resulting canonical recovery points instead of
 growing a second recovery-local control transport or action-specific payload
 contract.
+That same boundary also owns the line between recovery data and assistant
+diagnostics. Backend-native TrueNAS app log reads may route through shared
+AI/runtime wiring and the poller's provider selection path, but storage and
+recovery surfaces must not grow a second recovery-local log transport or
+diagnostic payload contract just because those reads can inform operator
+investigation.

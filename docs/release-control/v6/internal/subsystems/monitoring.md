@@ -251,6 +251,12 @@ refresh semantics. `internal/truenas/provider.go` and
 actions through the owned TrueNAS runtime and refresh cached records and
 recovery ingest immediately afterward, so assistant-driven app control does
 not rely on stale provider state or ad hoc config-local action paths.
+That same monitoring boundary now also owns canonical TrueNAS app log reads.
+`internal/truenas/client.go`, `internal/truenas/provider.go`, and
+`internal/monitoring/truenas_poller.go` must read bounded app-container logs
+through the owned `/api/current` JSON-RPC runtime and tenant-scoped poller
+selection path, so assistant-driven diagnostics do not depend on the unified
+agent or a parallel config-local read path.
 That same monitoring boundary now also owns API-backed TrueNAS system
 telemetry for the top-level NAS host. `internal/truenas/client.go` must ingest
 `reporting.realtime` through the official `/api/current` JSON-RPC websocket

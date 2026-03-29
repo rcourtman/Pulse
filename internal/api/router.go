@@ -2419,6 +2419,10 @@ func (r *Router) wireAIChatDependenciesForService(ctx context.Context, service A
 		service.SetAppContainerActionProvider(provider)
 		log.Debug().Msg("AI chat: App-container action provider wired")
 	}
+	if provider := newTrueNASAppReadProvider(r.trueNASPoller); provider != nil {
+		service.SetAppContainerReadProvider(provider)
+		log.Debug().Msg("AI chat: App-container read provider wired")
+	}
 
 	log.Info().Str("org_id", orgID).Msg("AI chat MCP tool providers wired")
 }

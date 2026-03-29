@@ -148,6 +148,21 @@ type AppContainer struct {
 	VolumeMounts []AppVolume
 }
 
+// AppLogLine stores one bounded log entry returned by the TrueNAS app log API.
+type AppLogLine struct {
+	Timestamp string
+	Data      string
+}
+
+// AppLogResult captures a bounded log read for one TrueNAS app container.
+type AppLogResult struct {
+	Host      string
+	App       App
+	Container AppContainer
+	Lines     []AppLogLine
+	TailLines int
+}
+
 // AppVolume describes a bind or named volume mount exposed by a TrueNAS app.
 type AppVolume struct {
 	Source      string

@@ -196,6 +196,38 @@ type AppContainerActionProvider interface {
 	ExecuteAction(ctx context.Context, req AppContainerActionRequest) (*AppContainerActionResult, error)
 }
 
+// AppContainerReadRequest describes a canonical read-only diagnostic request
+// against an API-backed app-container resource.
+type AppContainerReadRequest struct {
+	OrgID       string
+	ResourceID  string
+	ProviderUID string
+	Name        string
+	Host        string
+	Platform    string
+	Container   string
+	Lines       int
+}
+
+// AppContainerReadResult captures a bounded read-only diagnostic result for an
+// API-backed app-container.
+type AppContainerReadResult struct {
+	ResourceID  string
+	ProviderUID string
+	Name        string
+	Host        string
+	Platform    string
+	Container   string
+	Lines       int
+	Output      string
+}
+
+// AppContainerReadProvider executes canonical read-only diagnostics for
+// API-backed app-container resources such as TrueNAS-managed applications.
+type AppContainerReadProvider interface {
+	ReadLogs(ctx context.Context, req AppContainerReadRequest) (*AppContainerReadResult, error)
+}
+
 // DiscoveryProvider provides AI-powered infrastructure discovery
 type DiscoveryProvider interface {
 	GetDiscovery(id string) (*ResourceDiscoveryInfo, error)
@@ -401,6 +433,7 @@ type ExecutorConfig struct {
 	// Optional providers - unified resources
 	UnifiedResourceProvider    UnifiedResourceProvider
 	AppContainerActionProvider AppContainerActionProvider
+	AppContainerReadProvider   AppContainerReadProvider
 	ActionAuditStore           unifiedresources.ResourceStore
 	// Optional typed read access to current infrastructure state.
 	// When provided, tool handlers should prefer this over models.StateSnapshot iteration.
@@ -453,6 +486,7 @@ type PulseToolExecutor struct {
 	// Unified resources provider
 	unifiedResourceProvider    UnifiedResourceProvider
 	appContainerActionProvider AppContainerActionProvider
+	appContainerReadProvider   AppContainerReadProvider
 	actionAuditStore           unifiedresources.ResourceStore
 	// Typed state reader. Nil means "legacy-only": tools must fall back to StateSnapshot access.
 	readState unifiedresources.ReadState
@@ -528,6 +562,7 @@ func NewPulseToolExecutor(cfg ExecutorConfig) *PulseToolExecutor {
 		discoveryProvider:          cfg.DiscoveryProvider,
 		unifiedResourceProvider:    cfg.UnifiedResourceProvider,
 		appContainerActionProvider: cfg.AppContainerActionProvider,
+		appContainerReadProvider:   cfg.AppContainerReadProvider,
 		actionAuditStore:           cfg.ActionAuditStore,
 		readState:                  cfg.ReadState,
 		controlLevel:               cfg.ControlLevel,
@@ -736,6 +771,12 @@ func (e *PulseToolExecutor) SetAppContainerActionProvider(provider AppContainerA
 	e.appContainerActionProvider = provider
 }
 
+// SetAppContainerReadProvider sets the provider used for canonical native
+// app-container read-only diagnostics.
+func (e *PulseToolExecutor) SetAppContainerReadProvider(provider AppContainerReadProvider) {
+	e.appContainerReadProvider = provider
+}
+
 // SetActionAuditStore sets the durable store used to persist action audit and lifecycle events.
 func (e *PulseToolExecutor) SetActionAuditStore(store unifiedresources.ResourceStore) {
 	e.actionAuditStore = store
@@ -809,7 +850,7 @@ func (e *PulseToolExecutor) isToolAvailable(name string) bool {
 	case "pulse_alerts":
 		return e.alertProvider != nil || e.findingsProvider != nil || e.findingsManager != nil || e.hasReadState()
 	case "pulse_read":
-		return e.agentServer != nil
+		return e.agentServer != nil || (e.appContainerReadProvider != nil && e.hasReadState())
 	case "pulse_control":
 		return (e.agentServer != nil || e.appContainerActionProvider != nil) && e.hasReadState()
 	case "pulse_file_edit":

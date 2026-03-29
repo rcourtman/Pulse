@@ -579,6 +579,55 @@ func (p *TrueNASPoller) ControlApp(ctx context.Context, orgID, host, appID, acti
 	return nil, fmt.Errorf("truenas app %q was not found for org %q", appID, orgID)
 }
 
+// ReadAppLogs executes a canonical bounded log read for one tenant-scoped
+// TrueNAS-managed app-container resource.
+func (p *TrueNASPoller) ReadAppLogs(ctx context.Context, orgID, host, appID, containerRef string, tailLines int) (*truenas.AppLogResult, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas poller is nil")
+	}
+	if !truenas.IsFeatureEnabled() {
+		return nil, fmt.Errorf("truenas integration is disabled")
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+	host = strings.TrimSpace(host)
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return nil, fmt.Errorf("truenas app id is required")
+	}
+
+	type providerEntry struct {
+		connectionID string
+		provider     *truenas.Provider
+	}
+
+	p.mu.Lock()
+	entries := make([]providerEntry, 0, len(p.providersByOrg[orgID]))
+	for connectionID, provider := range p.providersByOrg[orgID] {
+		if provider == nil {
+			continue
+		}
+		entries = append(entries, providerEntry{
+			connectionID: connectionID,
+			provider:     provider,
+		})
+	}
+	p.mu.Unlock()
+
+	for _, entry := range entries {
+		currentSnapshot := entry.provider.Snapshot()
+		if _, ok := findTrueNASAppSnapshot(currentSnapshot, host, appID); !ok {
+			continue
+		}
+		return entry.provider.ReadAppLogs(ctx, appID, containerRef, tailLines)
+	}
+
+	return nil, fmt.Errorf("truenas app %q was not found for org %q", appID, orgID)
+}
+
 func cloneIngestRecords(records []unifiedresources.IngestRecord) []unifiedresources.IngestRecord {
 	if len(records) == 0 {
 		return nil

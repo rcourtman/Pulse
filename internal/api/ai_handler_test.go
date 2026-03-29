@@ -155,6 +155,9 @@ func (m *MockAIService) SetUnifiedResourceProvider(provider chat.MCPUnifiedResou
 func (m *MockAIService) SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider) {
 	m.Called(provider)
 }
+func (m *MockAIService) SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider) {
+	m.Called(provider)
+}
 
 func (m *MockAIService) UpdateControlSettings(cfg *config.AIConfig) { m.Called(cfg) }
 func (m *MockAIService) GetBaseURL() string {

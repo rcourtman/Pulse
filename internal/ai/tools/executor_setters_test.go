@@ -146,6 +146,14 @@ func TestPulseToolExecutor_IsToolAvailable(t *testing.T) {
 	})
 	assert.True(t, execWithUnifiedReadState.isToolAvailable("pulse_pmg"))
 	assert.True(t, execWithUnifiedReadState.isToolAvailable("pulse_kubernetes"))
+	assert.False(t, execWithUnifiedReadState.isToolAvailable("pulse_read"))
+
+	execWithNativeRead := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider:  adapter,
+		ReadState:                unifiedresources.NewRegistry(nil),
+		AppContainerReadProvider: &stubAppContainerReadProvider{},
+	})
+	assert.True(t, execWithNativeRead.isToolAvailable("pulse_read"))
 }
 
 func TestPulseToolExecutor_GetReadStatePrefersUnifiedResourceProvider(t *testing.T) {

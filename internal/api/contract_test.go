@@ -76,6 +76,9 @@ func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testin
 	if service.appContainerActionProvider == nil {
 		t.Fatal("expected TrueNAS app action provider to be wired into AI chat dependencies")
 	}
+	if service.appContainerReadProvider == nil {
+		t.Fatal("expected TrueNAS app read provider to be wired into AI chat dependencies")
+	}
 }
 
 func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {

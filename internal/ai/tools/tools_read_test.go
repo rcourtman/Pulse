@@ -11,6 +11,33 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type stubAppContainerReadProvider struct {
+	calls  []AppContainerReadRequest
+	result *AppContainerReadResult
+	err    error
+}
+
+func (s *stubAppContainerReadProvider) ReadLogs(_ context.Context, req AppContainerReadRequest) (*AppContainerReadResult, error) {
+	s.calls = append(s.calls, req)
+	if s.err != nil {
+		return nil, s.err
+	}
+	if s.result == nil {
+		return &AppContainerReadResult{
+			ResourceID:  req.ResourceID,
+			ProviderUID: req.ProviderUID,
+			Name:        req.Name,
+			Host:        req.Host,
+			Platform:    req.Platform,
+			Container:   req.Container,
+			Lines:       req.Lines,
+			Output:      "ok",
+		}, nil
+	}
+	result := *s.result
+	return &result, nil
+}
+
 func TestPulseToolExecutor_ExecuteReadLogs_Fallbacks(t *testing.T) {
 	ctx := context.Background()
 
@@ -135,4 +162,70 @@ func TestPulseToolExecutor_ExecuteReadRejectsLegacyAppContainerArg(t *testing.T)
 	assert.True(t, result.IsError)
 	require.NotEmpty(t, result.Content)
 	assert.Contains(t, result.Content[0].Text, "app_container is no longer supported; use app-container")
+}
+
+func TestPulseToolExecutor_ListTools_IncludesPulseReadForNativeAppReadProvider(t *testing.T) {
+	provider := newTrueNASUnifiedQueryProvider(t)
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider:  provider,
+		ReadState:                provider.ResourceRegistry,
+		AppContainerReadProvider: &stubAppContainerReadProvider{},
+	})
+
+	tools := exec.ListTools()
+	assert.True(t, containsTool(tools, "pulse_read"))
+}
+
+func TestExecuteReadLogs_TrueNASAppUsesNativeReadProvider(t *testing.T) {
+	provider := newTrueNASUnifiedQueryProvider(t)
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	readProvider := &stubAppContainerReadProvider{
+		result: &AppContainerReadResult{
+			ResourceID:  "app-container:truenas-main:nextcloud",
+			ProviderUID: "nextcloud",
+			Name:        "Nextcloud",
+			Host:        "truenas-main",
+			Platform:    "truenas",
+			Container:   "nextcloud",
+			Lines:       25,
+			Output:      "2026-03-29T18:00:00Z ready\n2026-03-29T18:01:00Z serving",
+		},
+	}
+
+	exec := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider:  provider,
+		ReadState:                provider.ResourceRegistry,
+		AppContainerReadProvider: readProvider,
+	})
+	exec.SetResolvedContext(resolved)
+
+	if _, err := exec.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "app-container",
+		"resource_id":   "nextcloud",
+	}); err != nil {
+		t.Fatalf("seed resolved context: unexpected error: %v", err)
+	}
+
+	result, err := exec.executeReadLogs(context.Background(), map[string]interface{}{
+		"action":      "logs",
+		"resource_id": "Nextcloud",
+		"container":   "nextcloud",
+		"lines":       25,
+	})
+	require.NoError(t, err)
+	assert.False(t, result.IsError)
+	require.NotEmpty(t, result.Content)
+	assert.Contains(t, result.Content[0].Text, "Logs from app 'Nextcloud' (container 'nextcloud') (last 25 lines):")
+	assert.Contains(t, result.Content[0].Text, "serving")
+
+	if len(readProvider.calls) != 1 {
+		t.Fatalf("expected one native app read call, got %+v", readProvider.calls)
+	}
+	call := readProvider.calls[0]
+	if call.OrgID != "default" || call.ProviderUID != "nextcloud" || call.Host != "truenas-main" || call.Container != "nextcloud" || call.Lines != 25 {
+		t.Fatalf("unexpected native app read request: %+v", call)
+	}
 }

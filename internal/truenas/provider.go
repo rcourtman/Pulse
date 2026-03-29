@@ -52,6 +52,10 @@ type appActionFetcher interface {
 	StopApp(ctx context.Context, appID string) error
 }
 
+type appReadFetcher interface {
+	ReadAppLogs(ctx context.Context, appName, containerID string, tailLines int) ([]AppLogLine, error)
+}
+
 // APIFetcher loads snapshots from the live TrueNAS API client.
 type APIFetcher struct {
 	Client *Client
@@ -85,6 +89,13 @@ func (f *APIFetcher) StopApp(ctx context.Context, appID string) error {
 		return fmt.Errorf("truenas api fetcher client is nil")
 	}
 	return f.Client.StopApp(ctx, appID)
+}
+
+func (f *APIFetcher) ReadAppLogs(ctx context.Context, appName, containerID string, tailLines int) ([]AppLogLine, error) {
+	if f == nil || f.Client == nil {
+		return nil, fmt.Errorf("truenas api fetcher client is nil")
+	}
+	return f.Client.GetAppLogs(ctx, appName, containerID, tailLines)
 }
 
 // FixtureFetcher loads snapshots from static fixture data.
@@ -185,6 +196,43 @@ func (p *Provider) ControlApp(ctx context.Context, appID, action string) (*Fixtu
 		return nil, err
 	}
 	return p.Snapshot(), nil
+}
+
+// ReadAppLogs returns a bounded recent log tail for one TrueNAS app container.
+func (p *Provider) ReadAppLogs(ctx context.Context, appID, containerRef string, tailLines int) (*AppLogResult, error) {
+	if p == nil {
+		return nil, fmt.Errorf("truenas provider is nil")
+	}
+	reader, ok := p.fetcher.(appReadFetcher)
+	if !ok {
+		return nil, fmt.Errorf("truenas provider fetcher does not support app log reads")
+	}
+
+	snapshot := p.Snapshot()
+	app, err := findAppInSnapshot(snapshot, appID)
+	if err != nil {
+		return nil, err
+	}
+	container, err := selectAppLogContainer(*app, containerRef)
+	if err != nil {
+		return nil, err
+	}
+
+	lines, err := reader.ReadAppLogs(ctx, appCanonicalID(*app), container.ID, tailLines)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &AppLogResult{
+		App:       *app,
+		Container: container,
+		Lines:     trimAppLogResultLines(lines, tailLines),
+		TailLines: tailLines,
+	}
+	if snapshot != nil {
+		result.Host = strings.TrimSpace(snapshot.System.Hostname)
+	}
+	return result, nil
 }
 
 // Close releases resources held by the active fetcher, if supported.
@@ -982,6 +1030,91 @@ func appCanonicalID(app App) string {
 		return id
 	}
 	return appDisplayName(app)
+}
+
+func findAppInSnapshot(snapshot *FixtureSnapshot, appID string) (*App, error) {
+	if snapshot == nil {
+		return nil, fmt.Errorf("truenas snapshot is unavailable")
+	}
+	appID = strings.TrimSpace(appID)
+	if appID == "" {
+		return nil, fmt.Errorf("truenas app id is required")
+	}
+	for i := range snapshot.Apps {
+		app := &snapshot.Apps[i]
+		if strings.EqualFold(appCanonicalID(*app), appID) || strings.EqualFold(strings.TrimSpace(app.Name), appID) {
+			return app, nil
+		}
+	}
+	return nil, fmt.Errorf("truenas app %q was not found", appID)
+}
+
+func selectAppLogContainer(app App, containerRef string) (AppContainer, error) {
+	if len(app.Containers) == 0 {
+		return AppContainer{}, fmt.Errorf("truenas app %q does not expose any runtime containers for log reads", appDisplayName(app))
+	}
+	containerRef = strings.TrimSpace(containerRef)
+	if containerRef != "" {
+		for _, container := range app.Containers {
+			if strings.EqualFold(strings.TrimSpace(container.ID), containerRef) ||
+				strings.EqualFold(strings.TrimSpace(container.ServiceName), containerRef) {
+				return container, nil
+			}
+		}
+		return AppContainer{}, fmt.Errorf("truenas app %q does not have container %q. Available containers: %s", appDisplayName(app), containerRef, availableAppLogContainers(app.Containers))
+	}
+	if len(app.Containers) == 1 {
+		return app.Containers[0], nil
+	}
+
+	canonicalAppID := normalizeAppStatsKey(appCanonicalID(app))
+	for _, container := range app.Containers {
+		if normalizeAppStatsKey(container.ServiceName) == canonicalAppID {
+			return container, nil
+		}
+	}
+	for _, container := range app.Containers {
+		if strings.EqualFold(strings.TrimSpace(container.State), "running") {
+			return container, nil
+		}
+	}
+	return AppContainer{}, fmt.Errorf("truenas app %q has multiple containers. Specify container using one of: %s", appDisplayName(app), availableAppLogContainers(app.Containers))
+}
+
+func availableAppLogContainers(containers []AppContainer) string {
+	if len(containers) == 0 {
+		return ""
+	}
+	options := make([]string, 0, len(containers))
+	for _, container := range containers {
+		label := strings.TrimSpace(container.ServiceName)
+		if label == "" {
+			label = strings.TrimSpace(container.ID)
+		}
+		if label == "" {
+			continue
+		}
+		if id := strings.TrimSpace(container.ID); id != "" && !strings.EqualFold(id, label) {
+			label = fmt.Sprintf("%s (%s)", label, id)
+		}
+		options = append(options, label)
+	}
+	if len(options) == 0 {
+		return ""
+	}
+	return strings.Join(options, ", ")
+}
+
+func trimAppLogResultLines(lines []AppLogLine, tailLines int) []AppLogLine {
+	if len(lines) == 0 {
+		return nil
+	}
+	if tailLines > 0 && len(lines) > tailLines {
+		lines = lines[len(lines)-tailLines:]
+	}
+	out := make([]AppLogLine, len(lines))
+	copy(out, lines)
+	return out
 }
 
 func primaryAppImage(app App) string {

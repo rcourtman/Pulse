@@ -191,6 +191,11 @@ canonical `agent`, `app-container`, `storage`, and `physical-disk` resources
 through those shared contracts, filtering dataset-topology storage children
 out of any `storage-pool` presentation instead of inventing TrueNAS-local
 assistant types or mislabeling datasets as pools.
+That same canonical app-container rule now also governs diagnostics. Assistant
+runtime paths such as `pulse_read` must resolve API-backed TrueNAS apps
+through the shared canonical `app-container` identity and `resource_id`
+contract instead of reintroducing host-local container routing assumptions for
+platforms that do not use the unified agent as their primary runtime path.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,
@@ -1080,6 +1085,12 @@ routing. `internal/unifiedresources/resolve.go`,
 containers while preserving adapter-specific routing. Reusing shared
 `DockerData` for workload metadata must not misclassify a TrueNAS app as a
 Docker-routed control target.
+That same resolved-context ownership also governs read diagnostics. When
+`internal/ai/tools/tools_read.go` executes `pulse_read action="logs"` against
+a canonical `app-container` resource, TrueNAS-backed app containers must
+route through adapter-aware native read providers keyed by canonical
+`resource_id`, not through Docker host/container routing or agent-host
+fallbacks.
 
 Typed view accessors for linked topology IDs must also return canonical
 trimmed values. Callers must not observe `" node-99 "` or `" agent-123 "`

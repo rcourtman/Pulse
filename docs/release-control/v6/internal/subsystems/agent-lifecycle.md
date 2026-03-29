@@ -433,6 +433,11 @@ for API-backed platforms. TrueNAS may surface Assistant control and runtime
 insight through the backend-owned platform connection and polling path, but
 adjacent lifecycle flows must not start treating a unified-agent install as
 the required bootstrap for provider-backed TrueNAS operations.
+That same agent-optional rule also covers Assistant diagnostics. Provider-
+backed TrueNAS app log reads may route through shared AI/runtime wiring on the
+platform connection and poller path, but lifecycle-adjacent setup/install
+flows must not reframe those diagnostics as requiring unified-agent host
+install before TrueNAS becomes operational in Pulse.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must tell a new
 Pulse user to start with `Install on a host` to add the first monitored

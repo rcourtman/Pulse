@@ -16,6 +16,7 @@ import (
 type capturingAIService struct {
 	running                    bool
 	appContainerActionProvider chat.MCPAppContainerActionProvider
+	appContainerReadProvider   chat.MCPAppContainerReadProvider
 }
 
 func (s *capturingAIService) Start(ctx context.Context) error { s.running = true; return nil }
@@ -80,6 +81,9 @@ func (s *capturingAIService) SetUnifiedResourceProvider(provider chat.MCPUnified
 func (s *capturingAIService) SetAppContainerActionProvider(provider chat.MCPAppContainerActionProvider) {
 	s.appContainerActionProvider = provider
 }
+func (s *capturingAIService) SetAppContainerReadProvider(provider chat.MCPAppContainerReadProvider) {
+	s.appContainerReadProvider = provider
+}
 func (s *capturingAIService) UpdateControlSettings(cfg *config.AIConfig) {}
 func (s *capturingAIService) GetBaseURL() string                         { return "" }
 
@@ -93,6 +97,9 @@ func TestWireAIChatDependenciesForService_WiresTrueNASAppActionProvider(t *testi
 
 	if service.appContainerActionProvider == nil {
 		t.Fatal("expected TrueNAS app action provider to be wired into AI chat service")
+	}
+	if service.appContainerReadProvider == nil {
+		t.Fatal("expected TrueNAS app read provider to be wired into AI chat service")
 	}
 }
 

@@ -16,7 +16,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_read",
-			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. target_host routes to host, system container, or VM by name.`,
+			Description: `Execute read-only operations on infrastructure (exec, file, find, tail, logs). Rejects write commands. Use target_host for agent-routed reads, or resource_id for API-backed native resource logs such as supported TrueNAS app-containers.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -27,7 +27,11 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"target_host": {
 						Type:        "string",
-						Description: "Hostname to read from (host, system container name, or VM name)",
+						Description: "For agent-routed reads: hostname to read from (host, system container name, or VM name)",
+					},
+					"resource_id": {
+						Type:        "string",
+						Description: "For native API-backed resource logs: discovered resource name or canonical resource ID from pulse_query",
 					},
 					"command": {
 						Type:        "string",
@@ -52,7 +56,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 					},
 					"container": {
 						Type:        "string",
-						Description: "Container name. For logs with source=docker, or for exec/file/tail to run inside a Docker container on target_host.",
+						Description: "Container name. For logs with source=docker, for exec/file/tail inside a Docker container on target_host, or for native app logs to choose a specific service/container within the app.",
 					},
 					"unit": {
 						Type:        "string",
@@ -67,7 +71,7 @@ func (e *PulseToolExecutor) registerReadTools() {
 						Description: "For logs/tail: filter output by pattern",
 					},
 				},
-				Required: []string{"action", "target_host"},
+				Required: []string{"action"},
 			},
 		},
 		Handler: func(ctx context.Context, exec *PulseToolExecutor, args map[string]interface{}) (CallToolResult, error) {
@@ -362,15 +366,13 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 	source, _ := args["source"].(string)
 	source = strings.ToLower(strings.TrimSpace(source))
 	targetHost, _ := args["target_host"].(string)
+	resourceRef, _ := args["resource_id"].(string)
+	resourceRef = strings.TrimSpace(resourceRef)
 	container, _ := args["container"].(string)
 	unit, _ := args["unit"].(string)
 	since, _ := args["since"].(string)
 	grepPattern, _ := args["grep"].(string)
 	lines := intArg(args, "lines", 100)
-
-	if targetHost == "" {
-		return NewErrorResult(fmt.Errorf("target_host is required")), nil
-	}
 
 	// Cap lines
 	if lines > 1000 {
@@ -378,6 +380,13 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 	}
 	if lines < 1 {
 		lines = 100
+	}
+
+	if resourceRef != "" {
+		return e.executeNativeAppContainerReadLogs(ctx, resourceRef, container, lines)
+	}
+	if targetHost == "" {
+		return NewErrorResult(fmt.Errorf("target_host is required when resource_id is not provided")), nil
 	}
 
 	var command string
@@ -447,6 +456,74 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 		"command":     command,
 		"target_host": targetHost,
 	})
+}
+
+func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Context, resourceRef, container string, lines int) (CallToolResult, error) {
+	if e.appContainerReadProvider == nil {
+		return NewErrorResult(fmt.Errorf("native app-container read provider is not available")), nil
+	}
+
+	validation := e.validateResolvedResource(resourceRef, "query", false)
+	if validation.IsBlocked() {
+		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
+	}
+	if validation.Resource == nil {
+		if validation.ErrorMsg != "" {
+			return NewErrorResult(fmt.Errorf("%s", validation.ErrorMsg)), nil
+		}
+		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Use pulse_query action=search to find it first", resourceRef)), nil
+	}
+	if validation.ErrorMsg != "" {
+		log.Warn().
+			Str("resource", resourceRef).
+			Str("validation_error", validation.ErrorMsg).
+			Msg("[ReadLogs] Continuing with discovered resource despite validation warning")
+	}
+
+	resolved := validation.Resource
+	if resolved.GetKind() != "app-container" {
+		return NewErrorResult(fmt.Errorf("resource '%s' of kind %q does not support native logs through pulse_read", resourceRef, resolved.GetKind())), nil
+	}
+	if !strings.EqualFold(strings.TrimSpace(resolved.GetAdapter()), "truenas") {
+		return NewErrorResult(fmt.Errorf("resource '%s' uses unsupported read adapter %q", resourceRef, resolved.GetAdapter())), nil
+	}
+
+	resourceName := resolvedResourceDisplayName(resolved)
+	readResult, err := e.appContainerReadProvider.ReadLogs(ctx, AppContainerReadRequest{
+		OrgID:       e.orgID,
+		ResourceID:  strings.TrimSpace(resolved.GetResourceID()),
+		ProviderUID: strings.TrimSpace(resolved.GetProviderUID()),
+		Name:        resourceName,
+		Host:        strings.TrimSpace(resolved.GetTargetHost()),
+		Platform:    "truenas",
+		Container:   strings.TrimSpace(container),
+		Lines:       lines,
+	})
+	if err != nil {
+		return NewErrorResult(err), nil
+	}
+	if readResult == nil {
+		return NewTextResult(fmt.Sprintf("No logs found for app '%s'.", resourceName)), nil
+	}
+
+	resourceName = strings.TrimSpace(readResult.Name)
+	if resourceName == "" {
+		resourceName = resolvedResourceDisplayName(resolved)
+	}
+
+	title := fmt.Sprintf("Logs from app '%s'", resourceName)
+	if containerName := strings.TrimSpace(readResult.Container); containerName != "" {
+		title = fmt.Sprintf("%s (container '%s')", title, containerName)
+	}
+	if readResult.Lines > 0 {
+		title = fmt.Sprintf("%s (last %d lines)", title, readResult.Lines)
+	}
+
+	output := strings.TrimSpace(readResult.Output)
+	if output == "" {
+		return NewTextResult(title + ":\n(no output)"), nil
+	}
+	return NewTextResult(fmt.Sprintf("%s:\n%s", title, output)), nil
 }
 
 // truncateCommand truncates a command for display/logging
