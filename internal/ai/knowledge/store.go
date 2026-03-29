@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rs/zerolog/log"
@@ -115,13 +116,83 @@ func NewStore(dataDir string) (*Store, error) {
 
 // guestFilePath returns the file path for a guest's knowledge
 func (s *Store) guestFilePath(guestID string) string {
-	// Sanitize guest ID for filesystem
-	safeID := filepath.Base(guestID) // Prevent path traversal
 	// Use .enc extension for encrypted files
+	fileBase := securityutil.HashedStorageName(guestID)
 	if s.crypto != nil {
-		return filepath.Join(s.dataDir, safeID+".enc")
+		return filepath.Join(s.dataDir, fileBase+".enc")
 	}
-	return filepath.Join(s.dataDir, safeID+".json")
+	return filepath.Join(s.dataDir, fileBase+".json")
+}
+
+func (s *Store) loadKnowledgeFromPath(path string) (*GuestKnowledge, bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, false, err
+	}
+
+	migratedPlaintext := false
+	if s.crypto != nil {
+		if decrypted, decErr := s.crypto.Decrypt(data); decErr == nil {
+			data = decrypted
+		} else {
+			migratedPlaintext = true
+		}
+	}
+
+	var knowledge GuestKnowledge
+	if err := json.Unmarshal(data, &knowledge); err != nil {
+		return nil, false, fmt.Errorf("failed to parse knowledge file: %w", err)
+	}
+
+	return &knowledge, migratedPlaintext, nil
+}
+
+func (s *Store) findLegacyKnowledgePath(guestID string) (string, error) {
+	canonicalEnc := securityutil.HashedStorageName(guestID) + ".enc"
+	canonicalJSON := securityutil.HashedStorageName(guestID) + ".json"
+	legacyEnc := filepath.Base(guestID) + ".enc"
+	legacyJSON := filepath.Base(guestID) + ".json"
+	entries, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to scan knowledge directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.Name() == legacyEnc || entry.Name() == legacyJSON {
+			if entry.IsDir() {
+				return "", fmt.Errorf("legacy knowledge path %q is not a regular file", entry.Name())
+			}
+		}
+		if entry.IsDir() {
+			continue
+		}
+		switch filepath.Ext(entry.Name()) {
+		case ".json", ".enc":
+		default:
+			continue
+		}
+		if entry.Name() == canonicalEnc || entry.Name() == canonicalJSON {
+			continue
+		}
+
+		path := filepath.Join(s.dataDir, entry.Name())
+		knowledge, _, err := s.loadKnowledgeFromPath(path)
+		if err != nil {
+			if entry.Name() == legacyEnc || entry.Name() == legacyJSON {
+				return "", fmt.Errorf("failed to inspect legacy knowledge file %q: %w", entry.Name(), err)
+			}
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to inspect legacy knowledge candidate")
+			continue
+		}
+		if normalizeGuestID(knowledge.GuestID) == guestID {
+			return path, nil
+		}
+	}
+
+	return "", nil
 }
 
 // GetKnowledge retrieves knowledge for a guest
@@ -151,13 +222,17 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 	}
 
 	filePath := s.guestFilePath(guestID)
-	migratedPlaintext := false
-	data, err := os.ReadFile(filePath)
-	if os.IsNotExist(err) {
-		// Try legacy unencrypted file
-		legacyJSONPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
-		data, err = os.ReadFile(legacyJSONPath)
-		if os.IsNotExist(err) {
+	activePath := filePath
+	knowledge, migratedPlaintext, err := s.loadKnowledgeFromPath(filePath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return nil, fmt.Errorf("failed to read knowledge file: %w", err)
+		}
+		activePath, err = s.findLegacyKnowledgePath(guestID)
+		if err != nil {
+			return nil, err
+		}
+		if activePath == "" {
 			// No knowledge yet, return empty
 			knowledge := &GuestKnowledge{
 				GuestID: guestID,
@@ -166,35 +241,11 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 			s.cache[guestID] = knowledge
 			return knowledge, nil
 		}
+		knowledge, migratedPlaintext, err = s.loadKnowledgeFromPath(activePath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read knowledge file: %w", err)
 		}
-		migratedPlaintext = true
-		log.Info().Str("guest_id", guestID).Msg("found unencrypted knowledge file, rewriting encrypted storage")
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to read knowledge file: %w", err)
-	}
-
-	// Decrypt if crypto is available and file is encrypted
-	if s.crypto != nil && filepath.Ext(filePath) == ".enc" {
-		decrypted, err := s.crypto.Decrypt(data)
-		if err != nil {
-			// Try as plain JSON (migration case)
-			var plaintextKnowledge GuestKnowledge
-			if jsonErr := json.Unmarshal(data, &plaintextKnowledge); jsonErr == nil {
-				migratedPlaintext = true
-				log.Info().Str("guest_id", guestID).Msg("loaded unencrypted knowledge, rewriting encrypted storage")
-			} else {
-				return nil, fmt.Errorf("failed to decrypt knowledge: %w", err)
-			}
-		} else {
-			data = decrypted
-		}
-	}
-
-	var knowledge GuestKnowledge
-	if err := json.Unmarshal(data, &knowledge); err != nil {
-		return nil, fmt.Errorf("failed to parse knowledge file: %w", err)
+		log.Info().Str("guest_id", guestID).Str("path", activePath).Msg("loaded legacy knowledge file, rewriting canonical storage")
 	}
 
 	needsMigration := false
@@ -207,15 +258,15 @@ func (s *Store) GetKnowledge(guestID string) (*GuestKnowledge, error) {
 		needsMigration = true
 	}
 
-	s.cache[guestID] = &knowledge
+	s.cache[guestID] = knowledge
 
-	if needsMigration || migratedPlaintext {
-		if err := s.saveToFile(guestID, &knowledge); err != nil {
+	if activePath != filePath || needsMigration || migratedPlaintext {
+		if err := s.saveToFile(guestID, knowledge); err != nil {
 			log.Warn().Err(err).Str("guest_id", guestID).Msg("failed to migrate canonical guest knowledge file")
 		}
 	}
 
-	return &knowledge, nil
+	return knowledge, nil
 }
 
 // SaveNote adds or updates a note for a guest
@@ -428,12 +479,9 @@ func (s *Store) saveToFile(guestID string, knowledge *GuestKnowledge) error {
 		return fmt.Errorf("failed to write knowledge file: %w", err)
 	}
 
-	// Remove legacy unencrypted file if it exists
-	if s.crypto != nil {
-		legacyPath := filepath.Join(s.dataDir, filepath.Base(guestID)+".json")
-		if _, err := os.Stat(legacyPath); err == nil {
-			os.Remove(legacyPath)
-			log.Info().Str("guest_id", guestID).Msg("removed legacy unencrypted knowledge file")
+	if legacyPath, err := s.findLegacyKnowledgePath(guestID); err == nil && legacyPath != "" && legacyPath != filePath {
+		if err := os.Remove(legacyPath); err != nil && !os.IsNotExist(err) {
+			log.Warn().Err(err).Str("guest_id", guestID).Str("path", legacyPath).Msg("failed to remove legacy knowledge file")
 		}
 	}
 
@@ -456,9 +504,17 @@ func (s *Store) ListGuests() ([]string, error) {
 	var guests []string
 	seen := make(map[string]struct{})
 	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
 		ext := filepath.Ext(file.Name())
 		if ext == ".json" || ext == ".enc" {
-			guestID := normalizeGuestID(file.Name()[:len(file.Name())-len(ext)])
+			knowledge, _, err := s.loadKnowledgeFromPath(filepath.Join(s.dataDir, file.Name()))
+			if err != nil {
+				log.Warn().Err(err).Str("file", file.Name()).Msg("failed to inspect knowledge file while listing guests")
+				continue
+			}
+			guestID := normalizeGuestID(knowledge.GuestID)
 			if guestID == "" {
 				continue
 			}

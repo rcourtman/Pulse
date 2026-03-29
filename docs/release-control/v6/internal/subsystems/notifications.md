@@ -110,6 +110,11 @@ retry gate in `webhook_enhanced.go` must parse provider failures from both
 `status 429`-style and `HTTP 429`-style error strings before it decides
 whether to retry, so a non-retryable `HTTP 400` result cannot be retried just
 because the transport changed its error wording.
+That same notification transport boundary also owns outbound Apprise HTTP URL
+normalization. Server URLs must be validated as absolute HTTP(S) endpoints
+without userinfo before request construction, and the `/notify` plus optional
+config-key path must append to the canonical server base instead of being
+rebuilt through raw string concatenation in local delivery code.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with

@@ -136,6 +136,12 @@ runtime data-dir authority being replaceable without hangs or leaked state,
 and router teardown must close the exact session, CSRF, and recovery-token
 workers that router initialized instead of assuming a later global auth-store
 binding will clean them up.
+That same runtime data-dir authority also assumes file-backed stores keep
+canonical filenames opaque and machine-owned. Recovery-adjacent session,
+knowledge, and discovery records may discover legacy identifier-derived files
+only for migration, and the next successful write must replace those legacy
+paths with hashed canonical names so operator-controlled identifiers do not
+become durable filesystem path segments.
 That same hosted handoff dependency also assumes the exchange path repairs
 tenant org access before redirecting the browser into protected routes.
 Recovery- and storage-adjacent hosted pages that open immediately after

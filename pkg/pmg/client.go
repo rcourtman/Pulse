@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
@@ -31,10 +32,27 @@ func readResponseBodyLimited(r io.Reader) ([]byte, error) {
 
 type Client struct {
 	baseURL    string
+	baseAPIURL *url.URL
 	httpClient *http.Client
 	auth       auth
 	config     ClientConfig
 	mu         sync.Mutex
+}
+
+func (c *Client) apiBaseURL() (*url.URL, error) {
+	if c.baseAPIURL != nil {
+		return c.baseAPIURL, nil
+	}
+	baseURL := strings.TrimSpace(c.baseURL)
+	if baseURL == "" {
+		return nil, fmt.Errorf("base URL is required")
+	}
+	parsed, err := securityutil.NormalizeHTTPBaseURL(baseURL, "")
+	if err != nil {
+		return nil, fmt.Errorf("invalid base URL: %w", err)
+	}
+	c.baseAPIURL = parsed
+	return parsed, nil
 }
 
 type ClientConfig struct {
@@ -170,6 +188,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	if strings.HasPrefix(cfg.Host, "http://") {
 		log.Warn().Str("host", cfg.Host).Msg("Using HTTP for PMG connection - consider enabling HTTPS")
 	}
+	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(cfg.Host, "")
+	if err != nil {
+		return nil, fmt.Errorf("invalid PMG host: %w", err)
+	}
+	baseAPIURL := securityutil.AppendURLPath(baseHostURL, "api2", "json")
 
 	var user, realm string
 
@@ -212,7 +235,8 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	httpClient := tlsutil.CreateHTTPClientWithTimeout(cfg.VerifySSL, cfg.Fingerprint, cfg.Timeout)
 
 	client := &Client{
-		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",
+		baseURL:    baseAPIURL.String(),
+		baseAPIURL: baseAPIURL,
 		httpClient: httpClient,
 		config:     cfg,
 		auth: auth{
@@ -248,7 +272,11 @@ func (c *Client) authenticate(ctx context.Context) error {
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/access/ticket", bytes.NewReader(body))
+	baseAPIURL, err := c.apiBaseURL()
+	if err != nil {
+		return err
+	}
+	req, err := securityutil.NewRelativeRequestWithContext(ctx, http.MethodPost, baseAPIURL, "/access/ticket", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -276,7 +304,11 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 		"password": {password},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/access/ticket", strings.NewReader(data.Encode()))
+	baseAPIURL, err := c.apiBaseURL()
+	if err != nil {
+		return err
+	}
+	req, err := securityutil.NewRelativeRequestWithContext(ctx, http.MethodPost, baseAPIURL, "/access/ticket", strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -373,7 +405,11 @@ func (c *Client) request(ctx context.Context, method, path string, params url.Va
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	baseAPIURL, err := c.apiBaseURL()
+	if err != nil {
+		return nil, err
+	}
+	req, err := securityutil.NewRelativeRequestWithContext(ctx, method, baseAPIURL, path, body)
 	if err != nil {
 		return nil, err
 	}

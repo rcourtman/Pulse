@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 	"github.com/rs/zerolog/log"
 )
@@ -133,9 +134,26 @@ func coerceUint64(field string, value interface{}) (uint64, error) {
 // Client represents a Proxmox VE API client
 type Client struct {
 	baseURL    string
+	baseAPIURL *url.URL
 	httpClient *http.Client
 	auth       auth
 	config     ClientConfig
+}
+
+func (c *Client) apiBaseURL() (*url.URL, error) {
+	if c.baseAPIURL != nil {
+		return c.baseAPIURL, nil
+	}
+	baseURL := strings.TrimSpace(c.baseURL)
+	if baseURL == "" {
+		return nil, fmt.Errorf("base URL is required")
+	}
+	parsed, err := securityutil.NormalizeHTTPBaseURL(baseURL, "")
+	if err != nil {
+		return nil, fmt.Errorf("invalid base URL: %w", err)
+	}
+	c.baseAPIURL = parsed
+	return parsed, nil
 }
 
 // ClientConfig holds configuration for the Proxmox client
@@ -206,6 +224,23 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	}
 	httpClient := tlsutil.CreateHTTPClientWithTimeout(cfg.VerifySSL, cfg.Fingerprint, timeout)
 
+	baseHost := strings.TrimSpace(cfg.Host)
+	if baseHost == "" {
+		return nil, fmt.Errorf("host is required")
+	}
+	if !strings.HasPrefix(baseHost, "http://") && !strings.HasPrefix(baseHost, "https://") {
+		baseHost = "https://" + baseHost
+		log.Debug().Str("host", baseHost).Msg("No protocol specified in Proxmox host, defaulting to HTTPS")
+	}
+	baseHostURL, err := securityutil.NormalizeHTTPBaseURL(baseHost, "")
+	if err != nil {
+		return nil, fmt.Errorf("invalid Proxmox host: %w", err)
+	}
+	if baseHostURL.Scheme == "http" {
+		log.Warn().Str("host", baseHostURL.String()).Msg("Using HTTP for Proxmox connection - consider enabling HTTPS")
+	}
+	baseAPIURL := securityutil.AppendURLPath(baseHostURL, "api2", "json")
+
 	// Extract just the token name part for API token authentication
 	tokenName := cfg.TokenName
 	if cfg.TokenName != "" && strings.Contains(cfg.TokenName, "!") {
@@ -222,7 +257,8 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		Msg("Proxmox client configured")
 
 	client := &Client{
-		baseURL:    strings.TrimSuffix(cfg.Host, "/") + "/api2/json",
+		baseURL:    baseAPIURL.String(),
+		baseAPIURL: baseAPIURL,
 		httpClient: httpClient,
 		config:     cfg,
 		auth: auth{
@@ -268,7 +304,11 @@ func (c *Client) authenticateJSON(ctx context.Context, username, password string
 		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/access/ticket", bytes.NewReader(body))
+	baseAPIURL, err := c.apiBaseURL()
+	if err != nil {
+		return err
+	}
+	req, err := securityutil.NewRelativeRequestWithContext(ctx, "POST", baseAPIURL, "/access/ticket", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -289,7 +329,11 @@ func (c *Client) authenticateForm(ctx context.Context, username, password string
 		"password": {password},
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/access/ticket", strings.NewReader(data.Encode()))
+	baseAPIURL, err := c.apiBaseURL()
+	if err != nil {
+		return err
+	}
+	req, err := securityutil.NewRelativeRequestWithContext(ctx, "POST", baseAPIURL, "/access/ticket", strings.NewReader(data.Encode()))
 	if err != nil {
 		return err
 	}
@@ -371,7 +415,11 @@ func (c *Client) requestWithRetry(ctx context.Context, method, path string, data
 		body = strings.NewReader(data.Encode())
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	baseAPIURL, err := c.apiBaseURL()
+	if err != nil {
+		return nil, err
+	}
+	req, err := securityutil.NewRelativeRequestWithContext(ctx, method, baseAPIURL, path, body)
 	if err != nil {
 		return nil, err
 	}

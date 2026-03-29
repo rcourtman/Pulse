@@ -19,6 +19,7 @@ import (
 	"github.com/crewjam/saml"
 	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -913,10 +914,19 @@ func (r *Router) testOIDCConnection(ctx context.Context, cfg *OIDCTestConfig) SS
 	}
 
 	// Fetch OIDC discovery document
-	discoveryURL := strings.TrimRight(cfg.IssuerURL, "/") + "/.well-known/openid-configuration"
+	issuerURL, err := securityutil.NormalizeHTTPBaseURL(cfg.IssuerURL, "")
+	if err != nil {
+		log.Error().Err(err).Msg("OIDC test: invalid issuer URL")
+		return SSOTestResponse{
+			Success: false,
+			Message: "Invalid issuer URL format",
+			Error:   "invalid_url",
+		}
+	}
+	discoveryURL := securityutil.AppendURLPath(issuerURL, ".well-known", "openid-configuration")
 
 	httpClient := newTestHTTPClient()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
+	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("OIDC test: failed to create discovery request")
 		return SSOTestResponse{
@@ -1187,7 +1197,12 @@ func newTestHTTPClient() *http.Client {
 }
 
 func fetchSAMLMetadataFromURL(ctx context.Context, client *http.Client, metadataURL string) ([]byte, *saml.EntityDescriptor, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
+	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(metadataURL)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return nil, nil, err
 	}

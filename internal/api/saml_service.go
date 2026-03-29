@@ -19,6 +19,7 @@ import (
 
 	"github.com/crewjam/saml"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -121,7 +122,12 @@ func (s *SAMLService) loadIDPMetadata(ctx context.Context) error {
 }
 
 func (s *SAMLService) fetchIDPMetadataFromURL(ctx context.Context, metadataURL string) (*saml.EntityDescriptor, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, metadataURL, nil)
+	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(metadataURL)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodGet, targetURL, nil)
 	if err != nil {
 		return nil, err
 	}

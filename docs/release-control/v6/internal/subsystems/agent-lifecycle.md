@@ -219,6 +219,12 @@ setup or router work touches shared `internal/api/` files, telemetry preview
 and install-ID reset routes must keep reusing the canonical system-settings
 trust boundary and server-owned telemetry runtime instead of borrowing agent
 lifecycle proof or state ownership just because the same router surface moved.
+That same shared `internal/api/` dependency also now assumes SSO test and
+metadata-preview routes fail closed on validated outbound URL handling.
+Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those
+shared helpers, but they must not reintroduce raw URL concatenation,
+userinfo-bearing fetch targets, or origin-root OIDC discovery drift when
+operators validate identity configuration.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

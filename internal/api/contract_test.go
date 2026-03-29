@@ -65,6 +65,120 @@ func TestContract_WebSocketTrustedProxyHostedOrigin(t *testing.T) {
 	conn.Close()
 }
 
+func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {
+	called := make(chan struct{}, 1)
+	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case called <- struct{}{}:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write([]byte(testSAMLMetadata))
+	}))
+	defer metadataServer.Close()
+
+	metadataURL, err := url.Parse(metadataServer.URL)
+	if err != nil {
+		t.Fatalf("parse metadata server url: %v", err)
+	}
+	metadataURL.User = url.UserPassword("user", "pass")
+
+	reqBody := SSOTestRequest{
+		Type: "saml",
+		SAML: &SAMLTestConfig{
+			IDPMetadataURL: metadataURL.String(),
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setTestIP(req)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleTestSSOProvider(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var resp SSOTestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Success {
+		t.Fatalf("expected failed response, got success: %+v", resp)
+	}
+
+	select {
+	case <-called:
+		t.Fatal("expected SAML metadata URL with userinfo to be rejected before outbound fetch")
+	default:
+	}
+}
+
+func TestContract_SSOTestOIDCDiscoveryKeepsIssuerBasePath(t *testing.T) {
+	var issuerURL string
+	discoveryServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/auth/realms/pulse/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{
+			"issuer": %q,
+			"authorization_endpoint": %q,
+			"token_endpoint": %q,
+			"userinfo_endpoint": %q,
+			"jwks_uri": %q,
+			"scopes_supported": ["openid", "profile", "email"]
+		}`, issuerURL, issuerURL+"/protocol/openid-connect/auth", issuerURL+"/protocol/openid-connect/token", issuerURL+"/protocol/openid-connect/userinfo", issuerURL+"/protocol/openid-connect/certs")
+	}))
+	defer discoveryServer.Close()
+	issuerURL = discoveryServer.URL + "/auth/realms/pulse"
+
+	reqBody := SSOTestRequest{
+		Type: "oidc",
+		OIDC: &OIDCTestConfig{
+			IssuerURL: issuerURL,
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setTestIP(req)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleTestSSOProvider(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp SSOTestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("expected success response, got %+v", resp)
+	}
+	if resp.Details == nil {
+		t.Fatal("expected OIDC details in response")
+	}
+	if resp.Details.EntityID != issuerURL {
+		t.Fatalf("issuer=%q, want %q", resp.Details.EntityID, issuerURL)
+	}
+}
+
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
 	lastSeen := now.Add(5 * time.Minute)

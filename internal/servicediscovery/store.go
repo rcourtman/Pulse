@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/crypto"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -207,10 +208,38 @@ func NewStore(dataDir string) (*Store, error) {
 
 // getFilePath returns the file path for a resource ID.
 func (s *Store) getFilePath(id string) string {
-	// Sanitize ID for filename: replace : with _
-	safeID := strings.ReplaceAll(id, ":", "_")
-	safeID = strings.ReplaceAll(safeID, "/", "_")
-	return filepath.Join(s.dataDir, safeID+".enc")
+	return filepath.Join(s.dataDir, securityutil.HashedStorageName(id)+".enc")
+}
+
+func (s *Store) findLegacyDiscoveryPath(id string) (string, error) {
+	canonicalName := securityutil.HashedStorageName(id) + ".enc"
+	entries, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to scan discovery directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".enc") {
+			continue
+		}
+		if entry.Name() == canonicalName {
+			continue
+		}
+		path := filepath.Join(s.dataDir, entry.Name())
+		storedID, err := s.readDiscoveryIDFromPath(path)
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to inspect legacy discovery candidate")
+			continue
+		}
+		if storedID == id {
+			return path, nil
+		}
+	}
+
+	return "", nil
 }
 
 // readRegularFileWithLimit reads a file with a strict size cap and rejects non-regular files.
@@ -307,6 +336,23 @@ func (s *Store) maybeRewritePlaintextDiscovery(filePath string, data []byte, mig
 	return nil
 }
 
+func (s *Store) marshalDiscoveryForStorage(discovery *ResourceDiscovery) ([]byte, error) {
+	data, err := marshalDiscovery(discovery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal discovery: %w", err)
+	}
+
+	if s.crypto != nil {
+		encrypted, err := s.crypto.Encrypt(data)
+		if err != nil {
+			return nil, fmt.Errorf("failed to encrypt discovery: %w", err)
+		}
+		data = encrypted
+	}
+
+	return data, nil
+}
+
 // Save persists a discovery to encrypted storage.
 func (s *Store) Save(d *ResourceDiscovery) error {
 	s.mu.Lock()
@@ -326,30 +372,24 @@ func (s *Store) Save(d *ResourceDiscovery) error {
 	toSave := cloneResourceDiscovery(d)
 	normalizeDiscovery(toSave)
 
-	data, err := marshalDiscovery(toSave)
+	data, err := s.marshalDiscoveryForStorage(toSave)
 	if err != nil {
-		return fmt.Errorf("failed to marshal discovery: %w", err)
-	}
-
-	// Encrypt if crypto is available
-	if s.crypto != nil {
-		encrypted, err := s.crypto.Encrypt(data)
-		if err != nil {
-			return fmt.Errorf("failed to encrypt discovery: %w", err)
-		}
-		data = encrypted
-	}
-
-	filePath := s.getFilePath(d.ID)
-	if err := s.persistDiscoveryBytes(filePath, data); err != nil {
 		return err
 	}
 
-	// Update cache
-	s.cache[d.ID] = toSave
-	s.cacheTime[d.ID] = time.Now()
+	filePath := s.getFilePath(toSave.ID)
+	if err := s.persistDiscoveryBytes(filePath, data); err != nil {
+		return err
+	}
+	if legacyPath, err := s.findLegacyDiscoveryPath(toSave.ID); err == nil && legacyPath != "" && legacyPath != filePath {
+		_ = os.Remove(legacyPath)
+	}
 
-	log.Debug().Str("id", d.ID).Str("service", d.ServiceType).Msg("discovery saved")
+	// Update cache
+	s.cache[toSave.ID] = toSave
+	s.cacheTime[toSave.ID] = time.Now()
+
+	log.Debug().Str("id", toSave.ID).Str("service", toSave.ServiceType).Msg("discovery saved")
 	return nil
 }
 
@@ -371,11 +411,20 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	defer s.mu.Unlock()
 
 	filePath := s.getFilePath(id)
+	activePath := filePath
 	data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil // Not found is not an error
-		} else {
+			activePath, err = s.findLegacyDiscoveryPath(id)
+			if err != nil {
+				return nil, err
+			}
+			if activePath == "" {
+				return nil, nil // Not found is not an error
+			}
+			data, migratedPlaintext, err = s.loadDiscoveryFileData(activePath, maxDiscoveryFileReadBytes)
+		}
+		if err != nil {
 			return nil, fmt.Errorf("failed to read discovery file: %w", err)
 		}
 	}
@@ -384,12 +433,22 @@ func (s *Store) Get(id string) (*ResourceDiscovery, error) {
 	if err := unmarshalStoredDiscovery(data, &discovery); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal discovery: %w", err)
 	}
-	if err := s.maybeRewritePlaintextDiscovery(filePath, data, migratedPlaintext); err != nil {
+	if err := s.maybeRewritePlaintextDiscovery(activePath, data, migratedPlaintext); err != nil {
 		return nil, err
 	}
 
 	// Canonicalize stored fields loaded from disk.
 	normalizeDiscovery(&discovery)
+	if activePath != filePath {
+		rewritten, err := s.marshalDiscoveryForStorage(&discovery)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.persistDiscoveryBytes(filePath, rewritten); err != nil {
+			return nil, err
+		}
+		_ = os.Remove(activePath)
+	}
 
 	// Update cache
 	s.cache[id] = cloneResourceDiscovery(&discovery)
@@ -410,11 +469,25 @@ func (s *Store) Delete(id string) error {
 	defer s.mu.Unlock()
 
 	filePath := s.getFilePath(id)
+	var removed bool
 	if err := os.Remove(filePath); err != nil {
-		if os.IsNotExist(err) {
-			return nil // Already deleted
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("failed to delete discovery file: %w", err)
 		}
-		return fmt.Errorf("failed to delete discovery file: %w", err)
+	} else {
+		removed = true
+	}
+	if legacyPath, err := s.findLegacyDiscoveryPath(id); err == nil && legacyPath != "" && legacyPath != filePath {
+		if err := os.Remove(legacyPath); err != nil {
+			if !os.IsNotExist(err) {
+				return fmt.Errorf("failed to delete legacy discovery file: %w", err)
+			}
+		} else {
+			removed = true
+		}
+	}
+	if !removed {
+		return nil // Already deleted
 	}
 
 	// Remove from cache
@@ -577,10 +650,17 @@ func (s *Store) Exists(id string) bool {
 
 	filePath := s.getFilePath(id)
 	_, err := os.Stat(filePath)
+	if err == nil {
+		return true
+	}
 	if err != nil && !os.IsNotExist(err) {
 		log.Warn().Err(err).Str("id", id).Str("file", filePath).Msg("Failed to stat discovery file")
 	}
-	return err == nil
+	legacyPath, findErr := s.findLegacyDiscoveryPath(id)
+	if findErr != nil {
+		log.Warn().Err(findErr).Str("id", id).Msg("Failed to scan for legacy discovery file")
+	}
+	return legacyPath != ""
 }
 
 // GetAge returns how old the discovery is, or -1 if not found.
@@ -605,10 +685,46 @@ func (s *Store) NeedsRefresh(id string, maxAge time.Duration) bool {
 
 // getFingerprintFilePath returns the file path for a fingerprint.
 func (s *Store) getFingerprintFilePath(resourceID string) string {
-	// Sanitize ID for filename
-	safeID := strings.ReplaceAll(resourceID, ":", "_")
-	safeID = strings.ReplaceAll(safeID, "/", "_")
-	return filepath.Join(s.fingerprintDir, safeID+".json")
+	return filepath.Join(s.fingerprintDir, securityutil.HashedStorageName(resourceID)+".json")
+}
+
+func (s *Store) findLegacyFingerprintPath(resourceID string) (string, error) {
+	canonicalName := securityutil.HashedStorageName(resourceID) + ".json"
+	entries, err := os.ReadDir(s.fingerprintDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to scan fingerprint directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		if entry.Name() == canonicalName {
+			continue
+		}
+
+		path := filepath.Join(s.fingerprintDir, entry.Name())
+		data, err := readRegularFileWithLimit(path, maxFingerprintFileReadBytes)
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to inspect legacy fingerprint candidate")
+			continue
+		}
+
+		var fp ContainerFingerprint
+		if err := unmarshalStoredFingerprint(data, &fp); err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to parse legacy fingerprint candidate")
+			continue
+		}
+		canonicalizeFingerprint(&fp)
+		if fp.ResourceID == resourceID {
+			return path, nil
+		}
+	}
+
+	return "", nil
 }
 
 // loadFingerprints loads all fingerprints from disk into memory.
@@ -680,6 +796,9 @@ func (s *Store) SaveFingerprint(fp *ContainerFingerprint) error {
 			log.Warn().Err(cleanupErr).Str("tmp_path", tmpPath).Msg("Failed to remove temp fingerprint file after rename failure")
 		}
 		return fmt.Errorf("failed to finalize fingerprint file: %w", err)
+	}
+	if legacyPath, err := s.findLegacyFingerprintPath(fpCopy.ResourceID); err == nil && legacyPath != "" && legacyPath != filePath {
+		_ = os.Remove(legacyPath)
 	}
 
 	return nil
@@ -808,8 +927,17 @@ func (s *Store) CleanupOrphanedFingerprints(currentResourceIDs map[string]bool) 
 
 			// Remove from disk
 			filePath := s.getFingerprintFilePath(fpID)
+			removeErr := error(nil)
 			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
-				log.Warn().Err(err).Str("id", fpID).Msg("failed to remove orphaned fingerprint file")
+				removeErr = err
+			}
+			if legacyPath, err := s.findLegacyFingerprintPath(fpID); err == nil && legacyPath != "" && legacyPath != filePath {
+				if err := os.Remove(legacyPath); err != nil && !os.IsNotExist(err) {
+					removeErr = err
+				}
+			}
+			if removeErr != nil {
+				log.Warn().Err(removeErr).Str("id", fpID).Msg("failed to remove orphaned fingerprint file")
 			} else {
 				log.Debug().Str("id", fpID).Msg("removed orphaned fingerprint")
 			}
@@ -886,8 +1014,7 @@ func filenameToResourceID(filename string) string {
 	return resourceType + ":" + host + ":" + resourceID
 }
 
-func (s *Store) readDiscoveryIDFromFile(filename string) (string, error) {
-	filePath := filepath.Join(s.dataDir, filename)
+func (s *Store) readDiscoveryIDFromPath(filePath string) (string, error) {
 	data, migratedPlaintext, err := s.loadDiscoveryFileData(filePath, maxDiscoveryFileReadBytes)
 	if err != nil {
 		return "", fmt.Errorf("failed to read discovery file: %w", err)
@@ -907,6 +1034,10 @@ func (s *Store) readDiscoveryIDFromFile(filename string) (string, error) {
 	}
 
 	return discovery.ID, nil
+}
+
+func (s *Store) readDiscoveryIDFromFile(filename string) (string, error) {
+	return s.readDiscoveryIDFromPath(filepath.Join(s.dataDir, filename))
 }
 
 // ListDiscoveryIDs returns all discovery IDs currently stored.

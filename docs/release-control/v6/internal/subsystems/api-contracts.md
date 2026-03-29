@@ -186,6 +186,7 @@ Own canonical runtime payload shapes between backend and frontend.
 19. Governed frontend API clients open-coding `try/catch` wrappers around `apiFetchJSON(...)` just to map `402` or `404` into `[]`, `{ plans: [] }`, or `null` instead of using canonical shared API-error-status fallback helpers
 20. Backend config/settings handlers pointing operator guidance at GitHub `main` docs when the running build already ships that guidance locally under `/docs/`
 21. Telemetry preview or reset endpoints drifting from the exact server-owned telemetry runtime contract instead of reusing the same source-of-truth snapshot and install-ID state the background sender uses
+22. Shared SSO test or metadata-preview handlers open-coding outbound metadata/discovery URLs, allowing userinfo-bearing HTTP(S) inputs, or rebuilding `/.well-known/openid-configuration` with origin-root string concatenation instead of the shared validated URL helpers before any outbound request
 
 ## Completion Obligations
 
@@ -239,6 +240,11 @@ Own canonical runtime payload shapes between backend and frontend.
     self-serve verification failures may render owned HTML, but they must
     preserve originating Pulse context instead of collapsing into generic
     control-plane failures.
+22. Keep shared SSO test and metadata-preview transport fail-closed: SAML
+    metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
+    inputs before any outbound request is attempted, and OIDC discovery must
+    append `/.well-known/openid-configuration` beneath the configured issuer
+    base path instead of resetting to the origin root.
 
 ## Current State
 
@@ -261,6 +267,12 @@ the cloud proxy, the runtime must derive the effective same-origin
 `https://<tenant-host>` boundary from trusted forwarded host/proto headers
 only after the hosted container contract has injected explicit proxy CIDRs, so
 live updates stay connected without weakening cross-site websocket checks.
+That same shared boundary now also owns outbound SSO metadata and discovery
+URL handling. SAML test/preview metadata fetches and OIDC issuer discovery
+must normalize absolute HTTP(S) inputs through shared helpers, reject
+userinfo-bearing URLs before any outbound request, and append the OIDC
+well-known path relative to the issuer base instead of resetting discovery to
+the origin root.
 Commercial self-service actions in that shell must stay same-origin as well:
 the frontend may only call the portal-owned `/api/portal/commercial/*` routes,
 and `internal/cloudcp/portal/commercial_proxy.go` plus `internal/cloudcp/routes.go`

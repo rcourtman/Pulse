@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -1515,6 +1516,10 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 	}
 
 	requestURL := strings.TrimRight(serverURL, "/") + notifyEndpoint
+	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(requestURL)
+	if err != nil {
+		return fmt.Errorf("apprise server URL validation failed: %w", err)
+	}
 
 	payload := map[string]any{
 		"body":  body,
@@ -1532,7 +1537,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		return fmt.Errorf("failed to marshal Apprise payload: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, requestURL, bytes.NewReader(payloadBytes))
+	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(payloadBytes))
 	if err != nil {
 		return fmt.Errorf("failed to create Apprise request: %w", err)
 	}

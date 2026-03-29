@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -71,7 +72,44 @@ func (s *SessionStore) sessionPath(id string) (string, error) {
 	if err := validateSessionID(id); err != nil {
 		return "", err
 	}
-	return filepath.Join(s.dataDir, id+".json"), nil
+	return filepath.Join(s.dataDir, securityutil.HashedStorageName(id)+".json"), nil
+}
+
+func (s *SessionStore) findLegacySessionPath(id string) (string, error) {
+	if err := validateSessionID(id); err != nil {
+		return "", err
+	}
+	canonicalName := securityutil.HashedStorageName(id) + ".json"
+	entries, err := os.ReadDir(s.dataDir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to scan session directory: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		if entry.Name() == canonicalName {
+			continue
+		}
+		path := filepath.Join(s.dataDir, entry.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read legacy session candidate")
+			continue
+		}
+		var session sessionData
+		if err := json.Unmarshal(data, &session); err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to parse legacy session candidate")
+			continue
+		}
+		if session.ID == id {
+			return path, nil
+		}
+	}
+	return "", nil
 }
 
 // List returns all sessions, sorted by updated_at descending
@@ -90,10 +128,18 @@ func (s *SessionStore) List() ([]Session, error) {
 			continue
 		}
 
-		data, err := s.readSession(strings.TrimSuffix(entry.Name(), ".json"))
+		file, err := os.ReadFile(filepath.Join(s.dataDir, entry.Name()))
 		if err != nil {
 			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to read session file")
 			continue
+		}
+		var data sessionData
+		if err := json.Unmarshal(file, &data); err != nil {
+			log.Warn().Err(err).Str("file", entry.Name()).Msg("failed to parse session file")
+			continue
+		}
+		for i := range data.Messages {
+			data.Messages[i] = data.Messages[i].NormalizeCollections()
 		}
 
 		sessions = append(sessions, Session{
@@ -167,11 +213,26 @@ func (s *SessionStore) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("session not found: %s", id)
+	var removed bool
+	candidates := []string{path}
+	legacyPath, err := s.findLegacySessionPath(id)
+	if err != nil {
+		return err
+	}
+	if legacyPath != "" && legacyPath != path {
+		candidates = append(candidates, legacyPath)
+	}
+	for _, candidate := range candidates {
+		if err := os.Remove(candidate); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return fmt.Errorf("failed to delete session: %w", err)
 		}
-		return fmt.Errorf("failed to delete session: %w", err)
+		removed = true
+	}
+	if !removed {
+		return fmt.Errorf("session not found: %s", id)
 	}
 
 	// Also clean up resolved context, FSM, and knowledge accumulator
@@ -253,10 +314,17 @@ func (s *SessionStore) readSession(id string) (*sessionData, error) {
 		return nil, err
 	}
 	file, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
+	if os.IsNotExist(err) {
+		legacyPath, legacyErr := s.findLegacySessionPath(id)
+		if legacyErr != nil {
+			return nil, legacyErr
+		}
+		if legacyPath == "" {
 			return nil, fmt.Errorf("session not found: %s", id)
 		}
+		file, err = os.ReadFile(legacyPath)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to read session: %w", err)
 	}
 
@@ -291,6 +359,9 @@ func (s *SessionStore) writeSession(data sessionData) error {
 	}
 	if err := os.WriteFile(path, file, 0600); err != nil {
 		return fmt.Errorf("failed to write session: %w", err)
+	}
+	if legacyPath, err := s.findLegacySessionPath(data.ID); err == nil && legacyPath != "" && legacyPath != path {
+		_ = os.Remove(legacyPath)
 	}
 
 	return nil

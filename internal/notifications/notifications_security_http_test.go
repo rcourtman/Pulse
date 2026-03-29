@@ -3,6 +3,7 @@ package notifications
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -24,6 +25,46 @@ func TestSendAppriseViaHTTPInvalidScheme(t *testing.T) {
 	err := nm.sendAppriseViaHTTP(AppriseConfig{ServerURL: "ftp://example.com", TimeoutSeconds: 1}, "title", "body", "info")
 	if err == nil || !strings.Contains(err.Error(), "must start with http or https") {
 		t.Fatalf("expected scheme validation error, got %v", err)
+	}
+}
+
+func TestSendAppriseViaHTTPRejectsUserinfoServerURL(t *testing.T) {
+	nm := NewNotificationManager("")
+	defer nm.Stop()
+
+	called := make(chan struct{}, 1)
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case called <- struct{}{}:
+		default:
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("allowlist: %v", err)
+	}
+
+	serverURL, err := url.Parse(server.URL)
+	if err != nil {
+		t.Fatalf("parse server URL: %v", err)
+	}
+	serverURL.User = url.UserPassword("user", "pass")
+
+	err = nm.sendAppriseViaHTTP(AppriseConfig{
+		ServerURL:      serverURL.String(),
+		TimeoutSeconds: 2,
+	}, "title", "body", "info")
+	if err == nil || !strings.Contains(err.Error(), "userinfo") {
+		t.Fatalf("expected userinfo validation error, got %v", err)
+	}
+
+	select {
+	case <-called:
+		t.Fatal("expected userinfo-bearing Apprise URL to be rejected before outbound delivery")
+	default:
 	}
 }
 

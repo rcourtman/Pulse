@@ -104,6 +104,54 @@ func TestSessionStore(t *testing.T) {
 	})
 }
 
+func TestSessionStoreMigratesLegacySessionFileOnWrite(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Round(time.Second)
+	legacy := sessionData{
+		ID:        "legacy-session",
+		Title:     "",
+		Messages:  []Message{},
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	payload, err := json.MarshalIndent(legacy, "", "  ")
+	require.NoError(t, err)
+
+	legacyPath := filepath.Join(store.dataDir, legacy.ID+".json")
+	require.NoError(t, os.WriteFile(legacyPath, payload, 0600))
+
+	canonicalPath, err := store.sessionPath(legacy.ID)
+	require.NoError(t, err)
+
+	_, err = os.Stat(canonicalPath)
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	err = store.AddMessage(legacy.ID, Message{
+		Role:    "user",
+		Content: "hello from legacy storage",
+	})
+	require.NoError(t, err)
+
+	session, err := store.Get(legacy.ID)
+	require.NoError(t, err)
+	assert.Equal(t, legacy.ID, session.ID)
+	assert.Equal(t, "hello from legacy storage", session.Title)
+
+	messages, err := store.GetMessages(legacy.ID)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, "hello from legacy storage", messages[0].Content)
+
+	_, err = os.Stat(canonicalPath)
+	require.NoError(t, err)
+
+	_, err = os.Stat(legacyPath)
+	assert.ErrorIs(t, err, os.ErrNotExist)
+}
+
 func TestMessage_UsesCanonicalEmptyCollections(t *testing.T) {
 	payload, err := json.Marshal(EmptyMessage())
 	require.NoError(t, err)

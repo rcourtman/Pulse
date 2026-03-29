@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 )
 
@@ -225,8 +226,12 @@ func (w *WebhookDelivery) deliver(url string, event Event) error {
 	if err := validateWebhookURL(ctx, url); err != nil {
 		return fmt.Errorf("webhook URL blocked: %w", err)
 	}
+	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(url)
+	if err != nil {
+		return fmt.Errorf("webhook URL blocked: %w", err)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	req, err := securityutil.NewValidatedRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to create webhook request: %w", err)
 	}

@@ -179,6 +179,11 @@ The same migration-only rule applies to guest knowledge under
 knowledge files may only serve as migration input, and the knowledge store
 must rewrite canonical encrypted-at-rest storage immediately on load instead
 of leaving guest knowledge plaintext on disk until a future note update.
+Chat-session and guest-knowledge persistence now also keep canonical on-disk
+names opaque and machine-owned. Legacy identifier-derived filenames may be
+discovered only by inspecting already-owned files for embedded record IDs, and
+the next successful write must rewrite them to hashed canonical paths instead
+of preserving user-controlled identifiers as filesystem path segments.
 That trust boundary also applies when the store is constructed: if the
 knowledge store cannot initialize encryption, construction must fail closed
 instead of silently creating a plaintext-at-rest runtime store.
