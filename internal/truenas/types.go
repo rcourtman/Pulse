@@ -10,6 +10,7 @@ type FixtureSnapshot struct {
 	Datasets         []Dataset
 	Disks            []Disk
 	Alerts           []Alert
+	Apps             []App
 	ZFSSnapshots     []ZFSSnapshot
 	ReplicationTasks []ReplicationTask
 }
@@ -67,6 +68,65 @@ type Alert struct {
 	Source    string
 	Dismissed bool
 	Datetime  time.Time
+}
+
+// App mirrors the subset of TrueNAS application fields needed for unified
+// workload mapping.
+type App struct {
+	ID                    string
+	Name                  string
+	State                 string
+	Version               string
+	HumanVersion          string
+	CustomApp             bool
+	UpgradeAvailable      bool
+	ImageUpdatesAvailable bool
+	Notes                 string
+	ContainerCount        int
+	UsedHostIPs           []string
+	UsedPorts             []AppPort
+	Containers            []AppContainer
+	Volumes               []AppVolume
+	Images                []string
+	Networks              []AppNetwork
+}
+
+// AppPort describes an app-level published port mapping.
+type AppPort struct {
+	ContainerPort int
+	Protocol      string
+	HostPorts     []AppHostPort
+}
+
+// AppHostPort describes a host-bound port used by a TrueNAS app.
+type AppHostPort struct {
+	HostPort int
+	HostIP   string
+}
+
+// AppContainer describes one runtime container inside a TrueNAS app.
+type AppContainer struct {
+	ID           string
+	ServiceName  string
+	Image        string
+	State        string
+	PortConfig   []AppPort
+	VolumeMounts []AppVolume
+}
+
+// AppVolume describes a bind or named volume mount exposed by a TrueNAS app.
+type AppVolume struct {
+	Source      string
+	Destination string
+	Mode        string
+	Type        string
+}
+
+// AppNetwork describes a Docker network attached to a TrueNAS app.
+type AppNetwork struct {
+	ID     string
+	Name   string
+	Labels map[string]string
 }
 
 // ZFSSnapshot mirrors the subset of snapshot fields needed for recovery-point mapping.

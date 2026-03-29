@@ -40,15 +40,15 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
 
 	resources := registry.List()
-	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks)
+	wantCount := 1 + len(fixtures.Pools) + len(fixtures.Datasets) + len(fixtures.Disks) + len(fixtures.Apps)
 	if len(resources) != wantCount {
 		t.Fatalf("expected %d resources, got %d", wantCount, len(resources))
 	}
 
 	system := requireResource(t, resources, unifiedresources.ResourceTypeAgent, fixtures.System.Hostname)
 	assertSourceTracking(t, *system, unifiedresources.SourceTrueNAS)
-	if system.ChildCount != len(fixtures.Pools) {
-		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools), system.ChildCount)
+	if system.ChildCount != len(fixtures.Pools)+len(fixtures.Apps) {
+		t.Fatalf("expected system child count %d, got %d", len(fixtures.Pools)+len(fixtures.Apps), system.ChildCount)
 	}
 	if system.TrueNAS == nil {
 		t.Fatal("expected TrueNAS metadata on system record")
@@ -114,6 +114,24 @@ func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 		t.Fatalf("expected dataset parent %q, got %+v", pool.ID, dataset.ParentID)
 	}
 	assertDiskMetric(t, dataset.Metrics, 18*1024*1024*1024*1024, 5*1024*1024*1024*1024)
+
+	app := requireResource(t, resources, unifiedresources.ResourceTypeAppContainer, "Nextcloud")
+	assertSourceTracking(t, *app, unifiedresources.SourceTrueNAS)
+	if app.ParentID == nil || *app.ParentID != system.ID {
+		t.Fatalf("expected app parent %q, got %+v", system.ID, app.ParentID)
+	}
+	if app.Docker == nil {
+		t.Fatal("expected DockerData on TrueNAS app resource")
+	}
+	if app.Docker.ContainerID != "nextcloud" {
+		t.Fatalf("expected app container ID nextcloud, got %q", app.Docker.ContainerID)
+	}
+	if app.Docker.Runtime != "docker" {
+		t.Fatalf("expected app runtime docker, got %q", app.Docker.Runtime)
+	}
+	if app.Status != unifiedresources.StatusOnline {
+		t.Fatalf("expected Nextcloud status online, got %q", app.Status)
+	}
 
 	disk := requireResource(t, resources, unifiedresources.ResourceTypePhysicalDisk, "sda")
 	assertSourceTracking(t, *disk, unifiedresources.SourceTrueNAS)
@@ -185,7 +203,7 @@ func TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing(t *testing.
 			t.Fatalf("expected canonical render type, got truenas-specific type for %s", resource.ID)
 		}
 		switch resource.Type {
-		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk:
+		case unifiedresources.ResourceTypeAgent, unifiedresources.ResourceTypeStorage, unifiedresources.ResourceTypePhysicalDisk, unifiedresources.ResourceTypeAppContainer:
 		default:
 			t.Fatalf("unexpected unified type for truenas fixture resource: %s (%s)", resource.Type, resource.ID)
 		}
@@ -286,7 +304,7 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 			if meta.Risk.Level != "warning" {
 				t.Fatalf("expected warning risk for degraded disk %q, got %+v", fixture.Name, meta.Risk)
 			}
-			if len(meta.Risk.Reasons) == 0 || meta.Risk.Reasons[0].Code != "truenas_disk_state" {
+			if !containsRiskReason(meta.Risk.Reasons, "truenas_disk_state") {
 				t.Fatalf("expected truenas_disk_state reason for %q, got %+v", fixture.Name, meta.Risk.Reasons)
 			}
 			if len(record.Resource.Incidents) != 1 || record.Resource.Incidents[0].Code != "truenas_smart" {
@@ -301,6 +319,15 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 func hasIncidentCode(incidents []unifiedresources.ResourceIncident, code string) bool {
 	for _, incident := range incidents {
 		if incident.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
+func containsRiskReason(reasons []unifiedresources.PhysicalDiskRiskReason, code string) bool {
+	for _, reason := range reasons {
+		if reason.Code == code {
 			return true
 		}
 	}

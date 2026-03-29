@@ -348,6 +348,73 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 	}
 }
 
+func TestRecordsIncludeTrueNASAppsAsCanonicalWorkloads(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		SetFeatureEnabled(previous)
+	})
+
+	provider := NewProvider(DefaultFixtures())
+	records := provider.Records()
+	if len(records) == 0 {
+		t.Fatal("expected fixture records from provider")
+	}
+
+	var nextcloud *unifiedresources.IngestRecord
+	var adguard *unifiedresources.IngestRecord
+	for i := range records {
+		record := &records[i]
+		if record.Resource.Type != unifiedresources.ResourceTypeAppContainer {
+			continue
+		}
+		switch record.Resource.Name {
+		case "Nextcloud":
+			nextcloud = record
+		case "AdGuard Home":
+			adguard = record
+		}
+	}
+
+	if nextcloud == nil || adguard == nil {
+		t.Fatalf("expected TrueNAS app-container records for Nextcloud and AdGuard Home")
+	}
+	if nextcloud.ParentSourceID != "system:truenas-main" {
+		t.Fatalf("expected Nextcloud parent system:truenas-main, got %q", nextcloud.ParentSourceID)
+	}
+	if nextcloud.Resource.Technology != "docker" {
+		t.Fatalf("expected Nextcloud technology docker, got %q", nextcloud.Resource.Technology)
+	}
+	if nextcloud.Resource.Docker == nil {
+		t.Fatal("expected Nextcloud docker metadata")
+	}
+	if nextcloud.Resource.Docker.ContainerID != "nextcloud" {
+		t.Fatalf("expected Nextcloud canonical container ID %q, got %q", "nextcloud", nextcloud.Resource.Docker.ContainerID)
+	}
+	if nextcloud.Resource.Docker.Image != "docker.io/library/nextcloud:29.0.7" {
+		t.Fatalf("expected Nextcloud image %q, got %q", "docker.io/library/nextcloud:29.0.7", nextcloud.Resource.Docker.Image)
+	}
+	if nextcloud.Resource.Docker.Runtime != "docker" {
+		t.Fatalf("expected Nextcloud runtime docker, got %q", nextcloud.Resource.Docker.Runtime)
+	}
+	if len(nextcloud.Resource.Docker.Ports) != 1 || nextcloud.Resource.Docker.Ports[0].PublicPort != 30443 {
+		t.Fatalf("unexpected Nextcloud published ports: %+v", nextcloud.Resource.Docker.Ports)
+	}
+	if len(nextcloud.Resource.Docker.Mounts) != 2 {
+		t.Fatalf("expected Nextcloud mounts, got %+v", nextcloud.Resource.Docker.Mounts)
+	}
+	if nextcloud.Resource.Status != unifiedresources.StatusOnline {
+		t.Fatalf("expected Nextcloud status online, got %q", nextcloud.Resource.Status)
+	}
+
+	if adguard.Resource.Status != unifiedresources.StatusOffline {
+		t.Fatalf("expected AdGuard Home status offline, got %q", adguard.Resource.Status)
+	}
+	if adguard.Resource.Docker == nil || adguard.Resource.Docker.ContainerState != "exited" {
+		t.Fatalf("expected AdGuard Home container state exited, got %+v", adguard.Resource.Docker)
+	}
+}
+
 func TestRecordsElevateOnlineDiskWhenTemperatureCritical(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)

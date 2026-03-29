@@ -179,7 +179,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	systemRisk := unifiedresources.StorageRiskFromAssessment(systemAssessment)
 	_, protectionReduced, rebuildInProgress, protectionSummary, rebuildSummary := unifiedresources.StorageRiskSemantics(systemRisk)
 	systemIncidents, poolIncidents, diskIncidents := buildIncidentAssignments(snapshot)
-	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Disks))
+	records := make([]unifiedresources.IngestRecord, 0, 1+len(snapshot.Pools)+len(snapshot.Datasets)+len(snapshot.Apps)+len(snapshot.Disks))
 
 	totalCapacity, totalUsed := aggregatePoolUsage(snapshot.Pools)
 	records = append(records, unifiedresources.IngestRecord{
@@ -297,6 +297,50 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					snapshot.System.Hostname,
 					dataset.Name,
 				},
+			},
+		})
+	}
+
+	for _, app := range snapshot.Apps {
+		dockerMeta := &unifiedresources.DockerData{
+			ContainerID:    appCanonicalID(app),
+			Hostname:       strings.TrimSpace(snapshot.System.Hostname),
+			DisplayName:    appDisplayName(app),
+			Image:          primaryAppImage(app),
+			Runtime:        "docker",
+			ContainerState: appContainerState(app),
+			Ports:          dockerPortsFromTrueNASApp(app),
+			Mounts:         dockerMountsFromTrueNASApp(app),
+			Networks:       dockerNetworksFromTrueNASApp(app),
+			Labels: map[string]string{
+				"truenas.app_id": strings.TrimSpace(app.ID),
+			},
+		}
+		if strings.TrimSpace(app.Version) != "" {
+			dockerMeta.Labels["truenas.version"] = strings.TrimSpace(app.Version)
+		}
+		if strings.TrimSpace(app.HumanVersion) != "" {
+			dockerMeta.Labels["truenas.human_version"] = strings.TrimSpace(app.HumanVersion)
+		}
+		if app.CustomApp {
+			dockerMeta.Labels["truenas.custom_app"] = "true"
+		}
+
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID:       appSourceID(app.ID),
+			ParentSourceID: systemSourceID,
+			Resource: unifiedresources.Resource{
+				Type:       unifiedresources.ResourceTypeAppContainer,
+				Technology: "docker",
+				Name:       appDisplayName(app),
+				Status:     statusFromApp(app),
+				LastSeen:   collectedAt,
+				UpdatedAt:  collectedAt,
+				Docker:     dockerMeta,
+				Tags:       appTags(app),
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: dedupeStrings([]string{appDisplayName(app)}),
 			},
 		})
 	}
@@ -612,8 +656,151 @@ func datasetSourceID(dataset string) string {
 	return "dataset:" + strings.TrimSpace(dataset)
 }
 
+func appSourceID(id string) string {
+	return "app:" + strings.TrimSpace(id)
+}
+
 func diskSourceID(name string) string {
 	return "disk:" + strings.TrimSpace(name)
+}
+
+func appDisplayName(app App) string {
+	if name := strings.TrimSpace(app.Name); name != "" {
+		return name
+	}
+	return strings.TrimSpace(app.ID)
+}
+
+func appCanonicalID(app App) string {
+	if id := strings.TrimSpace(app.ID); id != "" {
+		return id
+	}
+	return appDisplayName(app)
+}
+
+func primaryAppImage(app App) string {
+	if len(app.Images) > 0 {
+		if image := strings.TrimSpace(app.Images[0]); image != "" {
+			return image
+		}
+	}
+	for _, container := range app.Containers {
+		if image := strings.TrimSpace(container.Image); image != "" {
+			return image
+		}
+	}
+	return ""
+}
+
+func appContainerState(app App) string {
+	if len(app.Containers) > 0 {
+		state := strings.ToLower(strings.TrimSpace(app.Containers[0].State))
+		if state != "" {
+			return state
+		}
+	}
+	return strings.ToLower(strings.TrimSpace(app.State))
+}
+
+func statusFromApp(app App) unifiedresources.ResourceStatus {
+	switch strings.ToUpper(strings.TrimSpace(app.State)) {
+	case "RUNNING":
+		return unifiedresources.StatusOnline
+	case "DEPLOYING", "STOPPING", "CRASHED":
+		return unifiedresources.StatusWarning
+	case "STOPPED":
+		return unifiedresources.StatusOffline
+	default:
+		return unifiedresources.StatusUnknown
+	}
+}
+
+func appTags(app App) []string {
+	tags := []string{"truenas", "app"}
+	if state := strings.ToLower(strings.TrimSpace(app.State)); state != "" {
+		tags = append(tags, "state:"+state)
+	}
+	if app.CustomApp {
+		tags = append(tags, "custom-app")
+	}
+	return dedupeStrings(tags)
+}
+
+func dockerPortsFromTrueNASApp(app App) []unifiedresources.DockerPortMeta {
+	if len(app.UsedPorts) == 0 {
+		return nil
+	}
+	ports := make([]unifiedresources.DockerPortMeta, 0, len(app.UsedPorts))
+	for _, port := range app.UsedPorts {
+		if port.ContainerPort == 0 && len(port.HostPorts) == 0 {
+			continue
+		}
+		if len(port.HostPorts) == 0 {
+			ports = append(ports, unifiedresources.DockerPortMeta{
+				PrivatePort: port.ContainerPort,
+				Protocol:    strings.ToLower(strings.TrimSpace(port.Protocol)),
+			})
+			continue
+		}
+		for _, hostPort := range port.HostPorts {
+			ports = append(ports, unifiedresources.DockerPortMeta{
+				PrivatePort: port.ContainerPort,
+				PublicPort:  hostPort.HostPort,
+				Protocol:    strings.ToLower(strings.TrimSpace(port.Protocol)),
+				IP:          strings.TrimSpace(hostPort.HostIP),
+			})
+		}
+	}
+	if len(ports) == 0 {
+		return nil
+	}
+	return ports
+}
+
+func dockerMountsFromTrueNASApp(app App) []unifiedresources.DockerMountMeta {
+	if len(app.Volumes) == 0 {
+		return nil
+	}
+	mounts := make([]unifiedresources.DockerMountMeta, 0, len(app.Volumes))
+	for _, volume := range app.Volumes {
+		destination := strings.TrimSpace(volume.Destination)
+		source := strings.TrimSpace(volume.Source)
+		if destination == "" && source == "" {
+			continue
+		}
+		mounts = append(mounts, unifiedresources.DockerMountMeta{
+			Type:        strings.TrimSpace(volume.Type),
+			Source:      source,
+			Destination: destination,
+			Mode:        strings.TrimSpace(volume.Mode),
+			RW:          !strings.Contains(strings.ToLower(strings.TrimSpace(volume.Mode)), "ro"),
+		})
+	}
+	if len(mounts) == 0 {
+		return nil
+	}
+	return mounts
+}
+
+func dockerNetworksFromTrueNASApp(app App) []unifiedresources.DockerNetworkMeta {
+	if len(app.Networks) == 0 {
+		return nil
+	}
+	networks := make([]unifiedresources.DockerNetworkMeta, 0, len(app.Networks))
+	for _, network := range app.Networks {
+		name := strings.TrimSpace(network.Name)
+		if name == "" {
+			name = strings.TrimSpace(network.ID)
+		}
+		if name == "" {
+			continue
+		}
+		networks = append(networks, unifiedresources.DockerNetworkMeta{Name: name})
+	}
+	if len(networks) == 0 {
+		return nil
+	}
+	return networks
 }
 
 func statusFromDisk(disk Disk) unifiedresources.ResourceStatus {
@@ -674,7 +861,67 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.Datasets = append([]Dataset(nil), snapshot.Datasets...)
 	copied.Disks = append([]Disk(nil), snapshot.Disks...)
 	copied.Alerts = append([]Alert(nil), snapshot.Alerts...)
+	copied.Apps = cloneApps(snapshot.Apps)
 	copied.ZFSSnapshots = append([]ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
 	copied.ReplicationTasks = append([]ReplicationTask(nil), snapshot.ReplicationTasks...)
 	return &copied
+}
+
+func cloneApps(apps []App) []App {
+	if len(apps) == 0 {
+		return nil
+	}
+	out := make([]App, len(apps))
+	for i := range apps {
+		out[i] = apps[i]
+		out[i].UsedHostIPs = append([]string(nil), apps[i].UsedHostIPs...)
+		out[i].UsedPorts = cloneAppPorts(apps[i].UsedPorts)
+		out[i].Containers = cloneAppContainers(apps[i].Containers)
+		out[i].Volumes = append([]AppVolume(nil), apps[i].Volumes...)
+		out[i].Images = append([]string(nil), apps[i].Images...)
+		out[i].Networks = cloneAppNetworks(apps[i].Networks)
+	}
+	return out
+}
+
+func cloneAppPorts(ports []AppPort) []AppPort {
+	if len(ports) == 0 {
+		return nil
+	}
+	out := make([]AppPort, len(ports))
+	for i := range ports {
+		out[i] = ports[i]
+		out[i].HostPorts = append([]AppHostPort(nil), ports[i].HostPorts...)
+	}
+	return out
+}
+
+func cloneAppContainers(containers []AppContainer) []AppContainer {
+	if len(containers) == 0 {
+		return nil
+	}
+	out := make([]AppContainer, len(containers))
+	for i := range containers {
+		out[i] = containers[i]
+		out[i].PortConfig = cloneAppPorts(containers[i].PortConfig)
+		out[i].VolumeMounts = append([]AppVolume(nil), containers[i].VolumeMounts...)
+	}
+	return out
+}
+
+func cloneAppNetworks(networks []AppNetwork) []AppNetwork {
+	if len(networks) == 0 {
+		return nil
+	}
+	out := make([]AppNetwork, len(networks))
+	for i := range networks {
+		out[i] = networks[i]
+		if len(networks[i].Labels) > 0 {
+			out[i].Labels = make(map[string]string, len(networks[i].Labels))
+			for key, value := range networks[i].Labels {
+				out[i].Labels[key] = value
+			}
+		}
+	}
+	return out
 }

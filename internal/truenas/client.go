@@ -312,6 +312,57 @@ func (c *Client) GetAlerts(ctx context.Context) ([]Alert, error) {
 	return alerts, nil
 }
 
+// GetApps returns the best-effort TrueNAS app inventory as canonical workload
+// candidates. The API surface varies across TrueNAS releases, so we parse the
+// documented app.query response shape loosely.
+func (c *Client) GetApps(ctx context.Context) ([]App, error) {
+	var response []map[string]any
+	if err := c.getJSON(ctx, http.MethodGet, "/app", &response); err != nil {
+		return nil, err
+	}
+
+	apps := make([]App, 0, len(response))
+	for _, item := range response {
+		activeWorkloads := readMapAny(item, "active_workloads", "activeWorkloads")
+
+		app := App{
+			ID:                    strings.TrimSpace(readStringAny(item, "id")),
+			Name:                  strings.TrimSpace(readStringAny(item, "name")),
+			State:                 strings.TrimSpace(readStringAny(item, "state")),
+			Version:               strings.TrimSpace(readStringAny(item, "version")),
+			HumanVersion:          strings.TrimSpace(readStringAny(item, "human_version", "humanVersion")),
+			CustomApp:             readBoolAny(item, "custom_app", "customApp"),
+			UpgradeAvailable:      readBoolAny(item, "upgrade_available", "upgradeAvailable"),
+			ImageUpdatesAvailable: readBoolAny(item, "image_updates_available", "imageUpdatesAvailable"),
+			Notes:                 strings.TrimSpace(readStringAny(item, "notes")),
+			ContainerCount:        readIntAny(activeWorkloads, "containers"),
+			UsedHostIPs:           dedupeStrings(readStringSliceAny(activeWorkloads, "used_host_ips", "usedHostIps")),
+			UsedPorts:             parseAppPorts(readSliceAny(activeWorkloads, "used_ports", "usedPorts")),
+			Containers:            parseAppContainers(readSliceAny(activeWorkloads, "container_details", "containerDetails")),
+			Volumes:               parseAppVolumes(readSliceAny(activeWorkloads, "volumes")),
+			Images:                dedupeStrings(readStringSliceAny(activeWorkloads, "images")),
+			Networks:              parseAppNetworks(readSliceAny(activeWorkloads, "networks")),
+		}
+
+		if app.Name == "" {
+			app.Name = app.ID
+		}
+		if app.ContainerCount <= 0 {
+			app.ContainerCount = len(app.Containers)
+		}
+		if len(app.Images) == 0 {
+			app.Images = dedupeStrings(appImagesFromContainers(app.Containers))
+		}
+		if len(app.Volumes) == 0 {
+			app.Volumes = dedupeAppVolumes(appVolumesFromContainers(app.Containers))
+		}
+
+		apps = append(apps, app)
+	}
+
+	return apps, nil
+}
+
 // GetZFSSnapshots returns a best-effort list of ZFS snapshots.
 //
 // NOTE: TrueNAS exposes multiple snapshot APIs across versions. We intentionally parse the
@@ -459,6 +510,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 	}
 
 	// Recovery artifacts are best-effort: do not fail monitoring if additional endpoints are unavailable.
+	apps, _ := c.GetApps(ctx)
 	zfsSnapshots, _ := c.GetZFSSnapshots(ctx)
 	replicationTasks, _ := c.GetReplicationTasks(ctx)
 
@@ -469,6 +521,7 @@ func (c *Client) FetchSnapshot(ctx context.Context) (*FixtureSnapshot, error) {
 		Datasets:         datasets,
 		Disks:            disks,
 		Alerts:           alerts,
+		Apps:             apps,
 		ZFSSnapshots:     zfsSnapshots,
 		ReplicationTasks: replicationTasks,
 	}, nil
@@ -584,6 +637,286 @@ func splitSnapshotName(full string) (dataset string, snapshot string) {
 		return "", ""
 	}
 	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+}
+
+func readMapAny(record map[string]any, keys ...string) map[string]any {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if typed, ok := value.(map[string]any); ok {
+			return typed
+		}
+	}
+	return nil
+}
+
+func readSliceAny(record map[string]any, keys ...string) []any {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if typed, ok := value.([]any); ok {
+			return typed
+		}
+	}
+	return nil
+}
+
+func readBoolAny(record map[string]any, keys ...string) bool {
+	if record == nil {
+		return false
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		switch typed := value.(type) {
+		case bool:
+			return typed
+		case string:
+			switch strings.ToLower(strings.TrimSpace(typed)) {
+			case "1", "true", "yes", "on":
+				return true
+			}
+		case map[string]any:
+			if parsed, ok := firstAny(typed, "parsed", "rawvalue", "value"); ok {
+				if readBoolAny(map[string]any{"value": parsed}, "value") {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func readIntAny(record map[string]any, keys ...string) int {
+	if record == nil {
+		return 0
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		if parsed, ok := parseInt64Any(value); ok {
+			return int(parsed)
+		}
+	}
+	return 0
+}
+
+func parseAppPorts(entries []any) []AppPort {
+	if len(entries) == 0 {
+		return nil
+	}
+	ports := make([]AppPort, 0, len(entries))
+	for _, entry := range entries {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		port := AppPort{
+			ContainerPort: readIntAny(record, "container_port", "containerPort"),
+			Protocol:      strings.ToLower(strings.TrimSpace(readStringAny(record, "protocol"))),
+			HostPorts:     parseAppHostPorts(readSliceAny(record, "host_ports", "hostPorts")),
+		}
+		if port.ContainerPort == 0 && len(port.HostPorts) == 0 {
+			continue
+		}
+		ports = append(ports, port)
+	}
+	if len(ports) == 0 {
+		return nil
+	}
+	return ports
+}
+
+func parseAppHostPorts(entries []any) []AppHostPort {
+	if len(entries) == 0 {
+		return nil
+	}
+	ports := make([]AppHostPort, 0, len(entries))
+	for _, entry := range entries {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		hostPort := AppHostPort{
+			HostPort: readIntAny(record, "host_port", "hostPort"),
+			HostIP:   strings.TrimSpace(readStringAny(record, "host_ip", "hostIp")),
+		}
+		if hostPort.HostPort == 0 && hostPort.HostIP == "" {
+			continue
+		}
+		ports = append(ports, hostPort)
+	}
+	if len(ports) == 0 {
+		return nil
+	}
+	return ports
+}
+
+func parseAppContainers(entries []any) []AppContainer {
+	if len(entries) == 0 {
+		return nil
+	}
+	containers := make([]AppContainer, 0, len(entries))
+	for _, entry := range entries {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		container := AppContainer{
+			ID:           strings.TrimSpace(readStringAny(record, "id")),
+			ServiceName:  strings.TrimSpace(readStringAny(record, "service_name", "serviceName")),
+			Image:        strings.TrimSpace(readStringAny(record, "image")),
+			State:        strings.TrimSpace(readStringAny(record, "state")),
+			PortConfig:   parseAppPorts(readSliceAny(record, "port_config", "portConfig")),
+			VolumeMounts: parseAppVolumes(readSliceAny(record, "volume_mounts", "volumeMounts")),
+		}
+		if container.ID == "" && container.ServiceName == "" && container.Image == "" {
+			continue
+		}
+		containers = append(containers, container)
+	}
+	if len(containers) == 0 {
+		return nil
+	}
+	return containers
+}
+
+func parseAppVolumes(entries []any) []AppVolume {
+	if len(entries) == 0 {
+		return nil
+	}
+	volumes := make([]AppVolume, 0, len(entries))
+	for _, entry := range entries {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		volume := AppVolume{
+			Source:      strings.TrimSpace(readStringAny(record, "source")),
+			Destination: strings.TrimSpace(readStringAny(record, "destination")),
+			Mode:        strings.TrimSpace(readStringAny(record, "mode")),
+			Type:        strings.TrimSpace(readStringAny(record, "type")),
+		}
+		if volume.Source == "" && volume.Destination == "" {
+			continue
+		}
+		volumes = append(volumes, volume)
+	}
+	return dedupeAppVolumes(volumes)
+}
+
+func parseAppNetworks(entries []any) []AppNetwork {
+	if len(entries) == 0 {
+		return nil
+	}
+	networks := make([]AppNetwork, 0, len(entries))
+	for _, entry := range entries {
+		record, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		network := AppNetwork{
+			ID:     strings.TrimSpace(readStringAny(record, "id")),
+			Name:   strings.TrimSpace(readStringAny(record, "name", "Name")),
+			Labels: readStringMapAny(record, "labels", "Labels"),
+		}
+		if network.ID == "" && network.Name == "" {
+			continue
+		}
+		networks = append(networks, network)
+	}
+	if len(networks) == 0 {
+		return nil
+	}
+	return networks
+}
+
+func readStringMapAny(record map[string]any, keys ...string) map[string]string {
+	if record == nil {
+		return nil
+	}
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok || value == nil {
+			continue
+		}
+		typed, ok := value.(map[string]any)
+		if !ok {
+			continue
+		}
+		out := make(map[string]string, len(typed))
+		for labelKey, labelValue := range typed {
+			out[strings.TrimSpace(labelKey)] = strings.TrimSpace(fmt.Sprintf("%v", labelValue))
+		}
+		if len(out) == 0 {
+			continue
+		}
+		return out
+	}
+	return nil
+}
+
+func appImagesFromContainers(containers []AppContainer) []string {
+	if len(containers) == 0 {
+		return nil
+	}
+	images := make([]string, 0, len(containers))
+	for _, container := range containers {
+		image := strings.TrimSpace(container.Image)
+		if image == "" {
+			continue
+		}
+		images = append(images, image)
+	}
+	return images
+}
+
+func appVolumesFromContainers(containers []AppContainer) []AppVolume {
+	if len(containers) == 0 {
+		return nil
+	}
+	volumes := make([]AppVolume, 0, len(containers))
+	for _, container := range containers {
+		volumes = append(volumes, container.VolumeMounts...)
+	}
+	return volumes
+}
+
+func dedupeAppVolumes(volumes []AppVolume) []AppVolume {
+	if len(volumes) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(volumes))
+	out := make([]AppVolume, 0, len(volumes))
+	for _, volume := range volumes {
+		key := strings.Join([]string{
+			strings.TrimSpace(volume.Source),
+			strings.TrimSpace(volume.Destination),
+			strings.TrimSpace(volume.Mode),
+			strings.TrimSpace(volume.Type),
+		}, "|")
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, volume)
+	}
+	return out
 }
 
 func dedupeStrings(values []string) []string {

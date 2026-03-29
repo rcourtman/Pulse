@@ -164,6 +164,13 @@ populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read
 the same disk-health contract instead of inventing a provider-local temperature
 surface.
+TrueNAS-managed applications now follow the same canonical workload rule. One
+TrueNAS app instance from `app.query` must project as one canonical
+`app-container` resource under `SourceTrueNAS`, reusing the shared workload and
+Docker payload contracts instead of inventing a `truenas-app` resource type or
+lane-local workload UI. Until Pulse ingests a real TrueNAS app stats/history
+path, those resources must keep metrics-history targets unset rather than
+pretending Docker memory-store history exists for them.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

@@ -108,6 +108,26 @@ func TestClientGetters(t *testing.T) {
 	if alerts[0].Datetime != time.UnixMilli(1707400000000).UTC() {
 		t.Fatalf("unexpected alert datetime: %s", alerts[0].Datetime)
 	}
+
+	apps, err := client.GetApps(ctx)
+	if err != nil {
+		t.Fatalf("GetApps() error = %v", err)
+	}
+	if len(apps) != 1 {
+		t.Fatalf("expected 1 app, got %d", len(apps))
+	}
+	if apps[0].ID != "nextcloud" || apps[0].Name != "Nextcloud" {
+		t.Fatalf("unexpected app identity mapping: %+v", apps[0])
+	}
+	if apps[0].ContainerCount != 2 || len(apps[0].Containers) != 2 {
+		t.Fatalf("unexpected app container mapping: %+v", apps[0])
+	}
+	if len(apps[0].UsedPorts) != 1 || apps[0].UsedPorts[0].ContainerPort != 443 {
+		t.Fatalf("unexpected app used ports mapping: %+v", apps[0].UsedPorts)
+	}
+	if len(apps[0].Volumes) != 2 || len(apps[0].Networks) != 1 {
+		t.Fatalf("unexpected app volume/network mapping: volumes=%d networks=%d", len(apps[0].Volumes), len(apps[0].Networks))
+	}
 }
 
 func TestClientAuthHeaderAPIKey(t *testing.T) {
@@ -186,12 +206,15 @@ func TestFetchSnapshot(t *testing.T) {
 	if snapshot.System.Hostname != "truenas-main" {
 		t.Fatalf("unexpected snapshot system: %+v", snapshot.System)
 	}
-	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 {
-		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d",
-			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts))
+	if len(snapshot.Pools) != 1 || len(snapshot.Datasets) != 1 || len(snapshot.Disks) != 2 || len(snapshot.Alerts) != 1 || len(snapshot.Apps) != 1 {
+		t.Fatalf("unexpected snapshot counts: pools=%d datasets=%d disks=%d alerts=%d apps=%d",
+			len(snapshot.Pools), len(snapshot.Datasets), len(snapshot.Disks), len(snapshot.Alerts), len(snapshot.Apps))
 	}
 	if snapshot.Disks[0].Temperature != 34 || snapshot.Disks[1].Temperature != 49 {
 		t.Fatalf("unexpected snapshot disk temperatures: %+v", snapshot.Disks)
+	}
+	if snapshot.Apps[0].ID != "nextcloud" || snapshot.Apps[0].ContainerCount != 2 {
+		t.Fatalf("unexpected snapshot apps: %+v", snapshot.Apps)
 	}
 }
 
@@ -436,6 +459,9 @@ func defaultAPIResponses() map[string]apiResponse {
 		},
 		"/api/v2.0/alert/list": {
 			body: `[{"id":"a1","level":"WARNING","formatted":"Disk temp high","source":"DiskService","dismissed":false,"datetime":{"$date":1707400000000}}]`,
+		},
+		"/api/v2.0/app": {
+			body: `[{"id":"nextcloud","name":"Nextcloud","state":"RUNNING","version":"1.0.3","human_version":"29.0.7","upgrade_available":true,"image_updates_available":true,"notes":"Team cloud","active_workloads":{"containers":2,"used_host_ips":["0.0.0.0"],"used_ports":[{"container_port":443,"protocol":"tcp","host_ports":[{"host_port":30443,"host_ip":"0.0.0.0"}]}],"container_details":[{"id":"nextcloud-web-1","service_name":"nextcloud","image":"docker.io/library/nextcloud:29.0.7","state":"running","port_config":[{"container_port":443,"protocol":"tcp","host_ports":[{"host_port":30443,"host_ip":"0.0.0.0"}]}],"volume_mounts":[{"source":"/mnt/tank/apps/nextcloud","destination":"/var/www/html","mode":"rw","type":"bind"}]},{"id":"nextcloud-redis-1","service_name":"redis","image":"docker.io/library/redis:7.2","state":"running","port_config":[],"volume_mounts":[{"source":"ix-nextcloud-redis","destination":"/data","mode":"rw","type":"volume"}]}],"volumes":[{"source":"/mnt/tank/apps/nextcloud","destination":"/var/www/html","mode":"rw","type":"bind"},{"source":"ix-nextcloud-redis","destination":"/data","mode":"rw","type":"volume"}],"images":["docker.io/library/nextcloud:29.0.7","docker.io/library/redis:7.2"],"networks":[{"name":"ix-nextcloud_default","id":"net-1","labels":{"com.docker.compose.project":"nextcloud"}}]}}]`,
 		},
 	}
 }

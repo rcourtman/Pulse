@@ -1764,6 +1764,8 @@ func (rr *ResourceRegistry) rebuildViews() {
 		case ResourceTypeAppContainer:
 			v := NewDockerContainerView(viewResource)
 			rr.cachedDockerContainers = append(rr.cachedDockerContainers, &v)
+			w := NewWorkloadView(viewResource)
+			rr.cachedWorkload = append(rr.cachedWorkload, &w)
 		case ResourceTypeAgent:
 			inf := NewInfrastructureView(viewResource)
 			rr.cachedInfra = append(rr.cachedInfra, &inf)
@@ -1896,7 +1898,7 @@ func (rr *ResourceRegistry) K8sDeployments() []*K8sDeploymentView {
 	return withViewCache(rr, func() []*K8sDeploymentView { return rr.cachedK8sDeployments })
 }
 
-// Workloads returns a unified slice of VM + LXC container views sorted by name.
+// Workloads returns a unified slice of canonical workload views sorted by name.
 func (rr *ResourceRegistry) Workloads() []*WorkloadView {
 	return withViewCache(rr, func() []*WorkloadView { return rr.cachedWorkload })
 }

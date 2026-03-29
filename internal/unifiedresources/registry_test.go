@@ -1706,3 +1706,70 @@ func TestRegistryHasMatchingMonitoredSystemUsesCanonicalHostIdentity(t *testing.
 		t.Fatal("expected unrelated candidate not to match existing counted system")
 	}
 }
+
+func TestResourceRegistry_WorkloadsIncludeCanonicalAppContainers(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceProxmox, []IngestRecord{
+		{
+			SourceID: "vm-101",
+			Resource: Resource{
+				Type:     ResourceTypeVM,
+				Name:     "db-01",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	rr.IngestRecords(SourceDocker, []IngestRecord{
+		{
+			SourceID: "ctr-201",
+			Resource: Resource{
+				Type:     ResourceTypeAppContainer,
+				Name:     "metrics-sidecar",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+		},
+	})
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "app:nextcloud",
+			Resource: Resource{
+				Type:     ResourceTypeAppContainer,
+				Name:     "Nextcloud",
+				Status:   StatusOnline,
+				LastSeen: now,
+				TrueNAS:  &TrueNASData{Hostname: "truenas-main"},
+				Docker: &DockerData{
+					ContainerID:    "nextcloud",
+					DisplayName:    "Nextcloud",
+					Image:          "library/nextcloud:latest",
+					Runtime:        "docker",
+					ContainerState: "running",
+				},
+			},
+		},
+	})
+
+	workloads := rr.Workloads()
+	if len(workloads) != 3 {
+		t.Fatalf("Workloads() returned %d records, want 3", len(workloads))
+	}
+
+	typesByName := make(map[string]ResourceType, len(workloads))
+	for _, workload := range workloads {
+		typesByName[workload.Name()] = workload.Type()
+	}
+
+	if got := typesByName["db-01"]; got != ResourceTypeVM {
+		t.Fatalf("expected VM workload for db-01, got %q", got)
+	}
+	if got := typesByName["metrics-sidecar"]; got != ResourceTypeAppContainer {
+		t.Fatalf("expected app-container workload for metrics-sidecar, got %q", got)
+	}
+	if got := typesByName["Nextcloud"]; got != ResourceTypeAppContainer {
+		t.Fatalf("expected app-container workload for Nextcloud, got %q", got)
+	}
+}

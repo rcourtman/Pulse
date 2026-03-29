@@ -157,5 +157,119 @@ func DefaultFixtures() FixtureSnapshot {
 				Datetime:  time.Date(2026, 2, 5, 3, 0, 0, 0, time.UTC),
 			},
 		},
+		Apps: []App{
+			{
+				ID:                    "nextcloud",
+				Name:                  "Nextcloud",
+				State:                 "RUNNING",
+				Version:               "1.0.3",
+				HumanVersion:          "29.0.7",
+				UpgradeAvailable:      true,
+				ImageUpdatesAvailable: true,
+				Notes:                 "Team cloud and file sync",
+				ContainerCount:        2,
+				UsedHostIPs:           []string{"0.0.0.0"},
+				UsedPorts: []AppPort{
+					{
+						ContainerPort: 443,
+						Protocol:      "tcp",
+						HostPorts: []AppHostPort{
+							{HostPort: 30443, HostIP: "0.0.0.0"},
+						},
+					},
+				},
+				Containers: []AppContainer{
+					{
+						ID:          "nextcloud-web-1",
+						ServiceName: "nextcloud",
+						Image:       "docker.io/library/nextcloud:29.0.7",
+						State:       "running",
+						PortConfig: []AppPort{
+							{
+								ContainerPort: 443,
+								Protocol:      "tcp",
+								HostPorts: []AppHostPort{
+									{HostPort: 30443, HostIP: "0.0.0.0"},
+								},
+							},
+						},
+						VolumeMounts: []AppVolume{
+							{
+								Source:      "/mnt/tank/apps/nextcloud",
+								Destination: "/var/www/html",
+								Mode:        "rw",
+								Type:        "bind",
+							},
+						},
+					},
+					{
+						ID:          "nextcloud-redis-1",
+						ServiceName: "redis",
+						Image:       "docker.io/library/redis:7.2",
+						State:       "running",
+						VolumeMounts: []AppVolume{
+							{
+								Source:      "ix-nextcloud-redis",
+								Destination: "/data",
+								Mode:        "rw",
+								Type:        "volume",
+							},
+						},
+					},
+				},
+				Volumes: []AppVolume{
+					{
+						Source:      "/mnt/tank/apps/nextcloud",
+						Destination: "/var/www/html",
+						Mode:        "rw",
+						Type:        "bind",
+					},
+					{
+						Source:      "ix-nextcloud-redis",
+						Destination: "/data",
+						Mode:        "rw",
+						Type:        "volume",
+					},
+				},
+				Images: []string{
+					"docker.io/library/nextcloud:29.0.7",
+					"docker.io/library/redis:7.2",
+				},
+				Networks: []AppNetwork{
+					{
+						ID:   "ix-nextcloud-default",
+						Name: "ix-nextcloud_default",
+						Labels: map[string]string{
+							"com.docker.compose.project": "nextcloud",
+						},
+					},
+				},
+			},
+			{
+				ID:           "adguard-home",
+				Name:         "AdGuard Home",
+				State:        "STOPPED",
+				Version:      "0.1.2",
+				HumanVersion: "0.107.64",
+				CustomApp:    true,
+				Containers: []AppContainer{
+					{
+						ID:          "adguard-home-1",
+						ServiceName: "adguard-home",
+						Image:       "docker.io/adguard/adguardhome:v0.107.64",
+						State:       "exited",
+					},
+				},
+				Volumes: []AppVolume{
+					{
+						Source:      "/mnt/tank/apps/adguard-home",
+						Destination: "/opt/adguardhome/work",
+						Mode:        "rw",
+						Type:        "bind",
+					},
+				},
+				Images: []string{"docker.io/adguard/adguardhome:v0.107.64"},
+			},
+		},
 	}
 }

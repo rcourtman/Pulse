@@ -37,6 +37,6 @@ type ReadState interface {
 	K8sDeployments() []*K8sDeploymentView
 
 	// Polymorphic accessors for mixed-type iteration
-	Workloads() []*WorkloadView            // VMs + LXC containers
+	Workloads() []*WorkloadView            // Canonical runtime workloads (VMs, system containers, app containers)
 	Infrastructure() []*InfrastructureView // All infrastructure parent resources
 }

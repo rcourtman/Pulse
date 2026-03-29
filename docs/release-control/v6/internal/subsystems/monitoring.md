@@ -143,6 +143,12 @@ name, and type context from canonical `ReadState` instead of from
 snapshot-owned VM/container arrays, so storage backup polling, guest snapshot
 polling, timeout sizing, PBS recovery candidate assembly, and Proxmox recovery
 ingest all follow unified runtime truth when a live resource registry exists.
+That same monitoring-owned workload boundary now includes canonical app
+workloads projected through unified resources, not only VM/LXC-style guests.
+Consumers that need runtime workload truth must treat `ReadState.Workloads()`
+as the cross-platform workload surface for VMs, system containers, docker
+containers, and API-backed app containers such as TrueNAS apps instead of
+assuming workload views stop at traditional guest types.
 Typed unified-resource views also need to present canonical monitoring truth,
 not raw ingest formatting. Linked topology accessors exposed through
 `internal/unifiedresources/views.go` must trim outer whitespace before

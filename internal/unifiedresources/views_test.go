@@ -1452,6 +1452,24 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 
 	rr := NewRegistry(nil)
 	rr.IngestSnapshot(snapshot)
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID:       "app:nextcloud",
+			ParentSourceID: "system:truenas-main",
+			Resource: Resource{
+				Type:      ResourceTypeAppContainer,
+				Name:      "aa-app",
+				Status:    StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Docker: &DockerData{
+					ContainerID: "nextcloud",
+					Runtime:     "docker",
+					Image:       "docker.io/library/nextcloud:29.0.7",
+				},
+			},
+		},
+	})
 
 	// Access all typed, cached getters and validate counts and deterministic sort by name.
 	vms := rr.VMs()
@@ -1558,18 +1576,19 @@ func TestView_RegistryCachedAccessors(t *testing.T) {
 	}
 
 	workloads := rr.Workloads()
-	if len(workloads) != 4 {
-		t.Fatalf("expected 4 workloads (VMs + LXCs), got %d", len(workloads))
+	if len(workloads) != 6 {
+		t.Fatalf("expected 6 workloads (VMs + LXCs + app containers), got %d", len(workloads))
 	}
-	if workloads[0].Name() != "a-ct" || workloads[1].Name() != "a-vm" || workloads[2].Name() != "b-ct" || workloads[3].Name() != "b-vm" {
-		t.Fatalf("expected workloads sorted by name across VM+LXC, got: [%q %q %q %q]", workloads[0].Name(), workloads[1].Name(), workloads[2].Name(), workloads[3].Name())
+	if workloads[0].Name() != "a-ct" || workloads[1].Name() != "a-vm" || workloads[2].Name() != "aa-app" || workloads[3].Name() != "b-ct" || workloads[4].Name() != "b-vm" || workloads[5].Name() != "ignored-docker-container" {
+		t.Fatalf("expected workloads sorted by name across canonical workload types, got: [%q %q %q %q %q %q]",
+			workloads[0].Name(), workloads[1].Name(), workloads[2].Name(), workloads[3].Name(), workloads[4].Name(), workloads[5].Name())
 	}
 	for _, w := range workloads {
 		if w == nil || w.r == nil {
 			t.Fatalf("expected workload view to be non-nil")
 		}
-		if w.r.Type != ResourceTypeVM && w.r.Type != ResourceTypeSystemContainer {
-			t.Fatalf("expected workload type vm or lxc, got %q", w.r.Type)
+		if w.r.Type != ResourceTypeVM && w.r.Type != ResourceTypeSystemContainer && w.r.Type != ResourceTypeAppContainer {
+			t.Fatalf("expected canonical workload type, got %q", w.r.Type)
 		}
 	}
 
@@ -1641,6 +1660,24 @@ func TestView_ReadStateInterfaceUsage(t *testing.T) {
 	})
 
 	var rs ReadState = rr
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID:       "app:minio",
+			ParentSourceID: "system:truenas-main",
+			Resource: Resource{
+				Type:      ResourceTypeAppContainer,
+				Name:      "iface-app",
+				Status:    StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Docker: &DockerData{
+					ContainerID: "minio",
+					Runtime:     "docker",
+					Image:       "quay.io/minio/minio:latest",
+				},
+			},
+		},
+	})
 
 	if got := rs.VMs(); len(got) != 1 || got[0].Name() != "iface-vm" {
 		t.Fatalf("expected 1 VM via ReadState, got %d", len(got))
@@ -1672,8 +1709,8 @@ func TestView_ReadStateInterfaceUsage(t *testing.T) {
 	if got := rs.K8sClusters(); len(got) != 1 || got[0].Name() != "iface-k8s" {
 		t.Fatalf("expected 1 k8s cluster via ReadState, got %d", len(got))
 	}
-	if got := rs.Workloads(); len(got) != 2 {
-		t.Fatalf("expected 2 workloads (vm + lxc) via ReadState, got %d", len(got))
+	if got := rs.Workloads(); len(got) != 3 {
+		t.Fatalf("expected 3 workloads (vm + lxc + app container) via ReadState, got %d", len(got))
 	}
 	if got := rs.Infrastructure(); len(got) != 3 {
 		t.Fatalf("expected 3 infrastructure resources (node + host + docker) via ReadState, got %d", len(got))

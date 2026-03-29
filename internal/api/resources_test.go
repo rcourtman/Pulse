@@ -2935,6 +2935,71 @@ func TestResourceListIncludesTrueNASPhysicalDiskTemperature(t *testing.T) {
 	}
 }
 
+func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previous)
+	})
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
+	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
+		records:      truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+		ownedSources: []unified.DataSource{unified.SourceTrueNAS},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?type=app-container&source=truenas", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 2 {
+		t.Fatalf("expected 2 TrueNAS app-container resources, got %d", len(resp.Data))
+	}
+
+	var nextcloud *unified.Resource
+	for i := range resp.Data {
+		resource := &resp.Data[i]
+		if resource.Name == "Nextcloud" {
+			nextcloud = resource
+			break
+		}
+	}
+	if nextcloud == nil {
+		t.Fatalf("expected Nextcloud in TrueNAS app-container response, got %+v", resp.Data)
+	}
+	if !containsSource(nextcloud.Sources, unified.SourceTrueNAS) {
+		t.Fatalf("expected TrueNAS source, got %+v", nextcloud.Sources)
+	}
+	if nextcloud.ParentName != "truenas-main" {
+		t.Fatalf("expected Nextcloud parentName truenas-main, got %q", nextcloud.ParentName)
+	}
+	if nextcloud.Docker == nil {
+		t.Fatal("expected docker payload on TrueNAS app resource")
+	}
+	if nextcloud.Docker.ContainerID != "nextcloud" {
+		t.Fatalf("expected canonical app container ID %q, got %q", "nextcloud", nextcloud.Docker.ContainerID)
+	}
+	if nextcloud.Docker.Image != "docker.io/library/nextcloud:29.0.7" {
+		t.Fatalf("expected Nextcloud image %q, got %q", "docker.io/library/nextcloud:29.0.7", nextcloud.Docker.Image)
+	}
+	if nextcloud.Docker.Runtime != "docker" {
+		t.Fatalf("expected runtime docker, got %q", nextcloud.Docker.Runtime)
+	}
+	if nextcloud.MetricsTarget != nil {
+		t.Fatalf("expected metrics target to remain unset until TrueNAS app stats are ingested, got %+v", nextcloud.MetricsTarget)
+	}
+}
+
 func TestResourceStorageIncidentsGroupsCanonicalSections(t *testing.T) {
 	now := time.Now().UTC()
 	cfg := &config.Config{DataPath: t.TempDir()}

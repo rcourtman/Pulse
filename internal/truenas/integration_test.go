@@ -39,6 +39,7 @@ func TestIntegrationFullLifecycle(t *testing.T) {
 	}
 
 	foundHost := false
+	foundAppWorkload := false
 	foundPoolStorage := false
 	foundDatasetStorage := false
 	foundPoolHealthTag := false
@@ -46,6 +47,9 @@ func TestIntegrationFullLifecycle(t *testing.T) {
 	for _, resource := range resources {
 		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Name == "truenas-main" {
 			foundHost = true
+		}
+		if resource.Type == unifiedresources.ResourceTypeAppContainer && resource.Name == "Nextcloud" {
+			foundAppWorkload = true
 		}
 
 		if resource.Type != unifiedresources.ResourceTypeStorage {
@@ -72,6 +76,9 @@ func TestIntegrationFullLifecycle(t *testing.T) {
 
 	if !foundHost {
 		t.Fatal("expected host resource named truenas-main")
+	}
+	if !foundAppWorkload {
+		t.Fatal("expected TrueNAS app-container workload named Nextcloud")
 	}
 	if !foundPoolStorage {
 		t.Fatal("expected at least one storage resource with pool tag")
