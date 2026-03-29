@@ -554,7 +554,9 @@ const Recovery: Component = () => {
         timeRange={summaryRange}
       />
 
-      <div ref={historySectionRef} class="flex flex-col">
+      {workspaceControls()}
+
+      <div ref={historySectionRef} class="flex flex-col gap-2">
         {(() => {
           return (
             <>
@@ -582,14 +584,12 @@ const Recovery: Component = () => {
                   setPlatformFilter={setPlatformFilter}
                   setQueryFilter={setQueryFilter}
                   setVerificationFilter={setVerificationFilter}
-                  workspaceControls={workspaceControls()}
                 />
               </Show>
 
               <Show when={workspaceView() === 'events'}>
                 <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
                   <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
-                    {workspaceControls()}
                     <div class="border-b border-border-subtle">{eventsActivity()}</div>
                     <div class="p-6">
                       <EmptyState
@@ -650,7 +650,6 @@ const Recovery: Component = () => {
                     tableMinWidth={tableMinWidth}
                     totalPages={totalPages}
                     verificationFilter={verificationFilter}
-                    workspaceControls={workspaceControls()}
                     workspaceIntro={eventsActivity()}
                   />
                 </Show>

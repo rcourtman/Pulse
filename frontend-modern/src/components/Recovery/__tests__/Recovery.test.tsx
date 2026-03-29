@@ -204,7 +204,9 @@ describe('Recovery', () => {
 
     expect(screen.getByTestId('recovery-page').className).toContain('gap-2');
     expect(screen.getByTestId('recovery-page').className).not.toContain('gap-3');
-    expect(await screen.findByTestId('recovery-summary')).toBeInTheDocument();
+    const recoveryPage = screen.getByTestId('recovery-page');
+    const summaryPanel = await screen.findByTestId('recovery-summary');
+    expect(summaryPanel).toBeInTheDocument();
     expect(screen.getByText('Recovery Posture')).toBeInTheDocument();
     const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
     expect(within(workspaceTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
@@ -241,12 +243,14 @@ describe('Recovery', () => {
       expect(screen.getAllByRole('table')).toHaveLength(1);
     });
     const inventoryTable = screen.getAllByRole('table')[0];
-    const inventoryWorkspaceCard = workspaceTablist.closest('.overflow-hidden');
     const inventoryBody = inventoryTable.querySelector('tbody');
-    expect(inventoryWorkspaceCard).not.toBeNull();
-    expect(inventoryWorkspaceCard).toContainElement(workspaceTablist);
-    expect(inventoryWorkspaceCard).toContainElement(inventoryControls);
-    expect(inventoryWorkspaceCard).toContainElement(inventoryTable);
+    expect(recoveryPage).toContainElement(summaryPanel);
+    expect(recoveryPage).toContainElement(workspaceTablist);
+    expect(recoveryPage).toContainElement(inventoryControls);
+    expect(recoveryPage).toContainElement(inventoryTable);
+    expect(
+      summaryPanel.compareDocumentPosition(workspaceTablist) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(
       workspaceTablist.compareDocumentPosition(inventoryControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -297,9 +301,9 @@ describe('Recovery', () => {
     const historyControls = screen.getByRole('group', { name: /recovery events controls/i });
     const historyTablist = screen.getByRole('tablist', { name: /recovery data view/i });
     const activityBars = screen.getByTestId('recovery-activity-bars');
-    const eventsWorkspaceCard = historyTablist.closest('.overflow-hidden');
-    expect(eventsWorkspaceCard).not.toBeNull();
-    expect(eventsWorkspaceCard).toContainElement(historyTablist);
+    expect(recoveryPage).toContainElement(historyTablist);
+    expect(recoveryPage).toContainElement(historyControls);
+    expect(recoveryPage).toContainElement(historyTable);
     expect(
       historyTablist.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -310,9 +314,7 @@ describe('Recovery', () => {
     ).not.toBeInTheDocument();
     expect(screen.queryByText(/^Range$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\/ day/i)).not.toBeInTheDocument();
-    expect(eventsWorkspaceCard).toContainElement(activityHeading);
-    expect(eventsWorkspaceCard).toContainElement(historyControls);
-    expect(eventsWorkspaceCard).toContainElement(historyTable);
+    expect(recoveryPage).toContainElement(activityHeading);
     expect(
       activityHeading.compareDocumentPosition(historyControls) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);

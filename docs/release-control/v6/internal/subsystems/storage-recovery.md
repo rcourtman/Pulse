@@ -714,6 +714,9 @@ That same orientation-first rule also applies at the page-shell boundary:
 recovery should hand straight from the summary strip into the active workspace
 card without an extra page-local spacer band that makes the shell feel softer
 than storage or workloads.
+That same storage-style page rhythm also applies to the workspace tabs:
+`Protected items` / `Recovery events` should live as a standalone subtab row
+above the active section, not inside the data card itself.
 That same card-level scan rule should prefer one dominant metric per card with
 short supporting readouts, the same quick-scan rhythm operators already get on
 infrastructure and workloads, instead of nested sub-cards that turn recovery
