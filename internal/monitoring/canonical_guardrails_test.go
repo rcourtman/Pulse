@@ -207,6 +207,41 @@ func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	}
 }
 
+func TestTrueNASSystemTelemetryUsesCanonicalHostTemperatureModel(t *testing.T) {
+	clientData, err := os.ReadFile(filepath.Join("..", "truenas", "client.go"))
+	if err != nil {
+		t.Fatalf("failed to read ../truenas/client.go: %v", err)
+	}
+	clientSource := string(clientData)
+	clientSnippets := []string{
+		`"reporting.get_data"`,
+		`telemetry.TemperatureCelsius = cloneTemperatureMap(temperatures)`,
+		`return parseSystemTemperatures(response), nil`,
+	}
+	for _, snippet := range clientSnippets {
+		if !strings.Contains(clientSource, snippet) {
+			t.Fatalf("../truenas/client.go must contain %q", snippet)
+		}
+	}
+
+	providerData, err := os.ReadFile(filepath.Join("..", "truenas", "provider.go"))
+	if err != nil {
+		t.Fatalf("failed to read ../truenas/provider.go: %v", err)
+	}
+	providerSource := string(providerData)
+	providerSnippets := []string{
+		`if temperature := maxTrueNASSystemTemperature(system); temperature != nil {`,
+		`agent.Temperature = temperature`,
+		`if sensors := sensorMetaFromTrueNASSystem(system); sensors != nil {`,
+		`agent.Sensors = sensors`,
+	}
+	for _, snippet := range providerSnippets {
+		if !strings.Contains(providerSource, snippet) {
+			t.Fatalf("../truenas/provider.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestHostAgentRemovalGuardUsesResolvedIdentifier(t *testing.T) {
 	data, err := os.ReadFile("monitor_agents.go")
 	if err != nil {

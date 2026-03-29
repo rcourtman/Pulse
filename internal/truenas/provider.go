@@ -534,8 +534,62 @@ func agentDataFromTrueNASSystem(system SystemInfo, storageRisk *unifiedresources
 			Free:  free,
 		}
 	}
+	if temperature := maxTrueNASSystemTemperature(system); temperature != nil {
+		agent.Temperature = temperature
+	}
+	if sensors := sensorMetaFromTrueNASSystem(system); sensors != nil {
+		agent.Sensors = sensors
+	}
 
 	return agent
+}
+
+func maxTrueNASSystemTemperature(system SystemInfo) *float64 {
+	if len(system.TemperatureCelsius) == 0 {
+		return nil
+	}
+	if value, ok := system.TemperatureCelsius["cpu_package"]; ok && value > 0 {
+		canonical := value
+		return &canonical
+	}
+
+	var best float64
+	found := false
+	for key, value := range system.TemperatureCelsius {
+		key = strings.TrimSpace(strings.ToLower(key))
+		if value <= 0 || !strings.HasPrefix(key, "cpu") {
+			continue
+		}
+		if !found || value > best {
+			best = value
+			found = true
+		}
+	}
+	if !found {
+		return nil
+	}
+	return &best
+}
+
+func sensorMetaFromTrueNASSystem(system SystemInfo) *unifiedresources.HostSensorMeta {
+	if len(system.TemperatureCelsius) == 0 {
+		return nil
+	}
+
+	sensors := &unifiedresources.HostSensorMeta{
+		TemperatureCelsius: make(map[string]float64, len(system.TemperatureCelsius)),
+	}
+	for key, value := range system.TemperatureCelsius {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+		sensors.TemperatureCelsius[key] = value
+	}
+	if len(sensors.TemperatureCelsius) == 0 {
+		return nil
+	}
+	return sensors
 }
 
 func enrichAppStatsFromPreviousSnapshot(current *FixtureSnapshot, previous *FixtureSnapshot) {
@@ -1059,6 +1113,7 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	}
 
 	copied := *snapshot
+	copied.System = cloneSystemInfo(snapshot.System)
 	copied.Pools = append([]Pool(nil), snapshot.Pools...)
 	copied.Datasets = append([]Dataset(nil), snapshot.Datasets...)
 	copied.Disks = append([]Disk(nil), snapshot.Disks...)
@@ -1067,6 +1122,17 @@ func copyFixtureSnapshot(snapshot *FixtureSnapshot) *FixtureSnapshot {
 	copied.ZFSSnapshots = append([]ZFSSnapshot(nil), snapshot.ZFSSnapshots...)
 	copied.ReplicationTasks = append([]ReplicationTask(nil), snapshot.ReplicationTasks...)
 	return &copied
+}
+
+func cloneSystemInfo(system SystemInfo) SystemInfo {
+	cloned := system
+	if len(system.TemperatureCelsius) > 0 {
+		cloned.TemperatureCelsius = make(map[string]float64, len(system.TemperatureCelsius))
+		for key, value := range system.TemperatureCelsius {
+			cloned.TemperatureCelsius[key] = value
+		}
+	}
+	return cloned
 }
 
 func cloneApps(apps []App) []App {

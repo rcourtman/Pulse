@@ -51,6 +51,7 @@ func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
 
 	first.Pools[0].Name = "mutated"
 	first.Datasets = append(first.Datasets, Dataset{Name: "extra/dataset"})
+	first.System.TemperatureCelsius["cpu_package"] = 99.9
 
 	second, err := fetcher.Fetch(context.Background())
 	if err != nil {
@@ -64,6 +65,9 @@ func TestFixtureFetcherReturnsSnapshotCopy(t *testing.T) {
 	}
 	if len(second.Datasets) != len(fixtures.Datasets) {
 		t.Fatalf("expected dataset count %d, got %d", len(fixtures.Datasets), len(second.Datasets))
+	}
+	if second.System.TemperatureCelsius["cpu_package"] != fixtures.System.TemperatureCelsius["cpu_package"] {
+		t.Fatalf("expected fixture cpu_package temperature %v, got %v", fixtures.System.TemperatureCelsius["cpu_package"], second.System.TemperatureCelsius["cpu_package"])
 	}
 }
 
@@ -223,6 +227,12 @@ func TestSystemRecordPopulatesTrueNASMetadata(t *testing.T) {
 	}
 	if system.Resource.Agent.CPUCount != 16 || system.Resource.Agent.UptimeSeconds != int64(42*24*60*60) {
 		t.Fatalf("expected canonical host telemetry metadata, got %+v", system.Resource.Agent)
+	}
+	if system.Resource.Agent.Temperature == nil || *system.Resource.Agent.Temperature != 61.5 {
+		t.Fatalf("expected canonical host temperature 61.5, got %+v", system.Resource.Agent)
+	}
+	if system.Resource.Agent.Sensors == nil || system.Resource.Agent.Sensors.TemperatureCelsius["cpu_package"] != 61.5 {
+		t.Fatalf("expected canonical host sensors on TrueNAS system record, got %+v", system.Resource.Agent.Sensors)
 	}
 	if system.Resource.Metrics == nil || system.Resource.Metrics.CPU == nil || system.Resource.Metrics.Memory == nil {
 		t.Fatalf("expected canonical system metrics on TrueNAS host record, got %+v", system.Resource.Metrics)

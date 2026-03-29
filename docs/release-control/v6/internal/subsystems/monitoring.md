@@ -254,3 +254,10 @@ canonical host `AgentData` and shared `ResourceMetrics` contract, and
 metrics-history/store path. Pulse must not add a TrueNAS-only top-level
 system charts path or leave TrueNAS host telemetry outside the canonical host
 history contract.
+That same monitoring boundary now also owns API-backed TrueNAS CPU
+temperature. `internal/truenas/client.go` must use the modern
+`reporting.get_data` RPC surface to derive current `cputemp` readings in the
+same RPC session as system telemetry, and `internal/truenas/provider.go` must
+project those readings into the canonical host temperature and host-sensor
+contract. Pulse must not treat TrueNAS CPU temperature as an agent-only
+capability or invent a TrueNAS-local sensor payload.

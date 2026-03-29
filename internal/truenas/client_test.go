@@ -288,6 +288,36 @@ func TestGetSystemTelemetryFromRPC(t *testing.T) {
 		}
 		writeRPCResult(t, conn, authReq.ID, true)
 
+		temperatureReq := readRPCRequest(t, conn)
+		if temperatureReq.Method != "reporting.get_data" {
+			t.Fatalf("expected reporting.get_data, got %q", temperatureReq.Method)
+		}
+		writeRPCResult(t, conn, temperatureReq.ID, []map[string]any{{
+			"name":       "cputemp",
+			"identifier": nil,
+			"legend":     []string{"cpu_package", "core 0", "core 1"},
+			"aggregations": map[string]any{
+				"mean": map[string]any{
+					"cpu_package": 61.5,
+					"core 0":      58.0,
+					"core 1":      59.0,
+				},
+				"min": map[string]any{
+					"cpu_package": 60.0,
+					"core 0":      57.0,
+					"core 1":      58.0,
+				},
+				"max": map[string]any{
+					"cpu_package": 63.0,
+					"core 0":      60.0,
+					"core 1":      61.0,
+				},
+			},
+			"data":  []any{},
+			"start": time.Now().Add(-5 * time.Minute).Unix(),
+			"end":   time.Now().Unix(),
+		}})
+
 		subscribeReq := readRPCRequest(t, conn)
 		if subscribeReq.Method != "core.subscribe" {
 			t.Fatalf("expected core.subscribe, got %q", subscribeReq.Method)
@@ -336,8 +366,58 @@ func TestGetSystemTelemetryFromRPC(t *testing.T) {
 	if system.DiskReadRate != 6144 || system.DiskWriteRate != 4096 {
 		t.Fatalf("unexpected disk telemetry: %+v", system)
 	}
+	if got := system.TemperatureCelsius["cpu_package"]; got != 61.5 {
+		t.Fatalf("expected cpu_package temperature 61.5, got %+v", system.TemperatureCelsius)
+	}
+	if got := system.TemperatureCelsius["cpu_core_0"]; got != 58.0 {
+		t.Fatalf("expected cpu_core_0 temperature 58.0, got %+v", system.TemperatureCelsius)
+	}
 	if system.IntervalSeconds != 2 || system.CollectedAt.IsZero() {
 		t.Fatalf("expected interval/collectedAt metadata, got %+v", system)
+	}
+}
+
+func TestGetSystemTelemetryIgnoresUnavailableTemperatureRPC(t *testing.T) {
+	server := newMockServerWithRPC(t, defaultAPIResponses(), nil, func(t *testing.T, conn *websocket.Conn) {
+		authReq := readRPCRequest(t, conn)
+		if authReq.Method != "auth.login_with_api_key" {
+			t.Fatalf("expected api-key auth method, got %q", authReq.Method)
+		}
+		writeRPCResult(t, conn, authReq.ID, true)
+
+		temperatureReq := readRPCRequest(t, conn)
+		if temperatureReq.Method != "reporting.get_data" {
+			t.Fatalf("expected reporting.get_data, got %q", temperatureReq.Method)
+		}
+		writeRPCError(t, conn, temperatureReq.ID, -32601, "not found")
+
+		subscribeReq := readRPCRequest(t, conn)
+		if subscribeReq.Method != "core.subscribe" {
+			t.Fatalf("expected core.subscribe, got %q", subscribeReq.Method)
+		}
+		writeRPCResult(t, conn, subscribeReq.ID, "sub-1")
+		writeRPCNotification(t, conn, "collection_update", map[string]any{
+			"collection": "reporting.realtime:{\"interval\":2}",
+			"fields": map[string]any{
+				"cpu": map[string]any{"usage": 41},
+			},
+		})
+	})
+	t.Cleanup(server.Close)
+
+	client := mustClientForServer(t, server.URL, ClientConfig{APIKey: "api-key"})
+	system, err := client.GetSystemTelemetry(context.Background())
+	if err != nil {
+		t.Fatalf("GetSystemTelemetry() error = %v", err)
+	}
+	if system == nil {
+		t.Fatal("expected system telemetry")
+	}
+	if system.CPUPercent != 41 {
+		t.Fatalf("expected cpu percent 41, got %+v", system)
+	}
+	if len(system.TemperatureCelsius) != 0 {
+		t.Fatalf("expected unavailable temperature RPC to be ignored, got %+v", system.TemperatureCelsius)
 	}
 }
 
@@ -681,6 +761,21 @@ func writeRPCResult(t *testing.T, conn *websocket.Conn, id int64, result any) {
 		Result:  raw,
 	}); err != nil {
 		t.Fatalf("WriteJSON() rpc result error = %v", err)
+	}
+}
+
+func writeRPCError(t *testing.T, conn *websocket.Conn, id int64, code int, message string) {
+	t.Helper()
+
+	if err := conn.WriteJSON(trueNASRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error: &trueNASRPCError{
+			Code:    code,
+			Message: message,
+		},
+	}); err != nil {
+		t.Fatalf("WriteJSON() rpc error response = %v", err)
 	}
 }
 

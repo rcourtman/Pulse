@@ -21,8 +21,13 @@ func DefaultFixtures() FixtureSnapshot {
 			NetOutRate:           19_500_000,
 			DiskReadRate:         7_200_000,
 			DiskWriteRate:        3_400_000,
-			IntervalSeconds:      2,
-			CollectedAt:          time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC),
+			TemperatureCelsius: map[string]float64{
+				"cpu_package": 61.5,
+				"cpu_core_0":  58.0,
+				"cpu_core_1":  59.0,
+			},
+			IntervalSeconds: 2,
+			CollectedAt:     time.Date(2026, 2, 8, 12, 0, 0, 0, time.UTC),
 		},
 		Pools: []Pool{
 			{

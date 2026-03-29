@@ -180,6 +180,11 @@ provider-local host surface. API-backed `reporting.realtime` telemetry must
 project onto that same canonical `agent` contract as live metrics and metrics
 targets, using the shared `agent:<id>` in-memory key and `agent` history store
 path instead of adding a TrueNAS-only host history lane.
+API-backed TrueNAS CPU temperature now follows that same canonical host rule.
+TrueNAS system records must project `cputemp` readings into the shared
+`agent.temperature` and `agent.sensors.temperatureCelsius` fields instead of
+inventing a provider-local temperature payload or leaving TrueNAS host
+temperatures unavailable without the unified agent.
 AI discovery and query surfaces now follow the same rule. Assistant runtime
 paths such as `pulse_query` and unified AI context must expose TrueNAS-backed
 canonical `agent`, `app-container`, `storage`, and `physical-disk` resources

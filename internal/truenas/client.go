@@ -189,12 +189,24 @@ func (c *Client) GetSystemTelemetry(ctx context.Context) (*SystemInfo, error) {
 		return nil, err
 	}
 
+	temperatures, err := rpc.getSystemTemperatures(ctx)
+	if err != nil {
+		temperatures = nil
+	}
+
 	subscriptionName := fmt.Sprintf("reporting.realtime:{\"interval\":%d}", defaultRealtimeIntervalSeconds)
 	if err := rpc.call(ctx, "core.subscribe", []any{subscriptionName}, nil); err != nil {
 		return nil, err
 	}
 
-	return rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
+	telemetry, err := rpc.readSystemTelemetryEvent(ctx, defaultRealtimeIntervalSeconds)
+	if err != nil {
+		return nil, err
+	}
+	if len(temperatures) > 0 {
+		telemetry.TemperatureCelsius = cloneTemperatureMap(temperatures)
+	}
+	return telemetry, nil
 }
 
 // GetPools returns storage pools.
@@ -633,6 +645,9 @@ func mergeSystemTelemetry(system *SystemInfo, telemetry *SystemInfo) {
 	system.NetOutRate = telemetry.NetOutRate
 	system.DiskReadRate = telemetry.DiskReadRate
 	system.DiskWriteRate = telemetry.DiskWriteRate
+	if len(telemetry.TemperatureCelsius) > 0 {
+		system.TemperatureCelsius = cloneTemperatureMap(telemetry.TemperatureCelsius)
+	}
 	if telemetry.IntervalSeconds > 0 {
 		system.IntervalSeconds = telemetry.IntervalSeconds
 	}
@@ -781,6 +796,22 @@ type trueNASAppBlkIOStats struct {
 type trueNASRealtimeNotification struct {
 	Collection string         `json:"collection"`
 	Fields     map[string]any `json:"fields"`
+}
+
+type trueNASReportingGetDataResponse struct {
+	Name         string                       `json:"name"`
+	Identifier   any                          `json:"identifier"`
+	Data         []any                        `json:"data"`
+	Aggregations trueNASReportingAggregations `json:"aggregations"`
+	Start        int64                        `json:"start"`
+	End          int64                        `json:"end"`
+	Legend       []string                     `json:"legend"`
+}
+
+type trueNASReportingAggregations struct {
+	Min  any `json:"min"`
+	Mean any `json:"mean"`
+	Max  any `json:"max"`
 }
 
 func (c *Client) dialRPC(ctx context.Context) (*websocket.Conn, error) {
@@ -939,6 +970,35 @@ func (c *trueNASRPCClient) readAppStatsEvent(ctx context.Context, intervalSecond
 	}
 }
 
+func (c *trueNASRPCClient) getSystemTemperatures(ctx context.Context) (map[string]float64, error) {
+	if c == nil || c.conn == nil {
+		return nil, fmt.Errorf("truenas rpc connection is nil")
+	}
+
+	end := time.Now().Unix()
+	start := end - 300
+	if start <= 0 {
+		start = end
+	}
+
+	var response []trueNASReportingGetDataResponse
+	params := []any{
+		[]map[string]any{{
+			"name":       "cputemp",
+			"identifier": nil,
+		}},
+		map[string]any{
+			"aggregate": true,
+			"start":     start,
+			"end":       end,
+		},
+	}
+	if err := c.call(ctx, "reporting.get_data", params, &response); err != nil {
+		return nil, err
+	}
+	return parseSystemTemperatures(response), nil
+}
+
 func (c *trueNASRPCClient) readSystemTelemetryEvent(ctx context.Context, intervalSeconds int) (*SystemInfo, error) {
 	if c == nil || c.conn == nil {
 		return nil, fmt.Errorf("truenas rpc connection is nil")
@@ -1080,6 +1140,156 @@ func parseSystemTelemetry(fields map[string]any, intervalSeconds int, collectedA
 	}
 
 	return telemetry
+}
+
+func parseSystemTemperatures(responses []trueNASReportingGetDataResponse) map[string]float64 {
+	if len(responses) == 0 {
+		return nil
+	}
+
+	temperatures := make(map[string]float64)
+	for _, response := range responses {
+		if strings.TrimSpace(strings.ToLower(response.Name)) != "cputemp" || len(response.Legend) == 0 {
+			continue
+		}
+
+		values := extractReportingLegendFloatValues(response.Aggregations.Mean, response.Legend)
+		if len(values) == 0 && len(response.Data) > 0 {
+			values = extractReportingLegendFloatValues(response.Data[len(response.Data)-1], response.Legend)
+		}
+		if len(values) == 0 {
+			continue
+		}
+
+		for index, legend := range response.Legend {
+			value, ok := values[legend]
+			if !ok || value <= 0 {
+				continue
+			}
+			key := canonicalSystemTemperatureKey(legend, index, len(response.Legend))
+			if key == "" {
+				continue
+			}
+			temperatures[key] = value
+		}
+	}
+	if len(temperatures) == 0 {
+		return nil
+	}
+	return temperatures
+}
+
+func extractReportingLegendFloatValues(raw any, legends []string) map[string]float64 {
+	if raw == nil || len(legends) == 0 {
+		return nil
+	}
+
+	values := make(map[string]float64)
+	switch typed := raw.(type) {
+	case []any:
+		for index, value := range typed {
+			if index >= len(legends) {
+				break
+			}
+			if parsed, ok := parseFloat64Any(value); ok {
+				values[legends[index]] = parsed
+			}
+		}
+	case map[string]any:
+		for index, legend := range legends {
+			for _, key := range reportingLegendLookupKeys(legend, index) {
+				value, ok := typed[key]
+				if !ok {
+					continue
+				}
+				if parsed, ok := parseFloat64Any(value); ok {
+					values[legend] = parsed
+					break
+				}
+			}
+		}
+		if len(values) == 0 && len(legends) == 1 {
+			for _, value := range typed {
+				if parsed, ok := parseFloat64Any(value); ok {
+					values[legends[0]] = parsed
+					break
+				}
+			}
+		}
+	}
+	if len(values) == 0 {
+		return nil
+	}
+	return values
+}
+
+func reportingLegendLookupKeys(legend string, index int) []string {
+	trimmed := strings.TrimSpace(legend)
+	keys := []string{trimmed}
+	normalized := normalizeTemperatureLegendLabel(trimmed)
+	if normalized != "" && normalized != trimmed {
+		keys = append(keys, normalized)
+	}
+	keys = append(keys, strconv.Itoa(index))
+	return keys
+}
+
+func canonicalSystemTemperatureKey(legend string, index int, total int) string {
+	normalized := normalizeTemperatureLegendLabel(legend)
+	switch {
+	case normalized == "":
+		if total == 1 {
+			return "cpu_package"
+		}
+		return fmt.Sprintf("cpu_temp_%d", index)
+	case normalized == "cpu" || normalized == "temp" || normalized == "temperature":
+		return "cpu_package"
+	case strings.Contains(normalized, "package"):
+		return "cpu_package"
+	case strings.HasPrefix(normalized, "cpu"):
+		return normalized
+	case strings.HasPrefix(normalized, "core"):
+		return "cpu_" + normalized
+	default:
+		if total == 1 {
+			return "cpu_package"
+		}
+		return normalized
+	}
+}
+
+func normalizeTemperatureLegendLabel(value string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(value))
+	if trimmed == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	builder.Grow(len(trimmed))
+	lastUnderscore := false
+	for _, r := range trimmed {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			builder.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if !lastUnderscore {
+			builder.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+	return strings.Trim(builder.String(), "_")
+}
+
+func cloneTemperatureMap(src map[string]float64) map[string]float64 {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(src))
+	for key, value := range src {
+		out[key] = value
+	}
+	return out
 }
 
 func firstAny(record map[string]any, keys ...string) (any, bool) {

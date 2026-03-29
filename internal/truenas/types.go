@@ -31,6 +31,7 @@ type SystemInfo struct {
 	NetOutRate           float64
 	DiskReadRate         float64
 	DiskWriteRate        float64
+	TemperatureCelsius   map[string]float64
 	IntervalSeconds      int
 	CollectedAt          time.Time
 }
