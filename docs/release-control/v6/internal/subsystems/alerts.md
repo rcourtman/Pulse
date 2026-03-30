@@ -282,6 +282,13 @@ signals on canonical `agent`, `vm`, and `storage` resources, with related
 event/task context routed through the shared incident and resource links.
 Pulse must not grow a VMware-only alert shell, alarm editor, or direct alarm-
 control surface in phase 1.
+That same VMware alert rule now also includes the topology boundary. Alarm
+context that originates on a datacenter, cluster, folder, or resource pool may
+inform a shared incident, but it must still resolve onto canonical `agent`,
+`vm`, or `storage` investigation paths rather than creating synthetic
+top-level VMware incident resources. If that attachment cannot be done
+honestly for a given signal, the signal should remain supporting context
+instead of inflating the support claim.
 Future Docker thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
 back into a mixed render surface.

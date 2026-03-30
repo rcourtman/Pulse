@@ -116,10 +116,15 @@ Owners:
 - `monitoring`
 - `unified-resources`
 
+Slice contract:
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
+
 Deliver:
 
 - API-backed ingest from the official vCenter Automation API plus the Virtual
   Infrastructure JSON API
+- one canonical VMware source classification and `platformType:
+  vmware-vsphere` on shared resources instead of provider-local source forks
 - stable identity and dedupe for ESXi hosts, VMs, and datastores
 - shared-resource projection with no provider-local `esxi-host`,
   `vsphere-vm`, or `vsphere-datastore` top-level types
@@ -129,7 +134,7 @@ Deliver:
 Required proof:
 
 - one real `vCenter` produces canonical `agent`, `vm`, and `storage`
-  resources end to end
+  resources end to end as defined in the projection spec
 - topology, identity, and counts stay coherent across infrastructure and
   workload surfaces
 - no phase-1 path depends on a unified agent being installed on ESXi or guests
@@ -167,6 +172,7 @@ Owners:
 
 Companion proof matrix:
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
 
 Deliver:
 

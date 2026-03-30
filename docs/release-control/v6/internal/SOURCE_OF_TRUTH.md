@@ -524,6 +524,11 @@ acceptable phase-1 model if implementation starts.
    `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
    as the concrete slice order and stop/go contract for the first admitted
    VMware support floor.
+10. Projection contract:
+   If implementation starts, it should also follow
+   `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
+   as the canonical source, identity, topology, alert-mapping, and
+   non-projection boundary for phase-1 VMware resources.
 
 ## Cross-Repo Contracts
 

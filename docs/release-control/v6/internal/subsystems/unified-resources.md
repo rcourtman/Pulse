@@ -180,6 +180,29 @@ top-level types. Phase-1 vSphere work must not invent `esxi-host`,
 `vsphere-vm`, `vsphere-cluster`, `system-container`, `app-container`, or
 `physical-disk` projections just because the upstream APIs expose additional
 object classes.
+That same VMware contract now also includes the shared source boundary. When
+runtime work starts, VMware-backed records must flow through one canonical
+VMware source key plus `platformType: vmware-vsphere`, not through separate
+`vcenter` and `esxi` source forks or provider-local raw type aliases. One
+host, VM, or datastore from VMware should therefore still look like one shared
+Pulse `agent`, `vm`, or `storage` resource to downstream selectors, drawers,
+alerts, AI, and route filters.
+That same VMware contract now also includes the identity rule. VMware managed
+object identifiers are phase-1 provider identities, but they must be scoped by
+the owning `vCenter` connection or discovered vCenter identity so bare object
+IDs do not masquerade as workspace-global keys. Secondary identities such as
+VM `instance_uuid` / `bios_uuid` and host UUID when available belong under the
+shared canonical identity model for future merge or assistant reasoning, not
+inside a VMware-only dedupe lane.
+That same VMware contract now also includes the topology rule. `vCenter`,
+datacenter, cluster, folder, resource pool, datastore cluster, and network
+objects may enrich canonical `agent`, `vm`, and `storage` resources as
+placement metadata or relationships, but they must not appear as synthetic
+top-level VMware resource types just to mirror the upstream inventory tree.
+Snapshot trees and VMware alarm/event/task context are also governed by that
+same rule: they may enrich canonical `vm`, `agent`, or `storage` resources and
+their timelines, but they do not become shared recovery artifacts, new
+resource kinds, or a parallel VMware incident model.
 TrueNAS disk telemetry now follows the same rule. API-backed TrueNAS disks must
 populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read

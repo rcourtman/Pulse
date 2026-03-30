@@ -80,6 +80,26 @@ is materially narrower than the vCenter inventory and the declared support
 floor depends on vCenter-backed topology, shared datastore scope, alarm state,
 and historical performance access. Any later direct-ESXi work must be admitted
 explicitly instead of inheriting vCenter support by implication.
+That same VMware monitoring boundary now also includes the canonical telemetry
+rule. ESXi host metrics and history belong on the shared `agent` path, VM
+metrics and history belong on the shared `vm` path, and datastore
+capacity/accessibility history belongs on the shared `storage` path. VMware
+phase-1 work must not create `vmware-host`, `vmware-vm`, or
+`vmware-datastore` history stores just because the collection APIs differ from
+other platforms.
+That same VMware monitoring boundary now also includes the source and identity
+rule. Runtime collection may authenticate to `vCenter`, call multiple VMware
+API families, and gather several object classes, but the emitted state must
+still collapse onto one canonical VMware source classification and one
+provider-scoped identity model for hosts, VMs, and datastores. Monitoring must
+not leak `vcenter` versus `esxi` transport distinctions into downstream
+resource identity or source filtering.
+That same VMware monitoring boundary now also includes the proof rule for
+history depth. `PerformanceManager.QueryPerfComposite` clearly supports
+host-plus-child metric collection, but exact VM and datastore history fidelity
+still requires live proof on the supported version floor. If that proof does
+not hold on the shared history model, the support claim must narrow rather
+than falling back to VMware-only history paths.
 
 The monitor adapter now also acts as the canonical bridge from live registry
 rebuilds and supplemental ingest into the unified-resource timeline. That means

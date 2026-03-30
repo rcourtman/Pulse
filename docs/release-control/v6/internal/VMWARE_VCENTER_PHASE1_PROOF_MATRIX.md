@@ -6,6 +6,7 @@ Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
 
 Use this matrix for the trust-critical boundary between:
 
@@ -137,7 +138,8 @@ Pass when:
 
 1. Let the VMware poller collect from the saved connection.
 2. Inspect the infrastructure/workload/storage surfaces or canonical APIs.
-3. Confirm hosts, VMs, and datastores are visible.
+3. Compare the observed resources against the governed projection spec.
+4. Confirm hosts, VMs, and datastores are visible.
 
 Pass when:
 
@@ -146,6 +148,8 @@ Pass when:
 3. datastores land as canonical `storage`
 4. no provider-local top-level `esxi-host`, `vsphere-vm`, or equivalent type
    appears
+5. topology metadata stays metadata and does not appear as synthetic top-level
+   VMware resource types
 
 ### `VC-4` Storage And Snapshot Visibility
 
