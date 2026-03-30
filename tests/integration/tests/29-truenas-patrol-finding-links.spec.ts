@@ -54,7 +54,7 @@ test.describe('TrueNAS patrol finding links', () => {
           data: [
             {
               id: 'truenas-main',
-              type: 'truenas',
+              type: 'agent',
               name: 'truenas-main',
               displayName: 'TrueNAS Main',
               platformId: 'truenas-main',
@@ -211,7 +211,7 @@ test.describe('TrueNAS patrol finding links', () => {
               category: 'availability',
               resource_id: 'truenas-main',
               resource_name: 'TrueNAS Main',
-              resource_type: 'truenas',
+              resource_type: 'agent',
               title: 'TrueNAS system offline',
               description: 'Pulse Patrol detected that the TrueNAS appliance stopped reporting.',
               detected_at: '2026-03-30T09:10:00Z',

@@ -218,19 +218,24 @@ work extends shared components instead of creating new local variants.
     destination chips to render, but canonical href, label, dedupe, and
     infrastructure-fallback truth must stay in
     `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
-14. Keep shared feature-shell Patrol run fixtures on the canonical run-record
+    route strings or provider-local link builders inside feature panels.
+14. Keep shared infrastructure/resource selectors on the canonical agent-facet
+    truth. Shared primitives and settings-facing selector helpers must treat
+    top-level TrueNAS appliances as agent-facet infrastructure via shared
+    helper ownership instead of reviving a direct `resource.type === 'truenas'`
+    branch inside page shells, selectors, or reporting-resource type helpers.
+15. Keep shared feature-shell Patrol run fixtures on the canonical run-record
     contract. When `frontend-modern/src/features/patrol/` consumes Patrol run
     history, the shared normalized record must preserve provider-backed counts
     such as `truenas_checked` instead of letting feature-local fixtures or
     fallback objects collapse API-backed TrueNAS systems back into generic
     agent-host presentation.
-    route strings or provider-local link builders inside feature panels.
-14. Keep the authenticated app root aligned with that same first-session path.
+16. Keep the authenticated app root aligned with that same first-session path.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
-15. Keep relay settings shell copy on the shared presentation owner in
+17. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability

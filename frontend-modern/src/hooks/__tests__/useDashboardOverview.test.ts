@@ -113,8 +113,9 @@ describe('computeDashboardOverview', () => {
       }),
       createResource({
         id: 'infra-5',
-        type: 'truenas',
+        type: 'agent',
         displayName: 'NAS 5',
+        platformType: 'truenas',
         status: 'online',
         cpu: { current: 70 },
         memory: { current: 50 },
@@ -133,10 +134,9 @@ describe('computeDashboardOverview', () => {
 
     expect(overview.infrastructure.total).toBe(6);
     expect(overview.infrastructure.byType).toEqual({
-      agent: 2,
+      agent: 3,
       'k8s-node': 1,
       'docker-host': 1,
-      truenas: 1,
       'k8s-cluster': 1,
     });
     expect(overview.infrastructure.byStatus.online).toBe(4);

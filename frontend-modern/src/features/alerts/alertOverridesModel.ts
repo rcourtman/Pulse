@@ -1,7 +1,7 @@
 import type { PBSInstance } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { Resource } from '@/types/resource';
-import { getActionableAgentIdFromResource } from '@/utils/agentResources';
+import { getActionableAgentIdFromResource, isTrueNASSystemResource } from '@/utils/agentResources';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 import {
@@ -111,7 +111,7 @@ export const buildContainerRuntimeResources = ({
 
   dockerHostResources.forEach(addRuntime);
   allResources.forEach((resource) => {
-    if (resource.type === 'truenas') {
+    if (isTrueNASSystemResource(resource)) {
       addRuntime(resource);
     }
   });

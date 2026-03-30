@@ -5,7 +5,7 @@ import {
   fetchInfrastructureSummaryAndCache,
   readInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
-import { hasAgentFacet } from '@/utils/agentResources';
+import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
@@ -65,14 +65,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
 
   const { workloads, resources } = useResources();
   const agentResources = createMemo(() =>
-    resources().filter(
-      (resource) =>
-        (resource.type === 'agent' ||
-          resource.type === 'pbs' ||
-          resource.type === 'pmg' ||
-          resource.type === 'truenas') &&
-        hasAgentFacet(resource),
-    ),
+    resources().filter((resource) => isAgentFacetInfrastructureResource(resource)),
   );
 
   const [orgVersion, setOrgVersion] = createSignal(0);

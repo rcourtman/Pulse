@@ -195,6 +195,11 @@ provider-local host surface. API-backed `reporting.realtime` telemetry must
 project onto that same canonical `agent` contract as live metrics and metrics
 targets, using the shared `agent:<id>` in-memory key and `agent` history store
 path instead of adding a TrueNAS-only host history lane.
+That same rule applies at the frontend boundary. Shared compatibility adapters
+such as `frontend-modern/src/hooks/useUnifiedResources.ts` and
+`frontend-modern/src/utils/resourceTypeCompat.ts` must collapse any legacy raw
+`truenas` top-level type payloads back onto canonical `agent` before route
+helpers, dashboard summaries, alert context, or selector models consume them.
 API-backed TrueNAS CPU temperature now follows that same canonical host rule.
 TrueNAS system records must project `cputemp` readings into the shared
 `agent.temperature` and `agent.sensors.temperatureCelsius` fields instead of

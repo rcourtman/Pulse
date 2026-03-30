@@ -397,6 +397,7 @@ describe('DashboardFilter', () => {
       ]);
 
       expect(screen.getByLabelText('Platform')).toHaveValue('truenas');
+      expect(screen.getByRole('option', { name: 'TrueNAS' })).toBeInTheDocument();
     });
   });
 

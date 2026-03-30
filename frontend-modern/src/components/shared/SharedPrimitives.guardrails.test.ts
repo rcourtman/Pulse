@@ -502,7 +502,7 @@ describe('shared primitive guardrails', () => {
     expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorAgents');
     expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorBackupCounts');
     expect(infrastructureSelectorModelSource).toContain('buildInfrastructureSelectorUnifiedNodes');
-    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
   });
 
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {

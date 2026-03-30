@@ -119,6 +119,12 @@ That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path
 instead of drifting back into hook-local notification strings.
+That same token-management boundary must also treat top-level TrueNAS
+appliances as canonical agent-scope resources through the shared agent-facet
+helper. Security surfaces may consume compatibility-normalized
+`platformType: 'truenas'` resources, but they must not reintroduce a separate
+`resource.type === 'truenas'` trust path when calculating token usage,
+revocation targets, or operator-facing token ownership.
 Telemetry/privacy disclosures now also route through the shipped frontend docs
 boundary: `frontend-modern/src/utils/docsLinks.ts` is the canonical frontend
 owner for privacy-document URLs, while `frontend-modern/public/docs/PRIVACY.md`

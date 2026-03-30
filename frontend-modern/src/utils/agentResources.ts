@@ -4,15 +4,15 @@ import {
   isAgentDiscoveryResourceType,
   isAppContainerDiscoveryResourceType,
 } from '@/utils/discoveryTarget';
+import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import { asTrimmedString } from '@/utils/stringUtils';
 
-const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>(['agent', 'pbs', 'pmg', 'truenas']);
+const AGENT_FACET_INFRASTRUCTURE_TYPES = new Set<ResourceType>(['agent', 'pbs', 'pmg']);
 const AGENT_PROFILE_ASSIGNABLE_TYPES = new Set<ResourceType>([
   'docker-host',
   'agent',
   'pbs',
   'pmg',
-  'truenas',
   'k8s-cluster',
 ]);
 
@@ -58,8 +58,18 @@ type ResourceClusterNameLike = KubernetesContextLike & {
 export const getPlatformDataRecord = (resource: Resource): Record<string, unknown> | undefined =>
   resource.platformData ? (resource.platformData as Record<string, unknown>) : undefined;
 
+const hasPlatformSource = (resource: Resource, source: string): boolean => {
+  const sources = getPlatformDataRecord(resource)?.sources;
+  if (!Array.isArray(sources)) return false;
+  return sources.some((value) => normalizeSourcePlatformKey(value) === source);
+};
+
 export const getPlatformAgentRecord = (resource: Resource): Record<string, unknown> | undefined =>
   asRecord(getPlatformDataRecord(resource)?.agent);
+
+export const isTrueNASSystemResource = (resource: Resource): boolean =>
+  resource.type === 'agent' &&
+  (resource.platformType === 'truenas' || hasPlatformSource(resource, 'truenas'));
 
 export const getExplicitAgentIdFromResource = (resource: Resource): string | undefined => {
   const platformData = getPlatformDataRecord(resource);

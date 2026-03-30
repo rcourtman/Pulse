@@ -50,7 +50,9 @@ describe('SetupCompletionPanel guardrails', () => {
   });
 
   it('keeps connected infrastructure labels on the canonical local identity helper', () => {
+    expect(setupCompletionPanelSource).toContain('isAgentFacetInfrastructureResource');
     expect(setupCompletionPanelSource).toContain('getPreferredInfrastructureDisplayName');
+    expect(setupCompletionPanelSource).not.toContain("resource.type === 'truenas'");
     expect(setupCompletionPanelSource).not.toContain('getPreferredResourceDisplayName(resource)');
   });
 

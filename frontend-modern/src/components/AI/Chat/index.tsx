@@ -25,6 +25,7 @@ import type { Resource } from '@/types/resource';
 import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   getActionableAgentIdFromResource,
+  isAgentFacetInfrastructureResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
@@ -453,13 +454,8 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const containers = [...byType('system-container'), ...byType('oci-container')];
     const dockerHosts = byType('docker-host');
     const appContainers = byType('app-container');
-    const agentResources = allResources().filter(
-      (resource) =>
-        (resource.type === 'agent' ||
-          resource.type === 'pbs' ||
-          resource.type === 'pmg' ||
-          resource.type === 'truenas') &&
-        hasAgentFacet(resource),
+    const agentResources = allResources().filter((resource) =>
+      isAgentFacetInfrastructureResource(resource),
     );
     const mentionCandidates: MentionResource[] = [];
 

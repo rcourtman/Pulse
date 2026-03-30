@@ -291,7 +291,7 @@ describe('monitored-system model guardrails', () => {
     expect(apiTokenManagerModelSource).toContain("resource.type === 'agent'");
     expect(apiTokenManagerModelSource).toContain("resource.type === 'pbs'");
     expect(apiTokenManagerModelSource).toContain("resource.type === 'pmg'");
-    expect(apiTokenManagerModelSource).toContain("resource.type === 'truenas'");
+    expect(apiTokenManagerModelSource).not.toContain("resource.type === 'truenas'");
     expect(apiTokenManagerModelSource).toContain('resourceHasAgentFacet(resource)');
     expect(apiTokenManagerModelSource).toContain(
       'getActionableDockerRuntimeIdFromResource(resource)',
@@ -328,7 +328,9 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureOperationsSource).toContain('@/utils/agentCapabilityPresentation');
     expect(infrastructureOperationsSource).not.toContain('const getCapabilityLabel =');
     expect(infrastructureOperationsSource).not.toContain('const getCapabilityBadgeClass =');
-    expect(agentCapabilityPresentationSource).toContain("export type AgentCapability = 'agent'");
+    expect(agentCapabilityPresentationSource).toContain('export type AgentCapability =');
+    expect(agentCapabilityPresentationSource).toContain("| 'agent'");
+    expect(agentCapabilityPresentationSource).toContain("| 'truenas'");
     expect(agentCapabilityPresentationSource).toContain('export function getAgentCapabilityLabel');
     expect(agentCapabilityPresentationSource).toContain(
       'export function getAgentCapabilityBadgeClass',
@@ -476,7 +478,7 @@ describe('monitored-system model guardrails', () => {
       'Security configured. Save these first-run credentials now.',
     );
     expect(infrastructureInstallerSectionSource).toContain(
-      'Generate a scoped install token below before copying agent commands.',
+      'Pulse generated the first scoped install token automatically. The install commands below are ready for the first host.',
     );
     expect(setupCompletionPanelSource).toContain('@/utils/relayPresentation');
     expect(setupCompletionPanelSource).toContain('RELAY_ONBOARDING_SETUP_LABEL');
@@ -669,7 +671,8 @@ describe('monitored-system model guardrails', () => {
     expect(patrolIntelligenceStateSource).toContain('updatePatrolAutonomySettings');
     expect(patrolIntelligenceHeaderSource).toContain('buildPatrolScheduleOptions');
     expect(patrolIntelligenceHeaderSource).toContain('getAIQuickstartCreditsPresentation');
-    expect(patrolIntelligenceSummarySource).toContain('PATROL_NO_ISSUES_LABEL');
+    expect(patrolIntelligenceSummarySource).toContain('getPatrolAssessmentPresentation');
+    expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryMetricState');
     expect(patrolIntelligenceSummarySource).toContain('getPatrolSummaryPresentation');
     expect(patrolIntelligenceWorkspaceSource).toContain('ApprovalBanner');
     expect(patrolIntelligenceWorkspaceSource).toContain('FindingsPanel');
@@ -917,7 +920,7 @@ describe('monitored-system model guardrails', () => {
       "import { useThresholdsData } from './useThresholdsData';",
     );
     expect(thresholdsDataHookSource).toContain('useThresholdsHostData');
-    expect(thresholdsHostDataHookSource).toContain("resourceType: 'Agent Disk'");
+    expect(thresholdsHostDataHookSource).toContain("resourceType: 'System Disk'");
     expect(thresholdsHostDataHookSource).not.toContain("resourceType: 'Host Disk'");
     expect(thresholdsHostDataHookSource).toContain('props.agentDefaults');
     expect(thresholdsTableAgentsResourcesSectionSource).toContain('disableAllAgents');
@@ -945,7 +948,7 @@ describe('monitored-system model guardrails', () => {
     expect(infrastructureSelectorSource).not.toContain("resource.type === 'truenas'");
     expect(infrastructureSelectorStateSource).toContain('useResources');
     expect(infrastructureSelectorModelSource).toContain('hasInfrastructureSelectorAgentFacet');
-    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
     expect(infrastructureSelectorModelSource).not.toContain('if (hostLikeResources.length === 0');
     expect(guestRowCellsSource).toContain('getDashboardGuestBackupStatusPresentation');
     expect(guestRowCellsSource).toContain('getDashboardGuestBackupTooltip');
@@ -988,7 +991,8 @@ describe('monitored-system model guardrails', () => {
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
     expect(aiChatSource).toContain('const hasAgentFacet = (resource: Resource): boolean =>');
-    expect(aiChatSource).toContain("resource.type === 'truenas'");
+    expect(aiChatSource).toContain('isAgentFacetInfrastructureResource');
+    expect(aiChatSource).not.toContain("resource.type === 'truenas'");
     expect(aiChatSource).not.toContain("resource.type === 'host'");
     expect(aiChatSource).toContain("type: 'agent'");
     expect(aiChatSource).not.toContain("mention.type === 'agent'");
@@ -1033,9 +1037,8 @@ describe('monitored-system model guardrails', () => {
   it('keeps dashboard and recovery type presentation on shared canonical helpers', () => {
     expect(problemResourcesTableSource).toContain('getResourceTypeLabel(pr.resource.type)');
     expect(problemResourcesTableSource).not.toContain('function formatType(');
-    expect(recoveryTablePresentationSource).toContain(
-      'getResourceTypePresentation(normalizeRecoverySubjectTypeKey(raw))',
-    );
+    expect(recoveryTablePresentationSource).toContain('getRecoveryItemTypeBadgeClass');
+    expect(recoveryTablePresentationSource).toContain('getRecoveryItemTypeLabel');
     expect(recoverySource).not.toContain('SUBJECT_TYPE_LABELS');
     expect(resourceBadgesSource).toContain('@/utils/resourceBadgePresentation');
     expect(resourceBadgePresentationSource).toContain('getResourceTypePresentation');
@@ -1293,7 +1296,7 @@ describe('monitored-system model guardrails', () => {
       "if (path.includes('/thresholds/containers')) return 'docker';",
     );
     expect(thresholdsTableStateSource).toContain('/thresholds/agents');
-    expect(thresholdsHostDataHookSource).toContain("resourceType: 'Agent Disk'");
+    expect(thresholdsHostDataHookSource).toContain("resourceType: 'System Disk'");
     expect(thresholdsTableStateSource).toContain('getAlertThresholdsSectionTitles');
     expect(thresholdsTableAgentDisksSectionSource).toContain(
       'title={state.sectionTitles.agentDisks}',

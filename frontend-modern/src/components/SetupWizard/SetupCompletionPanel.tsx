@@ -18,6 +18,7 @@ import type { Resource } from '@/types/resource';
 import { showSuccess, showError } from '@/utils/toast';
 import {
   getActionableAgentIdFromResource,
+  isAgentFacetInfrastructureResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
 import {
@@ -149,13 +150,8 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
         });
         const resources = state.resources || [];
         const nodeResources = resources.filter((resource) => resource.type === 'agent');
-        const agentFacetResources = resources.filter(
-          (resource) =>
-            (resource.type === 'agent' ||
-              resource.type === 'pbs' ||
-              resource.type === 'pmg' ||
-              resource.type === 'truenas') &&
-            hasAgentFacet(resource),
+        const agentFacetResources = resources.filter((resource) =>
+          isAgentFacetInfrastructureResource(resource),
         );
 
         const nodes = nodeResources.map(toNodeSummaryShape);

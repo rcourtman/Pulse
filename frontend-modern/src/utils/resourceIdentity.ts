@@ -12,6 +12,7 @@ import {
   getActionableKubernetesClusterIdFromResource,
   getPreferredResourceClusterName,
   getPreferredResourceKubernetesContext,
+  isTrueNASSystemResource,
   getPlatformAgentRecord,
   getPlatformDataRecord,
 } from '@/utils/agentResources';
@@ -374,7 +375,7 @@ export const getPreferredWorkloadsAgentHint = (resource: Resource): string | und
     );
   }
 
-  if (resource.type === 'truenas') {
+  if (isTrueNASSystemResource(resource)) {
     return (
       asTrimmedString(truenas?.hostname) || getPreferredResourceHostname(resource) || resource.id
     );

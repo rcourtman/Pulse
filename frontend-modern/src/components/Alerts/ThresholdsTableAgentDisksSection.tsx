@@ -25,7 +25,7 @@ export function ThresholdsTableAgentDisksSection(props: ThresholdsTableSectionPr
           <ResourceTable
             title=""
             groupedResources={state.agentDisksGroupedByAgent()}
-            groupHeaderMeta={state.guestGroupHeaderMeta()}
+            groupHeaderMeta={state.agentGroupHeaderMeta()}
             columns={['Disk %']}
             activeAlerts={tableProps.activeAlerts}
             emptyMessage={state.AGENT_DISKS_FILTER_EMPTY_STATE}

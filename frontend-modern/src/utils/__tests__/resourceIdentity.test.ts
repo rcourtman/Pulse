@@ -543,7 +543,7 @@ describe('resourceIdentity', () => {
     expect(
       getPreferredWorkloadsAgentHint(
         makeResource({
-          type: 'truenas',
+          type: 'agent',
           platformType: 'truenas',
           id: 'truenas-id',
           identity: { hostname: 'identity-host' },

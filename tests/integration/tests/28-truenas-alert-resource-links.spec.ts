@@ -55,7 +55,7 @@ test.describe('TrueNAS alert resource links', () => {
           data: [
             {
               id: 'truenas-main',
-              type: 'truenas',
+              type: 'agent',
               name: 'truenas-main',
               displayName: 'TrueNAS Main',
               platformId: 'truenas-main',
@@ -122,7 +122,7 @@ test.describe('TrueNAS alert resource links', () => {
             node: 'truenas-main',
             nodeDisplayName: 'TrueNAS Main',
             metadata: {
-              resourceType: 'truenas',
+              resourceType: 'agent',
             },
           },
         ]),

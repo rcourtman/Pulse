@@ -8,7 +8,8 @@ const containerRuntimeResources = () =>
   [
     {
       id: 'truenas-main',
-      type: 'truenas',
+      type: 'agent',
+      platformType: 'truenas',
     },
   ] as any[];
 
@@ -81,7 +82,8 @@ describe('useAlertsConfigurationState', () => {
     expect(result.containerRuntimeResources()).toEqual([
       expect.objectContaining({
         id: 'truenas-main',
-        type: 'truenas',
+        type: 'agent',
+        platformType: 'truenas',
       }),
     ]);
   });

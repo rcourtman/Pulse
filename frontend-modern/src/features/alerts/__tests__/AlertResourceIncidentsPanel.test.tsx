@@ -46,7 +46,7 @@ describe('AlertResourceIncidentsPanel', () => {
           resourceId === 'truenas-main'
             ? ({
                 id: 'truenas-main',
-                type: 'truenas',
+                type: 'agent',
                 name: 'truenas-main',
                 displayName: 'TrueNAS Main',
                 platformId: 'truenas-main',

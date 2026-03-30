@@ -192,6 +192,12 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
+That same hot-path rule now applies to infrastructure summary resource
+filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+must include API-backed systems such as top-level TrueNAS appliances through
+the shared `isAgentFacetInfrastructureResource(...)` helper instead of a local
+`resource.type` branch, so the summary poll/cache path stays on one canonical
+infrastructure selector contract.
 That same dashboard shell boundary also owns empty-state action routing in
 `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`. When the
 dashboard has no connected infrastructure, the CTA must hand operators

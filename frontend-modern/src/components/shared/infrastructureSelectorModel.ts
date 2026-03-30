@@ -8,6 +8,7 @@ import {
 } from '@/utils/resourceIdentity';
 import {
   getActionableAgentIdFromResource,
+  isAgentFacetInfrastructureResource,
   hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
 
@@ -63,13 +64,8 @@ export function buildInfrastructureSelectorCounts(
 }
 
 export function buildInfrastructureSelectorAgents(resources: Resource[]): Agent[] {
-  const agentFacetResources = resources.filter(
-    (resource) =>
-      (resource.type === 'agent' ||
-        resource.type === 'pbs' ||
-        resource.type === 'pmg' ||
-        resource.type === 'truenas') &&
-      hasInfrastructureSelectorAgentFacet(resource),
+  const agentFacetResources = resources.filter((resource) =>
+    isAgentFacetInfrastructureResource(resource),
   );
 
   const agentsById = new Map<string, Agent>();

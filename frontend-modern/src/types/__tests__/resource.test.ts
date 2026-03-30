@@ -34,7 +34,7 @@ function createResource(overrides: Partial<Resource> = {}): Resource {
 
 describe('Resource Type Guards', () => {
   describe('isInfrastructure', () => {
-    const infrastructureTypes: ResourceType[] = ['agent', 'docker-host', 'k8s-node', 'truenas'];
+    const infrastructureTypes: ResourceType[] = ['agent', 'docker-host', 'k8s-node', 'k8s-cluster'];
     const nonInfrastructureTypes: ResourceType[] = [
       'vm',
       'system-container',
@@ -262,7 +262,6 @@ describe('Resource Interface', () => {
       'docker-host',
       'k8s-cluster',
       'k8s-node',
-      'truenas',
       'vm',
       'system-container',
       'app-container',

@@ -28,6 +28,7 @@ vi.mock('@/components/Alerts/Thresholds/hooks/useCollapsedSections', () => ({
 vi.mock('../useThresholdsData', () => ({
   useThresholdsData: () => ({
     agentDisksGroupedByAgent: () => ({}),
+    agentGroupHeaderMeta: () => ({}),
     agentDisksWithOverrides: () => [],
     agentsWithOverrides: () => [],
     dockerContainersFlat: () => [],

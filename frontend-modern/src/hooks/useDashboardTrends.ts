@@ -11,7 +11,7 @@ import {
   buildInfrastructureSummarySeries,
 } from '@/components/Infrastructure/infrastructureSummaryModel';
 import type { DashboardOverview } from '@/hooks/useDashboardOverview';
-import { hasAgentFacet } from '@/utils/agentResources';
+import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { fetchInfrastructureSummaryAndCache } from '@/utils/infrastructureSummaryCache';
 import { isInfrastructure, isStorage, type Resource } from '@/types/resource';
 
@@ -133,13 +133,8 @@ async function fetchInfrastructureTrendSnapshot(
     };
   }
 
-  const agentFacetResources = resources.filter(
-    (resource) =>
-      (resource.type === 'agent' ||
-        resource.type === 'pbs' ||
-        resource.type === 'pmg' ||
-        resource.type === 'truenas') &&
-      hasAgentFacet(resource),
+  const agentFacetResources = resources.filter((resource) =>
+    isAgentFacetInfrastructureResource(resource),
   );
 
   const { map, oldestDataTimestamp } = await fetchInfrastructureSummaryAndCache(

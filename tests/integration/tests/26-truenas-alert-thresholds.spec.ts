@@ -55,7 +55,7 @@ test.describe('TrueNAS alert thresholds', () => {
           data: [
             {
               id: 'truenas-resource',
-              type: 'truenas',
+              type: 'agent',
               name: 'truenas-main',
               displayName: 'TrueNAS Main',
               platformId: 'truenas-main',

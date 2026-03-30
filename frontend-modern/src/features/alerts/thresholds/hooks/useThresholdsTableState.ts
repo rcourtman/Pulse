@@ -198,6 +198,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     agentsWithOverrides,
     agentDisksWithOverrides,
     agentDisksGroupedByAgent,
+    agentGroupHeaderMeta,
     dockerHostsWithOverrides,
     dockerContainersGroupedByHost,
     dockerContainersFlat,
@@ -507,6 +508,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   return {
     activeTab,
     agentDisksGroupedByAgent,
+    agentGroupHeaderMeta,
     agentDisksWithOverrides,
     agentsWithOverrides,
     alertsEnabled,

@@ -8,7 +8,7 @@ describe('resourceTypePresentation', () => {
   it('returns canonical labels for unified resource types', () => {
     expect(getResourceTypeLabel('docker-host')).toBe('Container Runtime');
     expect(getResourceTypeLabel('k8s-cluster')).toBe('K8s Cluster');
-    expect(getResourceTypeLabel('truenas')).toBe('TrueNAS');
+    expect(getResourceTypeLabel('truenas')).toBe('Agent');
   });
 
   it('returns shared presentations for external recovery subject aliases', () => {

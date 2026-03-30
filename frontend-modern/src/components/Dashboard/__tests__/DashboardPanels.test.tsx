@@ -55,9 +55,10 @@ describe('Dashboard panels data contract', () => {
       }),
       createResource({
         id: 'infra-5',
-        type: 'truenas',
+        type: 'agent',
         name: 'truenas-epsilon',
         displayName: 'TrueNAS Epsilon',
+        platformType: 'truenas',
         status: 'degraded',
         cpu: { current: 65 },
       }),

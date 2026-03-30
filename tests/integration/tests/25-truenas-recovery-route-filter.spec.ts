@@ -55,7 +55,7 @@ test.describe('TrueNAS recovery route filters', () => {
           data: [
             {
               id: 'truenas-main',
-              type: 'truenas',
+              type: 'agent',
               name: 'tower',
               displayName: 'TrueNAS Tower',
               platformId: 'truenas-main',

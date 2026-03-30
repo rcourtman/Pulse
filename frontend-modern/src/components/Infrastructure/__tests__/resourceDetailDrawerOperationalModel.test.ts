@@ -147,7 +147,7 @@ describe('resourceDetailDrawerOperationalModel', () => {
       buildRelatedLinks(
         baseResource({
           id: 'truenas-main',
-          type: 'truenas',
+          type: 'agent',
           name: 'truenas-main',
           platformId: 'truenas-main',
           platformType: 'truenas',

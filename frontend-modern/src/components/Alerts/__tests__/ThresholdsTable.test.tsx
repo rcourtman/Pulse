@@ -375,11 +375,12 @@ describe('ThresholdsTable Resource Rendering', () => {
     setPathname('/alerts/thresholds/systems');
     const truenasSystem = {
       id: 'truenas-resource',
-      type: 'truenas',
+      type: 'agent',
       name: 'truenas-main',
       displayName: 'TrueNAS Main',
       status: 'online',
       lastSeen: 123,
+      platformType: 'truenas',
       platformData: {
         agent: {
           agentId: 'truenas-main',
@@ -394,6 +395,7 @@ describe('ThresholdsTable Resource Rendering', () => {
       expect(screen.getByTestId('resource-name-truenas-main')).toHaveTextContent('TrueNAS Main');
     });
 
+    expect(screen.getByTestId('group-header-0')).toHaveTextContent('TrueNAS Main');
     expect(
       screen.getByTestId('resource-row-agent:truenas-main/disk:mnt-tank'),
     ).toBeInTheDocument();
@@ -572,7 +574,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     setPathname('/alerts/thresholds/containers');
     const truenasRuntime = {
       id: 'truenas-resource',
-      type: 'truenas',
+      type: 'agent',
       name: 'truenas-main',
       displayName: 'TrueNAS Main',
       platformId: 'truenas-main',

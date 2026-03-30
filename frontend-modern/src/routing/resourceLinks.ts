@@ -15,6 +15,7 @@ import {
   getActionableDockerRuntimeIdFromResource,
   getPlatformDataRecord,
   hasDockerWorkloadsScope,
+  isTrueNASSystemResource,
 } from '@/utils/agentResources';
 import {
   getPreferredInfrastructureDisplayName,
@@ -314,11 +315,6 @@ export const buildWorkloadsHrefForResource = (resource: Resource): string | null
     return buildWorkloadsPath({ type: 'app-container', platform: 'docker', agent });
   }
 
-  if (resource.type === 'truenas') {
-    const agent = resolveHostHintForResource(resource);
-    return buildWorkloadsPath({ type: 'app-container', platform: 'truenas', agent });
-  }
-
   if (resource.type === 'agent') {
     const agent = resolveHostHintForResource(resource);
     if (resource.platformType === 'truenas' || hasMergedSource(resource, 'truenas')) {
@@ -455,14 +451,14 @@ export const buildStorageHrefForResource = (resource: Resource): string | null =
     });
   }
 
-  if (resource.type === 'truenas' || resource.type === 'pbs') {
+  if (resource.type === 'pbs') {
     return buildStoragePath({
       source,
       node: resource.id,
     });
   }
 
-  if (resource.type === 'agent' && source === 'truenas') {
+  if (isTrueNASSystemResource(resource)) {
     return buildStoragePath({
       source,
       node: resource.id,
@@ -507,7 +503,7 @@ export const buildRecoveryHrefForResource = (resource: Resource): string | null 
     resource.storage?.platform || mergedPlatform || resource.platformType || resource.type,
   );
 
-  if (platform === 'truenas' && (resource.type === 'truenas' || resource.type === 'agent')) {
+  if (platform === 'truenas' && isTrueNASSystemResource(resource)) {
     return buildRecoveryPath({
       platform: 'truenas',
       node: resource.id,

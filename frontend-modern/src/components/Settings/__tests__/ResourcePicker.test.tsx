@@ -84,14 +84,20 @@ describe('ResourcePicker', () => {
         status: 'online',
       }),
       makeResource({ id: 'vm-1', type: 'vm', name: 'Alpha VM', displayName: 'Alpha VM' }),
-      makeResource({ id: 'truenas-1', type: 'truenas', name: 'TrueNAS', displayName: 'TrueNAS' }),
+      makeResource({
+        id: 'truenas-1',
+        type: 'agent',
+        name: 'TrueNAS',
+        displayName: 'TrueNAS',
+        platformType: 'truenas',
+      }),
     ];
 
     renderPicker();
 
     expect(await screen.findByText('Node One')).toBeInTheDocument();
     expect(screen.getByText('Alpha VM')).toBeInTheDocument();
-    expect(screen.queryByText('TrueNAS')).not.toBeInTheDocument();
+    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
   });
 
   it('renders governed resources with the safe display label', async () => {

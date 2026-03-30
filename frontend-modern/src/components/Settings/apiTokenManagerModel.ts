@@ -78,7 +78,6 @@ export const hasAgentScopeResource = (resource: Resource): boolean => {
     resource.type === 'agent' ||
     resource.type === 'pbs' ||
     resource.type === 'pmg' ||
-    resource.type === 'truenas' ||
     resourceHasAgentFacet(resource)
   );
 };

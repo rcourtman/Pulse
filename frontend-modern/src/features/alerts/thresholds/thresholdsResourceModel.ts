@@ -1,4 +1,5 @@
 import { unwrap } from 'solid-js/store';
+import { getPreferredResourceHostname } from '@/utils/resourceIdentity';
 
 import { requiresGovernedResourceDisplay } from '@/types/resource';
 import type { Resource } from '@/types/resource';
@@ -187,6 +188,27 @@ export function buildNodeHeaderMeta(node: Resource) {
 
   const keys = new Set<string>();
   [node.name, originalDisplayName, friendlyName].forEach((value) => {
+    if (value && value.trim()) {
+      keys.add(value.trim());
+    }
+  });
+
+  return { headerMeta, keys };
+}
+
+export function buildAgentHeaderMeta(agent: Resource) {
+  const displayName = getAlertResourceDisplayLabel(agent);
+  const rawName = getPreferredResourceHostname(agent) || agent.name || agent.id;
+
+  const headerMeta: GroupHeaderMeta = {
+    type: 'agent',
+    displayName,
+    rawName,
+    status: agent.status,
+  };
+
+  const keys = new Set<string>();
+  [displayName, rawName, agent.id].forEach((value) => {
     if (value && value.trim()) {
       keys.add(value.trim());
     }

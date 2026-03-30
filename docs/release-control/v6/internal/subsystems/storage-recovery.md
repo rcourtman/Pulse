@@ -144,6 +144,12 @@ they do not own the timeline store itself. The canonical resource-change
 history now lives in `internal/unifiedresources/store.go` and is surfaced
 through the shared API/resource wiring, which keeps storage and recovery focused
 on presentation and query shape rather than re-implementing change persistence.
+That same shared-resource dependency now also assumes frontend compatibility
+normalization collapses any legacy top-level `truenas` payload into canonical
+`agent` plus `platformType: 'truenas'` before shared route or filter logic
+runs. Storage and recovery links may consume that normalized platform truth,
+but they must not preserve a second top-level `truenas` type contract in
+storage/recovery-local route, handoff, or filter code.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

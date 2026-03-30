@@ -77,8 +77,9 @@ describe('alertOverridesModel', () => {
   it('derives canonical container runtimes from explicit docker hosts and TrueNAS app parents', () => {
     const truenas = makeResource({
       id: 'truenas-main',
-      type: 'truenas',
+      type: 'agent',
       name: 'truenas-main',
+      platformType: 'truenas',
     });
     const dockerHost = makeResource({
       id: 'docker-main',
@@ -103,9 +104,10 @@ describe('alertOverridesModel', () => {
   it('projects TrueNAS app overrides through the canonical container runtime surface', () => {
     const truenas = makeResource({
       id: 'truenas-main',
-      type: 'truenas',
+      type: 'agent',
       name: 'truenas-main',
       displayName: 'TrueNAS Main',
+      platformType: 'truenas',
     });
     const app = makeResource({
       id: 'ix-nextcloud',

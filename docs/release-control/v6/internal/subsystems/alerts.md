@@ -219,6 +219,11 @@ override toggles now route through
 while powered-off/connectivity state transitions plus alert-removal side
 effects now route through
 `frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsAvailabilityMutations.ts`.
+That same thresholds host-data boundary now treats top-level TrueNAS appliances
+as canonical `agent` resources with `platformType: 'truenas'`. System-disk
+group headers must use agent-owned header metadata instead of guest/node-
+friendly header metadata, so appliance labels like `TrueNAS Main` do not
+collapse to vendor-only `TrueNAS` inside thresholds or override surfaces.
 The thresholds tab adapter contract now lives in
 `frontend-modern/src/features/alerts/thresholds/thresholdsTabModel.ts`, so
 `frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx` stays a shell

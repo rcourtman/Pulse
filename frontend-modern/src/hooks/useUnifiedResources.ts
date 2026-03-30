@@ -433,7 +433,7 @@ const resolveType = (value?: string): ResourceType => {
     case 'k8s-node':
       return 'k8s-node';
     case 'truenas':
-      return 'truenas';
+      return 'agent';
     case 'vm':
       return 'vm';
     case 'system-container':

@@ -5,7 +5,6 @@ export const CANONICAL_RESOURCE_TYPES = [
   'docker-host',
   'k8s-cluster',
   'k8s-node',
-  'truenas',
   'vm',
   'system-container',
   'app-container',

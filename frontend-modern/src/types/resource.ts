@@ -21,7 +21,6 @@ export type ResourceType =
   | 'docker-host' // Docker/Podman host
   | 'k8s-cluster' // Kubernetes cluster
   | 'k8s-node' // Kubernetes node
-  | 'truenas' // TrueNAS system
   | 'vm' // Proxmox VM
   | 'system-container' // System container (LXC, Incus, BSD jail)
   | 'app-container' // Application container (Docker, Podman)
@@ -482,7 +481,7 @@ export interface Resource {
  * Helper type guards
  */
 export function isInfrastructure(r: Resource): boolean {
-  return ['agent', 'docker-host', 'k8s-cluster', 'k8s-node', 'truenas'].includes(r.type);
+  return ['agent', 'docker-host', 'k8s-cluster', 'k8s-node'].includes(r.type);
 }
 
 export function isWorkload(r: Resource): boolean {

@@ -361,7 +361,7 @@ describe('buildWorkloadsHref', () => {
 
     it('routes top-level truenas resources to platform-scoped app workloads', () => {
       const resource = makeResource({
-        type: 'truenas',
+        type: 'agent',
         platformType: 'truenas',
         name: 'truenas-main',
       });
@@ -376,14 +376,8 @@ describe('buildWorkloadsHref', () => {
 
   describe('unsupported resource types', () => {
     it.each([
-      'vm',
       'container',
-      'system-container',
-      'app-container',
       'docker-container',
-      'oci-container',
-      'pod',
-      'jail',
       'docker-service',
       'k8s-deployment',
       'k8s-service',

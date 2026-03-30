@@ -30,6 +30,7 @@ export const canonicalizeFrontendResourceType = (
   switch (normalized) {
     case 'host':
     case 'hosts':
+    case 'truenas':
       return 'agent';
     case 'docker':
       return 'app-container';

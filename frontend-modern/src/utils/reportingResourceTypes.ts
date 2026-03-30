@@ -19,8 +19,6 @@ export type ReportingResourceType =
 
 export function toReportingResourceType(resourceType: ResourceType): ReportingResourceType {
   switch (resourceType) {
-    case 'truenas':
-      return 'agent';
     case 'jail':
       return 'system-container';
     case 'docker-service':

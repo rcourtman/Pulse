@@ -2,10 +2,11 @@ import { createMemo } from 'solid-js';
 
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 
-import type { Resource as TableResource } from '../tableTypes';
+import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
 import { ThresholdsDataInputs } from '../thresholdsResourceModel';
 import {
   agentDiskResourceId,
+  buildAgentHeaderMeta,
   createOverridesMap,
   findOverrideByCandidates,
   getFriendlyAlertNodeName,
@@ -268,10 +269,22 @@ export function useThresholdsHostData(inputs: ThresholdsDataInputs) {
     return grouped;
   });
 
+  const agentGroupHeaderMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
+    const meta: Record<string, GroupHeaderMeta> = {};
+    (props.agents ?? []).forEach((agent) => {
+      const { headerMeta, keys } = buildAgentHeaderMeta(agent);
+      keys.forEach((key: string) => {
+        meta[key] = headerMeta;
+      });
+    });
+    return meta;
+  });
+
   return {
     nodesWithOverrides,
     agentsWithOverrides,
     agentDisksWithOverrides,
     agentDisksGroupedByAgent,
+    agentGroupHeaderMeta,
   };
 }

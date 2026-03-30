@@ -11,6 +11,7 @@ import {
   hasAgentFacet,
   isAgentFacetInfrastructureResource,
   isAgentProfileAssignableResource,
+  isTrueNASSystemResource,
 } from '@/utils/agentResources';
 
 const makeResource = (overrides: Partial<Resource> = {}): Resource =>
@@ -307,6 +308,37 @@ describe('agentResources', () => {
       isAgentProfileAssignableResource(
         makeResource({
           type: 'vm',
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it('recognizes canonical TrueNAS systems through agent typing and platform ownership', () => {
+    expect(
+      isTrueNASSystemResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'truenas',
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isTrueNASSystemResource(
+        makeResource({
+          type: 'agent',
+          platformData: {
+            sources: ['agent', 'truenas'],
+          },
+        }),
+      ),
+    ).toBe(true);
+
+    expect(
+      isTrueNASSystemResource(
+        makeResource({
+          type: 'agent',
+          platformType: 'agent',
         }),
       ),
     ).toBe(false);

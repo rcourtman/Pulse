@@ -52,7 +52,7 @@ test.describe('TrueNAS infrastructure storage and recovery links', () => {
             data: [
               {
                 id: 'truenas-main',
-                type: 'truenas',
+                type: 'agent',
                 name: 'truenas-main',
                 displayName: 'TrueNAS Main',
                 platformId: 'truenas-main',

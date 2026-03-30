@@ -121,7 +121,8 @@ describe('useAlertOverridesState', () => {
         id: 'truenas-main',
         name: 'truenas-main',
         displayName: 'TrueNAS Main',
-        type: 'truenas',
+        type: 'agent',
+        platformType: 'truenas',
         platformData: {
           agent: {
             agentId: 'truenas-main',
@@ -150,7 +151,8 @@ describe('useAlertOverridesState', () => {
     await waitFor(() => expect(result.containerRuntimeResources()).toHaveLength(1));
     expect(result.containerRuntimeResources()[0]).toMatchObject({
       id: 'truenas-main',
-      type: 'truenas',
+      type: 'agent',
+      platformType: 'truenas',
     });
   });
 });

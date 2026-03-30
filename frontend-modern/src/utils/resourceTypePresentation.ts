@@ -26,10 +26,6 @@ const RESOURCE_TYPE_PRESENTATION: Partial<Record<ResourceType | string, Resource
       label: 'K8s Node',
       badgeClasses: DEFAULT_BADGE_CLASSES,
     },
-    truenas: {
-      label: 'TrueNAS',
-      badgeClasses: DEFAULT_BADGE_CLASSES,
-    },
     vm: {
       label: 'VM',
       badgeClasses: DEFAULT_BADGE_CLASSES,

@@ -178,7 +178,7 @@ describe('resource link routing contract', () => {
     expect(
       buildWorkloadsHrefForResource({
         id: 'truenas-main',
-        type: 'truenas',
+        type: 'agent',
         name: 'truenas-main',
         displayName: 'TrueNAS Main',
         platformId: 'truenas-main',
@@ -309,7 +309,7 @@ describe('resource link routing contract', () => {
   it('builds storage deep links for top-level TrueNAS systems', () => {
     const href = buildStorageHrefForResource({
       id: 'truenas-main',
-      type: 'truenas',
+      type: 'agent',
       name: 'truenas-main',
       displayName: 'TrueNAS Main',
       platformId: 'truenas-main',
@@ -344,7 +344,7 @@ describe('resource link routing contract', () => {
   it('builds recovery deep links for top-level TrueNAS systems', () => {
     const href = buildRecoveryHrefForResource({
       id: 'truenas-main',
-      type: 'truenas',
+      type: 'agent',
       name: 'truenas-main',
       displayName: 'TrueNAS Main',
       platformId: 'truenas-main',
@@ -381,7 +381,7 @@ describe('resource link routing contract', () => {
       buildResourceSurfaceLinksForResource(
         {
           id: 'truenas-main',
-          type: 'truenas',
+          type: 'agent',
           name: 'truenas-main',
           displayName: 'TrueNAS Main',
           platformId: 'truenas-main',

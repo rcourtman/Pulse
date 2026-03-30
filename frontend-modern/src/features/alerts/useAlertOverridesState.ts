@@ -3,7 +3,7 @@ import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js'
 import type { PBSInstance, PMGInstance } from '@/types/api';
 import type { RawOverrideConfig } from '@/types/alerts';
 import type { Resource, ResourceType } from '@/types/resource';
-import { hasAgentFacet } from '@/utils/agentResources';
+import { isAgentFacetInfrastructureResource } from '@/utils/agentResources';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
 import {
@@ -45,14 +45,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
   );
 
   const agentResources = createMemo(() =>
-    props.allResources().filter(
-      (resource) =>
-        (resource.type === 'agent' ||
-          resource.type === 'pbs' ||
-          resource.type === 'pmg' ||
-          resource.type === 'truenas') &&
-        hasAgentFacet(resource),
-    ),
+    props.allResources().filter((resource) => isAgentFacetInfrastructureResource(resource)),
   );
 
   const pbsInstances = createMemo<PBSInstance[]>(() =>

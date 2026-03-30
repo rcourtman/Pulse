@@ -1018,6 +1018,8 @@ describe('Settings architecture guardrails', () => {
     expect(apiTokenManagerModelSource).toContain('export const hasAgentScopeResource =');
     expect(apiTokenManagerModelSource).toContain('export const buildDockerTokenUsage =');
     expect(apiTokenManagerModelSource).toContain('export const buildAgentTokenUsage =');
+    expect(apiTokenManagerModelSource).toContain('resourceHasAgentFacet(resource)');
+    expect(apiTokenManagerModelSource).not.toContain("resource.type === 'truenas'");
     expect(apiTokenManagerModelSource).toContain(
       'export const getAPITokenScopePresets = (): APITokenPreset[] => [',
     );

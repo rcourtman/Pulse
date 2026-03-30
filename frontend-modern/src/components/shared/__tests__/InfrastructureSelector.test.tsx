@@ -90,7 +90,7 @@ describe('InfrastructureSelector', () => {
     expect(infrastructureSelectorModelSource).toContain(
       'buildInfrastructureSelectorUnifiedNodes',
     );
-    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorModelSource).toContain('isAgentFacetInfrastructureResource');
   });
 
   it('toggles node selection and clears it on escape', async () => {

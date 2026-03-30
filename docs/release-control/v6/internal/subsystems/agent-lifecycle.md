@@ -215,6 +215,12 @@ management, and fleet control surfaces.
     available for optional later agent augmentation on TrueNAS, but first-run
     copy, alternative CTAs, and install-profile lists must not imply that an
     agent install is the required bootstrap for TrueNAS support in Pulse.
+11. Keep first-session and lifecycle-adjacent frontend resource handling on the
+    canonical unified-resource boundary. Top-level TrueNAS appliances may reach
+    setup-completion or infrastructure lifecycle surfaces only as canonical
+    `agent` resources with `platformType: 'truenas'`; any legacy raw
+    `resource.type === 'truenas'` compatibility collapse belongs in the shared
+    frontend resource adapters, not in setup or lifecycle-local UI branching.
 
 ## Current State
 
