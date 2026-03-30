@@ -2,7 +2,7 @@ import unittest
 from pathlib import Path
 
 from canonical_completion_guard import REPO_ROOT
-from subsystem_lookup import lookup_paths
+from subsystem_lookup import lookup_paths, parse_args, render_pretty
 
 
 RECOVERY_PRODUCT_SURFACE_EXACT_FILES = [
@@ -39,6 +39,12 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
 
 
 class SubsystemLookupTest(unittest.TestCase):
+    def test_parse_args_accepts_lean_flag(self) -> None:
+        args = parse_args(["internal/api/ai_handler.go", "--pretty", "--lean"])
+        self.assertEqual(args.paths, ["internal/api/ai_handler.go"])
+        self.assertTrue(args.pretty)
+        self.assertTrue(args.lean)
+
     def test_lookup_paths_reports_multiple_subsystems_for_shared_runtime_file(self) -> None:
         result = lookup_paths(["internal/api/resources.go"])
         impacted = {entry["subsystem"] for entry in result["impacted_subsystems"]}
@@ -4441,10 +4447,105 @@ class SubsystemLookupTest(unittest.TestCase):
             {contract["subsystem"] for contract in file_entry["dependent_contract_updates"]},
             {"monitoring"},
         )
+        monitoring_contract = file_entry["dependent_contract_updates"][0]
+        self.assertEqual(
+            monitoring_contract["matched_reference_details"],
+            [
+                {
+                    "heading": "## Canonical Files",
+                    "path": "internal/unifiedresources/views.go",
+                    "line": 32,
+                    "heading_line": 23,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/unifiedresources/views.go",
+                    "line": 46,
+                    "heading_line": 42,
+                },
+            ],
+        )
         self.assertEqual(
             {contract["subsystem"] for contract in result["required_contract_updates"]},
             {"monitoring", "unified-resources"},
         )
+
+    def test_lookup_paths_reports_contract_focus_for_shared_api_runtime_file(self) -> None:
+        result = lookup_paths(["internal/api/ai_handler.go"])
+        file_entry = result["files"][0]
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+
+        self.assertEqual(
+            by_subsystem["ai-runtime"]["matched_contract_references"],
+            [
+                {
+                    "heading": "## Canonical Files",
+                    "path": "internal/api/ai_handler.go",
+                    "line": 24,
+                    "heading_line": 21,
+                },
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/api/ai_handler.go",
+                    "line": 45,
+                    "heading_line": 41,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/api/ai_handler.go",
+                    "line": 52,
+                    "heading_line": 49,
+                },
+            ],
+        )
+        self.assertEqual(
+            by_subsystem["api-contracts"]["matched_contract_references"],
+            [
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/api/ai_handler.go",
+                    "line": 108,
+                    "heading_line": 77,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/api/ai_handler.go",
+                    "line": 167,
+                    "heading_line": 125,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/api/ai_handler.go",
+                    "line": 168,
+                    "heading_line": 125,
+                },
+            ],
+        )
+        self.assertEqual(
+            by_subsystem["api-contracts"]["ownership_basis"],
+            {"type": "owned-prefix", "value": "internal/api/"},
+        )
+
+    def test_lookup_paths_lean_mode_trims_status_payload_but_keeps_contract_focus(self) -> None:
+        result = lookup_paths(["internal/api/ai_handler.go"], lean=True)
+        self.assertNotIn("scope", result)
+        self.assertNotIn("status_summary", result)
+
+        file_entry = result["files"][0]
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        api_match = by_subsystem["api-contracts"]
+        self.assertEqual(api_match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(api_match["lane_context"]["open_decision_ids"], [])
+        self.assertIn("paid-feature-entitlement-gating", api_match["lane_context"]["release_gate_ids"])
+        self.assertEqual(
+            [reference["line"] for reference in api_match["matched_contract_references"]],
+            [108, 167, 168],
+        )
+
+    def test_render_pretty_shows_contract_focus_for_lean_lookup(self) -> None:
+        rendered = render_pretty(lookup_paths(["internal/api/ai_handler.go"], lean=True))
+        self.assertIn("contract focus: ## Shared Boundaries @L108: internal/api/ai_handler.go", rendered)
+        self.assertIn("contract focus: ## Canonical Files @L24: internal/api/ai_handler.go", rendered)
 
     def test_lookup_paths_maps_unified_agent_runtime_to_agent_lifecycle(self) -> None:
         result = lookup_paths(["internal/hostagent/agent.go"])

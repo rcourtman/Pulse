@@ -182,12 +182,22 @@ def parse_contract_text(rel: str, content: str) -> tuple[dict[str, Any], list[st
     for heading in ("## Canonical Files", "## Shared Boundaries", "## Extension Points"):
         if heading not in heading_positions:
             continue
+        heading_line = heading_positions[heading] + 1
+        body_start = heading_positions[heading] + 1
         body = section_body(lines, heading)
         items = section_list_items(body)
-        for _, item in items:
+        for item_index, item in items:
+            line_number = body_start + item_index + 1
             for token in re.findall(r"`([^`]+)`", item):
                 if looks_like_repo_path(token):
-                    path_references.append({"heading": heading, "path": token})
+                    path_references.append(
+                        {
+                            "heading": heading,
+                            "path": token,
+                            "line": line_number,
+                            "heading_line": heading_line,
+                        }
+                    )
 
     return {
         "title": lines[0].strip() if lines else "",

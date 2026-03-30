@@ -76,9 +76,24 @@ Stable.
         self.assertEqual(
             parsed["path_references"],
             [
-                {"heading": "## Canonical Files", "path": "internal/example/runtime.go"},
-                {"heading": "## Shared Boundaries", "path": "internal/shared/runtime.go"},
-                {"heading": "## Extension Points", "path": "internal/example/"},
+                {
+                    "heading": "## Canonical Files",
+                    "path": "internal/example/runtime.go",
+                    "line": 17,
+                    "heading_line": 15,
+                },
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/shared/runtime.go",
+                    "line": 21,
+                    "heading_line": 19,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/example/",
+                    "line": 25,
+                    "heading_line": 23,
+                },
             ],
         )
 
@@ -138,8 +153,18 @@ Stable.
         self.assertEqual(
             matches[0]["matched_references"],
             [
-                {"heading": "## Canonical Files", "path": "internal/example/runtime.go"},
-                {"heading": "## Extension Points", "path": "internal/example/"},
+                {
+                    "heading": "## Canonical Files",
+                    "path": "internal/example/runtime.go",
+                    "line": 17,
+                    "heading_line": 15,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/example/",
+                    "line": 25,
+                    "heading_line": 23,
+                },
             ],
         )
 
@@ -149,7 +174,12 @@ Stable.
         self.assertEqual(
             shared_matches[0]["matched_references"],
             [
-                {"heading": "## Shared Boundaries", "path": "internal/shared/runtime.go"},
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/shared/runtime.go",
+                    "line": 21,
+                    "heading_line": 19,
+                },
             ],
         )
 

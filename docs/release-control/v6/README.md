@@ -81,7 +81,8 @@ Useful helper tools:
 - `python3 scripts/release_control/readiness_assertion_guard.py --active-target --proof-type hybrid`
   Runs any executable hybrid proof commands required by the active target phase, without replacing the linked manual release gates.
 - `python3 scripts/release_control/registry_audit.py --check`
-- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]` for subsystem ownership, proof routing, lane context, relevant decision records, and dependent contract-update obligations
+- `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean` for subsystem ownership, proof routing, exact contract-focus lines, and compact lane context without pulling the full governance payload into every lookup
+  Omit `--lean` when you explicitly need the full decision, release-gate, and status-summary payload.
 - `python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty`
   Reserve or renew exactly one governed slice in a shared checkout before mutation without hand-editing `status.json`.
 - `python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty`

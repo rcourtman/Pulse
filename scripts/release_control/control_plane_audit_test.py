@@ -123,6 +123,10 @@ class ControlPlaneAuditTest(unittest.TestCase):
             "python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
             entrypoint["targeted_lookup_commands"],
         )
+        self.assertIn(
+            "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean",
+            entrypoint["targeted_lookup_commands"],
+        )
         self.assertIn("reserve exactly one", entrypoint["claim_rule"])
         self.assertIn("record any remaining same-lane residual", entrypoint["claim_rule"])
         self.assertIn(

@@ -2708,6 +2708,23 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "## Extension Points: internal/unifiedresources/views.go",
             ],
         )
+        self.assertEqual(
+            required["docs/release-control/v6/internal/subsystems/monitoring.md"]["matched_reference_details"],
+            [
+                {
+                    "heading": "## Canonical Files",
+                    "path": "internal/unifiedresources/views.go",
+                    "line": 32,
+                    "heading_line": 23,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/unifiedresources/views.go",
+                    "line": 46,
+                    "heading_line": 42,
+                },
+            ],
+        )
 
     def test_monitoring_owned_runtime_does_not_require_unified_resources_contract(self):
         required = required_contract_updates(["internal/monitoring/monitor.go"])

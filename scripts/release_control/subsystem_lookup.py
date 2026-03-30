@@ -20,6 +20,7 @@ from canonical_completion_guard import (
     required_contract_updates,
     subsystem_matches_path,
 )
+from subsystem_contracts import load_contract_index, referenced_contracts_for_path
 from status_audit import audit_status_payload, load_status_payload
 from registry_audit import load_registry_payload
 
@@ -82,6 +83,40 @@ def verification_requirements_for_test_path(rule: dict[str, Any], path: str) -> 
     return requirements
 
 
+def ownership_basis_for_path(rule: dict[str, Any], path: str) -> dict[str, str] | None:
+    for exact_file in rule.get("owned_files", []):
+        if path == exact_file:
+            return {"type": "owned-file", "value": str(exact_file)}
+    for prefix in rule.get("owned_prefixes", []):
+        normalized = str(prefix).rstrip("/")
+        if path == normalized or path.startswith(str(prefix)):
+            return {"type": "owned-prefix", "value": str(prefix)}
+    return None
+
+
+def normalized_reference_details(references: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized: list[dict[str, Any]] = []
+    for reference in references:
+        detail = {
+            "heading": str(reference.get("heading", "")),
+            "path": str(reference.get("path", "")),
+        }
+        if isinstance(reference.get("line"), int):
+            detail["line"] = int(reference["line"])
+        if isinstance(reference.get("heading_line"), int):
+            detail["heading_line"] = int(reference["heading_line"])
+        if detail not in normalized:
+            normalized.append(detail)
+    return sorted(
+        normalized,
+        key=lambda item: (
+            int(item.get("line", 0) or 0),
+            str(item.get("heading", "")).casefold(),
+            str(item.get("path", "")).casefold(),
+        ),
+    )
+
+
 def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -> dict[str, Any] | None:
     lane_id = str(rule.get("lane", "")).strip()
     subsystem_id = str(rule.get("id", "")).strip()
@@ -115,10 +150,98 @@ def lane_context_for_rule(rule: dict[str, Any], status_report: dict[str, Any]) -
     }
 
 
-def lookup_paths(paths: list[str]) -> dict[str, Any]:
+def compact_control_plane(control_plane: dict[str, Any]) -> dict[str, Any]:
+    active_target = dict(control_plane.get("active_target", {}))
+    return {
+        "active_profile_id": control_plane.get("active_profile_id"),
+        "active_target": {
+            key: active_target[key]
+            for key in ("id", "kind", "status", "completion_rule", "completion_met")
+            if key in active_target
+        },
+    }
+
+
+def compact_lane_context(lane_context: dict[str, Any] | None) -> dict[str, Any] | None:
+    if lane_context is None:
+        return None
+    lane = lane_context.get("lane")
+    compact_lane = None
+    if isinstance(lane, dict):
+        compact_lane = {
+            key: lane.get(key)
+            for key in ("id", "name", "status", "derived_status", "completion_state", "gap", "repo_ids")
+            if key in lane
+        }
+    return {
+        "lane_id": lane_context.get("lane_id"),
+        "lane": compact_lane,
+        "open_decision_ids": [
+            str(decision.get("id"))
+            for decision in lane_context.get("open_decisions", [])
+            if isinstance(decision, dict) and decision.get("id")
+        ],
+        "resolved_decision_ids": [
+            str(decision.get("id"))
+            for decision in lane_context.get("resolved_decisions", [])
+            if isinstance(decision, dict) and decision.get("id")
+        ],
+        "release_gate_ids": [
+            str(gate.get("id"))
+            for gate in lane_context.get("release_gates", [])
+            if isinstance(gate, dict) and gate.get("id")
+        ],
+    }
+
+
+def compact_match(match: dict[str, Any]) -> dict[str, Any]:
+    compacted = dict(match)
+    compacted["lane_context"] = compact_lane_context(match.get("lane_context"))
+    return compacted
+
+
+def compact_contract_update(contract_update: dict[str, Any]) -> dict[str, Any]:
+    compacted = dict(contract_update)
+    if compacted.get("matched_reference_details"):
+        compacted.pop("matched_references", None)
+    return compacted
+
+
+def compact_lookup_result(result: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "control_plane": compact_control_plane(result.get("control_plane", {})),
+        "status_audit_errors": list(result.get("status_audit_errors", [])),
+        "files": [
+            {
+                **entry,
+                "matches": [compact_match(match) for match in entry.get("matches", [])],
+                "dependent_contract_updates": [
+                    compact_contract_update(contract)
+                    for contract in entry.get("dependent_contract_updates", [])
+                ],
+            }
+            for entry in result.get("files", [])
+        ],
+        "impacted_subsystems": [
+            {
+                **entry,
+                "lane_context": compact_lane_context(entry.get("lane_context")),
+            }
+            for entry in result.get("impacted_subsystems", [])
+        ],
+        "required_contract_updates": [
+            compact_contract_update(contract)
+            for contract in result.get("required_contract_updates", [])
+        ],
+        "unowned_runtime_files": list(result.get("unowned_runtime_files", [])),
+    }
+
+
+def lookup_paths(paths: list[str], *, lean: bool = False) -> dict[str, Any]:
     normalized = [normalize_input_path(path) for path in paths if path.strip()]
     rules = load_subsystem_rules()
     rules_by_id = {str(rule["id"]): rule for rule in rules}
+    contract_index = load_contract_index()
     registry_payload = load_registry_payload()
     shared_ownership_by_path = {
         str(entry["path"]): entry
@@ -137,6 +260,12 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
             classification = "ignored"
         elif is_test_or_fixture(path):
             classification = "test-or-fixture"
+        reference_matches_by_subsystem = {
+            str(contract["subsystem_id"]): normalized_reference_details(
+                list(contract.get("matched_references", []))
+            )
+            for contract in referenced_contracts_for_path(path, contract_index)
+        }
 
         matches = []
         if classification == "runtime":
@@ -151,6 +280,11 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
                         "lane_context": lane_context_for_rule(rule, status_report),
                         "contract_update_required": True,
                         "proof_update_required": True,
+                        "ownership_basis": ownership_basis_for_path(rule, path),
+                        "matched_contract_references": reference_matches_by_subsystem.get(
+                            str(rule["id"]),
+                            [],
+                        ),
                         "verification_requirement": requirement,
                     }
                 )
@@ -164,6 +298,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
                             "lane_context": lane_context_for_rule(rule, status_report),
                             "contract_update_required": False,
                             "proof_update_required": False,
+                            "ownership_basis": ownership_basis_for_path(rule, path),
                             "verification_requirement": requirement,
                         }
                     )
@@ -200,7 +335,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
             }
         )
 
-    return {
+    result = {
         "control_plane": status_report.get("control_plane", {}),
         "scope": status_report.get("scope", {}),
         "status_summary": status_report.get("summary", {}),
@@ -210,6 +345,7 @@ def lookup_paths(paths: list[str]) -> dict[str, Any]:
         "required_contract_updates": list(contract_updates.values()),
         "unowned_runtime_files": unowned,
     }
+    return compact_lookup_result(result) if lean else result
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -225,7 +361,22 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Print a concise human-readable summary instead of JSON.",
     )
+    parser.add_argument(
+        "--lean",
+        action="store_true",
+        help="Return compact agent-facing context with exact contract reference lines.",
+    )
     return parser.parse_args(argv)
+
+
+def format_reference_detail(reference: dict[str, Any]) -> str:
+    heading = str(reference.get("heading", "")).strip() or "-"
+    path = str(reference.get("path", "")).strip()
+    line = reference.get("line")
+    line_suffix = f" @L{line}" if isinstance(line, int) else ""
+    if path:
+        return f"{heading}{line_suffix}: {path}"
+    return f"{heading}{line_suffix}"
 
 
 def render_pretty(result: dict[str, Any]) -> str:
@@ -257,12 +408,27 @@ def render_pretty(result: dict[str, Any]) -> str:
             )
             if lane_context and lane_context.get("lane"):
                 lane = lane_context["lane"]
+                gap = lane.get("gap")
+                gap_text = f"{gap:.0f}" if isinstance(gap, (int, float)) else "-"
+                open_decisions = lane_context.get("open_decisions", lane_context.get("open_decision_ids", []))
+                release_gates = lane_context.get("release_gates", lane_context.get("release_gate_ids", []))
                 lines.append(
                     f"    lane {lane_context['lane_id']} "
-                    f"gap={lane['gap']:.0f} derived={lane['derived_status']} "
+                    f"gap={gap_text} derived={lane.get('derived_status') or '-'} "
                     f"repos={','.join(lane.get('repo_ids', [])) or '-'} "
-                    f"open_decisions={len(lane_context['open_decisions'])} "
-                    f"release_gates={len(lane_context['release_gates'])}"
+                    f"open_decisions={len(open_decisions)} "
+                    f"release_gates={len(release_gates)}"
+                )
+            if match.get("matched_contract_references"):
+                focus = ", ".join(
+                    format_reference_detail(reference)
+                    for reference in match["matched_contract_references"]
+                )
+                lines.append(f"    contract focus: {focus}")
+            elif match.get("ownership_basis"):
+                basis = match["ownership_basis"]
+                lines.append(
+                    f"    ownership basis: {basis.get('type') or '-'} {basis.get('value') or '-'}"
                 )
         if entry.get("shared_ownership"):
             shared = entry["shared_ownership"]
@@ -273,8 +439,12 @@ def render_pretty(result: dict[str, Any]) -> str:
             lines.append(
                 f"  - also update {contract['subsystem']} contract -> {contract['contract']}"
             )
-            for reference in contract.get("matched_references", []):
-                lines.append(f"    referenced by {reference}")
+            if contract.get("matched_reference_details"):
+                for reference in contract["matched_reference_details"]:
+                    lines.append(f"    referenced by {format_reference_detail(reference)}")
+            else:
+                for reference in contract.get("matched_references", []):
+                    lines.append(f"    referenced by {reference}")
         if entry["classification"] == "runtime" and not entry["matches"]:
             lines.append("  - no owning subsystem rule matched")
     for path in result["unowned_runtime_files"]:
@@ -295,7 +465,7 @@ def main(argv: list[str] | None = None) -> int:
         print("no file paths provided", file=sys.stderr)
         return 2
 
-    result = lookup_paths(paths)
+    result = lookup_paths(paths, lean=args.lean)
     output = render_pretty(result) if args.pretty else json.dumps(result, indent=2, sort_keys=True)
     print(output)
     return 0

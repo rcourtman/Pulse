@@ -303,10 +303,31 @@ def required_contract_updates(
                 descriptor = f"{reference['heading']}: {reference['path']}"
                 if descriptor not in entry["matched_references"]:
                     entry["matched_references"].append(descriptor)
+                detail = {
+                    "heading": str(reference.get("heading", "")),
+                    "path": str(reference.get("path", "")),
+                }
+                if isinstance(reference.get("line"), int):
+                    detail["line"] = int(reference["line"])
+                if isinstance(reference.get("heading_line"), int):
+                    detail["heading_line"] = int(reference["heading_line"])
+                detail_list = entry.setdefault("matched_reference_details", [])
+                if detail not in detail_list:
+                    detail_list.append(detail)
 
     for data in required.values():
         data["touched_runtime_files"] = sorted(set(data["touched_runtime_files"]))
         data["matched_references"] = sorted(set(data["matched_references"]), key=str.casefold)
+        details = data.get("matched_reference_details")
+        if isinstance(details, list) and details:
+            data["matched_reference_details"] = sorted(
+                details,
+                key=lambda item: (
+                    int(item.get("line", 0) or 0),
+                    str(item.get("heading", "")).casefold(),
+                    str(item.get("path", "")).casefold(),
+                ),
+            )
 
     return dict(sorted(required.items()))
 

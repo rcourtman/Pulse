@@ -482,10 +482,11 @@ Before adding new behavior, the author must answer:
 If those answers are not obvious in under a minute, the subsystem still needs
 architectural hardening.
 
-Use `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...]`
-to ask the repo which subsystem, contract, proof route, live lane context,
-relevant decision records, and dependent contract-update obligations apply to a
-file set before editing.
+Use `python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean`
+to ask the repo which subsystem, contract, proof route, exact contract-focus
+lines, and compact lane context apply to a file set before editing.
+Omit `--lean` only when the full decision, release-gate, or status-summary
+payload is materially needed.
 
 ## Boundary Rule
 

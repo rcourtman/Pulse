@@ -334,7 +334,7 @@ def agent_entrypoint(*, staged: bool = False) -> dict[str, Any]:
             "python3 scripts/release_control/status_lookup.py --followup <FOLLOWUP_ID> --pretty",
             "python3 scripts/release_control/status_lookup.py --work-claim <CLAIM_ID> --pretty",
             "python3 scripts/release_control/work_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
-            "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty",
+            "python3 scripts/release_control/subsystem_lookup.py <path> [<path> ...] --pretty --lean",
             "python3 scripts/release_control/worktree_base.py --base-branch <BASE_BRANCH> --pretty",
             "python3 scripts/release_control/worktree_claim.py --kind <KIND> --id <ID> --summary <SUMMARY> --agent-id <AGENT_ID> --pretty",
             "python3 scripts/release_control/worktree_finish.py --base-branch <BASE_BRANCH> --pretty",
