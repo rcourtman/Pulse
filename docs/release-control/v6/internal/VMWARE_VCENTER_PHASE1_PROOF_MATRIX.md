@@ -109,6 +109,22 @@ Before calling VMware supported, Pulse should have automated proof for at least:
 If the automated floor is missing, the manual drill may inform implementation,
 but it must not be used as the sole basis for a support claim.
 
+Current repo-local automated proof already covers part of the read-only
+boundary:
+
+1. `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts` proves
+   canonical VMware-backed Assistant mentions stay on shared resource IDs and
+   shared Assistant routes.
+2. `internal/ai/chat/context_prefetch_additional_test.go` proves VMware-backed
+   guest mentions stay read-only in Assistant context summaries.
+3. `internal/ai/chat/service_tooling_test.go` and
+   `internal/ai/tools/control_resource_test.go` prove shared Assistant/tool
+   wording stays capability-gated instead of claiming blanket VM control.
+4. `internal/api/route_inventory_test.go` and
+   `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
+   prove the shipped route and browser surface stay out of direct `ESXi`,
+   recovery, and VMware admin-plane territory.
+
 ## Scenario Matrix
 
 | ID | Scenario | Pass focus |
@@ -230,6 +246,13 @@ Pass when:
 3. no control capability or VMware-specific action metadata is exposed as part
    of the VMware phase-1 floor
 
+Current automated coverage:
+
+1. `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts`
+2. `internal/ai/chat/context_prefetch_additional_test.go`
+3. `internal/ai/chat/service_tooling_test.go`
+4. `internal/ai/tools/control_resource_test.go`
+
 ### `VC-7` Exclusion Integrity
 
 1. Review shipped wording, route inventory, tool inventory, and visible product
@@ -242,6 +265,13 @@ Pass when:
 2. recovery support is still `n/a`
 3. assistant control is still `read-only`
 4. no VMware admin-plane action surface shipped by implication
+
+Current automated coverage:
+
+1. `internal/api/route_inventory_test.go`
+2. `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
+3. `internal/ai/tools/tools_query_test.go`
+4. `internal/ai/tools/control_resource_test.go`
 
 ## Evidence To Capture
 

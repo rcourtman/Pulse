@@ -171,6 +171,13 @@ Required proof:
 - assistant control remains read-only in both product wording and runtime
   capability exposure
 
+Automated proof already landed for part of this slice:
+
+- `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts`
+- `internal/ai/chat/context_prefetch_additional_test.go`
+- `internal/ai/chat/service_tooling_test.go`
+- `internal/ai/tools/control_resource_test.go`
+
 ### 4. Support Claim Ratchet
 
 Owners:
@@ -200,6 +207,11 @@ Required proof:
 - support wording matches the narrow floor exactly
 - the implementation can fail closed without silently inheriting direct-ESXi or
   recovery support claims
+
+Automated exclusion proof already landed for the shipped floor:
+
+- `internal/api/route_inventory_test.go`
+- `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
 
 ## What Must Be True Before Pulse Can Say VMware Is Supported
 
