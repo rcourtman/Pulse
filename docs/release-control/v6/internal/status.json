@@ -1,6 +1,6 @@
 {
   "version": "6.0",
-  "updated_at": "2026-03-27",
+  "updated_at": "2026-03-30",
   "scope": {
     "active_repos": [
       "pulse",
@@ -1695,6 +1695,171 @@
         {
           "repo": "pulse",
           "path": "tests/integration/tests/15-settings-shell-consistency.spec.ts",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA20",
+      "summary": "Pulse's TrueNAS support claim is bounded to the current API-first floor: onboarding is through platform connections without requiring unified-agent bootstrap, TrueNAS projects into the canonical resource model and shared infrastructure/workload/storage/recovery/alert surfaces, Assistant support is read-first with bounded app control, and broader TrueNAS administration is not part of the current floor.",
+      "kind": "invariant",
+      "blocking_level": "release-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6",
+        "L9",
+        "L13",
+        "L15"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "truenas-api-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/api",
+            "-run",
+            "TestTrueNASHandlers_",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "truenas-runtime-floor-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/monitoring",
+            "./internal/recovery/mapper/truenas",
+            "./internal/truenas",
+            "-run",
+            "TestFeatureFlagDefaultsTrueNASOnUnlessExplicitlyDisabled|TestGetAppLogsUsesRPCSubscription|TestProviderGetAppConfigReturnsCanonicalApp|TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource|TestStartAndStopAppUseRPCMethods|TestTrueNASDiskRecordsPopulatePhysicalDiskMeta|TestTrueNASPollerGetAppConfigUsesTenantScopedProvider|TestTrueNASResourcesFlowThroughUnifiedTypesWithoutSpecialCasing",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/alerts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Recovery/__tests__/Recovery.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Storage/__tests__/DiskList.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Storage/__tests__/Storage.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/hooks/__tests__/useUnifiedResources.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/hooks/__tests__/useWorkloads.test.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/truenas_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/monitoring/truenas_poller_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/recovery/mapper/truenas/mapper_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/truenas/client_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/truenas/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/truenas/provider_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/evals/tasks/truenas-node-add.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/28-truenas-alert-resource-links.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/32-truenas-workloads-resource-deeplink.spec.ts",
           "kind": "file"
         }
       ]
@@ -3728,6 +3893,27 @@
       "subsystem_ids": [],
       "lane_ids": [
         "L5"
+      ]
+    },
+    {
+      "id": "platform-support-model-v1",
+      "summary": "Pulse v6 platform support is governed by one canonical model: first-class platforms declare primary ingestion, canonical resource projections, and support-floor surfaces, while runtime variants such as Podman and transport helpers are not top-level platforms.",
+      "kind": "architecture",
+      "decided_at": "2026-03-30",
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15",
+        "L16"
       ]
     }
   ]

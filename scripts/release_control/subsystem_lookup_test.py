@@ -4380,6 +4380,7 @@ class SubsystemLookupTest(unittest.TestCase):
             {
                 "canonical-timeline-source-precedence",
                 "host-type-migration-boundary-audit",
+                "platform-support-model-v1",
             },
         )
 

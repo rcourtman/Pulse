@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-03-27
+Last updated: 2026-03-30
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -86,6 +86,9 @@ This file must not contain:
    notice requirements for the v6 cutover.
 13. `docs/release-control/v6/internal/RC_TO_GA_REHEARSAL_TEMPLATE.md`
    Canonical human record shape for the non-publish RC-to-GA rehearsal run.
+14. `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`
+   Canonical first-class platform, ingestion-mode, resource-projection, and
+   support-floor model for Pulse v6.
 
 These machine files remain canonical, but agents should not ingest them in full
 by default when a smaller derived command answers the question. Prefer
@@ -408,6 +411,63 @@ Assertion design rules:
     commands, runbooks, and alert lifecycle breadcrumbs, but it must remain a
     derived incident projection rather than a competing source of truth for
     durable resource history.
+
+## TrueNAS Support Floor
+
+Pulse v6 uses one governed definition of "TrueNAS supported" at the current
+floor. Detailed proof routes live in `status.json.readiness_assertions` and the
+owning subsystem contracts; user-facing claims must not exceed this floor.
+
+1. Architecture boundary:
+   TrueNAS is API-first. The unified agent may augment a TrueNAS system later,
+   but it is not required for bootstrap or baseline support. TrueNAS must
+   project into the canonical `agent`, `app-container`, `storage`,
+   `physical-disk`, and recovery contracts instead of reopening a parallel
+   TrueNAS product model.
+2. Onboarding path:
+   Supported now through the shared platform-connections flow and
+   `/api/truenas/connections`. Operators can add, test, edit, retest, and
+   delete stored TrueNAS connections without re-entering masked secrets on
+   ordinary edits. `truenas_disabled` is only an explicit server opt-out, not
+   the baseline state. Out of scope for this floor: a separate TrueNAS-first
+   wizard, agent-required bootstrap, or disabled-by-default launch posture.
+3. Infrastructure visibility:
+   Supported now as one canonical top-level system in connected infrastructure
+   plus shared host telemetry/history when the API can supply it. The expected
+   user outcome is that a connected TrueNAS appliance shows up as
+   infrastructure, keeps platform-connection poll health, and remains a
+   TrueNAS platform even when host telemetry is ignored. Out of scope: a
+   separate `truenas-system` surface or provider-local infrastructure model.
+4. Workloads:
+   Supported now for TrueNAS apps projected as canonical `app-container`
+   workloads with shared workload navigation, metrics, and related links. Out
+   of scope: a separate TrueNAS app runtime model or provider-local workload
+   page/control surface.
+5. Storage and disk health:
+   Supported now for pools, datasets, and physical disks projected into the
+   shared storage and disk contracts, including SMART/disk-state risk, live
+   temperature, and recent temperature aggregates when the provider supplies
+   them. Out of scope: promising deeper TrueNAS-only topology or admin actions
+   beyond the current shared storage-health floor.
+6. Recovery:
+   Supported now as read-side visibility for TrueNAS snapshots and replication
+   artifacts in the shared recovery model, filters, rollups, and cross-surface
+   handoffs. Out of scope: treating recovery as its own TrueNAS onboarding
+   flow or promising provider-native restore/control actions that do not yet
+   exist on the governed shared path.
+7. Alerts:
+   Supported now when TrueNAS systems, disks, and app parents participate in
+   the shared alert thresholds, incidents, and related-resource handoffs into
+   infrastructure, workloads, storage, and recovery. Out of scope: a separate
+   TrueNAS-only alert product surface.
+8. Assistant read/control:
+   Supported now for canonical read-side resource access plus bounded app
+   control. Assistant may read TrueNAS app logs via `pulse_read`, read app
+   config via `pulse_query action="config"`, and issue native app
+   start/stop/restart through `pulse_control` on canonical `app-container`
+   resources. Out of scope: a blanket TrueNAS admin plane, provider-local AI
+   tools, host command execution without the unified agent, or broader action
+   promises ahead of the existing action-governance coverage gap.
 
 ## Cross-Repo Contracts
 

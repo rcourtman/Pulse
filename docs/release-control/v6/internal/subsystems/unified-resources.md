@@ -158,6 +158,12 @@ assembly branch.
    route-owned source such as `truenas` in the filter option set even when the
    current unified-resource snapshot does not contain that source, so
    cross-surface handoffs do not silently fall back to `All`.
+7. Keep first-class platform classification on
+   `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New platform
+   work must declare its primary ingestion mode and canonical resource
+   projections there before adding platform-local branches here, and runtime
+   variants such as `podman` must stay inside the owning platform contract
+   instead of becoming new top-level platforms or resource types.
 
 ## Current State
 
@@ -225,6 +231,12 @@ API-backed TrueNAS apps through the same canonical `app-container` identity
 and `resource_id` contract, then project native runtime/config shape through
 the shared app-container payload rather than forcing those resources through
 guest-config routing or inventing a TrueNAS-local config type.
+That projection contract is the product-definition floor for TrueNAS support:
+Pulse supports TrueNAS only when it lands on the shared `agent`,
+`app-container`, `storage`, `physical-disk`, and recovery-linked resource
+shapes. The unified agent may augment a TrueNAS system later, but baseline
+support does not depend on it, and product surfaces must not reopen a parallel
+`truenas-*` resource model just to add another capability.
 The canonical resource timeline now also owns durable incident-response facts
 that materially changed resource investigation state. `ResourceChange` kinds
 such as `alert_fired`, `alert_acknowledged`, `alert_unacknowledged`,

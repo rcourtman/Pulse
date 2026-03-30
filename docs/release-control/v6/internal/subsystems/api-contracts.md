@@ -299,6 +299,13 @@ Own canonical runtime payload shapes between backend and frontend.
     `bootstrapTokenPath`, and allows browser-owned first-session proof to
     re-enter the real setup wizard instead of silently falling back to an
     authenticated dashboard state.
+25. Keep platform transport vocabulary aligned with
+    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. Presentation
+    keys, future-label helpers, recovery provider strings, and
+    connected-infrastructure surface kinds may carry forward-compatible
+    vocabulary, but they must not be treated as admitting a new first-class
+    platform until that model, the owning contracts, and the applicable proof
+    surfaces change together.
 22. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must
@@ -669,6 +676,15 @@ That same `/api/truenas/connections` boundary also owns explicit disabled-path
 semantics: the `truenas_disabled` response exists only when the server has
 explicitly opted out of the default-on TrueNAS integration, not as the normal
 bootstrap state for a supported platform.
+That same platform-connections boundary therefore defines the current TrueNAS
+onboarding floor for Pulse. Supported now means operators can bootstrap
+TrueNAS through the shared Platform connections workflow and
+`/api/truenas/connections` without the unified agent, preserve masked secrets
+on ordinary edits, retest saved connections through the stored-secret path,
+and see last-sync plus discovered contribution summaries on the same settings
+surface. Pulse does not promise a separate TrueNAS-only onboarding wizard,
+agent-required bootstrap, or public provider-local app/log/config APIs at this
+floor.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

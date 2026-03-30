@@ -270,6 +270,12 @@ parents through the shared alert-overrides state rather than assuming
 the same `Container Runtimes` / `Containers` surface, while Docker-specific
 controls like ignored prefixes and Swarm service gap settings must stay gated
 to real Docker runtimes instead of leaking onto non-Docker platforms.
+At the current support floor, TrueNAS alert support means the shared alert
+surfaces can evaluate, show, and drill into incidents on TrueNAS-backed
+systems, disks, and app parents using the canonical resource model and related
+links into infrastructure, workloads, storage, and recovery. Pulse does not
+promise a TrueNAS-only alert workflow or provider-specific alert management
+surface beyond the shared alerts product.
 Future Docker thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
 back into a mixed render surface.

@@ -68,6 +68,11 @@ runtime cost control, and shared AI transport surfaces.
 3. Preserve explicit coverage for chat, Patrol, remediation, and cost-control behavior when AI runtime changes
 4. Preserve auditability for outbound model-bound context exports and keep the export record aligned with the prompt boundary that actually reaches the provider
 5. Keep AI resource and incident context aligned with the canonical unified-resource timeline before falling back to patrol-local change detectors
+6. Keep platform assistant read/control claims aligned with
+   `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. New
+   platform-native reads or writes must extend the shared Assistant tool
+   contracts, and read-only or augmentation-only platforms must stay explicit
+   there instead of drifting into provider-local tools.
 
 ## Current State
 
@@ -180,6 +185,13 @@ API-backed app configuration reads such as TrueNAS app-container runtime
 shape on the shared `pulse_query` tool with `action="config"` and
 `resource_id=<canonical app>` instead of forcing those resources through the
 guest-config shim or adding a provider-local config tool.
+That bounded tool set is the current Assistant floor for TrueNAS. Supported
+now means read-side app logs/config and native app start/stop/restart on
+canonical `app-container` resources through the shared `pulse_read`,
+`pulse_query`, and `pulse_control` tools. Pulse does not promise a blanket
+TrueNAS admin plane, host command execution on API-backed systems without the
+unified agent, or provider-local AI tools outside the shared action-governed
+runtime contract.
 That same AI tool ownership also applies to recovery-backed storage reads.
 When `internal/ai/tools/adapters.go` returns recovery points with malformed
 persisted metadata omitted at the shared recovery-store boundary, the storage

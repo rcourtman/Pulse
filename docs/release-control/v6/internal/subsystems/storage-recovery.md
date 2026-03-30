@@ -132,6 +132,12 @@ querying, and the operator-facing storage health presentation layer.
    expose unauthenticated setup so storage/recovery-owned empty-state and
    dashboard handoff proof does not silently fall back to an authenticated
    dashboard path.
+9. Keep recovery support claims aligned with
+   `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. Forward-
+   compatible provider strings are not support declarations by themselves, and
+   a platform should be treated as recovery-capable only when that model marks
+   recovery as part of its support floor and the owning ingest/projection path
+   exists in the same governed slice.
 
 ## Current State
 
@@ -1614,3 +1620,10 @@ shared AI/runtime wiring and the poller's provider selection path, but storage
 and recovery surfaces must not grow a second recovery-local config transport
 or provider-shaped configuration payload just because those reads can inform
 operator investigation.
+That bounded projection is the current TrueNAS floor for storage and recovery:
+operators can inspect TrueNAS pools, datasets, disks, snapshots, and
+replication artifacts through the shared storage and recovery pages plus
+cross-surface handoffs. Storage and recovery do not promise a TrueNAS-local
+onboarding path, restore/control plane, or separate diagnostic transport;
+backend-native app actions, logs, and config reads stay on the adjacent
+AI/runtime path and only feed refreshed canonical recovery/state afterward.

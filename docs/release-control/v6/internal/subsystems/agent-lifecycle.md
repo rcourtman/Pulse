@@ -227,6 +227,12 @@ management, and fleet control surfaces.
     top-level `truenas` type, that value must collapse immediately to the
     canonical `agent` host type before lifecycle surfaces, setup handoffs, or
     operator-visible route state consume it.
+13. Keep onboarding ownership aligned with
+    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: agent-backed
+    first-class platforms belong to the install/reporting lifecycle path,
+    API-backed first-class platforms belong to Platform connections, and any
+    later unified-agent augmentation on an API-backed platform must remain an
+    optional secondary path instead of silently becoming the required bootstrap.
 
 ## Current State
 

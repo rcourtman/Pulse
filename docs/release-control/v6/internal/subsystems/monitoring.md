@@ -59,6 +59,11 @@ truth for live infrastructure data.
 2. Tighten guardrails when `GetState()`-centric paths are removed
 3. Keep discovery-provider, metrics-history, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
+5. Keep platform ingestion semantics aligned with
+   `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
+   declared ingestion mode on an admitted first-class platform, not a license
+   to create new platform ids from secondary pollers or optional agent
+   augmentation paths.
 
 ## Current State
 
@@ -331,3 +336,11 @@ same RPC session as system telemetry, and `internal/truenas/provider.go` must
 project those readings into the canonical host temperature and host-sensor
 contract. Pulse must not treat TrueNAS CPU temperature as an agent-only
 capability or invent a TrueNAS-local sensor payload.
+Taken together, this is the current monitoring-owned TrueNAS floor: one stored
+API connection can surface one canonical top-level system, shared host
+telemetry/history, app-container workloads, disk health/history, and
+per-connection poll health without requiring the unified agent. The same
+poller/provider path also owns assistant-driven app start/stop, logs, and
+config refresh for those canonical workloads. Pulse does not promise a
+separate TrueNAS runtime model, broader NAS administration, or agent-required
+bootstrap at this floor.
