@@ -1627,3 +1627,11 @@ cross-surface handoffs. Storage and recovery do not promise a TrueNAS-local
 onboarding path, restore/control plane, or separate diagnostic transport;
 backend-native app actions, logs, and config reads stay on the adjacent
 AI/runtime path and only feed refreshed canonical recovery/state afterward.
+VMware vSphere follows a narrower phase-1 boundary. If `vmware-vsphere`
+implementation starts, storage and recovery may consume vCenter-backed
+datastore inventory plus VM snapshot-tree visibility as shared storage and
+workload context, but VMware recovery stays out of the support claim.
+Storage and recovery must not treat vSphere snapshots, changed-disk/block
+visibility, or datastore presence as canonical Pulse recovery artifacts,
+restore capability, or recovery-backed Assistant control until a later
+governed slice adds those contracts explicitly.

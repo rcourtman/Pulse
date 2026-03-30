@@ -344,3 +344,5 @@ floor end to end: connection onboarding, minimum privilege bundle, supported
 version floor, canonical `agent`/`vm`/`storage` projections, alert and metrics
 history truth, and assistant read behavior. If that proof does not hold,
 implementation must stop at governance rather than widening the support claim.
+The concrete first-implementation slice order and stop/go checks live in
+`docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`.

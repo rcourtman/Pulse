@@ -276,6 +276,12 @@ systems, disks, and app parents using the canonical resource model and related
 links into infrastructure, workloads, storage, and recovery. Pulse does not
 promise a TrueNAS-only alert workflow or provider-specific alert management
 surface beyond the shared alerts product.
+At the current locked VMware floor, alert support must mean the same shared
+alert surfaces can evaluate, show, and drill into vSphere alarm and health
+signals on canonical `agent`, `vm`, and `storage` resources, with related
+event/task context routed through the shared incident and resource links.
+Pulse must not grow a VMware-only alert shell, alarm editor, or direct alarm-
+control surface in phase 1.
 Future Docker thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
 back into a mixed render surface.

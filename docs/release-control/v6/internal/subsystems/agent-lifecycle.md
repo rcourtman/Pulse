@@ -518,6 +518,13 @@ Provider-backed TrueNAS app config may route through shared AI/runtime wiring
 on the platform connection and poller path, but lifecycle-adjacent
 setup/install flows must not reframe those config reads as requiring
 unified-agent host install before TrueNAS becomes operational in Pulse.
+That same platform-connections boundary now also defines the only acceptable
+phase-1 VMware onboarding path. If `vmware-vsphere` implementation starts,
+`PlatformConnectionsWorkspace.tsx` must add `vCenter` under the shared
+API-backed workspace, preserve the saved-connection test and health model, and
+keep direct `ESXi` out of the phase-1 route and install model. Lifecycle-
+adjacent flows must not invent a VMware-only setup shell or reframe unified-
+agent host install as the bootstrap requirement for VMware support.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must tell a new
 Pulse user to start with `Install on a host` to add the first monitored

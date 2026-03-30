@@ -519,6 +519,11 @@ acceptable phase-1 model if implementation starts.
    truth, and assistant read behavior. If those proofs do not hold,
    implementation should stop at governance rather than shipping an inflated
    support claim.
+9. Execution sequence:
+   If implementation starts, it should follow
+   `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
+   as the concrete slice order and stop/go contract for the first admitted
+   VMware support floor.
 
 ## Cross-Repo Contracts
 

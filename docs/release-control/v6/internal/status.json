@@ -3518,12 +3518,37 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/agent-lifecycle.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/alerts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
           "kind": "file"
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/storage-recovery.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md",
           "kind": "file"
         }
       ]
