@@ -85,6 +85,7 @@ interface ConnectedAgent {
 
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
 const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';
+const INFRASTRUCTURE_PLATFORMS_PATH = '/settings/infrastructure/platforms';
 const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
 const pd = (resource: Resource) =>
@@ -254,6 +255,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const downloadCredentials = () => {
     const baseUrl = getPulseBaseUrl();
     const installWorkspaceUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_INSTALL_PATH}`;
+    const platformConnectionsUrl = `${baseUrl.replace(/\/$/, '')}${INFRASTRUCTURE_PLATFORMS_PATH}`;
     const content = `Pulse Credentials
 ==================
 Generated: ${new Date().toISOString()}
@@ -272,11 +274,19 @@ Infrastructure Install Workspace:
 ---------------------------------
 ${installWorkspaceUrl}
 
+Platform Connections Workspace:
+-------------------------------
+${platformConnectionsUrl}
+
 Use the Infrastructure Install workspace to:
 - continue with the first-host install token Pulse prepares from setup
 - choose the agent connection URL
 - configure TLS and custom CA options
 - copy Linux, macOS, Windows, and related install commands
+
+Use the Platform connections workspace when:
+- the first system is API-backed, such as Proxmox or TrueNAS
+- Pulse should poll that platform directly instead of starting with a host install
 
 Keep these credentials secure!
 `;
@@ -294,6 +304,10 @@ Keep these credentials secure!
 
   const handleOpenInstallWorkspace = () => {
     props.onComplete(INFRASTRUCTURE_INSTALL_PATH);
+  };
+
+  const handleOpenPlatformConnections = () => {
+    props.onComplete(INFRASTRUCTURE_PLATFORMS_PATH);
   };
 
   const handleGoToDashboard = () => {
@@ -664,7 +678,7 @@ Keep these credentials secure!
             <div class="mt-2 text-xs text-muted">
               {hasConnectedAgents()
                 ? 'Infrastructure Install stays available any time you want to add more systems later.'
-                : 'Use that workspace any time you want to add more systems later.'}
+                : 'If the first system is API-backed, use Platform connections instead of starting with host install.'}
             </div>
           </div>
           <div class="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -676,6 +690,14 @@ Keep these credentials secure!
             >
               {hasConnectedAgents() ? 'Go to Dashboard' : 'Open Infrastructure Install'}
             </button>
+            <Show when={!hasConnectedAgents()}>
+              <button
+                onClick={handleOpenPlatformConnections}
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+              >
+                Open Platform connections
+              </button>
+            </Show>
             <Show when={hasConnectedAgents()}>
               <button
                 onClick={handleOpenInstallWorkspace}

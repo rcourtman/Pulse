@@ -110,6 +110,7 @@ describe('SetupCompletionPanel', () => {
 
     expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getAllByText('Open Infrastructure Install').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
     expect(screen.getByText('Credentials you must save now')).toBeInTheDocument();
     expect(screen.getByText('Shown during setup')).toBeInTheDocument();
     expect(screen.getByText('admin')).toBeInTheDocument();
@@ -147,6 +148,16 @@ describe('SetupCompletionPanel', () => {
     expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/install');
   });
 
+  it('hands API-backed starts into the canonical platform connections workspace', async () => {
+    const onComplete = vi.fn();
+
+    render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open Platform connections' }));
+
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+  });
+
   it('downloads credentials that point operators to the install workspace instead of inline commands', async () => {
     const anchorClickMock = vi.fn();
     const createElementSpy = vi.spyOn(document, 'createElement').mockImplementation((tagName) => {
@@ -173,8 +184,13 @@ describe('SetupCompletionPanel', () => {
     expect(content).toContain('Admin API Token:');
     expect(content).toContain('Infrastructure Install Workspace:');
     expect(content).toContain('https://pulse.example.com/settings/infrastructure/install');
+    expect(content).toContain('Platform Connections Workspace:');
+    expect(content).toContain('https://pulse.example.com/settings/infrastructure/platforms');
     expect(content).toContain(
       'continue with the first-host install token Pulse prepares from setup',
+    );
+    expect(content).toContain(
+      'the first system is API-backed, such as Proxmox or TrueNAS',
     );
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
@@ -229,6 +245,7 @@ describe('SetupCompletionPanel', () => {
     expect(
       screen.getAllByRole('button', { name: 'Open Infrastructure Install' }).length,
     ).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: 'Open Platform connections' })).not.toBeInTheDocument();
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
     const nextStepCard = nextStepHeading.closest('div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6');

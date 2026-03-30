@@ -6,15 +6,22 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain(
       "const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';",
     );
+    expect(setupCompletionPanelSource).toContain(
+      "const INFRASTRUCTURE_PLATFORMS_PATH = '/settings/infrastructure/platforms';",
+    );
     expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
+    expect(setupCompletionPanelSource).toContain('Open Platform connections');
     expect(setupCompletionPanelSource).toContain('Infrastructure Install Workspace');
+    expect(setupCompletionPanelSource).toContain('Platform Connections Workspace');
     expect(setupCompletionPanelSource).toContain('Credentials you must save now');
     expect(setupCompletionPanelSource).toContain('Shown during setup');
     expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_INSTALL_PATH);');
+    expect(setupCompletionPanelSource).toContain('props.onComplete(INFRASTRUCTURE_PLATFORMS_PATH);');
     expect(setupCompletionPanelSource).toContain('Use the Infrastructure Install workspace to:');
     expect(setupCompletionPanelSource).toContain(
       'continue with the first-host install token Pulse prepares from setup',
     );
+    expect(setupCompletionPanelSource).toContain('Use the Platform connections workspace when:');
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
     expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
@@ -33,6 +40,9 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Start with one host, then add more systems later from the same install workspace.');
     expect(setupCompletionPanelSource).toContain(
       'API-backed platforms like Proxmox and TrueNAS use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+    );
+    expect(setupCompletionPanelSource).toContain(
+      'If the first system is API-backed, use Platform connections instead of starting with host install.',
     );
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
     expect(setupCompletionPanelSource).not.toContain('Agent Metrics');
@@ -70,6 +80,7 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain(
       "{hasConnectedAgents() ? 'Go to Dashboard' : 'Open Infrastructure Install'}",
     );
+    expect(setupCompletionPanelSource).toContain('handleOpenPlatformConnections');
     expect(setupCompletionPanelSource).not.toContain(
       "connectedAgents().length > 0 ? 'Go to Dashboard' : 'Open Infrastructure Install'",
     );

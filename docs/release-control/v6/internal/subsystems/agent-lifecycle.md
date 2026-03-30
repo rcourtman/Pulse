@@ -149,7 +149,8 @@ management, and fleet control surfaces.
    that route as the first-host install step, and present `Platform
    connections` as the named API-backed alternative for Proxmox, TrueNAS, and
    future provider integrations rather than leaving post-setup next actions
-   implicit.
+   implicit. That API-backed alternative must be a real first-run handoff
+   control, not prose-only guidance.
 6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical
