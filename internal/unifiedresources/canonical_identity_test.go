@@ -335,3 +335,78 @@ func TestRefreshCanonicalIdentityScopesVMwareManagedObjectsByConnection(t *testi
 		}
 	}
 }
+
+func TestRefreshCanonicalIdentityIgnoresVMwarePlacementDetailAliases(t *testing.T) {
+	resource := Resource{
+		ID:   "vmware-vm-1",
+		Type: ResourceTypeVM,
+		Name: "db-vm",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"db-vm.guest.lab.local"},
+			MachineID: "vm-instance-uuid-1",
+		},
+		VMware: &VMwareData{
+			ConnectionID:        "vc-1",
+			ManagedObjectID:     "vm-101",
+			EntityType:          "vm",
+			DatacenterName:      "DC-1",
+			ComputeResourceName: "Compute-A",
+			ClusterName:         "Cluster-A",
+			FolderName:          "Production",
+			ResourcePoolName:    "Prod-VMs",
+			RuntimeHostName:     "esxi-01.lab.local",
+			DatastoreNames:      []string{"vmfs-prod-01", "vmfs-prod-02"},
+			GuestHostname:       "db-vm.guest.lab.local",
+			GuestIPAddresses:    []string{"10.0.0.10", "10.0.0.11"},
+			InstanceUUID:        "vm-instance-uuid-1",
+			BIOSUUID:            "vm-bios-uuid-1",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.PrimaryID; got != "vmware:vc-1:vm:vm-101" {
+		t.Fatalf("primaryId = %q, want vmware:vc-1:vm:vm-101", got)
+	}
+
+	wantAliases := []string{
+		"vmware:vc-1:vm:vm-101",
+		"vm-101",
+		"db-vm",
+		"db-vm.guest.lab.local",
+		"vm-instance-uuid-1",
+		"vmware-vm-1",
+	}
+	if len(resource.Canonical.Aliases) != len(wantAliases) {
+		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
+	}
+	for i, want := range wantAliases {
+		if got := resource.Canonical.Aliases[i]; got != want {
+			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
+		}
+	}
+
+	disallowedAliases := []string{
+		"DC-1",
+		"Compute-A",
+		"Cluster-A",
+		"Production",
+		"Prod-VMs",
+		"esxi-01.lab.local",
+		"vmfs-prod-01",
+		"vmfs-prod-02",
+		"10.0.0.10",
+		"10.0.0.11",
+		"vm-bios-uuid-1",
+	}
+	for _, disallowed := range disallowedAliases {
+		for _, alias := range resource.Canonical.Aliases {
+			if alias == disallowed {
+				t.Fatalf("expected VMware topology/detail value %q not to become canonical alias: %+v", disallowed, resource.Canonical.Aliases)
+			}
+		}
+	}
+}

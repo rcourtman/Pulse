@@ -125,6 +125,16 @@ folders, or datacenters may inform investigation only when they can be
 attached honestly to canonical `agent`, `vm`, or `storage` resources; the
 collector must not solve that ambiguity by creating VMware-only top-level
 incident targets.
+That same monitoring boundary now also has a concrete detail-enrichment seam.
+`internal/vmware/client.go`, `internal/vmware/client_topology.go`, and
+`internal/vmware/provider.go` may use the official vCenter Automation API plus
+VI JSON `name`, `parent`, `runtime`, `resourcePool`, `datastore`, `host`,
+`vm`, and datastore-summary paths to enrich canonical VMware-backed resources
+with placement, guest identity, and storage consumer context. That
+enrichment remains best-effort provider detail on the shared VMware source: it
+must not create a second topology cache, a VMware-only placement store, or a
+parallel guest-identity model outside the canonical `agent` / `vm` / `storage`
+resource graph.
 
 The monitor adapter now also acts as the canonical bridge from live registry
 rebuilds and supplemental ingest into the unified-resource timeline. That means

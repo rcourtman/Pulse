@@ -323,6 +323,8 @@ describe('useUnifiedResources', () => {
               vCenterHost: 'vc.lab.local',
               managedObjectId: 'host-101',
               entityType: 'host',
+              datacenterName: 'DC1',
+              clusterName: 'Compute-A',
             },
           },
         ],
@@ -344,6 +346,8 @@ describe('useUnifiedResources', () => {
       connectionId: 'vc-1',
       managedObjectId: 'host-101',
       entityType: 'host',
+      datacenterName: 'DC1',
+      clusterName: 'Compute-A',
     });
 
     dispose();

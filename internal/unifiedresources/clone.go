@@ -250,6 +250,11 @@ func cloneVMwareData(in *VMwareData) *VMwareData {
 		return nil
 	}
 	out := *in
+	out.DatastoreIDs = cloneStringSlice(in.DatastoreIDs)
+	out.DatastoreNames = cloneStringSlice(in.DatastoreNames)
+	out.DatastoreAccessible = cloneBoolPtr(in.DatastoreAccessible)
+	out.MultipleHostAccess = cloneBoolPtr(in.MultipleHostAccess)
+	out.GuestIPAddresses = cloneStringSlice(in.GuestIPAddresses)
 	return &out
 }
 

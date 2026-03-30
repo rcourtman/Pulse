@@ -1120,6 +1120,42 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	if incoming.HostUUID != "" {
 		merged.HostUUID = incoming.HostUUID
 	}
+	if incoming.DatacenterID != "" {
+		merged.DatacenterID = incoming.DatacenterID
+	}
+	if incoming.DatacenterName != "" {
+		merged.DatacenterName = incoming.DatacenterName
+	}
+	if incoming.ComputeResourceID != "" {
+		merged.ComputeResourceID = incoming.ComputeResourceID
+	}
+	if incoming.ComputeResourceName != "" {
+		merged.ComputeResourceName = incoming.ComputeResourceName
+	}
+	if incoming.ClusterID != "" {
+		merged.ClusterID = incoming.ClusterID
+	}
+	if incoming.ClusterName != "" {
+		merged.ClusterName = incoming.ClusterName
+	}
+	if incoming.FolderID != "" {
+		merged.FolderID = incoming.FolderID
+	}
+	if incoming.FolderName != "" {
+		merged.FolderName = incoming.FolderName
+	}
+	if incoming.ResourcePoolID != "" {
+		merged.ResourcePoolID = incoming.ResourcePoolID
+	}
+	if incoming.ResourcePoolName != "" {
+		merged.ResourcePoolName = incoming.ResourcePoolName
+	}
+	if incoming.RuntimeHostID != "" {
+		merged.RuntimeHostID = incoming.RuntimeHostID
+	}
+	if incoming.RuntimeHostName != "" {
+		merged.RuntimeHostName = incoming.RuntimeHostName
+	}
 	if incoming.ConnectionState != "" {
 		merged.ConnectionState = incoming.ConnectionState
 	}
@@ -1137,6 +1173,39 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	}
 	if incoming.DatastoreType != "" {
 		merged.DatastoreType = incoming.DatastoreType
+	}
+	if len(incoming.DatastoreIDs) > 0 {
+		merged.DatastoreIDs = uniqueStrings(append(cloneStringSlice(merged.DatastoreIDs), incoming.DatastoreIDs...))
+	}
+	if len(incoming.DatastoreNames) > 0 {
+		merged.DatastoreNames = uniqueStrings(append(cloneStringSlice(merged.DatastoreNames), incoming.DatastoreNames...))
+	}
+	if incoming.DatastoreURL != "" {
+		merged.DatastoreURL = incoming.DatastoreURL
+	}
+	if incoming.DatastoreAccessible != nil {
+		merged.DatastoreAccessible = cloneBoolPtr(incoming.DatastoreAccessible)
+	}
+	if incoming.MultipleHostAccess != nil {
+		merged.MultipleHostAccess = cloneBoolPtr(incoming.MultipleHostAccess)
+	}
+	if incoming.MaintenanceMode != "" {
+		merged.MaintenanceMode = incoming.MaintenanceMode
+	}
+	if incoming.InstanceUUID != "" {
+		merged.InstanceUUID = incoming.InstanceUUID
+	}
+	if incoming.BIOSUUID != "" {
+		merged.BIOSUUID = incoming.BIOSUUID
+	}
+	if incoming.GuestOSFamily != "" {
+		merged.GuestOSFamily = incoming.GuestOSFamily
+	}
+	if incoming.GuestHostname != "" {
+		merged.GuestHostname = incoming.GuestHostname
+	}
+	if len(incoming.GuestIPAddresses) > 0 {
+		merged.GuestIPAddresses = uniqueStrings(append(cloneStringSlice(merged.GuestIPAddresses), incoming.GuestIPAddresses...))
 	}
 	if incoming.ActiveAlarmCount > 0 {
 		merged.ActiveAlarmCount = incoming.ActiveAlarmCount

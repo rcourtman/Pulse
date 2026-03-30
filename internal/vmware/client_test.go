@@ -40,6 +40,12 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if host.OverallStatus != "yellow" {
 		t.Fatalf("host overall status = %q, want yellow", host.OverallStatus)
 	}
+	if host.ClusterName != "Prod Compute" || host.DatacenterName != "DC1" {
+		t.Fatalf("expected host placement enrichment, got cluster=%q datacenter=%q", host.ClusterName, host.DatacenterName)
+	}
+	if len(host.DatastoreNames) != 1 || host.DatastoreNames[0] != "nvme-primary" {
+		t.Fatalf("expected host datastore names, got %+v", host.DatastoreNames)
+	}
 	if host.Metrics == nil || host.Metrics.CPUPercent == nil || *host.Metrics.CPUPercent != 21.4 {
 		t.Fatalf("expected host cpu metrics, got %+v", host.Metrics)
 	}
@@ -57,6 +63,15 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if len(vm.TriggeredAlarms) != 1 || vm.TriggeredAlarms[0].OverallStatus != "red" {
 		t.Fatalf("expected VM alarm signals, got %+v", vm.TriggeredAlarms)
 	}
+	if vm.RuntimeHostName != "esxi-01.lab.local" || vm.ResourcePoolName != "Tier 1" {
+		t.Fatalf("expected VM placement enrichment, got host=%q pool=%q", vm.RuntimeHostName, vm.ResourcePoolName)
+	}
+	if vm.InstanceUUID != "vm-instance-201" || vm.BIOSUUID != "vm-bios-201" {
+		t.Fatalf("expected VM identity enrichment, got instance=%q bios=%q", vm.InstanceUUID, vm.BIOSUUID)
+	}
+	if vm.GuestHostname != "app-01.internal" || len(vm.GuestIPAddresses) != 1 || vm.GuestIPAddresses[0] != "10.0.0.21" {
+		t.Fatalf("expected VM guest identity enrichment, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
+	}
 	if vm.SnapshotCount != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", vm.SnapshotCount)
 	}
@@ -67,6 +82,15 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	datastore := snapshot.Datastores[0]
 	if datastore.OverallStatus != "yellow" {
 		t.Fatalf("datastore overall status = %q, want yellow", datastore.OverallStatus)
+	}
+	if datastore.Accessible == nil || !*datastore.Accessible {
+		t.Fatalf("expected datastore accessibility enrichment, got %+v", datastore.Accessible)
+	}
+	if len(datastore.HostNames) != 1 || datastore.HostNames[0] != "esxi-01.lab.local" {
+		t.Fatalf("expected datastore host attachment enrichment, got %+v", datastore.HostNames)
+	}
+	if len(datastore.VMNames) != 1 || datastore.VMNames[0] != "app-01" {
+		t.Fatalf("expected datastore VM attachment enrichment, got %+v", datastore.VMNames)
 	}
 	if len(datastore.RecentTasks) != 1 || datastore.RecentTasks[0].Name != "Refresh datastore" {
 		t.Fatalf("expected datastore recent task info, got %+v", datastore.RecentTasks)
@@ -156,6 +180,23 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			FreeSpace: 40,
 			Capacity:  100,
 		}})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, map[string]any{
+			"identity": map[string]any{
+				"bios_uuid":     "vm-bios-201",
+				"instance_uuid": "vm-instance-201",
+			},
+		})
+	})
+	mux.HandleFunc("/api/vcenter/vm/vm-201/guest/identity", func(w http.ResponseWriter, r *http.Request) {
+		requireAutomationSession(t, r)
+		writeJSON(w, map[string]any{
+			"family":     "LINUX",
+			"host_name":  "app-01.internal",
+			"ip_address": "10.0.0.21",
+		})
 	})
 
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/ServiceInstance/ServiceInstance/content", func(w http.ResponseWriter, r *http.Request) {
@@ -287,6 +328,18 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 		requireVISession(t, r)
 		writeJSON(w, []map[string]any{{"type": "Task", "value": "task-11"}})
 	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/HostSystem/host-101/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "esxi-01.lab.local")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/HostSystem/host-101/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "ClusterComputeResource", "value": "domain-c101"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/HostSystem/host-101/datastore", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{{"type": "Datastore", "value": "datastore-11"}})
+	})
 
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/VirtualMachine/vm-201/overallStatus", func(w http.ResponseWriter, r *http.Request) {
 		requireVISession(t, r)
@@ -313,6 +366,24 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 			}},
 		})
 	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/VirtualMachine/vm-201/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Folder", "value": "group-v7"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/VirtualMachine/vm-201/runtime", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{
+			"host": map[string]any{"type": "HostSystem", "value": "host-101"},
+		})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/VirtualMachine/vm-201/resourcePool", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "ResourcePool", "value": "resgroup-22"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/VirtualMachine/vm-201/datastore", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{{"type": "Datastore", "value": "datastore-11"}})
+	})
 
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/overallStatus", func(w http.ResponseWriter, r *http.Request) {
 		requireVISession(t, r)
@@ -325,6 +396,79 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/recentTask", func(w http.ResponseWriter, r *http.Request) {
 		requireVISession(t, r)
 		writeJSON(w, []map[string]any{{"type": "Task", "value": "task-31"}})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "nvme-primary")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Folder", "value": "group-s4"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/summary", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{
+			"accessible":         true,
+			"multipleHostAccess": true,
+			"maintenanceMode":    "normal",
+			"url":                "ds:///vmfs/volumes/datastore-11/",
+		})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/host", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{{"type": "HostSystem", "value": "host-101"}})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datastore/datastore-11/vm", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{{"type": "VirtualMachine", "value": "vm-201"}})
+	})
+
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/ClusterComputeResource/domain-c101/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "Prod Compute")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/ClusterComputeResource/domain-c101/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Folder", "value": "group-h4"})
+	})
+
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-h4/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "Prod Hosts")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-h4/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Datacenter", "value": "datacenter-1"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-v7/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "Production VMs")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-v7/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Datacenter", "value": "datacenter-1"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-s4/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "Shared Datastores")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Folder/group-s4/parent", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "Datacenter", "value": "datacenter-1"})
+	})
+
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/Datacenter/datacenter-1/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "DC1")
+	})
+
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/ResourcePool/resgroup-22/name", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, "Tier 1")
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/ResourcePool/resgroup-22/owner", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{"type": "ClusterComputeResource", "value": "domain-c101"})
 	})
 
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/Alarm/alarm-11/info", func(w http.ResponseWriter, r *http.Request) {

@@ -114,7 +114,16 @@ describe('Resource Helper Functions', () => {
         vcenterHost: 'vc.lab.local',
         managedObjectId: 'vm-101',
         entityType: 'vm',
+        datacenterName: 'DC1',
+        clusterName: 'Production Cluster',
+        folderName: 'Workloads',
+        resourcePoolName: 'Tier 1',
+        runtimeHostName: 'esxi-01.lab.local',
         overallStatus: 'yellow',
+        datastoreNames: ['primary-vmfs'],
+        instanceUuid: 'vm-instance-101',
+        guestHostname: 'app-01.internal',
+        guestIpAddresses: ['10.0.0.21'],
         activeAlarmCount: 2,
         activeAlarmSummary: 'CPU ready alarm; snapshot age warning',
         recentTaskCount: 1,
@@ -123,6 +132,10 @@ describe('Resource Helper Functions', () => {
       };
 
       expect(vmware.overallStatus).toBe('yellow');
+      expect(vmware.clusterName).toBe('Production Cluster');
+      expect(vmware.runtimeHostName).toBe('esxi-01.lab.local');
+      expect(vmware.datastoreNames).toEqual(['primary-vmfs']);
+      expect(vmware.guestIpAddresses).toEqual(['10.0.0.21']);
       expect(vmware.activeAlarmCount).toBe(2);
       expect(vmware.recentTaskSummary).toBe('Clone VM task finished');
       expect(vmware.snapshotCount).toBe(3);

@@ -19,12 +19,22 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 		VCenterHost:    "vc.lab.local",
 		CollectedAt:    collectedAt,
 		Hosts: []InventoryHost{{
-			Host:            "host-101",
-			Name:            "esxi-01.lab.local",
-			ConnectionState: "CONNECTED",
-			PowerState:      "POWERED_ON",
-			HostUUID:        "uuid-host-1",
-			OverallStatus:   "yellow",
+			Host:                "host-101",
+			Name:                "esxi-01.lab.local",
+			ConnectionState:     "CONNECTED",
+			PowerState:          "POWERED_ON",
+			HostUUID:            "uuid-host-1",
+			DatacenterID:        "datacenter-1",
+			DatacenterName:      "DC1",
+			ComputeResourceID:   "domain-c101",
+			ComputeResourceName: "Prod Compute",
+			ClusterID:           "domain-c101",
+			ClusterName:         "Prod Compute",
+			FolderID:            "group-h4",
+			FolderName:          "Prod Hosts",
+			DatastoreIDs:        []string{"datastore-11"},
+			DatastoreNames:      []string{"nvme-primary"},
+			OverallStatus:       "yellow",
 			Metrics: &InventoryMetrics{
 				CPUPercent:              float64Ptr(21.4),
 				MemoryPercent:           float64Ptr(63.2),
@@ -49,12 +59,31 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 			}},
 		}},
 		VMs: []InventoryVM{{
-			VM:            "vm-201",
-			Name:          "app-01",
-			PowerState:    "POWERED_ON",
-			CPUCount:      4,
-			MemorySizeMiB: 8192,
-			OverallStatus: "green",
+			VM:                  "vm-201",
+			Name:                "app-01",
+			PowerState:          "POWERED_ON",
+			CPUCount:            4,
+			MemorySizeMiB:       8192,
+			DatacenterID:        "datacenter-1",
+			DatacenterName:      "DC1",
+			ComputeResourceID:   "domain-c101",
+			ComputeResourceName: "Prod Compute",
+			ClusterID:           "domain-c101",
+			ClusterName:         "Prod Compute",
+			FolderID:            "group-v7",
+			FolderName:          "Production VMs",
+			ResourcePoolID:      "resgroup-22",
+			ResourcePoolName:    "Tier 1",
+			RuntimeHostID:       "host-101",
+			RuntimeHostName:     "esxi-01.lab.local",
+			DatastoreIDs:        []string{"datastore-11"},
+			DatastoreNames:      []string{"nvme-primary"},
+			InstanceUUID:        "vm-instance-201",
+			BIOSUUID:            "vm-bios-201",
+			GuestOSFamily:       "LINUX",
+			GuestHostname:       "app-01.internal",
+			GuestIPAddresses:    []string{"10.0.0.21"},
+			OverallStatus:       "green",
 			Metrics: &InventoryMetrics{
 				CPUPercent:              float64Ptr(38.1),
 				MemoryPercent:           float64Ptr(57.5),
@@ -80,12 +109,24 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 			SnapshotCount: 2,
 		}},
 		Datastores: []InventoryDatastore{{
-			Datastore:     "datastore-11",
-			Name:          "nvme-primary",
-			Type:          "VMFS",
-			FreeSpace:     40,
-			Capacity:      100,
-			OverallStatus: "yellow",
+			Datastore:          "datastore-11",
+			Name:               "nvme-primary",
+			Type:               "VMFS",
+			FreeSpace:          40,
+			Capacity:           100,
+			DatacenterID:       "datacenter-1",
+			DatacenterName:     "DC1",
+			FolderID:           "group-s4",
+			FolderName:         "Shared Datastores",
+			HostIDs:            []string{"host-101"},
+			HostNames:          []string{"esxi-01.lab.local"},
+			VMIDs:              []string{"vm-201"},
+			VMNames:            []string{"app-01"},
+			Accessible:         boolPtr(true),
+			MultipleHostAccess: boolPtr(true),
+			MaintenanceMode:    "normal",
+			URL:                "ds:///vmfs/volumes/datastore-11/",
+			OverallStatus:      "yellow",
 			RecentTasks: []InventoryTask{{
 				Task:      "task-31",
 				Name:      "Refresh datastore",
@@ -119,6 +160,12 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	if got := hostRecord.Resource.VMware.RecentTaskSummary; got != "Reconnect host (running)" {
 		t.Fatalf("host recent task summary = %q, want %q", got, "Reconnect host (running)")
 	}
+	if got := hostRecord.Resource.VMware.ClusterName; got != "Prod Compute" {
+		t.Fatalf("host cluster name = %q, want Prod Compute", got)
+	}
+	if got := hostRecord.Resource.VMware.DatastoreNames; len(got) != 1 || got[0] != "nvme-primary" {
+		t.Fatalf("host datastore names = %#v, want [nvme-primary]", got)
+	}
 	if hostRecord.Resource.Metrics == nil || hostRecord.Resource.Metrics.CPU == nil || hostRecord.Resource.Metrics.Memory == nil {
 		t.Fatalf("expected VMware host metrics, got %+v", hostRecord.Resource.Metrics)
 	}
@@ -133,6 +180,9 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if hostRecord.Identity.DMIUUID != "uuid-host-1" {
 		t.Fatalf("host identity DMI UUID = %q, want uuid-host-1", hostRecord.Identity.DMIUUID)
+	}
+	if got := hostRecord.Identity.ClusterName; got != "Prod Compute" {
+		t.Fatalf("host cluster name = %q, want Prod Compute", got)
 	}
 	if hostRecord.Resource.LastSeen != collectedAt {
 		t.Fatalf("host last seen = %v, want %v", hostRecord.Resource.LastSeen, collectedAt)
@@ -156,6 +206,24 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.SnapshotCount; got != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", got)
+	}
+	if got := vmRecord.Resource.ParentName; got != "esxi-01.lab.local" {
+		t.Fatalf("vm parent name = %q, want esxi-01.lab.local", got)
+	}
+	if got := vmRecord.ParentSourceID; got != "vc-1:host:host-101" {
+		t.Fatalf("vm parent source id = %q, want vc-1:host:host-101", got)
+	}
+	if got := vmRecord.Resource.VMware.RuntimeHostName; got != "esxi-01.lab.local" {
+		t.Fatalf("vm runtime host name = %q, want esxi-01.lab.local", got)
+	}
+	if got := vmRecord.Resource.VMware.InstanceUUID; got != "vm-instance-201" {
+		t.Fatalf("vm instance uuid = %q, want vm-instance-201", got)
+	}
+	if got := vmRecord.Identity.MachineID; got != "vm-instance-201" {
+		t.Fatalf("vm machine id = %q, want vm-instance-201", got)
+	}
+	if got := vmRecord.Identity.IPAddresses; len(got) != 1 || got[0] != "10.0.0.21" {
+		t.Fatalf("vm identity IPs = %#v, want [10.0.0.21]", got)
 	}
 	if vmRecord.Resource.Metrics == nil || vmRecord.Resource.Metrics.CPU == nil || vmRecord.Resource.Metrics.Memory == nil {
 		t.Fatalf("expected VMware VM metrics, got %+v", vmRecord.Resource.Metrics)
@@ -195,4 +263,23 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	if got := datastoreRecord.Resource.VMware.RecentTaskSummary; got != "Refresh datastore (queued)" {
 		t.Fatalf("datastore recent task summary = %q, want %q", got, "Refresh datastore (queued)")
 	}
+	if !datastoreRecord.Resource.Storage.Shared {
+		t.Fatal("expected datastore storage meta to mark the datastore as shared")
+	}
+	if got := datastoreRecord.Resource.Storage.Nodes; len(got) != 1 || got[0] != "esxi-01.lab.local" {
+		t.Fatalf("datastore storage nodes = %#v, want [esxi-01.lab.local]", got)
+	}
+	if got := datastoreRecord.Resource.Storage.ConsumerCount; got != 1 {
+		t.Fatalf("datastore consumer count = %d, want 1", got)
+	}
+	if got := datastoreRecord.Resource.Storage.TopConsumers; len(got) != 1 || got[0].Name != "app-01" {
+		t.Fatalf("datastore top consumers = %#v, want app-01", got)
+	}
+	if datastoreRecord.Resource.VMware.DatastoreAccessible == nil || !*datastoreRecord.Resource.VMware.DatastoreAccessible {
+		t.Fatalf("datastore accessible = %#v, want true", datastoreRecord.Resource.VMware.DatastoreAccessible)
+	}
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }

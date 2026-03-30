@@ -1,6 +1,7 @@
 package unifiedresources
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -209,22 +210,32 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 		ManagedObjectID:    "vm-101",
 		EntityType:         "vm",
 		HostUUID:           "uuid-host-1",
+		DatacenterName:     "DC1",
+		ClusterName:        "Cluster A",
+		DatastoreNames:     []string{"primary-vmfs"},
 		ConnectionState:    "connected",
 		PowerState:         "poweredOn",
 		OverallStatus:      "green",
+		GuestHostname:      "app-01.internal",
 		ActiveAlarmCount:   1,
 		ActiveAlarmSummary: "old alarm",
 		RecentTaskCount:    1,
 		RecentTaskSummary:  "old task",
 		SnapshotCount:      1,
 	}
+	accessible := false
 	incoming := &VMwareData{
-		OverallStatus:      "yellow",
-		ActiveAlarmCount:   3,
-		ActiveAlarmSummary: "Host connection lost; datastore latency elevated",
-		RecentTaskCount:    2,
-		RecentTaskSummary:  "vMotion task completed",
-		SnapshotCount:      4,
+		ClusterName:         "Cluster A",
+		RuntimeHostName:     "esxi-01.lab.local",
+		DatastoreNames:      []string{"backup-nfs"},
+		DatastoreAccessible: &accessible,
+		GuestIPAddresses:    []string{"10.0.0.21"},
+		OverallStatus:       "yellow",
+		ActiveAlarmCount:    3,
+		ActiveAlarmSummary:  "Host connection lost; datastore latency elevated",
+		RecentTaskCount:     2,
+		RecentTaskSummary:   "vMotion task completed",
+		SnapshotCount:       4,
 	}
 
 	merged := mergeVMwareData(existing, incoming)
@@ -254,6 +265,21 @@ func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *tes
 	}
 	if got := merged.SnapshotCount; got != 4 {
 		t.Fatalf("snapshot count = %d, want 4", got)
+	}
+	if got := merged.RuntimeHostName; got != "esxi-01.lab.local" {
+		t.Fatalf("runtime host name = %q, want esxi-01.lab.local", got)
+	}
+	if got := merged.DatastoreNames; !reflect.DeepEqual(got, []string{"primary-vmfs", "backup-nfs"}) {
+		t.Fatalf("datastore names = %#v", got)
+	}
+	if merged.DatastoreAccessible == nil || *merged.DatastoreAccessible {
+		t.Fatalf("datastore accessible = %#v, want false", merged.DatastoreAccessible)
+	}
+	if got := merged.GuestHostname; got != "app-01.internal" {
+		t.Fatalf("guest hostname = %q, want app-01.internal", got)
+	}
+	if got := merged.GuestIPAddresses; !reflect.DeepEqual(got, []string{"10.0.0.21"}) {
+		t.Fatalf("guest ip addresses = %#v", got)
 	}
 }
 

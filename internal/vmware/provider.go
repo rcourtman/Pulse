@@ -46,43 +46,84 @@ type InventoryMetrics struct {
 // InventoryHost is the canonical phase-1 host summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryHost struct {
-	Host            string            `json:"host"`
-	Name            string            `json:"name"`
-	ConnectionState string            `json:"connection_state"`
-	PowerState      string            `json:"power_state,omitempty"`
-	HostUUID        string            `json:"host_uuid,omitempty"`
-	OverallStatus   string            `json:"overall_status,omitempty"`
-	TriggeredAlarms []InventoryAlarm  `json:"triggered_alarms,omitempty"`
-	RecentTasks     []InventoryTask   `json:"recent_tasks,omitempty"`
-	Metrics         *InventoryMetrics `json:"metrics,omitempty"`
+	Host                string            `json:"host"`
+	Name                string            `json:"name"`
+	ConnectionState     string            `json:"connection_state"`
+	PowerState          string            `json:"power_state,omitempty"`
+	HostUUID            string            `json:"host_uuid,omitempty"`
+	DatacenterID        string            `json:"datacenter_id,omitempty"`
+	DatacenterName      string            `json:"datacenter_name,omitempty"`
+	ComputeResourceID   string            `json:"compute_resource_id,omitempty"`
+	ComputeResourceName string            `json:"compute_resource_name,omitempty"`
+	ClusterID           string            `json:"cluster_id,omitempty"`
+	ClusterName         string            `json:"cluster_name,omitempty"`
+	FolderID            string            `json:"folder_id,omitempty"`
+	FolderName          string            `json:"folder_name,omitempty"`
+	DatastoreIDs        []string          `json:"datastore_ids,omitempty"`
+	DatastoreNames      []string          `json:"datastore_names,omitempty"`
+	OverallStatus       string            `json:"overall_status,omitempty"`
+	TriggeredAlarms     []InventoryAlarm  `json:"triggered_alarms,omitempty"`
+	RecentTasks         []InventoryTask   `json:"recent_tasks,omitempty"`
+	Metrics             *InventoryMetrics `json:"metrics,omitempty"`
 }
 
 // InventoryVM is the canonical phase-1 VM summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryVM struct {
-	VM              string            `json:"vm"`
-	Name            string            `json:"name"`
-	PowerState      string            `json:"power_state"`
-	CPUCount        int               `json:"cpu_count,omitempty"`
-	MemorySizeMiB   int64             `json:"memory_size_mib,omitempty"`
-	OverallStatus   string            `json:"overall_status,omitempty"`
-	TriggeredAlarms []InventoryAlarm  `json:"triggered_alarms,omitempty"`
-	RecentTasks     []InventoryTask   `json:"recent_tasks,omitempty"`
-	SnapshotCount   int               `json:"snapshot_count,omitempty"`
-	Metrics         *InventoryMetrics `json:"metrics,omitempty"`
+	VM                  string            `json:"vm"`
+	Name                string            `json:"name"`
+	PowerState          string            `json:"power_state"`
+	CPUCount            int               `json:"cpu_count,omitempty"`
+	MemorySizeMiB       int64             `json:"memory_size_mib,omitempty"`
+	DatacenterID        string            `json:"datacenter_id,omitempty"`
+	DatacenterName      string            `json:"datacenter_name,omitempty"`
+	ComputeResourceID   string            `json:"compute_resource_id,omitempty"`
+	ComputeResourceName string            `json:"compute_resource_name,omitempty"`
+	ClusterID           string            `json:"cluster_id,omitempty"`
+	ClusterName         string            `json:"cluster_name,omitempty"`
+	FolderID            string            `json:"folder_id,omitempty"`
+	FolderName          string            `json:"folder_name,omitempty"`
+	ResourcePoolID      string            `json:"resource_pool_id,omitempty"`
+	ResourcePoolName    string            `json:"resource_pool_name,omitempty"`
+	RuntimeHostID       string            `json:"runtime_host_id,omitempty"`
+	RuntimeHostName     string            `json:"runtime_host_name,omitempty"`
+	DatastoreIDs        []string          `json:"datastore_ids,omitempty"`
+	DatastoreNames      []string          `json:"datastore_names,omitempty"`
+	InstanceUUID        string            `json:"instance_uuid,omitempty"`
+	BIOSUUID            string            `json:"bios_uuid,omitempty"`
+	GuestOSFamily       string            `json:"guest_os_family,omitempty"`
+	GuestHostname       string            `json:"guest_hostname,omitempty"`
+	GuestIPAddresses    []string          `json:"guest_ip_addresses,omitempty"`
+	OverallStatus       string            `json:"overall_status,omitempty"`
+	TriggeredAlarms     []InventoryAlarm  `json:"triggered_alarms,omitempty"`
+	RecentTasks         []InventoryTask   `json:"recent_tasks,omitempty"`
+	SnapshotCount       int               `json:"snapshot_count,omitempty"`
+	Metrics             *InventoryMetrics `json:"metrics,omitempty"`
 }
 
 // InventoryDatastore is the canonical phase-1 datastore summary returned by
 // the vCenter Automation API list endpoint.
 type InventoryDatastore struct {
-	Datastore       string           `json:"datastore"`
-	Name            string           `json:"name"`
-	Type            string           `json:"type"`
-	FreeSpace       int64            `json:"free_space,omitempty"`
-	Capacity        int64            `json:"capacity,omitempty"`
-	OverallStatus   string           `json:"overall_status,omitempty"`
-	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
-	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
+	Datastore          string           `json:"datastore"`
+	Name               string           `json:"name"`
+	Type               string           `json:"type"`
+	FreeSpace          int64            `json:"free_space,omitempty"`
+	Capacity           int64            `json:"capacity,omitempty"`
+	DatacenterID       string           `json:"datacenter_id,omitempty"`
+	DatacenterName     string           `json:"datacenter_name,omitempty"`
+	FolderID           string           `json:"folder_id,omitempty"`
+	FolderName         string           `json:"folder_name,omitempty"`
+	HostIDs            []string         `json:"host_ids,omitempty"`
+	HostNames          []string         `json:"host_names,omitempty"`
+	VMIDs              []string         `json:"vm_ids,omitempty"`
+	VMNames            []string         `json:"vm_names,omitempty"`
+	Accessible         *bool            `json:"accessible,omitempty"`
+	MultipleHostAccess *bool            `json:"multiple_host_access,omitempty"`
+	MaintenanceMode    string           `json:"maintenance_mode,omitempty"`
+	URL                string           `json:"url,omitempty"`
+	OverallStatus      string           `json:"overall_status,omitempty"`
+	TriggeredAlarms    []InventoryAlarm `json:"triggered_alarms,omitempty"`
+	RecentTasks        []InventoryTask  `json:"recent_tasks,omitempty"`
 }
 
 // InventorySnapshot captures the projected inventory floor for one vCenter
@@ -260,6 +301,14 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 	connectionName := firstNonEmptyTrimmed(snapshot.ConnectionName, snapshot.VCenterHost, snapshot.ConnectionID)
 	vcenterHost := strings.TrimSpace(snapshot.VCenterHost)
 	records := make([]unifiedresources.IngestRecord, 0, len(snapshot.Hosts)+len(snapshot.VMs)+len(snapshot.Datastores))
+	hostSourceIDsByManagedObject := make(map[string]string, len(snapshot.Hosts))
+	for _, host := range snapshot.Hosts {
+		hostID := strings.TrimSpace(host.Host)
+		if hostID == "" {
+			continue
+		}
+		hostSourceIDsByManagedObject[hostID] = vmwareSourceID(snapshot.ConnectionID, "host", hostID)
+	}
 
 	for _, host := range snapshot.Hosts {
 		name := firstNonEmptyTrimmed(host.Name, host.Host)
@@ -277,19 +326,29 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			Incidents:  incidents,
 			Metrics:    inventoryMetricsResourceMetrics(host.Metrics),
 			VMware: &unifiedresources.VMwareData{
-				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
-				ConnectionName:     connectionName,
-				VCenterHost:        vcenterHost,
-				ManagedObjectID:    strings.TrimSpace(host.Host),
-				EntityType:         "host",
-				HostUUID:           strings.TrimSpace(host.HostUUID),
-				ConnectionState:    strings.TrimSpace(host.ConnectionState),
-				PowerState:         strings.TrimSpace(host.PowerState),
-				OverallStatus:      strings.TrimSpace(host.OverallStatus),
-				ActiveAlarmCount:   len(host.TriggeredAlarms),
-				ActiveAlarmSummary: vmwareAlarmSummary(host.TriggeredAlarms),
-				RecentTaskCount:    len(host.RecentTasks),
-				RecentTaskSummary:  vmwareRecentTaskSummary(host.RecentTasks),
+				ConnectionID:        strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:      connectionName,
+				VCenterHost:         vcenterHost,
+				ManagedObjectID:     strings.TrimSpace(host.Host),
+				EntityType:          "host",
+				HostUUID:            strings.TrimSpace(host.HostUUID),
+				DatacenterID:        strings.TrimSpace(host.DatacenterID),
+				DatacenterName:      strings.TrimSpace(host.DatacenterName),
+				ComputeResourceID:   strings.TrimSpace(host.ComputeResourceID),
+				ComputeResourceName: strings.TrimSpace(host.ComputeResourceName),
+				ClusterID:           strings.TrimSpace(host.ClusterID),
+				ClusterName:         strings.TrimSpace(host.ClusterName),
+				FolderID:            strings.TrimSpace(host.FolderID),
+				FolderName:          strings.TrimSpace(host.FolderName),
+				ConnectionState:     strings.TrimSpace(host.ConnectionState),
+				PowerState:          strings.TrimSpace(host.PowerState),
+				OverallStatus:       strings.TrimSpace(host.OverallStatus),
+				DatastoreIDs:        cloneStringSlice(host.DatastoreIDs),
+				DatastoreNames:      cloneStringSlice(host.DatastoreNames),
+				ActiveAlarmCount:    len(host.TriggeredAlarms),
+				ActiveAlarmSummary:  vmwareAlarmSummary(host.TriggeredAlarms),
+				RecentTaskCount:     len(host.RecentTasks),
+				RecentTaskSummary:   vmwareRecentTaskSummary(host.RecentTasks),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -302,8 +361,9 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			),
 		}
 		identity := unifiedresources.ResourceIdentity{
-			DMIUUID:   strings.TrimSpace(host.HostUUID),
-			Hostnames: filterNonEmptyStrings(name),
+			DMIUUID:     strings.TrimSpace(host.HostUUID),
+			Hostnames:   filterNonEmptyStrings(name),
+			ClusterName: vmwareClusterHint(host.ClusterName, host.ComputeResourceName),
 		}
 		records = append(records, unifiedresources.IngestRecord{
 			SourceID: vmwareSourceID(snapshot.ConnectionID, "host", host.Host),
@@ -327,21 +387,41 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			UpdatedAt:  collectedAt,
 			Incidents:  incidents,
 			Metrics:    inventoryMetricsResourceMetrics(vm.Metrics),
+			ParentName: strings.TrimSpace(vm.RuntimeHostName),
 			VMware: &unifiedresources.VMwareData{
-				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
-				ConnectionName:     connectionName,
-				VCenterHost:        vcenterHost,
-				ManagedObjectID:    strings.TrimSpace(vm.VM),
-				EntityType:         "vm",
-				PowerState:         strings.TrimSpace(vm.PowerState),
-				CPUCount:           vm.CPUCount,
-				MemorySizeMiB:      vm.MemorySizeMiB,
-				OverallStatus:      strings.TrimSpace(vm.OverallStatus),
-				ActiveAlarmCount:   len(vm.TriggeredAlarms),
-				ActiveAlarmSummary: vmwareAlarmSummary(vm.TriggeredAlarms),
-				RecentTaskCount:    len(vm.RecentTasks),
-				RecentTaskSummary:  vmwareRecentTaskSummary(vm.RecentTasks),
-				SnapshotCount:      vm.SnapshotCount,
+				ConnectionID:        strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:      connectionName,
+				VCenterHost:         vcenterHost,
+				ManagedObjectID:     strings.TrimSpace(vm.VM),
+				EntityType:          "vm",
+				DatacenterID:        strings.TrimSpace(vm.DatacenterID),
+				DatacenterName:      strings.TrimSpace(vm.DatacenterName),
+				ComputeResourceID:   strings.TrimSpace(vm.ComputeResourceID),
+				ComputeResourceName: strings.TrimSpace(vm.ComputeResourceName),
+				ClusterID:           strings.TrimSpace(vm.ClusterID),
+				ClusterName:         strings.TrimSpace(vm.ClusterName),
+				FolderID:            strings.TrimSpace(vm.FolderID),
+				FolderName:          strings.TrimSpace(vm.FolderName),
+				ResourcePoolID:      strings.TrimSpace(vm.ResourcePoolID),
+				ResourcePoolName:    strings.TrimSpace(vm.ResourcePoolName),
+				RuntimeHostID:       strings.TrimSpace(vm.RuntimeHostID),
+				RuntimeHostName:     strings.TrimSpace(vm.RuntimeHostName),
+				PowerState:          strings.TrimSpace(vm.PowerState),
+				CPUCount:            vm.CPUCount,
+				MemorySizeMiB:       vm.MemorySizeMiB,
+				DatastoreIDs:        cloneStringSlice(vm.DatastoreIDs),
+				DatastoreNames:      cloneStringSlice(vm.DatastoreNames),
+				InstanceUUID:        strings.TrimSpace(vm.InstanceUUID),
+				BIOSUUID:            strings.TrimSpace(vm.BIOSUUID),
+				GuestOSFamily:       strings.TrimSpace(vm.GuestOSFamily),
+				GuestHostname:       strings.TrimSpace(vm.GuestHostname),
+				GuestIPAddresses:    cloneStringSlice(vm.GuestIPAddresses),
+				OverallStatus:       strings.TrimSpace(vm.OverallStatus),
+				ActiveAlarmCount:    len(vm.TriggeredAlarms),
+				ActiveAlarmSummary:  vmwareAlarmSummary(vm.TriggeredAlarms),
+				RecentTaskCount:     len(vm.RecentTasks),
+				RecentTaskSummary:   vmwareRecentTaskSummary(vm.RecentTasks),
+				SnapshotCount:       vm.SnapshotCount,
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -352,9 +432,17 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				tagWithValue("power", strings.ToLower(strings.TrimSpace(vm.PowerState))),
 			),
 		}
+		identity := unifiedresources.ResourceIdentity{
+			MachineID:   firstNonEmptyTrimmed(vm.InstanceUUID, vm.BIOSUUID),
+			Hostnames:   uniqueSortedTrimmedStrings([]string{name, vm.GuestHostname}),
+			IPAddresses: uniqueSortedTrimmedStrings(vm.GuestIPAddresses),
+			ClusterName: vmwareClusterHint(vm.ClusterName, vm.ComputeResourceName),
+		}
 		records = append(records, unifiedresources.IngestRecord{
-			SourceID: vmwareSourceID(snapshot.ConnectionID, "vm", vm.VM),
-			Resource: resource,
+			SourceID:       vmwareSourceID(snapshot.ConnectionID, "vm", vm.VM),
+			ParentSourceID: hostSourceIDsByManagedObject[strings.TrimSpace(vm.RuntimeHostID)],
+			Resource:       resource,
+			Identity:       identity,
 		})
 	}
 
@@ -380,23 +468,37 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Disk: diskMetric(datastore.Capacity, used),
 			},
 			Storage: &unifiedresources.StorageMeta{
-				Type:     normalizeDatastoreType(datastore.Type),
-				Platform: "vmware-vsphere",
-				Topology: "datastore",
-				Enabled:  true,
+				Type:          normalizeDatastoreType(datastore.Type),
+				Platform:      "vmware-vsphere",
+				Topology:      "datastore",
+				Enabled:       vmwareDatastoreEnabled(datastore),
+				Active:        vmwareDatastoreActive(datastore),
+				Shared:        vmwareDatastoreShared(datastore),
+				Nodes:         cloneStringSlice(datastore.HostNames),
+				ConsumerCount: len(datastore.VMNames),
+				ConsumerTypes: vmwareDatastoreConsumerTypes(datastore),
+				TopConsumers:  vmwareDatastoreTopConsumers(datastore),
 			},
 			VMware: &unifiedresources.VMwareData{
-				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
-				ConnectionName:     connectionName,
-				VCenterHost:        vcenterHost,
-				ManagedObjectID:    strings.TrimSpace(datastore.Datastore),
-				EntityType:         "datastore",
-				DatastoreType:      strings.TrimSpace(datastore.Type),
-				OverallStatus:      strings.TrimSpace(datastore.OverallStatus),
-				ActiveAlarmCount:   len(datastore.TriggeredAlarms),
-				ActiveAlarmSummary: vmwareAlarmSummary(datastore.TriggeredAlarms),
-				RecentTaskCount:    len(datastore.RecentTasks),
-				RecentTaskSummary:  vmwareRecentTaskSummary(datastore.RecentTasks),
+				ConnectionID:        strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:      connectionName,
+				VCenterHost:         vcenterHost,
+				ManagedObjectID:     strings.TrimSpace(datastore.Datastore),
+				EntityType:          "datastore",
+				DatacenterID:        strings.TrimSpace(datastore.DatacenterID),
+				DatacenterName:      strings.TrimSpace(datastore.DatacenterName),
+				FolderID:            strings.TrimSpace(datastore.FolderID),
+				FolderName:          strings.TrimSpace(datastore.FolderName),
+				DatastoreType:       strings.TrimSpace(datastore.Type),
+				DatastoreURL:        strings.TrimSpace(datastore.URL),
+				DatastoreAccessible: cloneBoolPointer(datastore.Accessible),
+				MultipleHostAccess:  cloneBoolPointer(datastore.MultipleHostAccess),
+				MaintenanceMode:     strings.TrimSpace(datastore.MaintenanceMode),
+				OverallStatus:       strings.TrimSpace(datastore.OverallStatus),
+				ActiveAlarmCount:    len(datastore.TriggeredAlarms),
+				ActiveAlarmSummary:  vmwareAlarmSummary(datastore.TriggeredAlarms),
+				RecentTaskCount:     len(datastore.RecentTasks),
+				RecentTaskSummary:   vmwareRecentTaskSummary(datastore.RecentTasks),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -449,6 +551,8 @@ func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
 	out := make([]InventoryHost, len(in))
 	for i := range in {
 		out[i] = in[i]
+		out[i].DatastoreIDs = cloneStringSlice(in[i].DatastoreIDs)
+		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
@@ -463,6 +567,9 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 	out := make([]InventoryVM, len(in))
 	for i := range in {
 		out[i] = in[i]
+		out[i].DatastoreIDs = cloneStringSlice(in[i].DatastoreIDs)
+		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
+		out[i].GuestIPAddresses = cloneStringSlice(in[i].GuestIPAddresses)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
@@ -477,6 +584,12 @@ func cloneInventoryDatastores(in []InventoryDatastore) []InventoryDatastore {
 	out := make([]InventoryDatastore, len(in))
 	for i := range in {
 		out[i] = in[i]
+		out[i].HostIDs = cloneStringSlice(in[i].HostIDs)
+		out[i].HostNames = cloneStringSlice(in[i].HostNames)
+		out[i].VMIDs = cloneStringSlice(in[i].VMIDs)
+		out[i].VMNames = cloneStringSlice(in[i].VMNames)
+		out[i].Accessible = cloneBoolPointer(in[i].Accessible)
+		out[i].MultipleHostAccess = cloneBoolPointer(in[i].MultipleHostAccess)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
 	}
@@ -554,6 +667,12 @@ func vmStatus(vm InventoryVM) unifiedresources.ResourceStatus {
 func datastoreStatus(datastore InventoryDatastore) unifiedresources.ResourceStatus {
 	if strings.TrimSpace(datastore.Datastore) == "" && strings.TrimSpace(datastore.Name) == "" {
 		return unifiedresources.StatusUnknown
+	}
+	if datastore.Accessible != nil && !*datastore.Accessible {
+		return unifiedresources.StatusOffline
+	}
+	if mode := strings.ToLower(strings.TrimSpace(datastore.MaintenanceMode)); mode != "" && mode != "normal" {
+		return unifiedresources.StatusWarning
 	}
 	return unifiedresources.StatusOnline
 }
@@ -716,6 +835,63 @@ func normalizeDatastoreType(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
 
+func vmwareClusterHint(clusterName, computeResourceName string) string {
+	return firstNonEmptyTrimmed(clusterName, computeResourceName)
+}
+
+func vmwareDatastoreEnabled(datastore InventoryDatastore) bool {
+	if datastore.Accessible == nil {
+		return true
+	}
+	return *datastore.Accessible
+}
+
+func vmwareDatastoreActive(datastore InventoryDatastore) bool {
+	if datastore.Accessible != nil && !*datastore.Accessible {
+		return false
+	}
+	mode := strings.ToLower(strings.TrimSpace(datastore.MaintenanceMode))
+	return mode == "" || mode == "normal"
+}
+
+func vmwareDatastoreShared(datastore InventoryDatastore) bool {
+	if datastore.MultipleHostAccess != nil {
+		return *datastore.MultipleHostAccess
+	}
+	return len(datastore.HostNames) > 1
+}
+
+func vmwareDatastoreConsumerTypes(datastore InventoryDatastore) []string {
+	if len(datastore.VMNames) == 0 {
+		return nil
+	}
+	return []string{string(unifiedresources.ResourceTypeVM)}
+}
+
+func vmwareDatastoreTopConsumers(datastore InventoryDatastore) []unifiedresources.StorageConsumerMeta {
+	if len(datastore.VMNames) == 0 {
+		return nil
+	}
+	consumers := make([]unifiedresources.StorageConsumerMeta, 0, len(datastore.VMNames))
+	for _, name := range datastore.VMNames {
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		consumer := unifiedresources.StorageConsumerMeta{
+			ResourceType: unifiedresources.ResourceTypeVM,
+			Name:         strings.TrimSpace(name),
+		}
+		consumers = append(consumers, consumer)
+		if len(consumers) == 5 {
+			break
+		}
+	}
+	if len(consumers) == 0 {
+		return nil
+	}
+	return consumers
+}
+
 func diskMetric(total, used int64) *unifiedresources.MetricValue {
 	if total <= 0 {
 		return nil
@@ -815,6 +991,23 @@ func cloneInt64Pointer(in *int64) *int64 {
 	}
 	value := *in
 	return &value
+}
+
+func cloneBoolPointer(in *bool) *bool {
+	if in == nil {
+		return nil
+	}
+	value := *in
+	return &value
+}
+
+func cloneStringSlice(in []string) []string {
+	if in == nil {
+		return nil
+	}
+	out := make([]string, len(in))
+	copy(out, in)
+	return out
 }
 
 func firstNonEmptyTrimmed(values ...string) string {

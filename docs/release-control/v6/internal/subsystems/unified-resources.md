@@ -223,6 +223,17 @@ Snapshot trees and VMware alarm/event/task context are also governed by that
 same rule: they may enrich canonical `vm`, `agent`, or `storage` resources and
 their timelines, but they do not become shared recovery artifacts, new
 resource kinds, or a parallel VMware incident model.
+That same topology contract now also has a concrete projection seam.
+`internal/vmware/provider.go` must preserve VMware placement and identity
+detail on the shared `vmware` facet only: hosts may carry datacenter,
+compute-resource, cluster, folder, and attached-datastore metadata; VMs may
+carry runtime-host, folder, resource-pool, datastore, and guest-identity
+metadata plus canonical parentage to the owning ESXi `agent`; datastores may
+carry datacenter/folder placement plus shared storage-node and workload
+consumer metadata through `storage.nodes`, `storage.consumerCount`, and
+`storage.topConsumers`. Those enrichments must remain subordinate to shared
+`agent`, `vm`, and `storage` resources rather than becoming a VMware-only
+topology graph or a separate provider detail drawer contract.
 TrueNAS disk telemetry now follows the same rule. API-backed TrueNAS disks must
 populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read

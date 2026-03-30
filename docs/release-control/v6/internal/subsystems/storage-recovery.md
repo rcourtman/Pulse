@@ -93,6 +93,7 @@ querying, and the operator-facing storage health presentation layer.
 27. Keep alert-side recovery drill-ins on that same shared route-helper contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder instead of freezing alert-local recovery URLs or introducing another provider-shaped recovery handoff vocabulary.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
 29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
+30. Keep VMware placement and guest-detail enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, folder, runtime-host, datastore-attachment, guest-hostname, or guest-IP metadata onto canonical VMware `agent` / `vm` / `storage` resources, storage and recovery may use that detail for labeling and navigation only; they must not promote those topology or guest fields into recovery ownership, restore targeting, protection grouping, or a VMware-local recovery taxonomy without a separately governed slice.
 
 ## Forbidden Paths
 
@@ -1654,3 +1655,14 @@ facing storage visibility still ends at inventory, capacity, and navigation.
 Storage and recovery must not infer VMware restore support, recovery rollups,
 or VMware-local protection semantics from the presence of those datastores or
 VM snapshot-read context on the shared pages.
+That same shared adapter floor also now carries richer VMware placement and
+guest-detail metadata through the canonical `agent` / `vm` / `storage`
+resources that storage and recovery can inspect on shared pages.
+`internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and
+`frontend-modern/src/hooks/useUnifiedResources.ts` may expose datacenter,
+cluster, folder, runtime-host, datastore-attachment, guest-hostname, and
+guest-IP detail as inventory context, but those fields stay descriptive only.
+Storage and recovery must not treat topology labels, datastore attachments, or
+guest identity as recovery ownership, restore targeting, protection grouping,
+or a new VMware-local storage/recovery taxonomy until a separately governed
+slice explicitly promotes them into recovery contracts.
