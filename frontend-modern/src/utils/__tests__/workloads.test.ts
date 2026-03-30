@@ -7,6 +7,7 @@ import {
   resolveWorkloadTypeFromString,
   getWorkloadMetricsKind,
   getCanonicalWorkloadId,
+  isDockerManagedAppContainer,
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -202,6 +203,30 @@ describe('getCanonicalWorkloadId', () => {
   it('returns id when node is missing', () => {
     const guest = { id: 'test', type: 'vm', instance: 'homelab', node: '', vmid: 100 };
     expect(getCanonicalWorkloadId(guest)).toBe('test');
+  });
+});
+
+describe('isDockerManagedAppContainer', () => {
+  it('returns true for docker-platform app containers', () => {
+    expect(
+      isDockerManagedAppContainer({
+        workloadType: 'app-container',
+        type: 'app-container',
+        platformType: 'docker',
+        containerRuntime: 'docker',
+      }),
+    ).toBe(true);
+  });
+
+  it('returns false for TrueNAS app containers even when runtime metadata is docker', () => {
+    expect(
+      isDockerManagedAppContainer({
+        workloadType: 'app-container',
+        type: 'app-container',
+        platformType: 'truenas',
+        containerRuntime: 'docker',
+      }),
+    ).toBe(false);
   });
 });
 

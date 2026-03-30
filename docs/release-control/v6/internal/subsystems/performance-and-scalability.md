@@ -244,6 +244,14 @@ workload hot path must also tolerate transient async route/data gaps by
 treating missing filtered-workload collections as empty until the route and
 resource snapshots converge, rather than crashing the dashboard between sync
 phases.
+That same workload hot path also owns the split between canonical
+app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWorkloads.ts`,
+`frontend-modern/src/components/Dashboard/workloadTopology.ts`, and
+`frontend-modern/src/components/Dashboard/useGuestRowState.ts` must preserve a
+generic app-container host path for discovery and navigation while keeping
+Docker runtime action identifiers explicit. TrueNAS app-containers may reuse
+runtime metadata such as image and runtime strings, but they must not inherit
+Docker-only update affordances or fallback host IDs on the dashboard row path.
 The shared infrastructure table hot path now also treats operator-facing
 resource identity as a protected boundary: sorting, searching, summary-series
 matching, and row titles on the infrastructure page must use the canonical

@@ -5,6 +5,7 @@ import {
   buildGuestParentNodeMap,
   buildNodeByInstance,
   getDiscoveryHostIdForWorkload,
+  getWorkloadContainerHostId,
   getDiscoveryResourceIdForWorkload,
   getKubernetesContextKey,
   getWorkloadDockerHostId,
@@ -131,10 +132,11 @@ describe('workloadTopology', () => {
   });
 
   describe('workload discovery/action IDs', () => {
-    it('prefers docker hostSourceId and falls back to node or instance', () => {
+    it('keeps Docker action hosts explicit and uses broader host fallback for discovery', () => {
       const dockerWithHostId = makeGuest(1, {
         type: 'app-container',
         workloadType: 'app-container',
+        platformType: 'docker',
         dockerHostId: 'docker-host-1',
         node: 'node-a',
         instance: 'inst-a',
@@ -142,12 +144,24 @@ describe('workloadTopology', () => {
       const dockerFallback = makeGuest(2, {
         type: 'app-container',
         workloadType: 'app-container',
+        platformType: 'docker',
         dockerHostId: '',
         node: 'node-b',
         instance: 'inst-b',
       });
+      const truenasApp = makeGuest(3, {
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'truenas',
+        dockerHostId: '',
+        node: 'truenas-main',
+        instance: 'truenas-main',
+      });
       expect(getWorkloadDockerHostId(dockerWithHostId)).toBe('docker-host-1');
-      expect(getWorkloadDockerHostId(dockerFallback)).toBe('node-b');
+      expect(getWorkloadDockerHostId(dockerFallback)).toBe('');
+      expect(getWorkloadDockerHostId(truenasApp)).toBe('');
+      expect(getWorkloadContainerHostId(dockerFallback)).toBe('node-b');
+      expect(getWorkloadContainerHostId(truenasApp)).toBe('truenas-main');
     });
 
     it('maps discovery host and resource IDs for app-container, pod, and vm', () => {
@@ -155,9 +169,19 @@ describe('workloadTopology', () => {
         id: 'container-abc123',
         type: 'app-container',
         workloadType: 'app-container',
+        platformType: 'docker',
         dockerHostId: 'docker-host-1',
       });
-      const k8s = makeGuest(2, {
+      const truenas = makeGuest(2, {
+        id: 'ix-nextcloud',
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'truenas',
+        dockerHostId: '',
+        node: 'truenas-main',
+        instance: 'truenas-main',
+      });
+      const k8s = makeGuest(3, {
         id: 'k8s:cluster-a:pod:pod-uid-1',
         type: 'pod',
         workloadType: 'pod',
@@ -175,6 +199,8 @@ describe('workloadTopology', () => {
 
       expect(getDiscoveryHostIdForWorkload(docker)).toBe('docker-host-1');
       expect(getDiscoveryResourceIdForWorkload(docker)).toBe('container-abc123');
+      expect(getDiscoveryHostIdForWorkload(truenas)).toBe('truenas-main');
+      expect(getDiscoveryResourceIdForWorkload(truenas)).toBe('ix-nextcloud');
 
       expect(getDiscoveryHostIdForWorkload(k8s)).toBe('k8s-agent-1');
       expect(getDiscoveryResourceIdForWorkload(k8s)).toBe('pod-uid-1');

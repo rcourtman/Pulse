@@ -78,6 +78,12 @@ test.describe('TrueNAS workloads platform filter', () => {
                 imageName: 'nextcloud:29',
                 runtime: 'docker',
                 hostSourceId: 'truenas-main',
+                updateStatus: {
+                  updateAvailable: true,
+                  currentDigest: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
+                  latestDigest: 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
+                  lastChecked: 1743362400000,
+                },
               },
             },
             {
@@ -129,6 +135,7 @@ test.describe('TrueNAS workloads platform filter', () => {
     const workloadTable = page.locator('table').first();
     await expect(workloadTable).toContainText('nextcloud');
     await expect(workloadTable).not.toContainText('grafana');
+    await expect(page.locator('tr[data-guest-id="ix-nextcloud"] [data-prevent-toggle]')).toHaveCount(0);
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

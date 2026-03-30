@@ -73,6 +73,22 @@ export const getWorkloadMetricsKind = (
   }
 };
 
+export const isDockerManagedAppContainer = (
+  guest: Pick<WorkloadGuest, 'workloadType' | 'type' | 'platformType' | 'containerRuntime'>,
+): boolean => {
+  if (resolveWorkloadType(guest) !== 'app-container') return false;
+
+  const platform = (guest.platformType || '').trim().toLowerCase();
+  if (platform === 'truenas') return false;
+  if (platform === 'docker') return true;
+
+  const rawType = (guest.type || '').trim().toLowerCase();
+  if (rawType === 'docker') return true;
+
+  const runtime = (guest.containerRuntime || '').trim().toLowerCase();
+  return runtime === 'docker' || runtime === 'podman';
+};
+
 export const getCanonicalWorkloadId = (
   guest: Pick<WorkloadGuest, 'id' | 'workloadType' | 'type' | 'instance' | 'node' | 'vmid'>,
 ): string => {

@@ -19,13 +19,19 @@ export const getKubernetesContextKey = (guest: WorkloadGuest): string => {
 export const getWorkloadDockerHostId = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type !== 'app-container') return '';
+  return (guest.dockerHostId || '').trim();
+};
+
+export const getWorkloadContainerHostId = (guest: WorkloadGuest): string => {
+  const type = resolveWorkloadType(guest);
+  if (type !== 'app-container') return '';
   return (guest.dockerHostId || guest.node || guest.instance || '').trim();
 };
 
 export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
   if (type === 'app-container') {
-    return getWorkloadDockerHostId(guest);
+    return getWorkloadContainerHostId(guest);
   }
   if (type === 'pod') {
     return (guest.kubernetesAgentId || guest.instance || guest.node || '').trim();

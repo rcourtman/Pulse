@@ -170,6 +170,7 @@ describe('useWorkloads', () => {
     expect(byName.get('vm-pbs')?.platformType).toBe('proxmox-pbs');
     expect(byName.get('vm-pmg')?.platformType).toBe('proxmox-pmg');
     expect(byName.get('nextcloud')?.platformType).toBe('truenas');
+    expect(byName.get('nextcloud')?.dockerHostId).toBeUndefined();
 
     dispose();
   });

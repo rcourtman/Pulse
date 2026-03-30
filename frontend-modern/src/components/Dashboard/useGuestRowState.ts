@@ -8,6 +8,7 @@ import { getShortImageName, formatBytes } from '@/utils/format';
 import {
   getCanonicalWorkloadId,
   getWorkloadMetricsKind,
+  isDockerManagedAppContainer,
   resolveWorkloadType,
 } from '@/utils/workloads';
 import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
@@ -117,6 +118,13 @@ export function useGuestRowState(props: GuestRowProps) {
     }
 
     if (workloadType() === 'app-container') {
+      if (!isDockerManagedAppContainer(props.guest)) {
+        const platform = (props.guest.platformType || '').trim().toLowerCase();
+        return getWorkloadTypeBadge('app-container', {
+          title: platform === 'truenas' ? 'TrueNAS App Container' : 'Application Container',
+        });
+      }
+
       const runtime = (props.guest.containerRuntime || '').trim();
       const normalized = runtime.toLowerCase();
       const label =
@@ -248,7 +256,9 @@ export function useGuestRowState(props: GuestRowProps) {
     props.isGroupedView ? GROUPED_FIRST_CELL_INDENT : DEFAULT_FIRST_CELL_INDENT,
   );
 
-  const dockerHostId = createMemo(() => getWorkloadDockerHostId(props.guest));
+  const dockerHostId = createMemo(() =>
+    isDockerManagedAppContainer(props.guest) ? getWorkloadDockerHostId(props.guest) : '',
+  );
 
   return {
     cpuAnomaly,

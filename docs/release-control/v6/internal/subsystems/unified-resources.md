@@ -1121,6 +1121,16 @@ routing. `internal/unifiedresources/resolve.go`,
 containers while preserving adapter-specific routing. Reusing shared
 `DockerData` for workload metadata must not misclassify a TrueNAS app as a
 Docker-routed control target.
+That same contract applies to the frontend workload state boundary:
+`frontend-modern/src/hooks/useWorkloads.ts`,
+`frontend-modern/src/utils/workloads.ts`,
+`frontend-modern/src/components/Dashboard/workloadTopology.ts`, and
+`frontend-modern/src/components/Dashboard/useGuestRowState.ts` may reuse
+shared `DockerData` for runtime metadata, but they must keep Docker-only
+action identifiers and update affordances scoped to Docker-managed
+app-containers. TrueNAS-backed `app-container` workloads must still navigate
+and discover through the canonical app-container host path without
+populating Docker-only action IDs.
 That same resolved-context ownership also governs read diagnostics. When
 `internal/ai/tools/tools_read.go` executes `pulse_read action="logs"` against
 a canonical `app-container` resource, TrueNAS-backed app containers must

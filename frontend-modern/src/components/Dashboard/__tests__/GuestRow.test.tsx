@@ -510,6 +510,7 @@ describe('GuestRow', () => {
         guest: makeGuest({
           type: 'app-container',
           workloadType: 'app-container',
+          platformType: 'docker',
           dockerHostId: 'host-1',
         }),
         visibleColumnIds: ['name', 'update'],
@@ -980,10 +981,25 @@ describe('app-container update button visibility', () => {
       guest: makeGuest({
         type: 'app-container',
         workloadType: 'app-container',
+        platformType: 'docker',
         dockerHostId: 'host-1',
       }),
       visibleColumnIds: ['name', 'update'],
     });
     expect(screen.getByTestId('update-button')).toBeTruthy();
+  });
+
+  it('does not show Docker update button for TrueNAS app containers', () => {
+    renderGuestRow({
+      guest: makeGuest({
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'truenas',
+        containerRuntime: 'docker',
+        dockerHostId: 'truenas-main',
+      }),
+      visibleColumnIds: ['name', 'update'],
+    });
+    expect(screen.queryByTestId('update-button')).toBeNull();
   });
 });

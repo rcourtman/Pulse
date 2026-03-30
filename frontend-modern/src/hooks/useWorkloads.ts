@@ -11,7 +11,7 @@ import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
 import { normalizeDiskArray } from '@/utils/format';
-import { resolveWorkloadTypeFromString } from '@/utils/workloads';
+import { isDockerManagedAppContainer, resolveWorkloadTypeFromString } from '@/utils/workloads';
 import {
   getPreferredResourceClusterName,
   getPreferredResourceKubernetesContext,
@@ -281,6 +281,13 @@ const buildWorkloadsUrl = (page: number) =>
 const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
+  const platformType = resolvePlatformTypeFromSources(resource.sources);
+  const dockerManagedAppContainer = isDockerManagedAppContainer({
+    workloadType,
+    type: resource.type,
+    platformType,
+    containerRuntime: resource.docker?.runtime,
+  });
 
   const name = (resource.name || resource.id || '').toString().trim();
   const node = resource.node ?? resource.proxmox?.nodeName ?? resource.kubernetes?.nodeName ?? '';
@@ -422,9 +429,9 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
         ? (resource.docker?.runtime || '').trim() || undefined
         : undefined,
     updateStatus: resource.docker?.updateStatus as WorkloadGuest['updateStatus'] | undefined,
-    dockerHostId: resource.docker?.hostSourceId,
+    dockerHostId: dockerManagedAppContainer ? resource.docker?.hostSourceId : undefined,
     kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
-    platformType: resolvePlatformTypeFromSources(resource.sources),
+    platformType,
   };
 };
 
