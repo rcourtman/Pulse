@@ -218,6 +218,12 @@ work extends shared components instead of creating new local variants.
     destination chips to render, but canonical href, label, dedupe, and
     infrastructure-fallback truth must stay in
     `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
+14. Keep shared feature-shell Patrol run fixtures on the canonical run-record
+    contract. When `frontend-modern/src/features/patrol/` consumes Patrol run
+    history, the shared normalized record must preserve provider-backed counts
+    such as `truenas_checked` instead of letting feature-local fixtures or
+    fallback objects collapse API-backed TrueNAS systems back into generic
+    agent-host presentation.
     route strings or provider-local link builders inside feature panels.
 14. Keep the authenticated app root aligned with that same first-session path.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let

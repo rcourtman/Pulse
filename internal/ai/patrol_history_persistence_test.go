@@ -525,6 +525,7 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 			DockerChecked:             1,
 			StorageChecked:            1,
 			HostsChecked:              0,
+			TrueNASChecked:            1,
 			PBSChecked:                0,
 			NewFindings:               1,
 			ExistingFindings:          2,
@@ -557,6 +558,9 @@ func TestPatrolHistoryPersistenceAdapter_SaveAndLoad(t *testing.T) {
 	if strings.Join(loaded[0].EffectiveScopeResourceIDs, ",") != strings.Join(runs[0].EffectiveScopeResourceIDs, ",") {
 		t.Fatalf("expected effective scope IDs %v, got %v", runs[0].EffectiveScopeResourceIDs, loaded[0].EffectiveScopeResourceIDs)
 	}
+	if loaded[0].TrueNASChecked != runs[0].TrueNASChecked {
+		t.Fatalf("expected TrueNASChecked=%d, got %d", runs[0].TrueNASChecked, loaded[0].TrueNASChecked)
+	}
 }
 
 func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(t *testing.T) {
@@ -577,6 +581,7 @@ func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(
 			ScopeResourceTypes:        []string{"vm"},
 			ResourcesChecked:          2,
 			GuestsChecked:             2,
+			TrueNASChecked:            1,
 			PMGChecked:                1,
 			NewFindings:               0,
 			ExistingFindings:          1,
@@ -616,6 +621,9 @@ func TestPatrolHistoryPersistenceAdapter_PreservesEmptySnapshotsAndParityFields(
 	}
 	if loaded[0].PMGChecked != 1 {
 		t.Fatalf("expected PMGChecked=1, got %d", loaded[0].PMGChecked)
+	}
+	if loaded[0].TrueNASChecked != 1 {
+		t.Fatalf("expected TrueNASChecked=1, got %d", loaded[0].TrueNASChecked)
 	}
 	if loaded[0].RejectedFindings != 1 {
 		t.Fatalf("expected RejectedFindings=1, got %d", loaded[0].RejectedFindings)

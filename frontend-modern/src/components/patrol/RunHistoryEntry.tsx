@@ -307,6 +307,12 @@ export function RunHistoryEntry(props: RunHistoryEntryProps) {
                     {run.hosts_checked !== 1 ? 's' : ''}
                   </span>
                 </Show>
+                <Show when={run.truenas_checked > 0}>
+                  <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-50 text-teal-700 dark:bg-teal-900 dark:text-teal-300">
+                    <HardDriveIcon class="w-3 h-3" /> {run.truenas_checked} TrueNAS
+                    {run.truenas_checked !== 1 ? ' systems' : ' system'}
+                  </span>
+                </Show>
                 <Show when={run.pbs_checked > 0}>
                   <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
                     <DatabaseIcon class="w-3 h-3" /> {run.pbs_checked} PBS

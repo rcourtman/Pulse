@@ -13,8 +13,11 @@ func TestGetResourceCurrentState(t *testing.T) {
 	state := models.StateSnapshot{
 		Storage: []models.Storage{{ID: "storage-1", Name: "local", Usage: 42, Status: "active"}},
 		Nodes:   []models.Node{{ID: "node-1", Name: "node-1", CPU: 0.2, Memory: models.Memory{Usage: 33}, Status: "online"}},
-		Hosts:   []models.Host{{ID: "host-1", Hostname: "host-1", CPUUsage: 27.5, Memory: models.Memory{Usage: 41.0}, Status: "online"}},
-		VMs:     []models.VM{{ID: "vm-1", Name: "vm-1", CPU: 0.1, Memory: models.Memory{Usage: 44}, Status: "running"}},
+		Hosts: []models.Host{
+			{ID: "host-1", Hostname: "host-1", CPUUsage: 27.5, Memory: models.Memory{Usage: 41.0}, Status: "online"},
+			{ID: "truenas-1", Hostname: "truenas-1", DisplayName: "TrueNAS Main", Platform: "truenas", CPUUsage: 18.0, Memory: models.Memory{Usage: 52.0}, Status: "online"},
+		},
+		VMs: []models.VM{{ID: "vm-1", Name: "vm-1", CPU: 0.1, Memory: models.Memory{Usage: 44}, Status: "running"}},
 		Containers: []models.Container{
 			{ID: "ct-1", Name: "ct-1", CPU: 0.3, Memory: models.Memory{Usage: 55}, Status: "running"},
 		},
@@ -34,6 +37,7 @@ func TestGetResourceCurrentState(t *testing.T) {
 		{alert: AlertInfo{ResourceType: "usage", Type: "usage", ResourceID: "storage-1", ResourceName: "local"}, assert: "Storage 'local'"},
 		{alert: AlertInfo{ResourceType: "node", ResourceID: "node-1", ResourceName: "node-1"}, assert: "Node 'node-1'"},
 		{alert: AlertInfo{ResourceType: "agent", ResourceID: "host-1", ResourceName: "host-1"}, assert: "Agent host 'host-1'"},
+		{alert: AlertInfo{ResourceType: "truenas", ResourceID: "truenas-1", ResourceName: "TrueNAS Main"}, assert: "TrueNAS 'truenas-1'"},
 		{alert: AlertInfo{ResourceType: "vm", ResourceID: "vm-1", ResourceName: "vm-1"}, assert: "VM 'vm-1'"},
 		{alert: AlertInfo{ResourceType: "system-container", ResourceID: "ct-1", ResourceName: "ct-1"}, assert: "Container 'ct-1'"},
 		{alert: AlertInfo{ResourceType: "app-container", ResourceID: "dc-1", ResourceName: "web"}, assert: "Docker container 'web'"},

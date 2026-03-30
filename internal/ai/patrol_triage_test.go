@@ -613,6 +613,7 @@ func TestFormatTriageBriefing(t *testing.T) {
 			TotalPhysicalDisks: 0,
 			TotalStorage:       1,
 			TotalDocker:        1,
+			TotalTrueNAS:       1,
 			TotalPBS:           1,
 			TotalPMG:           0,
 			FlaggedCount:       1,
@@ -633,7 +634,7 @@ func TestFormatTriageBriefing(t *testing.T) {
 	if !strings.Contains(out, "## Healthy Resources") {
 		t.Fatalf("expected healthy summary section, got:\n%s", out)
 	}
-	if !strings.Contains(out, "Scanned 6 resources: 1 nodes, 2 guests, 1 storage resources (1 pools, 0 physical disks), 1 docker hosts, 1 PBS, 0 PMG.") {
+	if !strings.Contains(out, "Scanned 7 resources: 1 nodes, 2 guests, 1 storage resources (1 pools, 0 physical disks), 1 docker hosts, 1 TrueNAS systems, 1 PBS, 0 PMG.") {
 		t.Fatalf("expected explicit storage breakdown in scanned summary, got:\n%s", out)
 	}
 	if !strings.Contains(out, "Storage: 1 resources monitored (1 pools, 0 physical disks)") {
@@ -723,6 +724,21 @@ func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 					return &host
 				}(),
 			},
+			hosts: []*unifiedresources.HostView{
+				func() *unifiedresources.HostView {
+					host := unifiedresources.NewHostView(&unifiedresources.Resource{
+						ID:     "truenas-1",
+						Name:   "truenas-main",
+						Type:   unifiedresources.ResourceTypeAgent,
+						Status: unifiedresources.StatusOnline,
+						Agent: &unifiedresources.AgentData{
+							Hostname: "truenas-main",
+							Platform: "truenas",
+						},
+					})
+					return &host
+				}(),
+			},
 			pbs: []*unifiedresources.PBSInstanceView{
 				func() *unifiedresources.PBSInstanceView {
 					pbs := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
@@ -768,7 +784,7 @@ func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 	}
 
 	summary := triageBuildSummaryState(state, map[string]bool{"qemu/100": true})
-	if summary.TotalNodes != 1 || summary.TotalStoragePools != 1 || summary.TotalPhysicalDisks != 1 || summary.TotalStorage != 2 || summary.TotalDocker != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
+	if summary.TotalNodes != 1 || summary.TotalStoragePools != 1 || summary.TotalPhysicalDisks != 1 || summary.TotalStorage != 2 || summary.TotalDocker != 1 || summary.TotalTrueNAS != 1 || summary.TotalPBS != 1 || summary.TotalPMG != 1 {
 		t.Fatalf("unexpected non-guest summary counts from readState: %#v", summary)
 	}
 	if summary.TotalGuests != 3 || summary.RunningGuests != 2 || summary.StoppedGuests != 1 {
@@ -776,6 +792,37 @@ func TestTriageBuildSummaryState_UsesReadStateWhenLegacySlicesEmpty(t *testing.T
 	}
 	if summary.FlaggedCount != 1 {
 		t.Fatalf("expected flagged count to be preserved, got %#v", summary)
+	}
+}
+
+func TestTriageAlertChecksState_ResolvesTrueNASHostsToCanonicalResourceType(t *testing.T) {
+	state := patrolRuntimeState{
+		Hosts: []models.Host{
+			{
+				ID:          "truenas-1",
+				Hostname:    "truenas-main",
+				DisplayName: "TrueNAS Main",
+				Platform:    "truenas",
+				Status:      "online",
+			},
+		},
+		ActiveAlerts: []models.Alert{
+			{
+				ResourceID:   "truenas-1",
+				ResourceName: "TrueNAS Main",
+				Type:         "offline",
+				Level:        "critical",
+				Message:      "TrueNAS is offline",
+			},
+		},
+	}
+
+	flags := triageAlertChecksState(state, nil)
+	if len(flags) != 1 {
+		t.Fatalf("expected 1 alert-backed triage flag, got %d", len(flags))
+	}
+	if flags[0].ResourceType != "truenas" {
+		t.Fatalf("expected TrueNAS resource type, got %#v", flags[0])
 	}
 }
 

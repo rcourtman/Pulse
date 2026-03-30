@@ -498,6 +498,7 @@ func TestPatrolRunRecord(t *testing.T) {
 		ResourcesChecked: 10,
 		NodesChecked:     2,
 		GuestsChecked:    5,
+		TrueNASChecked:   1,
 		NewFindings:      1,
 		Status:           "issues_found",
 	}
@@ -525,6 +526,9 @@ func TestPatrolRunRecord(t *testing.T) {
 	}
 	if record.GuestsChecked != 5 {
 		t.Errorf("Expected 5 guests checked, got %d", record.GuestsChecked)
+	}
+	if record.TrueNASChecked != 1 {
+		t.Errorf("Expected 1 TrueNAS system checked, got %d", record.TrueNASChecked)
 	}
 	if record.NewFindings != 1 {
 		t.Errorf("Expected 1 new finding, got %d", record.NewFindings)
@@ -567,12 +571,16 @@ func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
 		"started_at":"2026-03-11T00:00:00Z",
 		"completed_at":"2026-03-11T00:01:00Z",
 		"duration_ms":60000,
-		"alert_identifier":"instance:node:100::metric/cpu"
+		"alert_identifier":"instance:node:100::metric/cpu",
+		"truenas_checked":1
 	}`), &decodedCanonical); err != nil {
 		t.Fatalf("unmarshal canonical patrol run: %v", err)
 	}
 	if decodedCanonical.AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier to load, got %q", decodedCanonical.AlertIdentifier)
+	}
+	if decodedCanonical.TrueNASChecked != 1 {
+		t.Fatalf("expected truenas_checked to load, got %d", decodedCanonical.TrueNASChecked)
 	}
 
 	var decoded PatrolRunRecord
@@ -581,12 +589,16 @@ func TestPatrolRunRecordJSONCanonicalOutput(t *testing.T) {
 		"started_at":"2026-03-11T00:00:00Z",
 		"completed_at":"2026-03-11T00:01:00Z",
 		"duration_ms":60000,
-		"alert_identifier":"instance:node:100::metric/cpu"
+		"alert_identifier":"instance:node:100::metric/cpu",
+		"truenas_checked":1
 	}`), &decoded); err != nil {
 		t.Fatalf("unmarshal canonical patrol run: %v", err)
 	}
 	if decoded.AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert_identifier to populate canonical field, got %q", decoded.AlertIdentifier)
+	}
+	if decoded.TrueNASChecked != 1 {
+		t.Fatalf("expected truenas_checked to populate canonical field, got %d", decoded.TrueNASChecked)
 	}
 }
 

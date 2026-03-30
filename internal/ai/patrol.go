@@ -134,6 +134,7 @@ type PatrolRunRecord struct {
 	DockerChecked     int `json:"docker_checked"`
 	StorageChecked    int `json:"storage_checked"`
 	HostsChecked      int `json:"hosts_checked"`
+	TrueNASChecked    int `json:"truenas_checked"`
 	PBSChecked        int `json:"pbs_checked"`
 	PMGChecked        int `json:"pmg_checked"`
 	KubernetesChecked int `json:"kubernetes_checked"`
@@ -178,6 +179,7 @@ type patrolRunRecordJSON struct {
 	DockerChecked             int              `json:"docker_checked"`
 	StorageChecked            int              `json:"storage_checked"`
 	HostsChecked              int              `json:"hosts_checked"`
+	TrueNASChecked            int              `json:"truenas_checked"`
 	PBSChecked                int              `json:"pbs_checked"`
 	PMGChecked                int              `json:"pmg_checked"`
 	KubernetesChecked         int              `json:"kubernetes_checked"`
@@ -252,6 +254,7 @@ func (r PatrolRunRecord) MarshalJSON() ([]byte, error) {
 		DockerChecked:             normalized.DockerChecked,
 		StorageChecked:            normalized.StorageChecked,
 		HostsChecked:              normalized.HostsChecked,
+		TrueNASChecked:            normalized.TrueNASChecked,
 		PBSChecked:                normalized.PBSChecked,
 		PMGChecked:                normalized.PMGChecked,
 		KubernetesChecked:         normalized.KubernetesChecked,
@@ -300,6 +303,7 @@ func (r *PatrolRunRecord) UnmarshalJSON(data []byte) error {
 		DockerChecked:             payload.DockerChecked,
 		StorageChecked:            payload.StorageChecked,
 		HostsChecked:              payload.HostsChecked,
+		TrueNASChecked:            payload.TrueNASChecked,
 		PBSChecked:                payload.PBSChecked,
 		PMGChecked:                payload.PMGChecked,
 		KubernetesChecked:         payload.KubernetesChecked,

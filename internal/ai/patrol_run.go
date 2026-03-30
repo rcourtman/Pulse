@@ -277,6 +277,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		dockerChecked     int
 		storageChecked    int
 		hostsChecked      int
+		trueNASChecked    int
 		pbsChecked        int
 		pmgChecked        int
 		kubernetesChecked int
@@ -345,12 +346,14 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 	}
 	if cfg.AnalyzeHosts {
 		runStats.hostsChecked = resourceCounts.hosts
+		runStats.trueNASChecked = resourceCounts.truenas
 	}
 	if cfg.AnalyzeKubernetes {
 		runStats.kubernetesChecked = resourceCounts.kubernetes
 	}
 	runStats.resourceCount = runStats.nodesChecked + runStats.guestsChecked +
 		runStats.dockerChecked + runStats.storageChecked + runStats.pbsChecked + runStats.pmgChecked + runStats.hostsChecked +
+		runStats.trueNASChecked +
 		runStats.kubernetesChecked
 
 	// Determine if we can run LLM analysis (requires AI service + circuit breaker not open)
@@ -573,6 +576,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		DockerChecked:     runStats.dockerChecked,
 		StorageChecked:    runStats.storageChecked,
 		HostsChecked:      runStats.hostsChecked,
+		TrueNASChecked:    runStats.trueNASChecked,
 		PBSChecked:        runStats.pbsChecked,
 		PMGChecked:        runStats.pmgChecked,
 		KubernetesChecked: runStats.kubernetesChecked,
@@ -713,6 +717,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		dockerChecked     int
 		storageChecked    int
 		hostsChecked      int
+		trueNASChecked    int
 		pbsChecked        int
 		pmgChecked        int
 		kubernetesChecked int
@@ -757,6 +762,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 	if cfg.AnalyzeHosts {
 		resourceCount += resourceCounts.hosts
+		resourceCount += resourceCounts.truenas
 	}
 	if cfg.AnalyzeKubernetes {
 		resourceCount += resourceCounts.kubernetes
@@ -801,6 +807,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 	}
 	if cfg.AnalyzeHosts {
 		runStats.hostsChecked = resourceCounts.hosts
+		runStats.trueNASChecked = resourceCounts.truenas
 	}
 	if cfg.AnalyzeKubernetes {
 		runStats.kubernetesChecked = resourceCounts.kubernetes
@@ -934,6 +941,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 		DockerChecked:             runStats.dockerChecked,
 		StorageChecked:            runStats.storageChecked,
 		HostsChecked:              runStats.hostsChecked,
+		TrueNASChecked:            runStats.trueNASChecked,
 		PBSChecked:                runStats.pbsChecked,
 		PMGChecked:                runStats.pmgChecked,
 		KubernetesChecked:         runStats.kubernetesChecked,
@@ -2083,7 +2091,11 @@ func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) pa
 			return resource
 		}
 	case "agent":
-		if resource, ok := patrolLookupAgentAlertResourceState(alert, snap); ok {
+		if resource, ok := patrolLookupHostAlertResourceState(alert, snap); ok {
+			return resource
+		}
+	case "truenas":
+		if resource, ok := patrolLookupHostAlertResourceState(alert, snap); ok {
 			return resource
 		}
 	}
@@ -2158,8 +2170,8 @@ func patrolLookupGuestAlertResourceState(alert AlertInfo, snap patrolRuntimeStat
 }
 
 type patrolHostAlertRow struct {
-	id, name, hostname, status string
-	cpu, memory                float64
+	id, name, hostname, status, platform, resourceType string
+	cpu, memory                                        float64
 }
 
 func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
@@ -2168,12 +2180,14 @@ func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
 		rows := make([]patrolHostAlertRow, 0, len(hosts))
 		for _, host := range hosts {
 			rows = append(rows, patrolHostAlertRow{
-				id:       host.ID(),
-				name:     host.Name(),
-				hostname: host.Hostname(),
-				status:   string(host.Status()),
-				cpu:      host.CPUPercent(),
-				memory:   host.MemoryPercent(),
+				id:           host.ID(),
+				name:         host.Name(),
+				hostname:     host.Hostname(),
+				status:       string(host.Status()),
+				platform:     host.Platform(),
+				resourceType: patrolHostResourceType(host.Platform()),
+				cpu:          host.CPUPercent(),
+				memory:       host.MemoryPercent(),
 			})
 		}
 		return rows
@@ -2182,18 +2196,27 @@ func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
 	rows := make([]patrolHostAlertRow, 0, len(snap.Hosts))
 	for _, host := range snap.Hosts {
 		rows = append(rows, patrolHostAlertRow{
-			id:       host.ID,
-			name:     host.DisplayName,
-			hostname: host.Hostname,
-			status:   host.Status,
-			cpu:      host.CPUUsage,
-			memory:   host.Memory.Usage,
+			id:           host.ID,
+			name:         host.DisplayName,
+			hostname:     host.Hostname,
+			status:       host.Status,
+			platform:     host.Platform,
+			resourceType: patrolHostResourceType(host.Platform),
+			cpu:          host.CPUUsage,
+			memory:       host.Memory.Usage,
 		})
 	}
 	return rows
 }
 
-func patrolLookupAgentAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
+func patrolHostResourceType(platform string) string {
+	if strings.EqualFold(strings.TrimSpace(platform), "truenas") {
+		return "truenas"
+	}
+	return "agent"
+}
+
+func patrolLookupHostAlertResourceState(alert AlertInfo, snap patrolRuntimeState) (patrolAlertResourceState, bool) {
 	for _, host := range patrolHostAlertRows(snap) {
 		if !patrolAlertNameMatches(alert, host.id, host.name, host.hostname) {
 			continue
@@ -2203,7 +2226,7 @@ func patrolLookupAgentAlertResourceState(alert AlertInfo, snap patrolRuntimeStat
 			name = host.name
 		}
 		return patrolAlertResourceState{
-			resourceType: "agent",
+			resourceType: host.resourceType,
 			name:         name,
 			status:       host.status,
 			cpu:          host.cpu,
@@ -2239,7 +2262,7 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 		return false
 	}
 	switch resource.resourceType {
-	case "node", "agent":
+	case "node", "agent", "truenas":
 		return resource.status == "online"
 	case "vm", "system-container", "app-container":
 		return resource.status == "running" || resource.status == string(unifiedresources.StatusOnline)
@@ -2302,6 +2325,8 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 			return "Storage not found in current state (may have been removed)"
 		case "node":
 			return "Node not found in current state"
+		case "truenas":
+			return "TrueNAS system not found in current state"
 		case "agent":
 			return "Agent host not found in current state"
 		case "vm":
@@ -2319,6 +2344,9 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 		return fmt.Sprintf("Storage '%s': %.1f%% used, status: %s", resource.name, resource.disk, resource.status)
 	case "node":
 		return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+			resource.name, resource.cpu, resource.memory, resource.status)
+	case "truenas":
+		return fmt.Sprintf("TrueNAS '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)
 	case "agent":
 		return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",

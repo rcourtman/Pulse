@@ -69,6 +69,7 @@ describe('RunHistoryEntry', () => {
     docker_checked: 0,
     storage_checked: 0,
     hosts_checked: 0,
+    truenas_checked: 0,
     pbs_checked: 0,
     pmg_checked: 0,
     kubernetes_checked: 0,
@@ -273,5 +274,27 @@ describe('RunHistoryEntry', () => {
 
     expect(screen.getByText('3 triage flags')).toBeInTheDocument();
     expect(screen.getByText('LLM skipped')).toBeInTheDocument();
+  });
+
+  it('renders TrueNAS run coverage separately from agent hosts', () => {
+    render(() => (
+      <RunHistoryEntry
+        run={{
+          ...run,
+          id: 'run-truenas',
+          resources_checked: 2,
+          docker_checked: 1,
+          truenas_checked: 1,
+        }}
+        isLive={false}
+        patrolStream={patrolStream}
+        selected={true}
+        onSelect={vi.fn()}
+      />
+    ));
+
+    expect(screen.getByText('1 container')).toBeInTheDocument();
+    expect(screen.getByText('1 TrueNAS system')).toBeInTheDocument();
+    expect(screen.queryByText('1 agent')).not.toBeInTheDocument();
   });
 });

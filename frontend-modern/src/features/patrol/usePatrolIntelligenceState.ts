@@ -510,6 +510,7 @@ export function usePatrolIntelligenceState() {
       docker_checked: 0,
       storage_checked: 0,
       hosts_checked: 0,
+      truenas_checked: 0,
       pbs_checked: 0,
       pmg_checked: 0,
       kubernetes_checked: 0,

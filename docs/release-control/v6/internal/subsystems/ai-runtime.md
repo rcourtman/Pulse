@@ -203,6 +203,11 @@ history, and chat sessions must not keep legacy plaintext files on the runtime
 primary path once the process can read them. Plaintext AI persistence files may
 only serve as migration input and must be rewritten immediately into
 encrypted-at-rest storage on load.
+That same Patrol runtime ownership also governs Patrol run-summary taxonomy.
+`internal/ai/` must keep API-backed TrueNAS systems distinct from unified-agent
+hosts in runtime counts, triage summaries, and persisted Patrol run history
+instead of collapsing both surfaces back into `hosts_checked` or generic
+`agent` resource wording.
 That same config-persistence boundary also owns fixed runtime file paths: the
 resolved data directory must be normalized once and fixed AI/runtime filenames
 must rejoin through the shared storage-path helper instead of raw

@@ -18,6 +18,7 @@ const (
 	patrolRuntimeResourceDockerHost   patrolRuntimeResourceKind = "docker-host"
 	patrolRuntimeResourceDockerItem   patrolRuntimeResourceKind = "docker-container"
 	patrolRuntimeResourceHost         patrolRuntimeResourceKind = "host"
+	patrolRuntimeResourceTrueNAS      patrolRuntimeResourceKind = "truenas"
 	patrolRuntimeResourcePBS          patrolRuntimeResourceKind = "pbs"
 	patrolRuntimeResourcePMG          patrolRuntimeResourceKind = "pmg"
 	patrolRuntimeResourceK8sCluster   patrolRuntimeResourceKind = "k8s-cluster"
@@ -157,6 +158,12 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 	emit := func(kind patrolRuntimeResourceKind, ids []string, aliases ...string) bool {
 		return visit(patrolRuntimeResourceRecord{kind: kind, ids: ids, aliases: aliases})
 	}
+	hostResourceKind := func(platform string) patrolRuntimeResourceKind {
+		if strings.EqualFold(strings.TrimSpace(platform), "truenas") {
+			return patrolRuntimeResourceTrueNAS
+		}
+		return patrolRuntimeResourceHost
+	}
 
 	if rs := s.readState; rs != nil {
 		for _, n := range rs.Nodes() {
@@ -190,7 +197,7 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, h := range rs.Hosts() {
-			if !emit(patrolRuntimeResourceHost, []string{h.ID()}, h.Name(), h.Hostname()) {
+			if !emit(hostResourceKind(h.Platform()), []string{h.ID()}, h.Name(), h.Hostname()) {
 				return
 			}
 		}
@@ -241,7 +248,7 @@ func patrolVisitRuntimeResources(s patrolRuntimeState, visit func(patrolRuntimeR
 			}
 		}
 		for _, h := range s.Hosts {
-			if !emit(patrolRuntimeResourceHost, []string{h.ID}, h.DisplayName, h.Hostname) {
+			if !emit(hostResourceKind(h.Platform), []string{h.ID}, h.DisplayName, h.Hostname) {
 				return
 			}
 		}
@@ -429,13 +436,14 @@ type patrolRuntimeResourceCounts struct {
 	docker     int
 	storage    int
 	hosts      int
+	truenas    int
 	pbs        int
 	pmg        int
 	kubernetes int
 }
 
 func (c patrolRuntimeResourceCounts) total() int {
-	return c.nodes + c.guests + c.docker + c.storage + c.hosts + c.pbs + c.pmg + c.kubernetes
+	return c.nodes + c.guests + c.docker + c.storage + c.hosts + c.truenas + c.pbs + c.pmg + c.kubernetes
 }
 
 func patrolRuntimeCountResources(s patrolRuntimeState) patrolRuntimeResourceCounts {
@@ -452,6 +460,8 @@ func patrolRuntimeCountResources(s patrolRuntimeState) patrolRuntimeResourceCoun
 			counts.storage++
 		case patrolRuntimeResourceHost:
 			counts.hosts++
+		case patrolRuntimeResourceTrueNAS:
+			counts.truenas++
 		case patrolRuntimeResourcePBS:
 			counts.pbs++
 		case patrolRuntimeResourcePMG:

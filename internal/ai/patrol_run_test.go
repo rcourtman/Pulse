@@ -608,6 +608,15 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 			Hostname: "agent.local",
 		},
 	})
+	trueNASHostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID:   "truenas-1",
+		Name: "truenas-main",
+		Type: unifiedresources.ResourceTypeAgent,
+		Agent: &unifiedresources.AgentData{
+			Hostname: "truenas-main.local",
+			Platform: "truenas",
+		},
+	})
 	pbsView := unifiedresources.NewPBSInstanceView(&unifiedresources.Resource{
 		ID:   "pbs-1",
 		Name: "pbs-a",
@@ -629,7 +638,7 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 			nodes:       []*unifiedresources.NodeView{&nodeView},
 			vms:         []*unifiedresources.VMView{vmView},
 			containers:  []*unifiedresources.ContainerView{ctView},
-			hosts:       []*unifiedresources.HostView{&hostView},
+			hosts:       []*unifiedresources.HostView{&hostView, &trueNASHostView},
 			dockerHosts: []*unifiedresources.DockerHostView{&dockerHostView},
 			dockerCtrs:  []*unifiedresources.DockerContainerView{&dockerCtrView},
 			storage:     []*unifiedresources.StoragePoolView{&storageView},
@@ -649,6 +658,7 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 		},
 		Hosts: []models.Host{
 			{ID: "agent-1", DisplayName: "agent-display", Hostname: "agent.local"},
+			{ID: "truenas-1", DisplayName: "truenas-display", Hostname: "truenas-main.local", Platform: "truenas"},
 		},
 		KubernetesClusters: []models.KubernetesCluster{
 			{ID: "k8s-1", CustomDisplayName: "cluster-custom", Name: "cluster-a"},
@@ -674,15 +684,15 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 	}
 
 	counts := patrolRuntimeCountResources(state)
-	if counts.nodes != 1 || counts.guests != 2 || counts.storage != 2 || counts.docker != 1 || counts.hosts != 1 || counts.pbs != 1 || counts.pmg != 1 || counts.kubernetes != 1 {
+	if counts.nodes != 1 || counts.guests != 2 || counts.storage != 2 || counts.docker != 1 || counts.hosts != 1 || counts.truenas != 1 || counts.pbs != 1 || counts.pmg != 1 || counts.kubernetes != 1 {
 		t.Fatalf("unexpected canonical runtime counts: %#v", counts)
 	}
-	if counts.total() != 10 {
-		t.Fatalf("expected canonical runtime total 10, got %#v", counts)
+	if counts.total() != 11 {
+		t.Fatalf("expected canonical runtime total 11, got %#v", counts)
 	}
 
 	resourceIDs := patrolRuntimeSortedResourceIDs(state)
-	for _, want := range []string{"node-1", "qemu/100", "lxc/200", "storage-1", "docker-1", "ctr-1", "agent-1", "pbs-1", "pmg-1", "k8s-1", "disk-1", "/dev/sda"} {
+	for _, want := range []string{"node-1", "qemu/100", "lxc/200", "storage-1", "docker-1", "ctr-1", "agent-1", "truenas-1", "pbs-1", "pmg-1", "k8s-1", "disk-1", "/dev/sda"} {
 		found := false
 		for _, got := range resourceIDs {
 			if got == want {
@@ -696,7 +706,7 @@ func TestPatrolRuntimeResourceHelpers_PrepareCanonicalInventory(t *testing.T) {
 	}
 
 	known := patrolRuntimeKnownResources(state)
-	for _, want := range []string{"node-a", "vm-a", "ct-a", "local-zfs", "docker.local", "docker-custom", "web", "web-snapshot", "agent.local", "agent-display", "cluster-a", "cluster-custom", "Samsung SSD"} {
+	for _, want := range []string{"node-a", "vm-a", "ct-a", "local-zfs", "docker.local", "docker-custom", "web", "web-snapshot", "agent.local", "agent-display", "truenas-main", "truenas-main.local", "truenas-display", "cluster-a", "cluster-custom", "Samsung SSD"} {
 		if !known[want] {
 			t.Fatalf("expected known runtime resources to include %q", want)
 		}
@@ -1700,6 +1710,26 @@ func TestIsResourceOnline_Agent(t *testing.T) {
 	}
 }
 
+func TestIsResourceOnline_TrueNAS(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := models.StateSnapshot{
+		Hosts: []models.Host{
+			{ID: "tn1", Hostname: "truenas-1", DisplayName: "TrueNAS One", Platform: "truenas", Status: "online"},
+			{ID: "tn2", Hostname: "truenas-2", Platform: "truenas", Status: "offline"},
+		},
+	}
+
+	alert := AlertInfo{ResourceID: "tn1", ResourceType: "truenas"}
+	if !ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
+		t.Error("expected TrueNAS tn1 to be online")
+	}
+
+	alert = AlertInfo{ResourceID: "tn2", ResourceType: "truenas"}
+	if ps.isResourceOnlineState(alert, patrolRuntimeStateForTest(ps, state)) {
+		t.Error("expected TrueNAS tn2 to be offline")
+	}
+}
+
 func TestIsResourceOnline_UnknownType(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{}
@@ -1850,6 +1880,26 @@ func TestIsResourceOnline_UsesReadStateWhenLegacySlicesEmpty(t *testing.T) {
 
 	if !ps.isResourceOnlineState(AlertInfo{ResourceID: "h1", ResourceType: "agent", Type: "offline"}, state) {
 		t.Fatal("expected host to be online via readState")
+	}
+}
+
+func TestIsResourceOnline_UsesReadStateForTrueNASWhenLegacySlicesEmpty(t *testing.T) {
+	ps := NewPatrolService(nil, nil)
+	state := newPatrolRuntimeState(models.StateSnapshot{})
+	hostView := unifiedresources.NewHostView(&unifiedresources.Resource{
+		ID:     "tn1",
+		Name:   "truenas-1",
+		Type:   unifiedresources.ResourceTypeAgent,
+		Status: unifiedresources.StatusOnline,
+		Agent: &unifiedresources.AgentData{
+			Hostname: "truenas-1",
+			Platform: "truenas",
+		},
+	})
+	state.readState = &mockReadState{hosts: []*unifiedresources.HostView{&hostView}}
+
+	if !ps.isResourceOnlineState(AlertInfo{ResourceID: "tn1", ResourceType: "truenas", Type: "offline"}, state) {
+		t.Fatal("expected TrueNAS host to be online via readState")
 	}
 }
 

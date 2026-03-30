@@ -44,6 +44,7 @@ type TriageSummary struct {
 	TotalPhysicalDisks int
 	TotalStorage       int
 	TotalDocker        int
+	TotalTrueNAS       int
 	TotalPBS           int
 	TotalPMG           int
 	FlaggedCount       int
@@ -350,7 +351,7 @@ func triageAlertChecksState(snap patrolRuntimeState, scopedSet map[string]bool) 
 		flags = append(flags, TriageFlag{
 			ResourceID:   alert.ResourceID,
 			ResourceName: resourceName,
-			ResourceType: triageResourceType("", alert.ResourceID),
+			ResourceType: triageRuntimeResourceType(snap, "", alert.ResourceID),
 			Category:     triageAlertCategory(alert.Type),
 			Severity:     severity,
 			Reason:       reason,
@@ -373,7 +374,7 @@ func triageConnectivityChecksState(snap patrolRuntimeState, guestIntel map[strin
 		flags = append(flags, TriageFlag{
 			ResourceID:   entry.resourceID,
 			ResourceName: triageResourceName(entry.resourceID, entry.resourceID),
-			ResourceType: triageConnectionResourceType(entry.resourceID),
+			ResourceType: triageRuntimeResourceType(snap, "", entry.resourceID),
 			Category:     "connectivity",
 			Severity:     "critical",
 			Reason:       "Instance disconnected",
@@ -455,9 +456,9 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	sb.WriteString("# Deterministic Triage Results\n")
 
 	scanned := triage.Summary.TotalNodes + triage.Summary.TotalGuests + triage.Summary.TotalStorage +
-		triage.Summary.TotalDocker + triage.Summary.TotalPBS + triage.Summary.TotalPMG
+		triage.Summary.TotalDocker + triage.Summary.TotalTrueNAS + triage.Summary.TotalPBS + triage.Summary.TotalPMG
 	sb.WriteString(fmt.Sprintf(
-		"Scanned %d resources: %d nodes, %d guests, %d storage resources (%d pools, %d physical disks), %d docker hosts, %d PBS, %d PMG.\n\n",
+		"Scanned %d resources: %d nodes, %d guests, %d storage resources (%d pools, %d physical disks), %d docker hosts, %d TrueNAS systems, %d PBS, %d PMG.\n\n",
 		scanned,
 		triage.Summary.TotalNodes,
 		triage.Summary.TotalGuests,
@@ -465,6 +466,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		triage.Summary.TotalStoragePools,
 		triage.Summary.TotalPhysicalDisks,
 		triage.Summary.TotalDocker,
+		triage.Summary.TotalTrueNAS,
 		triage.Summary.TotalPBS,
 		triage.Summary.TotalPMG,
 	))
@@ -516,6 +518,10 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	if healthyDocker < 0 {
 		healthyDocker = 0
 	}
+	healthyTrueNAS := triage.Summary.TotalTrueNAS - triageUniqueFlaggedByType(triage.Flags, "truenas")
+	if healthyTrueNAS < 0 {
+		healthyTrueNAS = 0
+	}
 	healthyPBS := triage.Summary.TotalPBS - triageUniqueFlaggedByType(triage.Flags, "pbs")
 	if healthyPBS < 0 {
 		healthyPBS = 0
@@ -525,7 +531,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		healthyPMG = 0
 	}
 
-	totalHealthy := healthyNodes + healthyGuests + healthyStorage + healthyDocker + healthyPBS + healthyPMG
+	totalHealthy := healthyNodes + healthyGuests + healthyStorage + healthyDocker + healthyTrueNAS + healthyPBS + healthyPMG
 	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", totalHealthy))
 	sb.WriteString(fmt.Sprintf("Nodes: %d healthy\n", healthyNodes))
 	sb.WriteString(fmt.Sprintf("Guests: %d running, %d stopped\n", triage.Summary.RunningGuests, triage.Summary.StoppedGuests))
@@ -534,6 +540,7 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		triage.Summary.TotalStoragePools,
 		triage.Summary.TotalPhysicalDisks))
 	sb.WriteString(fmt.Sprintf("Docker: %d hosts\n", healthyDocker))
+	sb.WriteString(fmt.Sprintf("TrueNAS: %d systems\n", healthyTrueNAS))
 	sb.WriteString(fmt.Sprintf("PBS: %d instances\n", healthyPBS))
 	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", healthyPMG))
 
@@ -552,6 +559,7 @@ func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool
 		TotalPhysicalDisks: len(physicalDisks),
 		TotalStorage:       len(storagePools) + len(physicalDisks),
 		TotalDocker:        counts.docker,
+		TotalTrueNAS:       counts.truenas,
 		TotalPBS:           counts.pbs,
 		TotalPMG:           counts.pmg,
 		FlaggedCount:       len(flaggedIDs),
@@ -722,6 +730,26 @@ func triageResourceType(knownType, resourceID string) string {
 	return triageConnectionResourceType(resourceID)
 }
 
+func triageRuntimeResourceType(snap patrolRuntimeState, knownType, resourceID string) string {
+	if normalized := triageCanonicalResourceType(knownType); normalized != "" {
+		return normalized
+	}
+
+	normalizedID := strings.ToLower(strings.TrimSpace(resourceID))
+	if normalizedID == "" {
+		return triageConnectionResourceType(resourceID)
+	}
+
+	for _, host := range patrolHostAlertRows(snap) {
+		if strings.EqualFold(strings.TrimSpace(host.id), normalizedID) ||
+			strings.EqualFold(strings.TrimSpace(host.hostname), normalizedID) {
+			return host.resourceType
+		}
+	}
+
+	return triageConnectionResourceType(resourceID)
+}
+
 func triageGuestResourceType(knownType, resourceID string) string {
 	canonicalType := triageCanonicalResourceType(knownType)
 	switch canonicalType {
@@ -740,7 +768,7 @@ func triageGuestResourceType(knownType, resourceID string) string {
 
 func triageCanonicalResourceType(resourceType string) string {
 	switch normalized := strings.ToLower(strings.TrimSpace(resourceType)); normalized {
-	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent", "physical_disk", "physical-disk":
+	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent", "truenas", "physical_disk", "physical-disk":
 		if normalized == "physical-disk" {
 			return "physical_disk"
 		}
@@ -763,6 +791,8 @@ func triageConnectionResourceType(resourceID string) string {
 		return "storage"
 	case strings.HasPrefix(id, "docker-host:"), strings.HasPrefix(id, "docker-host/"), strings.HasPrefix(id, "app-container:"), strings.HasPrefix(id, "app-container/"), strings.HasPrefix(id, "docker-"), strings.Contains(id, "docker"):
 		return "docker-host"
+	case strings.HasPrefix(id, "truenas-"), strings.HasPrefix(id, "truenas:"), strings.HasPrefix(id, "truenas/"), strings.Contains(id, "truenas"):
+		return "truenas"
 	case strings.HasPrefix(id, "pbs-"), strings.HasPrefix(id, "pbs/"), strings.Contains(id, "pbs"):
 		return "pbs"
 	case strings.HasPrefix(id, "pmg-"), strings.HasPrefix(id, "pmg/"), strings.Contains(id, "pmg"):

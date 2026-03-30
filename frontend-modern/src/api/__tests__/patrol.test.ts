@@ -119,6 +119,7 @@ describe('patrol api', () => {
         docker_checked: 0,
         storage_checked: 0,
         hosts_checked: 0,
+        truenas_checked: 1,
         pbs_checked: 0,
         pmg_checked: 0,
         kubernetes_checked: 0,
@@ -143,6 +144,7 @@ describe('patrol api', () => {
     expect(result[0]).toMatchObject({
       alertIdentifier: 'canonical-alert-1',
       effective_scope_resource_ids: ['resource-1', 'resource-2'],
+      truenas_checked: 1,
       triage_flags: 2,
       triage_skipped_llm: true,
     });
@@ -161,6 +163,7 @@ describe('patrol api', () => {
       docker_checked: 0,
       storage_checked: 0,
       hosts_checked: 0,
+      truenas_checked: 0,
       pbs_checked: 0,
       pmg_checked: 0,
       kubernetes_checked: 0,
@@ -180,6 +183,7 @@ describe('patrol api', () => {
     await expect(getPatrolRun('run-2')).resolves.toMatchObject({
       id: 'run-2',
       alertIdentifier: 'canonical-alert-2',
+      truenas_checked: 0,
       tool_call_count: 1,
     });
   });

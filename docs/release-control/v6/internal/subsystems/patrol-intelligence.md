@@ -217,6 +217,11 @@ The same supporting-chip rule applies to timing: the primary summary card may
 show health and active-finding support, but it should not add another recency
 pill once header metadata, verification, and findings footer already carry the
 governed activity/verification timestamps.
+That same Patrol-owned run-history surface must keep platform-backed system
+counts canonical too. When the backend distinguishes API-backed TrueNAS
+systems from unified-agent hosts in Patrol run history, the run-history chips
+and selected-run breakdown must render `TrueNAS` separately instead of
+collapsing those systems back into the generic `agent` count.
 That summary-card/metrics-strip split also applies to findings counts. The
 primary assessment card may keep health as supporting context, but active
 findings, warning counts, and critical counts belong to the supporting metric

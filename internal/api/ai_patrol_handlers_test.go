@@ -406,6 +406,7 @@ func TestHandleGetPatrolRunHistory_PreservesExplicitEmptySnapshotCollections(t *
 		ScopeResourceTypes:        []string{"vm"},
 		ResourcesChecked:          2,
 		PMGChecked:                1,
+		TrueNASChecked:            1,
 		ExistingFindings:          1,
 		RejectedFindings:          1,
 		FindingsSummary:           "ok",
@@ -444,6 +445,9 @@ func TestHandleGetPatrolRunHistory_PreservesExplicitEmptySnapshotCollections(t *
 	}
 	if got := run["pmg_checked"]; got != float64(1) {
 		t.Fatalf("expected pmg_checked=1, got %#v", got)
+	}
+	if got := run["truenas_checked"]; got != float64(1) {
+		t.Fatalf("expected truenas_checked=1, got %#v", got)
 	}
 	if got := run["rejected_findings"]; got != float64(1) {
 		t.Fatalf("expected rejected_findings=1, got %#v", got)

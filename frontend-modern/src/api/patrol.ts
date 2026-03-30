@@ -418,6 +418,7 @@ export interface PatrolRunRecord {
   docker_checked: number;
   storage_checked: number;
   hosts_checked: number;
+  truenas_checked: number;
   pbs_checked: number;
   pmg_checked: number;
   kubernetes_checked: number;
@@ -446,7 +447,16 @@ function normalizePatrolRunRecord(run: PatrolRunRecord | null | undefined): Patr
   if (!run || typeof run !== 'object' || Array.isArray(run)) {
     return null;
   }
-  return promoteLegacyAlertIdentifier(run as PatrolRunRecord & { alert_identifier?: string });
+  const normalized = promoteLegacyAlertIdentifier(
+    run as PatrolRunRecord & { alert_identifier?: string; truenas_checked?: number },
+  );
+  return {
+    ...normalized,
+    truenas_checked:
+      typeof normalized.truenas_checked === 'number' && Number.isFinite(normalized.truenas_checked)
+        ? normalized.truenas_checked
+        : 0,
+  };
 }
 
 function normalizeHistoryLimit(limit: number): number {
