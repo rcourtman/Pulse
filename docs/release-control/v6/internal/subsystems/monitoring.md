@@ -226,6 +226,13 @@ TrueNAS monitoring ownership now also includes provider rebind semantics in
 host, auth, TLS, or fingerprint settings change, the poller must replace the
 live provider instance instead of keeping stale connection state in memory
 until the process restarts.
+That same monitoring boundary now also owns canonical per-connection poll
+health and discovered-summary state for the settings platform-connections
+surface. `internal/monitoring/truenas_poller.go` must honor each configured
+TrueNAS connection's `pollIntervalSeconds`, keep the next poll schedule plus
+last success/failure state in one canonical runtime owner, and project the most
+recent discovered host/pool/dataset/app/disk/recovery counts there instead of
+recomputing settings health panel-by-panel.
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
 `disk.temperatures` from the TrueNAS API, fall back to modern

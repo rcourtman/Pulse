@@ -348,6 +348,7 @@ func (r *Router) setupRoutes() {
 		getPersistence: r.configHandlers.getPersistence,
 		getConfig:      r.configHandlers.getConfig,
 		getMonitor:     r.configHandlers.getMonitor,
+		getPoller:      func(context.Context) *monitoring.TrueNASPoller { return r.trueNASPoller },
 	}
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)

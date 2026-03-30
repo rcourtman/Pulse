@@ -84,6 +84,7 @@ querying, and the operator-facing storage health presentation layer.
 22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
 23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.
 24. Keep backend-native platform configuration reads on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app config for Assistant, storage and recovery may use that runtime shape during investigation, but they must not grow a parallel recovery-local config transport or provider-shaped configuration payload.
+25. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
 
 ## Forbidden Paths
 
@@ -1534,6 +1535,12 @@ onboarding. Storage and recovery may consume resulting TrueNAS snapshots and
 replication points, but connection CRUD, masked-secret preservation on update,
 and platform polling setup must stay on the adjacent platform-connections
 contract instead of being rebuilt as storage/recovery-local connection flows.
+That same provider-backed boundary also owns connection poll cadence, last-sync
+health, failure summaries, and discovered platform-contribution counts exposed
+in the TrueNAS settings workspace. Storage and recovery may consume the
+resulting datasets, apps, disks, and recovery artifacts, but they must not
+redefine those settings-runtime health semantics or handoff routes inside
+storage/recovery-local transport or page contracts.
 That same shared boundary also owns the line between recovery data and
 assistant control. Backend-native TrueNAS app actions may refresh the poller
 and recovery ingest after a control event, but storage and recovery surfaces

@@ -15,6 +15,7 @@ export interface TrueNASConnectionFormState {
   name: string;
   host: string;
   port: string;
+  pollIntervalSeconds: string;
   authMode: TrueNASAuthMode;
   apiKey: string;
   username: string;
@@ -33,6 +34,7 @@ const createEmptyFormState = (): TrueNASConnectionFormState => ({
   name: '',
   host: '',
   port: '',
+  pollIntervalSeconds: '60',
   authMode: 'apiKey',
   apiKey: '',
   username: '',
@@ -55,6 +57,7 @@ const buildFormStateFromConnection = (connection: TrueNASConnection): TrueNASCon
     name: connection.name || '',
     host: connection.host || '',
     port: connection.port ? String(connection.port) : '',
+    pollIntervalSeconds: String(connection.pollIntervalSeconds ?? 60),
     authMode,
     apiKey: '',
     username: authMode === 'userpass' ? connection.username || '' : '',
@@ -74,6 +77,16 @@ const parseOptionalPort = (value: string): number | undefined => {
   const parsed = Number(trimmed);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
     throw new Error('Port must be a whole number between 1 and 65535');
+  }
+  return parsed;
+};
+
+const parsePollIntervalSeconds = (value: string): number => {
+  const trimmed = value.trim();
+  if (!trimmed) return 60;
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 3600) {
+    throw new Error('Poll interval must be a whole number between 1 and 3600 seconds');
   }
   return parsed;
 };
@@ -98,6 +111,7 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnectionInput => {
   const port = parseOptionalPort(form.port);
+  const pollIntervalSeconds = parsePollIntervalSeconds(form.pollIntervalSeconds);
   const name = form.name.trim();
   const host = form.host.trim();
   const fingerprint = form.fingerprint.trim();
@@ -106,6 +120,7 @@ const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnecti
     ...(name ? { name } : {}),
     host,
     ...(port !== undefined ? { port } : {}),
+    pollIntervalSeconds,
     useHttps: form.useHttps,
     insecureSkipVerify: form.insecureSkipVerify,
     ...(fingerprint ? { fingerprint } : {}),

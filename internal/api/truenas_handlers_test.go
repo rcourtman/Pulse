@@ -7,7 +7,11 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
@@ -211,6 +215,87 @@ func TestTrueNASHandlers_HandleList_RedactsSensitiveFields(t *testing.T) {
 	}
 	if listed[1].Password != "********" {
 		t.Fatalf("expected password to be redacted, got %q", listed[1].Password)
+	}
+}
+
+func TestTrueNASHandlers_HandleList_IncludesPollAndObservedSummary(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	handler, persistence, _ := newTrueNASHandlersForTest(t, cfg)
+	multiTenant := config.NewMultiTenantPersistence(cfg.DataPath)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/api/v2.0/system/info":
+			_, _ = w.Write([]byte(`{"hostname":"tower","version":"TrueNAS-SCALE-24.10.2","buildtime":"24.10.2.1","uptime_seconds":86400,"system_serial":"SER-tower"}`))
+		case "/api/v2.0/pool":
+			_, _ = w.Write([]byte(`[{"id":1,"name":"tank","status":"ONLINE","size":1000,"allocated":400,"free":600}]`))
+		case "/api/v2.0/pool/dataset":
+			_, _ = w.Write([]byte(`[{"id":"tank/apps","name":"tank/apps","pool":"tank","used":{"rawvalue":"12345","parsed":12345},"available":{"rawvalue":"555","parsed":555},"mountpoint":"/mnt/tank/apps","readonly":{"rawvalue":"off","parsed":false},"mounted":true}]`))
+		case "/api/v2.0/disk":
+			_, _ = w.Write([]byte(`[{"identifier":"{disk-1}","name":"sda","serial":"SER-A","size":1000000,"model":"Seagate","type":"HDD","pool":"tank","bus":"SATA","rotationrate":7200,"status":"ONLINE"}]`))
+		case "/api/v2.0/alert/list":
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+
+	connection := trueNASInstanceFromRawURL(t, "tower-1", server.URL, true)
+	connection.PollIntervalSecs = 60
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	poller := monitoring.NewTrueNASPoller(multiTenant, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+	handler.getPoller = func(context.Context) *monitoring.TrueNASPoller { return poller }
+
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		summaries := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})
+		if summary, ok := summaries[connection.ID]; ok && summary.Poll != nil && summary.Poll.LastSuccessAt != nil && summary.Observed != nil {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var listed []trueNASConnectionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 listed instance, got %d", len(listed))
+	}
+	if listed[0].Poll == nil {
+		t.Fatalf("expected poll summary, got nil")
+	}
+	if listed[0].Poll.IntervalSeconds != 60 {
+		t.Fatalf("expected poll interval 60, got %d", listed[0].Poll.IntervalSeconds)
+	}
+	if listed[0].Poll.LastSuccessAt == nil {
+		t.Fatalf("expected last success timestamp in poll summary")
+	}
+	if listed[0].Observed == nil {
+		t.Fatalf("expected observed summary, got nil")
+	}
+	if listed[0].Observed.Host != "tower" || listed[0].Observed.ResourceID != "tower" {
+		t.Fatalf("unexpected observed host summary: %+v", listed[0].Observed)
+	}
+	if listed[0].Observed.StoragePools != 1 || listed[0].Observed.Datasets != 1 || listed[0].Observed.Disks != 1 {
+		t.Fatalf("unexpected observed counts: %+v", listed[0].Observed)
 	}
 }
 
@@ -448,4 +533,28 @@ func marshalTrueNASRequest(t *testing.T, payload map[string]any) []byte {
 		t.Fatalf("marshal request body: %v", err)
 	}
 	return body
+}
+
+func trueNASInstanceFromRawURL(t *testing.T, id string, rawURL string, enabled bool) config.TrueNASInstance {
+	t.Helper()
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		t.Fatalf("url.Parse(%q): %v", rawURL, err)
+	}
+	port, err := strconv.Atoi(parsed.Port())
+	if err != nil {
+		t.Fatalf("parse port from %q: %v", rawURL, err)
+	}
+
+	return config.TrueNASInstance{
+		ID:               id,
+		Name:             "connection-" + id,
+		Host:             parsed.Hostname(),
+		Port:             port,
+		APIKey:           "test-api-key",
+		UseHTTPS:         strings.EqualFold(parsed.Scheme, "https"),
+		Enabled:          enabled,
+		PollIntervalSecs: 60,
+	}
 }

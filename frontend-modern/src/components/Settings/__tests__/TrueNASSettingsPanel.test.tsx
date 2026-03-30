@@ -18,6 +18,7 @@ const mockState = vi.hoisted(() => ({
     name: '',
     host: '',
     port: '',
+    pollIntervalSeconds: '60',
     authMode: 'apiKey' as const,
     apiKey: '',
     username: '',
@@ -62,6 +63,7 @@ describe('TrueNASSettingsPanel', () => {
       name: '',
       host: '',
       port: '',
+      pollIntervalSeconds: '60',
       authMode: 'apiKey',
       apiKey: '',
       username: '',
@@ -94,9 +96,35 @@ describe('TrueNASSettingsPanel', () => {
         host: 'truenas.local',
         port: 443,
         apiKey: '********',
+        pollIntervalSeconds: 60,
         useHttps: true,
         insecureSkipVerify: false,
         enabled: true,
+        poll: {
+          intervalSeconds: 60,
+          lastSuccessAt: new Date(Date.now() - 60_000).toISOString(),
+        },
+        observed: {
+          host: 'tower',
+          resourceId: 'tower',
+          collectedAt: new Date(Date.now() - 60_000).toISOString(),
+          systems: 1,
+          storagePools: 2,
+          datasets: 12,
+          apps: 4,
+          disks: 8,
+          recoveryArtifacts: 18,
+        },
+      },
+      {
+        id: 'conn-2',
+        name: 'vault',
+        host: 'vault.local',
+        username: 'admin',
+        useHttps: true,
+        insecureSkipVerify: false,
+        enabled: false,
+        pollIntervalSeconds: 300,
       },
     ]);
 
@@ -106,6 +134,26 @@ describe('TrueNASSettingsPanel', () => {
     expect(screen.getByText('TrueNAS connections')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
     expect(screen.getByText('API key auth')).toBeInTheDocument();
+    expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(screen.getByText('Paused')).toBeInTheDocument();
+    expect(screen.getByText('Poll every 1 minute')).toBeInTheDocument();
+    expect(screen.getByText('Poll every 5 minutes')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Infrastructure' })).toHaveAttribute(
+      'href',
+      '/infrastructure?source=truenas&resource=tower',
+    );
+    expect(screen.getByRole('link', { name: 'Workloads' })).toHaveAttribute(
+      'href',
+      '/workloads?type=app-container&platform=truenas&agent=tower',
+    );
+    expect(screen.getByRole('link', { name: 'Storage' })).toHaveAttribute(
+      'href',
+      '/storage?source=truenas&node=tower',
+    );
+    expect(screen.getByRole('link', { name: 'Recovery' })).toHaveAttribute(
+      'href',
+      '/recovery?platform=truenas&node=tower',
+    );
     expect(screen.getByRole('button', { name: 'Add TrueNAS connection' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add TrueNAS connection' }));
     expect(mockState.openCreateDialog).toHaveBeenCalledTimes(1);

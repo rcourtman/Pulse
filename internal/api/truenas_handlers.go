@@ -22,7 +22,14 @@ type TrueNASHandlers struct {
 	getPersistence func(ctx context.Context) *config.ConfigPersistence
 	getConfig      func(ctx context.Context) *config.Config
 	getMonitor     func(ctx context.Context) *monitoring.Monitor
+	getPoller      func(ctx context.Context) *monitoring.TrueNASPoller
 	newClient      func(truenas.ClientConfig) (trueNASClient, error)
+}
+
+type trueNASConnectionResponse struct {
+	config.TrueNASInstance
+	Poll     *monitoring.TrueNASConnectionPollStatus      `json:"poll,omitempty"`
+	Observed *monitoring.TrueNASConnectionObservedSummary `json:"observed,omitempty"`
 }
 
 type trueNASClient interface {
@@ -55,6 +62,7 @@ func (h *TrueNASHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	if instance.ID == "" {
 		instance.ID = config.NewTrueNASInstance().ID
 	}
+	instance.ApplyDefaults()
 
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
@@ -103,10 +111,26 @@ func (h *TrueNASHandlers) HandleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	redacted := make([]config.TrueNASInstance, 0, len(instances))
+	orgID := resolveTenantOrgID(r)
+	var summaries map[string]monitoring.TrueNASConnectionSummary
+	if h != nil && h.getPoller != nil {
+		if poller := h.getPoller(r.Context()); poller != nil {
+			summaries = poller.ConnectionSummaries(orgID, instances)
+		}
+	}
+
+	redacted := make([]trueNASConnectionResponse, 0, len(instances))
 	for i := range instances {
-		item := instances[i].Redacted()
-		redacted = append(redacted, item)
+		item := instances[i]
+		item.ApplyDefaults()
+		response := trueNASConnectionResponse{
+			TrueNASInstance: item.Redacted(),
+		}
+		if summary, ok := summaries[strings.TrimSpace(item.ID)]; ok {
+			response.Poll = summary.Poll
+			response.Observed = summary.Observed
+		}
+		redacted = append(redacted, response)
 	}
 
 	writeJSON(w, http.StatusOK, redacted)
@@ -196,6 +220,7 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	instance.Username = strings.TrimSpace(instance.Username)
 	instance.Password = strings.TrimSpace(instance.Password)
 	instance.Fingerprint = strings.TrimSpace(instance.Fingerprint)
+	instance.ApplyDefaults()
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {

@@ -25,6 +25,54 @@ const defaultTrueNASPollInterval = 60 * time.Second
 
 const defaultTrueNASHistoryReadTimeout = 10 * time.Second
 
+// TrueNASConnectionPollError captures the last runtime poll error for one
+// configured TrueNAS connection.
+type TrueNASConnectionPollError struct {
+	At       *time.Time `json:"at,omitempty"`
+	Message  string     `json:"message,omitempty"`
+	Category string     `json:"category,omitempty"`
+}
+
+// TrueNASConnectionPollStatus summarizes the runtime polling state for one
+// configured TrueNAS connection.
+type TrueNASConnectionPollStatus struct {
+	IntervalSeconds     int                         `json:"intervalSeconds"`
+	LastAttemptAt       *time.Time                  `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt       *time.Time                  `json:"lastSuccessAt,omitempty"`
+	ConsecutiveFailures int                         `json:"consecutiveFailures,omitempty"`
+	LastError           *TrueNASConnectionPollError `json:"lastError,omitempty"`
+}
+
+// TrueNASConnectionObservedSummary summarizes the canonical resources the most
+// recent successful poll contributed for one configured TrueNAS connection.
+type TrueNASConnectionObservedSummary struct {
+	Host              string     `json:"host,omitempty"`
+	ResourceID        string     `json:"resourceId,omitempty"`
+	CollectedAt       *time.Time `json:"collectedAt,omitempty"`
+	Systems           int        `json:"systems"`
+	StoragePools      int        `json:"storagePools"`
+	Datasets          int        `json:"datasets"`
+	Apps              int        `json:"apps"`
+	Disks             int        `json:"disks"`
+	RecoveryArtifacts int        `json:"recoveryArtifacts"`
+}
+
+// TrueNASConnectionSummary merges poll health with the most recent discovered
+// platform contribution for one configured TrueNAS connection.
+type TrueNASConnectionSummary struct {
+	Poll     *TrueNASConnectionPollStatus      `json:"poll,omitempty"`
+	Observed *TrueNASConnectionObservedSummary `json:"observed,omitempty"`
+}
+
+type trueNASConnectionRuntimeStatus struct {
+	lastAttemptAt       time.Time
+	lastSuccessAt       time.Time
+	lastError           *TrueNASConnectionPollError
+	consecutiveFailures int
+	nextPollAt          time.Time
+	observed            *TrueNASConnectionObservedSummary
+}
+
 // TrueNASPoller manages periodic polling of configured TrueNAS connections.
 type TrueNASPoller struct {
 	multiTenant     *config.MultiTenantPersistence
@@ -34,11 +82,14 @@ type TrueNASPoller struct {
 	providersByOrg map[string]map[string]*truenas.Provider
 	// configsByOrg is keyed by orgID, then connection ID.
 	configsByOrg map[string]map[string]config.TrueNASInstance
+	// statusByOrg is keyed by orgID, then connection ID.
+	statusByOrg map[string]map[string]*trueNASConnectionRuntimeStatus
 	// cachedRecordsByOrg is keyed by orgID, then connection ID.
 	cachedRecordsByOrg map[string]map[string][]unifiedresources.IngestRecord
 	cancel             context.CancelFunc
 	stopped            chan struct{}
 	interval           time.Duration
+	explicitInterval   bool
 }
 
 type trueNASPollerProviderEntry struct {
@@ -48,6 +99,7 @@ type trueNASPollerProviderEntry struct {
 
 // NewTrueNASPoller builds a new TrueNAS poller with the provided poll interval.
 func NewTrueNASPoller(multiTenant *config.MultiTenantPersistence, interval time.Duration, recoveryManager *recoverymanager.Manager) *TrueNASPoller {
+	explicitInterval := interval > 0
 	if interval <= 0 {
 		interval = defaultTrueNASPollInterval
 	}
@@ -60,9 +112,11 @@ func NewTrueNASPoller(multiTenant *config.MultiTenantPersistence, interval time.
 		recoveryManager:    recoveryManager,
 		providersByOrg:     make(map[string]map[string]*truenas.Provider),
 		configsByOrg:       make(map[string]map[string]config.TrueNASInstance),
+		statusByOrg:        make(map[string]map[string]*trueNASConnectionRuntimeStatus),
 		cachedRecordsByOrg: make(map[string]map[string][]unifiedresources.IngestRecord),
 		stopped:            stopped,
 		interval:           interval,
+		explicitInterval:   explicitInterval,
 	}
 }
 
@@ -99,15 +153,19 @@ func (p *TrueNASPoller) Start(ctx context.Context) {
 
 		p.syncConnections()
 		p.pollAll(runCtx)
-
-		ticker := time.NewTicker(p.interval)
-		defer ticker.Stop()
-
 		for {
+			wait := p.nextWaitDuration(time.Now())
+			timer := time.NewTimer(wait)
 			select {
 			case <-runCtx.Done():
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
 				return
-			case <-ticker.C:
+			case <-timer.C:
 				p.syncConnections()
 				p.pollAll(runCtx)
 			}
@@ -171,6 +229,7 @@ func (p *TrueNASPoller) syncConnections() {
 	}
 
 	// orgID -> connID -> instance
+	configured := make(map[string]map[string]config.TrueNASInstance, len(orgs))
 	active := make(map[string]map[string]config.TrueNASInstance, len(orgs))
 
 	for _, org := range orgs {
@@ -206,7 +265,15 @@ func (p *TrueNASPoller) syncConnections() {
 		for i := range instances {
 			instance := instances[i]
 			id := strings.TrimSpace(instance.ID)
-			if id == "" || !instance.Enabled {
+			if id == "" {
+				continue
+			}
+			instance.ApplyDefaults()
+			if configured[orgID] == nil {
+				configured[orgID] = make(map[string]config.TrueNASInstance)
+			}
+			configured[orgID][id] = instance
+			if !instance.Enabled {
 				continue
 			}
 			if active[orgID] == nil {
@@ -230,13 +297,19 @@ func (p *TrueNASPoller) syncConnections() {
 		if p.configsByOrg[orgID] == nil {
 			p.configsByOrg[orgID] = make(map[string]config.TrueNASInstance)
 		}
+		if p.statusByOrg[orgID] == nil {
+			p.statusByOrg[orgID] = make(map[string]*trueNASConnectionRuntimeStatus)
+		}
 		if p.cachedRecordsByOrg[orgID] == nil {
 			p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
 		}
 
 		for connID, instance := range byConn {
+			previousConfig := p.configsByOrg[orgID][connID]
 			existingProvider, exists := p.providersByOrg[orgID][connID]
-			if exists && !trueNASProviderConfigChanged(p.configsByOrg[orgID][connID], instance) {
+			p.configsByOrg[orgID][connID] = instance
+			p.alignConnectionNextPollLocked(orgID, connID, previousConfig, instance)
+			if exists && !trueNASProviderConfigChanged(previousConfig, instance) {
 				continue
 			}
 
@@ -251,6 +324,8 @@ func (p *TrueNASPoller) syncConnections() {
 				Fingerprint:        instance.Fingerprint,
 			})
 			if err != nil {
+				now := time.Now().UTC()
+				p.recordConnectionFailureLocked(orgID, connID, instance, err, now)
 				log.Warn().
 					Str("component", "truenas_poller").
 					Str("action", "initialize_client").
@@ -265,7 +340,6 @@ func (p *TrueNASPoller) syncConnections() {
 				existingProvider.Close()
 			}
 			p.providersByOrg[orgID][connID] = truenas.NewLiveProvider(&truenas.APIFetcher{Client: client})
-			p.configsByOrg[orgID][connID] = instance
 		}
 	}
 
@@ -307,6 +381,23 @@ func (p *TrueNASPoller) syncConnections() {
 			delete(p.cachedRecordsByOrg, orgID)
 		}
 	}
+
+	// Prune runtime status only when the connection is truly gone from config.
+	for orgID, byConn := range p.statusByOrg {
+		configuredByConn := configured[orgID]
+		for connID := range byConn {
+			if configuredByConn == nil {
+				delete(byConn, connID)
+				continue
+			}
+			if _, ok := configuredByConn[connID]; !ok {
+				delete(byConn, connID)
+			}
+		}
+		if len(byConn) == 0 {
+			delete(p.statusByOrg, orgID)
+		}
+	}
 }
 
 func (p *TrueNASPoller) closeAllProviders() {
@@ -326,6 +417,77 @@ func (p *TrueNASPoller) closeAllProviders() {
 	}
 }
 
+// ConnectionSummaries returns per-connection runtime health and discovered
+// contribution summaries for the supplied TrueNAS settings records.
+func (p *TrueNASPoller) ConnectionSummaries(orgID string, instances []config.TrueNASInstance) map[string]TrueNASConnectionSummary {
+	if len(instances) == 0 {
+		return nil
+	}
+
+	orgID = normalizeTrueNASOrgID(orgID)
+	summaries := make(map[string]TrueNASConnectionSummary, len(instances))
+
+	for i := range instances {
+		instance := instances[i]
+		instance.ApplyDefaults()
+		connID := strings.TrimSpace(instance.ID)
+		if connID == "" {
+			continue
+		}
+
+		summary := TrueNASConnectionSummary{
+			Poll: &TrueNASConnectionPollStatus{
+				IntervalSeconds: instance.EffectivePollIntervalSecs(),
+			},
+		}
+
+		if p != nil {
+			p.mu.Lock()
+			status := p.cloneRuntimeStatusLocked(orgID, connID)
+			p.mu.Unlock()
+			if status != nil {
+				summary.Poll.LastAttemptAt = cloneTimePointer(status.LastAttemptAt)
+				summary.Poll.LastSuccessAt = cloneTimePointer(status.LastSuccessAt)
+				summary.Poll.ConsecutiveFailures = status.ConsecutiveFailures
+				summary.Poll.LastError = cloneTrueNASConnectionPollError(status.LastError)
+				summary.Observed = cloneTrueNASObservedSummary(status.Observed)
+			}
+		}
+
+		summaries[connID] = summary
+	}
+
+	return summaries
+}
+
+func (p *TrueNASPoller) nextWaitDuration(now time.Time) time.Duration {
+	if p == nil {
+		return defaultTrueNASPollInterval
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	wait := p.interval
+	for orgID, byConn := range p.configsByOrg {
+		for connID, instance := range byConn {
+			next := p.nextPollAtLocked(orgID, connID, instance)
+			if next.IsZero() || !next.After(now) {
+				return 0
+			}
+			until := next.Sub(now)
+			if until < wait {
+				wait = until
+			}
+		}
+	}
+
+	if wait < 0 {
+		return 0
+	}
+	return wait
+}
+
 func (p *TrueNASPoller) pollAll(ctx context.Context) {
 	if p == nil {
 		return
@@ -334,12 +496,26 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 	type providerEntry struct {
 		orgID    string
 		id       string
+		config   config.TrueNASInstance
 		provider *truenas.Provider
 	}
 	entries := make([]providerEntry, 0)
+	now := time.Now().UTC()
 	for orgID, providers := range p.providersByOrg {
 		for id, provider := range providers {
-			entries = append(entries, providerEntry{orgID: orgID, id: id, provider: provider})
+			instance, ok := p.configsByOrg[orgID][id]
+			if !ok {
+				continue
+			}
+			if !p.connectionPollDueLocked(orgID, id, instance, now) {
+				continue
+			}
+			entries = append(entries, providerEntry{
+				orgID:    orgID,
+				id:       id,
+				config:   instance,
+				provider: provider,
+			})
 		}
 	}
 	p.mu.Unlock()
@@ -351,9 +527,9 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 			continue
 		}
 
-		start := time.Now()
+		start := time.Now().UTC()
 		err := entry.provider.Refresh(ctx)
-		end := time.Now()
+		end := time.Now().UTC()
 		if err != nil {
 			pm.RecordResult(PollResult{
 				InstanceName: entry.id,
@@ -363,6 +539,9 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 				StartTime:    start,
 				EndTime:      end,
 			})
+			p.mu.Lock()
+			p.recordConnectionFailureLocked(entry.orgID, entry.id, entry.config, err, end)
+			p.mu.Unlock()
 			log.Warn().
 				Str("component", "truenas_poller").
 				Str("action", "refresh_connection").
@@ -379,6 +558,11 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 			StartTime:    start,
 			EndTime:      end,
 		})
+
+		snapshot := entry.provider.Snapshot()
+		p.mu.Lock()
+		p.recordConnectionSuccessLocked(entry.orgID, entry.id, entry.config, end, snapshot)
+		p.mu.Unlock()
 
 		records := entry.provider.Records()
 		if len(records) == 0 {
@@ -398,6 +582,212 @@ func (p *TrueNASPoller) pollAll(ctx context.Context) {
 		p.mu.Unlock()
 
 		p.ingestRecoveryPoints(ctx, entry.orgID, entry.id, entry.provider)
+	}
+}
+
+type trueNASConnectionRuntimeSnapshot struct {
+	LastAttemptAt       *time.Time
+	LastSuccessAt       *time.Time
+	ConsecutiveFailures int
+	LastError           *TrueNASConnectionPollError
+	Observed            *TrueNASConnectionObservedSummary
+}
+
+func (p *TrueNASPoller) cloneRuntimeStatusLocked(orgID string, connID string) *trueNASConnectionRuntimeSnapshot {
+	if p == nil {
+		return nil
+	}
+	byConn := p.statusByOrg[orgID]
+	if byConn == nil {
+		return nil
+	}
+	status := byConn[connID]
+	if status == nil {
+		return nil
+	}
+	return &trueNASConnectionRuntimeSnapshot{
+		LastAttemptAt:       timePointerIfSet(status.lastAttemptAt),
+		LastSuccessAt:       timePointerIfSet(status.lastSuccessAt),
+		ConsecutiveFailures: status.consecutiveFailures,
+		LastError:           cloneTrueNASConnectionPollError(status.lastError),
+		Observed:            cloneTrueNASObservedSummary(status.observed),
+	}
+}
+
+func (p *TrueNASPoller) ensureConnectionRuntimeStatusLocked(orgID, connID string) *trueNASConnectionRuntimeStatus {
+	if p.statusByOrg[orgID] == nil {
+		p.statusByOrg[orgID] = make(map[string]*trueNASConnectionRuntimeStatus)
+	}
+	if p.statusByOrg[orgID][connID] == nil {
+		p.statusByOrg[orgID][connID] = &trueNASConnectionRuntimeStatus{}
+	}
+	return p.statusByOrg[orgID][connID]
+}
+
+func (p *TrueNASPoller) alignConnectionNextPollLocked(
+	orgID string,
+	connID string,
+	previous config.TrueNASInstance,
+	next config.TrueNASInstance,
+) {
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	if status == nil || status.lastAttemptAt.IsZero() {
+		return
+	}
+	previousInterval := p.effectiveRuntimePollInterval(previous)
+	nextInterval := p.effectiveRuntimePollInterval(next)
+	if previousInterval == nextInterval {
+		return
+	}
+	status.nextPollAt = status.lastAttemptAt.Add(nextInterval)
+}
+
+func (p *TrueNASPoller) connectionPollDueLocked(
+	orgID string,
+	connID string,
+	instance config.TrueNASInstance,
+	now time.Time,
+) bool {
+	next := p.nextPollAtLocked(orgID, connID, instance)
+	return next.IsZero() || !next.After(now)
+}
+
+func (p *TrueNASPoller) nextPollAtLocked(orgID string, connID string, instance config.TrueNASInstance) time.Time {
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	if status == nil {
+		return time.Time{}
+	}
+	if status.nextPollAt.IsZero() && !status.lastAttemptAt.IsZero() {
+		status.nextPollAt = status.lastAttemptAt.Add(p.effectiveRuntimePollInterval(instance))
+	}
+	return status.nextPollAt
+}
+
+func (p *TrueNASPoller) effectiveRuntimePollInterval(instance config.TrueNASInstance) time.Duration {
+	base := time.Duration(instance.EffectivePollIntervalSecs()) * time.Second
+	if p != nil && p.explicitInterval && p.interval > 0 && p.interval < base {
+		return p.interval
+	}
+	return base
+}
+
+func (p *TrueNASPoller) recordConnectionSuccessLocked(
+	orgID string,
+	connID string,
+	instance config.TrueNASInstance,
+	at time.Time,
+	snapshot *truenas.FixtureSnapshot,
+) {
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	status.lastAttemptAt = at
+	status.lastSuccessAt = at
+	status.lastError = nil
+	status.consecutiveFailures = 0
+	status.nextPollAt = at.Add(p.effectiveRuntimePollInterval(instance))
+	status.observed = buildTrueNASObservedSummary(snapshot)
+}
+
+func (p *TrueNASPoller) recordConnectionFailureLocked(
+	orgID string,
+	connID string,
+	instance config.TrueNASInstance,
+	err error,
+	at time.Time,
+) {
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	status.lastAttemptAt = at
+	status.consecutiveFailures++
+	status.nextPollAt = at.Add(p.effectiveRuntimePollInterval(instance))
+
+	category := ""
+	if monitorErr := classifyTrueNASError(err, connID); monitorErr != nil {
+		category = string(monitorErr.Type)
+	}
+	status.lastError = &TrueNASConnectionPollError{
+		At:       timePointerIfSet(at),
+		Message:  strings.TrimSpace(err.Error()),
+		Category: category,
+	}
+}
+
+func buildTrueNASObservedSummary(snapshot *truenas.FixtureSnapshot) *TrueNASConnectionObservedSummary {
+	if snapshot == nil {
+		return nil
+	}
+
+	host := strings.TrimSpace(snapshot.System.Hostname)
+	resourceID := host
+	collectedAt := snapshot.CollectedAt
+	if collectedAt.IsZero() {
+		collectedAt = snapshot.System.CollectedAt
+	}
+
+	summary := &TrueNASConnectionObservedSummary{
+		Host:              host,
+		ResourceID:        resourceID,
+		Systems:           0,
+		StoragePools:      len(snapshot.Pools),
+		Datasets:          len(snapshot.Datasets),
+		Apps:              len(snapshot.Apps),
+		Disks:             len(snapshot.Disks),
+		RecoveryArtifacts: len(snapshot.ZFSSnapshots) + len(snapshot.ReplicationTasks),
+	}
+	if host != "" || resourceID != "" {
+		summary.Systems = 1
+	}
+	summary.CollectedAt = timePointerIfSet(collectedAt)
+	return summary
+}
+
+func normalizeTrueNASOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
+func timePointerIfSet(value time.Time) *time.Time {
+	if value.IsZero() {
+		return nil
+	}
+	copied := value
+	return &copied
+}
+
+func cloneTimePointer(value *time.Time) *time.Time {
+	if value == nil || value.IsZero() {
+		return nil
+	}
+	copied := *value
+	return &copied
+}
+
+func cloneTrueNASConnectionPollError(value *TrueNASConnectionPollError) *TrueNASConnectionPollError {
+	if value == nil {
+		return nil
+	}
+	return &TrueNASConnectionPollError{
+		At:       cloneTimePointer(value.At),
+		Message:  strings.TrimSpace(value.Message),
+		Category: strings.TrimSpace(value.Category),
+	}
+}
+
+func cloneTrueNASObservedSummary(value *TrueNASConnectionObservedSummary) *TrueNASConnectionObservedSummary {
+	if value == nil {
+		return nil
+	}
+	return &TrueNASConnectionObservedSummary{
+		Host:              strings.TrimSpace(value.Host),
+		ResourceID:        strings.TrimSpace(value.ResourceID),
+		CollectedAt:       cloneTimePointer(value.CollectedAt),
+		Systems:           value.Systems,
+		StoragePools:      value.StoragePools,
+		Datasets:          value.Datasets,
+		Apps:              value.Apps,
+		Disks:             value.Disks,
+		RecoveryArtifacts: value.RecoveryArtifacts,
 	}
 }
 

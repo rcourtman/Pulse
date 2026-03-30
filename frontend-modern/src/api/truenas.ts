@@ -13,6 +13,36 @@ const REDACTED_SECRET = '********';
 
 type RawTrueNASConnection = Partial<TrueNASConnection>;
 
+type RawTrueNASConnectionPollError = Partial<TrueNASConnectionPollError>;
+type RawTrueNASConnectionPoll = Partial<TrueNASConnectionPollStatus>;
+type RawTrueNASConnectionObservedSummary = Partial<TrueNASConnectionObservedSummary>;
+
+export interface TrueNASConnectionPollError {
+  at?: string;
+  message?: string;
+  category?: string;
+}
+
+export interface TrueNASConnectionPollStatus {
+  intervalSeconds?: number;
+  lastAttemptAt?: string;
+  lastSuccessAt?: string;
+  consecutiveFailures?: number;
+  lastError?: TrueNASConnectionPollError;
+}
+
+export interface TrueNASConnectionObservedSummary {
+  host?: string;
+  resourceId?: string;
+  collectedAt?: string;
+  systems: number;
+  storagePools: number;
+  datasets: number;
+  apps: number;
+  disks: number;
+  recoveryArtifacts: number;
+}
+
 export interface TrueNASConnection {
   id: string;
   name: string;
@@ -26,6 +56,8 @@ export interface TrueNASConnection {
   fingerprint?: string;
   enabled: boolean;
   pollIntervalSeconds?: number;
+  poll?: TrueNASConnectionPollStatus;
+  observed?: TrueNASConnectionObservedSummary;
 }
 
 export interface TrueNASConnectionInput {
@@ -46,6 +78,47 @@ export interface TrueNASConnectionTestResult {
   success: boolean;
 }
 
+const normalizeTrueNASConnectionPollError = (
+  error: RawTrueNASConnectionPollError | undefined,
+): TrueNASConnectionPollError | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  return {
+    at: optionalTrimmedString(error.at),
+    message: optionalTrimmedString(error.message),
+    category: optionalTrimmedString(error.category),
+  };
+};
+
+const normalizeTrueNASConnectionPoll = (
+  poll: RawTrueNASConnectionPoll | undefined,
+): TrueNASConnectionPollStatus | undefined => {
+  if (!poll || typeof poll !== 'object') return undefined;
+  return {
+    intervalSeconds: finiteNumberOrUndefined(poll.intervalSeconds),
+    lastAttemptAt: optionalTrimmedString(poll.lastAttemptAt),
+    lastSuccessAt: optionalTrimmedString(poll.lastSuccessAt),
+    consecutiveFailures: finiteNumberOrUndefined(poll.consecutiveFailures),
+    lastError: normalizeTrueNASConnectionPollError(poll.lastError),
+  };
+};
+
+const normalizeTrueNASConnectionObservedSummary = (
+  observed: RawTrueNASConnectionObservedSummary | undefined,
+): TrueNASConnectionObservedSummary | undefined => {
+  if (!observed || typeof observed !== 'object') return undefined;
+  return {
+    host: optionalTrimmedString(observed.host),
+    resourceId: optionalTrimmedString(observed.resourceId),
+    collectedAt: optionalTrimmedString(observed.collectedAt),
+    systems: finiteNumberOrUndefined(observed.systems) ?? 0,
+    storagePools: finiteNumberOrUndefined(observed.storagePools) ?? 0,
+    datasets: finiteNumberOrUndefined(observed.datasets) ?? 0,
+    apps: finiteNumberOrUndefined(observed.apps) ?? 0,
+    disks: finiteNumberOrUndefined(observed.disks) ?? 0,
+    recoveryArtifacts: finiteNumberOrUndefined(observed.recoveryArtifacts) ?? 0,
+  };
+};
+
 const normalizeTrueNASConnection = (connection: RawTrueNASConnection): TrueNASConnection => ({
   id: trimmedString(connection.id),
   name: optionalTrimmedString(connection.name) ?? '',
@@ -59,6 +132,8 @@ const normalizeTrueNASConnection = (connection: RawTrueNASConnection): TrueNASCo
   fingerprint: optionalTrimmedString(connection.fingerprint),
   enabled: strictBoolean(connection.enabled),
   pollIntervalSeconds: finiteNumberOrUndefined(connection.pollIntervalSeconds),
+  poll: normalizeTrueNASConnectionPoll(connection.poll),
+  observed: normalizeTrueNASConnectionObservedSummary(connection.observed),
 });
 
 const serializeTrueNASConnectionInput = (input: TrueNASConnectionInput) => ({

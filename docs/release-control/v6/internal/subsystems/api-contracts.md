@@ -614,6 +614,17 @@ must stay the canonical API-backed platform boundary for listing, creating,
 updating, deleting, and testing TrueNAS integrations, and `PUT` updates must
 preserve masked secrets (`********`) instead of clearing stored API keys or
 passwords when operators edit non-secret fields from the settings surface.
+That same `/api/truenas/connections` list boundary now also owns the
+operator-facing runtime summary for those configured connections. The list
+response must carry the canonical redacted config together with poll health
+(`intervalSeconds`, last success/failure, consecutive failures) and discovered
+platform contribution summary (host/resource identity plus systems, pools,
+datasets, apps, disks, and recovery artifacts) so the platform-connections
+workspace can render real API-backed status and handoff context without
+inventing a settings-local shadow fetch path. Zero-value legacy
+`pollIntervalSeconds` config must normalize back to the canonical 60-second
+default at this same boundary instead of leaking ambiguous `0` values to the
+frontend.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

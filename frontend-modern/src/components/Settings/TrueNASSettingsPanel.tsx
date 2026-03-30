@@ -5,6 +5,14 @@ import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { Card } from '@/components/shared/Card';
 import { Dialog } from '@/components/shared/Dialog';
+import type { TrueNASConnection } from '@/api/truenas';
+import {
+  buildInfrastructurePath,
+  buildRecoveryPath,
+  buildStoragePath,
+  buildWorkloadsPath,
+} from '@/routing/resourceLinks';
+import { formatNumber, formatRelativeTime } from '@/utils/format';
 import {
   formCheckbox,
   formControl,
@@ -22,6 +30,106 @@ const primaryButtonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60';
 const dangerButtonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-950/30';
+
+const connectionMetaBadgeClass =
+  'inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-muted';
+
+const getPollIntervalLabel = (seconds: number | undefined): string => {
+  const value = seconds && Number.isFinite(seconds) && seconds > 0 ? seconds : 60;
+  if (value % 60 === 0) {
+    const minutes = value / 60;
+    return minutes === 1 ? 'Poll every 1 minute' : `Poll every ${minutes} minutes`;
+  }
+  return value === 1 ? 'Poll every 1 second' : `Poll every ${value} seconds`;
+};
+
+const getConnectionHealthPresentation = (connection: TrueNASConnection) => {
+  if (!connection.enabled) {
+    return {
+      label: 'Paused',
+      className: 'bg-surface text-muted',
+      detail: 'Polling paused',
+      error: null,
+    };
+  }
+
+  const poll = connection.poll;
+  const lastSuccessAt = poll?.lastSuccessAt;
+  const lastError = poll?.lastError;
+  const lastErrorAfterSuccess =
+    !!lastError?.at &&
+    (!lastSuccessAt || new Date(lastError.at).getTime() >= new Date(lastSuccessAt).getTime());
+
+  if (lastError && lastErrorAfterSuccess) {
+    return {
+      label: 'Sync failing',
+      className: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
+      detail: lastError.at
+        ? `Last error ${formatRelativeTime(lastError.at, { compact: true })}`
+        : 'Last poll failed',
+      error: lastError.message || null,
+    };
+  }
+
+  if (lastSuccessAt) {
+    return {
+      label: 'Healthy',
+      className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+      detail: `Last sync ${formatRelativeTime(lastSuccessAt, { compact: true })}`,
+      error: null,
+    };
+  }
+
+  return {
+    label: 'Awaiting first sync',
+    className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+    detail: 'Pulse has not completed the first poll yet',
+    error: null,
+  };
+};
+
+const getConnectionObservedMetrics = (connection: TrueNASConnection) => {
+  const observed = connection.observed;
+  if (!observed) return [];
+  return [
+    { label: 'system', value: observed.systems },
+    { label: 'pool', value: observed.storagePools },
+    { label: 'dataset', value: observed.datasets },
+    { label: 'app', value: observed.apps },
+    { label: 'disk', value: observed.disks },
+    { label: 'recovery artifact', value: observed.recoveryArtifacts },
+  ].filter((item) => item.value > 0);
+};
+
+const pluralize = (count: number, singular: string): string =>
+  count === 1 ? singular : `${singular}s`;
+
+const getConnectionHandoffs = (connection: TrueNASConnection) => {
+  const host = (connection.observed?.host || '').trim();
+  const resourceId = (connection.observed?.resourceId || host).trim();
+  if (!host && !resourceId) {
+    return null;
+  }
+  return {
+    infrastructure: buildInfrastructurePath({
+      source: 'truenas',
+      ...(resourceId ? { resource: resourceId } : {}),
+    }),
+    workloads: buildWorkloadsPath({
+      type: 'app-container',
+      platform: 'truenas',
+      ...(host ? { agent: host } : {}),
+    }),
+    storage: buildStoragePath({
+      source: 'truenas',
+      ...(resourceId ? { node: resourceId } : {}),
+    }),
+    recovery: buildRecoveryPath({
+      platform: 'truenas',
+      ...(host ? { node: host } : {}),
+    }),
+  };
+};
 
 interface TrueNASSettingsPanelProps {
   state: TrueNASSettingsPanelState;
@@ -136,68 +244,159 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
             <Show when={!state.loading() && !state.loadingError() && state.connections().length > 0}>
               <div class="space-y-3">
                 <For each={state.connections()}>
-                  {(connection) => (
-                    <div class="rounded-lg border border-border bg-surface-alt px-4 py-4">
-                      <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="space-y-2">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <h4 class="text-sm font-semibold text-base-content">
-                              {connection.name || connection.host}
-                            </h4>
-                            <span
-                              class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                                connection.enabled
-                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
-                                  : 'bg-surface text-muted'
-                              }`}
-                            >
-                              {connection.enabled ? 'Enabled' : 'Disabled'}
-                            </span>
-                          </div>
-                          <p class="text-sm text-muted">
-                            {connection.host}
-                            {connection.port ? `:${connection.port}` : ''}
-                          </p>
-                          <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
-                            <span>{connection.apiKey ? 'API key auth' : 'Username/password auth'}</span>
-                            <span aria-hidden="true">•</span>
-                            <span>{connection.useHttps ? 'HTTPS' : 'HTTP'}</span>
-                            <Show when={connection.insecureSkipVerify}>
-                              <>
+                  {(connection) => {
+                    const health = () => getConnectionHealthPresentation(connection);
+                    const observedMetrics = () => getConnectionObservedMetrics(connection);
+                    const handoffs = () => getConnectionHandoffs(connection);
+
+                    return (
+                      <div
+                        class="rounded-lg border border-border bg-surface-alt px-4 py-4"
+                        data-testid={`truenas-connection-${connection.id}`}
+                      >
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                          <div class="space-y-3">
+                            <div class="space-y-2">
+                              <div class="flex flex-wrap items-center gap-2">
+                                <h4 class="text-sm font-semibold text-base-content">
+                                  {connection.name || connection.host}
+                                </h4>
+                                <span
+                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    connection.enabled
+                                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300'
+                                      : 'bg-surface text-muted'
+                                  }`}
+                                >
+                                  {connection.enabled ? 'Enabled' : 'Disabled'}
+                                </span>
+                                <span
+                                  class={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${health().className}`}
+                                >
+                                  {health().label}
+                                </span>
+                              </div>
+
+                              <p class="text-sm text-muted">
+                                {connection.host}
+                                {connection.port ? `:${connection.port}` : ''}
+                              </p>
+
+                              <div class="flex flex-wrap items-center gap-2 text-xs text-muted">
+                                <span>
+                                  {connection.apiKey ? 'API key auth' : 'Username/password auth'}
+                                </span>
                                 <span aria-hidden="true">•</span>
-                                <span>Skip TLS verification</span>
-                              </>
+                                <span>{connection.useHttps ? 'HTTPS' : 'HTTP'}</span>
+                                <Show when={connection.insecureSkipVerify}>
+                                  <>
+                                    <span aria-hidden="true">•</span>
+                                    <span>Skip TLS verification</span>
+                                  </>
+                                </Show>
+                                <span aria-hidden="true">•</span>
+                                <span>{getPollIntervalLabel(connection.pollIntervalSeconds)}</span>
+                                <Show when={connection.poll?.lastAttemptAt || health().detail}>
+                                  <>
+                                    <span aria-hidden="true">•</span>
+                                    <span>{health().detail}</span>
+                                  </>
+                                </Show>
+                              </div>
+
+                              <Show when={health().error}>
+                                <p class="text-xs font-medium text-red-700 dark:text-red-300">
+                                  {health().error}
+                                </p>
+                              </Show>
+                            </div>
+
+                            <Show when={connection.observed}>
+                              <div class="space-y-2">
+                                <div class="flex flex-wrap gap-2">
+                                  <Show when={connection.observed?.collectedAt}>
+                                    <span class={connectionMetaBadgeClass}>
+                                      Synced{' '}
+                                      {formatRelativeTime(connection.observed?.collectedAt, {
+                                        compact: true,
+                                      })}
+                                    </span>
+                                  </Show>
+                                  <For each={observedMetrics()}>
+                                    {(item) => (
+                                      <span class={connectionMetaBadgeClass}>
+                                        {formatNumber(item.value)} {pluralize(item.value, item.label)}
+                                      </span>
+                                    )}
+                                  </For>
+                                </div>
+
+                                <Show when={handoffs()}>
+                                  {(links) => (
+                                    <div class="flex flex-wrap items-center gap-2">
+                                      <a
+                                        href={links().infrastructure}
+                                        class={buttonClass}
+                                        data-testid={`truenas-connection-${connection.id}-infrastructure`}
+                                      >
+                                        Infrastructure
+                                      </a>
+                                      <a
+                                        href={links().workloads}
+                                        class={buttonClass}
+                                        data-testid={`truenas-connection-${connection.id}-workloads`}
+                                      >
+                                        Workloads
+                                      </a>
+                                      <a
+                                        href={links().storage}
+                                        class={buttonClass}
+                                        data-testid={`truenas-connection-${connection.id}-storage`}
+                                      >
+                                        Storage
+                                      </a>
+                                      <a
+                                        href={links().recovery}
+                                        class={buttonClass}
+                                        data-testid={`truenas-connection-${connection.id}-recovery`}
+                                      >
+                                        Recovery
+                                      </a>
+                                    </div>
+                                  )}
+                                </Show>
+                              </div>
                             </Show>
                           </div>
-                        </div>
 
-                        <div class="flex flex-wrap items-center gap-2">
-                          <button
-                            type="button"
-                            class={buttonClass}
-                            onClick={() => void state.testSavedConnection(connection)}
-                            disabled={state.testing()}
-                          >
-                            Test
-                          </button>
-                          <button
-                            type="button"
-                            class={buttonClass}
-                            onClick={() => state.openEditDialog(connection)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            class={dangerButtonClass}
-                            onClick={() => state.openDeleteDialog(connection)}
-                          >
-                            Delete
-                          </button>
+                          <div class="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              class={buttonClass}
+                              onClick={() => void state.testSavedConnection(connection)}
+                              disabled={state.testing()}
+                            >
+                              Test
+                            </button>
+                            <button
+                              type="button"
+                              class={buttonClass}
+                              onClick={() => state.openEditDialog(connection)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              class={dangerButtonClass}
+                              onClick={() => state.openDeleteDialog(connection)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  }}
                 </For>
               </div>
             </Show>
@@ -249,6 +448,21 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                 onInput={(event) => state.updateForm({ port: event.currentTarget.value })}
                 placeholder={state.form().useHttps ? '443' : '80'}
               />
+            </label>
+            <label class={formField}>
+              <span class={formLabel}>Poll interval (seconds)</span>
+              <input
+                class={formControl}
+                inputMode="numeric"
+                value={state.form().pollIntervalSeconds}
+                onInput={(event) =>
+                  state.updateForm({ pollIntervalSeconds: event.currentTarget.value })
+                }
+                placeholder="60"
+              />
+              <span class={formHelpText}>
+                How often Pulse should refresh this TrueNAS connection.
+              </span>
             </label>
             <label class={formField}>
               <span class={formLabel}>Authentication</span>

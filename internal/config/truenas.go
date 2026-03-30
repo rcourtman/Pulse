@@ -8,6 +8,7 @@ import (
 )
 
 const trueNASSensitiveMask = "********"
+const defaultTrueNASPollIntervalSecs = 60
 
 // IsTrueNASSensitiveMask reports whether the value is the redacted placeholder
 // used by the TrueNAS settings API.
@@ -37,7 +38,28 @@ func NewTrueNASInstance() TrueNASInstance {
 		ID:               uuid.NewString(),
 		UseHTTPS:         true,
 		Enabled:          true,
-		PollIntervalSecs: 60,
+		PollIntervalSecs: defaultTrueNASPollIntervalSecs,
+	}
+}
+
+// EffectivePollIntervalSecs returns the configured poll interval or the
+// canonical default when the stored config still uses the zero-value legacy
+// form.
+func (t TrueNASInstance) EffectivePollIntervalSecs() int {
+	if t.PollIntervalSecs > 0 {
+		return t.PollIntervalSecs
+	}
+	return defaultTrueNASPollIntervalSecs
+}
+
+// ApplyDefaults normalizes legacy zero-value config onto the canonical stored
+// defaults without changing explicitly configured values.
+func (t *TrueNASInstance) ApplyDefaults() {
+	if t == nil {
+		return
+	}
+	if t.PollIntervalSecs <= 0 {
+		t.PollIntervalSecs = defaultTrueNASPollIntervalSecs
 	}
 }
 

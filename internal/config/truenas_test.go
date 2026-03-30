@@ -27,6 +27,17 @@ func TestTrueNASNewInstanceDefaultsAndUniqueID(t *testing.T) {
 	require.Equal(t, 60, first.PollIntervalSecs)
 }
 
+func TestTrueNASEffectivePollIntervalAndApplyDefaults(t *testing.T) {
+	instance := TrueNASInstance{}
+	require.Equal(t, 60, instance.EffectivePollIntervalSecs())
+
+	instance.ApplyDefaults()
+	require.Equal(t, 60, instance.PollIntervalSecs)
+
+	instance.PollIntervalSecs = 120
+	require.Equal(t, 120, instance.EffectivePollIntervalSecs())
+}
+
 func TestTrueNASValidate(t *testing.T) {
 	tests := []struct {
 		name      string

@@ -54,6 +54,9 @@ test.describe('TrueNAS platform connections settings', () => {
   test('renders the platform-connections workspace with the TrueNAS integration shell', async ({
     page,
   }) => {
+    const healthyAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    const failingAt = new Date(Date.now() - 2 * 60_000).toISOString();
+
     await page.route('**/api/truenas/connections', async (route) => {
       if (route.request().method() !== 'GET') {
         await route.continue();
@@ -74,6 +77,22 @@ test.describe('TrueNAS platform connections settings', () => {
             insecureSkipVerify: false,
             fingerprint: '',
             enabled: true,
+            pollIntervalSeconds: 60,
+            poll: {
+              intervalSeconds: 60,
+              lastSuccessAt: healthyAt,
+            },
+            observed: {
+              host: 'tower',
+              resourceId: 'tower',
+              collectedAt: healthyAt,
+              systems: 1,
+              storagePools: 2,
+              datasets: 12,
+              apps: 4,
+              disks: 8,
+              recoveryArtifacts: 18,
+            },
           },
           {
             id: 'truenas-2',
@@ -86,6 +105,28 @@ test.describe('TrueNAS platform connections settings', () => {
             insecureSkipVerify: true,
             fingerprint: 'sha256:example',
             enabled: false,
+            pollIntervalSeconds: 300,
+            poll: {
+              intervalSeconds: 300,
+              lastAttemptAt: failingAt,
+              consecutiveFailures: 2,
+              lastError: {
+                at: failingAt,
+                message: 'authentication failed',
+                category: 'auth',
+              },
+            },
+            observed: {
+              host: 'vault',
+              resourceId: 'vault',
+              collectedAt: healthyAt,
+              systems: 1,
+              storagePools: 1,
+              datasets: 6,
+              apps: 0,
+              disks: 12,
+              recoveryArtifacts: 24,
+            },
           },
         ]),
       });
@@ -120,6 +161,28 @@ test.describe('TrueNAS platform connections settings', () => {
     await expect(page.getByText('Backup Vault')).toBeVisible();
     await expect(page.getByText('API key auth')).toBeVisible();
     await expect(page.getByText('Username/password auth')).toBeVisible();
+    await expect(page.getByText('Healthy')).toBeVisible();
+    await expect(page.getByText('Paused', { exact: true })).toBeVisible();
+    await expect(page.getByText('Poll every 1 minute')).toBeVisible();
+    await expect(page.getByText('Poll every 5 minutes')).toBeVisible();
+    await expect(page.getByText('2 pools')).toBeVisible();
+    await expect(page.getByText('12 datasets')).toBeVisible();
+    await expect(page.getByTestId('truenas-connection-truenas-1-infrastructure')).toHaveAttribute(
+      'href',
+      '/infrastructure?source=truenas&resource=tower',
+    );
+    await expect(page.getByTestId('truenas-connection-truenas-1-workloads')).toHaveAttribute(
+      'href',
+      '/workloads?type=app-container&platform=truenas&agent=tower',
+    );
+    await expect(page.getByTestId('truenas-connection-truenas-1-storage')).toHaveAttribute(
+      'href',
+      '/storage?source=truenas&node=tower',
+    );
+    await expect(page.getByTestId('truenas-connection-truenas-1-recovery')).toHaveAttribute(
+      'href',
+      '/recovery?platform=truenas&node=tower',
+    );
 
     fs.mkdirSync(path.dirname(SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });

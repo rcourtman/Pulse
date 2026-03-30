@@ -22,6 +22,22 @@ describe('TrueNASAPI', () => {
         useHttps: true,
         insecureSkipVerify: false,
         enabled: true,
+        pollIntervalSeconds: 120,
+        poll: {
+          intervalSeconds: 120,
+          lastSuccessAt: ' 2026-03-30T12:00:00Z ',
+          consecutiveFailures: 0,
+        },
+        observed: {
+          host: ' tower ',
+          resourceId: ' tower ',
+          systems: 1,
+          storagePools: 2,
+          datasets: 12,
+          apps: 4,
+          disks: 8,
+          recoveryArtifacts: 18,
+        },
       },
     ]);
 
@@ -38,7 +54,25 @@ describe('TrueNASAPI', () => {
         insecureSkipVerify: false,
         fingerprint: undefined,
         enabled: true,
-        pollIntervalSeconds: undefined,
+        pollIntervalSeconds: 120,
+        poll: {
+          intervalSeconds: 120,
+          lastAttemptAt: undefined,
+          lastSuccessAt: '2026-03-30T12:00:00Z',
+          consecutiveFailures: 0,
+          lastError: undefined,
+        },
+        observed: {
+          host: 'tower',
+          resourceId: 'tower',
+          collectedAt: undefined,
+          systems: 1,
+          storagePools: 2,
+          datasets: 12,
+          apps: 4,
+          disks: 8,
+          recoveryArtifacts: 18,
+        },
       },
     ]);
   });

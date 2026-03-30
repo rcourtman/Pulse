@@ -448,6 +448,12 @@ composition boundary, and
 the direct-node/discovery runtime hooks plus `useTrueNASSettingsPanelState.ts`
 as the canonical provider state owners, instead of leaving those panels
 ungoverned beside the canonical unified-agent install path.
+That same lifecycle-owned platform-connections workspace must keep API-backed
+provider state operationally useful, not CRUD-only. `TrueNASSettingsPanel.tsx`
+and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,
+poll cadence, discovered contribution summary, and canonical infrastructure /
+workloads / storage / recovery handoffs coming from `/api/truenas/connections`
+instead of falling back to panel-local inference or agent-first setup guidance.
 That same API-backed platform workspace owner now also includes the shared
 presentation helpers `frontend-modern/src/utils/clusterEndpointPresentation.ts`
 and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint

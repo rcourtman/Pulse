@@ -53,6 +53,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        pollIntervalSeconds: 90,
         useHttps: true,
         insecureSkipVerify: false,
         enabled: true,
@@ -63,6 +64,7 @@ describe('useTrueNASSettingsPanelState', () => {
       name: 'tower',
       host: 'truenas.local',
       apiKey: '********',
+      pollIntervalSeconds: 90,
       useHttps: true,
       insecureSkipVerify: false,
       enabled: true,
@@ -73,6 +75,7 @@ describe('useTrueNASSettingsPanelState', () => {
         name: 'tower',
         host: 'truenas.local',
         apiKey: '********',
+        pollIntervalSeconds: 90,
         useHttps: true,
         insecureSkipVerify: false,
         enabled: true,
@@ -85,6 +88,7 @@ describe('useTrueNASSettingsPanelState', () => {
 
     result.openEditDialog(result.connections()[0]);
     expect(result.dialogOpen()).toBe(true);
+    expect(result.form().pollIntervalSeconds).toBe('90');
     await result.saveCurrentForm();
 
     expect(TrueNASAPI.updateConnection).toHaveBeenCalledWith(
@@ -92,6 +96,7 @@ describe('useTrueNASSettingsPanelState', () => {
       expect.objectContaining({
         host: 'truenas.local',
         apiKey: '********',
+        pollIntervalSeconds: 90,
         username: '',
         password: '',
       }),

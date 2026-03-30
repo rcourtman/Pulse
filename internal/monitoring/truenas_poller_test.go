@@ -249,6 +249,116 @@ func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerConnectionSummariesExposeObservedCounts(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	mock := newTrueNASMockServer(t, "summary-host")
+	t.Cleanup(mock.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "summary-conn", mock.URL(), true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		summaries := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})
+		summary, ok := summaries[connection.ID]
+		return ok && summary.Poll != nil && summary.Poll.LastSuccessAt != nil && summary.Observed != nil
+	}, "expected connection summary to include successful poll and observed counts")
+
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.IntervalSeconds != 60 {
+		t.Fatalf("expected poll interval summary 60 seconds, got %+v", summary.Poll)
+	}
+	if summary.Observed == nil {
+		t.Fatal("expected observed summary to be present")
+	}
+	if summary.Observed.Host != "summary-host" || summary.Observed.ResourceID != "summary-host" {
+		t.Fatalf("unexpected observed host identity: %+v", summary.Observed)
+	}
+	if summary.Observed.Systems != 1 || summary.Observed.StoragePools != 1 || summary.Observed.Datasets != 1 || summary.Observed.Disks != 1 {
+		t.Fatalf("unexpected observed counts: %+v", summary.Observed)
+	}
+}
+
+func TestTrueNASPollerConnectionSummariesCaptureFailures(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte(`{"error":"unauthorized"}`))
+	}))
+	t.Cleanup(server.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "summary-fail", server.URL, true)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 50*time.Millisecond, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		summaries := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})
+		summary, ok := summaries[connection.ID]
+		return ok && summary.Poll != nil && summary.Poll.LastError != nil && summary.Poll.ConsecutiveFailures > 0
+	}, "expected connection summary to capture poll failure state")
+
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastError == nil {
+		t.Fatalf("expected poll failure summary, got %+v", summary.Poll)
+	}
+	if summary.Poll.LastError.Category != "auth" {
+		t.Fatalf("expected auth error category, got %+v", summary.Poll.LastError)
+	}
+}
+
+func TestTrueNASPollerHonorsConfiguredPollInterval(t *testing.T) {
+	previous := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() { truenas.SetFeatureEnabled(previous) })
+
+	mock := newTrueNASMockServer(t, "interval-host")
+	t.Cleanup(mock.Close)
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := trueNASInstanceForServer(t, "interval-conn", mock.URL(), true)
+	connection.PollIntervalSecs = 1
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, 0, nil)
+	poller.Start(context.Background())
+	t.Cleanup(poller.Stop)
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return mock.RequestCount() >= 5
+	}, "expected initial immediate poll for configured TrueNAS connection")
+
+	requestCountAfterFirstPoll := mock.RequestCount()
+	time.Sleep(400 * time.Millisecond)
+	if got := mock.RequestCount(); got != requestCountAfterFirstPoll {
+		t.Fatalf("expected configured 1s poll interval to avoid an early repoll, got before=%d after=%d", requestCountAfterFirstPoll, got)
+	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		return mock.RequestCount() > requestCountAfterFirstPoll
+	}, "expected configured 1s poll interval to trigger the next poll without waiting for the 60s default")
+}
+
 func TestTrueNASPollerPhysicalDiskTemperatureHistoryUsesTenantScopedProvider(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
