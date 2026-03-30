@@ -342,6 +342,8 @@ export function useRecoverySurfaceState() {
       const normalized = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
       if (normalized) platforms.add(normalized);
     }
+    const selected = normalizeRecoveryPlatformSelection(platformFilter());
+    if (selected !== 'all') platforms.add(selected);
     return ['all', ...buildSourcePlatformOptions(platforms).map((option) => option.key)];
   });
 

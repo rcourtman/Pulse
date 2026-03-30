@@ -896,6 +896,14 @@ consume that shared `platform` filter surface directly. They must not keep
 recovery-local `provider` route/query vocabulary alive behind renamed labels,
 or the UI will drift back to backend-shaped navigation even when the copy says
 `Platform`.
+That same shared recovery filter owner must also preserve route-owned platform
+visibility while transport-backed options are still hydrating. If
+`frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` restores a
+canonical `platform` selection such as `truenas` from the route before the
+rollups, points, or facets payloads arrive, it must keep that selected
+platform present in the option set so the shared `LabeledFilterSelect` shows
+the owned value immediately instead of flashing back to `All Platforms` until
+recovery data warms.
 `frontend-modern/src/utils/problemResourcePresentation.ts` now also belongs to
 that same dashboard overview boundary so the problem-resource severity contract
 stays shared with `ProblemResourcesTable.tsx` instead of floating as an

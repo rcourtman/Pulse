@@ -806,6 +806,20 @@ describe('Recovery', () => {
     });
   });
 
+  it('keeps route-owned recovery platform and node filters visible while options hydrate', async () => {
+    mockLocationSearch = '?view=events&platform=truenas&node=tower';
+    apiFetchMock.mockImplementation(() => new Promise(() => {}));
+
+    render(() => <Recovery />);
+
+    await waitFor(() => expect(screen.getByLabelText('Platform')).toBeInTheDocument());
+
+    expect(screen.getByLabelText('Platform')).toHaveValue('truenas');
+    expect(screen.getByRole('option', { name: 'TrueNAS' }).selected).toBe(true);
+    expect(screen.getByText('Host / Agent')).toBeInTheDocument();
+    expect(screen.getByText('tower')).toBeInTheDocument();
+  });
+
   it('uses the shared reset action for protected item filters', async () => {
     render(() => <Recovery />);
 
