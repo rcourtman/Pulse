@@ -44,6 +44,14 @@ func (r *Router) handleResetFirstRunSecurity(w http.ResponseWriter, req *http.Re
 	r.config.APITokens = nil
 	config.Mu.Unlock()
 
+	for _, key := range []string{
+		"PULSE_AUTH_USER",
+		"PULSE_AUTH_PASS",
+		"REQUIRE_AUTH",
+	} {
+		_ = os.Unsetenv(key)
+	}
+
 	if previousAuthUser != "" {
 		InvalidateUserSessions(previousAuthUser)
 	}

@@ -168,6 +168,14 @@ management, and fleet control surfaces.
 8. Keep post-install lifecycle completion explicit inside
    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    and `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`.
+9. Keep the dev first-session proof deterministic on the real wizard path:
+   `tests/integration/tests/helpers.ts` and
+   `tests/integration/tests/11-first-session.spec.ts` must refresh first-run
+   state through `/api/security/dev/reset-first-run`, then prove both the
+   canonical `Open Infrastructure Install` handoff and the explicit
+   `Open Platform connections` handoff against the live setup wizard instead
+   of relying on stale bootstrap tokens, dashboard fallbacks, or preview-only
+   coverage.
    When the first host reports successfully, the install workflow must treat
    that as a completion handoff with direct navigation into `/dashboard` and
    `/settings/infrastructure/operations` instead of leaving operators on a
@@ -1311,6 +1319,10 @@ That same `SetupCompletionPanel` boundary must also stay on the direct
 `setup-completion-install-surface` proof path, rather than relying only on shared
 helper coverage or downstream install tests to catch lifecycle drift in the
 setup completion surface.
+That same first-session browser proof must also exercise the explicit
+`Platform connections` completion action through the real setup wizard flow
+for API-backed starts like TrueNAS, rather than relying only on the preview
+route or prose-level assertions to represent the API-backed alternative.
 The same ownership also covers manual install fallback in the infrastructure
 settings surface: active and ignored Connected infrastructure rows must now
 come from the backend-owned `connectedInfrastructure` projection instead of a

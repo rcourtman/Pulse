@@ -3,11 +3,11 @@ import { ensureAuthenticated, ensureFirstRunExperience, navigateToSettings, apiR
 
 /**
  * Dedicated first-session E2E test covering the full journey:
- *   wizard → infrastructure operations handoff → settings discovery → gated panel guards
+ *   wizard → canonical first-session handoffs → settings discovery → gated panel guards
  *
  * This satisfies L8 score-8 criteria: "Dedicated first-session E2E test
- * (wizard → settings discovery)" with the current canonical first-run handoff
- * landing in Infrastructure Operations install rather than the legacy dashboard.
+ * (wizard → settings discovery)" while also keeping the setup-completion
+ * surface on real browser proof for both host-install and API-backed starts.
  *
  * The opening test in this file forces the backend into deterministic
  * first-run state through the dev/test reset route, then completes the real
@@ -41,6 +41,24 @@ test.describe.serial('First-session experience', () => {
     // The main content area should be rendered (not stuck on a spinner/blank).
     const mainContent = page.locator('main, [role="main"], #root > div').first();
     await expect(mainContent).toBeVisible();
+  });
+
+  test('wizard completion can hand off API-backed starts into platform connections', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only first-session coverage');
+
+    await ensureFirstRunExperience(page, { completionTarget: 'platforms' });
+
+    await expect(page).toHaveURL(/\/settings\/infrastructure\/platforms/);
+    await expect(
+      page.getByRole('heading', { name: 'Infrastructure Operations', exact: true }).first(),
+    ).toBeVisible();
+    await expect(page.getByRole('tab', { name: 'Platform connections' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+    await expect(page.getByText('TrueNAS', { exact: false }).first()).toBeVisible();
   });
 
   test('dashboard shows key navigation elements', async ({ page }, testInfo) => {

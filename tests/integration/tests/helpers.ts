@@ -65,7 +65,32 @@ type ResetFirstRunResponse = {
   bootstrapToken?: string;
 };
 
-async function completeSetupWizard(page: Page, bootstrapToken: string) {
+type SetupCompletionTarget = 'install' | 'platforms' | 'none';
+
+type CompleteSetupWizardOptions = {
+  completionTarget?: SetupCompletionTarget;
+};
+
+const SETUP_COMPLETION_HANDOFFS: Record<
+  Exclude<SetupCompletionTarget, 'none'>,
+  { buttonName: string; urlPattern: RegExp }
+> = {
+  install: {
+    buttonName: 'Open Infrastructure Install',
+    urlPattern: /\/settings\/infrastructure\/install/,
+  },
+  platforms: {
+    buttonName: 'Open Platform connections',
+    urlPattern: /\/settings\/infrastructure\/platforms/,
+  },
+};
+
+async function completeSetupWizard(
+  page: Page,
+  bootstrapToken: string,
+  options: CompleteSetupWizardOptions = {},
+) {
+  const completionTarget = options.completionTarget ?? 'install';
   if (!bootstrapToken) {
     throw new Error('Pulse requires first-run setup but no bootstrap token is available');
   }
@@ -76,30 +101,62 @@ async function completeSetupWizard(page: Page, bootstrapToken: string) {
   const wizard = page.getByRole('main', { name: 'Pulse Setup Wizard' });
   await expect(wizard).toBeVisible();
 
-  const securityConfigured = wizard.getByText(/security configured/i);
+  const completionHeading = wizard.getByRole('heading', {
+    name: /install your first monitored host|first monitored host connected/i,
+  });
+  const openInstallWorkspaceButton = wizard.getByRole('button', {
+    name: 'Open Infrastructure Install',
+    exact: true,
+  });
+  const openPlatformConnectionsButton = wizard.getByRole('button', {
+    name: 'Open Platform connections',
+    exact: true,
+  });
   const secureDashboardHeading = wizard.getByText('Secure Your Dashboard');
-  const continueButton = wizard.getByRole('button', { name: /continue to setup|continue/i });
+  const continueButton = wizard.getByRole('button', {
+    name: /verify bootstrap token|continue to setup|continue/i,
+  });
   const finishButton = wizard.getByRole('button', { name: /go to dashboard|skip for now/i });
+  const bootstrapTokenInput = page.getByPlaceholder('Paste your bootstrap token');
 
-  await page.getByPlaceholder('Paste your bootstrap token').fill(bootstrapToken);
+  await bootstrapTokenInput.click();
+  await bootstrapTokenInput.fill('');
+  await bootstrapTokenInput.pressSequentially(bootstrapToken, { delay: 10 });
 
-  // Welcome step auto-submits pasted tokens; only click Continue if no transition happened.
-  let onSecurityStep = false;
-  let onCompleteStep = false;
-  for (let attempt = 0; attempt < 30; attempt++) {
-    if (await securityConfigured.isVisible({ timeout: 150 }).catch(() => false)) {
-      onCompleteStep = true;
-      break;
+  const detectWizardStep = async (): Promise<'security' | 'completion' | 'pending'> => {
+    if (
+      await completionHeading.isVisible({ timeout: 100 }).catch(() => false) ||
+      await openInstallWorkspaceButton.isVisible({ timeout: 100 }).catch(() => false) ||
+      await openPlatformConnectionsButton.isVisible({ timeout: 100 }).catch(() => false)
+    ) {
+      return 'completion';
     }
-    if (await secureDashboardHeading.isVisible({ timeout: 150 }).catch(() => false)) {
-      onSecurityStep = true;
-      break;
+    if (await secureDashboardHeading.isVisible({ timeout: 100 }).catch(() => false)) {
+      return 'security';
     }
-    if (attempt === 5 && await continueButton.isVisible({ timeout: 250 }).catch(() => false)) {
-      await continueButton.click();
-    }
-    await page.waitForTimeout(200);
+    return 'pending';
+  };
+
+  // The welcome step now prefers auto-submit once the pasted bootstrap token
+  // is long enough. Only fall back to the explicit verify button if the step
+  // stays put after that auto-submit window.
+  let wizardStep = await detectWizardStep();
+  if (wizardStep === 'pending') {
+    await expect.poll(detectWizardStep, { timeout: 10_000 }).not.toBe('pending').catch(() => {});
+    wizardStep = await detectWizardStep();
   }
+  if (
+    wizardStep === 'pending' &&
+    await continueButton.isVisible({ timeout: 250 }).catch(() => false) &&
+    await continueButton.isEnabled().catch(() => false)
+  ) {
+    await continueButton.click({ timeout: 1_000 }).catch(() => {});
+    await expect.poll(detectWizardStep, { timeout: 10_000 }).not.toBe('pending');
+    wizardStep = await detectWizardStep();
+  }
+
+  const onSecurityStep = wizardStep === 'security';
+  let onCompleteStep = wizardStep === 'completion';
 
   if (!onSecurityStep && !onCompleteStep) {
     throw new Error('Setup wizard did not reach security or completion step');
@@ -115,7 +172,11 @@ async function completeSetupWizard(page: Page, bootstrapToken: string) {
           clickedCustomPassword = true;
           break;
         } catch (error) {
-          if (await securityConfigured.isVisible({ timeout: 250 }).catch(() => false)) {
+          if (
+            await completionHeading.isVisible({ timeout: 250 }).catch(() => false) ||
+            await openInstallWorkspaceButton.isVisible({ timeout: 250 }).catch(() => false) ||
+            await openPlatformConnectionsButton.isVisible({ timeout: 250 }).catch(() => false)
+          ) {
             onCompleteStep = true;
             break;
           }
@@ -134,10 +195,17 @@ async function completeSetupWizard(page: Page, bootstrapToken: string) {
         await wizard.getByRole('button', { name: /create account/i }).click();
         await expect
           .poll(async () => {
-            if (await securityConfigured.isVisible({ timeout: 250 }).catch(() => false)) {
+            if (
+              await completionHeading.isVisible({ timeout: 250 }).catch(() => false) ||
+              await openInstallWorkspaceButton.isVisible({ timeout: 250 }).catch(() => false) ||
+              await openPlatformConnectionsButton.isVisible({ timeout: 250 }).catch(() => false)
+            ) {
               return 'complete';
             }
-            if (/\/settings\/infrastructure\/install/.test(page.url())) {
+            if (
+              completionTarget === 'install' &&
+              SETUP_COMPLETION_HANDOFFS.install.urlPattern.test(page.url())
+            ) {
               return 'handoff';
             }
             return 'pending';
@@ -146,12 +214,33 @@ async function completeSetupWizard(page: Page, bootstrapToken: string) {
         onCompleteStep = true;
       }
     } else {
-      await expect(securityConfigured).toBeVisible();
+      await expect(completionHeading).toBeVisible();
       onCompleteStep = true;
     }
   }
 
-  if (onCompleteStep) {
+  if (onCompleteStep && completionTarget !== 'none') {
+    const completionAction = SETUP_COMPLETION_HANDOFFS[completionTarget];
+    if (!completionAction.urlPattern.test(page.url())) {
+      const completionButton = wizard.getByRole('button', {
+        name: completionAction.buttonName,
+        exact: true,
+      });
+      const completionVisible = await completionButton.isVisible({ timeout: 500 }).catch(() => false);
+
+      if (completionVisible) {
+        await completionButton.scrollIntoViewIfNeeded();
+        await completionButton.click({ timeout: 10_000 });
+        await expect(page).toHaveURL(completionAction.urlPattern);
+      }
+    }
+
+    if (!completionAction.urlPattern.test(page.url())) {
+      throw new Error(
+        `Setup wizard completion did not hand off to ${completionAction.buttonName}: ${page.url()}`,
+      );
+    }
+  } else if (onCompleteStep) {
     const finishVisible = await finishButton.isVisible({ timeout: 500 }).catch(() => false);
     if (finishVisible) {
       await finishButton.scrollIntoViewIfNeeded();
@@ -179,56 +268,49 @@ export async function maybeCompleteSetupWizard(page: Page) {
   await completeSetupWizard(page, E2E_CREDENTIALS.bootstrapToken);
 }
 
-export async function ensureFirstRunExperience(page: Page) {
+export async function ensureFirstRunExperience(
+  page: Page,
+  options: CompleteSetupWizardOptions = {},
+) {
   await page.addInitScript(() => {
     localStorage.setItem('pulse_whats_new_v2_shown', 'true');
   });
   await waitForPulseReady(page);
+  const completionTarget = options.completionTarget ?? 'install';
 
   let bootstrapToken = E2E_CREDENTIALS.bootstrapToken;
   const security = await getSecurityStatus(page);
-  if (security.hasAuthentication !== false) {
-    let resetRes = await apiRequest(page, '/api/security/dev/reset-first-run', {
+  let resetRes = await apiRequest(page, '/api/security/dev/reset-first-run', {
+    method: 'POST',
+    headers: E2E_CREDENTIALS.primaryApiToken
+      ? { 'X-API-Token': E2E_CREDENTIALS.primaryApiToken }
+      : undefined,
+  });
+  if (resetRes.status() === 401 && !E2E_CREDENTIALS.primaryApiToken && security.hasAuthentication !== false) {
+    await login(page);
+    resetRes = await apiRequest(page, '/api/security/dev/reset-first-run', {
       method: 'POST',
-      headers: E2E_CREDENTIALS.primaryApiToken
-        ? { 'X-API-Token': E2E_CREDENTIALS.primaryApiToken }
-        : undefined,
     });
-    if (resetRes.status() === 401 && !E2E_CREDENTIALS.primaryApiToken) {
-      await login(page);
-      resetRes = await apiRequest(page, '/api/security/dev/reset-first-run', {
-        method: 'POST',
-      });
-    }
-    if (!resetRes.ok()) {
-      throw new Error(`Failed to reset first-run state: ${resetRes.status()} ${await resetRes.text()}`);
-    }
-
-    const payload = (await resetRes.json()) as ResetFirstRunResponse;
-    bootstrapToken = String(payload.bootstrapToken || '').trim();
-    if (bootstrapToken === '') {
-      throw new Error('First-run reset response did not include a bootstrap token');
-    }
-
-    await expect
-      .poll(async () => {
-        const current = await getSecurityStatus(page);
-        return current.hasAuthentication === false;
-      })
-      .toBe(true);
-
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
-    await page.evaluate(() => {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-    });
-    await page.context().clearCookies();
+  }
+  if (!resetRes.ok()) {
+    throw new Error(`Failed to reset first-run state: ${resetRes.status()} ${await resetRes.text()}`);
   }
 
-  await completeSetupWizard(page, bootstrapToken);
+  const payload = (await resetRes.json()) as ResetFirstRunResponse;
+  bootstrapToken = String(payload.bootstrapToken || '').trim();
+  if (bootstrapToken === '') {
+    throw new Error('First-run reset response did not include a bootstrap token');
+  }
+
+  await completeSetupWizard(page, bootstrapToken, { completionTarget });
   const firstRunLandingPattern =
-    /\/(settings\/infrastructure\/install|proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
+    completionTarget === 'platforms'
+      ? SETUP_COMPLETION_HANDOFFS.platforms.urlPattern
+      : /\/(settings\/infrastructure\/install|proxmox|dashboard|nodes|hosts|docker|infrastructure)/;
   if (!firstRunLandingPattern.test(page.url())) {
+    if (completionTarget === 'platforms') {
+      throw new Error(`First-run setup did not reach Platform connections: ${page.url()}`);
+    }
     await login(page);
   }
   await expect(page).toHaveURL(firstRunLandingPattern);

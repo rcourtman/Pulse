@@ -87,6 +87,12 @@ server-side update execution surfaces.
 1. Update this contract when canonical deployment or installer entry points move
 2. Keep deployment runtime and shared API proof routing aligned in `registry.json`
 3. Preserve explicit coverage for installer parity, update planning, and deployment bootstrap behavior when these surfaces change
+4. Keep managed-runtime first-session helpers deterministic: shared browser
+   helpers under `tests/integration/tests/helpers.ts` may only drive the live
+   setup wizard through the current managed runtime after refreshing the
+   canonical dev reset route, and any helper changes that rely on hot-dev
+   browser/backend behavior must keep a managed-runtime recovery proof updated
+   in the same slice.
 
 ## Current State
 

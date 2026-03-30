@@ -272,6 +272,13 @@ Own canonical runtime payload shapes between backend and frontend.
     self-serve verification failures may render owned HTML, but they must
     preserve originating Pulse context instead of collapsing into generic
     control-plane failures.
+24. Keep `/api/security/dev/reset-first-run` transport-backed and genuinely
+    unauthenticated: when the dev reset route clears first-run auth it must
+    also clear any env-backed auth state that feeds `/api/security/status`, so
+    the status payload flips `hasAuthentication` to `false`, preserves
+    `bootstrapTokenPath`, and allows browser-owned first-session proof to
+    re-enter the real setup wizard instead of silently falling back to an
+    authenticated dashboard state.
 22. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must

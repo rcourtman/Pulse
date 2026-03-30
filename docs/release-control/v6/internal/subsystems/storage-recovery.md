@@ -126,6 +126,12 @@ querying, and the operator-facing storage health presentation layer.
    owned for dashboard composition, but when no resources have reported yet it
    must route operators to `/settings/infrastructure/install` instead of
    leaving the dashboard as a passive dead end.
+8. Keep dependent first-session reset behavior honest on the shared `internal/api/`
+   boundary: when `/api/security/dev/reset-first-run` is used to reopen the
+   setup wizard in browser proof, the resulting status payload must genuinely
+   expose unauthenticated setup so storage/recovery-owned empty-state and
+   dashboard handoff proof does not silently fall back to an authenticated
+   dashboard path.
 
 ## Current State
 

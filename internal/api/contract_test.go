@@ -3886,6 +3886,46 @@ func TestContract_ResetFirstRunSecurityResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_ResetFirstRunSecurityClearsEnvBackedStatus(t *testing.T) {
+	t.Setenv("PULSE_DEV", "true")
+	t.Setenv("NODE_ENV", "")
+	t.Setenv("PULSE_AUTH_USER", "admin")
+	t.Setenv("PULSE_AUTH_PASS", "hashed-password")
+
+	record := newTokenRecord(t, "contract-reset-first-run-token-456.12345678", []string{config.ScopeSettingsWrite}, nil)
+	cfg := newTestConfigWithTokens(t, record)
+	cfg.AuthUser = "admin"
+	cfg.AuthPass = "hashed-password"
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	resetReq := httptest.NewRequest(http.MethodPost, "/api/security/dev/reset-first-run", nil)
+	resetReq.Header.Set("X-API-Token", "contract-reset-first-run-token-456.12345678")
+	resetRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(resetRec, resetReq)
+	if resetRec.Code != http.StatusOK {
+		t.Fatalf("reset-first-run status = %d, want 200 (%s)", resetRec.Code, resetRec.Body.String())
+	}
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	statusRec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("security status = %d, want 200 (%s)", statusRec.Code, statusRec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode security status payload: %v", err)
+	}
+	if got, _ := payload["hasAuthentication"].(bool); got {
+		t.Fatalf("hasAuthentication = %v, want false", payload["hasAuthentication"])
+	}
+	if got, _ := payload["bootstrapTokenPath"].(string); strings.TrimSpace(got) == "" {
+		t.Fatalf("bootstrapTokenPath = %v, want non-empty", payload["bootstrapTokenPath"])
+	}
+}
+
 func TestContract_SetupScriptURLResponseJSONSnapshot(t *testing.T) {
 	payload := map[string]any{
 		"type":              "pve",

@@ -113,6 +113,23 @@ test.describe.serial('Managed dev runtime recovery', () => {
         message: 'expected proxied backend health to recover after managed backend restart',
       })
       .toBe(200);
+    await expect
+      .poll(
+        async () => {
+          const response = await page.request.get('/api/security/status');
+          if (!response.ok()) {
+            return '';
+          }
+          const payload = (await response.json()) as { hasAuthentication?: boolean };
+          return typeof payload.hasAuthentication === 'boolean' ? String(payload.hasAuthentication) : '';
+        },
+        {
+          timeout: 30_000,
+          message:
+            'expected security status to stay readable through managed backend restart recovery',
+        },
+      )
+      .not.toBe('');
   });
 
   test('browser shell recovers after the managed hot-dev owner process is killed', async ({
