@@ -173,6 +173,15 @@ That same governed settings trust boundary now also includes
 copy, security posture scoring, audit-log wording, audit-webhook wording, and
 SSO provider-type presentation remain part of the governed security trust
 surface instead of floating as unowned settings helpers.
+That same governed security-score presentation boundary also owns the
+operator-facing low-score warning copy used by the top-level runtime banner:
+`frontend-modern/src/utils/securityScorePresentation.ts` must describe the
+actual missing controls surfaced by the current security posture, and it may
+only claim the instance is accessible without authentication when
+`hasAuthentication` is false. Authenticated local runtimes that are merely
+missing HTTPS, API tokens, or protected exports must not reuse the
+unauthenticated credential-exposure warning just because the aggregate score
+remains below the banner threshold.
 That same shared security transport boundary must stay under explicit proof
 routing on both sides: `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and

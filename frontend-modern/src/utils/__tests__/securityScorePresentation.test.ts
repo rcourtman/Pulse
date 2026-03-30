@@ -51,6 +51,9 @@ describe('securityScorePresentation', () => {
         score: 40,
         publicAccess: true,
         hasAuthentication: false,
+        apiTokenConfigured: false,
+        exportProtected: false,
+        hasHTTPS: false,
       }),
     ).toMatchObject({
       background: 'bg-red-50 dark:bg-red-900',
@@ -65,6 +68,9 @@ describe('securityScorePresentation', () => {
         score: 35,
         publicAccess: false,
         hasAuthentication: false,
+        apiTokenConfigured: false,
+        exportProtected: false,
+        hasHTTPS: false,
       }),
     ).toMatchObject({
       background: 'bg-red-50 dark:bg-red-900',
@@ -79,12 +85,28 @@ describe('securityScorePresentation', () => {
         score: 60,
         publicAccess: false,
         hasAuthentication: false,
+        apiTokenConfigured: false,
+        exportProtected: false,
+        hasHTTPS: false,
       }),
     ).toMatchObject({
       background: 'bg-yellow-50 dark:bg-yellow-900',
       border: 'border-yellow-200 dark:border-yellow-800',
       messageClass: 'text-base-content',
     });
+  });
+
+  it('describes missing controls when authentication is enabled', () => {
+    expect(
+      getSecurityWarningPresentation({
+        score: 60,
+        publicAccess: false,
+        hasAuthentication: true,
+        apiTokenConfigured: false,
+        exportProtected: true,
+        hasHTTPS: false,
+      }).message,
+    ).toBe('Authentication is enabled, but this Pulse instance is still missing HTTPS and an API token.');
   });
 
   it('returns canonical yes/no feature-state presentation', () => {

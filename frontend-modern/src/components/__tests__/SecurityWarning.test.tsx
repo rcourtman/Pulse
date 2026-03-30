@@ -54,6 +54,14 @@ describe('SecurityWarning', () => {
       expect(screen.getByText(/Security score:/i)).toBeInTheDocument();
     });
 
+    expect(
+      screen.getByText(
+        'Authentication is enabled, but this Pulse instance is still missing HTTPS, an API token, and protected exports.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/accessible without authentication/i),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Learn More' })).toHaveAttribute(
       'href',
       '/docs/SECURITY.md',

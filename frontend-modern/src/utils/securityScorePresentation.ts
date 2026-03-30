@@ -113,6 +113,9 @@ export function getSecurityWarningPresentation(options: {
   score: number;
   publicAccess: boolean;
   hasAuthentication: boolean;
+  apiTokenConfigured: boolean;
+  exportProtected: boolean;
+  hasHTTPS?: boolean;
 }): SecurityWarningPresentation {
   if (options.publicAccess && !options.hasAuthentication) {
     return {
@@ -125,6 +128,38 @@ export function getSecurityWarningPresentation(options: {
   }
 
   const posture = getSecurityScorePresentation(options.score);
+  const missingControls: string[] = [];
+  if (!options.hasHTTPS) {
+    missingControls.push('HTTPS');
+  }
+  if (!options.apiTokenConfigured) {
+    missingControls.push('an API token');
+  }
+  if (!options.exportProtected) {
+    missingControls.push('protected exports');
+  }
+
+  const formatList = (items: string[]): string => {
+    if (items.length <= 1) {
+      return items[0] ?? 'required security controls';
+    }
+    if (items.length === 2) {
+      return `${items[0]} and ${items[1]}`;
+    }
+    return `${items.slice(0, -1).join(', ')}, and ${items[items.length - 1]}`;
+  };
+
+  let message = 'Review the remaining security settings before using this instance for live infrastructure.';
+  if (!options.hasAuthentication) {
+    message =
+      'Authentication is disabled. Anyone who can reach this Pulse instance can access stored infrastructure credentials.';
+  } else if (missingControls.length > 0) {
+    const missingSummary = formatList(missingControls);
+    message = options.publicAccess
+      ? `This Pulse instance is reachable from a public network and is still missing ${missingSummary}.`
+      : `Authentication is enabled, but this Pulse instance is still missing ${missingSummary}.`;
+  }
+
   return {
     background:
       posture.label === 'Moderate'
@@ -134,8 +169,7 @@ export function getSecurityWarningPresentation(options: {
       posture.label === 'Moderate'
         ? 'border-yellow-200 dark:border-yellow-800'
         : 'border-red-200 dark:border-red-800',
-    message:
-      'Your Pulse instance is accessible without authentication. Proxmox credentials could be exposed.',
+    message,
     messageClass: 'text-base-content',
   };
 }

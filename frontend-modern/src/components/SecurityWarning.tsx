@@ -113,6 +113,9 @@ export const SecurityWarning: Component = () => {
       score: scorePercentage(),
       publicAccess: status()!.publicAccess || false,
       hasAuthentication: status()!.hasAuthentication,
+      apiTokenConfigured: status()!.hasAPIToken,
+      exportProtected: status()!.exportProtected,
+      hasHTTPS: status()!.hasHTTPS,
     });
 
   return (
