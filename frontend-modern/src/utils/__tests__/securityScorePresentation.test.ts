@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getSecurityFeatureCardPresentation,
   getSecurityFeatureStatePresentation,
+  getSecurityHardeningActions,
   getSecurityNetworkAccessSubtitle,
   getSecurityPostureItems,
   getSecurityScoreIconComponent,
@@ -146,6 +147,46 @@ describe('securityScorePresentation', () => {
         publicAccess: true,
       }),
     ).toBe(true);
+  });
+
+  it('returns recommended hardening steps for private authenticated setups', () => {
+    expect(
+      getSecurityHardeningActions({
+        hasAuthentication: true,
+        apiTokenConfigured: false,
+        exportProtected: true,
+        hasAuditLogging: false,
+        requiresAuth: true,
+        publicAccess: false,
+        isPrivateNetwork: true,
+        hasHTTPS: false,
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        key: 'configure-https',
+        severity: 'recommended',
+      }),
+      expect.objectContaining({
+        key: 'create-api-token',
+        severity: 'recommended',
+      }),
+    ]);
+  });
+
+  it('returns critical hardening steps for exposed setups', () => {
+    expect(
+      getSecurityHardeningActions({
+        hasAuthentication: false,
+        apiTokenConfigured: false,
+        exportProtected: false,
+        unprotectedExportAllowed: true,
+        hasAuditLogging: false,
+        requiresAuth: false,
+        publicAccess: true,
+        isPrivateNetwork: false,
+        hasHTTPS: false,
+      }).map((action) => action.key),
+    ).toEqual(['enable-authentication', 'protect-exports', 'configure-https']);
   });
 
   it('returns canonical yes/no feature-state presentation', () => {

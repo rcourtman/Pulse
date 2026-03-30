@@ -163,6 +163,7 @@ That same rule also applies inside shipped security guidance itself:
 not bounce the operator back to GitHub `main` for section references that the
 running build already owns locally.
 That same governed settings trust boundary now also includes
+`frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`,
 `frontend-modern/src/components/Settings/QuickSecuritySetup.tsx`,
 `frontend-modern/src/components/Settings/SecurityPostureSummary.tsx`,
 `frontend-modern/src/components/Settings/SSOProviderTypeIcon.tsx`,
@@ -192,6 +193,13 @@ HTTP, but private authenticated runtimes that are only missing optional
 hardening controls such as HTTPS on localhost or an API token must route that
 guidance through the governed Security Overview posture surfaces instead of
 covering the primary app chrome with a persistent warning.
+That same Security Overview surface must stay action-oriented once those
+low-risk states are demoted out of the global banner:
+`frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` and
+`frontend-modern/src/utils/securityScorePresentation.ts` must render explicit
+next-step hardening actions that point to the owning auth, API-access, or
+security-guidance surface rather than dropping operators onto a generic score
+without a remediation path.
 That same shared security transport boundary must stay under explicit proof
 routing on both sides: `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and

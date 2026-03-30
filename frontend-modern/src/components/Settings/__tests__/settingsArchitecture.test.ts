@@ -1299,6 +1299,12 @@ describe('Settings architecture guardrails', () => {
     expect(aiRuntimeControlsSectionSource).toContain('TERMS_DOC_URL');
     expect(securityOverviewPanelSource).toContain('@/utils/docsLinks');
     expect(securityOverviewPanelSource).toContain('PROXY_AUTH_DOC_URL');
+    expect(securityOverviewPanelSource).toContain('SECURITY_DOC_URL');
+    expect(securityOverviewPanelSource).toContain('getSecurityHardeningActions');
+    expect(securityOverviewPanelSource).toContain("label: 'Open API Access'");
+    expect(securityOverviewPanelSource).toContain("label: 'Open security guide'");
+    expect(securityOverviewPanelSource).toContain("tone={hardeningTone()}");
+    expect(securityOverviewPanelSource).toContain("criticalHardeningActions() > 0 ? 'danger' : 'info'");
     expect(selfHostedCommercialActivationSectionSource).toContain('@/utils/docsLinks');
     expect(selfHostedCommercialActivationSectionSource).toContain('TERMS_DOC_URL');
     expect(apiTokenManagerModelSource).toContain('@/utils/docsLinks');

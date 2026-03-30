@@ -45,6 +45,19 @@ export interface SecurityFeatureCardPresentation {
   criticalLabelClassName: string;
 }
 
+export type SecurityHardeningActionKey =
+  | 'enable-authentication'
+  | 'protect-exports'
+  | 'configure-https'
+  | 'create-api-token';
+
+export interface SecurityHardeningAction {
+  key: SecurityHardeningActionKey;
+  severity: 'critical' | 'recommended';
+  title: string;
+  description: string;
+}
+
 export interface SecurityPostureStatus {
   hasAuthentication: boolean;
   ssoEnabled?: boolean;
@@ -251,6 +264,62 @@ export function getSecurityFeatureCardPresentation(options: {
     statusLabel: 'Disabled',
     criticalLabelClassName: 'text-muted',
   };
+}
+
+export function getSecurityHardeningActions(
+  status: SecurityPostureStatus,
+): SecurityHardeningAction[] {
+  const actions: SecurityHardeningAction[] = [];
+
+  if (!status.hasAuthentication) {
+    actions.push({
+      key: 'enable-authentication',
+      severity: 'critical',
+      title: 'Enable authentication',
+      description:
+        'Anyone who can reach this Pulse instance can sign in without a password boundary until authentication is configured.',
+    });
+  }
+
+  if (!status.exportProtected || status.unprotectedExportAllowed) {
+    actions.push({
+      key: 'protect-exports',
+      severity: 'critical',
+      title: 'Protect exports',
+      description:
+        'Backup and export flows are currently allowed without token-backed protection. Lock them down before using this instance for real infrastructure data.',
+    });
+  }
+
+  if (status.publicAccess && !status.hasHTTPS) {
+    actions.push({
+      key: 'configure-https',
+      severity: 'critical',
+      title: 'Enable HTTPS for public access',
+      description:
+        'This Pulse instance is reachable from a public network and still serves over HTTP. Put it behind TLS before exposing it beyond your private network.',
+    });
+  } else if (!status.hasHTTPS) {
+    actions.push({
+      key: 'configure-https',
+      severity: 'recommended',
+      title: 'Plan HTTPS before live use',
+      description:
+        'Local HTTP is acceptable for development, but production access should terminate TLS at a reverse proxy before operators use this instance for live infrastructure.',
+    });
+  }
+
+  if (status.hasAuthentication && !status.apiTokenConfigured) {
+    actions.push({
+      key: 'create-api-token',
+      severity: 'recommended',
+      title: 'Create an API token',
+      description:
+        'Scoped API tokens protect export and automation flows without reusing the interactive admin password.',
+    });
+  }
+
+  return actions;
 }
 
 export function getSecurityPostureItems(status: SecurityPostureStatus): SecurityPostureItem[] {

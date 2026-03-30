@@ -329,6 +329,15 @@ the shared shipped-doc helper in `frontend-modern/src/utils/docsLinks.ts`
 instead of hardcoding GitHub `main` URLs that can drift from the running
 build, and `tests/integration/tests/20-local-doc-links.spec.ts` must keep
 browser proof on those settings-shell surfaces.
+That same settings-shell boundary now also owns the remediation framing for
+Security Overview itself. `SecurityOverviewPanel.tsx` may not stop at a score
+card and static best-practices copy once low-risk security debt has been
+demoted out of the global banner; it must render explicit next-step hardening
+actions on the canonical settings shell, source those actions from the shared
+security presentation owner, and keep direct operator links pointed at the
+owning auth, API-access, or shipped security-guide surface. The canonical
+proof for that shell framing remains
+`frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`.
 The same reporting catalog ownership now also governs the operator resource-
 selection cap for performance reports. `ReportingPanel.tsx` and
 `ResourcePicker.tsx` may present or enforce that limit, but they must receive

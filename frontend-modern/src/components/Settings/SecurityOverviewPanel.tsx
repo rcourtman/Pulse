@@ -1,9 +1,16 @@
-import { Component, Show, Accessor } from 'solid-js';
+import { Component, Show, Accessor, For, createMemo } from 'solid-js';
+import { CalloutCard } from '@/components/shared/CalloutCard';
 import SettingsPanel from '@/components/shared/SettingsPanel';
-import { PROXY_AUTH_DOC_URL } from '@/utils/docsLinks';
+import { PROXY_AUTH_DOC_URL, SECURITY_DOC_URL } from '@/utils/docsLinks';
 import { SecurityPostureSummary } from './SecurityPostureSummary';
+import { settingsTabPath } from './settingsNavigationModel';
 import Shield from 'lucide-solid/icons/shield';
 import Info from 'lucide-solid/icons/info';
+import AlertTriangle from 'lucide-solid/icons/alert-triangle';
+import {
+  getSecurityHardeningActions,
+  type SecurityHardeningAction,
+} from '@/utils/securityScorePresentation';
 
 interface SecurityStatusInfo {
   hasAuthentication: boolean;
@@ -29,6 +36,52 @@ interface SecurityOverviewPanelProps {
 }
 
 export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (props) => {
+  const hardeningActions = createMemo(() =>
+    props.securityStatus() ? getSecurityHardeningActions(props.securityStatus()!) : [],
+  );
+  const criticalHardeningActions = createMemo(
+    () => hardeningActions().filter((action) => action.severity === 'critical').length,
+  );
+  const recommendedHardeningActions = createMemo(
+    () => hardeningActions().filter((action) => action.severity === 'recommended').length,
+  );
+  const hardeningTone = createMemo(() =>
+    criticalHardeningActions() > 0 ? 'danger' : 'info',
+  );
+  const hardeningTitle = createMemo(() =>
+    criticalHardeningActions() > 0 ? 'Hardening priorities' : 'Recommended hardening steps',
+  );
+  const hardeningDescription = createMemo(() => {
+    if (criticalHardeningActions() > 0) {
+      return `Resolve the ${criticalHardeningActions() === 1 ? 'critical exposure' : `${criticalHardeningActions()} critical exposures`} below before using this Pulse instance for live infrastructure.`;
+    }
+
+    return 'Authentication is enabled and this instance appears private, but it still needs a few production hardening steps.';
+  });
+  const actionLinkFor = (action: SecurityHardeningAction) => {
+    switch (action.key) {
+      case 'enable-authentication':
+        return {
+          href: settingsTabPath('security-auth'),
+          label: 'Open Authentication',
+          external: false,
+        } as const;
+      case 'protect-exports':
+      case 'create-api-token':
+        return {
+          href: settingsTabPath('api'),
+          label: 'Open API Access',
+          external: false,
+        } as const;
+      case 'configure-https':
+        return {
+          href: SECURITY_DOC_URL,
+          label: 'Open security guide',
+          external: false,
+        } as const;
+    }
+  };
+
   return (
     <SettingsPanel
       title="Security Overview"
@@ -66,6 +119,67 @@ export const SecurityOverviewPanel: Component<SecurityOverviewPanelProps> = (pro
 
       <Show when={!props.securityStatusLoading() && props.securityStatus()}>
         <SecurityPostureSummary status={props.securityStatus()!} embedded />
+      </Show>
+
+      <Show when={!props.securityStatusLoading() && hardeningActions().length > 0}>
+        <CalloutCard
+          tone={hardeningTone()}
+          title={hardeningTitle()}
+          description={hardeningDescription()}
+          icon={
+            criticalHardeningActions() > 0 ? (
+              <AlertTriangle class="h-5 w-5" />
+            ) : (
+              <Info class="h-5 w-5" />
+            )
+          }
+          class="space-y-4"
+        >
+          <div class="grid gap-3 lg:grid-cols-2">
+            <For each={hardeningActions()}>
+              {(action) => {
+                const actionLink = actionLinkFor(action);
+                return (
+                  <div class="rounded-md border border-border bg-surface px-4 py-3">
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                          <h3 class="text-sm font-semibold text-base-content">{action.title}</h3>
+                          <span
+                            class={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                              action.severity === 'critical'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                            }`}
+                          >
+                            {action.severity === 'critical' ? 'Act now' : 'Recommended'}
+                          </span>
+                        </div>
+                        <p class="mt-2 text-sm text-muted">{action.description}</p>
+                      </div>
+                    </div>
+                    <div class="mt-3 flex flex-wrap items-center gap-3">
+                      <a
+                        href={actionLink.href}
+                        target={actionLink.external ? '_blank' : undefined}
+                        rel={actionLink.external ? 'noreferrer' : undefined}
+                        class="inline-flex min-h-10 items-center rounded-md border border-border bg-surface-alt px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
+                      >
+                        {actionLink.label}
+                      </a>
+                    </div>
+                  </div>
+                );
+              }}
+            </For>
+          </div>
+          <Show when={recommendedHardeningActions() > 0}>
+            <p class="text-xs text-muted">
+              Recommended items improve production readiness even when the current runtime is only
+              being used locally.
+            </p>
+          </Show>
+        </CalloutCard>
       </Show>
 
       <Show when={!props.securityStatusLoading() && props.securityStatus()?.hasProxyAuth}>
