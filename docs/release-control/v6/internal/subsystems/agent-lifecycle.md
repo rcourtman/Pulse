@@ -463,6 +463,10 @@ and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,
 poll cadence, discovered contribution summary, and canonical infrastructure /
 workloads / storage / recovery handoffs coming from `/api/truenas/connections`
 instead of falling back to panel-local inference or agent-first setup guidance.
+Saved connection retests from that workspace must use the server-owned
+`POST /api/truenas/connections/{id}/test` path so operators can verify stored
+credentials without leaking masked-secret placeholders back into the draft
+connection form contract.
 When that same platform workspace reports TrueNAS as unavailable, the disabled
 state must mean the server has explicitly opted out of the default-on TrueNAS
 integration, not that operators still need to enable a hidden feature gate for

@@ -96,6 +96,7 @@ describe('TrueNASAPI', () => {
         enabled: false,
       })
       .mockResolvedValueOnce({ success: true, id: 'conn-1' })
+      .mockResolvedValueOnce({ success: true })
       .mockResolvedValueOnce({ success: true });
 
     await TrueNASAPI.createConnection({
@@ -120,6 +121,7 @@ describe('TrueNASAPI', () => {
         apiKey: 'secret',
       }),
     ).resolves.toEqual({ success: true });
+    await expect(TrueNASAPI.testSavedConnection('conn/1')).resolves.toEqual({ success: true });
 
     expect(apiFetchJSON).toHaveBeenNthCalledWith(
       1,
@@ -161,6 +163,13 @@ describe('TrueNASAPI', () => {
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ host: 'truenas.local', apiKey: 'secret' }),
+      }),
+    );
+    expect(apiFetchJSON).toHaveBeenNthCalledWith(
+      5,
+      '/api/truenas/connections/conn%2F1/test',
+      expect.objectContaining({
+        method: 'POST',
       }),
     );
   });

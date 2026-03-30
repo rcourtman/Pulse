@@ -204,4 +204,16 @@ export class TrueNASAPI {
       success: strictBoolean(response.success),
     };
   }
+
+  static async testSavedConnection(id: string): Promise<TrueNASConnectionTestResult> {
+    const response = await apiFetchJSON<Partial<TrueNASConnectionTestResult>>(
+      `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}/test`,
+      {
+        method: 'POST',
+      },
+    );
+    return {
+      success: strictBoolean(response.success),
+    };
+  }
 }

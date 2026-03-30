@@ -11,6 +11,7 @@ vi.mock('@/api/truenas', () => ({
     updateConnection: vi.fn(),
     deleteConnection: vi.fn(),
     testConnection: vi.fn(),
+    testSavedConnection: vi.fn(),
   },
   isRedactedTrueNASSecret: (value: string | null | undefined) => (value || '').trim() === '********',
 }));
@@ -105,5 +106,33 @@ describe('useTrueNASSettingsPanelState', () => {
     );
     expect(result.dialogOpen()).toBe(false);
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection updated');
+  });
+
+  it('tests saved connections through the canonical saved-connection API path', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([
+      {
+        id: 'conn-1',
+        name: 'tower',
+        host: 'truenas.local',
+        apiKey: '********',
+        pollIntervalSeconds: 60,
+        useHttps: true,
+        insecureSkipVerify: false,
+        enabled: true,
+      },
+    ] as never);
+    vi.mocked(TrueNASAPI.testSavedConnection).mockResolvedValueOnce({ success: true } as never);
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+
+    await waitFor(() => expect(result.connections()).toHaveLength(1));
+
+    await result.testSavedConnection(result.connections()[0]);
+
+    expect(TrueNASAPI.testSavedConnection).toHaveBeenCalledWith('conn-1');
+    expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
+    expect(notificationStore.success).toHaveBeenCalledWith(
+      'TrueNAS connection successful for tower',
+    );
   });
 });

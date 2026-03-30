@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrueNASSettingsPanel } from '../TrueNASSettingsPanel';
 import type { TrueNASSettingsPanelState } from '../useTrueNASSettingsPanelState';
@@ -157,6 +157,11 @@ describe('TrueNASSettingsPanel', () => {
     expect(screen.getByRole('button', { name: 'Add TrueNAS connection' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Add TrueNAS connection' }));
     expect(mockState.openCreateDialog).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(within(screen.getByTestId('truenas-connection-conn-1')).getByRole('button', { name: 'Test' }));
+    expect(mockState.testSavedConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'conn-1' }),
+    );
   });
 
   it('shows the feature gate warning when the backend path is disabled', () => {

@@ -250,7 +250,7 @@ export function useTrueNASSettingsPanelState() {
   const testSavedConnection = async (connection: TrueNASConnection) => {
     setTesting(true);
     try {
-      await TrueNASAPI.testConnection(buildConnectionInput(buildFormStateFromConnection(connection)));
+      await TrueNASAPI.testSavedConnection(connection.id);
       notificationStore.success(`TrueNAS connection successful for ${connection.name || connection.host}`);
     } catch (error) {
       const message = getErrorMessage(error, 'TrueNAS connection failed');

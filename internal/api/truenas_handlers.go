@@ -278,11 +278,60 @@ func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Re
 	instance.Host = strings.TrimSpace(instance.Host)
 	instance.APIKey = strings.TrimSpace(instance.APIKey)
 	instance.Username = strings.TrimSpace(instance.Username)
+	instance.Password = strings.TrimSpace(instance.Password)
+	instance.Fingerprint = strings.TrimSpace(instance.Fingerprint)
+	instance.ApplyDefaults()
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
 
+	h.testConnectionInstance(w, r, instance)
+}
+
+// HandleTestSavedConnection validates connectivity for one saved TrueNAS
+// connection using the server-owned stored secret material instead of relying
+// on frontend redaction placeholders.
+func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *http.Request) {
+	if !h.featureEnabled(w) {
+		return
+	}
+
+	connectionID, ok := trueNASConnectionIDFromTestPath(r.URL.Path)
+	if !ok {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_connection_id", "Connection ID is required", nil)
+		return
+	}
+
+	persistence := h.persistenceForRequest(w, r.Context())
+	if persistence == nil {
+		return
+	}
+
+	instances, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "truenas_load_failed", "Failed to load TrueNAS configuration", map[string]string{"error": err.Error()})
+		return
+	}
+
+	for i := range instances {
+		instance := instances[i]
+		if strings.TrimSpace(instance.ID) != connectionID {
+			continue
+		}
+		instance.ApplyDefaults()
+		h.testConnectionInstance(w, r, instance)
+		return
+	}
+
+	writeErrorResponse(w, http.StatusNotFound, "truenas_not_found", "Connection not found", nil)
+}
+
+func (h *TrueNASHandlers) testConnectionInstance(
+	w http.ResponseWriter,
+	r *http.Request,
+	instance config.TrueNASInstance,
+) {
 	newClient := h.newClient
 	if newClient == nil {
 		newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) { return truenas.NewClient(cfg) }
@@ -394,5 +443,28 @@ func trueNASConnectionIDFromPath(path string) (string, bool) {
 		return "", false
 	}
 
+	return connectionID, true
+}
+
+func trueNASConnectionIDFromTestPath(path string) (string, bool) {
+	if !strings.HasPrefix(path, trueNASConnectionsPathPrefix) {
+		return "", false
+	}
+	trimmed := strings.Trim(strings.TrimPrefix(path, trueNASConnectionsPathPrefix), "/")
+	if !strings.HasSuffix(trimmed, "/test") {
+		return "", false
+	}
+	raw := strings.TrimSuffix(trimmed, "/test")
+	if raw == "" || strings.Contains(raw, "/") {
+		return "", false
+	}
+	connectionID, err := url.PathUnescape(raw)
+	if err != nil {
+		return "", false
+	}
+	connectionID = strings.TrimSpace(connectionID)
+	if connectionID == "" || strings.Contains(connectionID, "/") {
+		return "", false
+	}
 	return connectionID, true
 }

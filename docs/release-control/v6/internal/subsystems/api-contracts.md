@@ -627,6 +627,11 @@ must stay the canonical API-backed platform boundary for listing, creating,
 updating, deleting, and testing TrueNAS integrations, and `PUT` updates must
 preserve masked secrets (`********`) instead of clearing stored API keys or
 passwords when operators edit non-secret fields from the settings surface.
+Draft validation must stay on `POST /api/truenas/connections/test`, while
+re-testing one saved connection must route through
+`POST /api/truenas/connections/{id}/test` so the server reuses stored secret
+material instead of forcing the frontend to round-trip redaction placeholders
+back through the draft-test API.
 That same `/api/truenas/connections` list boundary now also owns the
 operator-facing runtime summary for those configured connections. The list
 response must carry the canonical redacted config together with poll health

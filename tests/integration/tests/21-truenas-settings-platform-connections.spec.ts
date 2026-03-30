@@ -24,6 +24,13 @@ const OPERATIONS_SCREENSHOT_PATH = path.resolve(
   'tmp',
   'truenas-settings-operations-summary.png',
 );
+const WORKFLOW_SCREENSHOT_PATH = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'tmp',
+  'truenas-settings-platform-workflow.png',
+);
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -186,6 +193,168 @@ test.describe('TrueNAS platform connections settings', () => {
 
     fs.mkdirSync(path.dirname(SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
+  });
+
+  test('adds, retests, and deletes TrueNAS connections through the canonical settings workflow', async ({
+    page,
+  }) => {
+    const syncedAt = new Date(Date.now() - 60_000).toISOString();
+    let connections: Record<string, unknown>[] = [];
+    let draftTestPayload: Record<string, unknown> | null = null;
+    let createPayload: Record<string, unknown> | null = null;
+    let draftTestCalls = 0;
+    const savedTestPaths: string[] = [];
+    const deletePaths: string[] = [];
+
+    await page.route('**/api/truenas/connections**', async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === '/api/truenas/connections' && method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(connections),
+        });
+        return;
+      }
+
+      if (pathname === '/api/truenas/connections/test' && method === 'POST') {
+        draftTestCalls += 1;
+        draftTestPayload = JSON.parse(request.postData() || '{}');
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        });
+        return;
+      }
+
+      if (pathname === '/api/truenas/connections' && method === 'POST') {
+        createPayload = JSON.parse(request.postData() || '{}');
+        connections = [
+          {
+            id: 'conn-1',
+            name: createPayload.name,
+            host: createPayload.host,
+            port: createPayload.port,
+            apiKey: '********',
+            useHttps: createPayload.useHttps,
+            insecureSkipVerify: createPayload.insecureSkipVerify,
+            fingerprint: createPayload.fingerprint,
+            enabled: createPayload.enabled,
+            pollIntervalSeconds: createPayload.pollIntervalSeconds,
+            poll: {
+              intervalSeconds: createPayload.pollIntervalSeconds,
+              lastSuccessAt: syncedAt,
+            },
+            observed: {
+              host: 'tower',
+              resourceId: 'tower',
+              collectedAt: syncedAt,
+              systems: 1,
+              storagePools: 2,
+              datasets: 12,
+              apps: 4,
+              disks: 8,
+              recoveryArtifacts: 18,
+            },
+          },
+        ];
+        await route.fulfill({
+          status: 201,
+          contentType: 'application/json',
+          body: JSON.stringify(connections[0]),
+        });
+        return;
+      }
+
+      if (pathname === '/api/truenas/connections/conn-1/test' && method === 'POST') {
+        savedTestPaths.push(pathname);
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        });
+        return;
+      }
+
+      if (pathname === '/api/truenas/connections/conn-1' && method === 'DELETE') {
+        deletePaths.push(pathname);
+        connections = [];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true, id: 'conn-1' }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto('/settings/infrastructure/platforms/truenas', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
+      timeout: 15_000,
+    });
+
+    await expect(page.getByText('No TrueNAS connections yet')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Add TrueNAS connection' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Add TrueNAS connection' });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByPlaceholder('tower').fill('Tower NAS');
+    await dialog.getByPlaceholder('truenas.local').fill('tower.local');
+    await dialog.getByPlaceholder('443').fill('443');
+    await dialog.getByPlaceholder('60').fill('90');
+    await dialog.locator('input[type="password"]').first().fill('secret-api-key');
+
+    await dialog.getByRole('button', { name: 'Test connection' }).click();
+    await expect
+      .poll(() => draftTestPayload)
+      .toMatchObject({
+        name: 'Tower NAS',
+        host: 'tower.local',
+        port: 443,
+        apiKey: 'secret-api-key',
+        useHttps: true,
+        enabled: true,
+        pollIntervalSeconds: 90,
+      });
+
+    await dialog.getByRole('button', { name: 'Add connection' }).click();
+
+    const connectionCard = page.getByTestId('truenas-connection-conn-1');
+    await expect(connectionCard).toBeVisible();
+    await expect(connectionCard).toContainText('Tower NAS');
+    await expect(connectionCard).toContainText('Healthy');
+    await expect
+      .poll(() => createPayload)
+      .toMatchObject({
+        name: 'Tower NAS',
+        host: 'tower.local',
+        port: 443,
+        apiKey: 'secret-api-key',
+        useHttps: true,
+        enabled: true,
+        pollIntervalSeconds: 90,
+      });
+
+    await connectionCard.getByRole('button', { name: 'Test' }).click();
+    await expect.poll(() => savedTestPaths).toEqual(['/api/truenas/connections/conn-1/test']);
+    await expect.poll(() => draftTestCalls).toBe(1);
+
+    await connectionCard.getByRole('button', { name: 'Delete' }).click();
+    await page.getByRole('button', { name: 'Delete connection' }).click();
+    await expect.poll(() => deletePaths).toEqual(['/api/truenas/connections/conn-1']);
+    await expect(page.getByText('No TrueNAS connections yet')).toBeVisible();
+
+    fs.mkdirSync(path.dirname(WORKFLOW_SCREENSHOT_PATH), { recursive: true });
+    await page.screenshot({ path: WORKFLOW_SCREENSHOT_PATH, fullPage: true });
   });
 
   test('counts TrueNAS alongside the other platform connections on the operations summary', async ({
