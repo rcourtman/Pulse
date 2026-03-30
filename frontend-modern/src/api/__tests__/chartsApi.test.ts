@@ -119,6 +119,7 @@ describe('ChartsAPI', () => {
     expect(asMetricsHistoryResourceType('host')).toBeNull();
 
     expect(mapUnifiedTypeToHistoryResourceType('truenas')).toBe('agent');
+    expect(mapUnifiedTypeToHistoryResourceType('node')).toBe('agent');
     expect(mapUnifiedTypeToHistoryResourceType('pod')).toBe('pod');
     expect(mapUnifiedTypeToHistoryResourceType('container')).toBeNull();
 

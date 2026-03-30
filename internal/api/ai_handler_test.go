@@ -548,6 +548,7 @@ func TestHandleChat_DropsLegacyMentionTypes(t *testing.T) {
 }
 
 func TestCanonicalizeChatMentionType_RejectsRemovedAliases(t *testing.T) {
+	assert.Equal(t, "agent", canonicalizeChatMentionType("truenas"))
 	assert.Equal(t, "", canonicalizeChatMentionType("host"))
 	assert.Equal(t, "", canonicalizeChatMentionType("container"))
 	assert.Equal(t, "", canonicalizeChatMentionType("lxc"))

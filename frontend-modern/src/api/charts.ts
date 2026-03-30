@@ -6,6 +6,7 @@
  */
 
 import { apiFetchJSON } from '@/utils/apiClient';
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 
 // Types matching backend response format
 export interface MetricPoint {
@@ -195,7 +196,8 @@ export function asMetricsHistoryResourceType(type: string): ResourceType | null 
 }
 
 export function mapUnifiedTypeToHistoryResourceType(type: string): ResourceType | null {
-  switch (type) {
+  const canonical = canonicalizeFrontendResourceType(type) || type.trim().toLowerCase();
+  switch (canonical) {
     case 'agent':
       return 'agent';
     case 'docker-host':
@@ -204,8 +206,6 @@ export function mapUnifiedTypeToHistoryResourceType(type: string): ResourceType 
       return 'k8s-node';
     case 'k8s-cluster':
       return 'k8s-cluster';
-    case 'truenas':
-      return 'agent';
     case 'vm':
       return 'vm';
     case 'system-container':

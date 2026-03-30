@@ -221,6 +221,12 @@ management, and fleet control surfaces.
     `agent` resources with `platformType: 'truenas'`; any legacy raw
     `resource.type === 'truenas'` compatibility collapse belongs in the shared
     frontend resource adapters, not in setup or lifecycle-local UI branching.
+12. Keep lifecycle-adjacent AI transport compatibility on the shared
+    `internal/api/` boundary. If chat mention parsing, alert investigation
+    targets, or adjacent Assistant resource transport still accept a legacy
+    top-level `truenas` type, that value must collapse immediately to the
+    canonical `agent` host type before lifecycle surfaces, setup handoffs, or
+    operator-visible route state consume it.
 
 ## Current State
 

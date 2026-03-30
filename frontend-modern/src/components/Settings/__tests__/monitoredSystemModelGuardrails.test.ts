@@ -983,10 +983,12 @@ describe('monitored-system model guardrails', () => {
     expect(resourceDetailDiscoveryModelSource).toContain('const explicitDiscoveryAgentId =');
     expect(resourceDetailDiscoveryModelSource).toContain('agentId: explicitDiscoveryAgentId');
     expect(resourceDetailDiscoveryModelSource).not.toContain('hostId: explicitDiscoveryAgentId');
+    expect(resourceDetailDiscoveryModelSource).not.toContain("case 'truenas'");
     expect(resourceDetailMappersSource).toContain('getActionableAgentIdFromResource(resource)');
     expect(unifiedResourcesHookSource).toContain(
       'const discoveryAgentId = v2.discoveryTarget?.agentId;',
     );
+    expect(unifiedResourcesHookSource).not.toContain("case 'truenas'");
   });
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
@@ -1498,6 +1500,7 @@ describe('monitored-system model guardrails', () => {
     expect(chartsApiSource).not.toContain("| 'dockerHost'");
     expect(chartsApiSource).not.toContain("| 'guest'");
     expect(chartsApiSource).not.toContain("| 'docker'");
+    expect(chartsApiSource).not.toContain("case 'truenas'");
     expect(resourcePickerSource).toContain('@/utils/reportableResourceTypes');
     expect(reportableResourceTypesSource).toContain("return 'docker-host';");
     expect(reportableResourceTypesSource).toContain("return 'app-container';");

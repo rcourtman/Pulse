@@ -150,6 +150,12 @@ normalization collapses any legacy top-level `truenas` payload into canonical
 runs. Storage and recovery links may consume that normalized platform truth,
 but they must not preserve a second top-level `truenas` type contract in
 storage/recovery-local route, handoff, or filter code.
+That same shared `internal/api/` dependency now also assumes Assistant-facing
+resource transport behaves the same way: any legacy top-level `truenas`
+resource or mention type that still reaches shared AI handlers must collapse
+to canonical `agent` before storage/recovery-adjacent links, filters, or
+drill-ins consume it, so those surfaces never inherit a second live host-type
+contract from chat or alert investigation ingress.
 That same storage ownership also includes the shared storage-source presentation
 contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and

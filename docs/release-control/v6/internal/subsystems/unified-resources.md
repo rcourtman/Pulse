@@ -200,6 +200,9 @@ such as `frontend-modern/src/hooks/useUnifiedResources.ts` and
 `frontend-modern/src/utils/resourceTypeCompat.ts` must collapse any legacy raw
 `truenas` top-level type payloads back onto canonical `agent` before route
 helpers, dashboard summaries, alert context, or selector models consume them.
+Downstream shared consumers such as metrics-history target helpers and drawer
+discovery mappers must reuse that same canonicalization step instead of adding
+their own `case 'truenas'` branches later in the render path.
 API-backed TrueNAS CPU temperature now follows that same canonical host rule.
 TrueNAS system records must project `cputemp` readings into the shared
 `agent.temperature` and `agent.sensors.temperatureCelsius` fields instead of
@@ -1204,6 +1207,10 @@ resource type aliases before storing `discoveryTarget`. Backend `k8s`
 discovery coordinates collapse to the canonical frontend `pod` target, and
 typed PBS/storage facets must be preserved as the explicit frontend resource
 meta interfaces instead of floating as untyped platform-data consumers.
+That same consumer boundary now also owns legacy top-level TrueNAS alias
+collapse for discovery and chart consumers: shared frontend hooks may accept
+raw `truenas` payloads at ingest, but once normalized the rest of the frontend
+must consume the canonical `agent` host type rather than repeating the alias.
 
 Resolved host deduplication must also fail safe on unfamiliar connector types.
 Unknown source types may contribute identity and source-label evidence, but

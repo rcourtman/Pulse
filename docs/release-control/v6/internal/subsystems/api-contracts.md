@@ -178,6 +178,13 @@ Own canonical runtime payload shapes between backend and frontend.
     canonical `agent` resource with `platformType: 'truenas'`; API-backed
     settings surfaces such as token management must not branch on
     `resource.type === 'truenas'` as a second runtime contract.
+24. Keep AI transport compatibility-only TrueNAS aliases normalized at the
+    handler boundary. `internal/api/ai_handler.go` and
+    `internal/api/ai_handlers.go` may accept legacy `truenas` mention or
+    `resource_type` inputs only by collapsing them immediately to the
+    canonical `agent` host type; downstream runtime requests, tests, and
+    frontend clients must not treat raw `truenas` as a second AI transport
+    contract.
 
 ## Forbidden Paths
 

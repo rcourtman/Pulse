@@ -61,6 +61,31 @@ describe('toDiscoveryConfig', () => {
     });
   });
 
+  it('normalizes legacy truenas host types through the canonical agent discovery path', () => {
+    const resource: Resource = {
+      ...baseResource(),
+      type: 'truenas' as unknown as Resource['type'],
+      platformType: 'truenas',
+      sourceType: 'hybrid',
+      platformData: {
+        sources: ['agent', 'truenas'],
+        truenas: { hostname: 'truenas-main' },
+        agent: { hostname: 'truenas-main' },
+      },
+    };
+
+    const config = toDiscoveryConfig(resource);
+    expect(config).toEqual({
+      resourceType: 'agent',
+      agentId: 'truenas-main',
+      resourceId: 'truenas-main',
+      hostname: 'stale-hostname',
+      metadataKind: 'agent',
+      metadataId: 'truenas-main',
+      targetLabel: 'agent',
+    });
+  });
+
   it('uses explicit discoveryTarget.agentId when provided', () => {
     const resource: Resource = {
       ...baseResource(),

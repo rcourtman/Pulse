@@ -717,9 +717,9 @@ type ChatMention struct {
 }
 
 func canonicalizeChatMentionType(raw string) string {
-	normalized := strings.ToLower(strings.TrimSpace(raw))
+	normalized := normalizeAITransportResourceType(raw)
 	switch normalized {
-	case "vm", "node", "agent", "system-container", "app-container", "docker-host", "k8s-cluster", "k8s-node", "k8s-pod", "k8s-deployment", "storage", "disk", "pbs", "pmg", "proxmox", "truenas", "ceph", "oci-container":
+	case "vm", "node", "agent", "system-container", "app-container", "docker-host", "k8s-cluster", "k8s-node", "k8s-pod", "k8s-deployment", "storage", "disk", "pbs", "pmg", "proxmox", "ceph", "oci-container":
 		return normalized
 	default:
 		return ""

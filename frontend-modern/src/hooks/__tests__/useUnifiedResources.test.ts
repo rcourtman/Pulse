@@ -783,6 +783,38 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('normalizes legacy truenas resources to canonical agent records at ingest', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'truenas-main',
+            type: 'truenas',
+            name: 'truenas-main',
+            sources: ['agent', 'truenas'],
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await flushAsync();
+    await waitForResourceCount(() => result!.resources().length);
+
+    expect(result!.resources()[0]?.type).toBe('agent');
+    expect(result!.resources()[0]?.platformType).toBe('truenas');
+
+    dispose();
+  });
+
   it('preserves resource facets from backend payloads', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

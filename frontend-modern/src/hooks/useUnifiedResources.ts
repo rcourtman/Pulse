@@ -21,6 +21,7 @@ import { normalizeDiskArray } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { eventBus } from '@/stores/events';
 import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
+import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
 import {
   getPreferredNormalizedPlatformId,
   getPreferredResourceClusterName,
@@ -422,28 +423,26 @@ const resolveStatus = (status?: string): ResourceStatus => {
 
 const resolveType = (value?: string): ResourceType => {
   const normalized = (value || '').toLowerCase();
-  switch (normalized) {
+  const canonicalFrontendType = canonicalizeFrontendResourceType(normalized);
+  switch (canonicalFrontendType) {
     case 'agent':
-    case 'node':
-      return 'agent';
     case 'docker-host':
-      return 'docker-host';
     case 'k8s-cluster':
-      return 'k8s-cluster';
     case 'k8s-node':
-      return 'k8s-node';
-    case 'truenas':
-      return 'agent';
     case 'vm':
-      return 'vm';
     case 'system-container':
-      return 'system-container';
     case 'oci-container':
-      return 'oci-container';
     case 'app-container':
-      return 'app-container';
     case 'pod':
-      return 'pod';
+    case 'pbs':
+    case 'pmg':
+    case 'ceph':
+      return canonicalFrontendType;
+    default:
+      break;
+  }
+
+  switch (normalized) {
     case 'jail':
       return 'jail';
     case 'docker-service':
@@ -460,14 +459,7 @@ const resolveType = (value?: string): ResourceType => {
       return 'pool';
     case 'dataset':
       return 'dataset';
-    case 'pbs':
-      return 'pbs';
-    case 'pmg':
-      return 'pmg';
-    case 'ceph':
-      return 'ceph';
     case 'physical_disk':
-      return 'physical_disk';
     case 'physical-disk':
       return 'physical_disk';
     default:

@@ -293,6 +293,10 @@ ID. Frontend mention pickers should emit that canonical ID for every
 app-container, including API-backed platforms such as TrueNAS, while backend
 structured-mention resolution may continue to accept legacy `docker:...`
 mentions only as a compatibility path.
+Compatibility-only top-level TrueNAS mention types must also collapse to the
+canonical `agent` host type at that same handler boundary, so the AI runtime
+does not carry a parallel raw `truenas` mention contract once transport input
+has been normalized.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

@@ -690,6 +690,7 @@ describe('frontend resource type boundaries', () => {
     expect(chartsApiSource).toContain("| 'pod'");
     expect(chartsApiSource).toContain("case 'k8s-cluster'");
     expect(chartsApiSource).toContain("return 'k8s';");
+    expect(chartsApiSource).not.toContain("case 'truenas'");
     expect(chartsApiSource).toContain(
       "guestTypes?: Record<string, 'vm' | 'system-container' | 'k8s'>",
     );
@@ -1081,7 +1082,7 @@ describe('frontend resource type boundaries', () => {
     expect(emptyStatePresentationSource).toContain('export function getEmptyStatePresentation');
     expect(discoveryTargetSource).toContain('canonicalizeFrontendResourceType');
     expect(recoveryOutcomePresentationSource).toContain('import type { RecoveryOutcome }');
-    expect(recoverySummarySource).toContain('buildRecoveryPostureSegments');
+    expect(recoverySummarySource).toContain('buildRecoveryPostureSummary');
     expect(recoverySummarySource).toContain('RECOVERY_SUMMARY_TIME_RANGES');
     expect(recoverySummarySource).toContain('buildRecoveryFreshnessBuckets');
     expect(recoverySummarySource).not.toContain(
@@ -1095,7 +1096,6 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).not.toContain('const MODE_LABELS: Record<ArtifactMode, string>');
     expect(recoverySource).not.toContain('const MODE_BADGE_CLASS: Record<ArtifactMode, string>');
     expect(recoverySource).not.toContain('const CHART_SEGMENT_CLASS: Record<ArtifactMode, string>');
-    expect(recoverySource).toContain('getRecoveryIssueRailClass');
     expect(recoverySource).not.toContain(
       "const ISSUE_RAIL_CLASS: Record<Exclude<IssueTone, 'none'>, string>",
     );
@@ -1127,14 +1127,14 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsFacets');
     expect(recoverySurfaceStateSource).toContain('useRecoveryPointsSeries');
     expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeGreaterThan(-1);
-    expect(recoveryComponentSource.indexOf('<RecoveryActivitySection')).toBeGreaterThan(
+    expect(recoveryComponentSource.indexOf('{eventsActivity()}')).toBeGreaterThan(
       recoveryComponentSource.indexOf("<Show when={workspaceView() === 'events'}>"),
     );
     expect(recoverySource).toContain('getRecoveryFilterChipPresentation');
     expect(recoverySource).not.toContain('const titleize =');
-    expect(recoverySource).toContain(
-      "segmentedButtonClass(props.chartRangeDays() === range, false, 'accent')",
-    );
+    expect(recoverySummarySource).toContain('<SummaryPanel');
+    expect(recoverySummarySource).toContain('timeRange={props.timeRange()}');
+    expect(recoverySummarySource).not.toContain('segmentedButtonClass(');
     expect(recoverySource).not.toContain('border-blue-200 bg-blue-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-cyan-200 bg-cyan-50 px-2 py-0.5');
     expect(recoverySource).not.toContain('border-emerald-200 bg-emerald-50 px-2 py-0.5');
@@ -1153,8 +1153,6 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain('formatRecoveryTimeOnly');
     expect(recoverySource).toContain('getRecoveryNiceAxisMax');
     expect(recoverySource).toContain('getRecoveryProtectedToggleClass');
-    expect(recoverySource).toContain('getRecoveryRollupStatusPillClass');
-    expect(recoverySource).toContain('getRecoveryRollupStatusPillLabel');
     expect(recoverySource).toContain('getRecoverySpecialOutcomeTextClass');
     expect(recoverySource).toContain('getRecoveryBreadcrumbLinkClass');
     expect(recoverySource).toContain('getRecoveryFilterPanelClearClass');
@@ -1175,7 +1173,6 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).toContain('getRecoveryPointTimestampMs');
     expect(recoverySource).toContain('normalizeRecoveryModeQueryValue');
     expect(recoverySource).toContain('getRecoveryTimelineAxisLabelClass');
-    expect(recoverySource).toContain('getRecoveryTimelineBarMinWidthClass');
     expect(recoverySource).toContain('getRecoveryTimelineLabelEvery');
     expect(recoverySource).toContain('getRecoveryGroupNoTimestampLabel');
     expect(recoverySource).toContain('getRecoveryProtectedSearchPlaceholder');
@@ -1185,11 +1182,9 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySource).not.toContain('Search recovery history...');
     expect(recoverySource).not.toContain('Recent searches appear here.');
     expect(recoverySource).toContain('RECOVERY_TIMELINE_LEGEND_ITEM_CLASS');
-    expect(recoverySource).toContain('RECOVERY_TIMELINE_RANGE_GROUP_CLASS');
     expect(recoverySource).toContain('getRecoveryEventTimeTextClass');
     expect(recoverySource).not.toContain('getRecoverySubjectTypeBadgeClass');
     expect(recoverySource).not.toContain('getRecoverySubjectTypeLabel');
-    expect(recoverySource).toContain('getRecoveryRollupIssueTone');
     expect(recoverySource).toContain('getRecoveryRollupAgeTextClass');
     expect(recoverySource).toContain('RECOVERY_ADVANCED_FILTER_LABEL_CLASS');
     expect(recoverySource).toContain('RECOVERY_ADVANCED_FILTER_FIELD_CLASS');
@@ -1390,8 +1385,6 @@ describe('frontend resource type boundaries', () => {
     expect(recoverySummaryPresentationSource).toContain(
       'export function getRecoveryAttentionDotClass',
     );
-    expect(recoverySummarySource).toContain('getRecoveryAttentionChipClass');
-    expect(recoverySummarySource).toContain('getRecoveryAttentionDotClass');
     expect(recoverySummarySource).not.toContain('function getAttentionChipClass(');
     expect(recoverySummarySource).not.toContain('function getAttentionDotClass(');
     expect(dashboardMetricPresentationSource).toContain(
@@ -3129,7 +3122,10 @@ describe('frontend resource type boundaries', () => {
     expect(infrastructureSelectorModelSource).toContain(
       'buildInfrastructureSelectorUnifiedNodes',
     );
-    expect(infrastructureSelectorModelSource).toContain("resource.type === 'truenas'");
+    expect(infrastructureSelectorModelSource).toContain(
+      'isAgentFacetInfrastructureResource',
+    );
+    expect(infrastructureSelectorModelSource).not.toContain("resource.type === 'truenas'");
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
     expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
@@ -3732,11 +3728,12 @@ describe('frontend resource type boundaries', () => {
     expect(alertThresholdsTabSource).toContain(
       "import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';",
     );
-    expect(alertThresholdsTabSource).toContain('buildThresholdsTableProps');
-    expect(alertThresholdsTabSource).not.toContain('pmgThresholds={props.pmgThresholds}');
+    expect(alertThresholdsTabSource).not.toContain('buildThresholdsTableProps');
+    expect(alertThresholdsTabSource).toContain('pmgThresholds={props.pmgThresholds}');
+    expect(alertThresholdsTabSource).toContain('guestDefaults={props.guestDefaults()}');
     expect(thresholdsTabModelSource).toContain('export interface ThresholdsTabProps');
-    expect(thresholdsTabModelSource).toContain('export function buildThresholdsTableProps');
-    expect(thresholdsTabModelSource).toContain('guestDefaults: props.guestDefaults()');
+    expect(thresholdsTabModelSource).not.toContain('export function buildThresholdsTableProps');
+    expect(thresholdsTabModelSource).toContain("guestDefaults: Accessor<ThresholdsTableProps['guestDefaults']>");
     expect(thresholdsTabModelSource).not.toContain('hasUnsavedChanges');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",

@@ -4078,18 +4078,18 @@ func (r AIInvestigateAlertRequest) alertIdentifier() string {
 }
 
 func normalizeInvestigateAlertTargetType(raw string) (string, error) {
-	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	resourceType := normalizeAITransportResourceType(raw)
 	switch resourceType {
 	case "vm":
 		return "vm", nil
 	case "system-container", "oci-container":
 		return "system-container", nil
-	case "agent", "node", "docker-host", "app-container", "pod", "k8s-node", "k8s-cluster", "k8s-deployment", "k8s-service", "storage", "disk", "pbs", "pmg", "proxmox", "truenas", "ceph":
+	case "agent", "node", "docker-host", "app-container", "pod", "k8s-node", "k8s-cluster", "k8s-deployment", "k8s-service", "storage", "disk", "pbs", "pmg", "proxmox", "ceph":
 		return "agent", nil
 	case "":
 		return "", errors.New("resource_type is required")
 	default:
-		return "", fmt.Errorf("unsupported resource_type %q (allowed: vm, system-container, oci-container, app-container, pod, agent, node, docker-host, k8s-cluster, k8s-node, k8s-deployment, k8s-service, storage, disk, pbs, pmg, proxmox, truenas, ceph)", raw)
+		return "", fmt.Errorf("unsupported resource_type %q (allowed: vm, system-container, oci-container, app-container, pod, agent, node, docker-host, k8s-cluster, k8s-node, k8s-deployment, k8s-service, storage, disk, pbs, pmg, proxmox, ceph)", raw)
 	}
 }
 

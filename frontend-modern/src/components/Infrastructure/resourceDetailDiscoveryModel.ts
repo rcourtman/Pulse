@@ -168,15 +168,15 @@ export const toDiscoveryConfig = (resource: Resource): DiscoveryConfig | null =>
     resource.platformId ||
     resource.id;
   const hostname = getPreferredHostLabel(resource);
+  const canonicalResourceType = canonicalDiscoveryResourceType(resource.type) || resource.type;
 
-  switch (resource.type) {
+  switch (canonicalResourceType) {
     case 'agent':
     case 'docker-host':
     case 'pbs':
     case 'pmg':
     case 'k8s-cluster':
     case 'k8s-node':
-    case 'truenas':
       return {
         resourceType: 'agent',
         agentId: agentLookupId,
