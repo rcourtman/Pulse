@@ -180,6 +180,7 @@ Owners:
 Companion proof matrix:
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
+- `docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md`
 
 Deliver:
 
@@ -187,6 +188,8 @@ Deliver:
 - minimum privilege bundle documented
 - explicit phase-1 exclusions documented in support language
 - support matrix changed only after live proof exists
+- blocked proof state replaced by a dated successful proof record only after the
+  first real `vCenter` pass
 
 Required proof:
 

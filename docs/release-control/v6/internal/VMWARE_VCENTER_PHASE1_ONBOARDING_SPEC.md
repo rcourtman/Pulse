@@ -194,6 +194,8 @@ available in this workspace.
 
 The companion live-proof checklist for the first real environment is
 `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`.
+The current blocked proof record is
+`docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md`.
 The companion backend contract for implementation is
 `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`.
 

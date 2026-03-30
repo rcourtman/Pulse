@@ -3513,6 +3513,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
           "kind": "file"
         },

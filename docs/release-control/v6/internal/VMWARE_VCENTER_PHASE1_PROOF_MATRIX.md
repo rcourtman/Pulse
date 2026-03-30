@@ -10,7 +10,8 @@ Governance surfaces:
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
 
-Use this matrix for the trust-critical boundary between:
+Use this matrix as the live-proof runbook for the trust-critical boundary
+between:
 
 1. a planned VMware architecture
 2. an implemented VMware onboarding and projection path
@@ -67,6 +68,27 @@ Before running this matrix, provide a real VMware environment with:
 
 Record the non-secret capability metadata first in `LOCAL_CAPABILITIES.md`.
 If that record does not exist, the matrix is not runnable.
+
+## Proof Record Contract
+
+Until a successful live proof exists, keep the current blocked record at:
+
+`docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md`
+
+When the first real environment is exercised successfully, replace that blocked
+state with a dated proof record at:
+
+`docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-<YYYY-MM-DD>.md`
+
+That dated record should summarize:
+
+1. the environment alias and `LOCAL_CAPABILITIES.md` entry used
+2. `vCenter` version and build information
+3. the exact privilege bundle used for the pass
+4. pass/fail notes for `VC-0` through `VC-7`
+5. captured evidence for projection, alerts/history, and Assistant read
+6. explicit confirmation that direct `ESXi`, recovery support, and control
+   stayed out of scope
 
 ## Automated Proof Floor
 
@@ -218,7 +240,7 @@ Pass when:
 
 ## Evidence To Capture
 
-Capture all of the following outside git or in a dated release-control record:
+Capture all of the following outside git or in the dated release-control record:
 
 1. the `LOCAL_CAPABILITIES.md` capability entry
 2. `vCenter` version/build information
@@ -231,6 +253,10 @@ Capture all of the following outside git or in a dated release-control record:
 7. assistant read transcript or screenshots showing canonical VMware-backed
    resource inspection
 8. explicit note that recovery and control stayed out of scope
+
+The expected success-record path is:
+
+`docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-<YYYY-MM-DD>.md`
 
 ## Failure Rules
 
@@ -253,3 +279,7 @@ There is still no recorded VMware capability in
 
 That means the planning and implementation path can continue, but the support
 claim remains blocked until a real proof environment is available.
+
+Current blocked record:
+
+`docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-blocked-2026-03-30.md`
