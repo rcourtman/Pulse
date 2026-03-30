@@ -17,6 +17,8 @@ import {
 import {
   getStorageCapabilitiesForResource,
   getStorageCategoryFromType,
+  isBackupRepositoryStorageResource,
+  isCanonicalDatastoreStorageResource,
   readResourceStorageMeta,
   resolveResourceStorageContent,
 } from './resourceStorageMapping';
@@ -35,22 +37,48 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   const platformData = (resource.platformData as Record<string, unknown> | undefined) || {};
   const storageMeta = readResourceStorageMeta(resource, platformData);
   const resourceType = (resource.type || '').toLowerCase();
-  const isDatastore = resourceType === 'datastore';
+  const storageTypeHint =
+    storageMeta?.type || (platformData.type as string | undefined) || undefined;
+  const storagePlatform =
+    storageMeta?.platform ||
+    (platformData.platform as string | undefined) ||
+    resource.storage?.platform ||
+    resource.platformType;
+  const storageTopology =
+    storageMeta?.topology ||
+    (platformData.topology as string | undefined) ||
+    resource.storage?.topology;
   const storageType =
-    storageMeta?.type ||
-    (platformData.type as string | undefined) ||
-    (isDatastore ? 'pbs' : resourceType);
-  const content = resolveResourceStorageContent(
-    storageMeta,
-    platformData,
-    isDatastore ? 'backup' : '',
-  );
+    storageTypeHint ||
+    (resourceType === 'pbs' ? 'pbs' : resourceType);
   const shared =
     typeof storageMeta?.shared === 'boolean'
       ? storageMeta.shared
       : typeof platformData.shared === 'boolean'
         ? platformData.shared
         : undefined;
+  const classificationContext = {
+    resourceType,
+    platform: storagePlatform,
+    topology: storageTopology,
+    entityType: resource.vmware?.entityType,
+    shared,
+  };
+  const isBackupRepository = isBackupRepositoryStorageResource(
+    storageType,
+    storageMeta,
+    classificationContext,
+  );
+  const isDatastore = isCanonicalDatastoreStorageResource(
+    storageType,
+    storageMeta,
+    classificationContext,
+  );
+  const content = resolveResourceStorageContent(
+    storageMeta,
+    platformData,
+    isBackupRepository ? 'backup' : '',
+  );
   const proxmoxNode =
     resource.proxmox?.node ||
     ((platformData.proxmox as Record<string, unknown> | undefined)?.nodeName as string | undefined);
@@ -67,7 +95,7 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       resource.platformId,
     ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0),
   );
-  const locationLabel = isDatastore
+  const locationLabel = isBackupRepository
     ? resource.parentName ||
       (platformData.pbsInstanceName as string | undefined) ||
       resource.parentId ||
@@ -102,11 +130,9 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
   return {
     id: resource.id,
     name: resource.name,
-    category: isDatastore
-      ? 'backup-repository'
-      : storageMeta?.isCeph || storageMeta?.isZfs
+    category: storageMeta?.isCeph || storageMeta?.isZfs
         ? 'pool'
-        : getStorageCategoryFromType(storageType),
+        : getStorageCategoryFromType(storageType, classificationContext),
     health: normalizeStorageResourceHealth(resource.status, resource.tags, resource.incidentSeverity),
     statusLabel: resource.status,
     hostLabel,
@@ -128,12 +154,10 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
     affectedDatastoreCount: resource.pbs?.affectedDatastoreCount || 0,
     location: {
       label: locationLabel,
-      scope: isDatastore ? 'cluster' : 'node',
+      scope: isBackupRepository ? 'cluster' : isDatastore ? (shared ? 'cluster' : 'host') : 'node',
     },
     capacity: buildStorageCapacity(totalBytes, usedBytes, freeBytes, usagePercent),
-    capabilities: isDatastore
-      ? dedupe(['capacity', 'health', 'backup-repository', 'deduplication', 'namespaces'])
-      : getStorageCapabilitiesForResource(storageType, storageMeta),
+    capabilities: getStorageCapabilitiesForResource(storageType, storageMeta, classificationContext),
     source: buildStorageSource(canonicalPlatform, adapterId),
     observedAt:
       typeof resource.lastSeen === 'number' && Number.isFinite(resource.lastSeen)
@@ -164,6 +188,8 @@ const mapResourceStorageRecord = (resource: Resource, adapterId: string): Storag
       protectionLabel,
       protectionReduced: resource.storage?.protectionReduced,
       rebuildInProgress: resource.storage?.rebuildInProgress,
+      platform: storagePlatform,
+      topology: storageTopology,
       content,
       contentTypes: storageMeta?.contentTypes,
       shared,

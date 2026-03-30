@@ -22,6 +22,8 @@ describe('resourceStorageMapping', () => {
     const resource = makeResource({
       storage: {
         type: 'rbd',
+        platform: 'proxmox-pve',
+        topology: 'pool',
         contentTypes: ['images', 'rootdir'],
         shared: false,
         isCeph: true,
@@ -29,6 +31,8 @@ describe('resourceStorageMapping', () => {
       platformData: {
         storage: {
           type: 'dir',
+          platform: 'proxmox-pbs',
+          topology: 'backup-target',
           shared: true,
         },
       },
@@ -36,6 +40,8 @@ describe('resourceStorageMapping', () => {
 
     expect(readResourceStorageMeta(resource, resource.platformData as Record<string, unknown>)).toEqual({
       type: 'rbd',
+      platform: 'proxmox-pve',
+      topology: 'pool',
       content: undefined,
       contentTypes: ['images', 'rootdir'],
       shared: false,
@@ -76,8 +82,22 @@ describe('resourceStorageMapping', () => {
         isCeph: true,
       }),
     ).toEqual(['capacity', 'health', 'replication', 'multi-node']);
+    expect(
+      getStorageCapabilitiesForResource('vmfs', {
+        platform: 'vmware-vsphere',
+        topology: 'datastore',
+        shared: true,
+      }),
+    ).toEqual(['capacity', 'health', 'multi-node']);
     expect(getStorageCategoryFromType('zfs-pool')).toBe('pool');
     expect(getStorageCategoryFromType('pbs')).toBe('backup-repository');
+    expect(
+      getStorageCategoryFromType('vmfs', {
+        platform: 'vmware-vsphere',
+        topology: 'datastore',
+        entityType: 'datastore',
+      }),
+    ).toBe('datastore');
     expect(getStorageCategoryFromType('filesystem')).toBe('filesystem');
   });
 });

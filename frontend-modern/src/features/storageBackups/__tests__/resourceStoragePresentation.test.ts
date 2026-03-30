@@ -32,9 +32,34 @@ describe('resourceStoragePresentation', () => {
   });
 
   it('derives canonical topology labels for storage resources', () => {
-    expect(getResourceStorageTopologyLabel(makeResource({ type: 'datastore' }), 'pbs')).toBe(
-      'Backup Target',
-    );
+    expect(
+      getResourceStorageTopologyLabel(
+        makeResource({
+          type: 'datastore',
+          platformType: 'proxmox-pbs',
+          storage: {
+            platform: 'proxmox-pbs',
+            type: 'pbs',
+          },
+        }),
+        'pbs',
+      ),
+    ).toBe('Backup Target');
+    expect(
+      getResourceStorageTopologyLabel(
+        makeResource({
+          platformType: 'vmware-vsphere',
+          storage: {
+            platform: 'vmware-vsphere',
+            type: 'vmfs',
+          },
+          vmware: {
+            entityType: 'datastore',
+          },
+        }),
+        'vmfs',
+      ),
+    ).toBe('Datastore');
     expect(getResourceStorageTopologyLabel(makeResource(), 'rbd')).toBe('Cluster Storage');
     expect(
       getResourceStorageTopologyLabel(makeResource(), 'ignored', 'rebuild target'),
@@ -72,6 +97,7 @@ describe('resourceStoragePresentation', () => {
     const resource = makeResource({
       type: 'pbs',
       storage: {
+        platform: 'proxmox-pbs',
         protection: 'mirrored cache',
       },
     });
@@ -81,5 +107,21 @@ describe('resourceStoragePresentation', () => {
     expect(getResourceStorageImpactSummary(resource)).toBe('No dependent resources');
     expect(getResourceStorageActionSummary(resource)).toBe('Monitor');
     expect(getResourceStorageProtectionLabel(resource)).toBe('Mirrored Cache');
+  });
+
+  it('keeps VMware datastore protection copy neutral on the shared storage path', () => {
+    const resource = makeResource({
+      platformType: 'vmware-vsphere',
+      storage: {
+        platform: 'vmware-vsphere',
+        type: 'vmfs',
+        topology: 'datastore',
+      },
+      vmware: {
+        entityType: 'datastore',
+      },
+    });
+
+    expect(getResourceStorageProtectionLabel(resource)).toBe('Healthy');
   });
 });

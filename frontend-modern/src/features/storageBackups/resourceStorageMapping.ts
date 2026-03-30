@@ -3,6 +3,8 @@ import type { StorageCapability, StorageCategory } from './models';
 
 export type ResourceStorageMeta = {
   type?: string;
+  platform?: string;
+  topology?: string;
   content?: string;
   contentTypes?: string[];
   shared?: boolean;
@@ -16,6 +18,17 @@ type ResourceWithStorageMeta = Resource & {
 
 const dedupe = <T>(values: T[]): T[] => Array.from(new Set(values));
 
+export type StorageClassificationContext = {
+  resourceType?: string;
+  platform?: string;
+  topology?: string;
+  entityType?: string;
+  shared?: boolean;
+};
+
+const normalizeClassificationValue = (value: string | undefined | null): string =>
+  (value || '').trim().toLowerCase();
+
 const normalizeStorageMeta = (value: unknown): ResourceStorageMeta | null => {
   if (!value || typeof value !== 'object') return null;
   const candidate = value as Record<string, unknown>;
@@ -27,6 +40,8 @@ const normalizeStorageMeta = (value: unknown): ResourceStorageMeta | null => {
 
   return {
     type: typeof candidate.type === 'string' ? candidate.type : undefined,
+    platform: typeof candidate.platform === 'string' ? candidate.platform : undefined,
+    topology: typeof candidate.topology === 'string' ? candidate.topology : undefined,
     content: typeof candidate.content === 'string' ? candidate.content : undefined,
     contentTypes,
     shared: typeof candidate.shared === 'boolean' ? candidate.shared : undefined,
@@ -57,13 +72,55 @@ export const resolveResourceStorageContent = (
   return platformContent || fallback;
 };
 
+export const isBackupRepositoryStorageResource = (
+  type: string | undefined,
+  storageMeta?: ResourceStorageMeta,
+  context?: StorageClassificationContext,
+): boolean => {
+  const value = normalizeClassificationValue(type);
+  const resourceType = normalizeClassificationValue(context?.resourceType);
+  const platform = normalizeClassificationValue(context?.platform || storageMeta?.platform);
+  const topology = normalizeClassificationValue(context?.topology || storageMeta?.topology);
+
+  return (
+    resourceType === 'pbs' ||
+    value.includes('pbs') ||
+    platform.includes('pbs') ||
+    topology === 'backup-target'
+  );
+};
+
+export const isCanonicalDatastoreStorageResource = (
+  type: string | undefined,
+  storageMeta?: ResourceStorageMeta,
+  context?: StorageClassificationContext,
+): boolean => {
+  if (isBackupRepositoryStorageResource(type, storageMeta, context)) {
+    return false;
+  }
+
+  const value = normalizeClassificationValue(type);
+  const resourceType = normalizeClassificationValue(context?.resourceType);
+  const platform = normalizeClassificationValue(context?.platform || storageMeta?.platform);
+  const topology = normalizeClassificationValue(context?.topology || storageMeta?.topology);
+  const entityType = normalizeClassificationValue(context?.entityType);
+
+  return (
+    resourceType === 'datastore' ||
+    topology === 'datastore' ||
+    entityType === 'datastore' ||
+    (platform.includes('vmware') && value.length > 0)
+  );
+};
+
 export const getStorageCapabilitiesForResource = (
   type: string | undefined,
   storageMeta?: ResourceStorageMeta,
+  context?: StorageClassificationContext,
 ): StorageCapability[] => {
   const value = (type || '').toLowerCase();
   const caps: StorageCapability[] = ['capacity', 'health'];
-  if (value.includes('pbs')) {
+  if (isBackupRepositoryStorageResource(type, storageMeta, context)) {
     caps.push('backup-repository', 'deduplication', 'namespaces');
   }
   if (storageMeta?.isZfs || value.includes('zfs')) {
@@ -72,13 +129,20 @@ export const getStorageCapabilitiesForResource = (
   if (storageMeta?.isCeph || value.includes('ceph')) {
     caps.push('replication', 'multi-node');
   }
+  if ((context?.shared ?? storageMeta?.shared) === true) {
+    caps.push('multi-node');
+  }
   return dedupe(caps);
 };
 
-export const getStorageCategoryFromType = (type: string | undefined): StorageCategory => {
+export const getStorageCategoryFromType = (
+  type: string | undefined,
+  context?: StorageClassificationContext,
+): StorageCategory => {
   const value = (type || '').toLowerCase();
   if (!value) return 'other';
-  if (value.includes('pbs')) return 'backup-repository';
+  if (isBackupRepositoryStorageResource(type, undefined, context)) return 'backup-repository';
+  if (isCanonicalDatastoreStorageResource(type, undefined, context)) return 'datastore';
   if (
     value.includes('zfs') ||
     value.includes('lvm') ||

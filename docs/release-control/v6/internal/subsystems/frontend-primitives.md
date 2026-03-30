@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["agent-lifecycle"]
+  "dependency_subsystem_ids": ["agent-lifecycle", "storage-recovery"]
 }
 ```
 
@@ -143,6 +143,7 @@ work extends shared components instead of creating new local variants.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
+6. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
 
 ## Forbidden Paths
 
@@ -258,6 +259,12 @@ work extends shared components instead of creating new local variants.
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
+16. Keep shared storage-route feature presentation on neutral capability truth.
+    Reusable mappers and presenters in `frontend-modern/src/features/storageBackups/`
+    must distinguish inventory datastores from backup repositories so VMware
+    rows on the shared storage route stay canonical to the admitted phase-1 floor instead of
+    reviving backup-target, protected-target, or recovery-local semantics on a
+    shared page.
 16. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,

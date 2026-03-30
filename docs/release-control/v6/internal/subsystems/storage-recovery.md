@@ -94,6 +94,7 @@ querying, and the operator-facing storage health presentation layer.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
 29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
 30. Keep VMware placement and guest-detail enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, folder, runtime-host, datastore-attachment, guest-hostname, or guest-IP metadata onto canonical VMware `agent` / `vm` / `storage` resources, storage and recovery may use that detail for labeling and navigation only; they must not promote those topology or guest fields into recovery ownership, restore targeting, protection grouping, or a VMware-local recovery taxonomy without a separately governed slice.
+31. Keep VMware datastore classification neutral on the shared storage adapter contract. When `frontend-modern/src/features/storageBackups/resourceStorageMapping.ts`, `frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts`, and `frontend-modern/src/features/storageBackups/storageAdapters.ts` evolve canonical storage-record mapping, VMware-backed datastores must continue to land on the shared storage route as inventory-only datastores with neutral protection fallback, not as backup repositories, backup targets, or recovery-protected resources.
 
 ## Forbidden Paths
 
@@ -1652,6 +1653,12 @@ adapter floor. `frontend-modern/src/hooks/useUnifiedResources.ts`,
 may surface VMware-backed datastores as canonical `storage` resources under
 the shared `vmware-vsphere` source/platform vocabulary, but that operator-
 facing storage visibility still ends at inventory, capacity, and navigation.
+That same shared storage adapter must classify those VMware-backed records as
+inventory-only datastores on `/storage`, not as backup repositories or
+recovery-protected targets. Shared storage rows may show datastore topology,
+capacity, accessibility, and multi-host context, but they must keep fallback
+protection semantics neutral unless a separately governed recovery slice adds
+real VMware protection contracts.
 Storage and recovery must not infer VMware restore support, recovery rollups,
 or VMware-local protection semantics from the presence of those datastores or
 VM snapshot-read context on the shared pages.

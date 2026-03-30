@@ -339,6 +339,57 @@ describe('storageAdapters', () => {
     expect(records[0].details?.protectionReduced).toBe(true);
   });
 
+  it('maps VMware datastores as shared storage inventory instead of backup repositories', () => {
+    const records = buildStorageRecords({
+      state: baseState(),
+      resources: [
+        makeResourceStorage({
+          id: 'vmware-datastore-1',
+          name: 'shared-vmfs',
+          displayName: 'shared-vmfs',
+          platformId: 'datastore-11',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          parentId: '',
+          parentName: '',
+          storage: {
+            type: 'vmfs',
+            platform: 'vmware-vsphere',
+            topology: 'datastore',
+            shared: true,
+            nodes: ['esxi-01.lab.local', 'esxi-02.lab.local'],
+          },
+          vmware: {
+            entityType: 'datastore',
+            connectionId: 'vc-1',
+            connectionName: 'vc.lab.local',
+            datastoreAccessible: true,
+            multipleHostAccess: true,
+          },
+          platformData: {
+            sources: ['vmware-vsphere'],
+          },
+        }),
+      ],
+    });
+
+    expect(records).toHaveLength(1);
+    expect(records[0].category).toBe('datastore');
+    expect(records[0].platformLabel).toBe('vSphere');
+    expect(records[0].topologyLabel).toBe('Datastore');
+    expect(records[0].protectionLabel).toBe('Healthy');
+    expect(records[0].location.label).toBe('esxi-01.lab.local');
+    expect(records[0].location.scope).toBe('cluster');
+    expect(records[0].capabilities).toEqual(
+      expect.arrayContaining(['capacity', 'health', 'multi-node']),
+    );
+    expect(records[0].capabilities).not.toEqual(
+      expect.arrayContaining(['backup-repository', 'deduplication', 'namespaces']),
+    );
+    expect(records[0].details?.platform).toBe('vmware-vsphere');
+    expect(records[0].details?.topology).toBe('datastore');
+  });
+
   it('normalizes storage source and platform keys to canonical v6 platform types', () => {
     const records = buildStorageRecords({
       state: baseState(),

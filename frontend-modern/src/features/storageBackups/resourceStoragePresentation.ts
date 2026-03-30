@@ -1,6 +1,7 @@
 import type { Resource } from '@/types/resource';
 import { getSourcePlatformLabel, normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import type { StorageBackupPlatform } from './models';
+import { isBackupRepositoryStorageResource } from './resourceStorageMapping';
 
 const titleize = (value: string | undefined | null): string =>
   (value || '')
@@ -22,6 +23,22 @@ export const getCanonicalStoragePlatformKey = (
 export const getResourceStoragePlatformLabel = (platform: StorageBackupPlatform): string =>
   getSourcePlatformLabel(platform);
 
+const getStorageClassificationContext = (resource: Resource) => {
+  const storage = (resource.storage as Record<string, unknown> | undefined) || {};
+  const platformData = (resource.platformData as Record<string, unknown> | undefined) || {};
+  return {
+    resourceType: resource.type,
+    platform:
+      (typeof storage.platform === 'string' ? storage.platform : undefined) ||
+      (typeof platformData.platform === 'string' ? platformData.platform : undefined) ||
+      resource.platformType,
+    topology:
+      (typeof storage.topology === 'string' ? storage.topology : undefined) ||
+      (typeof platformData.topology === 'string' ? platformData.topology : undefined),
+    entityType: resource.vmware?.entityType,
+  };
+};
+
 export const getResourceStorageTopologyLabel = (
   resource: Resource,
   storageType: string,
@@ -31,7 +48,25 @@ export const getResourceStorageTopologyLabel = (
   if (normalized) {
     return titleize(normalized);
   }
-  if (resource.type === 'datastore') return 'Backup Target';
+  const classification = getStorageClassificationContext(resource);
+  if (
+    isBackupRepositoryStorageResource(
+      storageType,
+      {
+        platform: classification.platform,
+        topology: classification.topology,
+      },
+      classification,
+    )
+  ) {
+    return 'Backup Target';
+  }
+  if (
+    resource.type === 'datastore' ||
+    (classification.entityType || '').trim().toLowerCase() === 'datastore'
+  ) {
+    return 'Datastore';
+  }
   switch ((storageType || '').trim().toLowerCase()) {
     case 'zfspool':
     case 'zfs-pool':
@@ -104,7 +139,20 @@ export const getResourceStorageProtectionLabel = (resource: Resource): string =>
   if (resource.storage?.protection?.trim()) {
     return titleize(resource.storage.protection.trim());
   }
-  if (resource.type === 'datastore' || resource.type === 'pbs') {
+  const storageType =
+    resource.storage?.type ||
+    ((resource.platformData as Record<string, unknown> | undefined)?.type as string | undefined);
+  const classification = getStorageClassificationContext(resource);
+  if (
+    isBackupRepositoryStorageResource(
+      storageType,
+      {
+        platform: classification.platform,
+        topology: classification.topology,
+      },
+      classification,
+    )
+  ) {
     return 'Protected';
   }
   return 'Healthy';
