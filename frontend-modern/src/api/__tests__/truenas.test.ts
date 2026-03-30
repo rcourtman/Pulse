@@ -121,7 +121,13 @@ describe('TrueNASAPI', () => {
         apiKey: 'secret',
       }),
     ).resolves.toEqual({ success: true });
-    await expect(TrueNASAPI.testSavedConnection('conn/1')).resolves.toEqual({ success: true });
+    await expect(
+      TrueNASAPI.testSavedConnection('conn/1', {
+        host: 'truenas.local',
+        apiKey: '********',
+        useHttps: true,
+      }),
+    ).resolves.toEqual({ success: true });
 
     expect(apiFetchJSON).toHaveBeenNthCalledWith(
       1,
@@ -170,6 +176,11 @@ describe('TrueNASAPI', () => {
       '/api/truenas/connections/conn%2F1/test',
       expect.objectContaining({
         method: 'POST',
+        body: JSON.stringify({
+          host: 'truenas.local',
+          apiKey: '********',
+          useHttps: true,
+        }),
       }),
     );
   });

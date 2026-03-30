@@ -1,8 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -57,12 +59,10 @@ func (h *TrueNASHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 
 	instance.ID = strings.TrimSpace(instance.ID)
-	instance.Name = strings.TrimSpace(instance.Name)
-	instance.Host = strings.TrimSpace(instance.Host)
 	if instance.ID == "" {
 		instance.ID = config.NewTrueNASInstance().ID
 	}
-	instance.ApplyDefaults()
+	normalizeTrueNASInstance(&instance)
 
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
@@ -214,13 +214,7 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	instance.ID = connectionID
-	instance.Name = strings.TrimSpace(instance.Name)
-	instance.Host = strings.TrimSpace(instance.Host)
-	instance.APIKey = strings.TrimSpace(instance.APIKey)
-	instance.Username = strings.TrimSpace(instance.Username)
-	instance.Password = strings.TrimSpace(instance.Password)
-	instance.Fingerprint = strings.TrimSpace(instance.Fingerprint)
-	instance.ApplyDefaults()
+	normalizeTrueNASInstance(&instance)
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
@@ -275,12 +269,7 @@ func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	instance.Host = strings.TrimSpace(instance.Host)
-	instance.APIKey = strings.TrimSpace(instance.APIKey)
-	instance.Username = strings.TrimSpace(instance.Username)
-	instance.Password = strings.TrimSpace(instance.Password)
-	instance.Fingerprint = strings.TrimSpace(instance.Fingerprint)
-	instance.ApplyDefaults()
+	normalizeTrueNASInstance(&instance)
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
@@ -319,7 +308,19 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 		if strings.TrimSpace(instance.ID) != connectionID {
 			continue
 		}
-		instance.ApplyDefaults()
+		normalizeTrueNASInstance(&instance)
+		if payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r); !ok {
+			return
+		} else if hasPayload {
+			payload.ID = connectionID
+			normalizeTrueNASInstance(&payload)
+			payload.PreserveMaskedSecrets(instance)
+			if err := payload.Validate(); err != nil {
+				writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+				return
+			}
+			instance = payload
+		}
 		h.testConnectionInstance(w, r, instance)
 		return
 	}
@@ -363,6 +364,44 @@ func (h *TrueNASHandlers) testConnectionInstance(
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func normalizeTrueNASInstance(instance *config.TrueNASInstance) {
+	if instance == nil {
+		return
+	}
+	instance.Name = strings.TrimSpace(instance.Name)
+	instance.Host = strings.TrimSpace(instance.Host)
+	instance.APIKey = strings.TrimSpace(instance.APIKey)
+	instance.Username = strings.TrimSpace(instance.Username)
+	instance.Password = strings.TrimSpace(instance.Password)
+	instance.Fingerprint = strings.TrimSpace(instance.Fingerprint)
+	instance.ApplyDefaults()
+}
+
+func decodeOptionalTrueNASInstanceRequest(
+	w http.ResponseWriter,
+	r *http.Request,
+) (config.TrueNASInstance, bool, bool) {
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return config.TrueNASInstance{}, false, false
+	}
+	if len(bytes.TrimSpace(body)) == 0 {
+		return config.TrueNASInstance{}, false, true
+	}
+
+	var instance config.TrueNASInstance
+	if err := json.Unmarshal(body, &instance); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return config.TrueNASInstance{}, false, false
+	}
+
+	return instance, true, true
 }
 
 func (h *TrueNASHandlers) featureEnabled(w http.ResponseWriter) bool {

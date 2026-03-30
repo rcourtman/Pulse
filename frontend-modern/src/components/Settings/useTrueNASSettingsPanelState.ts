@@ -234,7 +234,12 @@ export function useTrueNASSettingsPanelState() {
   const testCurrentForm = async () => {
     setTesting(true);
     try {
-      await TrueNASAPI.testConnection(buildConnectionInput(form()));
+      const payload = buildConnectionInput(form());
+      if (editingConnectionId()) {
+        await TrueNASAPI.testSavedConnection(editingConnectionId()!, payload);
+      } else {
+        await TrueNASAPI.testConnection(payload);
+      }
       notificationStore.success('TrueNAS connection successful');
       return true;
     } catch (error) {

@@ -466,7 +466,10 @@ instead of falling back to panel-local inference or agent-first setup guidance.
 Saved connection retests from that workspace must use the server-owned
 `POST /api/truenas/connections/{id}/test` path so operators can verify stored
 credentials without leaking masked-secret placeholders back into the draft
-connection form contract.
+connection form contract. When the operator is editing a saved connection, that
+same path must also accept the in-flight form payload and merge unchanged
+masked secrets on the server, so edit-dialog tests do not force credential
+re-entry just to validate changed host or TLS fields.
 When that same platform workspace reports TrueNAS as unavailable, the disabled
 state must mean the server has explicitly opted out of the default-on TrueNAS
 integration, not that operators still need to enable a hidden feature gate for

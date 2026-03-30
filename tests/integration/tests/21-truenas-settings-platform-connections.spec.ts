@@ -195,15 +195,16 @@ test.describe('TrueNAS platform connections settings', () => {
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
 
-  test('adds, retests, and deletes TrueNAS connections through the canonical settings workflow', async ({
+  test('adds, edits, retests, and deletes TrueNAS connections through the canonical settings workflow', async ({
     page,
   }) => {
     const syncedAt = new Date(Date.now() - 60_000).toISOString();
     let connections: Record<string, unknown>[] = [];
     let draftTestPayload: Record<string, unknown> | null = null;
     let createPayload: Record<string, unknown> | null = null;
+    let updatePayload: Record<string, unknown> | null = null;
     let draftTestCalls = 0;
-    const savedTestPaths: string[] = [];
+    const savedTestRequests: Array<{ path: string; payload: Record<string, unknown> | null }> = [];
     const deletePaths: string[] = [];
 
     await page.route('**/api/truenas/connections**', async (route) => {
@@ -271,11 +272,53 @@ test.describe('TrueNAS platform connections settings', () => {
       }
 
       if (pathname === '/api/truenas/connections/conn-1/test' && method === 'POST') {
-        savedTestPaths.push(pathname);
+        savedTestRequests.push({
+          path: pathname,
+          payload: request.postData() ? JSON.parse(request.postData() || '{}') : null,
+        });
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify({ success: true }),
+        });
+        return;
+      }
+
+      if (pathname === '/api/truenas/connections/conn-1' && method === 'PUT') {
+        updatePayload = JSON.parse(request.postData() || '{}');
+        connections = [
+          {
+            id: 'conn-1',
+            name: updatePayload.name,
+            host: updatePayload.host,
+            port: updatePayload.port,
+            apiKey: '********',
+            useHttps: updatePayload.useHttps,
+            insecureSkipVerify: updatePayload.insecureSkipVerify,
+            fingerprint: updatePayload.fingerprint,
+            enabled: updatePayload.enabled,
+            pollIntervalSeconds: updatePayload.pollIntervalSeconds,
+            poll: {
+              intervalSeconds: updatePayload.pollIntervalSeconds,
+              lastSuccessAt: syncedAt,
+            },
+            observed: {
+              host: 'tower',
+              resourceId: 'tower',
+              collectedAt: syncedAt,
+              systems: 1,
+              storagePools: 2,
+              datasets: 12,
+              apps: 4,
+              disks: 8,
+              recoveryArtifacts: 18,
+            },
+          },
+        ];
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(connections[0]),
         });
         return;
       }
@@ -344,8 +387,60 @@ test.describe('TrueNAS platform connections settings', () => {
         pollIntervalSeconds: 90,
       });
 
+    await connectionCard.getByRole('button', { name: 'Edit' }).click();
+    const editDialog = page.getByRole('dialog', { name: 'Edit TrueNAS connection' });
+    await expect(editDialog).toBeVisible();
+    await expect(
+      editDialog.getByPlaceholder('Saved API key retained unless replaced'),
+    ).toBeVisible();
+
+    await editDialog.getByPlaceholder('tower').fill('Tower NAS Edited');
+    await editDialog.getByPlaceholder('truenas.local').fill('tower-edited.local');
+    await editDialog.getByPlaceholder('60').fill('120');
+
+    await editDialog.getByRole('button', { name: 'Test connection' }).click();
+    await expect
+      .poll(() => savedTestRequests[0])
+      .toMatchObject({
+        path: '/api/truenas/connections/conn-1/test',
+        payload: {
+          name: 'Tower NAS Edited',
+          host: 'tower-edited.local',
+          port: 443,
+          apiKey: '********',
+          useHttps: true,
+          enabled: true,
+          pollIntervalSeconds: 120,
+        },
+      });
+    await expect.poll(() => draftTestCalls).toBe(1);
+
+    await editDialog.getByRole('button', { name: 'Save connection' }).click();
+    await expect
+      .poll(() => updatePayload)
+      .toMatchObject({
+        name: 'Tower NAS Edited',
+        host: 'tower-edited.local',
+        port: 443,
+        apiKey: '********',
+        useHttps: true,
+        enabled: true,
+        pollIntervalSeconds: 120,
+      });
+    await expect(connectionCard).toContainText('Tower NAS Edited');
+
     await connectionCard.getByRole('button', { name: 'Test' }).click();
-    await expect.poll(() => savedTestPaths).toEqual(['/api/truenas/connections/conn-1/test']);
+    await expect.poll(() => savedTestRequests).toEqual([
+      expect.objectContaining({
+        path: '/api/truenas/connections/conn-1/test',
+        payload: expect.objectContaining({
+          host: 'tower-edited.local',
+          apiKey: '********',
+          pollIntervalSeconds: 120,
+        }),
+      }),
+      { path: '/api/truenas/connections/conn-1/test', payload: null },
+    ]);
     await expect.poll(() => draftTestCalls).toBe(1);
 
     await connectionCard.getByRole('button', { name: 'Delete' }).click();

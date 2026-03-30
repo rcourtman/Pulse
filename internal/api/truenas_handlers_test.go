@@ -534,6 +534,69 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.
 	}
 }
 
+func TestTrueNASHandlers_HandleTestSavedConnection_MergesEditedPayloadWithStoredSecrets(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:                 "conn-1",
+			Name:               "tower",
+			Host:               "truenas.local",
+			Port:               443,
+			APIKey:             "super-secret",
+			UseHTTPS:           true,
+			InsecureSkipVerify: false,
+			Fingerprint:        "sha256:old",
+			Enabled:            true,
+			PollIntervalSecs:   60,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	var gotConfig truenas.ClientConfig
+	handler.newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) {
+		gotConfig = cfg
+		return &fakeTrueNASClient{}, nil
+	}
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":                "Tower Edited",
+		"host":                "tower-edited.local",
+		"port":                8443,
+		"apiKey":              "********",
+		"useHttps":            true,
+		"insecureSkipVerify":  true,
+		"fingerprint":         "sha256:new",
+		"enabled":             true,
+		"pollIntervalSeconds": 120,
+	})
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/truenas/connections/conn-1/test",
+		bytes.NewReader(body),
+	)
+	rec := httptest.NewRecorder()
+	handler.HandleTestSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if gotConfig.Host != "tower-edited.local" {
+		t.Fatalf("expected edited host, got %+v", gotConfig)
+	}
+	if gotConfig.Port != 8443 {
+		t.Fatalf("expected edited port, got %+v", gotConfig)
+	}
+	if gotConfig.APIKey != "super-secret" {
+		t.Fatalf("expected stored API key to be reused, got %+v", gotConfig)
+	}
+	if !gotConfig.InsecureSkipVerify || gotConfig.Fingerprint != "sha256:new" {
+		t.Fatalf("expected edited TLS settings, got %+v", gotConfig)
+	}
+}
+
 func newTrueNASHandlersForTest(t *testing.T, cfg *config.Config) (*TrueNASHandlers, *config.ConfigPersistence, *monitoring.Monitor) {
 	t.Helper()
 

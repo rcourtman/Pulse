@@ -205,11 +205,15 @@ export class TrueNASAPI {
     };
   }
 
-  static async testSavedConnection(id: string): Promise<TrueNASConnectionTestResult> {
+  static async testSavedConnection(
+    id: string,
+    input?: TrueNASConnectionInput,
+  ): Promise<TrueNASConnectionTestResult> {
     const response = await apiFetchJSON<Partial<TrueNASConnectionTestResult>>(
       `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}/test`,
       {
         method: 'POST',
+        ...(input !== undefined ? { body: JSON.stringify(serializeTrueNASConnectionInput(input)) } : {}),
       },
     );
     return {
