@@ -1409,7 +1409,7 @@ func (s *Service) buildSystemPrompt() string {
 ## CAPABILITIES
 - pulse_query: Find resources (VMs, containers, hosts) and their locations
 - pulse_discovery: Get service details, config paths, ports, bind mounts
-- pulse_control: Run commands on hosts, containers, and VMs
+- pulse_control: Run commands on hosts and control only resources that explicitly support shared Pulse actions
 - pulse_docker: Manage Docker containers
 - pulse_file_edit: Read and edit configuration files
 - pulse_question: Ask the user for missing information using a structured prompt (interactive only)
@@ -1427,6 +1427,7 @@ func (s *Service) buildSystemPrompt() string {
 
 ## TOOL SELECTION
 - pulse_control and pulse_docker are WRITE tools — they change infrastructure state.
+- Not every VM or container supports control. Some API-backed platforms are read-only even when the resource type is "vm" or "system-container".
 - ONLY use write tools when the user explicitly asks you to perform an action.
 - For status checks or monitoring, use pulse_query or pulse_read instead.
 - If you are missing critical information (target, risky choice, preference), use pulse_question to ask structured questions.

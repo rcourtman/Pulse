@@ -147,6 +147,22 @@ func TestFilterToolsForPrompt_BroadInfraKeepsStorage(t *testing.T) {
 	}
 }
 
+func TestBuildSystemPrompt_DoesNotClaimGenericVMControl(t *testing.T) {
+	svc := &Service{}
+
+	prompt := svc.buildSystemPrompt()
+
+	if strings.Contains(prompt, "Run commands on hosts, containers, and VMs") {
+		t.Fatalf("expected system prompt to avoid blanket VM control claim, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "Not every VM or container supports control") {
+		t.Fatalf("expected system prompt to call out read-only resource platforms, got %q", prompt)
+	}
+	if !strings.Contains(prompt, "control only resources that explicitly support shared Pulse actions") {
+		t.Fatalf("expected system prompt to describe capability-bound pulse_control usage, got %q", prompt)
+	}
+}
+
 func TestFilterToolsForPrompt_RecoveryOnlyKeepsStorage(t *testing.T) {
 	exec := tools.NewPulseToolExecutor(tools.ExecutorConfig{
 		RecoveryPointsProvider: &fakeRecoveryPointsProvider{points: []recovery.RecoveryPoint{{

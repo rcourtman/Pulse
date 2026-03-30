@@ -213,6 +213,12 @@ emit `pulse_control` guest instructions for it, shared resource registrations
 must stay limited to read-side actions, and any attempted `pulse_control`
 restart/stop/shutdown path must fail as a read-only denial instead of falling
 through to legacy guest resolution or provider-local control assumptions.
+That same boundary also governs shared Assistant wording in
+`internal/ai/chat/service.go` and `internal/ai/tools/tools_control.go`: the
+base system prompt and `pulse_control` schema/description must not claim that a
+generic `vm` or `system-container` is controllable. Shared AI text must describe
+control as capability-gated and explicitly allow read-only platform variants
+such as VMware phase-1 guests.
 That same VMware AI rule also includes the investigation path. Alarm, health,
 event, task, metrics-history, and snapshot-tree context for VMware-backed
 resources must stay reachable through those same shared read/query surfaces

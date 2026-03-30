@@ -21,7 +21,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 	e.registry.Register(RegisteredTool{
 		Definition: Tool{
 			Name:        "pulse_control",
-			Description: `WRITE operations: control canonical resources (VMs, system containers, supported app-containers) or execute state-modifying commands. For read-only operations use pulse_read. For Docker-only workflows use pulse_docker.`,
+			Description: `WRITE operations: control canonical resources that explicitly advertise shared Pulse actions (for example Proxmox guests and supported app-containers) or execute state-modifying commands. Some canonical resources are read-only and will reject pulse_control even when their type is vm or system-container. For read-only operations use pulse_read. For Docker-only workflows use pulse_docker.`,
 			InputSchema: InputSchema{
 				Type: "object",
 				Properties: map[string]PropertySchema{
@@ -40,7 +40,7 @@ func (e *PulseToolExecutor) registerControlTools() {
 					},
 					"action": {
 						Type:        "string",
-						Description: "For guest/resource: start, stop, shutdown, restart, delete (availability depends on resource type)",
+						Description: "For guest/resource: start, stop, shutdown, restart, delete (availability depends on the resolved resource's shared action set)",
 						Enum:        []string{"start", "stop", "shutdown", "restart", "delete"},
 					},
 					"command": {

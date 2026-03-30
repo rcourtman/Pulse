@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,6 +57,32 @@ func TestPulseToolExecutor_ListTools_IncludesPulseControlForNativeAppProvider(t 
 	if !found {
 		t.Fatalf("expected pulse_control to be available with native app action provider, got %+v", tools)
 	}
+}
+
+func TestPulseToolExecutor_ListTools_PulseControlDescriptionStaysCapabilityBounded(t *testing.T) {
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		StateProvider: &mockStateProvider{},
+		AgentServer:   &mockAgentServer{},
+		ControlLevel:  ControlLevelControlled,
+	})
+
+	tools := executor.ListTools()
+	for _, tool := range tools {
+		if tool.Name != "pulse_control" {
+			continue
+		}
+		if !strings.Contains(tool.Description, "explicitly advertise shared Pulse actions") {
+			t.Fatalf("expected pulse_control description to stay capability-bounded, got %q", tool.Description)
+		}
+		if !strings.Contains(tool.Description, "read-only") {
+			t.Fatalf("expected pulse_control description to warn about read-only resources, got %q", tool.Description)
+		}
+		if action := tool.InputSchema.Properties["action"].Description; !strings.Contains(action, "resolved resource's shared action set") {
+			t.Fatalf("expected pulse_control action schema to describe shared action gating, got %q", action)
+		}
+		return
+	}
+	t.Fatalf("expected pulse_control to be available, got %+v", tools)
 }
 
 func TestExecuteControlResource_TrueNASAppUsesNativeActionProvider(t *testing.T) {
