@@ -119,6 +119,24 @@ Ignored for v6 control:
 1. `pulse-5.1.x`
 2. `pulse-refactor-streams`
 
+## Product Direction
+
+Pulse is moving toward the unified operations layer for mixed private
+infrastructure.
+Pulse should win by giving operators one coherent place to monitor,
+investigate, and safely act across mixed estates rather than by accumulating
+opportunistic platform-specific surfaces.
+New platform work must therefore strengthen that mixed-estate operator surface
+and follow `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`
+instead of being admitted ad hoc.
+Under that governed platform model, `docker` and `kubernetes` are first-class
+top-level platforms, while `podman` stays a runtime variant inside `docker`
+rather than becoming its own top-level platform.
+The same model also sets the current posture for platform breadth: `truenas`
+is at the declared support floor summarized below, and `vmware-vsphere` is the
+current admitted strategic next-platform direction while its support claim
+remains proof-gated.
+
 ## Release Definition
 
 Pulse v6 is ready when these outcomes land together:
@@ -129,13 +147,14 @@ Pulse v6 is ready when these outcomes land together:
 4. Stable or GA promotion happens only after prerelease validation, not as the first
    customer exposure.
 
-Pulse v6 has a bridge-release direction, but the current stabilization target
-stays on the monitoring-and-alerting prerelease floor rather than the finished private
-operational broker.
+Pulse v6 is still a bridge release toward that unified operations layer, while
+the current active target remains governed GA promotion rather than broad new
+platform execution.
 For this profile, "bridge release" means the product should stop reading as a
-monitoring product growing sideways only where the surfaced case is already
-proven; the next surfaced target is policy-aware data governance, while the
-broader resource-centric, action-ready control platform remains a future lane.
+monitoring tool growing sideways and instead make the mixed-estate operator
+surface legible through canonical resources, investigation context, governed
+action boundaries, and fleet governance wherever the surfaced case is already
+proven.
 Pulse owns infrastructure context, policy, and governed action boundaries so
 any sandboxed agent can use them; Pulse does not own being the sandbox where
 arbitrary agent execution lives.
@@ -417,6 +436,9 @@ Assertion design rules:
 Pulse v6 uses one governed definition of "TrueNAS supported" at the current
 floor. Detailed proof routes live in `status.json.readiness_assertions` and the
 owning subsystem contracts; user-facing claims must not exceed this floor.
+Unless a concrete defect appears or governance explicitly widens the support
+claim, broad same-shape TrueNAS iteration is not default work above this
+declared floor.
 
 1. Architecture boundary:
    TrueNAS is API-first. The unified agent may augment a TrueNAS system later,
@@ -471,9 +493,11 @@ owning subsystem contracts; user-facing claims must not exceed this floor.
 
 ## VMware vSphere Admission Model
 
-Pulse v6 now has one locked architecture recommendation for any future VMware
-vSphere work. This is not a current support claim. It defines the only
-acceptable phase-1 model if implementation starts.
+Pulse v6 now has one locked, active strategic direction for VMware vSphere
+under the governed platform-admission model.
+VMware is the current admitted next-platform direction for Pulse, but it is
+not yet a supported platform claim. This section defines the only acceptable
+phase-1 floor while support remains proof-gated.
 
 1. Architecture boundary:
    VMware vSphere should enter Pulse only as the first-class
@@ -520,22 +544,22 @@ acceptable phase-1 model if implementation starts.
    assistant read behavior. If those proofs do not hold, implementation
    should stop at governance rather than shipping an inflated support claim.
 9. Execution sequence:
-   If implementation starts, it should follow
+   VMware phase-1 execution should follow
    `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
    as the concrete slice order and stop/go contract for the first admitted
    VMware support floor.
 10. Projection contract:
-   If implementation starts, it should also follow
+   VMware phase-1 projection should also follow
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
    as the canonical source, identity, topology, alert-mapping, and
    non-projection boundary for phase-1 VMware resources.
 11. Alerts and Assistant contract:
-   If implementation starts, it should also follow
+   VMware phase-1 alerts and Assistant work should also follow
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
    as the canonical shared-alert, shared-timeline, Assistant-read, and
    Assistant-control-exclusion boundary for the VMware phase-1 floor.
 12. Backend API/runtime contract:
-   If implementation starts, it should also follow
+   VMware phase-1 backend API/runtime work should also follow
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
    as the canonical public API-boundary, session-ownership, provider-health,
    and negative-space contract for the VMware phase-1 floor.

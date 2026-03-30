@@ -180,8 +180,8 @@ canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the
 shared VMware signal-metadata and `resource-incident` timeline vocabulary that
 canonical resources expose to alerts, AI, and frontend consumers.
-VMware vSphere now follows the same admission rule. If `vmware-vsphere`
-implementation starts, vCenter is the phase-1 connection authority but not a
+VMware vSphere now follows the same admission rule. In the admitted phase-1
+direction, vCenter is the connection authority but not a
 top-level unified resource: ESXi hosts must project as canonical `agent`
 resources, virtual machines as canonical `vm`, and datastores as canonical
 `storage`. Datacenters, clusters, folders, and resource pools stay topology or

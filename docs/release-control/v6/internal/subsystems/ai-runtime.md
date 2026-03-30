@@ -192,8 +192,8 @@ canonical `app-container` resources through the shared `pulse_read`,
 TrueNAS admin plane, host command execution on API-backed systems without the
 unified agent, or provider-local AI tools outside the shared action-governed
 runtime contract.
-That same platform-claim boundary now also covers VMware. If
-`vmware-vsphere` implementation starts, the phase-1 Assistant floor is
+That same platform-claim boundary now also covers the admitted VMware vSphere
+direction. The phase-1 Assistant floor is
 read-only access to canonical VMware-backed `agent`, `vm`, and `storage`
 resources through the shared read and query paths only. The AI runtime must
 not add VMware-local tools or action verbs for VM power, snapshot lifecycle,

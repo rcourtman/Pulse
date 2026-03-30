@@ -4380,6 +4380,7 @@ class SubsystemLookupTest(unittest.TestCase):
             {
                 "canonical-timeline-source-precedence",
                 "host-type-migration-boundary-audit",
+                "mixed-private-infrastructure-operations-direction",
                 "platform-support-model-v1",
                 "vmware-vsphere-vcenter-first-admission-model",
                 "vmware-vsphere-vcenter-support-claim-ratchet",

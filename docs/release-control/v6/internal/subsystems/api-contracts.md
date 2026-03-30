@@ -686,8 +686,8 @@ surface. Pulse does not promise a separate TrueNAS-only onboarding wizard,
 agent-required bootstrap, or public provider-local app/log/config APIs at this
 floor.
 That same infrastructure platform-connections contract is also the only
-acceptable public backend boundary for phase-1 VMware. If `vmware-vsphere`
-implementation starts, `/api/vmware/connections` must be the canonical
+acceptable public backend boundary for the admitted VMware vSphere phase-1
+direction. `/api/vmware/connections` must be the canonical
 admin-only route family for listing, creating, updating, deleting, and testing
 stored `vCenter` integrations under one saved-connection model. A green draft
 or saved-connection test must mean the declared phase-1 floor is reachable

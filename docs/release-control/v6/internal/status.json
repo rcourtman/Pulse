@@ -3486,7 +3486,7 @@
     },
     {
       "id": "platform-admission-execution",
-      "summary": "The platform support model now governs admission decisions, but the lane map still underrepresents the cross-surface work needed to carry a newly admitted first-class platform such as VMware vSphere from architecture lock to a proved support floor across setup, canonical projections, alerts, assistant read, and bounded control classification.",
+      "summary": "The platform support model now governs admission decisions, and VMware vSphere is already the current admitted strategic next-platform direction, but the lane map still underrepresents the cross-surface work needed to carry an admitted first-class platform from architecture lock to a proved support floor across setup, canonical projections, alerts, assistant read, and bounded control classification.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-30",
@@ -3690,8 +3690,8 @@
     {
       "id": "platform-admission-execution",
       "name": "Platform admission execution",
-      "summary": "Promote newly admitted first-class platforms from architecture lock to proved support floors through one governed lane covering shared onboarding, canonical resource projection, support-floor proof, and bounded assistant/control classification, starting with VMware vSphere.",
-      "status": "planned",
+      "summary": "Carry admitted first-class platform directions from architecture lock to proved support floors through one governed lane covering shared onboarding, canonical resource projection, support-floor proof, and bounded assistant/control classification, starting with the active VMware vSphere direction.",
+      "status": "accepted",
       "recorded_at": "2026-03-30",
       "target_id": "v6-product-lane-expansion",
       "current_lane_ids": [
@@ -4024,6 +4024,27 @@
       ]
     },
     {
+      "id": "mixed-private-infrastructure-operations-direction",
+      "summary": "Pulse is moving toward the unified operations layer for mixed private infrastructure: operators should get one coherent place to monitor, investigate, and safely act across mixed estates, and new platform work is admitted only when it strengthens that operator surface rather than landing opportunistically.",
+      "kind": "governance",
+      "decided_at": "2026-03-30",
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15",
+        "L16"
+      ]
+    },
+    {
       "id": "mobile-incident-companion-ia-v1",
       "summary": "Pulse Mobile's primary product job is anywhere fleet awareness, incident triage, and safe governed action away from the desk. The public-facing IA centers on Home, Findings, Fleet, Approvals, and More, while Chat remains a contextual investigation tool rather than a top-level destination.",
       "kind": "governance",
@@ -4035,7 +4056,7 @@
     },
     {
       "id": "platform-support-model-v1",
-      "summary": "Pulse v6 platform support is governed by one canonical model: first-class platforms declare primary ingestion, canonical resource projections, and support-floor surfaces, while runtime variants such as Podman and transport helpers are not top-level platforms.",
+      "summary": "Pulse v6 platform support is governed by one canonical model: `docker` and `kubernetes` are first-class top-level platforms, first-class platforms declare primary ingestion, canonical resource projections, and support-floor surfaces, and runtime variants such as `podman` plus transport helpers are not top-level platforms.",
       "kind": "architecture",
       "decided_at": "2026-03-30",
       "subsystem_ids": [
@@ -4056,7 +4077,7 @@
     },
     {
       "id": "vmware-vsphere-vcenter-first-admission-model",
-      "summary": "VMware vSphere is architecture-locked as a vCenter-first, API-first platform candidate: phase 1 projects ESXi hosts as `agent`, VMs as `vm`, datastores as `storage`, keeps direct ESXi out of scope, treats snapshots as read-side workload context rather than recovery support, and leaves assistant control read-only until the governed action model expands.",
+      "summary": "VMware vSphere is the current admitted strategic platform direction under the governed platform model: phase 1 stays vCenter-first and API-first, projects ESXi hosts as `agent`, VMs as `vm`, datastores as `storage`, keeps direct ESXi out of scope, treats snapshots as read-side workload context rather than recovery support, and leaves assistant control read-only until the governed action model expands.",
       "kind": "architecture",
       "decided_at": "2026-03-30",
       "subsystem_ids": [
@@ -4074,7 +4095,7 @@
     },
     {
       "id": "vmware-vsphere-vcenter-support-claim-ratchet",
-      "summary": "VMware vSphere remains a planned vCenter-first platform candidate rather than a supported Pulse platform until one real vCenter capability is recorded in LOCAL_CAPABILITIES.md and the governed phase-1 proof matrix passes; implementation may proceed against the locked contracts before that point, but product, settings, and assistant surfaces must not claim VMware support.",
+      "summary": "VMware vSphere is already an admitted strategic platform direction, but it is not a supported Pulse platform until one real vCenter capability is recorded in LOCAL_CAPABILITIES.md and the governed phase-1 proof matrix passes; implementation and contract work may proceed against the locked model before that point, but product, settings, and assistant surfaces must not claim VMware support.",
       "kind": "governance",
       "decided_at": "2026-03-30",
       "subsystem_ids": [
