@@ -634,7 +634,12 @@ material instead of forcing the frontend to round-trip redaction placeholders
 back through the draft-test API. That saved-connection test route must also
 accept the edit-form payload for an existing connection and merge unchanged
 masked secrets server-side, so editing operators can test changed host / port /
-TLS fields before saving without re-entering retained credentials.
+TLS fields before saving without re-entering retained credentials. For
+row-level saved-connection tests with no edit overlay payload, that same route
+must update the canonical TrueNAS poll summary owner so subsequent
+`/api/truenas/connections` reads reflect refreshed last-success or last-error
+state instead of leaving settings health disconnected from manual operator
+tests.
 That same `/api/truenas/connections` list boundary now also owns the
 operator-facing runtime summary for those configured connections. The list
 response must carry the canonical redacted config together with poll health

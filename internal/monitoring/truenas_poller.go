@@ -684,7 +684,9 @@ func (p *TrueNASPoller) recordConnectionSuccessLocked(
 	status.lastError = nil
 	status.consecutiveFailures = 0
 	status.nextPollAt = at.Add(p.effectiveRuntimePollInterval(instance))
-	status.observed = buildTrueNASObservedSummary(snapshot)
+	if snapshot != nil {
+		status.observed = buildTrueNASObservedSummary(snapshot)
+	}
 }
 
 func (p *TrueNASPoller) recordConnectionFailureLocked(
@@ -708,6 +710,55 @@ func (p *TrueNASPoller) recordConnectionFailureLocked(
 		Message:  strings.TrimSpace(err.Error()),
 		Category: category,
 	}
+}
+
+// RecordConnectionTestSuccess updates one saved TrueNAS connection summary after
+// a manual row-level test without clearing the last observed contribution
+// summary.
+func (p *TrueNASPoller) RecordConnectionTestSuccess(
+	orgID string,
+	connID string,
+	instance config.TrueNASInstance,
+	at time.Time,
+) {
+	if p == nil {
+		return
+	}
+	connID = strings.TrimSpace(connID)
+	if connID == "" {
+		return
+	}
+	orgID = normalizeTrueNASOrgID(orgID)
+	instance.ApplyDefaults()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.recordConnectionSuccessLocked(orgID, connID, instance, at, nil)
+}
+
+// RecordConnectionTestFailure updates one saved TrueNAS connection summary after
+// a manual row-level test failure while preserving any previously observed
+// resource contribution summary.
+func (p *TrueNASPoller) RecordConnectionTestFailure(
+	orgID string,
+	connID string,
+	instance config.TrueNASInstance,
+	err error,
+	at time.Time,
+) {
+	if p == nil || err == nil {
+		return
+	}
+	connID = strings.TrimSpace(connID)
+	if connID == "" {
+		return
+	}
+	orgID = normalizeTrueNASOrgID(orgID)
+	instance.ApplyDefaults()
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.recordConnectionFailureLocked(orgID, connID, instance, err, at)
 }
 
 func buildTrueNASObservedSummary(snapshot *truenas.FixtureSnapshot) *TrueNASConnectionObservedSummary {

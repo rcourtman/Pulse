@@ -31,6 +31,13 @@ const WORKFLOW_SCREENSHOT_PATH = path.resolve(
   'tmp',
   'truenas-settings-platform-workflow.png',
 );
+const HEALTH_REFRESH_SCREENSHOT_PATH = path.resolve(
+  __dirname,
+  '..',
+  '..',
+  'tmp',
+  'truenas-settings-health-refresh.png',
+);
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -450,6 +457,98 @@ test.describe('TrueNAS platform connections settings', () => {
 
     fs.mkdirSync(path.dirname(WORKFLOW_SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: WORKFLOW_SCREENSHOT_PATH, fullPage: true });
+  });
+
+  test('saved connection tests refresh runtime health in the settings card', async ({ page }) => {
+    const failedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    const recoveredAt = new Date().toISOString();
+    let savedTestCalls = 0;
+    let connection = {
+      id: 'conn-1',
+      name: 'Tower NAS',
+      host: 'tower.local',
+      port: 443,
+      apiKey: '********',
+      useHttps: true,
+      insecureSkipVerify: false,
+      enabled: true,
+      pollIntervalSeconds: 60,
+      poll: {
+        intervalSeconds: 60,
+        lastAttemptAt: failedAt,
+        consecutiveFailures: 2,
+        lastError: {
+          at: failedAt,
+          message: 'authentication failed',
+          category: 'auth',
+        },
+      },
+      observed: {
+        host: 'tower',
+        resourceId: 'tower',
+        collectedAt: failedAt,
+        systems: 1,
+        storagePools: 2,
+        datasets: 12,
+        apps: 4,
+        disks: 8,
+        recoveryArtifacts: 18,
+      },
+    };
+
+    await page.route('**/api/truenas/connections**', async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === '/api/truenas/connections' && method === 'GET') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify([connection]),
+        });
+        return;
+      }
+
+      if (pathname === '/api/truenas/connections/conn-1/test' && method === 'POST') {
+        savedTestCalls += 1;
+        connection = {
+          ...connection,
+          poll: {
+            intervalSeconds: 60,
+            lastSuccessAt: recoveredAt,
+          },
+        };
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ success: true }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto('/settings/infrastructure/platforms/truenas', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
+      timeout: 15_000,
+    });
+
+    const connectionCard = page.getByTestId('truenas-connection-conn-1');
+    await expect(connectionCard).toContainText('Sync failing');
+    await expect(connectionCard).toContainText('authentication failed');
+
+    await connectionCard.getByRole('button', { name: 'Test' }).click();
+
+    await expect.poll(() => savedTestCalls).toBe(1);
+    await expect(connectionCard).toContainText('Healthy');
+    await expect(connectionCard).not.toContainText('authentication failed');
+
+    fs.mkdirSync(path.dirname(HEALTH_REFRESH_SCREENSHOT_PATH), { recursive: true });
+    await page.screenshot({ path: HEALTH_REFRESH_SCREENSHOT_PATH, fullPage: true });
   });
 
   test('counts TrueNAS alongside the other platform connections on the operations summary', async ({

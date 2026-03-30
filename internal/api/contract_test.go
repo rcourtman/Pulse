@@ -29,6 +29,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/relay"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -97,6 +98,42 @@ func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "explicitly disabled") {
 		t.Fatalf("expected explicit disable message, got %s", rec.Body.String())
+	}
+}
+
+func TestContract_TrueNASSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	connection := config.TrueNASInstance{
+		ID:                 "conn-1",
+		Name:               "tower",
+		Host:               "truenas.local",
+		Port:               443,
+		APIKey:             "super-secret",
+		UseHTTPS:           true,
+		InsecureSkipVerify: false,
+		Enabled:            true,
+	}
+	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+	poller := monitoring.NewTrueNASPoller(nil, time.Minute, nil)
+	handler.getPoller = func(context.Context) *monitoring.TrueNASPoller { return poller }
+	handler.newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) {
+		return &fakeTrueNASClient{}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
+		t.Fatalf("expected saved manual test to refresh poll summary, got %+v", summary.Poll)
 	}
 }
 

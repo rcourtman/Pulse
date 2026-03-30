@@ -275,7 +275,7 @@ func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	h.testConnectionInstance(w, r, instance)
+	h.writeConnectionTestResult(w, r, instance)
 }
 
 // HandleTestSavedConnection validates connectivity for one saved TrueNAS
@@ -309,7 +309,8 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 			continue
 		}
 		normalizeTrueNASInstance(&instance)
-		if payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r); !ok {
+		payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r)
+		if !ok {
 			return
 		} else if hasPayload {
 			payload.ID = connectionID
@@ -321,18 +322,53 @@ func (h *TrueNASHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *ht
 			}
 			instance = payload
 		}
-		h.testConnectionInstance(w, r, instance)
+		invalidConfig, err := h.testConnectionInstance(r, instance)
+		if err != nil {
+			if !hasPayload && h != nil && h.getPoller != nil {
+				if poller := h.getPoller(r.Context()); poller != nil {
+					poller.RecordConnectionTestFailure(resolveTenantOrgID(r), connectionID, instance, err, time.Now().UTC())
+				}
+			}
+			if invalidConfig {
+				writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": err.Error()})
+				return
+			}
+			writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": err.Error()})
+			return
+		}
+		if !hasPayload && h != nil && h.getPoller != nil {
+			if poller := h.getPoller(r.Context()); poller != nil {
+				poller.RecordConnectionTestSuccess(resolveTenantOrgID(r), connectionID, instance, time.Now().UTC())
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"success": true})
 		return
 	}
 
 	writeErrorResponse(w, http.StatusNotFound, "truenas_not_found", "Connection not found", nil)
 }
 
-func (h *TrueNASHandlers) testConnectionInstance(
+func (h *TrueNASHandlers) writeConnectionTestResult(
 	w http.ResponseWriter,
 	r *http.Request,
 	instance config.TrueNASInstance,
 ) {
+	invalidConfig, err := h.testConnectionInstance(r, instance)
+	if err != nil {
+		if invalidConfig {
+			writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": err.Error()})
+			return
+		}
+		writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+}
+
+func (h *TrueNASHandlers) testConnectionInstance(
+	r *http.Request,
+	instance config.TrueNASInstance,
+) (bool, error) {
 	newClient := h.newClient
 	if newClient == nil {
 		newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) { return truenas.NewClient(cfg) }
@@ -350,8 +386,7 @@ func (h *TrueNASHandlers) testConnectionInstance(
 		Timeout:            10 * time.Second,
 	})
 	if err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "truenas_invalid_config", "Invalid TrueNAS connection configuration", map[string]string{"error": err.Error()})
-		return
+		return true, err
 	}
 	defer client.Close()
 
@@ -359,11 +394,9 @@ func (h *TrueNASHandlers) testConnectionInstance(
 	defer cancel()
 
 	if err := client.TestConnection(ctx); err != nil {
-		writeErrorResponse(w, http.StatusBadRequest, "truenas_connection_failed", "Failed to connect to TrueNAS", map[string]string{"error": err.Error()})
-		return
+		return false, err
 	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"success": true})
+	return false, nil
 }
 
 func normalizeTrueNASInstance(instance *config.TrueNASInstance) {

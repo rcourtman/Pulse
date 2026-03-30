@@ -263,6 +263,7 @@ export function useTrueNASSettingsPanelState() {
       logger.error('[TrueNAS Settings] Saved connection test failed', error);
     } finally {
       setTesting(false);
+      await loadConnections();
     }
   };
 

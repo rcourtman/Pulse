@@ -492,21 +492,22 @@ func TestTrueNASHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
+	connection := config.TrueNASInstance{
+		ID:                 "conn-1",
+		Name:               "tower",
+		Host:               "truenas.local",
+		Port:               443,
+		APIKey:             "super-secret",
+		UseHTTPS:           true,
+		InsecureSkipVerify: false,
+		Enabled:            true,
+	}
 	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
-	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
-		{
-			ID:                 "conn-1",
-			Name:               "tower",
-			Host:               "truenas.local",
-			Port:               443,
-			APIKey:             "super-secret",
-			UseHTTPS:           true,
-			InsecureSkipVerify: false,
-			Enabled:            true,
-		},
-	}); err != nil {
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
 		t.Fatalf("seed truenas config: %v", err)
 	}
+	poller := monitoring.NewTrueNASPoller(nil, time.Second, nil)
+	handler.getPoller = func(context.Context) *monitoring.TrueNASPoller { return poller }
 
 	var gotConfig truenas.ClientConfig
 	handler.newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) {
@@ -524,6 +525,10 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.
 	if gotConfig.Host != "truenas.local" || gotConfig.APIKey != "super-secret" || !gotConfig.UseHTTPS {
 		t.Fatalf("unexpected saved client config: %+v", gotConfig)
 	}
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
+		t.Fatalf("expected saved retest to update poll summary success state, got %+v", summary.Poll)
+	}
 
 	missingReq := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/missing/test", nil)
 	missingRec := httptest.NewRecorder()
@@ -531,6 +536,47 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.
 
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing saved connection, got %d: %s", missingRec.Code, missingRec.Body.String())
+	}
+}
+
+func TestTrueNASHandlers_HandleTestSavedConnection_UpdatesPollSummaryFailure(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	connection := config.TrueNASInstance{
+		ID:                 "conn-1",
+		Name:               "tower",
+		Host:               "truenas.local",
+		Port:               443,
+		APIKey:             "super-secret",
+		UseHTTPS:           true,
+		InsecureSkipVerify: false,
+		Enabled:            true,
+	}
+	handler, persistence, _ := newTrueNASHandlersForTest(t, nil)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+	poller := monitoring.NewTrueNASPoller(nil, time.Second, nil)
+	handler.getPoller = func(context.Context) *monitoring.TrueNASPoller { return poller }
+	handler.newClient = func(cfg truenas.ClientConfig) (trueNASClient, error) {
+		return &fakeTrueNASClient{
+			testConnection: func(context.Context) error { return errors.New("authentication failed") },
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestSavedConnection(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastError == nil {
+		t.Fatalf("expected saved retest failure to update poll summary, got %+v", summary.Poll)
+	}
+	if summary.Poll.LastError.Message != "authentication failed" {
+		t.Fatalf("expected failure message preserved, got %+v", summary.Poll.LastError)
 	}
 }
 

@@ -232,7 +232,11 @@ surface. `internal/monitoring/truenas_poller.go` must honor each configured
 TrueNAS connection's `pollIntervalSeconds`, keep the next poll schedule plus
 last success/failure state in one canonical runtime owner, and project the most
 recent discovered host/pool/dataset/app/disk/recovery counts there instead of
-recomputing settings health panel-by-panel.
+recomputing settings health panel-by-panel. That same poller-owned summary must
+also absorb manual saved-connection test results from the shared
+`POST /api/truenas/connections/{id}/test` path, so row-level operator tests in
+settings update the canonical last success / last error state instead of
+stopping at disconnected toast notifications.
 That same runtime owner also defines the feature-default contract for TrueNAS:
 the API-backed integration is on by default, and `PULSE_ENABLE_TRUENAS` is an
 explicit opt-out switch rather than a required bootstrap toggle.

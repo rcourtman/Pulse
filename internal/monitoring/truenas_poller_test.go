@@ -3,6 +3,7 @@ package monitoring
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -322,6 +323,47 @@ func TestTrueNASPollerConnectionSummariesCaptureFailures(t *testing.T) {
 	}
 	if summary.Poll.LastError.Category != "auth" {
 		t.Fatalf("expected auth error category, got %+v", summary.Poll.LastError)
+	}
+}
+
+func TestTrueNASPollerManualConnectionTestsUpdateSummariesWithoutClearingObservedCounts(t *testing.T) {
+	poller := NewTrueNASPoller(nil, time.Minute, nil)
+	connection := config.TrueNASInstance{
+		ID:               "manual-test-conn",
+		Host:             "manual-test.local",
+		APIKey:           "secret",
+		UseHTTPS:         true,
+		Enabled:          true,
+		PollIntervalSecs: 120,
+	}
+	connection.ApplyDefaults()
+
+	snapshot := &truenas.FixtureSnapshot{
+		System: truenas.SystemInfo{
+			Hostname: "manual-test",
+		},
+		Pools: []truenas.Pool{{Name: "tank"}},
+	}
+	firstSuccess := time.Date(2026, time.March, 30, 10, 0, 0, 0, time.UTC)
+	failureAt := firstSuccess.Add(2 * time.Minute)
+	manualSuccessAt := failureAt.Add(2 * time.Minute)
+
+	poller.mu.Lock()
+	poller.recordConnectionSuccessLocked("default", connection.ID, connection, firstSuccess, snapshot)
+	poller.recordConnectionFailureLocked("default", connection.ID, connection, errors.New("manual auth failed"), failureAt)
+	poller.mu.Unlock()
+
+	poller.RecordConnectionTestSuccess("default", connection.ID, connection, manualSuccessAt)
+
+	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
+		t.Fatalf("expected manual success to update poll summary, got %+v", summary.Poll)
+	}
+	if summary.Poll.LastError != nil {
+		t.Fatalf("expected manual success to clear previous error, got %+v", summary.Poll.LastError)
+	}
+	if summary.Observed == nil || summary.Observed.Host != "manual-test" || summary.Observed.StoragePools != 1 {
+		t.Fatalf("expected observed summary to be preserved after manual success, got %+v", summary.Observed)
 	}
 }
 

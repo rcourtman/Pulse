@@ -470,6 +470,11 @@ connection form contract. When the operator is editing a saved connection, that
 same path must also accept the in-flight form payload and merge unchanged
 masked secrets on the server, so edit-dialog tests do not force credential
 re-entry just to validate changed host or TLS fields.
+When an operator runs a row-level saved-connection test from that workspace,
+`useTrueNASSettingsPanelState.ts` must reload the shared connection summary
+after the request completes so the card reflects refreshed last-success or
+last-error state instead of leaving stale health beside a success or failure
+toast.
 When that same platform workspace reports TrueNAS as unavailable, the disabled
 state must mean the server has explicitly opted out of the default-on TrueNAS
 integration, not that operators still need to enable a hidden feature gate for
