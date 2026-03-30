@@ -153,6 +153,11 @@ assembly branch.
    as the explicit API-backed alternative for Proxmox, TrueNAS, and future
    provider-backed platforms instead of regressing to generic settings-root
    CTAs or provider-specific one-off routes.
+6. Keep infrastructure route-backed source filters on canonical unified-resource
+   truth. `frontend-modern/src/features/infrastructure/` must preserve a
+   route-owned source such as `truenas` in the filter option set even when the
+   current unified-resource snapshot does not contain that source, so
+   cross-surface handoffs do not silently fall back to `All`.
 
 ## Current State
 
@@ -1306,3 +1311,10 @@ Shared infrastructure consumers such as the unified resource table and detail
 drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other
 incidental runtime hints.
+That same infrastructure consumer boundary also owns route-backed source
+selection continuity. `frontend-modern/src/features/infrastructure/`
+must keep a route-owned canonical source such as `truenas` present in the
+source filter option set even when the currently loaded unified-resource
+snapshot does not contain that source yet, so cross-surface handoffs from
+settings, alerts, or findings do not collapse back to `All` during hydration
+or empty-filter states.

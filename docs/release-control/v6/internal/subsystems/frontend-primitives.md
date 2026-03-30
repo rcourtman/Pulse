@@ -188,6 +188,11 @@ work extends shared components instead of creating new local variants.
    completion CTA language aligned with the governed infrastructure install
    workspace instead of regressing to a route jump that leaves the next action
    implicit.
+10. Keep shared filter primitives coherent with route-owned option hydration.
+    Feature shells such as `frontend-modern/src/features/infrastructure/`
+    must keep a route-owned canonical option visible in shared selects like
+    `LabeledFilterSelect` even when current results do not contain that
+    option, so provider-scoped handoffs do not flash back to `All`.
 10. Keep the first welcome screen in
    `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
    explicit about operator context. The shell must explain that the bootstrap
@@ -1593,6 +1598,13 @@ summary state. `useInfrastructureSettingsState.ts`,
 Proxmox/PBS/PMG/TrueNAS counts and availability from one shared infrastructure
 settings state source instead of letting the reporting summary and the
 provider-specific panel fetch the same TrueNAS connection state separately.
+That same shared filter-presentation boundary also owns infrastructure
+route-filter continuity. `frontend-modern/src/features/infrastructure/`
+must keep a route-owned canonical source option such as `truenas` visible in
+the shared `LabeledFilterSelect` even when current unified-resource results do
+not contain that source, so platform handoffs from settings and other
+surfaces do not flash back to `All` while the operator is still in a
+provider-scoped investigation flow.
 That same shared feature-presentation boundary also owns storage disk-detail
 fallback messaging in `frontend-modern/src/features/storageBackups/`. Shared
 detail presenters must describe the actual capability or identity gap that

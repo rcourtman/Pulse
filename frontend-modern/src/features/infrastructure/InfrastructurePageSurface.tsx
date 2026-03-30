@@ -14,8 +14,6 @@ import SettingsIcon from 'lucide-solid/icons/settings';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { AgentDeployModal } from '@/components/Infrastructure/AgentDeployModal';
-import { DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS } from '@/utils/sourcePlatformOptions';
-import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import {
   getInfrastructureEmptyState,
   getInfrastructureFilterEmptyState,
@@ -25,7 +23,6 @@ import { useInfrastructurePageState, type GroupingMode } from './useInfrastructu
 
 export function InfrastructurePageSurface() {
   const navigate = useNavigate();
-  const sourceOptions = DEFAULT_INFRASTRUCTURE_SOURCE_OPTIONS;
   const {
     loading,
     error,
@@ -56,7 +53,7 @@ export function InfrastructurePageSurface() {
     setFiltersOpen,
     activeFilterCount,
     kioskMode,
-    availableSources,
+    sourceOptions,
     statusOptions,
     hasActiveFilters,
     clearFilters,
@@ -182,12 +179,7 @@ export function InfrastructurePageSurface() {
                       selectClass="min-w-[8rem]"
                     >
                       <option value="">All</option>
-                      <For
-                        each={sourceOptions.filter((source) => {
-                          const normalized = normalizeSourcePlatformKey(source.key);
-                          return normalized ? availableSources().has(normalized) : false;
-                        })}
-                      >
+                      <For each={sourceOptions()}>
                         {(source) => <option value={source.key}>{source.label}</option>}
                       </For>
                     </LabeledFilterSelect>

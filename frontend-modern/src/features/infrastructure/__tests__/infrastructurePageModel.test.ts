@@ -37,6 +37,10 @@ describe('infrastructurePageModel', () => {
     const derivation = buildInfrastructurePageFilterDerivation(resources, '', '', '');
 
     expect(Array.from(derivation.availableSources)).toEqual(['agent', 'proxmox-pve']);
+    expect(derivation.sourceOptions).toEqual([
+      { key: 'proxmox-pve', label: 'PVE' },
+      { key: 'agent', label: 'Agent' },
+    ]);
     expect(derivation.statusOptions).toEqual([
       { key: 'online', label: 'Online' },
       { key: 'warning', label: 'warning' },
@@ -89,5 +93,29 @@ describe('infrastructurePageModel', () => {
     expect(derivation.hasActiveFilters).toBe(true);
     expect(derivation.filteredResources).toEqual([]);
     expect(derivation.hasFilteredResources).toBe(false);
+  });
+
+  it('keeps a route-owned source option visible even when no current resources provide it', () => {
+    const derivation = buildInfrastructurePageFilterDerivation(
+      [
+        makeResource({
+          id: 'resource-2',
+          type: 'storage',
+          platformType: 'proxmox-pve',
+          platformData: { sources: ['proxmox'] },
+        }),
+      ],
+      'truenas',
+      '',
+      '',
+    );
+
+    expect(Array.from(derivation.availableSources)).toEqual(['proxmox-pve']);
+    expect(derivation.sourceOptions).toEqual([
+      { key: 'proxmox-pve', label: 'PVE' },
+      { key: 'truenas', label: 'TrueNAS' },
+    ]);
+    expect(derivation.activeFilterCount).toBe(1);
+    expect(derivation.hasActiveFilters).toBe(true);
   });
 });

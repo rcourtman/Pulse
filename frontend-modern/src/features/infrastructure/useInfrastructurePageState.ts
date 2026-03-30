@@ -54,6 +54,7 @@ export function useInfrastructurePageState() {
   );
   const activeFilterCount = createMemo(() => filterDerivation().activeFilterCount);
   const availableSources = createMemo(() => filterDerivation().availableSources);
+  const sourceOptions = createMemo(() => filterDerivation().sourceOptions);
   const statusOptions = createMemo(() => filterDerivation().statusOptions);
   const hasActiveFilters = createMemo(() => filterDerivation().hasActiveFilters);
   const filteredResources = createMemo(() => filterDerivation().filteredResources);
@@ -107,6 +108,7 @@ export function useInfrastructurePageState() {
     activeFilterCount,
     kioskMode,
     availableSources,
+    sourceOptions,
     statusOptions,
     hasActiveFilters,
     clearFilters,
