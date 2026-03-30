@@ -79,6 +79,7 @@ describe('resourceDetailDrawerIdentityModel', () => {
     const platformData = {
       agent: { hostname: 'host-1' },
       pbs: { instanceId: 'pbs-1' },
+      vmware: { connectionName: 'Lab VC' },
       metrics: { cpu: 42 },
       matchResults: { source: 'match-results' },
       matches: { source: 'matches' },
@@ -87,6 +88,7 @@ describe('resourceDetailDrawerIdentityModel', () => {
     expect(buildSourceSections(platformData).map((section) => section.id)).toEqual([
       'agent',
       'pbs',
+      'vmware',
       'metrics',
     ]);
     expect(buildIdentityMatchInfo(platformData)).toEqual({ source: 'match-results' });
@@ -108,11 +110,12 @@ describe('resourceDetailDrawerIdentityModel', () => {
         resource,
         platformData: {
           proxmox: { nodeName: 'pve-1' },
-          docker: { runtime: 'docker' },
-        },
-        sourceStatus: {
-          proxmox: { status: 'online' },
-        },
+        docker: { runtime: 'docker' },
+        vmware: { connectionName: 'Lab VC' },
+      },
+      sourceStatus: {
+        proxmox: { status: 'online' },
+      },
         identityMatchInfo: { matchedBy: 'hostname' },
       }),
     ).toEqual({
@@ -131,6 +134,7 @@ describe('resourceDetailDrawerIdentityModel', () => {
         pbs: undefined,
         pmg: undefined,
         kubernetes: undefined,
+        vmware: { connectionName: 'Lab VC' },
         metrics: undefined,
       },
     });

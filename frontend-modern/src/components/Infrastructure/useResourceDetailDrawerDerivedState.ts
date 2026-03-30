@@ -1,6 +1,7 @@
 import { createMemo, type Accessor } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { requiresGovernedResourceDisplay } from '@/types/resource';
+import type { ResourceVMwareMeta } from '@/types/resource';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
 import { getAgentStatusIndicator } from '@/utils/status';
 import {
@@ -57,6 +58,10 @@ import {
   buildResourceIdentityView,
   buildSourceSections,
 } from './resourceDetailDrawerIdentityModel';
+import {
+  buildVMwareDetailsSummary,
+  buildVMwareDetailSections,
+} from './resourceDetailDrawerVmwareModel';
 
 type DrawerTab = 'overview' | 'mail' | 'namespaces' | 'deployments' | 'swarm' | 'debug';
 
@@ -113,6 +118,9 @@ export const useResourceDetailDrawerDerivedState = (
   );
   const kubernetesMeta = createMemo(
     () => resource.kubernetes ?? (platformData()?.kubernetes as KubernetesPlatformData | undefined),
+  );
+  const vmwareData = createMemo(
+    () => resource.vmware ?? (platformData()?.vmware as ResourceVMwareMeta | undefined),
   );
   const kubernetesCapabilityBadges = createMemo(() =>
     buildKubernetesCapabilityBadges(kubernetesMeta()?.metricCapabilities),
@@ -250,6 +258,13 @@ export const useResourceDetailDrawerDerivedState = (
       pmg: pmgData(),
     });
   });
+  const vmwareDetailSections = createMemo(() =>
+    buildVMwareDetailSections(resource.type, vmwareData()),
+  );
+  const hasVMwareDetails = createMemo(() => vmwareDetailSections().length > 0);
+  const vmwareDetailsSummary = createMemo(() =>
+    buildVMwareDetailsSummary(resource.type, vmwareData()),
+  );
 
   const relatedLinks = createMemo(() => buildRelatedLinks(resource, displayName()));
   const accessSummary = createMemo(() =>
@@ -317,6 +332,7 @@ export const useResourceDetailDrawerDerivedState = (
     hasGovernanceData,
     agentMeta,
     kubernetesMeta,
+    vmwareData,
     kubernetesCapabilityBadges,
     proxmoxNode,
     agentInfo,
@@ -365,6 +381,9 @@ export const useResourceDetailDrawerDerivedState = (
     hostDetailSummary,
     hasServiceDetails,
     serviceDetailsSummary,
+    hasVMwareDetails,
+    vmwareDetailsSummary,
+    vmwareDetailSections,
     relatedLinks,
     hasRuntimeOperationalContext,
     sourceSections,

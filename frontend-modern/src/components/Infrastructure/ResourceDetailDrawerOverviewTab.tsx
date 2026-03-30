@@ -53,6 +53,17 @@ interface ResourceDetailDrawerOverviewTabProps {
 const hasMetadataEntries = (value?: Record<string, unknown> | null): boolean =>
   Boolean(value && Object.keys(value).length > 0);
 
+const vmwareRowToneClass = (tone?: 'default' | 'accent' | 'warning'): string => {
+  switch (tone) {
+    case 'accent':
+      return 'text-sky-700 dark:text-sky-300';
+    case 'warning':
+      return 'text-amber-700 dark:text-amber-300';
+    default:
+      return 'text-base-content';
+  }
+};
+
 const timelineKindOptions: Array<{ label: string; value: ResourceChangeKind | '' }> = [
   { label: 'All kinds', value: '' },
   ...RESOURCE_CHANGE_KIND_ORDER.map((kind) => ({
@@ -510,6 +521,7 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
         <Show
           when={
             drawer.hasServiceDetails() ||
+            drawer.hasVMwareDetails() ||
             drawer.hasHostDetails() ||
             drawer.hasAccessContext() ||
             drawer.hasInvestigationContext()
@@ -1115,6 +1127,47 @@ export const ResourceDetailDrawerOverviewTab: Component<ResourceDetailDrawerOver
                 );
               }}
             </Show>
+          </SupportDisclosure>
+        </Show>
+
+        <Show when={drawer.hasVMwareDetails()}>
+          <SupportDisclosure
+            title="vSphere"
+            summary={drawer.vmwareDetailsSummary()}
+            expanded={drawer.showVMwareDetails()}
+            onToggle={() => drawer.setShowVMwareDetails((value) => !value)}
+            showLabel="Show vSphere"
+            hideLabel="Hide vSphere"
+            class="h-full"
+            contentClass="mt-3 space-y-3"
+            dataTestId="resource-vmware-details-section"
+          >
+            <div class="space-y-3">
+              <For each={drawer.vmwareDetailSections()}>
+                {(section) => (
+                  <div class="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-700 dark:bg-sky-900">
+                    <div class="mb-2 text-[10px] font-medium uppercase tracking-wide text-sky-700 dark:text-sky-300">
+                      {section.label}
+                    </div>
+                    <div class="space-y-1.5 text-[11px]">
+                      <For each={section.rows}>
+                        {(row) => (
+                          <div class="flex items-center justify-between gap-2">
+                            <span class="text-muted">{row.label}</span>
+                            <span
+                              class={`max-w-[60%] truncate text-right font-medium ${vmwareRowToneClass(row.tone)}`}
+                              title={row.value}
+                            >
+                              {row.value}
+                            </span>
+                          </div>
+                        )}
+                      </For>
+                    </div>
+                  </div>
+                )}
+              </For>
+            </div>
           </SupportDisclosure>
         </Show>
 

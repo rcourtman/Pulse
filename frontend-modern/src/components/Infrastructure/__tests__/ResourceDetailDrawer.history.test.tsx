@@ -11,6 +11,7 @@ import resourceDetailDrawerDiscoveryModelSource from '@/components/Infrastructur
 import resourceDetailDrawerIdentityModelSource from '@/components/Infrastructure/resourceDetailDrawerIdentityModel.ts?raw';
 import resourceDetailDrawerOperationalModelSource from '@/components/Infrastructure/resourceDetailDrawerOperationalModel.ts?raw';
 import resourceDetailDrawerServiceModelSource from '@/components/Infrastructure/resourceDetailDrawerServiceModel.ts?raw';
+import resourceDetailDrawerVmwareModelSource from '@/components/Infrastructure/resourceDetailDrawerVmwareModel.ts?raw';
 import resourceDetailDrawerDockerActionsStateSource from '@/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts?raw';
 import resourceDetailDrawerStateSource from '@/components/Infrastructure/useResourceDetailDrawerState.ts?raw';
 import type { Resource } from '@/types/resource';
@@ -155,6 +156,9 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from './resourceDetailDrawerIdentityModel'",
     );
+    expect(resourceDetailDrawerDerivedStateSource).toContain(
+      "from './resourceDetailDrawerVmwareModel'",
+    );
     expect(resourceDetailDrawerDiscoveryModelSource).toContain('export const toDiscoveryConfig');
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceIdentityView',
@@ -164,6 +168,12 @@ describe('ResourceDetailDrawer change history section', () => {
     );
     expect(resourceDetailDrawerIdentityModelSource).toContain(
       'export const buildResourceDebugBundle',
+    );
+    expect(resourceDetailDrawerVmwareModelSource).toContain(
+      'export const buildVMwareDetailSections',
+    );
+    expect(resourceDetailDrawerVmwareModelSource).toContain(
+      'export const buildVMwareDetailsSummary',
     );
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildWorkloadsHref');
     expect(resourceDetailDrawerDerivedStateSource).not.toContain('buildServiceDetailLinks');

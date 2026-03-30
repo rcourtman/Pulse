@@ -61,23 +61,24 @@ cross-source deduplication.
 39. `frontend-modern/src/components/Infrastructure/unifiedResourceTableStateModel.ts`
 40. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDerivedState.ts`
 41. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerServiceModel.ts`
-42. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
-43. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
-44. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
-45. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
-46. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
-47. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
-48. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
-49. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
-50. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
-51. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
-52. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
-53. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
-54. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
-55. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-56. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-57. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
-58. `frontend-modern/src/utils/agentResources.ts`
+42. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerVmwareModel.ts`
+43. `frontend-modern/src/components/Infrastructure/resourceDetailDiscoveryModel.ts`
+44. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerOperationalModel.ts`
+45. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+46. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerDockerActionsState.ts`
+47. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`
+48. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableState.ts`
+49. `frontend-modern/src/components/Infrastructure/useUnifiedResourceTableViewportSync.ts`
+50. `frontend-modern/src/components/Discovery/DiscoveryTab.tsx`
+51. `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts`
+52. `frontend-modern/src/features/infrastructure/InfrastructurePageSurface.tsx`
+53. `frontend-modern/src/features/infrastructure/useInfrastructurePageRouteState.ts`
+54. `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+55. `frontend-modern/src/features/infrastructure/infrastructurePageModel.ts`
+56. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+57. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+58. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+59. `frontend-modern/src/utils/agentResources.ts`
 59. `frontend-modern/src/utils/canonicalResourceTypes.ts`
 60. `frontend-modern/src/utils/resourceBadgePresentation.ts`
 61. `frontend-modern/src/utils/resourceChangePresentation.ts`
@@ -1421,6 +1422,15 @@ Shared infrastructure consumers such as the unified resource table and detail
 drawer must present that owned metadata through shared helpers instead of
 reconstructing privacy posture from display names, source types, or other
 incidental runtime hints.
+That same shared-consumer boundary now also owns VMware phase-1 detail
+presentation. `frontend-modern/src/components/Infrastructure/`
+`resourceDetailDrawerVmwareModel.ts`,
+`ResourceDetailDrawerOverviewTab.tsx`, `ResourceDetailDrawerDebugTab.tsx`,
+`resourceDetailDrawerIdentityModel.ts`, and
+`useResourceDetailDrawerDerivedState.ts` must surface VMware read-only
+placement, signal, and snapshot context through the canonical resource drawer
+and debug/source sections rather than introducing a VMware-only detail route,
+drawer tab, or provider-local investigation shell.
 That same infrastructure consumer boundary also owns route-backed source
 selection continuity. `frontend-modern/src/features/infrastructure/`
 must keep a route-owned canonical source such as `truenas` present in the

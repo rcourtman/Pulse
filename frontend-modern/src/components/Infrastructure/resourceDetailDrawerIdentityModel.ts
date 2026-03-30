@@ -71,6 +71,7 @@ export const buildSourceSections = (
     { id: 'pbs', label: 'PBS', payload: platformData.pbs },
     { id: 'pmg', label: 'PMG', payload: platformData.pmg },
     { id: 'kubernetes', label: 'Kubernetes', payload: platformData.kubernetes },
+    { id: 'vmware', label: 'vSphere', payload: platformData.vmware },
     { id: 'metrics', label: 'Metrics', payload: platformData.metrics },
   ].filter((section) => section.payload !== undefined);
 };
@@ -101,6 +102,7 @@ export const buildResourceDebugBundle = (options: {
     pbs: options.platformData?.pbs,
     pmg: options.platformData?.pmg,
     kubernetes: options.platformData?.kubernetes,
+    vmware: options.platformData?.vmware,
     metrics: options.platformData?.metrics,
   },
 });

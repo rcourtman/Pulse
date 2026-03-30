@@ -252,6 +252,88 @@ describe('ResourceDetailDrawer runtime and identity cards', () => {
     expect(getByText('eth0')).toBeInTheDocument();
   });
 
+  it('surfaces VMware read-only placement and signal context on the shared drawer path', async () => {
+    const resource = baseResource({
+      type: 'vm',
+      name: 'app-01',
+      displayName: 'App 01',
+      platformId: 'vc-1:vm:vm-201',
+      platformType: 'vmware-vsphere',
+      sourceType: 'api',
+      platformData: {
+        sources: ['vmware'],
+        vmware: {
+          connectionName: 'Lab VC',
+          vcenterHost: 'vc.lab.local',
+          entityType: 'VirtualMachine',
+          overallStatus: 'green',
+          powerState: 'poweredOn',
+          datacenterName: 'Lab DC',
+          clusterName: 'Compute Cluster',
+          resourcePoolName: 'Production',
+          runtimeHostName: 'esxi-01.lab.local',
+          datastoreNames: ['shared-vsan'],
+          guestOsFamily: 'ubuntu64Guest',
+          guestHostname: 'app-01.lab.local',
+          guestIpAddresses: ['192.0.2.50'],
+          activeAlarmCount: 1,
+          activeAlarmSummary: 'Host fan degraded',
+          recentTaskCount: 1,
+          recentTaskSummary: 'Create snapshot (success)',
+          snapshotCount: 2,
+        },
+      },
+      vmware: {
+        connectionName: 'Lab VC',
+        vcenterHost: 'vc.lab.local',
+        entityType: 'VirtualMachine',
+        overallStatus: 'green',
+        powerState: 'poweredOn',
+        datacenterName: 'Lab DC',
+        clusterName: 'Compute Cluster',
+        resourcePoolName: 'Production',
+        runtimeHostName: 'esxi-01.lab.local',
+        datastoreNames: ['shared-vsan'],
+        guestOsFamily: 'ubuntu64Guest',
+        guestHostname: 'app-01.lab.local',
+        guestIpAddresses: ['192.0.2.50'],
+        activeAlarmCount: 1,
+        activeAlarmSummary: 'Host fan degraded',
+        recentTaskCount: 1,
+        recentTaskSummary: 'Create snapshot (success)',
+        snapshotCount: 2,
+      },
+    });
+
+    const { getByRole, getByText, getByTestId, queryByText } = render(() => (
+      <ResourceDetailDrawer resource={resource} />
+    ));
+
+    expect(getByTestId('resource-vmware-details-section')).toBeInTheDocument();
+    expect(getByText('Lab VC · Read-only vCenter context · 2 snapshots · 1 alarm · 1 task')).toBeInTheDocument();
+    expect(queryByText('Compute Cluster')).toBeNull();
+    expect(queryByText('Create snapshot (success)')).toBeNull();
+
+    fireEvent.click(getByRole('button', { name: 'Show vSphere' }));
+
+    await waitFor(() => {
+      expect(getByText('Placement')).toBeInTheDocument();
+    });
+
+    const section = getByTestId('resource-vmware-details-section');
+    expect(within(section).getByText('State')).toBeInTheDocument();
+    expect(within(section).getByText('Placement')).toBeInTheDocument();
+    expect(within(section).getByText('Guest')).toBeInTheDocument();
+    expect(within(section).getByText('Signals')).toBeInTheDocument();
+    expect(within(section).getByText('vc.lab.local')).toBeInTheDocument();
+    expect(within(section).getByText('Compute Cluster')).toBeInTheDocument();
+    expect(within(section).getByText('esxi-01.lab.local')).toBeInTheDocument();
+    expect(within(section).getByText('ubuntu64Guest')).toBeInTheDocument();
+    expect(within(section).getByText(/Create snapshot \(success\)/)).toBeInTheDocument();
+    expect(within(section).getByText(/Host fan degraded/)).toBeInTheDocument();
+    expect(within(section).getByText('2 snapshots')).toBeInTheDocument();
+  });
+
   it('keeps source provenance in the header when no source health issue is present', () => {
     const resource = baseResource({
       sourceType: 'api',
