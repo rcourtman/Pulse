@@ -231,19 +231,42 @@ describe('isDockerManagedAppContainer', () => {
 });
 
 describe('getDiscoveryResourceTypeForWorkload', () => {
-  it('returns the canonical discovery resource type for VM workloads', () => {
-    const guest = { workloadType: 'vm' as const, type: 'vm' };
+  it('returns the canonical discovery resource type for VM workloads with canonical coordinates', () => {
+    const guest = { workloadType: 'vm' as const, type: 'vm', node: 'pve1', vmid: 101 };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('vm');
   });
 
-  it('returns the canonical discovery resource type for app-container workloads', () => {
-    const guest = { workloadType: 'app-container' as const, type: 'docker' };
+  it('returns the canonical discovery resource type for Docker-managed app-container workloads', () => {
+    const guest = {
+      workloadType: 'app-container' as const,
+      type: 'app-container',
+      platformType: 'docker',
+      dockerHostId: 'docker-host-1',
+      id: 'app-container:docker-host-1:grafana',
+    };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('app-container');
   });
 
-  it('returns the canonical discovery resource type for pod workloads', () => {
-    const guest = { workloadType: 'pod' as const, type: 'k8s' };
+  it('returns the canonical discovery resource type for pod workloads with agent ownership', () => {
+    const guest = {
+      workloadType: 'pod' as const,
+      type: 'k8s',
+      kubernetesAgentId: 'k8s-agent-1',
+      id: 'k8s:cluster-a:pod:pod-uid-1',
+    };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('pod');
+  });
+
+  it('returns null for API-backed TrueNAS app-containers without canonical discovery ownership', () => {
+    const guest = {
+      workloadType: 'app-container' as const,
+      type: 'app-container',
+      platformType: 'truenas',
+      id: 'app-container:truenas-main:nextcloud',
+      node: 'truenas-main',
+      instance: 'truenas-main',
+    };
+    expect(getDiscoveryResourceTypeForWorkload(guest)).toBeNull();
   });
 });
 

@@ -1,9 +1,10 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 
 import { getDiscoveryLoadingState } from '@/utils/discoveryPresentation';
 import {
   getCanonicalWorkloadId,
   getDiscoveryResourceTypeForWorkload,
+  hasDiscoverySupportForWorkload,
   getWebInterfaceTargetLabelForWorkload,
 } from '@/utils/workloads';
 import { buildInfrastructureHrefForWorkload } from '@/routing/resourceLinks';
@@ -51,6 +52,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
   const backupPresentation = createMemo(() =>
     props.guest.lastBackup ? getGuestDrawerBackupPresentation(props.guest.lastBackup) : null,
   );
+  const hasDiscoverySupport = createMemo(() => hasDiscoverySupportForWorkload(props.guest));
   const discoveryAgentId = createMemo(() => getDiscoveryHostIdForWorkload(props.guest));
   const discoveryResourceId = createMemo(() => getDiscoveryResourceIdForWorkload(props.guest));
   const discoveryResourceType = createMemo(() =>
@@ -64,6 +66,12 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     setActiveTab(tab);
   };
 
+  createEffect(() => {
+    if (activeTab() === 'discovery' && !hasDiscoverySupport()) {
+      setActiveTab('overview');
+    }
+  });
+
   return {
     activeTab,
     agentLabel,
@@ -76,6 +84,7 @@ export function useGuestDrawerState(props: GuestDrawerProps) {
     guestId,
     guestOsSummary,
     hasAgentInfo,
+    hasDiscoverySupport,
     hasFilesystemDetails,
     hasNetworkInterfaces,
     hasOsInfo,

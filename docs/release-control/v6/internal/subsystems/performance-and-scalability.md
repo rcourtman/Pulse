@@ -248,10 +248,13 @@ That same workload hot path also owns the split between canonical
 app-container routing and Docker-only actions. `frontend-modern/src/hooks/useWorkloads.ts`,
 `frontend-modern/src/components/Dashboard/workloadTopology.ts`, and
 `frontend-modern/src/components/Dashboard/useGuestRowState.ts` must preserve a
-generic app-container host path for discovery and navigation while keeping
-Docker runtime action identifiers explicit. TrueNAS app-containers may reuse
-runtime metadata such as image and runtime strings, but they must not inherit
-Docker-only update affordances or fallback host IDs on the dashboard row path.
+canonical app-container navigation path while keeping Docker runtime action
+identifiers explicit. Discovery affordances on the dashboard drawer must follow
+the canonical `discoveryTarget` contract, not generic app-container host
+fallbacks. TrueNAS app-containers may reuse runtime metadata such as image and
+runtime strings, but they must not inherit Docker-only update affordances or
+agent-only Discovery tabs on the dashboard row path unless the unified
+resource contract explicitly supplies discovery ownership.
 That same row-and-selection boundary also requires canonical app-container
 identity to stay intact on the workload surface. `/workloads` rows, deep links,
 drawer selection, anomaly correlation, and route-owned filters must key on the

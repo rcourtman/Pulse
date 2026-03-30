@@ -121,6 +121,7 @@ test.describe('TrueNAS workloads resource deep links', () => {
     ).toContainText('nextcloud');
     await expect(page.getByText('Open related infrastructure', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Discovery' })).toHaveCount(0);
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

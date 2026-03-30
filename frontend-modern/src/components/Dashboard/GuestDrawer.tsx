@@ -18,6 +18,7 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
     discoveryResourceType,
     guestId,
     hasAgentInfo,
+    hasDiscoverySupport,
     hasFilesystemDetails,
     hasNetworkInterfaces,
     hasOsInfo,
@@ -46,17 +47,21 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
             <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
           )}
         </button>
-        <button
-          onClick={() => switchTab('discovery')}
-          class={`pb-2 text-sm font-medium transition-colors relative ${
-            activeTab() === 'discovery' ? 'text-blue-600 dark:text-blue-400' : ' hover:text-muted'
-          }`}
-        >
-          Discovery
-          {activeTab() === 'discovery' && (
-            <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
-          )}
-        </button>
+        {hasDiscoverySupport() && (
+          <button
+            onClick={() => switchTab('discovery')}
+            class={`pb-2 text-sm font-medium transition-colors relative ${
+              activeTab() === 'discovery'
+                ? 'text-blue-600 dark:text-blue-400'
+                : ' hover:text-muted'
+            }`}
+          >
+            Discovery
+            {activeTab() === 'discovery' && (
+              <div class="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-t-full" />
+            )}
+          </button>
+        )}
       </div>
       <div class="flex justify-end">
         <button
@@ -95,26 +100,28 @@ export const GuestDrawer: Component<GuestDrawerProps> = (props) => {
       {/* Always rendered, hidden via CSS. Wrapped in a local Suspense
                      so DiscoveryTab's createResource loading state doesn't bubble
                      up to the app-level Suspense and replace the entire page. */}
-      <div
-        class={activeTab() === 'discovery' ? '' : 'hidden'}
-        style={{ 'overflow-anchor': 'none' }}
-      >
-        <Suspense
-          fallback={
-            <div class="flex items-center justify-center py-8">
-              <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
-              <span class="ml-2 text-sm text-muted">{discoveryLoadingState.text}</span>
-            </div>
-          }
+      {hasDiscoverySupport() && (
+        <div
+          class={activeTab() === 'discovery' ? '' : 'hidden'}
+          style={{ 'overflow-anchor': 'none' }}
         >
-          <DiscoveryTab
-            resourceType={discoveryResourceType()}
-            agentId={discoveryAgentId()}
-            resourceId={discoveryResourceId()}
-            hostname={props.guest.name}
-          />
-        </Suspense>
-      </div>
+          <Suspense
+            fallback={
+              <div class="flex items-center justify-center py-8">
+                <div class="animate-spin h-6 w-6 border-2 border-blue-500 border-t-transparent rounded-full" />
+                <span class="ml-2 text-sm text-muted">{discoveryLoadingState.text}</span>
+              </div>
+            }
+          >
+            <DiscoveryTab
+              resourceType={discoveryResourceType()!}
+              agentId={discoveryAgentId()}
+              resourceId={discoveryResourceId()}
+              hostname={props.guest.name}
+            />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 };

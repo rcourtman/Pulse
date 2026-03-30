@@ -182,6 +182,18 @@ describe('workloadTopology', () => {
         node: 'truenas-main',
         instance: 'truenas-main',
       });
+      const truenasWithExplicitDiscovery = makeGuest(2, {
+        id: 'app-container:truenas-main:nextcloud',
+        type: 'app-container',
+        workloadType: 'app-container',
+        platformType: 'truenas',
+        dockerHostId: '',
+        discoveryTarget: {
+          resourceType: 'app-container',
+          agentId: 'truenas-helper',
+          resourceId: 'nextcloud',
+        },
+      });
       const k8s = makeGuest(3, {
         id: 'k8s:cluster-a:pod:pod-uid-1',
         type: 'pod',
@@ -202,10 +214,10 @@ describe('workloadTopology', () => {
       expect(getDiscoveryResourceIdForWorkload(docker)).toBe(
         'app-container:docker-host-1:container-abc123',
       );
-      expect(getDiscoveryHostIdForWorkload(truenas)).toBe('truenas-main');
-      expect(getDiscoveryResourceIdForWorkload(truenas)).toBe(
-        'app-container:truenas-main:nextcloud',
-      );
+      expect(getDiscoveryHostIdForWorkload(truenas)).toBe('');
+      expect(getDiscoveryResourceIdForWorkload(truenas)).toBe('');
+      expect(getDiscoveryHostIdForWorkload(truenasWithExplicitDiscovery)).toBe('truenas-helper');
+      expect(getDiscoveryResourceIdForWorkload(truenasWithExplicitDiscovery)).toBe('nextcloud');
 
       expect(getDiscoveryHostIdForWorkload(k8s)).toBe('k8s-agent-1');
       expect(getDiscoveryResourceIdForWorkload(k8s)).toBe('pod-uid-1');

@@ -1165,8 +1165,12 @@ That same contract applies to the frontend workload state boundary:
 shared `DockerData` for runtime metadata, but they must keep Docker-only
 action identifiers and update affordances scoped to Docker-managed
 app-containers. TrueNAS-backed `app-container` workloads must still navigate
-and discover through the canonical app-container host path without
-populating Docker-only action IDs.
+through the canonical app-container host path without populating Docker-only
+action IDs, but discovery support must come from canonical
+`discoveryTarget` ownership rather than synthesized `node` or `instance`
+fallbacks. API-backed workloads such as TrueNAS apps may not expose agent-only
+Discovery affordances unless the unified resource contract explicitly carries a
+discovery target.
 That same resolved-context ownership also governs read diagnostics. When
 `internal/ai/tools/tools_read.go` executes `pulse_read action="logs"` against
 a canonical `app-container` resource, TrueNAS-backed app containers must

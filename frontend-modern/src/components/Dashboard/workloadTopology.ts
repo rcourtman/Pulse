@@ -1,6 +1,10 @@
 import type { Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
-import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
+import {
+  getCanonicalWorkloadId,
+  resolveDiscoveryTargetForWorkload,
+  resolveWorkloadType,
+} from '@/utils/workloads';
 
 export const workloadNodeScopeId = (guest: WorkloadGuest): string =>
   `${(guest.instance || '').trim()}-${(guest.node || '').trim()}`;
@@ -29,30 +33,11 @@ export const getWorkloadContainerHostId = (guest: WorkloadGuest): string => {
 };
 
 export const getDiscoveryHostIdForWorkload = (guest: WorkloadGuest): string => {
-  const type = resolveWorkloadType(guest);
-  if (type === 'app-container') {
-    return getWorkloadContainerHostId(guest);
-  }
-  if (type === 'pod') {
-    return (guest.kubernetesAgentId || guest.instance || guest.node || '').trim();
-  }
-  return (guest.node || '').trim();
+  return resolveDiscoveryTargetForWorkload(guest)?.agentId || '';
 };
 
 export const getDiscoveryResourceIdForWorkload = (guest: WorkloadGuest): string => {
-  const type = resolveWorkloadType(guest);
-  if (type === 'app-container') {
-    return (guest.id || '').trim();
-  }
-  if (type === 'pod') {
-    const rawId = (guest.id || '').trim();
-    const match = rawId.match(/^k8s:[^:]+:pod:(.+)$/);
-    return (match?.[1] || rawId || String(guest.vmid)).trim();
-  }
-  if (Number.isFinite(guest.vmid) && guest.vmid > 0) {
-    return String(guest.vmid);
-  }
-  return (guest.id || '').trim();
+  return resolveDiscoveryTargetForWorkload(guest)?.resourceId || '';
 };
 
 export const buildNodeByInstance = (nodes: Node[]): Record<string, Node> => {

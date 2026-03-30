@@ -1,4 +1,5 @@
 import type { VM, Container, DockerContainerUpdateStatus } from './api';
+import type { ResourceDiscoveryTarget } from './resource';
 
 export type WorkloadType = 'vm' | 'system-container' | 'app-container' | 'pod';
 export type ViewMode = 'all' | WorkloadType;
@@ -24,4 +25,7 @@ export type WorkloadGuest = (VM | Container) & {
   dockerHostId?: string;
   // Kubernetes agent ID (when available) — preferred for actionable operations.
   kubernetesAgentId?: string;
+  // Canonical discovery ownership. API-backed platforms such as TrueNAS should
+  // only expose Discovery when the unified resource contract supplies a target.
+  discoveryTarget?: ResourceDiscoveryTarget;
 };

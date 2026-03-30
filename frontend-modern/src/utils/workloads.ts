@@ -1,7 +1,9 @@
 import type { WorkloadGuest, WorkloadType, ViewMode } from '@/types/workloads';
 import type { ResourceType as DiscoveryResourceType } from '@/types/discovery';
+import type { ResourceDiscoveryTarget } from '@/types/resource';
 import type { MetricResourceKind } from '@/utils/metricsKeys';
 import { canonicalizeFrontendResourceType } from '@/utils/resourceTypeCompat';
+import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 
 /**
  * Resolve a raw type string (from API or backend) to a semantic WorkloadType.
@@ -104,9 +106,96 @@ export const getCanonicalWorkloadId = (
   return guest.id;
 };
 
+export const resolveDiscoveryTargetForWorkload = (
+  guest: Pick<
+    WorkloadGuest,
+    | 'discoveryTarget'
+    | 'workloadType'
+    | 'type'
+    | 'platformType'
+    | 'containerRuntime'
+    | 'dockerHostId'
+    | 'kubernetesAgentId'
+    | 'instance'
+    | 'node'
+    | 'vmid'
+    | 'id'
+  >,
+): ResourceDiscoveryTarget | null => {
+  const explicit = guest.discoveryTarget;
+  if (explicit) {
+    const resourceType = canonicalDiscoveryResourceType(explicit.resourceType);
+    const agentId = (explicit.agentId || '').trim();
+    const resourceId = (explicit.resourceId || '').trim();
+    if (resourceType && agentId && resourceId) {
+      return {
+        resourceType: resourceType as ResourceDiscoveryTarget['resourceType'],
+        agentId,
+        resourceId,
+        hostname: explicit.hostname,
+      };
+    }
+  }
+
+  const type = resolveWorkloadType(guest);
+  if (type === 'app-container') {
+    if (!isDockerManagedAppContainer(guest)) return null;
+    const agentId = (guest.dockerHostId || '').trim();
+    const resourceId = (guest.id || '').trim();
+    return agentId && resourceId
+      ? { resourceType: 'app-container', agentId, resourceId }
+      : null;
+  }
+  if (type === 'pod') {
+    const agentId = (guest.kubernetesAgentId || guest.instance || guest.node || '').trim();
+    const rawId = (guest.id || '').trim();
+    const match = rawId.match(/^k8s:[^:]+:pod:(.+)$/);
+    const resourceId = (match?.[1] || rawId).trim();
+    return agentId && resourceId ? { resourceType: 'pod', agentId, resourceId } : null;
+  }
+  if ((type === 'vm' || type === 'system-container') && Number.isFinite(guest.vmid) && guest.vmid > 0) {
+    const agentId = (guest.node || '').trim();
+    const resourceId = String(guest.vmid);
+    return agentId ? { resourceType: type, agentId, resourceId } : null;
+  }
+  return null;
+};
+
 export const getDiscoveryResourceTypeForWorkload = (
-  guest: Pick<WorkloadGuest, 'workloadType' | 'type'>,
-): DiscoveryResourceType => resolveWorkloadType(guest) as DiscoveryResourceType;
+  guest: Pick<
+    WorkloadGuest,
+    | 'discoveryTarget'
+    | 'workloadType'
+    | 'type'
+    | 'platformType'
+    | 'containerRuntime'
+    | 'dockerHostId'
+    | 'kubernetesAgentId'
+    | 'instance'
+    | 'node'
+    | 'vmid'
+    | 'id'
+  >,
+): DiscoveryResourceType | null =>
+  (resolveDiscoveryTargetForWorkload(guest)?.resourceType as DiscoveryResourceType | undefined) ??
+  null;
+
+export const hasDiscoverySupportForWorkload = (
+  guest: Pick<
+    WorkloadGuest,
+    | 'discoveryTarget'
+    | 'workloadType'
+    | 'type'
+    | 'platformType'
+    | 'containerRuntime'
+    | 'dockerHostId'
+    | 'kubernetesAgentId'
+    | 'instance'
+    | 'node'
+    | 'vmid'
+    | 'id'
+  >,
+): boolean => Boolean(resolveDiscoveryTargetForWorkload(guest));
 
 export const getWebInterfaceTargetLabelForWorkload = (
   guest: Pick<WorkloadGuest, 'workloadType' | 'type'>,

@@ -10,6 +10,7 @@ import { apiFetchJSON, getOrgID } from '@/utils/apiClient';
 import { normalizeOrgScope } from '@/utils/orgScope';
 import { eventBus } from '@/stores/events';
 import { resolvePlatformTypeFromSources } from '@/utils/sourcePlatforms';
+import { canonicalDiscoveryResourceType } from '@/utils/discoveryTarget';
 import { normalizeDiskArray } from '@/utils/format';
 import { isDockerManagedAppContainer, resolveWorkloadTypeFromString } from '@/utils/workloads';
 import {
@@ -17,6 +18,7 @@ import {
   getPreferredResourceKubernetesContext,
 } from '@/utils/resourceIdentity';
 import type { WorkloadGuest } from '@/types/workloads';
+import type { ResourceDiscoveryTarget } from '@/types/resource';
 
 const WORKLOADS_URL = '/api/resources?type=vm,system-container,app-container,pod';
 const WORKLOADS_PAGE_LIMIT = 200;
@@ -122,6 +124,12 @@ type APIResource = {
     podUid?: string;
     image?: string;
     uptimeSeconds?: number;
+  };
+  discoveryTarget?: {
+    resourceType?: string;
+    agentId?: string;
+    resourceId?: string;
+    hostname?: string;
   };
 };
 
@@ -278,6 +286,34 @@ const resolveWorkloadsPayload = (payload: unknown): { data: APIResource[]; total
 const buildWorkloadsUrl = (page: number) =>
   `${WORKLOADS_URL}&page=${page}&limit=${WORKLOADS_PAGE_LIMIT}`;
 
+const resolveWorkloadDiscoveryTarget = (
+  resource: APIResource,
+): ResourceDiscoveryTarget | undefined => {
+  const explicit = resource.discoveryTarget;
+  if (!explicit) return undefined;
+  const resourceType = canonicalDiscoveryResourceType(explicit.resourceType);
+  const agentId = (explicit.agentId || '').trim();
+  const resourceId = (explicit.resourceId || '').trim();
+  if (!resourceType || !agentId || !resourceId) return undefined;
+  switch (resourceType) {
+    case 'agent':
+    case 'vm':
+    case 'system-container':
+    case 'app-container':
+    case 'pod':
+    case 'disk':
+    case 'ceph':
+      return {
+        resourceType,
+        agentId,
+        resourceId,
+        hostname: explicit.hostname,
+      };
+    default:
+      return undefined;
+  }
+};
+
 const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const workloadType = resolveWorkloadType(resource.type);
   if (!workloadType) return null;
@@ -321,6 +357,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
 
   const appContainerRuntimeId =
     workloadType === 'app-container' ? (resource.docker?.containerId || '').trim() : '';
+  const discoveryTarget = resolveWorkloadDiscoveryTarget(resource);
 
   // Keep workload identity on the canonical unified resource id. Platform-native
   // runtime ids such as Docker container ids must stay separate so workload
@@ -435,6 +472,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     dockerHostId: dockerManagedAppContainer ? resource.docker?.hostSourceId : undefined,
     kubernetesAgentId: workloadType === 'pod' ? resource.kubernetes?.agentId : undefined,
     platformType,
+    discoveryTarget,
   };
 };
 

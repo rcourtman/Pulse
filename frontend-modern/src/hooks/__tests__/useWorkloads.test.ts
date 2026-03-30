@@ -177,6 +177,52 @@ describe('useWorkloads', () => {
     dispose();
   });
 
+  it('preserves canonical discovery targets for workloads instead of inferring them from platform type', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      data: [
+        {
+          ...sampleResource,
+          id: 'app-container:truenas-main:nextcloud',
+          type: 'app-container',
+          name: 'nextcloud',
+          status: 'healthy',
+          sources: ['agent', 'truenas'],
+          parentName: 'truenas-main',
+          discoveryTarget: {
+            resourceType: 'app-container',
+            agentId: 'truenas-helper',
+            resourceId: 'nextcloud',
+          },
+          docker: {
+            containerId: 'nextcloud-ctr',
+            image: 'ix-nextcloud:latest',
+          },
+        },
+      ],
+      meta: { totalPages: 1 },
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseWorkloadsModule['useWorkloads']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      const [enabled] = createSignal(true);
+      result = useWorkloads(enabled);
+    });
+
+    await flushAsync();
+    await waitForWorkloadCount(() => result!.workloads().length, 1);
+
+    expect(result!.workloads()[0]?.discoveryTarget).toEqual({
+      resourceType: 'app-container',
+      agentId: 'truenas-helper',
+      resourceId: 'nextcloud',
+      hostname: undefined,
+    });
+
+    dispose();
+  });
+
   it('uses the canonical Kubernetes cluster name for pod context labels', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       data: [

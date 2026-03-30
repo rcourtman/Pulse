@@ -98,6 +98,26 @@ describe('GuestDrawer', () => {
       expect(screen.getByText('Discovery')).toBeInTheDocument();
     });
 
+    it('hides Discovery when the workload has no canonical discovery target', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            id: 'app-container:truenas-main:nextcloud',
+            type: 'app-container',
+            workloadType: 'app-container',
+            platformType: 'truenas',
+            dockerHostId: '',
+            node: 'truenas-main',
+            instance: 'truenas-main',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.getByText('Overview')).toBeInTheDocument();
+      expect(screen.queryByText('Discovery')).toBeNull();
+      expect(screen.queryByTestId('discovery-tab')).toBeNull();
+    });
+
     it('starts on the Overview tab (discovery content hidden)', () => {
       const { container } = render(() => <GuestDrawer guest={makeGuest()} onClose={vi.fn()} />);
       const panels = container.querySelectorAll('[style*="overflow-anchor"]');
@@ -580,6 +600,8 @@ describe('GuestDrawer', () => {
         <GuestDrawer
           guest={makeGuest({
             workloadType: 'app-container',
+            type: 'app-container',
+            platformType: 'docker',
             dockerHostId: 'dh-1',
             id: 'container-abc',
           })}
@@ -589,6 +611,48 @@ describe('GuestDrawer', () => {
       expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
       expect(screen.getByTestId('disc-agent-id').textContent).toBe('dh-1');
       expect(screen.getByTestId('disc-resource-id').textContent).toBe('container-abc');
+    });
+
+    it('does not render DiscoveryTab for TrueNAS app-containers without explicit discovery support', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            id: 'app-container:truenas-main:nextcloud',
+            workloadType: 'app-container',
+            type: 'app-container',
+            platformType: 'truenas',
+            dockerHostId: '',
+            node: 'truenas-main',
+            instance: 'truenas-main',
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.queryByTestId('discovery-tab')).toBeNull();
+    });
+
+    it('honors explicit canonical discovery targets for API-backed app-containers', () => {
+      render(() => (
+        <GuestDrawer
+          guest={makeGuest({
+            id: 'app-container:truenas-main:nextcloud',
+            workloadType: 'app-container',
+            type: 'app-container',
+            platformType: 'truenas',
+            dockerHostId: '',
+            discoveryTarget: {
+              resourceType: 'app-container',
+              agentId: 'truenas-helper',
+              resourceId: 'nextcloud',
+            },
+          })}
+          onClose={vi.fn()}
+        />
+      ));
+      expect(screen.getByText('Discovery')).toBeInTheDocument();
+      expect(screen.getByTestId('disc-resource-type').textContent).toBe('app-container');
+      expect(screen.getByTestId('disc-agent-id').textContent).toBe('truenas-helper');
+      expect(screen.getByTestId('disc-resource-id').textContent).toBe('nextcloud');
     });
 
     it('passes canonical pod resourceType for pod workloads', () => {
