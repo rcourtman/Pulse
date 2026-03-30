@@ -100,6 +100,16 @@ host-plus-child metric collection, but exact VM and datastore history fidelity
 still requires live proof on the supported version floor. If that proof does
 not hold on the shared history model, the support claim must narrow rather
 than falling back to VMware-only history paths.
+That same VMware monitoring boundary now also includes the incident-context
+rule. VMware event and task reads may support investigation, but they must
+feed the shared incident and canonical resource-history paths instead of a
+parallel VMware event store or provider-only incident timeline.
+That same VMware monitoring boundary also includes the topology-signal rule.
+Signals collected from non-projected VMware topology objects such as clusters,
+folders, or datacenters may inform investigation only when they can be
+attached honestly to canonical `agent`, `vm`, or `storage` resources; the
+collector must not solve that ambiguity by creating VMware-only top-level
+incident targets.
 
 The monitor adapter now also acts as the canonical bridge from live registry
 rebuilds and supplemental ingest into the unified-resource timeline. That means

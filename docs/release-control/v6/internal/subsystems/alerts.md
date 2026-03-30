@@ -289,6 +289,11 @@ inform a shared incident, but it must still resolve onto canonical `agent`,
 top-level VMware incident resources. If that attachment cannot be done
 honestly for a given signal, the signal should remain supporting context
 instead of inflating the support claim.
+That same VMware alert rule now also includes the timeline boundary. Related
+VMware event and task context may enrich shared alert and incident views, but
+it must do so through the canonical incident and resource-history paths rather
+than through a VMware-only history browser, event drill-down route, or alarm
+management shell.
 Future Docker thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
 back into a mixed render surface.

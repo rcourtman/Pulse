@@ -146,6 +146,9 @@ Owners:
 - `monitoring`
 - `ai-runtime`
 
+Slice contract:
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
+
 Deliver:
 
 - vSphere alarm and health signals routed through shared alert/incident paths
@@ -160,7 +163,7 @@ Required proof:
 - shared alerts can drill into VMware-backed incidents without a provider-local
   shell
 - assistant can inspect canonical VMware-backed resources without special-case
-  VMware tools
+  VMware tools or VMware-specific capability exposure
 - assistant control remains read-only in both product wording and runtime
   capability exposure
 

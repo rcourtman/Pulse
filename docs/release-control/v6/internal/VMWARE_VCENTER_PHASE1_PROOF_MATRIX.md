@@ -5,6 +5,7 @@ Status: PLANNED
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
 
@@ -172,24 +173,30 @@ Pass when:
 2. Confirm VMware-backed alarm or health context can be reached.
 3. Confirm related event/task context is available where the shared product
    expects it.
+4. Confirm topology-scoped alarm context does not appear as a VMware-only
+   incident resource.
 
 Pass when:
 
 1. alerts route through shared alert and incident surfaces
 2. VMware-backed context is readable there without a provider-local shell
 3. the product does not imply VMware-specific alarm management
+4. event and task context lands on shared incident or resource-timeline paths,
+   not a VMware-only history surface
 
 ### `VC-6` Assistant Read Floor
 
 1. Use the shared Assistant read paths against canonical VMware-backed
    resources.
 2. Inspect a host, a VM, and a datastore.
+3. Confirm shared tool exposure stays read-only.
 
 Pass when:
 
 1. Assistant reads work on canonical `agent`, `vm`, and `storage`
 2. there are no VMware-specific tools or verbs required
-3. no control capability is exposed as part of the VMware phase-1 floor
+3. no control capability or VMware-specific action metadata is exposed as part
+   of the VMware phase-1 floor
 
 ### `VC-7` Exclusion Integrity
 

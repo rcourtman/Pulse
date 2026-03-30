@@ -529,6 +529,11 @@ acceptable phase-1 model if implementation starts.
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
    as the canonical source, identity, topology, alert-mapping, and
    non-projection boundary for phase-1 VMware resources.
+11. Alerts and Assistant contract:
+   If implementation starts, it should also follow
+   `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
+   as the canonical shared-alert, shared-timeline, Assistant-read, and
+   Assistant-control-exclusion boundary for the VMware phase-1 floor.
 
 ## Cross-Repo Contracts
 

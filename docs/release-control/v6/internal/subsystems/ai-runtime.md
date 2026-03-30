@@ -199,6 +199,17 @@ resources through the shared read and query paths only. The AI runtime must
 not add VMware-local tools or action verbs for VM power, snapshot lifecycle,
 guest operations, host maintenance, or cluster administration before the
 governed action surface expands.
+That same VMware AI rule now also includes capability exposure. Even if
+runtime code can identify VMware-backed actions through upstream APIs,
+canonical resource capabilities and tool routing must stay read-only in phase
+1: shared `pulse_read` and `pulse_query` may expose VMware-backed context, but
+`pulse_control` must not grow VMware verbs and VMware-backed resources must not
+advertise action metadata that implies a supported VMware admin plane.
+That same VMware AI rule also includes the investigation path. Alarm, health,
+event, task, metrics-history, and snapshot-tree context for VMware-backed
+resources must stay reachable through those same shared read/query surfaces
+and canonical resource links rather than through a VMware-only AI tool or
+provider-local incident adapter.
 That same AI tool ownership also applies to recovery-backed storage reads.
 When `internal/ai/tools/adapters.go` returns recovery points with malformed
 persisted metadata omitted at the shared recovery-store boundary, the storage
