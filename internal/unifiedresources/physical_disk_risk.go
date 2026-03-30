@@ -7,27 +7,71 @@ import (
 )
 
 func PhysicalDiskRiskFromAssessment(assessment storagehealth.Assessment) *PhysicalDiskRisk {
-	if assessment.Level == storagehealth.RiskHealthy && len(assessment.Reasons) == 0 {
+	return PhysicalDiskRiskFromAssessmentAndIncidents(assessment, nil)
+}
+
+func PhysicalDiskRiskFromAssessmentAndIncidents(assessment storagehealth.Assessment, incidents []ResourceIncident) *PhysicalDiskRisk {
+	reasons := make([]PhysicalDiskRiskReason, 0, len(assessment.Reasons)+len(incidents))
+	seen := make(map[string]struct{}, len(assessment.Reasons)+len(incidents))
+	level := assessment.Level
+
+	for _, reason := range assessment.Reasons {
+		appendPhysicalDiskRiskReason(&reasons, seen, reason.Code, reason.Severity, reason.Summary)
+		if incidentSeverityRank(reason.Severity) > incidentSeverityRank(level) {
+			level = reason.Severity
+		}
+	}
+
+	for _, incident := range incidents {
+		if !physicalDiskIncidentAffectsRisk(incident) {
+			continue
+		}
+		appendPhysicalDiskRiskReason(&reasons, seen, incident.Code, incident.Severity, incident.Summary)
+		if incidentSeverityRank(incident.Severity) > incidentSeverityRank(level) {
+			level = incident.Severity
+		}
+	}
+
+	if level == storagehealth.RiskHealthy && len(reasons) == 0 {
 		return nil
 	}
 
-	reasons := make([]PhysicalDiskRiskReason, 0, len(assessment.Reasons))
-	for _, reason := range assessment.Reasons {
-		reasons = append(reasons, PhysicalDiskRiskReason{
-			Code:     reason.Code,
-			Severity: reason.Severity,
-			Summary:  reason.Summary,
-		})
-	}
-
 	return &PhysicalDiskRisk{
-		Level:   assessment.Level,
+		Level:   level,
 		Reasons: reasons,
 	}
 }
 
+func appendPhysicalDiskRiskReason(reasons *[]PhysicalDiskRiskReason, seen map[string]struct{}, code string, severity storagehealth.RiskLevel, summary string) {
+	code = strings.TrimSpace(code)
+	summary = strings.TrimSpace(summary)
+	if code == "" || summary == "" {
+		return
+	}
+
+	key := code + "\x00" + summary
+	if _, ok := seen[key]; ok {
+		return
+	}
+	seen[key] = struct{}{}
+	*reasons = append(*reasons, PhysicalDiskRiskReason{
+		Code:     code,
+		Severity: severity,
+		Summary:  summary,
+	})
+}
+
+func physicalDiskIncidentAffectsRisk(incident ResourceIncident) bool {
+	resource := &Resource{Type: ResourceTypePhysicalDisk}
+	return IncidentCategoryForResource(resource, incident) == IncidentCategoryDiskHealth
+}
+
+func physicalDiskRiskFromMeta(meta *PhysicalDiskMeta, incidents []ResourceIncident) *PhysicalDiskRisk {
+	return PhysicalDiskRiskFromAssessmentAndIncidents(physicalDiskAssessmentFromMeta(meta), incidents)
+}
+
 func physicalDiskRiskFromAssessment(assessment storagehealth.Assessment) *PhysicalDiskRisk {
-	return PhysicalDiskRiskFromAssessment(assessment)
+	return PhysicalDiskRiskFromAssessmentAndIncidents(assessment, nil)
 }
 
 func physicalDiskAssessmentFromMeta(meta *PhysicalDiskMeta) storagehealth.Assessment {

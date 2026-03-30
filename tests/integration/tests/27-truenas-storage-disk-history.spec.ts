@@ -111,6 +111,16 @@ test.describe('TrueNAS storage disk history', () => {
                 sizeBytes: 4_000 * 1024 * 1024 * 1024,
                 health: 'PASSED',
                 temperature: 41,
+                risk: {
+                  level: 'critical',
+                  reasons: [
+                    {
+                      code: 'truenas_smart',
+                      severity: 'critical',
+                      summary: 'Device /dev/sda has SMART test failures.',
+                    },
+                  ],
+                },
                 smart: {},
               },
               platformData: {
@@ -191,6 +201,8 @@ test.describe('TrueNAS storage disk history', () => {
 
     await page.getByRole('button', { name: 'Toggle details for Seagate IronWolf' }).click();
 
+    await expect(page.getByText('Replace Now')).toBeVisible();
+    await expect(page.getByText('Device /dev/sda has SMART test failures.')).toBeVisible();
     await expect(page.getByText('Historical disk charts are unavailable', { exact: false })).toHaveCount(0);
     await expect(page.getByText('Temperature').first()).toBeVisible();
     await expect

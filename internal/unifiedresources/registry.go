@@ -876,30 +876,36 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 	existing.Tags = uniqueStrings(append(existing.Tags, incoming.Tags...))
 	existing.Incidents = mergeResourceIncidents(existing.Incidents, incoming.Incidents)
 
+	mergedPhysicalDisk := incoming.PhysicalDisk != nil
+	if mergedPhysicalDisk {
+		previous := existing.PhysicalDisk
+		existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
+		if source == SourceProxmox && previous != nil && hasDataSource(existing.Sources, SourceAgent) {
+			if previous.Temperature > 0 {
+				existing.PhysicalDisk.Temperature = previous.Temperature
+			}
+			if previous.Wearout >= 0 {
+				existing.PhysicalDisk.Wearout = previous.Wearout
+			}
+			if previous.SMART != nil {
+				smart := *previous.SMART
+				existing.PhysicalDisk.SMART = &smart
+			}
+		}
+	}
+	if existing.PhysicalDisk != nil && (mergedPhysicalDisk || len(incoming.Incidents) > 0) {
+		existing.PhysicalDisk.Risk = physicalDiskRiskFromMeta(existing.PhysicalDisk, existing.Incidents)
+	}
+
 	// Update source payload
 	switch source {
 	case SourceProxmox:
-		if incoming.PhysicalDisk != nil {
-			previous := existing.PhysicalDisk
-			existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
-			if previous != nil && hasDataSource(existing.Sources, SourceAgent) {
-				if previous.Temperature > 0 {
-					existing.PhysicalDisk.Temperature = previous.Temperature
-				}
-				if previous.Wearout >= 0 {
-					existing.PhysicalDisk.Wearout = previous.Wearout
-				}
-				if previous.SMART != nil {
-					smart := *previous.SMART
-					existing.PhysicalDisk.SMART = &smart
-				}
-			}
+		if mergedPhysicalDisk {
 			break
 		}
 		existing.Proxmox = mergeProxmoxData(existing.Proxmox, incoming.Proxmox)
 	case SourceAgent:
-		if incoming.PhysicalDisk != nil {
-			existing.PhysicalDisk = mergePhysicalDiskData(existing.PhysicalDisk, incoming.PhysicalDisk)
+		if mergedPhysicalDisk {
 			break
 		}
 		existing.Agent = incoming.Agent

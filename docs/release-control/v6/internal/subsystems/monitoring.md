@@ -240,6 +240,12 @@ That same monitoring boundary now also owns live TrueNAS disk temperatures.
 project those readings into the canonical physical-disk model and risk path
 instead of leaving temperature telemetry agent-only or adding a TrueNAS-local
 presentation shim.
+That same monitoring boundary also owns SMART-backed TrueNAS disk risk
+projection. When TrueNAS raises disk-local SMART alerts such as
+`truenas_smart`, `internal/truenas/provider.go` must fold that incident truth
+into the canonical physical-disk risk payload instead of leaving SMART failure
+state trapped in incident/status-only decorations that storage consumers do
+not read.
 That same boundary now also owns recent aggregate TrueNAS disk temperature
 history. `internal/truenas/client.go` must ingest `disk.temperature_agg`, and
 `internal/truenas/provider.go` must project the returned min/avg/max readings

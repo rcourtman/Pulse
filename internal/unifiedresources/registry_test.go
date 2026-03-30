@@ -1415,6 +1415,92 @@ func TestResourceRegistry_IngestSnapshotDerivesPhysicalDiskRisk(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_MergePhysicalDiskKeepsIncidentBackedRisk(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 30, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-disk-sdc",
+			Resource: Resource{
+				Type:     ResourceTypePhysicalDisk,
+				Name:     "sdc",
+				Status:   StatusOnline,
+				LastSeen: now,
+				PhysicalDisk: &PhysicalDiskMeta{
+					DevPath:     "/dev/sdc",
+					Model:       "Seagate IronWolf",
+					Serial:      "SERIAL-RISK-2",
+					DiskType:    "sata",
+					SizeBytes:   4_000_000_000_000,
+					Health:      "PASSED",
+					Temperature: 38,
+					Wearout:     -1,
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "SERIAL-RISK-2",
+				Hostnames: []string{"truenas-main"},
+			},
+		},
+	})
+
+	rr.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "truenas-disk-sdc",
+			Resource: Resource{
+				Type:     ResourceTypePhysicalDisk,
+				Name:     "sdc",
+				Status:   StatusWarning,
+				LastSeen: now,
+				PhysicalDisk: &PhysicalDiskMeta{
+					DevPath:     "/dev/sdc",
+					Model:       "Seagate IronWolf",
+					Serial:      "SERIAL-RISK-2",
+					DiskType:    "sata",
+					SizeBytes:   4_000_000_000_000,
+					Health:      "UNKNOWN",
+					Temperature: 63,
+					Wearout:     -1,
+				},
+				Incidents: []ResourceIncident{
+					{
+						Code:     "truenas_smart",
+						Severity: storagehealth.RiskCritical,
+						Summary:  "Device /dev/sdc has SMART test failures.",
+					},
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "SERIAL-RISK-2",
+				Hostnames: []string{"truenas-main"},
+			},
+		},
+	})
+
+	disks := rr.ListByType(ResourceTypePhysicalDisk)
+	if len(disks) != 1 {
+		t.Fatalf("expected 1 merged physical disk, got %d", len(disks))
+	}
+	disk := disks[0]
+	if disk.PhysicalDisk == nil || disk.PhysicalDisk.Risk == nil {
+		t.Fatalf("expected merged disk risk, got %+v", disk.PhysicalDisk)
+	}
+	if disk.PhysicalDisk.Risk.Level != storagehealth.RiskCritical {
+		t.Fatalf("risk level = %q, want %q", disk.PhysicalDisk.Risk.Level, storagehealth.RiskCritical)
+	}
+	foundSmartReason := false
+	for _, reason := range disk.PhysicalDisk.Risk.Reasons {
+		if reason.Code == "truenas_smart" {
+			foundSmartReason = true
+			break
+		}
+	}
+	if !foundSmartReason {
+		t.Fatalf("expected SMART-backed risk reason after merge, got %+v", disk.PhysicalDisk.Risk.Reasons)
+	}
+}
+
 func hasStorageConsumer(consumers []StorageConsumerMeta, name string, resourceType ResourceType, diskCount int) bool {
 	for _, consumer := range consumers {
 		if consumer.Name == name && consumer.ResourceType == resourceType && consumer.DiskCount == diskCount {

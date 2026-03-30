@@ -62,6 +62,33 @@ func TestPhysicalDiskRiskFromAssessment_ConvertsReasons(t *testing.T) {
 	}
 }
 
+func TestPhysicalDiskRiskFromAssessmentAndIncidents_IncludesDiskHealthIncidents(t *testing.T) {
+	assessment := storagehealth.Assessment{
+		Level: storagehealth.RiskWarning,
+		Reasons: []storagehealth.Reason{
+			{Code: "temperature_high", Severity: storagehealth.RiskWarning, Summary: "Disk temperature is 63C"},
+		},
+	}
+	incidents := []ResourceIncident{
+		{Code: "truenas_smart", Severity: storagehealth.RiskCritical, Summary: "Device /dev/sdc has SMART test failures."},
+		{Code: "truenas_smart", Severity: storagehealth.RiskCritical, Summary: "Device /dev/sdc has SMART test failures."},
+	}
+
+	result := PhysicalDiskRiskFromAssessmentAndIncidents(assessment, incidents)
+	if result == nil {
+		t.Fatal("expected non-nil risk")
+	}
+	if result.Level != storagehealth.RiskCritical {
+		t.Fatalf("expected critical level, got %s", result.Level)
+	}
+	if len(result.Reasons) != 2 {
+		t.Fatalf("expected 2 unique reasons, got %d", len(result.Reasons))
+	}
+	if result.Reasons[1].Code != "truenas_smart" {
+		t.Fatalf("expected SMART incident reason, got %+v", result.Reasons)
+	}
+}
+
 // --- physicalDiskAssessmentFromMeta ---
 
 func TestPhysicalDiskAssessmentFromMeta_Nil(t *testing.T) {

@@ -164,6 +164,11 @@ populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read
 the same disk-health contract instead of inventing a provider-local temperature
 surface.
+That same canonical physical-disk risk contract must also absorb disk-health
+incidents during cross-source merges. A provider alert such as TrueNAS
+`truenas_smart` is not presentation-only context; it must become a canonical
+`physicalDisk.risk.reasons` entry so hybrid agent/API disk resources keep one
+shared disk-health truth after deduplication.
 That same canonical disk contract now also owns recent aggregate temperature
 history. When a provider such as TrueNAS can supply `disk.temperature_agg`
 min/avg/max readings, it must project those onto

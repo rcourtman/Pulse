@@ -636,7 +636,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 					TemperatureAggregate: temperatureAggregateMetaFromTrueNASDisk(disk),
 					Wearout:              -1,
 					RPM:                  rpmFromDisk(disk),
-					Risk:                 unifiedresources.PhysicalDiskRiskFromAssessment(assessment),
+					Risk:                 unifiedresources.PhysicalDiskRiskFromAssessmentAndIncidents(assessment, incidents),
 				},
 				Tags:      []string{"truenas", "disk", disk.Transport},
 				Incidents: incidents,

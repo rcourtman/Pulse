@@ -640,14 +640,20 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 		t.Fatal("expected sdc physical-disk risk")
 	}
 	foundTemperatureReason := false
+	foundSmartReason := false
 	for _, reason := range sdc.Resource.PhysicalDisk.Risk.Reasons {
 		if reason.Code == "temperature_high" {
 			foundTemperatureReason = true
-			break
+		}
+		if reason.Code == "truenas_smart" {
+			foundSmartReason = true
 		}
 	}
 	if !foundTemperatureReason {
 		t.Fatalf("expected sdc physical-disk risk to include temperature_high, got %+v", sdc.Resource.PhysicalDisk.Risk.Reasons)
+	}
+	if !foundSmartReason {
+		t.Fatalf("expected sdc physical-disk risk to include truenas_smart, got %+v", sdc.Resource.PhysicalDisk.Risk.Reasons)
 	}
 }
 

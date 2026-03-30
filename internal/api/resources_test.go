@@ -2912,26 +2912,50 @@ func TestResourceListIncludesTrueNASPhysicalDiskTemperature(t *testing.T) {
 		t.Fatal("expected TrueNAS physical disk resources")
 	}
 
-	var disk unified.Resource
-	found := false
+	var sda unified.Resource
+	foundSDA := false
+	var sdc unified.Resource
+	foundSDC := false
 	for _, candidate := range resp.Data {
 		if candidate.Name == "sda" {
-			disk = candidate
-			found = true
+			sda = candidate
+			foundSDA = true
+		}
+		if candidate.Name == "sdc" {
+			sdc = candidate
+			foundSDC = true
+		}
+	}
+	if !foundSDA {
+		t.Fatalf("expected sda in TrueNAS physical disk response, got %+v", resp.Data)
+	}
+	if !foundSDC {
+		t.Fatalf("expected sdc in TrueNAS physical disk response, got %+v", resp.Data)
+	}
+	if sda.PhysicalDisk == nil {
+		t.Fatalf("expected sda physical-disk metadata, got %+v", sda)
+	}
+	if sda.PhysicalDisk.Temperature != 34 {
+		t.Fatalf("expected sda temperature 34, got %+v", sda.PhysicalDisk)
+	}
+	if sda.MetricsTarget == nil || sda.MetricsTarget.ResourceType != "disk" || sda.MetricsTarget.ResourceID != "ZL0A1234" {
+		t.Fatalf("expected canonical disk metrics target ZL0A1234, got %+v", sda.MetricsTarget)
+	}
+	if sdc.PhysicalDisk == nil || sdc.PhysicalDisk.Risk == nil {
+		t.Fatalf("expected sdc disk risk payload, got %+v", sdc)
+	}
+	if sdc.PhysicalDisk.Risk.Level != storagehealth.RiskWarning {
+		t.Fatalf("expected sdc risk level warning, got %+v", sdc.PhysicalDisk.Risk)
+	}
+	foundSmartReason := false
+	for _, reason := range sdc.PhysicalDisk.Risk.Reasons {
+		if reason.Code == "truenas_smart" {
+			foundSmartReason = true
 			break
 		}
 	}
-	if !found {
-		t.Fatalf("expected sda in TrueNAS physical disk response, got %+v", resp.Data)
-	}
-	if disk.PhysicalDisk == nil {
-		t.Fatalf("expected physical-disk metadata, got %+v", disk)
-	}
-	if disk.PhysicalDisk.Temperature != 34 {
-		t.Fatalf("expected sda temperature 34, got %+v", disk.PhysicalDisk)
-	}
-	if disk.MetricsTarget == nil || disk.MetricsTarget.ResourceType != "disk" || disk.MetricsTarget.ResourceID != "ZL0A1234" {
-		t.Fatalf("expected canonical disk metrics target ZL0A1234, got %+v", disk.MetricsTarget)
+	if !foundSmartReason {
+		t.Fatalf("expected sdc SMART-backed risk reason, got %+v", sdc.PhysicalDisk.Risk.Reasons)
 	}
 }
 

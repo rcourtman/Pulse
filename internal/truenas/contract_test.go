@@ -317,6 +317,9 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 			if !containsRiskReason(meta.Risk.Reasons, "truenas_disk_state") {
 				t.Fatalf("expected truenas_disk_state reason for %q, got %+v", fixture.Name, meta.Risk.Reasons)
 			}
+			if !containsRiskReason(meta.Risk.Reasons, "truenas_smart") {
+				t.Fatalf("expected truenas_smart reason for %q, got %+v", fixture.Name, meta.Risk.Reasons)
+			}
 			if len(record.Resource.Incidents) != 1 || record.Resource.Incidents[0].Code != "truenas_smart" {
 				t.Fatalf("expected SMART incident on degraded disk %q, got %+v", fixture.Name, record.Resource.Incidents)
 			}

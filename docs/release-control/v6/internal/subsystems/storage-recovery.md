@@ -146,6 +146,11 @@ resolve through the canonical disk metrics target when one exists, then fall
 back to stable hardware identity, and operator-facing fallback copy must
 describe that identity gap instead of prescribing agent installation on
 API-backed platforms like TrueNAS.
+That same storage surface must also read the canonical physical-disk risk
+payload as its disk-health truth. When API-backed platforms such as TrueNAS
+raise SMART-backed disk incidents, those reasons must surface through
+`physicalDisk.risk.reasons` so storage rows and disk detail use the same shared
+disk-health contract instead of depending on incident-only side channels.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
