@@ -123,7 +123,12 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps the connection settings together.',
+        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps Platform connections beside it when the first target is API-backed.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'API-backed platforms like Proxmox and TrueNAS use Platform connections instead of a dedicated install profile in Infrastructure Install.',
       ),
     ).toBeInTheDocument();
 

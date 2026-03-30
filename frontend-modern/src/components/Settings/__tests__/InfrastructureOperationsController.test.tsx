@@ -120,9 +120,9 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('renderStopMonitoringDialog');
     expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
     expect(infrastructureInstallStateSource).toContain('MonitoringAPI.getState()');
-    expect(infrastructureInstallStateSource).toContain('./platformConnectionsModel');
+    expect(infrastructureInstallStateSource).toContain('./infrastructureWorkspaceModel');
     expect(infrastructureInstallStateSource).toContain(
-      "navigate(buildPlatformConnectionsPath('proxmox'))",
+      "navigate(buildInfrastructureWorkspacePath('platforms'))",
     );
     expect(infrastructureInstallStateSource).not.toContain(
       "navigate('/settings/infrastructure/proxmox')",
@@ -2720,6 +2720,34 @@ describe('InfrastructureOperationsController platform commands', () => {
       const hostDisableEnvBlocks = screen.getAllByText(/\$env:PULSE_ENABLE_HOST="false"/i);
       expect(hostDisableEnvBlocks.length).toBeGreaterThan(0);
     });
+  });
+
+  it('keeps TrueNAS out of host install profiles and routes the alternative CTA to platform connections', async () => {
+    createTokenMock.mockResolvedValue({
+      token: 'test-token',
+      record: {
+        id: 'token-record',
+        name: 'Test Token',
+        prefix: 'abc',
+        suffix: '123',
+        createdAt: new Date().toISOString(),
+      },
+    });
+
+    setupComponent();
+
+    fireEvent.click(screen.getByRole('button', { name: /Generate token/i }));
+
+    await waitFor(() => expect(createTokenMock).toHaveBeenCalled(), { interval: 0 });
+    await waitFor(() => {
+      expect(getTargetProfileSelect()).toBeInTheDocument();
+    });
+
+    expect(screen.queryByRole('option', { name: 'TrueNAS SCALE agent' })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Open Platform connections/i }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/settings/infrastructure/platforms');
   });
 
   it('tracks install command copies', async () => {

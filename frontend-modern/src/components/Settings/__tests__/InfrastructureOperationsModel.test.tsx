@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import {
+  INSTALL_PROFILE_OPTIONS,
   getPlatformConnectionsPathForCapability,
   hasMachineInstallActions,
   getPowerShellInstallProfileEnvFromFlags,
@@ -145,5 +146,9 @@ describe('infrastructure operations model', () => {
       '$env:PULSE_ENABLE_PROXMOX="true"',
       '$env:PULSE_PROXMOX_TYPE="pbs"',
     ]);
+  });
+
+  it('keeps api-backed TrueNAS out of the host install profile list', () => {
+    expect(INSTALL_PROFILE_OPTIONS.map((option) => option.value)).not.toContain('truenas');
   });
 });

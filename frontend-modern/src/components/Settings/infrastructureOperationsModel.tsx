@@ -23,8 +23,7 @@ export type InstallProfile =
   | 'docker'
   | 'kubernetes'
   | 'proxmox-pve'
-  | 'proxmox-pbs'
-  | 'truenas';
+  | 'proxmox-pbs';
 
 export type SetupHandoffState = {
   username: string;
@@ -336,13 +335,6 @@ export const INSTALL_PROFILE_OPTIONS: InstallProfileOption[] = [
     label: 'Proxmox Backup node',
     description: 'Force Proxmox integration and register as a PBS node.',
     flags: ['--enable-proxmox', '--proxmox-type pbs'],
-  },
-  {
-    value: 'truenas',
-    label: 'TrueNAS SCALE agent',
-    description:
-      'Use default auto-detection; installer applies TrueNAS-safe service handling automatically.',
-    flags: [],
   },
 ];
 

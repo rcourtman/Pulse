@@ -59,7 +59,7 @@ describe('InfrastructureWorkspace', () => {
     expect(screen.getByText('Connect your first system')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Start with Install on a host to connect the first machine you want Pulse to monitor. If you already know you want an API-backed platform such as Proxmox or TrueNAS instead, go straight to Platform connections.',
+        'Use Install on a host for the first machine that should run the unified agent. If the first system is API-backed, such as Proxmox or TrueNAS, go straight to Platform connections.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('1. Choose path')).toBeInTheDocument();

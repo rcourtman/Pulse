@@ -33,17 +33,17 @@ export const InfrastructureWorkspace: Component<InfrastructureWorkspaceProps> = 
           <div class="space-y-2">
             <h3 class="text-base font-semibold text-base-content">Connect your first system</h3>
             <p class="text-sm text-muted">
-              Start with Install on a host to connect the first machine you want Pulse to monitor.
-              If you already know you want an API-backed platform such as Proxmox or TrueNAS
-              instead, go straight to Platform connections.
+              Use Install on a host for the first machine that should run the unified agent. If the
+              first system is API-backed, such as Proxmox or TrueNAS, go straight to Platform
+              connections.
             </p>
           </div>
           <div class="grid gap-3 lg:grid-cols-3">
             <div class="rounded-md border border-border bg-surface px-4 py-3">
               <p class="text-xs font-semibold uppercase tracking-wide text-muted">1. Choose path</p>
               <p class="mt-1 text-sm text-base-content">
-                Install Pulse on a host first, or open Platform connections for Proxmox, TrueNAS,
-                and other systems Pulse should poll through their own APIs.
+                Choose Install on a host for agent-managed systems, or open Platform connections
+                for Proxmox, TrueNAS, and other systems Pulse should poll through their own APIs.
               </p>
             </div>
             <div class="rounded-md border border-border bg-surface px-4 py-3">

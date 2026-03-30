@@ -195,6 +195,17 @@ management, and fleet control surfaces.
    where the first-host scoped install token is prepared from setup handoff,
    not as a second manual token-generation task the operator still needs to
    figure out.
+10. Keep API-backed platform onboarding explicit across
+    `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
+    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`,
+    `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
+    `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, and
+    `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`.
+    TrueNAS must be presented as a Platform connections workflow first, not as
+    a dedicated Unified Agent install profile. The install workspace may remain
+    available for optional later agent augmentation on TrueNAS, but first-run
+    copy, alternative CTAs, and install-profile lists must not imply that an
+    agent install is the required bootstrap for TrueNAS support in Pulse.
 
 ## Current State
 

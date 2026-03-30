@@ -228,17 +228,6 @@ Own canonical runtime payload shapes between backend and frontend.
     operators can receive the first success handoff without typing a hostname
     or agent ID.
 20. Keep the shared first-run install-token transport explicit on
-21. Keep connected-infrastructure surface vocabulary canonical across the
-    shared `/api/state` and reporting/install consumers: `frontend-modern/src/types/api.ts`
-    must treat `truenas` as a first-class connected-infrastructure surface kind,
-    and connected-infrastructure consumers such as
-    `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
-    and
-    `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
-    must preserve the transport distinction between machine-managed surfaces
-    (`agent`, `docker`, `kubernetes`) and platform-connections-managed
-    surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
-    into one uninstall/stop-monitoring model.
     `/api/security/tokens` as used by
     `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`:
     once quick setup has produced the setup handoff credentials, the canonical
@@ -249,7 +238,33 @@ Own canonical runtime payload shapes between backend and frontend.
     install-state surface must describe that prepared token path consistently
     with the live runtime behavior rather than directing the operator to create
     another install token manually.
-21. Keep local trial-start transport explicit on the shared commercial API
+21. Keep connected-infrastructure surface vocabulary canonical across the
+    shared `/api/state` and reporting/install consumers:
+    `frontend-modern/src/types/api.ts` must treat `truenas` as a first-class
+    connected-infrastructure surface kind, and connected-infrastructure
+    consumers such as
+    `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`
+    and
+    `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+    must preserve the transport distinction between machine-managed surfaces
+    (`agent`, `docker`, `kubernetes`) and platform-connections-managed
+    surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
+    into one uninstall/stop-monitoring model.
+22. Keep API-backed first-target onboarding canonical on that same shared
+    infrastructure-settings boundary:
+    `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
+    `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`,
+    `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`,
+    `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`, and
+    `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx` must
+    present TrueNAS and other API-backed platforms as Platform connections-first
+    onboarding rather than as dedicated unified-agent install profiles. The
+    shared host-install contract may guide operators through the first
+    agent-managed host, but alternate CTAs and setup-completion guidance must
+    route API-backed first systems to `/settings/infrastructure/platforms`
+    instead of implying that a host install command is required before those
+    platforms can report into Pulse.
+23. Keep local trial-start transport explicit on the shared commercial API
     boundary: `/api/license/trial/start` must preserve the hosted-signup
     redirect contract during the allowed retry burst, then return the actual
     remaining backoff in both `Retry-After` and

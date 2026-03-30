@@ -50,28 +50,28 @@ interface CompleteStepProps {
 const UNIFIED_RESOURCE_GUIDANCE = {
   title: 'What happens next',
   description:
-    'Pulse is now secured. Your next step is to install the Pulse agent on the first system you want to monitor, then let Pulse discover and enrich that system over time.',
+    'Pulse is now secured. Next, choose the first infrastructure path: use Infrastructure Install for a host that should run the unified agent, or use Platform connections for API-backed platforms like Proxmox and TrueNAS.',
   steps: [
     {
       title: 'Open Infrastructure Install',
       description:
-        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps the connection settings together.',
+        'Use the canonical install workspace where Pulse prepares the first-host install token from setup and keeps Platform connections beside it when the first target is API-backed.',
     },
     {
       title: 'Copy the command for your target system',
       description:
-        'Choose Linux, macOS, Windows, or another supported target and copy the matching command.',
+        'Choose Linux, macOS, Windows, or another supported target only when the first system should run the unified agent directly.',
     },
     {
       title: 'Run it on the first host you want to monitor',
       description:
-        'When the agent connects, Pulse creates your first monitored system and you can add more infrastructure from there.',
+        'When that agent-managed host connects, Pulse creates your first monitored system and you can add more infrastructure from there.',
     },
   ],
   inventoryFacts: [
     'Start with one host, then add more systems later from the same install workspace.',
     'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
-    'Platform connections remains available for API-backed platforms like Proxmox and TrueNAS when you need it.',
+    'API-backed platforms like Proxmox and TrueNAS use Platform connections instead of a dedicated install profile in Infrastructure Install.',
   ],
 } as const;
 

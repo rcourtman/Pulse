@@ -17,7 +17,6 @@ import { getPulseBaseUrl } from '@/utils/url';
 import { logger } from '@/utils/logger';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { buildInfrastructureWorkspacePath } from './infrastructureWorkspaceModel';
-import { buildPlatformConnectionsPath } from './platformConnectionsModel';
 import {
   buildUnixAgentInstallCommand,
   buildWindowsAgentInstallCommand,
@@ -471,8 +470,8 @@ Pulse prepares the first-host install token from setup so you can move straight 
     }));
   });
 
-  const openDirectProxmoxSetup = () => {
-    navigate(buildPlatformConnectionsPath('proxmox'));
+  const openPlatformConnections = () => {
+    navigate(buildInfrastructureWorkspacePath('platforms'));
   };
 
   const openDashboard = () => {
@@ -518,7 +517,7 @@ Pulse prepares the first-host install token from setup so you can move straight 
     lookupValue,
     lookupWasAutoDetected,
     openDashboard,
-    openDirectProxmoxSetup,
+    openPlatformConnections,
     openInfrastructureInventory,
     requiresToken,
     selectedAgentUrl,

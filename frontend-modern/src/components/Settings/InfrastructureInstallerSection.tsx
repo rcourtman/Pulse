@@ -1,7 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createSignal } from 'solid-js';
 import Server from 'lucide-solid/icons/server';
-import { ProxmoxIcon } from '@/components/icons/ProxmoxIcon';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { copyToClipboard } from '@/utils/clipboard';
 import { formatAbsoluteTime, formatRelativeTime } from '@/utils/format';
@@ -138,31 +137,29 @@ export const InfrastructureInstallerSection: Component = () => {
       </Show>
 
       <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900 dark:border-blue-700 dark:bg-blue-900 dark:text-blue-100">
-        <p class="font-semibold">Start with the first host you want Pulse to monitor.</p>
+        <p class="font-semibold">Use this workspace for the first agent-managed host.</p>
         <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
-          Install the Pulse agent on that system first. Once it connects, Pulse can keep using this
-          workspace to add more hosts and layered platform integrations.
+          Install the Pulse agent here only when the first system should run the unified agent
+          directly. If the first system is API-backed, such as TrueNAS or Proxmox, open Platform
+          connections instead.
         </p>
       </div>
 
       <Show when={!state.isEmbedded()}>
         <div class="rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-700 dark:bg-emerald-900 dark:text-emerald-100">
-          <div class="flex items-start gap-3">
-            <ProxmoxIcon class="mt-0.5 h-5 w-5 shrink-0 text-amber-500" />
-            <div class="flex-1">
-              <p class="text-sm">
-                Proxmox nodes can be added here with the unified agent for extra capabilities like
-                temperature monitoring and Pulse Patrol automation (auto-creates the required token
-                and links the node).
-              </p>
-              <button
-                type="button"
-                onClick={state.openDirectProxmoxSetup}
-                class="mt-2 inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 underline hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100"
-              >
-                Need direct setup instead? Open Proxmox →
-              </button>
-            </div>
+          <div class="space-y-2">
+            <p class="text-sm">
+              API-backed platforms such as Proxmox and TrueNAS belong in Platform connections. Use
+              this install workspace only for systems where Pulse should run the unified agent on
+              the machine itself.
+            </p>
+            <button
+              type="button"
+              onClick={state.openPlatformConnections}
+              class="inline-flex min-h-10 sm:min-h-9 items-center rounded-md px-2 py-1.5 text-sm font-medium text-emerald-800 underline hover:bg-emerald-100 hover:text-emerald-900 dark:text-emerald-200 dark:hover:bg-emerald-900 dark:hover:text-emerald-100"
+            >
+              Open Platform connections →
+            </button>
           </div>
         </div>
       </Show>
@@ -462,6 +459,10 @@ export const InfrastructureInstallerSection: Component = () => {
                     </select>
                     <p class="mt-1.5 text-xs text-muted">
                       {state.getSelectedInstallProfile().description}
+                    </p>
+                    <p class="mt-1.5 text-xs text-muted">
+                      API-backed platforms such as TrueNAS connect through Platform connections
+                      rather than a dedicated install profile here.
                     </p>
                     <Show when={state.getInstallProfileFlags().length > 0}>
                       <p class="mt-1.5 text-xs text-muted">
