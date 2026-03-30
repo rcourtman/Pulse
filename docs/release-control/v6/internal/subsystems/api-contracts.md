@@ -724,6 +724,14 @@ provider-local routes. Phase 1 must not add public `/api/vmware/resources`,
 `/api/vmware/history`, `/api/vmware/alerts`, or VMware-specific recovery
 transport just because the internal poller now projects VMware-backed
 resources into the shared canonical inventory.
+That same shared API contract now also owns Assistant mention transport for
+those canonical resources. `frontend-modern/src/api/aiChat.ts`,
+`internal/api/ai_handler.go`, and `internal/api/ai_handlers.go` must preserve
+structured mention payloads for canonical `agent`, `vm`, `storage`, and
+`app-container` resources as shared unified-resource IDs plus shared mention
+types, so VMware-backed reads stay on `/api/ai/*` and `/api/resources*`
+instead of introducing VMware-only mention payloads or provider-local
+inventory reads under `/api/vmware/*`.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

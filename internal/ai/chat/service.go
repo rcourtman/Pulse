@@ -513,19 +513,21 @@ func (s *Service) ExecuteStream(ctx context.Context, req ExecuteRequest, callbac
 			resolvedCtx := sessions.GetResolvedContext(session.ID)
 			for _, mention := range prefetchCtx.Mentions {
 				// Build canonical resource ID: kind:scope:id
-				var resourceID string
-				switch mention.ResourceType {
-				case "system-container":
-					if mention.TargetID != "" {
-						resourceID = "system-container:" + mention.TargetID + ":" + mention.ResourceID
-					}
-				case "vm":
-					if mention.TargetID != "" {
-						resourceID = "vm:" + mention.TargetID + ":" + mention.ResourceID
-					}
-				case "app-container":
-					if mention.TargetHost != "" {
-						resourceID = "app-container:" + mention.TargetHost + ":" + mention.ResourceID
+				resourceID := strings.TrimSpace(mention.UnifiedResourceID)
+				if resourceID == "" {
+					switch mention.ResourceType {
+					case "system-container":
+						if mention.TargetID != "" {
+							resourceID = "system-container:" + mention.TargetID + ":" + mention.ResourceID
+						}
+					case "vm":
+						if mention.TargetID != "" {
+							resourceID = "vm:" + mention.TargetID + ":" + mention.ResourceID
+						}
+					case "app-container":
+						if mention.TargetHost != "" {
+							resourceID = "app-container:" + mention.TargetHost + ":" + mention.ResourceID
+						}
 					}
 				}
 				if resourceID != "" {

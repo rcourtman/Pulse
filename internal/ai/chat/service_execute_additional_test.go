@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 type stubServiceProvider struct {
@@ -109,6 +110,13 @@ func TestService_ExecuteStream_PrefetchMentionsAndOverrideModel(t *testing.T) {
 			{ID: "vm:node1:101", VMID: 101, Name: "vm1", Node: "node1", Status: "running"},
 		},
 	}
+	readState := unifiedresources.NewRegistry(nil)
+	readState.IngestSnapshot(state)
+	vmResources := readState.ListByType(unifiedresources.ResourceTypeVM)
+	if len(vmResources) != 1 {
+		t.Fatalf("expected one canonical VM resource, got %d", len(vmResources))
+	}
+	vmResourceID := vmResources[0].ID
 
 	var capturedModel string
 	svc := &Service{
@@ -116,7 +124,8 @@ func TestService_ExecuteStream_PrefetchMentionsAndOverrideModel(t *testing.T) {
 		sessions:          store,
 		executor:          executor,
 		agenticLoop:       loop,
-		contextPrefetcher: NewContextPrefetcher(newTestReadState(state), nil),
+		contextPrefetcher: NewContextPrefetcher(readState, nil),
+		provider:          provider,
 		started:           true,
 		providerFactory: func(modelStr string) (providers.StreamingProvider, error) {
 			capturedModel = modelStr
@@ -142,8 +151,79 @@ func TestService_ExecuteStream_PrefetchMentionsAndOverrideModel(t *testing.T) {
 	}
 
 	resolved := store.GetResolvedContext("sess-2")
-	if !resolved.WasRecentlyAccessed("vm:node1:101", time.Minute) {
+	if !resolved.WasRecentlyAccessed(vmResourceID, time.Minute) {
 		t.Fatal("expected explicit access to be recorded for structured mention")
+	}
+}
+
+func TestService_ExecuteStream_PrefetchMentionsMarksVMwareUnifiedResourceAccess(t *testing.T) {
+	tmpDir := t.TempDir()
+	store, err := NewSessionStore(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	provider := &stubServiceProvider{}
+	loop := NewAgenticLoop(provider, executor, "system")
+
+	now := time.Now().UTC()
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestRecords(unifiedresources.SourceVMware, []unifiedresources.IngestRecord{{
+		SourceID: "vc-1:vm:vm-201",
+		Resource: unifiedresources.Resource{
+			ID:         "vmware-vm-1",
+			Type:       unifiedresources.ResourceTypeVM,
+			Name:       "app-01",
+			Status:     unifiedresources.StatusOnline,
+			LastSeen:   now,
+			UpdatedAt:  now,
+			ParentName: "esxi-01.lab.local",
+			VMware: &unifiedresources.VMwareData{
+				ConnectionID:    "vc-1",
+				ConnectionName:  "Lab VC",
+				ManagedObjectID: "vm-201",
+				EntityType:      "vm",
+				RuntimeHostName: "esxi-01.lab.local",
+			},
+		},
+		Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"app-01"}},
+	}})
+	vmResources := rr.ListByType(unifiedresources.ResourceTypeVM)
+	if len(vmResources) != 1 {
+		t.Fatalf("expected one VMware VM resource, got %d", len(vmResources))
+	}
+	vmResourceID := vmResources[0].ID
+
+	svc := &Service{
+		cfg:               &config.AIConfig{ChatModel: "openai:primary"},
+		sessions:          store,
+		executor:          executor,
+		agenticLoop:       loop,
+		contextPrefetcher: NewContextPrefetcher(rr, nil),
+		provider:          provider,
+		started:           true,
+		providerFactory: func(modelStr string) (providers.StreamingProvider, error) {
+			return provider, nil
+		},
+	}
+
+	autonomous := true
+	req := ExecuteRequest{
+		SessionID:      "sess-vmware-mentions",
+		Prompt:         "check @app-01",
+		Mentions:       []StructuredMention{{ID: vmResourceID, Name: "app-01", Type: "vm"}},
+		MaxTurns:       1,
+		AutonomousMode: &autonomous,
+	}
+
+	if err := svc.ExecuteStream(context.Background(), req, func(StreamEvent) {}); err != nil {
+		t.Fatalf("ExecuteStream failed: %v", err)
+	}
+
+	resolved := store.GetResolvedContext("sess-vmware-mentions")
+	if !resolved.WasRecentlyAccessed(vmResourceID, time.Minute) {
+		t.Fatal("expected explicit access to be recorded for VMware structured mention")
 	}
 }
 

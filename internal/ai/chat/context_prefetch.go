@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -12,13 +13,14 @@ import (
 
 // ResourceMention represents a detected resource mention in a user message
 type ResourceMention struct {
-	Name          string
-	ResourceType  string // "vm", "system-container", "app-container", "agent", "node"
-	ResourceID    string
-	TargetID      string
-	MatchedText   string // The actual text that matched
-	Policy        *unifiedresources.ResourcePolicy
-	AISafeSummary string
+	Name              string
+	ResourceType      string // "vm", "system-container", "app-container", "agent", "node"
+	ResourceID        string
+	TargetID          string
+	MatchedText       string // The actual text that matched
+	Policy            *unifiedresources.ResourcePolicy
+	AISafeSummary     string
+	UnifiedResourceID string
 	// Docker-specific: bind mounts (source -> destination)
 	BindMounts []MountInfo
 	// Full routing chain (for Docker containers)
@@ -191,14 +193,22 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					seen[nameLower] = true
 					resolved := unifiedresources.ResolveResourceContext(rs, name)
 					policy, aiSafeSummary := resourceMentionGovernance(resolved.Resource)
+					resourceID := ""
+					if vmid := vm.VMID(); vmid > 0 {
+						resourceID = strconv.Itoa(vmid)
+					}
+					targetID := strings.TrimSpace(vm.Node())
+					resourceID = firstNonEmptyTrimmed(resourceID, mentionResourceIDFromResolved("vm", resolved.Resource))
+					targetID = firstNonEmptyTrimmed(targetID, mentionTargetIDFromResolved("vm", resolved.Resource))
 					mentions = append(mentions, ResourceMention{
-						Name:          name,
-						ResourceType:  "vm",
-						ResourceID:    fmt.Sprintf("%d", vm.VMID()),
-						TargetID:      vm.Node(),
-						MatchedText:   name,
-						Policy:        policy,
-						AISafeSummary: aiSafeSummary,
+						Name:              name,
+						ResourceType:      "vm",
+						ResourceID:        resourceID,
+						TargetID:          targetID,
+						MatchedText:       name,
+						Policy:            policy,
+						AISafeSummary:     aiSafeSummary,
+						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
 					})
 				}
 			}
@@ -218,14 +228,22 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					seen[nameLower] = true
 					resolved := unifiedresources.ResolveResourceContext(rs, name)
 					policy, aiSafeSummary := resourceMentionGovernance(resolved.Resource)
+					resourceID := ""
+					if vmid := ct.VMID(); vmid > 0 {
+						resourceID = strconv.Itoa(vmid)
+					}
+					targetID := strings.TrimSpace(ct.Node())
+					resourceID = firstNonEmptyTrimmed(resourceID, mentionResourceIDFromResolved("system-container", resolved.Resource))
+					targetID = firstNonEmptyTrimmed(targetID, mentionTargetIDFromResolved("system-container", resolved.Resource))
 					mentions = append(mentions, ResourceMention{
-						Name:          name,
-						ResourceType:  "system-container",
-						ResourceID:    fmt.Sprintf("%d", ct.VMID()),
-						TargetID:      ct.Node(),
-						MatchedText:   name,
-						Policy:        policy,
-						AISafeSummary: aiSafeSummary,
+						Name:              name,
+						ResourceType:      "system-container",
+						ResourceID:        resourceID,
+						TargetID:          targetID,
+						MatchedText:       name,
+						Policy:            policy,
+						AISafeSummary:     aiSafeSummary,
+						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
 					})
 				}
 			}
@@ -278,19 +296,48 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					loc := resolved.Location
 
 					mentions = append(mentions, ResourceMention{
-						Name:           name,
-						ResourceType:   "app-container",
-						ResourceID:     container.ContainerID(),
-						TargetID:       hostID,
-						MatchedText:    name,
-						Policy:         policy,
-						AISafeSummary:  aiSafeSummary,
-						BindMounts:     mounts,
-						DockerHostName: loc.DockerHostName,
-						DockerHostType: loc.DockerHostType,
-						DockerHostVMID: loc.DockerHostVMID,
-						NodeName:       loc.Node,
-						TargetHost:     loc.TargetHost,
+						Name:              name,
+						ResourceType:      "app-container",
+						ResourceID:        container.ContainerID(),
+						TargetID:          hostID,
+						MatchedText:       name,
+						Policy:            policy,
+						AISafeSummary:     aiSafeSummary,
+						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						BindMounts:        mounts,
+						DockerHostName:    loc.DockerHostName,
+						DockerHostType:    loc.DockerHostType,
+						DockerHostVMID:    loc.DockerHostVMID,
+						NodeName:          loc.Node,
+						TargetHost:        loc.TargetHost,
+					})
+				}
+			}
+		}
+	}
+
+	// Check canonical storage resources (including VMware datastores) via ReadState.
+	if rs != nil {
+		for _, storage := range rs.StoragePools() {
+			if storage == nil {
+				continue
+			}
+			name := storage.Name()
+			nameLower := strings.ToLower(name)
+			if nameLower != "" && len(nameLower) >= 3 && matchesResource(messageLower, messageWords, nameLower) {
+				if !seen[nameLower] {
+					seen[nameLower] = true
+					resolved := unifiedresources.ResolveResourceContext(rs, name)
+					policy, aiSafeSummary := resourceMentionGovernance(resolved.Resource)
+					mentions = append(mentions, ResourceMention{
+						Name:              name,
+						ResourceType:      "storage",
+						ResourceID:        firstNonEmptyTrimmed(strings.TrimSpace(storage.SourceID()), mentionResourceIDFromResolved("storage", resolved.Resource)),
+						TargetID:          firstNonEmptyTrimmed(strings.TrimSpace(storage.Node()), strings.TrimSpace(storage.Instance()), mentionTargetIDFromResolved("storage", resolved.Resource)),
+						MatchedText:       name,
+						Policy:            policy,
+						AISafeSummary:     aiSafeSummary,
+						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
 					})
 				}
 			}
@@ -312,14 +359,15 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					policy, aiSafeSummary := resourceMentionGovernance(resolved.Resource)
 					loc := resolved.Location
 					mentions = append(mentions, ResourceMention{
-						Name:          name,
-						ResourceType:  "node",
-						ResourceID:    name,
-						TargetID:      name,
-						MatchedText:   name,
-						Policy:        policy,
-						AISafeSummary: aiSafeSummary,
-						TargetHost:    loc.TargetHost,
+						Name:              name,
+						ResourceType:      "node",
+						ResourceID:        name,
+						TargetID:          name,
+						MatchedText:       name,
+						Policy:            policy,
+						AISafeSummary:     aiSafeSummary,
+						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						TargetHost:        loc.TargetHost,
 					})
 				}
 			}
@@ -343,14 +391,15 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 					// Use AgentID which maps to the original models.Host.ID
 					hostID := host.AgentID()
 					mentions = append(mentions, ResourceMention{
-						Name:          hostname,
-						ResourceType:  "agent",
-						ResourceID:    hostID,
-						TargetID:      hostID,
-						MatchedText:   hostname,
-						Policy:        policy,
-						AISafeSummary: aiSafeSummary,
-						TargetHost:    loc.TargetHost,
+						Name:              hostname,
+						ResourceType:      "agent",
+						ResourceID:        hostID,
+						TargetID:          hostID,
+						MatchedText:       hostname,
+						Policy:            policy,
+						AISafeSummary:     aiSafeSummary,
+						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						TargetHost:        loc.TargetHost,
 					})
 				}
 			}
@@ -492,17 +541,20 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			node := sm.Node
 			if len(parts) >= 3 {
 				node = parts[1]
-				vmID = parts[2]
+				vmID = strings.Join(parts[2:], ":")
 			}
+			vmID = firstNonEmptyTrimmed(vmID, mentionResourceIDFromResolved("vm", resolved.Resource))
+			node = firstNonEmptyTrimmed(node, mentionTargetIDFromResolved("vm", resolved.Resource))
 			mentions = append(mentions, ResourceMention{
-				Name:          sm.Name,
-				ResourceType:  "vm",
-				ResourceID:    vmID,
-				TargetID:      node,
-				MatchedText:   sm.Name,
-				Policy:        policy,
-				AISafeSummary: aiSafeSummary,
-				TargetHost:    loc.TargetHost,
+				Name:              sm.Name,
+				ResourceType:      "vm",
+				ResourceID:        vmID,
+				TargetID:          node,
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				TargetHost:        loc.TargetHost,
 			})
 
 		case "system-container":
@@ -510,21 +562,29 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			node := sm.Node
 			if len(parts) >= 3 {
 				node = parts[1]
-				vmID = parts[2]
+				vmID = strings.Join(parts[2:], ":")
 			}
+			vmID = firstNonEmptyTrimmed(vmID, mentionResourceIDFromResolved("system-container", resolved.Resource))
+			node = firstNonEmptyTrimmed(node, mentionTargetIDFromResolved("system-container", resolved.Resource))
 			mentions = append(mentions, ResourceMention{
-				Name:          sm.Name,
-				ResourceType:  "system-container",
-				ResourceID:    vmID,
-				TargetID:      node,
-				MatchedText:   sm.Name,
-				Policy:        policy,
-				AISafeSummary: aiSafeSummary,
-				TargetHost:    loc.TargetHost,
+				Name:              sm.Name,
+				ResourceType:      "system-container",
+				ResourceID:        vmID,
+				TargetID:          node,
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				TargetHost:        loc.TargetHost,
 			})
 
 		case "app-container":
 			hostID, containerID := parseStructuredAppContainerMentionID(sm.ID, rs)
+			if resolved.Resource != nil {
+				resolvedHost, resolvedContainerID := resolvedAppContainerMentionCoordinates(resolved.Resource)
+				hostID = firstNonEmptyTrimmed(hostID, resolvedHost)
+				containerID = firstNonEmptyTrimmed(containerID, resolvedContainerID)
+			}
 
 			// Gather bind mounts via ReadState
 			var mounts []MountInfo
@@ -548,31 +608,48 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			}
 
 			mentions = append(mentions, ResourceMention{
-				Name:           sm.Name,
-				ResourceType:   "app-container",
-				ResourceID:     containerID,
-				TargetID:       hostID,
-				MatchedText:    sm.Name,
-				Policy:         policy,
-				AISafeSummary:  aiSafeSummary,
-				BindMounts:     mounts,
-				DockerHostName: loc.DockerHostName,
-				DockerHostType: loc.DockerHostType,
-				DockerHostVMID: loc.DockerHostVMID,
-				NodeName:       loc.Node,
-				TargetHost:     loc.TargetHost,
+				Name:              sm.Name,
+				ResourceType:      "app-container",
+				ResourceID:        containerID,
+				TargetID:          hostID,
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				BindMounts:        mounts,
+				DockerHostName:    loc.DockerHostName,
+				DockerHostType:    loc.DockerHostType,
+				DockerHostVMID:    loc.DockerHostVMID,
+				NodeName:          loc.Node,
+				TargetHost:        loc.TargetHost,
+			})
+
+		case "storage":
+			resourceID := firstNonEmptyTrimmed(sm.ID, resolvedUnifiedResourceID(resolved.Resource), mentionResourceIDFromResolved("storage", resolved.Resource))
+			targetID := firstNonEmptyTrimmed(sm.Node, mentionTargetIDFromResolved("storage", resolved.Resource), loc.TargetHost)
+			mentions = append(mentions, ResourceMention{
+				Name:              sm.Name,
+				ResourceType:      "storage",
+				ResourceID:        resourceID,
+				TargetID:          targetID,
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				TargetHost:        firstNonEmptyTrimmed(loc.TargetHost, targetID),
 			})
 
 		case "node":
 			mentions = append(mentions, ResourceMention{
-				Name:          sm.Name,
-				ResourceType:  "node",
-				ResourceID:    sm.Name,
-				TargetID:      sm.Name,
-				MatchedText:   sm.Name,
-				Policy:        policy,
-				AISafeSummary: aiSafeSummary,
-				TargetHost:    loc.TargetHost,
+				Name:              sm.Name,
+				ResourceType:      "node",
+				ResourceID:        sm.Name,
+				TargetID:          sm.Name,
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				TargetHost:        loc.TargetHost,
 			})
 
 		case "agent":
@@ -581,14 +658,15 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				hostID = strings.Join(parts[1:], ":")
 			}
 			mentions = append(mentions, ResourceMention{
-				Name:          sm.Name,
-				ResourceType:  "agent",
-				ResourceID:    hostID,
-				TargetID:      hostID,
-				MatchedText:   sm.Name,
-				Policy:        policy,
-				AISafeSummary: aiSafeSummary,
-				TargetHost:    loc.TargetHost,
+				Name:              sm.Name,
+				ResourceType:      "agent",
+				ResourceID:        hostID,
+				TargetID:          hostID,
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				TargetHost:        loc.TargetHost,
 			})
 
 		default:
@@ -604,14 +682,15 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Str("type", sm.Type).
 				Msg("[ContextPrefetch] Unknown structured mention type, falling back to ResolveResource")
 			mentions = append(mentions, ResourceMention{
-				Name:          sm.Name,
-				ResourceType:  resourceType,
-				ResourceID:    sm.ID,
-				TargetID:      sm.Node,
-				MatchedText:   sm.Name,
-				Policy:        policy,
-				AISafeSummary: aiSafeSummary,
-				TargetHost:    loc.TargetHost,
+				Name:              sm.Name,
+				ResourceType:      resourceType,
+				ResourceID:        firstNonEmptyTrimmed(sm.ID, mentionResourceIDFromResolved(resourceType, resolved.Resource)),
+				TargetID:          firstNonEmptyTrimmed(sm.Node, mentionTargetIDFromResolved(resourceType, resolved.Resource)),
+				MatchedText:       sm.Name,
+				Policy:            policy,
+				AISafeSummary:     aiSafeSummary,
+				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				TargetHost:        loc.TargetHost,
 			})
 		}
 	}
@@ -710,6 +789,101 @@ func appContainerProviderUID(resource unifiedresources.Resource, host string) st
 	}
 	if name := strings.TrimSpace(resource.Name); name != "" {
 		return name
+	}
+	return ""
+}
+
+func resolvedAppContainerMentionCoordinates(resource *unifiedresources.Resource) (hostID string, containerID string) {
+	if resource == nil {
+		return "", ""
+	}
+	hostID = appContainerResourceHost(*resource)
+	containerID = appContainerProviderUID(*resource, hostID)
+	return strings.TrimSpace(hostID), strings.TrimSpace(containerID)
+}
+
+func resolvedUnifiedResourceID(resource *unifiedresources.Resource) string {
+	if resource == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.ID)
+}
+
+func resolvedStructuredUnifiedResourceID(structuredID string, resource *unifiedresources.Resource) string {
+	return firstNonEmptyTrimmed(resolvedUnifiedResourceID(resource), structuredID)
+}
+
+func mentionResourceIDFromResolved(resourceType string, resource *unifiedresources.Resource) string {
+	if resource == nil {
+		return ""
+	}
+
+	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	case "vm", "system-container":
+		if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+			return strconv.Itoa(resource.Proxmox.VMID)
+		}
+		if resource.VMware != nil {
+			return strings.TrimSpace(resource.VMware.ManagedObjectID)
+		}
+	case "storage":
+		if resource.Proxmox != nil {
+			return strings.TrimSpace(resource.Proxmox.SourceID)
+		}
+		if resource.VMware != nil {
+			return strings.TrimSpace(resource.VMware.ManagedObjectID)
+		}
+	case "agent":
+		if resource.Agent != nil {
+			return strings.TrimSpace(resource.Agent.AgentID)
+		}
+	}
+
+	return ""
+}
+
+func mentionTargetIDFromResolved(resourceType string, resource *unifiedresources.Resource) string {
+	if resource == nil {
+		return ""
+	}
+
+	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	case "vm", "system-container":
+		if resource.Proxmox != nil {
+			return strings.TrimSpace(resource.Proxmox.NodeName)
+		}
+		if resource.VMware != nil {
+			return firstNonEmptyTrimmed(
+				resource.VMware.RuntimeHostName,
+				resource.VMware.RuntimeHostID,
+				resource.ParentName,
+			)
+		}
+	case "storage":
+		if resource.Proxmox != nil {
+			return firstNonEmptyTrimmed(resource.Proxmox.NodeName, resource.Proxmox.Instance)
+		}
+		if resource.VMware != nil {
+			return firstNonEmptyTrimmed(
+				resource.ParentName,
+				resource.VMware.ConnectionName,
+				resource.VMware.RuntimeHostName,
+			)
+		}
+	case "agent":
+		if resource.Agent != nil {
+			return strings.TrimSpace(resource.Agent.AgentID)
+		}
+	}
+
+	return ""
+}
+
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
 	}
 	return ""
 }

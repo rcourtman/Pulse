@@ -210,6 +210,13 @@ event, task, metrics-history, and snapshot-tree context for VMware-backed
 resources must stay reachable through those same shared read/query surfaces
 and canonical resource links rather than through a VMware-only AI tool or
 provider-local incident adapter.
+That same VMware AI rule also now includes mention resolution. Frontend
+Assistant mention payloads for VMware-backed `agent`, `vm`, `storage`, and
+canonical `app-container` resources must preserve the shared unified resource
+ID coming from `/api/resources`, and backend prefetch/runtime code must
+resolve those mentions through canonical read-state lookups rather than
+reconstructing provider-local IDs in the UI or adding VMware-only read routes
+under `/api/vmware/*` for Assistant context.
 That same AI tool ownership also applies to recovery-backed storage reads.
 When `internal/ai/tools/adapters.go` returns recovery points with malformed
 persisted metadata omitted at the shared recovery-store boundary, the storage

@@ -46,6 +46,13 @@ const defaultResources: MentionResource[] = [
     status: 'stopped',
     node: undefined,
   }),
+  makeResource({
+    id: 'storage-1',
+    label: 'nvme-primary',
+    type: 'storage',
+    status: 'online',
+    node: 'Lab VC',
+  }),
 ];
 
 const defaultPosition = { top: 100, left: 200 };
@@ -134,6 +141,13 @@ describe('MentionAutocomplete', () => {
     it('shows the node name when present', () => {
       renderAutocomplete({ query: 'web' });
       expect(screen.getByText('pve1', { exact: false })).toBeInTheDocument();
+    });
+
+    it('shows the storage type label for storage resources', () => {
+      renderAutocomplete({ query: 'nvme' });
+      const resourceBtn = screen.getByText('nvme-primary').closest('button')!;
+      expect(resourceBtn.textContent).toContain('storage');
+      expect(resourceBtn.textContent).toContain('Lab VC');
     });
 
     it('does not show node separator when node is absent', () => {

@@ -82,6 +82,16 @@ func lookupResolvedResource(rs ReadState, loc models.ResourceLocation) *Resource
 			}
 		}
 
+	case "storage":
+		for _, pool := range rs.StoragePools() {
+			if pool == nil {
+				continue
+			}
+			if storagePoolMatches(pool, name) {
+				return cloneResourcePtr(pool.r)
+			}
+		}
+
 	case "agent":
 		for _, host := range rs.Hosts() {
 			if host == nil {

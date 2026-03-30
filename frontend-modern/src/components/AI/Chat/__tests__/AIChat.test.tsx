@@ -149,6 +149,16 @@ vi.mock('../MentionAutocomplete', () => ({
       >
         select-first
       </button>
+      {props.resources.map((resource) => (
+        <button
+          key={resource.id}
+          type="button"
+          data-testid={`mention-select-${resource.id}`}
+          onClick={() => props.onSelect(resource)}
+        >
+          {`select-${resource.id}`}
+        </button>
+      ))}
     </div>
   ),
 }));
@@ -593,7 +603,7 @@ describe('AIChat', () => {
         );
       });
 
-      fireEvent.click(screen.getByTestId('mention-select-first'));
+      fireEvent.click(screen.getByTestId('mention-select-app-container:truenas-main:nextcloud'));
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       expect(mockChat.sendMessage).toHaveBeenCalledWith(
@@ -608,6 +618,115 @@ describe('AIChat', () => {
         ],
         undefined,
       );
+    });
+
+    it('preserves canonical VMware vm and storage mention IDs in the shared payload', async () => {
+      const vmwareResources = [
+        {
+          id: 'vmware-vm-1',
+          type: 'vm' as const,
+          name: 'app-01',
+          displayName: 'App 01',
+          status: 'running',
+          parentId: 'vmware-host-1',
+          parentName: 'esxi-01.lab.local',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          vmware: {
+            managedObjectId: 'vm-201',
+            runtimeHostName: 'esxi-01.lab.local',
+            connectionName: 'Lab VC',
+          },
+        },
+        {
+          id: 'vmware-datastore-1',
+          type: 'storage' as const,
+          name: 'nvme-primary',
+          displayName: 'NVMe Primary',
+          status: 'online',
+          parentName: 'Lab VC',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          vmware: {
+            managedObjectId: 'datastore-11',
+            connectionName: 'Lab VC',
+          },
+        },
+      ];
+      mockByType.mockImplementation((type: string) => {
+        switch (type) {
+          case 'vm':
+            return [vmwareResources[0]];
+          case 'storage':
+            return [vmwareResources[1]];
+          default:
+            return [];
+        }
+      });
+      mockResources.mockReturnValue(vmwareResources);
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+
+      Object.defineProperty(textarea, 'selectionStart', { value: 4, writable: true });
+      fireEvent.input(textarea, { target: { value: '@app' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids')).toContain(
+          'vmware-vm-1',
+        );
+      });
+
+      fireEvent.click(screen.getByTestId('mention-select-vmware-vm-1'));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockChat.sendMessage).toHaveBeenCalledWith(
+          '@App 01',
+          [
+            expect.objectContaining({
+              id: 'vmware-vm-1',
+              name: 'App 01',
+              type: 'vm',
+              node: 'esxi-01.lab.local',
+            }),
+          ],
+          undefined,
+        );
+      });
+
+      mockChat.sendMessage.mockClear();
+      await waitFor(() => {
+        expect(textarea.value).toBe('');
+      });
+      Object.defineProperty(textarea, 'selectionStart', { value: 5, writable: true });
+      fireEvent.input(textarea, { target: { value: '@nvme' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids')).toContain(
+          'vmware-datastore-1',
+        );
+      });
+
+      fireEvent.click(screen.getByTestId('mention-select-vmware-datastore-1'));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockChat.sendMessage).toHaveBeenCalledWith(
+          '@NVMe Primary',
+          [
+            expect.objectContaining({
+              id: 'vmware-datastore-1',
+              name: 'NVMe Primary',
+              type: 'storage',
+              node: 'Lab VC',
+            }),
+          ],
+          undefined,
+        );
+      });
     });
 
     it('inserts the governed display label into the prompt when a mention is selected', async () => {

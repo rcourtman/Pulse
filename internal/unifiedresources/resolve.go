@@ -106,6 +106,24 @@ func ResolveResource(rs ReadState, name string) models.ResourceLocation {
 		return loc
 	}
 
+	// Check storage pools, including VMware datastores and shared platform storage.
+	for _, pool := range rs.StoragePools() {
+		if pool == nil {
+			continue
+		}
+		if !storagePoolMatches(pool, name) {
+			continue
+		}
+		targetID := storagePoolTarget(pool)
+		return models.ResourceLocation{
+			Found:        true,
+			Name:         pool.Name(),
+			ResourceType: "storage",
+			TargetID:     targetID,
+			TargetHost:   targetID,
+		}
+	}
+
 	// Check generic Hosts (Windows/Linux via Pulse Unified Agent).
 	// Match on Hostname() or AgentID() for parity with state.Hosts[].Hostname/ID.
 	// Use AgentID() as canonical target ID for host resources.
@@ -309,6 +327,60 @@ func appContainerResourceMatches(resource Resource, name string) bool {
 		}
 	}
 	return false
+}
+
+func storagePoolMatches(pool *StoragePoolView, name string) bool {
+	name = strings.TrimSpace(name)
+	if pool == nil || name == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(pool.Name()), name) ||
+		strings.EqualFold(strings.TrimSpace(pool.ID()), name) ||
+		strings.EqualFold(strings.TrimSpace(pool.SourceID()), name) {
+		return true
+	}
+	if pool.r != nil && pool.r.Canonical != nil {
+		for _, alias := range pool.r.Canonical.Aliases {
+			if strings.EqualFold(strings.TrimSpace(alias), name) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func storagePoolTarget(pool *StoragePoolView) string {
+	if pool == nil {
+		return ""
+	}
+	vmwareConnectionName := ""
+	vmwareRuntimeHost := ""
+	parentName := ""
+	if pool.r != nil {
+		parentName = strings.TrimSpace(pool.r.ParentName)
+		if pool.r.VMware != nil {
+			vmwareConnectionName = strings.TrimSpace(pool.r.VMware.ConnectionName)
+			vmwareRuntimeHost = strings.TrimSpace(pool.r.VMware.RuntimeHostName)
+		}
+	}
+	return firstNonEmptyResolvedString(
+		pool.Node(),
+		pool.Instance(),
+		parentName,
+		vmwareConnectionName,
+		vmwareRuntimeHost,
+		pool.ParentName(),
+		pool.Name(),
+	)
+}
+
+func firstNonEmptyResolvedString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func appContainerResourceHost(resource Resource) string {

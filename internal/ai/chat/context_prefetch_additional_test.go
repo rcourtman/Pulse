@@ -268,9 +268,15 @@ func TestContextPrefetcher_ResolveStructuredMentions_TrueNASCanonicalAppContaine
 		},
 	})
 
+	appContainers := rr.ListByType(unifiedresources.ResourceTypeAppContainer)
+	if len(appContainers) != 1 {
+		t.Fatalf("expected one TrueNAS app resource, got %d", len(appContainers))
+	}
+	appResourceID := appContainers[0].ID
+
 	prefetcher := NewContextPrefetcher(rr, nil)
 	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
-		ID:   "app-container:truenas-main:nextcloud",
+		ID:   appResourceID,
 		Name: "Nextcloud",
 		Type: "app-container",
 	}})
@@ -283,8 +289,106 @@ func TestContextPrefetcher_ResolveStructuredMentions_TrueNASCanonicalAppContaine
 	if mentions[0].TargetID != "truenas-main" || mentions[0].TargetHost != "truenas-main" {
 		t.Fatalf("expected TrueNAS host routing, got %+v", mentions[0])
 	}
-	if mentions[0].ResourceID != "nextcloud" {
-		t.Fatalf("expected canonical provider uid, got %+v", mentions[0])
+	if mentions[0].ResourceID != appResourceID {
+		t.Fatalf("expected canonical app mention id to be preserved, got %+v", mentions[0])
+	}
+	if mentions[0].UnifiedResourceID != appResourceID {
+		t.Fatalf("expected unified resource id to be preserved, got %+v", mentions[0])
+	}
+}
+
+func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testing.T) {
+	now := time.Now().UTC()
+	rr := unifiedresources.NewRegistry(nil)
+	rr.IngestRecords(unifiedresources.SourceVMware, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vc-1:host:host-101",
+			Resource: unifiedresources.Resource{
+				Type:      unifiedresources.ResourceTypeAgent,
+				Name:      "esxi-01.lab.local",
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"esxi-01.lab.local"}},
+		},
+		{
+			SourceID: "vc-1:vm:vm-201",
+			Resource: unifiedresources.Resource{
+				ID:         "vmware-vm-1",
+				Type:       unifiedresources.ResourceTypeVM,
+				Name:       "app-01",
+				Status:     unifiedresources.StatusOnline,
+				LastSeen:   now,
+				UpdatedAt:  now,
+				ParentName: "esxi-01.lab.local",
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "vm-201",
+					EntityType:      "vm",
+					RuntimeHostName: "esxi-01.lab.local",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"app-01"}},
+		},
+		{
+			SourceID: "vc-1:datastore:datastore-11",
+			Resource: unifiedresources.Resource{
+				ID:         "vmware-datastore-1",
+				Type:       unifiedresources.ResourceTypeStorage,
+				Name:       "nvme-primary",
+				Status:     unifiedresources.StatusOnline,
+				LastSeen:   now,
+				UpdatedAt:  now,
+				ParentName: "Lab VC",
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "datastore-11",
+					EntityType:      "datastore",
+				},
+				Storage: &unifiedresources.StorageMeta{Type: "vmfs"},
+			},
+		},
+	})
+
+	vmResources := rr.ListByType(unifiedresources.ResourceTypeVM)
+	if len(vmResources) != 1 {
+		t.Fatalf("expected one VMware VM resource, got %d", len(vmResources))
+	}
+	storageResources := rr.ListByType(unifiedresources.ResourceTypeStorage)
+	if len(storageResources) != 1 {
+		t.Fatalf("expected one VMware storage resource, got %d", len(storageResources))
+	}
+	vmResourceID := vmResources[0].ID
+	storageResourceID := storageResources[0].ID
+
+	prefetcher := NewContextPrefetcher(rr, nil)
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{
+		{ID: vmResourceID, Name: "app-01", Type: "vm"},
+		{ID: storageResourceID, Name: "nvme-primary", Type: "storage"},
+	})
+	if len(mentions) != 2 {
+		t.Fatalf("expected two mentions, got %#v", mentions)
+	}
+	if mentions[0].ResourceType != "vm" || mentions[0].ResourceID != "vm-201" || mentions[0].TargetID != "esxi-01.lab.local" {
+		t.Fatalf("expected VMware VM routing coordinates, got %+v", mentions[0])
+	}
+	if mentions[0].UnifiedResourceID != vmResourceID {
+		t.Fatalf("expected VMware VM unified resource id, got %+v", mentions[0])
+	}
+	if mentions[1].ResourceType != "storage" || mentions[1].ResourceID != storageResourceID || mentions[1].TargetID != "Lab VC" {
+		t.Fatalf("expected VMware datastore shared coordinates, got %+v", mentions[1])
+	}
+	if mentions[1].UnifiedResourceID != storageResourceID {
+		t.Fatalf("expected VMware datastore unified resource id, got %+v", mentions[1])
 	}
 }
 

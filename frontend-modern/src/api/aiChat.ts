@@ -14,7 +14,7 @@ export interface ChatSession {
   message_count: number;
 }
 
-export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'agent';
+export type ChatMentionType = 'vm' | 'system-container' | 'app-container' | 'agent' | 'storage';
 
 export interface ChatMention {
   id: string;

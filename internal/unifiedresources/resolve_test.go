@@ -187,6 +187,48 @@ func TestResolveResource_TrueNASAppDoesNotUseDockerRouting(t *testing.T) {
 	}
 }
 
+func TestResolveResource_VMwareStorage(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+	rr.IngestRecords(SourceVMware, []IngestRecord{{
+		SourceID: "vc-1:datastore:datastore-11",
+		Resource: Resource{
+			Type:       ResourceTypeStorage,
+			Name:       "nvme-primary",
+			Status:     StatusOnline,
+			LastSeen:   now,
+			UpdatedAt:  now,
+			ParentName: "Lab VC",
+			Storage:    &StorageMeta{Type: "vmfs"},
+			VMware: &VMwareData{
+				ConnectionID:    "vc-1",
+				ConnectionName:  "Lab VC",
+				ManagedObjectID: "datastore-11",
+				EntityType:      "datastore",
+			},
+		},
+	}})
+
+	loc := ResolveResource(rr, "nvme-primary")
+	if !loc.Found || loc.ResourceType != "storage" {
+		t.Fatalf("expected storage resource, got found=%v type=%q", loc.Found, loc.ResourceType)
+	}
+	if loc.TargetID != "Lab VC" || loc.TargetHost != "Lab VC" {
+		t.Fatalf("expected VMware storage target to route through Lab VC, got %+v", loc)
+	}
+
+	resolved := ResolveResourceContext(rr, "nvme-primary")
+	if resolved.Resource == nil {
+		t.Fatal("expected resolved VMware storage resource")
+	}
+	if resolved.Resource.Type != ResourceTypeStorage {
+		t.Fatalf("expected storage resource payload, got %q", resolved.Resource.Type)
+	}
+	if resolved.Resource.VMware == nil || resolved.Resource.VMware.ManagedObjectID != "datastore-11" {
+		t.Fatalf("expected VMware datastore metadata, got %+v", resolved.Resource.VMware)
+	}
+}
+
 func TestLookupResolvedResource_TrueNASAppUsesCanonicalAppContainerSet(t *testing.T) {
 	rr := newTrueNASAppRegistryFixture()
 

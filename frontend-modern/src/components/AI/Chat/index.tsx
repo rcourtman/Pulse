@@ -437,16 +437,64 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const parseLegacyVmid = (
       resource: Resource,
       platformData: Record<string, unknown> | undefined,
-    ): number => {
+    ): number | undefined => {
       const vmidRaw = platformData?.vmid;
-      if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw)) return vmidRaw;
+      if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw) && vmidRaw > 0) return vmidRaw;
       if (typeof vmidRaw === 'string') {
         const parsed = parseInt(vmidRaw, 10);
-        if (Number.isFinite(parsed)) return parsed;
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
       }
-      const idTail = resource.id.split('-').pop() ?? '0';
-      const parsed = parseInt(idTail, 10);
-      return Number.isFinite(parsed) ? parsed : 0;
+      return undefined;
+    };
+
+    const getVMMentionNode = (resource: Resource): string => {
+      const platformData = readPlatformData(resource);
+      return (
+        asString(platformData?.node) ||
+        asString(resource.vmware?.runtimeHostName) ||
+        asString(resource.vmware?.runtimeHostId) ||
+        resource.parentName ||
+        ''
+      );
+    };
+
+    const getVMMentionId = (resource: Resource): string => {
+      if (resource.id.startsWith('vm:')) {
+        return resource.id;
+      }
+
+      const platformData = readPlatformData(resource);
+      const node = getVMMentionNode(resource);
+      const vmid = parseLegacyVmid(resource, platformData);
+      if (node && vmid !== undefined) {
+        return `vm:${node}:${vmid}`;
+      }
+
+      return resource.id;
+    };
+
+    const getSystemContainerMentionId = (resource: Resource): string => {
+      if (resource.id.startsWith('system-container:')) {
+        return resource.id;
+      }
+
+      const platformData = readPlatformData(resource);
+      const node = asString(platformData?.node) || resource.parentName || '';
+      const vmid = parseLegacyVmid(resource, platformData);
+      if (node && vmid !== undefined) {
+        return `system-container:${node}:${vmid}`;
+      }
+
+      return resource.id;
+    };
+
+    const getStorageMentionNode = (resource: Resource): string => {
+      return (
+        resource.parentName ||
+        asString(resource.vmware?.connectionName) ||
+        asString(resource.vmware?.runtimeHostName) ||
+        ''
+      );
     };
 
     const nodes = byType('agent');
@@ -454,6 +502,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const containers = [...byType('system-container'), ...byType('oci-container')];
     const dockerHosts = byType('docker-host');
     const appContainers = byType('app-container');
+    const storageResources = byType('storage');
     const agentResources = allResources().filter((resource) =>
       isAgentFacetInfrastructureResource(resource),
     );
@@ -461,12 +510,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
     // Add VMs
     for (const vm of vms) {
-      const platformData = readPlatformData(vm);
-      const nodeRaw = platformData?.node;
-      const node = typeof nodeRaw === 'string' ? nodeRaw : '';
-      const vmid = parseLegacyVmid(vm, platformData);
+      const node = getVMMentionNode(vm);
       mentionCandidates.push({
-        id: `vm:${node}:${vmid}`,
+        id: getVMMentionId(vm),
         label: getPreferredResourceDisplayName(vm),
         type: 'vm',
         status: vm.status === 'running' ? 'running' : 'stopped',
@@ -477,11 +523,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     // Add LXC/system containers (includes OCI containers).
     for (const container of containers) {
       const platformData = readPlatformData(container);
-      const nodeRaw = platformData?.node;
-      const node = typeof nodeRaw === 'string' ? nodeRaw : '';
-      const vmid = parseLegacyVmid(container, platformData);
+      const node = asString(platformData?.node) || container.parentName || '';
       mentionCandidates.push({
-        id: `system-container:${node}:${vmid}`,
+        id: getSystemContainerMentionId(container),
         label: getPreferredResourceDisplayName(container),
         type: 'system-container',
         status: container.status === 'running' ? 'running' : 'stopped',
@@ -516,6 +560,16 @@ export const AIChat: Component<AIChatProps> = (props) => {
         type: 'app-container',
         status: container.status === 'running' ? 'running' : 'exited',
         node: getAppContainerMentionHost(container),
+      });
+    }
+
+    for (const storage of storageResources) {
+      mentionCandidates.push({
+        id: storage.id,
+        label: getPreferredResourceDisplayName(storage),
+        type: 'storage',
+        status: storage.status,
+        node: getStorageMentionNode(storage),
       });
     }
 

@@ -868,6 +868,13 @@ policy requires governed handling, the shared label helper now prefers the
 canonical AI-safe summary for every redacted or local-only resource and only
 falls back to the canonical redacted label if that governed summary is
 missing, so path-only and IP-only redactions do not regress to raw identity
+tokens in chat context. That same unified-resource contract now also owns the
+canonical mention identity path for shared Assistant reads: chat surfaces must
+carry the backend-issued unified resource ID for canonical `agent`, `vm`,
+`storage`, and `app-container` records, and backend mention resolution must be
+able to recover those resources by canonical ID and canonical name through the
+shared read-state instead of relying on provider-local route families or
+frontend reconstruction of VMware- or TrueNAS-specific coordinates.
 leakage or over-redaction.
 The frontend unified-resource hook now trusts backend canonical `policy` and
 `aiSafeSummary` values directly, so the canonical summary value stays

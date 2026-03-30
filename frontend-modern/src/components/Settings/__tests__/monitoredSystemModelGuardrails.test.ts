@@ -1020,7 +1020,7 @@ describe('monitored-system model guardrails', () => {
     expect(mentionAutocompleteSource).not.toContain('const getStatusColor =');
     expect(mentionAutocompleteSource).toContain("| 'system-container'");
     expect(mentionAutocompleteSource).not.toContain("| 'container'");
-    expect(mentionAutocompleteSource).not.toContain("| 'storage'");
+    expect(mentionAutocompleteSource).toContain("| 'storage'");
     expect(mentionAutocompleteSource).not.toContain("| 'host'");
   });
 
