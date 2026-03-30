@@ -297,6 +297,11 @@ Compatibility-only top-level TrueNAS mention types must also collapse to the
 canonical `agent` host type at that same handler boundary, so the AI runtime
 does not carry a parallel raw `truenas` mention contract once transport input
 has been normalized.
+That same compatibility-collapse rule also applies to alert, finding, and
+Patrol scope payloads. API-backed TrueNAS systems may still keep `truenas`
+platform metadata and separate run-history coverage counts, but AI resource
+type fields must normalize to canonical `agent` once they cross the governed
+runtime boundary.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved

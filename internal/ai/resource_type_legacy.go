@@ -6,10 +6,24 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
+// canonicalizeAICompatibilityResourceType collapses compatibility-only runtime
+// tokens onto the canonical v6 AI resource type contract.
+func canonicalizeAICompatibilityResourceType(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "truenas":
+		return "agent"
+	case "physical-disk":
+		return "physical_disk"
+	default:
+		return normalized
+	}
+}
+
 // isUnsupportedLegacyAIResourceTypeToken reports legacy/v5 type tokens that are
 // explicitly rejected by strict v6 AI resource-type normalization paths.
 func isUnsupportedLegacyAIResourceTypeToken(value string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized := canonicalizeAICompatibilityResourceType(value)
 	if normalized == "" {
 		return false
 	}

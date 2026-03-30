@@ -494,6 +494,13 @@ func TestPatrolScopeFactories_IgnoreLegacyResourceTypes(t *testing.T) {
 	}
 }
 
+func TestPatrolScopeFactories_CanonicalizeTrueNASToAgent(t *testing.T) {
+	scope := AlertTriggeredPatrolScope("alert-truenas", "res-truenas", "truenas", "offline")
+	if len(scope.ResourceTypes) != 1 || scope.ResourceTypes[0] != "agent" {
+		t.Fatalf("expected canonical agent scope for truenas host, got %v", scope.ResourceTypes)
+	}
+}
+
 func TestAlertClearedPatrolScope(t *testing.T) {
 	scope := AlertClearedPatrolScope("alert-2", "res-2", "vm")
 

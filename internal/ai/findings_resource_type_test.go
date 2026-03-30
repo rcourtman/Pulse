@@ -113,6 +113,7 @@ func TestCanonicalFindingResourceType(t *testing.T) {
 		{in: "docker_host", want: ""},
 		{in: "kubernetes_cluster", want: ""},
 		{in: "host", want: ""},
+		{in: "truenas", want: "agent"},
 		{in: "storage", want: "storage"},
 	}
 

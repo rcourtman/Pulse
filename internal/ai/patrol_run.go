@@ -2038,6 +2038,7 @@ func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert Alert
 // getCurrentMetricValue gets the current value of the metric that triggered the alert
 type patrolAlertResourceState struct {
 	resourceType string
+	platform     string
 	name         string
 	status       string
 	cpu          float64
@@ -2059,7 +2060,7 @@ func patrolAlertNameMatches(alert AlertInfo, ids ...string) bool {
 }
 
 func patrolAlertLookupType(alert AlertInfo) string {
-	resourceType := strings.TrimSpace(alert.ResourceType)
+	resourceType := canonicalizeAICompatibilityResourceType(alert.ResourceType)
 	if alert.Type == "usage" && (resourceType == "" || strings.EqualFold(resourceType, "usage")) {
 		return "storage"
 	}
@@ -2091,10 +2092,6 @@ func lookupPatrolAlertResourceState(alert AlertInfo, snap patrolRuntimeState) pa
 			return resource
 		}
 	case "agent":
-		if resource, ok := patrolLookupHostAlertResourceState(alert, snap); ok {
-			return resource
-		}
-	case "truenas":
 		if resource, ok := patrolLookupHostAlertResourceState(alert, snap); ok {
 			return resource
 		}
@@ -2170,8 +2167,8 @@ func patrolLookupGuestAlertResourceState(alert AlertInfo, snap patrolRuntimeStat
 }
 
 type patrolHostAlertRow struct {
-	id, name, hostname, status, platform, resourceType string
-	cpu, memory                                        float64
+	id, name, hostname, status, platform string
+	cpu, memory                          float64
 }
 
 func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
@@ -2180,14 +2177,13 @@ func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
 		rows := make([]patrolHostAlertRow, 0, len(hosts))
 		for _, host := range hosts {
 			rows = append(rows, patrolHostAlertRow{
-				id:           host.ID(),
-				name:         host.Name(),
-				hostname:     host.Hostname(),
-				status:       string(host.Status()),
-				platform:     host.Platform(),
-				resourceType: patrolHostResourceType(host.Platform()),
-				cpu:          host.CPUPercent(),
-				memory:       host.MemoryPercent(),
+				id:       host.ID(),
+				name:     host.Name(),
+				hostname: host.Hostname(),
+				status:   string(host.Status()),
+				platform: host.Platform(),
+				cpu:      host.CPUPercent(),
+				memory:   host.MemoryPercent(),
 			})
 		}
 		return rows
@@ -2196,23 +2192,19 @@ func patrolHostAlertRows(snap patrolRuntimeState) []patrolHostAlertRow {
 	rows := make([]patrolHostAlertRow, 0, len(snap.Hosts))
 	for _, host := range snap.Hosts {
 		rows = append(rows, patrolHostAlertRow{
-			id:           host.ID,
-			name:         host.DisplayName,
-			hostname:     host.Hostname,
-			status:       host.Status,
-			platform:     host.Platform,
-			resourceType: patrolHostResourceType(host.Platform),
-			cpu:          host.CPUUsage,
-			memory:       host.Memory.Usage,
+			id:       host.ID,
+			name:     host.DisplayName,
+			hostname: host.Hostname,
+			status:   host.Status,
+			platform: host.Platform,
+			cpu:      host.CPUUsage,
+			memory:   host.Memory.Usage,
 		})
 	}
 	return rows
 }
 
 func patrolHostResourceType(platform string) string {
-	if strings.EqualFold(strings.TrimSpace(platform), "truenas") {
-		return "truenas"
-	}
 	return "agent"
 }
 
@@ -2226,7 +2218,8 @@ func patrolLookupHostAlertResourceState(alert AlertInfo, snap patrolRuntimeState
 			name = host.name
 		}
 		return patrolAlertResourceState{
-			resourceType: host.resourceType,
+			resourceType: patrolHostResourceType(host.platform),
+			platform:     host.platform,
 			name:         name,
 			status:       host.status,
 			cpu:          host.cpu,
@@ -2262,7 +2255,7 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 		return false
 	}
 	switch resource.resourceType {
-	case "node", "agent", "truenas":
+	case "node", "agent":
 		return resource.status == "online"
 	case "vm", "system-container", "app-container":
 		return resource.status == "running" || resource.status == string(unifiedresources.StatusOnline)
@@ -2325,8 +2318,6 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 			return "Storage not found in current state (may have been removed)"
 		case "node":
 			return "Node not found in current state"
-		case "truenas":
-			return "TrueNAS system not found in current state"
 		case "agent":
 			return "Agent host not found in current state"
 		case "vm":
@@ -2345,10 +2336,11 @@ func (p *PatrolService) getResourceCurrentStateState(alert AlertInfo, snap patro
 	case "node":
 		return fmt.Sprintf("Node '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)
-	case "truenas":
-		return fmt.Sprintf("TrueNAS '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
-			resource.name, resource.cpu, resource.memory, resource.status)
 	case "agent":
+		if strings.EqualFold(strings.TrimSpace(resource.platform), "truenas") {
+			return fmt.Sprintf("TrueNAS system '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
+				resource.name, resource.cpu, resource.memory, resource.status)
+		}
 		return fmt.Sprintf("Agent host '%s': CPU %.1f%%, Memory %.1f%%, Status: %s",
 			resource.name, resource.cpu, resource.memory, resource.status)
 	case "vm":

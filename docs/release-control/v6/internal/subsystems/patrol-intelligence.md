@@ -222,6 +222,10 @@ counts canonical too. When the backend distinguishes API-backed TrueNAS
 systems from unified-agent hosts in Patrol run history, the run-history chips
 and selected-run breakdown must render `TrueNAS` separately instead of
 collapsing those systems back into the generic `agent` count.
+That run-history distinction must not reopen a parallel raw `truenas`
+resource-type contract in Patrol findings, scoped-run filters, or alert-backed
+resource state. Those payloads stay canonical `agent` plus platform context,
+while the separate `TrueNAS` count remains a run-history coverage detail.
 That summary-card/metrics-strip split also applies to findings counts. The
 primary assessment card may keep health as supporting context, but active
 findings, warning counts, and critical counts belong to the supporting metric

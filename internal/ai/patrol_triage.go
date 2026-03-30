@@ -743,7 +743,7 @@ func triageRuntimeResourceType(snap patrolRuntimeState, knownType, resourceID st
 	for _, host := range patrolHostAlertRows(snap) {
 		if strings.EqualFold(strings.TrimSpace(host.id), normalizedID) ||
 			strings.EqualFold(strings.TrimSpace(host.hostname), normalizedID) {
-			return host.resourceType
+			return patrolHostResourceType(host.platform)
 		}
 	}
 
@@ -767,11 +767,8 @@ func triageGuestResourceType(knownType, resourceID string) string {
 }
 
 func triageCanonicalResourceType(resourceType string) string {
-	switch normalized := strings.ToLower(strings.TrimSpace(resourceType)); normalized {
-	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent", "truenas", "physical_disk", "physical-disk":
-		if normalized == "physical-disk" {
-			return "physical_disk"
-		}
+	switch normalized := canonicalizeAICompatibilityResourceType(resourceType); normalized {
+	case "vm", "system-container", "app-container", "node", "storage", "docker-host", "pbs", "pmg", "agent", "physical_disk":
 		return normalized
 	default:
 		return ""
@@ -792,7 +789,7 @@ func triageConnectionResourceType(resourceID string) string {
 	case strings.HasPrefix(id, "docker-host:"), strings.HasPrefix(id, "docker-host/"), strings.HasPrefix(id, "app-container:"), strings.HasPrefix(id, "app-container/"), strings.HasPrefix(id, "docker-"), strings.Contains(id, "docker"):
 		return "docker-host"
 	case strings.HasPrefix(id, "truenas-"), strings.HasPrefix(id, "truenas:"), strings.HasPrefix(id, "truenas/"), strings.Contains(id, "truenas"):
-		return "truenas"
+		return "agent"
 	case strings.HasPrefix(id, "pbs-"), strings.HasPrefix(id, "pbs/"), strings.Contains(id, "pbs"):
 		return "pbs"
 	case strings.HasPrefix(id, "pmg-"), strings.HasPrefix(id, "pmg/"), strings.Contains(id, "pmg"):

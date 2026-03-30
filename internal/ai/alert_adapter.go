@@ -2,7 +2,6 @@ package ai
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -178,7 +177,7 @@ func inferResourceType(alertType string, metadata map[string]interface{}) string
 }
 
 func normalizeAlertResourceType(raw string) string {
-	resourceType := strings.ToLower(strings.TrimSpace(raw))
+	resourceType := canonicalizeAICompatibilityResourceType(raw)
 	if resourceType == "" {
 		return ""
 	}
@@ -200,6 +199,8 @@ func normalizeAlertResourceType(raw string) string {
 		return "node"
 	case "k8s-cluster":
 		return "k8s-cluster"
+	case "physical_disk":
+		return "physical_disk"
 	default:
 		return resourceType
 	}

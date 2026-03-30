@@ -37,7 +37,7 @@ func TestGetResourceCurrentState(t *testing.T) {
 		{alert: AlertInfo{ResourceType: "usage", Type: "usage", ResourceID: "storage-1", ResourceName: "local"}, assert: "Storage 'local'"},
 		{alert: AlertInfo{ResourceType: "node", ResourceID: "node-1", ResourceName: "node-1"}, assert: "Node 'node-1'"},
 		{alert: AlertInfo{ResourceType: "agent", ResourceID: "host-1", ResourceName: "host-1"}, assert: "Agent host 'host-1'"},
-		{alert: AlertInfo{ResourceType: "truenas", ResourceID: "truenas-1", ResourceName: "TrueNAS Main"}, assert: "TrueNAS 'truenas-1'"},
+		{alert: AlertInfo{ResourceType: "truenas", ResourceID: "truenas-1", ResourceName: "TrueNAS Main"}, assert: "TrueNAS system 'truenas-1'"},
 		{alert: AlertInfo{ResourceType: "vm", ResourceID: "vm-1", ResourceName: "vm-1"}, assert: "VM 'vm-1'"},
 		{alert: AlertInfo{ResourceType: "system-container", ResourceID: "ct-1", ResourceName: "ct-1"}, assert: "Container 'ct-1'"},
 		{alert: AlertInfo{ResourceType: "app-container", ResourceID: "dc-1", ResourceName: "web"}, assert: "Docker container 'web'"},

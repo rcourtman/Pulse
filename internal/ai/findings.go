@@ -438,7 +438,7 @@ func inferFindingResourceType(resourceID, resourceName string) string {
 }
 
 func canonicalFindingResourceType(resourceType string) string {
-	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	normalized := canonicalizeAICompatibilityResourceType(resourceType)
 	if normalized == "" {
 		return ""
 	}
@@ -460,6 +460,8 @@ func canonicalFindingResourceType(resourceType string) string {
 		return "agent"
 	case "node":
 		return "node"
+	case "physical_disk":
+		return "physical_disk"
 	default:
 		return normalized
 	}

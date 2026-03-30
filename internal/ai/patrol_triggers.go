@@ -3,7 +3,6 @@ package ai
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 
@@ -538,7 +537,7 @@ func slicesEqual(a, b []string) bool {
 }
 
 func canonicalPatrolScopeResourceType(resourceType string) string {
-	normalized := strings.ToLower(strings.TrimSpace(resourceType))
+	normalized := canonicalizeAICompatibilityResourceType(resourceType)
 	if normalized == "" {
 		return ""
 	}
@@ -560,6 +559,8 @@ func canonicalPatrolScopeResourceType(resourceType string) string {
 		return "agent"
 	case "node":
 		return "node"
+	case "physical_disk":
+		return "physical_disk"
 	default:
 		return normalized
 	}

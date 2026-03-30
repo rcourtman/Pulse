@@ -177,6 +177,7 @@ func TestNormalizeAlertResourceType(t *testing.T) {
 		{name: "legacy docker_container alias rejected", input: "docker_container", expected: ""},
 		{name: "legacy docker_service alias rejected", input: "docker_service", expected: ""},
 		{name: "legacy kubernetes_cluster alias rejected", input: "kubernetes_cluster", expected: ""},
+		{name: "truenas canonicalized to agent", input: "truenas", expected: "agent"},
 		{name: "trim and case normalize rejected", input: "  DOCKER-SERVICE  ", expected: ""},
 		{name: "unknown passthrough", input: "storage", expected: "storage"},
 	}

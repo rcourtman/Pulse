@@ -821,8 +821,14 @@ func TestTriageAlertChecksState_ResolvesTrueNASHostsToCanonicalResourceType(t *t
 	if len(flags) != 1 {
 		t.Fatalf("expected 1 alert-backed triage flag, got %d", len(flags))
 	}
-	if flags[0].ResourceType != "truenas" {
-		t.Fatalf("expected TrueNAS resource type, got %#v", flags[0])
+	if flags[0].ResourceType != "agent" {
+		t.Fatalf("expected canonical agent resource type, got %#v", flags[0])
+	}
+}
+
+func TestTriageRuntimeResourceType_CanonicalizesTrueNASConnectionIDsToAgent(t *testing.T) {
+	if got := triageRuntimeResourceType(patrolRuntimeState{}, "", "truenas-main"); got != "agent" {
+		t.Fatalf("expected truenas connection IDs to canonicalize to agent, got %q", got)
 	}
 }
 
