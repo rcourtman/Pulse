@@ -165,6 +165,9 @@ Owners:
 - release-control governance
 - owning subsystem contracts above
 
+Companion proof matrix:
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`
+
 Deliver:
 
 - version floor documented

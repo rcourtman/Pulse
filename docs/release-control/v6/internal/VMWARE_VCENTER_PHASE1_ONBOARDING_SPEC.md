@@ -5,6 +5,7 @@ Status: PLANNED
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`
 
 ## Intent
 
@@ -184,6 +185,9 @@ Pulse is ready to implement the shared VMware onboarding slice.
 Pulse is not yet ready to declare VMware support proven, because the live proof
 environment and resulting privilege/version validation are not currently
 available in this workspace.
+
+The companion live-proof checklist for the first real environment is
+`docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`.
 
 ## Primary Source Basis
 
