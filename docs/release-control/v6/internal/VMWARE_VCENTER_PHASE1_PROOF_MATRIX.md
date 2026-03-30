@@ -80,6 +80,11 @@ state with a dated proof record at:
 
 `docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-<YYYY-MM-DD>.md`
 
+Use
+`docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_RECORD_TEMPLATE.md`
+to capture both the `LOCAL_CAPABILITIES.md` entry shape and the successful
+proof record shape.
+
 That dated record should summarize:
 
 1. the environment alias and `LOCAL_CAPABILITIES.md` entry used
@@ -257,6 +262,10 @@ Capture all of the following outside git or in the dated release-control record:
 The expected success-record path is:
 
 `docs/release-control/v6/internal/records/vmware-vcenter-phase1-proof-<YYYY-MM-DD>.md`
+
+Use the companion template:
+
+`docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_RECORD_TEMPLATE.md`
 
 ## Failure Rules
 
