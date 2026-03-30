@@ -92,12 +92,16 @@ Owners:
 
 Slice contract:
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
 
 Deliver:
 
 - `vCenter` added only through the shared platform-connections workspace
 - one saved-connection contract for create, update, masked-secret preservation,
   test, health, and contribution summary
+- one backend contract for VMware session ownership, provider ownership, dual
+  API-family access, and stable failure classification under that same saved
+  connection model
 - explicit disabled/default behavior, reconnect semantics, and credential
   ownership on the shared platform-connections path
 

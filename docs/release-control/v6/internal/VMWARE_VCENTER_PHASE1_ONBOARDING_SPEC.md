@@ -4,6 +4,7 @@ Last updated: 2026-03-30
 Status: PLANNED
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`
 
@@ -142,11 +143,16 @@ of being hard-coded into a support claim up front:
    password or also a second VMware-native auth form
 2. whether certificate/thumbprint pinning should be required, optional, or
    deferred behind the shared TLS contract
-3. whether one session bootstrap can be reused cleanly across the vSphere
-   Automation API and the Virtual Infrastructure JSON API in Pulse’s poller
-   model, or whether the two API families need distinct authenticated clients
-4. the exact minimum privilege set required for inventory, datastore, alarm,
+3. the exact minimum privilege set required for inventory, datastore, alarm,
    event, snapshot, and performance reads
+
+The session-shape contract is now narrower than that unknown. The companion
+backend contract in
+`docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
+locks one safe rule for implementation: Pulse may keep distinct authenticated
+Automation API and VI JSON clients under one saved VMware connection and must
+not make phase-1 support depend on unproven shared-session reuse across those
+API families.
 
 ## Phase-1 Proof Prerequisites
 
@@ -188,6 +194,8 @@ available in this workspace.
 
 The companion live-proof checklist for the first real environment is
 `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_PROOF_MATRIX.md`.
+The companion backend contract for implementation is
+`docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`.
 
 ## Primary Source Basis
 

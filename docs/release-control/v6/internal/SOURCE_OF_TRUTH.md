@@ -534,6 +534,11 @@ acceptable phase-1 model if implementation starts.
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
    as the canonical shared-alert, shared-timeline, Assistant-read, and
    Assistant-control-exclusion boundary for the VMware phase-1 floor.
+12. Backend API/runtime contract:
+   If implementation starts, it should also follow
+   `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
+   as the canonical public API-boundary, session-ownership, provider-health,
+   and negative-space contract for the VMware phase-1 floor.
 
 ## Cross-Repo Contracts
 

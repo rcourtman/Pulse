@@ -94,6 +94,12 @@ still collapse onto one canonical VMware source classification and one
 provider-scoped identity model for hosts, VMs, and datastores. Monitoring must
 not leak `vcenter` versus `esxi` transport distinctions into downstream
 resource identity or source filtering.
+That same VMware monitoring boundary now also includes provider ownership. One
+saved VMware connection should map to one provider owner and one canonical poll
+health record, even if that provider keeps separate authenticated Automation
+API and VI JSON clients internally. Connection edits that change host, auth,
+TLS, or poll cadence must replace that live provider state instead of leaving
+stale VMware sessions resident until restart.
 That same VMware monitoring boundary now also includes the proof rule for
 history depth. `PerformanceManager.QueryPerfComposite` clearly supports
 host-plus-child metric collection, but exact VM and datastore history fidelity

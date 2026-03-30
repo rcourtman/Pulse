@@ -3553,6 +3553,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md",
           "kind": "file"
         },

@@ -4,6 +4,7 @@ Last updated: 2026-03-30
 Status: PLANNED
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
 - `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md`
@@ -120,6 +121,8 @@ Pass when:
 1. the draft validates through the shared VMware setup path
 2. failures classify clearly instead of collapsing into generic unknown error
 3. the path does not require a unified agent or direct `ESXi` routing
+4. a green result reflects the declared phase-1 floor rather than one partial
+   VMware API-family success
 
 ### `VC-2` Saved Connection Retest
 
@@ -134,6 +137,8 @@ Pass when:
 1. the saved-connection test succeeds without re-entering masked secrets
 2. edited saved-connection tests can reuse stored secrets server-side
 3. the list reflects refreshed last-success or last-error state
+4. the saved-connection contract still hides any dual-client runtime detail
+   behind one connection health result
 
 ### `VC-3` Inventory Projection Floor
 

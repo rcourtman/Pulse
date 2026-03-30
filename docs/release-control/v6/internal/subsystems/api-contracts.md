@@ -685,6 +685,21 @@ and see last-sync plus discovered contribution summaries on the same settings
 surface. Pulse does not promise a separate TrueNAS-only onboarding wizard,
 agent-required bootstrap, or public provider-local app/log/config APIs at this
 floor.
+That same infrastructure platform-connections contract is also the only
+acceptable public backend boundary for phase-1 VMware. If `vmware-vsphere`
+implementation starts, `/api/vmware/connections` must be the canonical
+admin-only route family for listing, creating, updating, deleting, and testing
+stored `vCenter` integrations under one saved-connection model. A green draft
+or saved-connection test must mean the declared phase-1 floor is reachable
+through the backend runtime, not merely that one of VMware's API families
+answered. Pulse may keep separate vSphere Automation API and VI JSON clients
+under that one saved connection, but the public API contract must hide that
+multi-client runtime detail behind one canonical health and contribution
+summary surface. Phase 1 must also keep the negative space explicit: no public
+`/api/vmware/hosts`, `/api/vmware/vms`, `/api/vmware/datastores`,
+`/api/vmware/events`, `/api/vmware/tasks`, or VMware control routes should be
+introduced while inventory, alerts, history, and Assistant reads still route
+through the shared canonical Pulse surfaces.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

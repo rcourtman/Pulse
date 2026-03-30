@@ -525,6 +525,12 @@ API-backed workspace, preserve the saved-connection test and health model, and
 keep direct `ESXi` out of the phase-1 route and install model. Lifecycle-
 adjacent flows must not invent a VMware-only setup shell or reframe unified-
 agent host install as the bootstrap requirement for VMware support.
+That same lifecycle-owned VMware workspace must also keep the backend-runtime
+shape hidden behind one operator-facing connection model. The settings surface
+may show one VMware connection's poll health, last error classification, and
+observed contribution summary, but it must not force the operator to manage
+separate Automation API versus VI JSON sessions or understand multi-client
+runtime wiring just to use the shared platform-connections path.
 That same infrastructure workspace boundary now also owns the first-run
 handoff copy for new operators. `InfrastructureWorkspace.tsx` must tell a new
 Pulse user to start with `Install on a host` to add the first monitored
