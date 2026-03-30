@@ -3999,6 +3999,16 @@
       ]
     },
     {
+      "id": "mobile-incident-companion-ia-v1",
+      "summary": "Pulse Mobile's primary product job is anywhere fleet awareness, incident triage, and safe governed action away from the desk. The public-facing IA centers on Home, Findings, Fleet, Approvals, and More, while Chat remains a contextual investigation tool rather than a top-level destination.",
+      "kind": "governance",
+      "decided_at": "2026-03-30",
+      "subsystem_ids": [],
+      "lane_ids": [
+        "L5"
+      ]
+    },
+    {
       "id": "platform-support-model-v1",
       "summary": "Pulse v6 platform support is governed by one canonical model: first-class platforms declare primary ingestion, canonical resource projections, and support-floor surfaces, while runtime variants such as Podman and transport helpers are not top-level platforms.",
       "kind": "architecture",
