@@ -45,7 +45,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     chartRange,
     setChartRange,
     diskData,
-    resId,
+    historyResourceId,
     attributeCards,
     historyCharts,
     metricResourceId,
@@ -148,7 +148,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
 
       {/* Historical charts */}
       <Show
-        when={resId()}
+        when={historyResourceId()}
         fallback={
           <div class={STORAGE_DETAIL_EMPTY_CLASS}>
             {getDiskDetailHistoryFallbackMessage()}
@@ -163,7 +163,7 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
                 <div class={STORAGE_DETAIL_CARD_CLASS}>
                   <HistoryChart
                     resourceType="disk"
-                    resourceId={resId()!}
+                    resourceId={historyResourceId()!}
                     metric={chart.metric}
                     label={chart.label}
                     unit={chart.unit}

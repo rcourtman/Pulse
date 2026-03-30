@@ -3,6 +3,7 @@ import type { Resource } from '@/types/resource';
 import {
   getPhysicalDiskNodeIdentity,
   matchesPhysicalDiskNode,
+  resolvePhysicalDiskHistoryResourceId,
   resolvePhysicalDiskMetricResourceId,
 } from '@/components/Storage/diskResourceUtils';
 
@@ -73,5 +74,37 @@ describe('diskResourceUtils', () => {
         '/dev/sda',
       ),
     ).toBe('existing-target');
+  });
+
+  it('resolves canonical physical disk history ids through metrics targets before raw hardware ids', () => {
+    expect(
+      resolvePhysicalDiskHistoryResourceId(
+        buildDisk({
+          metricsTarget: { resourceType: 'disk', resourceId: 'disk:truenas-main:sda' } as any,
+          physicalDisk: { serial: '', wwn: '' } as any,
+          platformData: {
+            physicalDisk: { serial: '', wwn: '' },
+          } as any,
+        }),
+      ),
+    ).toBe('disk:truenas-main:sda');
+
+    expect(
+      resolvePhysicalDiskHistoryResourceId(
+        buildDisk({
+          metricsTarget: undefined,
+          physicalDisk: { serial: 'SERIAL-1', wwn: '' } as any,
+        }),
+      ),
+    ).toBe('SERIAL-1');
+
+    expect(
+      resolvePhysicalDiskHistoryResourceId(
+        buildDisk({
+          metricsTarget: undefined,
+          physicalDisk: { serial: '', wwn: 'WWN-1' } as any,
+        }),
+      ),
+    ).toBe('WWN-1');
   });
 });

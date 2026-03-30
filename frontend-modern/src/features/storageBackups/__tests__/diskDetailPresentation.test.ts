@@ -104,7 +104,7 @@ describe('diskDetailPresentation', () => {
     ]);
     expect(DISK_DETAIL_LIVE_CHARTS.map((chart) => chart.label)).toEqual(['Read', 'Write', 'Busy']);
     expect(getDiskDetailLiveBadgeLabel()).toBe('Real-time');
-    expect(getDiskDetailHistoryFallbackMessage()).toContain('Pulse agent');
+    expect(getDiskDetailHistoryFallbackMessage()).toContain('stable identity');
 
     expect(
       getDiskDetailHistoryCharts({

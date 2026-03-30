@@ -68,7 +68,7 @@ export const DISK_DETAIL_LIVE_CHARTS: readonly DiskDetailLiveChartConfig[] = [
 export const getDiskDetailLiveBadgeLabel = (): string => 'Real-time';
 
 export const getDiskDetailHistoryFallbackMessage = (): string =>
-  'Install the Pulse agent for detailed SMART monitoring and historical charts.';
+  'Historical disk charts are unavailable until Pulse can resolve a stable identity for this disk.';
 
 export function getDiskDetailAttributeCards(
   disk: PhysicalDiskPresentationData,

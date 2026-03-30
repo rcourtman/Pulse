@@ -159,65 +159,70 @@ work extends shared components instead of creating new local variants.
    plus `tests/integration/tests/15-settings-shell-consistency.spec.ts`
 3. Update this contract when a new canonical UI pattern is adopted
 4. Remove local forks after the shared primitive is introduced
-5. When a settings route header and a top-level settings shell describe the same
+5. Keep shared feature-level presenters on capability truth. When reusable
+   presenters under `frontend-modern/src/features/` explain why a control,
+   chart, or detail surface is unavailable, they must describe the owned
+   identity or capability gap instead of prescribing a provider-local install
+   path that conflicts with API-backed platforms like TrueNAS.
+6. When a settings route header and a top-level settings shell describe the same
    commercial surface, keep them on the same shared presentation owner instead
    of allowing route metadata in `settingsHeaderMeta.ts` or labels in
    `settingsNavCatalog.ts` to drift into independent title or description copy,
    and keep adjacent settings-shell referrals such as
    `InfrastructureWorkspace.tsx` on that same shared owner instead of
    reintroducing local “go to Pulse Pro” variants.
-6. Keep hosted settings-shell framing imports safe for bundle initialization.
+7. Keep hosted settings-shell framing imports safe for bundle initialization.
    Self-hosted billing titles, descriptions, and referral copy used by
    `settingsHeaderMeta.ts`, `settingsNavCatalog.ts`, and adjacent settings
    shells must flow through
    `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
    instead of importing generic commercial presentation helpers directly into
    hosted settings route shells.
-7. Keep first-session dashboard empty-state copy on
+8. Keep first-session dashboard empty-state copy on
    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`, and make
    infrastructure setup guidance name the canonical destination explicitly
    instead of falling back to generic settings CTA labels.
-8. Keep the live first-session wizard on the canonical three-step runtime
+9. Keep the live first-session wizard on the canonical three-step runtime
    shape in `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
    (`Welcome`, `Security`, then `Install`), and keep the step indicator plus
    completion CTA language aligned with the governed infrastructure install
    workspace instead of regressing to a route jump that leaves the next action
    implicit.
-8. Keep the first welcome screen in
+10. Keep the first welcome screen in
    `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
    explicit about operator context. The shell must explain that the bootstrap
    token only unlocks first-run setup, state where the command should run, and
    adapt command/help text to detected Docker or containerized deployments
    instead of assuming the operator already knows which host or container owns
    the Pulse install.
-9. Keep the settings-shell infrastructure landing path aligned with that same
+11. Keep the settings-shell infrastructure landing path aligned with that same
    first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
    must treat `/settings` and the infrastructure settings tab as the canonical
    path to `/settings/infrastructure/install`, not to reporting/control, so
    the shell does not send first-time operators to the wrong infrastructure
    subview by default.
-10. Keep dashboard onboarding copy on the shared presentation owner in
+12. Keep dashboard onboarding copy on the shared presentation owner in
    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
    infrastructure empty state and the dashboard route's no-resources state
    must name the canonical install workspace explicitly, keep `Platform
    connections` visible as the API-backed alternative for Proxmox and
    TrueNAS, and expose the same first-host next step instead of falling back
    to passive “nothing here yet” wording.
-11. Keep the authenticated app root aligned with that same first-session path.
+13. Keep the authenticated app root aligned with that same first-session path.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
-12. Keep relay settings shell copy on the shared presentation owner in
+14. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability
     copy instead of drifting into separate rollout or pairing wording.
-13. Keep shared settings-shell legal and docs referrals on
+15. Keep shared settings-shell legal and docs referrals on
     `frontend-modern/src/utils/docsLinks.ts`. Shared settings surfaces such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
     privacy, security, proxy-auth, scope-reference, or Terms-of-Service links.
-14. Keep shared settings-shell telemetry transparency controls on the governed
+16. Keep shared settings-shell telemetry transparency controls on the governed
     general settings panel. Preview/reset affordances for anonymous telemetry
     must stay rendered inside
     `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
@@ -1538,3 +1543,9 @@ summary state. `useInfrastructureSettingsState.ts`,
 Proxmox/PBS/PMG/TrueNAS counts and availability from one shared infrastructure
 settings state source instead of letting the reporting summary and the
 provider-specific panel fetch the same TrueNAS connection state separately.
+That same shared feature-presentation boundary also owns storage disk-detail
+fallback messaging in `frontend-modern/src/features/storageBackups/`. Shared
+detail presenters must describe the actual capability or identity gap that
+prevents history from rendering, rather than reviving agent-install guidance
+on API-backed platforms like TrueNAS when the canonical disk metrics target is
+already the owning history path.

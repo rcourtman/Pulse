@@ -113,4 +113,44 @@ describe('DiskList', () => {
     fireEvent.click(screen.getByText('Cache SSD'));
     expect(screen.getByTestId('disk-detail')).toHaveTextContent('sdb');
   });
+
+  it('keeps api-backed TrueNAS disks on the canonical physical-disk surface even without hardware ids', () => {
+    render(() => (
+      <DiskList
+        disks={[
+          ({
+            ...buildDisk('sda', 'truenas-main', {
+              model: 'Seagate IronWolf',
+              serial: '',
+              wwn: '',
+            }),
+            platformType: 'truenas',
+            metricsTarget: { resourceType: 'disk', resourceId: 'disk:truenas-main:sda' },
+            sourceType: 'api',
+            identity: { hostname: 'truenas-main' },
+            canonicalIdentity: { hostname: 'truenas-main' },
+            platformData: {
+              sources: ['truenas'],
+              physicalDisk: {
+                serial: '',
+                wwn: '',
+              },
+            },
+          }) as Resource,
+        ]}
+        nodes={[
+          ({
+            ...buildNode('truenas-main', 'truenas-main'),
+            platformType: 'truenas',
+          }) as Resource,
+        ]}
+        selectedNode={null}
+        searchTerm=""
+      />
+    ));
+
+    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Seagate IronWolf'));
+    expect(screen.getByTestId('disk-detail')).toHaveTextContent('sda');
+  });
 });

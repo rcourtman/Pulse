@@ -12,7 +12,7 @@ vi.mock('@/stores/diskMetricsHistory', () => ({
   ],
 }));
 
-const buildDisk = (): Resource =>
+const buildDisk = (overrides: Partial<Resource> = {}): Resource =>
   ({
     id: 'disk-1',
     type: 'physical_disk',
@@ -40,6 +40,7 @@ const buildDisk = (): Resource =>
         reallocatedSectors: 0,
       },
     },
+    ...overrides,
   }) as unknown as Resource;
 
 describe('useDiskDetailModel', () => {
@@ -55,7 +56,7 @@ describe('useDiskDetailModel', () => {
     );
 
     expect(result.chartRange()).toBe('24h');
-    expect(result.resId()).toBe('SERIAL-1');
+    expect(result.historyResourceId()).toBe('agent-tower:sda');
     expect(result.metricResourceId()).toBe('agent-tower:sda');
     expect(result.attributeCards().length).toBeGreaterThan(0);
     expect(result.historyCharts().map((chart) => chart.metric)).toEqual([
@@ -74,5 +75,31 @@ describe('useDiskDetailModel', () => {
       { timestamp: 1000, value: 30, min: 30, max: 30 },
       { timestamp: 2000, value: 35, min: 35, max: 35 },
     ]);
+  });
+
+  it('keeps historical charts available for api-backed disks without serial or wwn when a canonical disk target exists', () => {
+    const [disk] = createSignal(
+      buildDisk({
+        metricsTarget: { resourceType: 'disk', resourceId: 'disk:truenas-main:sda' },
+        physicalDisk: {
+          devPath: '/dev/sda',
+          model: 'Seagate IronWolf',
+          serial: '',
+          wwn: '',
+          diskType: 'hdd',
+          temperature: 39,
+        },
+      } as Partial<Resource>),
+    );
+    const [nodes] = createSignal<Resource[]>([]);
+
+    const { result } = renderHook(() =>
+      useDiskDetailModel({
+        disk,
+        nodes,
+      }),
+    );
+
+    expect(result.historyResourceId()).toBe('disk:truenas-main:sda');
   });
 });

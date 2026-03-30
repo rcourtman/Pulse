@@ -6,6 +6,10 @@ type DiskPlatformData = {
     nodeName?: string;
     instance?: string;
   };
+  physicalDisk?: {
+    serial?: string;
+    wwn?: string;
+  };
 };
 
 export interface PhysicalDiskNodeIdentity {
@@ -14,6 +18,7 @@ export interface PhysicalDiskNodeIdentity {
 }
 
 const normalize = (value: string | null | undefined): string => value?.trim().toLowerCase() || '';
+const trim = (value: string | null | undefined): string => value?.trim() || '';
 
 export const getPhysicalDiskNodeIdentity = (resource: Resource): PhysicalDiskNodeIdentity => {
   const platformData = ((resource.platformData as DiskPlatformData | undefined) ||
@@ -71,4 +76,19 @@ export const resolvePhysicalDiskMetricResourceId = (
   if (!agentId) return null;
   const deviceName = devPath.replace('/dev/', '');
   return `${agentId}:${deviceName}`;
+};
+
+export const resolvePhysicalDiskHistoryResourceId = (disk: Resource): string | null => {
+  const metricsTargetType = normalize(disk.metricsTarget?.resourceType);
+  const metricsTargetId = trim(disk.metricsTarget?.resourceId);
+  if (metricsTargetId && (!metricsTargetType || metricsTargetType === 'disk')) {
+    return metricsTargetId;
+  }
+
+  const platformData = ((disk.platformData as DiskPlatformData | undefined) || {}) as DiskPlatformData;
+  const serial = trim(disk.physicalDisk?.serial || platformData.physicalDisk?.serial);
+  if (serial) return serial;
+
+  const wwn = trim(disk.physicalDisk?.wwn || platformData.physicalDisk?.wwn);
+  return wwn || null;
 };

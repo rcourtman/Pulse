@@ -10,7 +10,10 @@ import {
 } from '@/features/storageBackups/diskDetailPresentation';
 import { getDiskMetricHistory, getDiskMetricsVersion } from '@/stores/diskMetricsHistory';
 import type { Resource } from '@/types/resource';
-import { resolvePhysicalDiskMetricResourceId } from './diskResourceUtils';
+import {
+  resolvePhysicalDiskHistoryResourceId,
+  resolvePhysicalDiskMetricResourceId,
+} from './diskResourceUtils';
 
 type UseDiskDetailModelOptions = {
   disk: Accessor<Resource>;
@@ -35,7 +38,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
   const diskData = createMemo<PhysicalDiskPresentationData>(() =>
     extractPhysicalDiskPresentationData(options.disk()),
   );
-  const resId = createMemo(() => diskData().serial || diskData().wwn || null);
+  const historyResourceId = createMemo(() => resolvePhysicalDiskHistoryResourceId(options.disk()));
   const attributeCards = createMemo(() => getDiskDetailAttributeCards(diskData()));
   const historyCharts = createMemo(() => getDiskDetailHistoryCharts(diskData()));
   const metricResourceId = createMemo(() =>
@@ -68,7 +71,7 @@ export const useDiskDetailModel = (options: UseDiskDetailModelOptions) => {
     chartRange,
     setChartRange,
     diskData,
-    resId,
+    historyResourceId,
     attributeCards,
     historyCharts,
     metricResourceId,

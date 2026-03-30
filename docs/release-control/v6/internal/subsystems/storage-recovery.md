@@ -138,6 +138,13 @@ contract in `frontend-modern/src/utils/storageSources.ts`: storage pages and
 cross-surface storage links must reuse one canonical ordering, label, tone, and
 default-option model for sources like PVE, PBS, Ceph, and TrueNAS instead of
 re-sorting or re-presenting those source options locally.
+That same storage ownership also includes the physical-disk detail identity
+contract in `frontend-modern/src/components/Storage/` and
+`frontend-modern/src/features/storageBackups/`: historical disk charts must
+resolve through the canonical disk metrics target when one exists, then fall
+back to stable hardware identity, and operator-facing fallback copy must
+describe that identity gap instead of prescribing agent installation on
+API-backed platforms like TrueNAS.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
