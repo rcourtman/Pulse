@@ -264,6 +264,9 @@ func newVMwareUnifiedQueryProvider(t *testing.T) *registryUnifiedQueryProvider {
 	t.Helper()
 
 	now := time.Now().UTC()
+	diskUsed := int64(512 * 1024 * 1024 * 1024)
+	diskTotal := int64(1024 * 1024 * 1024 * 1024)
+	datastoreAccessible := true
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestRecords(unifiedresources.SourceVMware, []unifiedresources.IngestRecord{
 		{
@@ -310,7 +313,62 @@ func newVMwareUnifiedQueryProvider(t *testing.T) *registryUnifiedQueryProvider {
 				IPAddresses: []string{"192.0.2.50"},
 			},
 		},
+		{
+			SourceID: "vc-1:datastore:datastore-11",
+			Resource: unifiedresources.Resource{
+				Type:      unifiedresources.ResourceTypeStorage,
+				Name:      "nvme-primary",
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Metrics: &unifiedresources.ResourceMetrics{
+					Disk: &unifiedresources.MetricValue{
+						Used:    &diskUsed,
+						Total:   &diskTotal,
+						Percent: 50,
+					},
+				},
+				Storage: &unifiedresources.StorageMeta{
+					Type:     "vmfs",
+					Platform: "vmware-vsphere",
+					Topology: "datastore",
+					Enabled:  true,
+					Active:   true,
+					Shared:   false,
+					Nodes:    []string{"esxi-01.lab.local"},
+				},
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:        "vc-1",
+					ConnectionName:      "Lab VC",
+					ManagedObjectID:     "datastore-11",
+					EntityType:          "datastore",
+					DatastoreAccessible: &datastoreAccessible,
+				},
+			},
+		},
 	})
+	return &registryUnifiedQueryProvider{ResourceRegistry: registry}
+}
+
+func newCommandCapableAgentQueryProvider() *registryUnifiedQueryProvider {
+	now := time.Now().UTC()
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources([]unifiedresources.Resource{{
+		ID:        "agent:lab-host",
+		Type:      unifiedresources.ResourceTypeAgent,
+		Name:      "lab-host",
+		Status:    unifiedresources.StatusOnline,
+		LastSeen:  now,
+		UpdatedAt: now,
+		Agent: &unifiedresources.AgentData{
+			Hostname:        "lab-host",
+			Platform:        "linux",
+			CommandsEnabled: true,
+		},
+		Identity: unifiedresources.ResourceIdentity{
+			Hostnames: []string{"lab-host"},
+		},
+	}})
 	return &registryUnifiedQueryProvider{ResourceRegistry: registry}
 }
 
@@ -326,6 +384,15 @@ func TestCanonicalQueryListType_StrictV6Tokens(t *testing.T) {
 	}
 	if got := canonicalQueryListType("system"); got != "systems" {
 		t.Fatalf("canonicalQueryListType(system) = %q, want systems", got)
+	}
+	if got := canonicalQueryListType("agent"); got != "systems" {
+		t.Fatalf("canonicalQueryListType(agent) = %q, want systems", got)
+	}
+	if got := canonicalQueryListType("agents"); got != "systems" {
+		t.Fatalf("canonicalQueryListType(agents) = %q, want systems", got)
+	}
+	if got := canonicalQueryListType("storage"); got != "storage-pools" {
+		t.Fatalf("canonicalQueryListType(storage) = %q, want storage-pools", got)
 	}
 	if got := canonicalQueryListType("storage-pool"); got != "storage-pools" {
 		t.Fatalf("canonicalQueryListType(storage-pool) = %q, want storage-pools", got)
@@ -348,24 +415,39 @@ func TestCanonicalQueryTopologyInclude_StrictV6Tokens(t *testing.T) {
 }
 
 func TestCanonicalQuerySearchType_StrictV6Tokens(t *testing.T) {
+	if got := canonicalQuerySearchType("agent"); got != "agent" {
+		t.Fatalf("canonicalQuerySearchType(agent) = %q, want agent", got)
+	}
 	if got := canonicalQuerySearchType("docker-host"); got != "docker-host" {
 		t.Fatalf("canonicalQuerySearchType(docker-host) = %q, want docker-host", got)
 	}
 	if got := canonicalQuerySearchType("docker_host"); got != "docker_host" {
 		t.Fatalf("canonicalQuerySearchType(docker_host) = %q, want docker_host", got)
 	}
-	if got := canonicalQuerySearchType("systems"); got != "system" {
-		t.Fatalf("canonicalQuerySearchType(systems) = %q, want system", got)
+	if got := canonicalQuerySearchType("systems"); got != "agent" {
+		t.Fatalf("canonicalQuerySearchType(systems) = %q, want agent", got)
 	}
-	if got := canonicalQuerySearchType("storage-pools"); got != "storage-pool" {
-		t.Fatalf("canonicalQuerySearchType(storage-pools) = %q, want storage-pool", got)
+	if got := canonicalQuerySearchType("system"); got != "agent" {
+		t.Fatalf("canonicalQuerySearchType(system) = %q, want agent", got)
+	}
+	if got := canonicalQuerySearchType("storage"); got != "storage" {
+		t.Fatalf("canonicalQuerySearchType(storage) = %q, want storage", got)
+	}
+	if got := canonicalQuerySearchType("storage-pools"); got != "storage" {
+		t.Fatalf("canonicalQuerySearchType(storage-pools) = %q, want storage", got)
 	}
 	if got := canonicalQuerySearchType("physical-disks"); got != "physical-disk" {
 		t.Fatalf("canonicalQuerySearchType(physical-disks) = %q, want physical-disk", got)
 	}
 }
 
-func TestCanonicalQueryHelpers_DoNotTranslateLegacyAliases(t *testing.T) {
+func TestCanonicalQueryHelpers_NormalizeCanonicalAgentAndStorageAliases(t *testing.T) {
+	if got := canonicalQueryResourceType("system"); got != "agent" {
+		t.Fatalf("canonicalQueryResourceType(system) = %q, want agent", got)
+	}
+	if got := canonicalQueryResourceType("storage-pool"); got != "storage" {
+		t.Fatalf("canonicalQueryResourceType(storage-pool) = %q, want storage", got)
+	}
 	if got := canonicalQueryResourceType("container"); got != "container" {
 		t.Fatalf("canonicalQueryResourceType(container) = %q, want container", got)
 	}
@@ -898,17 +980,17 @@ func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 
 	searchPool, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
 		"query": "archive",
-		"type":  "storage-pool",
+		"type":  "storage",
 	})
 	if err != nil {
 		t.Fatalf("search storage pools: unexpected error: %v", err)
 	}
 	var searchResp ResourceSearchResponse
 	if err := json.Unmarshal([]byte(searchPool.Content[0].Text), &searchResp); err != nil {
-		t.Fatalf("decode storage-pool search response: %v", err)
+		t.Fatalf("decode storage search response: %v", err)
 	}
-	if len(searchResp.Matches) != 1 || searchResp.Matches[0].Type != "storage-pool" || searchResp.Matches[0].Name != "archive" || searchResp.Matches[0].Platform != "truenas" {
-		t.Fatalf("unexpected storage-pool search response: %+v", searchResp.Matches)
+	if len(searchResp.Matches) != 1 || searchResp.Matches[0].Type != "storage" || searchResp.Matches[0].Name != "archive" || searchResp.Matches[0].Platform != "truenas" {
+		t.Fatalf("unexpected storage search response: %+v", searchResp.Matches)
 	}
 
 	searchDisk, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
@@ -927,18 +1009,18 @@ func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 	}
 
 	getSystem, err := executor.executeGetResource(context.Background(), map[string]interface{}{
-		"resource_type": "system",
+		"resource_type": "agent",
 		"resource_id":   "truenas-main",
 	})
 	if err != nil {
-		t.Fatalf("get system: unexpected error: %v", err)
+		t.Fatalf("get agent: unexpected error: %v", err)
 	}
 	var systemRes ResourceResponse
 	if err := json.Unmarshal([]byte(getSystem.Content[0].Text), &systemRes); err != nil {
-		t.Fatalf("decode system resource: %v", err)
+		t.Fatalf("decode agent resource: %v", err)
 	}
-	if systemRes.Type != "system" || systemRes.Platform != "truenas" || systemRes.Host != "truenas-main" {
-		t.Fatalf("unexpected canonical system resource: %+v", systemRes)
+	if systemRes.Type != "agent" || systemRes.Platform != "truenas" || systemRes.Host != "truenas-main" {
+		t.Fatalf("unexpected canonical agent resource: %+v", systemRes)
 	}
 
 	getApp, err := executor.executeGetResource(context.Background(), map[string]interface{}{
@@ -1052,6 +1134,117 @@ func TestExecuteGetResource_RegistersVMwareVMAsReadOnly(t *testing.T) {
 	}
 }
 
+func TestExecuteGetResource_RegistersVMwareAgentAsReadOnly(t *testing.T) {
+	provider := newVMwareUnifiedQueryProvider(t)
+	hostResources := provider.GetByType(unifiedresources.ResourceTypeAgent)
+	if len(hostResources) != 1 {
+		t.Fatalf("expected one VMware host resource, got %d", len(hostResources))
+	}
+
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	result, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "agent",
+		"resource_id":   hostResources[0].ID,
+	})
+	if err != nil {
+		t.Fatalf("get agent: unexpected error: %v", err)
+	}
+
+	var response ResourceResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Type != "agent" || response.Platform != "vmware-vsphere" || response.Host != "esxi-01.lab.local" {
+		t.Fatalf("unexpected VMware agent response: %+v", response)
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("esxi-01.lab.local")
+	if !found {
+		t.Fatal("expected resolved context to include VMware host by alias")
+	}
+	if info.GetKind() != "agent" {
+		t.Fatalf("expected agent kind, got %q", info.GetKind())
+	}
+	if info.GetAdapter() != "vmware-vsphere" {
+		t.Fatalf("expected VMware adapter, got %q", info.GetAdapter())
+	}
+	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
+		t.Fatalf("expected VMware host to register read-only actions, got %v", info.GetAllowedActions())
+	}
+
+	controlResult, err := executor.executeControl(context.Background(), map[string]interface{}{
+		"type":        "resource",
+		"resource_id": "esxi-01.lab.local",
+		"action":      "restart",
+	})
+	if err != nil {
+		t.Fatalf("executeControl(type=resource): unexpected error: %v", err)
+	}
+	if !controlResult.IsError {
+		t.Fatalf("expected VMware host restart to be rejected, got %+v", controlResult)
+	}
+	if !strings.Contains(controlResult.Content[0].Text, "not permitted") {
+		t.Fatalf("expected read-only rejection, got %q", controlResult.Content[0].Text)
+	}
+}
+
+func TestExecuteGetResource_RegistersVMwareStorageAsReadOnly(t *testing.T) {
+	provider := newVMwareUnifiedQueryProvider(t)
+	storageResources := provider.GetByType(unifiedresources.ResourceTypeStorage)
+	if len(storageResources) != 1 {
+		t.Fatalf("expected one VMware storage resource, got %d", len(storageResources))
+	}
+
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	result, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "storage",
+		"resource_id":   storageResources[0].ID,
+	})
+	if err != nil {
+		t.Fatalf("get storage: unexpected error: %v", err)
+	}
+
+	var response ResourceResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Type != "storage" || response.Platform != "vmware-vsphere" || response.Name != "nvme-primary" {
+		t.Fatalf("unexpected VMware storage response: %+v", response)
+	}
+	if response.Disk == nil || response.Disk.TotalGB == 0 {
+		t.Fatalf("expected VMware storage capacity details, got %+v", response)
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("nvme-primary")
+	if !found {
+		t.Fatal("expected resolved context to include VMware storage by alias")
+	}
+	if info.GetKind() != "storage" {
+		t.Fatalf("expected storage kind, got %q", info.GetKind())
+	}
+	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
+		t.Fatalf("expected VMware storage to register read-only actions, got %v", info.GetAllowedActions())
+	}
+}
+
 func TestExecuteSearchResources_RegistersVMwareVMAsReadOnly(t *testing.T) {
 	provider := newVMwareUnifiedQueryProvider(t)
 	resolved := &mockResolvedContext{
@@ -1089,6 +1282,118 @@ func TestExecuteSearchResources_RegistersVMwareVMAsReadOnly(t *testing.T) {
 	}
 	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
 		t.Fatalf("expected VMware search registration to remain read-only, got %v", info.GetAllowedActions())
+	}
+}
+
+func TestExecuteSearchResources_RegistersVMwareAgentAsReadOnly(t *testing.T) {
+	provider := newVMwareUnifiedQueryProvider(t)
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	result, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "esxi-01",
+		"type":  "agent",
+	})
+	if err != nil {
+		t.Fatalf("search agent: unexpected error: %v", err)
+	}
+
+	var response ResourceSearchResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode search response: %v", err)
+	}
+	if len(response.Matches) != 1 {
+		t.Fatalf("expected one VMware host search match, got %+v", response.Matches)
+	}
+	if response.Matches[0].Type != "agent" || response.Matches[0].Platform != "vmware-vsphere" {
+		t.Fatalf("unexpected VMware host search match: %+v", response.Matches[0])
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("esxi-01.lab.local")
+	if !found {
+		t.Fatal("expected VMware host search result to register in resolved context")
+	}
+	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
+		t.Fatalf("expected VMware host search registration to remain read-only, got %v", info.GetAllowedActions())
+	}
+}
+
+func TestExecuteSearchResources_RegistersVMwareStorageAsReadOnly(t *testing.T) {
+	provider := newVMwareUnifiedQueryProvider(t)
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	result, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "nvme-primary",
+		"type":  "storage",
+	})
+	if err != nil {
+		t.Fatalf("search storage: unexpected error: %v", err)
+	}
+
+	var response ResourceSearchResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode search response: %v", err)
+	}
+	if len(response.Matches) != 1 {
+		t.Fatalf("expected one VMware storage search match, got %+v", response.Matches)
+	}
+	if response.Matches[0].Type != "storage" || response.Matches[0].Platform != "vmware-vsphere" {
+		t.Fatalf("unexpected VMware storage search match: %+v", response.Matches[0])
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("nvme-primary")
+	if !found {
+		t.Fatal("expected VMware storage search result to register in resolved context")
+	}
+	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
+		t.Fatalf("expected VMware storage search registration to remain read-only, got %v", info.GetAllowedActions())
+	}
+}
+
+func TestExecuteGetResource_RegistersCommandCapableAgentForExec(t *testing.T) {
+	provider := newCommandCapableAgentQueryProvider()
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	_, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "agent",
+		"resource_id":   "lab-host",
+	})
+	if err != nil {
+		t.Fatalf("get agent: unexpected error: %v", err)
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("lab-host")
+	if !found {
+		t.Fatal("expected command-capable agent to register in resolved context")
+	}
+	allowed := strings.Join(info.GetAllowedActions(), ",")
+	for _, action := range []string{"query", "get", "exec"} {
+		if !strings.Contains(allowed, action) {
+			t.Fatalf("expected allowed actions to include %q, got %v", action, info.GetAllowedActions())
+		}
 	}
 }
 

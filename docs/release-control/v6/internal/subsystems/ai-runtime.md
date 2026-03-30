@@ -371,10 +371,13 @@ when policy redaction covers aliases, hostnames, or platform IDs instead of
 persisting raw resource labels into cached AI facts.
 That same `pulse_query` boundary now also owns canonical resource coverage for
 API-backed platforms such as TrueNAS. The runtime must expose canonical
-`system`, `app-container`, `storage-pool`, and `physical-disk` views through
-the shared unified-resource model instead of falling back to Proxmox- or
-Docker-local enumerations when a platform projects onto canonical host,
-storage, disk, or workload contracts.
+`agent`, `app-container`, `storage`, and `physical-disk` resource views
+through the shared unified-resource model instead of falling back to Proxmox-
+or Docker-local enumerations when a platform projects onto canonical host,
+storage, disk, or workload contracts. Compatibility aliases such as
+`system` and `storage-pool` may still be accepted at the `pulse_query`
+boundary, but the governed runtime contract is the canonical `agent` /
+`storage` read path and the resolved-context registration emitted from it.
 That same runtime contract applies to resource-native diagnostics. When
 resolved context points at an API-backed canonical `app-container` such as a
 TrueNAS app, chat/runtime prompt hints and tool execution must route log reads

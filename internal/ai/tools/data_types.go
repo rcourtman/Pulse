@@ -238,7 +238,7 @@ func (r ResourceSearchResponse) NormalizeCollections() ResourceSearchResponse {
 // ResourceMatch is a compact match result for pulse_search_resources
 type ResourceMatch struct {
 	GovernedResourceMetadata
-	Type           string `json:"type"` // "node", "vm", "system-container", "app-container", "docker-host"
+	Type           string `json:"type"` // "agent", "node", "vm", "system-container", "app-container", "docker-host", "storage"
 	ID             string `json:"id,omitempty"`
 	Name           string `json:"name"`
 	Status         string `json:"status,omitempty"`
@@ -659,7 +659,7 @@ type TopologySummary struct {
 // ResourceResponse is returned by pulse_get_resource
 type ResourceResponse struct {
 	GovernedResourceMetadata
-	Type            string            `json:"type"` // "vm", "system-container", "app-container"
+	Type            string            `json:"type"` // "agent", "vm", "system-container", "app-container", "storage"
 	ID              string            `json:"id"`
 	Name            string            `json:"name"`
 	Status          string            `json:"status"`

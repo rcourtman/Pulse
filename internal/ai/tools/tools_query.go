@@ -2022,8 +2022,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"resource_type": {
 						Type:        "string",
-						Description: "Resource type. For get: 'system', 'vm', 'system-container', 'app-container'. For config: 'vm', 'system-container', or supported API-backed 'app-container'. For search: use type or resource_type with canonical values.",
-						Enum:        []string{"system", "vm", "system-container", "app-container", "node", "docker-host", "storage-pool", "physical-disk"},
+						Description: "Resource type. For get/search, prefer canonical values: 'agent', 'vm', 'system-container', 'app-container', 'storage', 'physical-disk', 'node', and 'docker-host'. Compatibility aliases 'system' and 'storage-pool' are still accepted. For config: 'vm', 'system-container', or supported API-backed 'app-container'.",
+						Enum:        []string{"agent", "system", "vm", "system-container", "app-container", "node", "docker-host", "storage", "storage-pool", "physical-disk"},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -2031,8 +2031,8 @@ func (e *PulseToolExecutor) registerQueryTools() {
 					},
 					"type": {
 						Type:        "string",
-						Description: "Filter by type (for action: list/search): 'systems', 'nodes', 'vms', 'system-containers', 'app-containers', 'docker-hosts', 'storage-pools', 'physical-disks', 'kubernetes', 'k8s-clusters', 'k8s-nodes', 'k8s-pods', 'k8s-deployments'",
-						Enum:        []string{"systems", "nodes", "vms", "system-containers", "app-containers", "docker-hosts", "storage-pools", "physical-disks", "kubernetes", "k8s-clusters", "k8s-nodes", "k8s-pods", "k8s-deployments"},
+						Description: "Filter by type. For action=list, use plural families such as 'agents', 'systems', 'nodes', 'vms', 'system-containers', 'app-containers', 'docker-hosts', 'storages', 'storage-pools', and 'physical-disks'. For action=search, singular canonical kinds such as 'agent' and 'storage' are also accepted.",
+						Enum:        []string{"agent", "agents", "systems", "nodes", "vms", "system-containers", "app-containers", "docker-hosts", "storage", "storages", "storage-pools", "physical-disks", "kubernetes", "k8s-clusters", "k8s-nodes", "k8s-pods", "k8s-deployments"},
 					},
 					"status": {
 						Type:        "string",
@@ -2110,12 +2110,19 @@ func (e *PulseToolExecutor) registerQueryTools() {
 }
 
 func canonicalQueryResourceType(resourceType string) string {
-	return strings.ToLower(strings.TrimSpace(resourceType))
+	switch strings.ToLower(strings.TrimSpace(resourceType)) {
+	case "system":
+		return "agent"
+	case "storage-pool":
+		return "storage"
+	default:
+		return strings.ToLower(strings.TrimSpace(resourceType))
+	}
 }
 
 func canonicalQueryListType(filterType string) string {
 	switch strings.ToLower(strings.TrimSpace(filterType)) {
-	case "system":
+	case "system", "agent", "agents":
 		return "systems"
 	case "node":
 		return "nodes"
@@ -2127,7 +2134,7 @@ func canonicalQueryListType(filterType string) string {
 		return "app-containers"
 	case "docker-host":
 		return "docker-hosts"
-	case "storage-pool":
+	case "storage", "storages", "storage-pool":
 		return "storage-pools"
 	case "physical-disk":
 		return "physical-disks"
@@ -2155,16 +2162,16 @@ func canonicalQueryTopologyInclude(include string) string {
 
 func canonicalQuerySearchType(typeFilter string) string {
 	switch strings.ToLower(strings.TrimSpace(typeFilter)) {
-	case "systems":
-		return "system"
+	case "agent", "agents", "system", "systems":
+		return "agent"
 	case "system-containers":
 		return "system-container"
 	case "app-containers":
 		return "app-container"
 	case "docker-hosts":
 		return "docker-host"
-	case "storage-pools":
-		return "storage-pool"
+	case "storage", "storages", "storage-pool", "storage-pools":
+		return "storage"
 	case "physical-disks":
 		return "physical-disk"
 	case "docker-host":
@@ -2378,6 +2385,191 @@ func readOnlyResourceActions() []string {
 	return []string{"query", "get"}
 }
 
+func commandCapableAgentActions(resource unifiedresources.Resource) []string {
+	if resource.Agent != nil && resource.Agent.CommandsEnabled {
+		return []string{"query", "get", "exec"}
+	}
+	return readOnlyResourceActions()
+}
+
+func canonicalResolvedProviderUID(kind string, resource unifiedresources.Resource, fallbacks ...string) string {
+	id := strings.TrimSpace(resource.ID)
+	prefix := strings.TrimSpace(kind) + ":"
+	if strings.HasPrefix(id, prefix) {
+		return strings.TrimSpace(strings.TrimPrefix(id, prefix))
+	}
+	for _, fallback := range fallbacks {
+		if fallback = strings.TrimSpace(fallback); fallback != "" {
+			return fallback
+		}
+	}
+	return id
+}
+
+func canonicalAgentHost(resource unifiedresources.Resource) string {
+	if resource.Agent != nil && strings.TrimSpace(resource.Agent.Hostname) != "" {
+		return strings.TrimSpace(resource.Agent.Hostname)
+	}
+	if resource.TrueNAS != nil && strings.TrimSpace(resource.TrueNAS.Hostname) != "" {
+		return strings.TrimSpace(resource.TrueNAS.Hostname)
+	}
+	for _, hostname := range resource.Identity.Hostnames {
+		if hostname = strings.TrimSpace(hostname); hostname != "" {
+			return hostname
+		}
+	}
+	return strings.TrimSpace(resource.Name)
+}
+
+func canonicalAgentManagedID(resource unifiedresources.Resource) string {
+	if resource.VMware != nil && strings.EqualFold(strings.TrimSpace(resource.VMware.EntityType), "host") {
+		connectionID := strings.TrimSpace(resource.VMware.ConnectionID)
+		managedObjectID := strings.TrimSpace(resource.VMware.ManagedObjectID)
+		if connectionID != "" && managedObjectID != "" {
+			return connectionID + ":host:" + managedObjectID
+		}
+		return managedObjectID
+	}
+	return ""
+}
+
+func canonicalAgentSearchCandidates(resource unifiedresources.Resource) []string {
+	candidates := []string{
+		resourceDisplayName(resource),
+		strings.TrimSpace(resource.ID),
+		canonicalAgentManagedID(resource),
+		canonicalResourcePlatform(resource),
+	}
+	candidates = append(candidates, resourceHostCandidates(resource)...)
+	if resource.Agent != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.Agent.AgentID), strings.TrimSpace(resource.Agent.MachineID))
+	}
+	if resource.VMware != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.VMware.ConnectionName), strings.TrimSpace(resource.VMware.HostUUID))
+	}
+	return appendUniqueStrings(nil, candidates...)
+}
+
+func canonicalAgentRegistration(resource unifiedresources.Resource) (ResourceRegistration, bool) {
+	name := strings.TrimSpace(resourceDisplayName(resource))
+	providerUID := canonicalResolvedProviderUID("agent", resource, canonicalAgentManagedID(resource), canonicalAgentHost(resource))
+	if name == "" || providerUID == "" {
+		return ResourceRegistration{}, false
+	}
+
+	executorID := firstNonEmptyString(canonicalAgentHost(resource), name, providerUID)
+	adapter := canonicalResourcePlatform(resource)
+	if resource.Agent != nil && resource.Agent.CommandsEnabled {
+		adapter = "direct"
+	}
+	return ResourceRegistration{
+		Kind:        "agent",
+		ProviderUID: providerUID,
+		Name:        name,
+		Aliases:     canonicalAgentSearchCandidates(resource),
+		Executors: []ExecutorRegistration{{
+			ExecutorID: executorID,
+			Adapter:    adapter,
+			Actions:    commandCapableAgentActions(resource),
+			Priority:   10,
+		}},
+	}, true
+}
+
+func canonicalStorageManagedID(resource unifiedresources.Resource) string {
+	if resource.VMware != nil && strings.EqualFold(strings.TrimSpace(resource.VMware.EntityType), "datastore") {
+		connectionID := strings.TrimSpace(resource.VMware.ConnectionID)
+		managedObjectID := strings.TrimSpace(resource.VMware.ManagedObjectID)
+		if connectionID != "" && managedObjectID != "" {
+			return connectionID + ":datastore:" + managedObjectID
+		}
+		return managedObjectID
+	}
+	return ""
+}
+
+func canonicalStorageHost(resource unifiedresources.Resource) string {
+	if parent := strings.TrimSpace(resource.ParentName); parent != "" {
+		return parent
+	}
+	if resource.Storage != nil && len(resource.Storage.Nodes) == 1 {
+		if node := strings.TrimSpace(resource.Storage.Nodes[0]); node != "" {
+			return node
+		}
+	}
+	return ""
+}
+
+func canonicalStorageSearchCandidates(resource unifiedresources.Resource) []string {
+	candidates := []string{
+		resourceDisplayName(resource),
+		strings.TrimSpace(resource.ID),
+		canonicalStorageManagedID(resource),
+		canonicalResourcePlatform(resource),
+		canonicalStorageHost(resource),
+	}
+	if resource.Storage != nil {
+		candidates = append(candidates, resource.Storage.Type, resource.Storage.Content, resource.Storage.Path)
+		candidates = append(candidates, resource.Storage.Nodes...)
+	}
+	if resource.VMware != nil {
+		candidates = append(candidates, strings.TrimSpace(resource.VMware.ConnectionName), strings.TrimSpace(resource.VMware.DatacenterName))
+	}
+	candidates = append(candidates, resource.Tags...)
+	return appendUniqueStrings(nil, candidates...)
+}
+
+func canonicalStorageRegistration(resource unifiedresources.Resource) (ResourceRegistration, bool) {
+	name := strings.TrimSpace(resourceDisplayName(resource))
+	providerUID := canonicalResolvedProviderUID("storage", resource, canonicalStorageManagedID(resource), name)
+	if name == "" || providerUID == "" {
+		return ResourceRegistration{}, false
+	}
+
+	executorID := firstNonEmptyString(canonicalStorageHost(resource), name, providerUID)
+	return ResourceRegistration{
+		Kind:        "storage",
+		ProviderUID: providerUID,
+		Name:        name,
+		Aliases:     canonicalStorageSearchCandidates(resource),
+		Executors: []ExecutorRegistration{{
+			ExecutorID: executorID,
+			Adapter:    canonicalResourcePlatform(resource),
+			Actions:    readOnlyResourceActions(),
+			Priority:   10,
+		}},
+	}, true
+}
+
+func findCanonicalResourceByID(resources []unifiedresources.Resource, resourceID string) (unifiedresources.Resource, bool) {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return unifiedresources.Resource{}, false
+	}
+	for _, resource := range resources {
+		if strings.EqualFold(strings.TrimSpace(resource.ID), resourceID) {
+			return resource, true
+		}
+	}
+	return unifiedresources.Resource{}, false
+}
+
+func matchesCanonicalResourceReference(resource unifiedresources.Resource, resourceID string, additionalCandidates ...string) bool {
+	if matchesCanonicalResourceID(resource, resourceID) {
+		return true
+	}
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return false
+	}
+	for _, candidate := range additionalCandidates {
+		if strings.EqualFold(strings.TrimSpace(candidate), resourceID) {
+			return true
+		}
+	}
+	return false
+}
+
 func canonicalGuestResourceType(kind string) (unifiedresources.ResourceType, bool) {
 	switch strings.TrimSpace(kind) {
 	case "vm":
@@ -2583,6 +2775,69 @@ func canonicalGuestResponse(kind string, resource unifiedresources.Resource, gov
 		}
 	}
 
+	return response.NormalizeCollections()
+}
+
+func canonicalAgentResponse(resource unifiedresources.Resource, governance *governedQueryMetadataResolver) ResourceResponse {
+	candidates := canonicalAgentSearchCandidates(resource)
+	response := EmptyResourceResponse()
+	response.GovernedResourceMetadata = governance.Resolve(candidates...)
+	response.Type = "agent"
+	response.ID = strings.TrimSpace(resource.ID)
+	response.Name = resourceDisplayName(resource)
+	response.Status = string(resource.Status)
+	response.Platform = canonicalResourcePlatform(resource)
+	response.Host = canonicalAgentHost(resource)
+	response.CPU = ResourceCPU{
+		Percent: metricPercent(resourceMetric(resource, "cpu")),
+	}
+	response.Memory = ResourceMemory{
+		Percent: metricPercent(resourceMetric(resource, "memory")),
+		UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
+		TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
+	}
+	if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
+		response.Disk = &ResourceDisk{
+			Percent: metricPercent(diskMetric),
+			UsedGB:  metricUsedGB(diskMetric),
+			TotalGB: metricTotalGB(diskMetric),
+		}
+	}
+	response.Tags = append([]string{}, resource.Tags...)
+	if resource.Agent != nil {
+		response.OS = strings.TrimSpace(resource.Agent.OSName)
+		response.CPU.Cores = resource.Agent.CPUCount
+	}
+	if response.Host == "" && resource.TrueNAS != nil {
+		response.Host = strings.TrimSpace(resource.TrueNAS.Hostname)
+	}
+	if response.Host == "" {
+		response.Host = canonicalAgentHost(resource)
+	}
+	return response.NormalizeCollections()
+}
+
+func canonicalStorageResponse(resource unifiedresources.Resource, governance *governedQueryMetadataResolver) ResourceResponse {
+	candidates := canonicalStorageSearchCandidates(resource)
+	response := EmptyResourceResponse()
+	response.GovernedResourceMetadata = governance.Resolve(candidates...)
+	response.Type = "storage"
+	response.ID = strings.TrimSpace(resource.ID)
+	response.Name = resourceDisplayName(resource)
+	response.Status = string(resource.Status)
+	response.Platform = canonicalResourcePlatform(resource)
+	response.Host = canonicalStorageHost(resource)
+	if response.Host != "" {
+		response.Node = response.Host
+	}
+	if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
+		response.Disk = &ResourceDisk{
+			Percent: metricPercent(diskMetric),
+			UsedGB:  metricUsedGB(diskMetric),
+			TotalGB: metricTotalGB(diskMetric),
+		}
+	}
+	response.Tags = append([]string{}, resource.Tags...)
 	return response.NormalizeCollections()
 }
 
@@ -3953,50 +4208,42 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 	governance := newGovernedQueryMetadataResolver(rs)
 
 	switch resourceType {
-	case "system":
+	case "agent":
 		if e.unifiedResourceProvider != nil {
 			for _, resource := range e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAgent) {
-				if !matchesCanonicalResourceID(resource, resourceID) {
+				if !matchesCanonicalResourceReference(resource, resourceID, canonicalAgentSearchCandidates(resource)...) {
 					continue
 				}
-				response := EmptyResourceResponse()
-				response.GovernedResourceMetadata = governance.Resolve(resourceDisplayName(resource), resource.ID)
-				response.Type = "system"
-				response.ID = strings.TrimSpace(resource.ID)
-				response.Name = resourceDisplayName(resource)
-				response.Status = string(resource.Status)
-				response.Platform = canonicalResourcePlatform(resource)
-				response.CPU = ResourceCPU{
-					Percent: metricPercent(resourceMetric(resource, "cpu")),
+				response := canonicalAgentResponse(resource, governance)
+				if reg, ok := canonicalAgentRegistration(resource); ok {
+					e.registerResolvedResourceWithExplicitAccess(reg)
 				}
-				response.Memory = ResourceMemory{
-					Percent: metricPercent(resourceMetric(resource, "memory")),
-					UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
-					TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
-				}
-				if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
-					response.Disk = &ResourceDisk{
-						Percent: metricPercent(diskMetric),
-						UsedGB:  metricUsedGB(diskMetric),
-						TotalGB: metricTotalGB(diskMetric),
-					}
-				}
-				response.Tags = append([]string{}, resource.Tags...)
-				if resource.Agent != nil {
-					response.OS = strings.TrimSpace(resource.Agent.OSName)
-					response.Host = strings.TrimSpace(resource.Agent.Hostname)
-					response.CPU.Cores = resource.Agent.CPUCount
-				}
-				if response.Host == "" && resource.TrueNAS != nil {
-					response.Host = strings.TrimSpace(resource.TrueNAS.Hostname)
-				}
-				return NewJSONResult(response.NormalizeCollections()), nil
+				return NewJSONResult(response), nil
 			}
 		}
 		return NewJSONResult(map[string]interface{}{
 			"error":       "not_found",
 			"resource_id": resourceID,
-			"type":        "system",
+			"type":        "agent",
+		}), nil
+
+	case "storage":
+		if e.unifiedResourceProvider != nil {
+			for _, resource := range canonicalStoragePoolResources(e.unifiedResourceProvider) {
+				if !matchesCanonicalResourceReference(resource, resourceID, canonicalStorageSearchCandidates(resource)...) {
+					continue
+				}
+				response := canonicalStorageResponse(resource, governance)
+				if reg, ok := canonicalStorageRegistration(resource); ok {
+					e.registerResolvedResourceWithExplicitAccess(reg)
+				}
+				return NewJSONResult(response), nil
+			}
+		}
+		return NewJSONResult(map[string]interface{}{
+			"error":       "not_found",
+			"resource_id": resourceID,
+			"type":        "storage",
 		}), nil
 
 	case "vm":
@@ -4338,7 +4585,7 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	default:
-		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'system', 'vm', 'system-container', or 'app-container'", resourceTypeRaw)), nil
+		return NewErrorResult(fmt.Errorf("invalid resource_type: %s. Use 'agent', 'vm', 'system-container', 'app-container', or 'storage' (compatibility aliases 'system' and 'storage-pool' are also accepted)", resourceTypeRaw)), nil
 	}
 }
 
@@ -4714,17 +4961,17 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 
 	allowedTypes := map[string]bool{
 		"":                 true,
-		"system":           true,
+		"agent":            true,
 		"node":             true,
 		"vm":               true,
 		"system-container": true,
 		"app-container":    true,
 		"docker-host":      true,
-		"storage-pool":     true,
+		"storage":          true,
 		"physical-disk":    true,
 	}
 	if !allowedTypes[typeFilter] {
-		return NewErrorResult(fmt.Errorf("invalid type: %s. Use system, node, vm, system-container, app-container, docker-host, storage-pool, or physical-disk", typeFilter)), nil
+		return NewErrorResult(fmt.Errorf("invalid type: %s. Use agent, node, vm, system-container, app-container, docker-host, storage, or physical-disk (compatibility aliases system and storage-pool are also accepted)", typeFilter)), nil
 	}
 
 	// normalizeForSearch replaces common separators with spaces and splits at
@@ -4838,22 +5085,23 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		total++
 	}
 
-	if typeFilter == "" || typeFilter == "system" {
+	if typeFilter == "" || typeFilter == "agent" {
 		for _, resource := range systemResources {
 			status := string(resource.Status)
 			if !statusMatchesFilter(status, statusFilter) {
 				continue
 			}
-			candidates := append(resourceHostCandidates(resource), resource.ID, canonicalResourcePlatform(resource))
+			candidates := canonicalAgentSearchCandidates(resource)
 			if !matchesQuery(queryLower, candidates...) {
 				continue
 			}
 			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID),
-				Type:                     "system",
+				GovernedResourceMetadata: governance.Resolve(candidates...),
+				Type:                     "agent",
 				ID:                       resource.ID,
 				Name:                     resourceDisplayName(resource),
 				Status:                   status,
+				Host:                     canonicalAgentHost(resource),
 				Platform:                 canonicalResourcePlatform(resource),
 				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
 			})
@@ -5131,31 +5379,23 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "storage-pool" {
+	if typeFilter == "" || typeFilter == "storage" {
 		for _, resource := range storagePoolResources {
 			status := string(resource.Status)
 			if !statusMatchesFilter(status, statusFilter) {
 				continue
 			}
-			candidates := []string{
-				resourceDisplayName(resource),
-				resource.ID,
-				canonicalResourcePlatform(resource),
-			}
-			if resource.Storage != nil {
-				candidates = append(candidates, resource.Storage.Type, resource.Storage.Content, resource.Storage.Path)
-			}
-			candidates = append(candidates, resource.Tags...)
+			candidates := canonicalStorageSearchCandidates(resource)
 			if !matchesQuery(queryLower, candidates...) {
 				continue
 			}
 			addMatch(ResourceMatch{
-				GovernedResourceMetadata: governance.Resolve(resourceDisplayName(resource), resource.ID),
-				Type:                     "storage-pool",
+				GovernedResourceMetadata: governance.Resolve(candidates...),
+				Type:                     "storage",
 				ID:                       resource.ID,
 				Name:                     resourceDisplayName(resource),
 				Status:                   status,
-				Host:                     strings.TrimSpace(resource.ParentName),
+				Host:                     canonicalStorageHost(resource),
 				Platform:                 canonicalResourcePlatform(resource),
 			})
 		}
@@ -5215,14 +5455,22 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		var reg ResourceRegistration
 
 		switch match.Type {
-		case "system":
-			reg = ResourceRegistration{
-				Kind:        "system",
-				ProviderUID: match.ID,
-				Name:        match.Name,
-				Aliases:     []string{match.Name, match.ID},
-				HostUID:     match.ID,
-				HostName:    match.Name,
+		case "agent":
+			if resource, ok := findCanonicalResourceByID(systemResources, match.ID); ok {
+				reg, _ = canonicalAgentRegistration(resource)
+			} else {
+				reg = ResourceRegistration{
+					Kind:        "agent",
+					ProviderUID: strings.TrimPrefix(match.ID, "agent:"),
+					Name:        match.Name,
+					Aliases:     []string{match.Name, match.ID, match.Host},
+					Executors: []ExecutorRegistration{{
+						ExecutorID: firstNonEmptyString(match.Host, match.Name, match.ID),
+						Adapter:    match.Platform,
+						Actions:    readOnlyResourceActions(),
+						Priority:   10,
+					}},
+				}
 			}
 		case "node":
 			reg = ResourceRegistration{
@@ -5329,14 +5577,22 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 					Priority:   10,
 				}}
 			}
-		case "storage-pool":
-			reg = ResourceRegistration{
-				Kind:        "storage-pool",
-				ProviderUID: match.ID,
-				Name:        match.Name,
-				Aliases:     []string{match.Name, match.ID},
-				HostUID:     match.Host,
-				HostName:    match.Host,
+		case "storage":
+			if resource, ok := findCanonicalResourceByID(storagePoolResources, match.ID); ok {
+				reg, _ = canonicalStorageRegistration(resource)
+			} else {
+				reg = ResourceRegistration{
+					Kind:        "storage",
+					ProviderUID: strings.TrimPrefix(match.ID, "storage:"),
+					Name:        match.Name,
+					Aliases:     []string{match.Name, match.ID},
+					Executors: []ExecutorRegistration{{
+						ExecutorID: firstNonEmptyString(match.Host, match.Name, match.ID),
+						Adapter:    match.Platform,
+						Actions:    readOnlyResourceActions(),
+						Priority:   10,
+					}},
+				}
 			}
 		case "physical-disk":
 			reg = ResourceRegistration{
