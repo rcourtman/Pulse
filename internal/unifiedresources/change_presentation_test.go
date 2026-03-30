@@ -11,6 +11,7 @@ import (
 func TestChangeKindLabel(t *testing.T) {
 	cases := map[ChangeKind]string{
 		ChangeStateTransition:     "State transition",
+		ChangeActivity:            "Activity",
 		ChangeRestart:             "Restart",
 		ChangeConfigUpdate:        "Config update",
 		ChangeAnomaly:             "Metric anomaly",
@@ -159,6 +160,21 @@ func TestFormatResourceChangeSummary(t *testing.T) {
 				"CPU usage exceeded threshold",
 			},
 		},
+		{
+			name: "provider activity",
+			change: ResourceChange{
+				Kind:          ChangeActivity,
+				SourceType:    SourcePlatformEvent,
+				SourceAdapter: AdapterVMware,
+				Reason:        "Create snapshot (success)",
+				ObservedAt:    time.Now().Add(-10 * time.Minute),
+			},
+			wants: []string{
+				"**Activity**",
+				"platform_event/vmware_adapter",
+				"Create snapshot (success)",
+			},
+		},
 	}
 
 	for _, tc := range cases {
@@ -175,6 +191,80 @@ func TestFormatResourceChangeSummary(t *testing.T) {
 				t.Fatalf("summary should not contain duplicated ago wording: %q", summary)
 			}
 		})
+	}
+}
+
+func TestBuildPlatformActivityChange(t *testing.T) {
+	occurredAt := time.Date(2026, 3, 30, 18, 12, 0, 0, time.UTC)
+	change := BuildPlatformActivityChange(" vc-1:vm:vm-201 ", PlatformActivityChange{
+		SourceAdapter: AdapterVMware,
+		ActivityType:  "vmware_task",
+		NativeID:      "task-201",
+		Title:         "Create snapshot",
+		State:         "success",
+		Message:       "Snapshot completed successfully",
+		Actor:         "vpxuser",
+		OccurredAt:    occurredAt,
+		RelatedResources: []string{
+			" vc-1:host:host-101 ",
+			"",
+			"vc-1:storage:datastore-11",
+		},
+		Metadata: map[string]any{
+			"vmwareConnectionId": "vc-1",
+		},
+	})
+	if change == nil {
+		t.Fatal("expected activity change")
+	}
+	if change.Kind != ChangeActivity {
+		t.Fatalf("Kind = %q, want %q", change.Kind, ChangeActivity)
+	}
+	if change.SourceType != SourcePlatformEvent {
+		t.Fatalf("SourceType = %q, want %q", change.SourceType, SourcePlatformEvent)
+	}
+	if change.SourceAdapter != AdapterVMware {
+		t.Fatalf("SourceAdapter = %q, want %q", change.SourceAdapter, AdapterVMware)
+	}
+	if change.Reason != "Create snapshot (success)" {
+		t.Fatalf("Reason = %q, want %q", change.Reason, "Create snapshot (success)")
+	}
+	if change.OccurredAt == nil || !change.OccurredAt.Equal(occurredAt) {
+		t.Fatalf("OccurredAt = %v, want %v", change.OccurredAt, occurredAt)
+	}
+	if got := change.Metadata[MetadataActivityType]; got != "vmware_task" {
+		t.Fatalf("activity_type = %#v, want vmware_task", got)
+	}
+	if got := change.Metadata[MetadataActivityNativeID]; got != "task-201" {
+		t.Fatalf("activity_native_id = %#v, want task-201", got)
+	}
+	if got := change.Metadata[MetadataActivityTitle]; got != "Create snapshot" {
+		t.Fatalf("activity_title = %#v, want Create snapshot", got)
+	}
+	if got := change.Metadata[MetadataActivityState]; got != "success" {
+		t.Fatalf("activity_state = %#v, want success", got)
+	}
+	if got := change.Metadata[MetadataActivityMessage]; got != "Snapshot completed successfully" {
+		t.Fatalf("activity_message = %#v, want Snapshot completed successfully", got)
+	}
+	if len(change.RelatedResources) != 2 || change.RelatedResources[0] != "vc-1:host:host-101" || change.RelatedResources[1] != "vc-1:storage:datastore-11" {
+		t.Fatalf("RelatedResources = %#v, want canonical related IDs", change.RelatedResources)
+	}
+
+	repeat := BuildPlatformActivityChange("vc-1:vm:vm-201", PlatformActivityChange{
+		SourceAdapter: AdapterVMware,
+		ActivityType:  "vmware_task",
+		NativeID:      "task-201",
+		Title:         "Create snapshot",
+		State:         "success",
+		Message:       "Snapshot completed successfully",
+		OccurredAt:    occurredAt,
+	})
+	if repeat == nil {
+		t.Fatal("expected deterministic repeat activity change")
+	}
+	if repeat.ID != change.ID {
+		t.Fatalf("repeat ID = %q, want %q", repeat.ID, change.ID)
 	}
 }
 

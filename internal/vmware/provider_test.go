@@ -280,6 +280,81 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 }
 
+func TestProviderActivityChanges_ProjectCanonicalTimelineEntries(t *testing.T) {
+	previous := IsFeatureEnabled()
+	SetFeatureEnabled(true)
+	t.Cleanup(func() { SetFeatureEnabled(previous) })
+
+	collectedAt := time.Date(2026, time.March, 30, 18, 20, 0, 0, time.UTC)
+	provider := NewProvider(InventorySnapshot{
+		ConnectionID:   "vc-1",
+		ConnectionName: "Lab VC",
+		VCenterHost:    "vc.lab.local",
+		CollectedAt:    collectedAt,
+		Hosts: []InventoryHost{{
+			Host: "host-101",
+			Name: "esxi-01.lab.local",
+			RecentTasks: []InventoryTask{{
+				Task:      "task-11",
+				Name:      "Reconnect host",
+				State:     "running",
+				StartedAt: collectedAt.Add(-1 * time.Minute),
+			}},
+		}},
+		VMs: []InventoryVM{{
+			VM:   "vm-201",
+			Name: "app-01",
+			RecentEvents: []InventoryEvent{{
+				Event:     "event-201",
+				Type:      "VmMessageEvent",
+				Message:   "Snapshot completed successfully",
+				User:      "vpxuser",
+				CreatedAt: collectedAt.Add(-2 * time.Minute),
+			}},
+		}},
+		Datastores: []InventoryDatastore{{
+			Datastore: "datastore-11",
+			Name:      "nvme-primary",
+			RecentEvents: []InventoryEvent{{
+				Event:     "event-301",
+				Type:      "DatastoreRenamedEvent",
+				Message:   "Datastore metadata refreshed",
+				User:      "storage-admin",
+				CreatedAt: collectedAt.Add(-3 * time.Minute),
+			}},
+		}},
+	})
+
+	changes := provider.ActivityChanges()
+	if len(changes) != 3 {
+		t.Fatalf("expected 3 VMware activity changes, got %d", len(changes))
+	}
+	if changes[0].Kind != unifiedresources.ChangeActivity {
+		t.Fatalf("latest change kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeActivity)
+	}
+	if changes[0].SourceType != unifiedresources.SourcePlatformEvent {
+		t.Fatalf("latest change source type = %q, want %q", changes[0].SourceType, unifiedresources.SourcePlatformEvent)
+	}
+	if changes[0].SourceAdapter != unifiedresources.AdapterVMware {
+		t.Fatalf("latest change source adapter = %q, want %q", changes[0].SourceAdapter, unifiedresources.AdapterVMware)
+	}
+	if changes[0].ResourceID != "vc-1:host:host-101" {
+		t.Fatalf("latest change resource ID = %q, want vc-1:host:host-101", changes[0].ResourceID)
+	}
+	if changes[0].OccurredAt == nil || !changes[0].OccurredAt.Equal(collectedAt.Add(-1*time.Minute)) {
+		t.Fatalf("latest change occurred_at = %v, want %v", changes[0].OccurredAt, collectedAt.Add(-1*time.Minute))
+	}
+	if got := changes[0].Metadata[unifiedresources.MetadataActivityType]; got != "vmware_task" {
+		t.Fatalf("latest change activity_type = %#v, want vmware_task", got)
+	}
+	if got := changes[1].Metadata["vmwareEventType"]; got != "VmMessageEvent" {
+		t.Fatalf("vm change event type = %#v, want VmMessageEvent", got)
+	}
+	if got := changes[2].Metadata["vmwareEventUser"]; got != "storage-admin" {
+		t.Fatalf("datastore change user = %#v, want storage-admin", got)
+	}
+}
+
 func boolPtr(value bool) *bool {
 	return &value
 }

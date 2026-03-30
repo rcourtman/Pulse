@@ -41,6 +41,26 @@ type viJSONTaskInfo struct {
 	Error         *viJSONLocalizedMessage `json:"error"`
 }
 
+type viJSONEventFilterSpec struct {
+	Entity   *viJSONEventFilterEntity `json:"entity,omitempty"`
+	MaxCount int                      `json:"maxCount,omitempty"`
+}
+
+type viJSONEventFilterEntity struct {
+	Entity    viJSONReference `json:"entity"`
+	Recursion string          `json:"recursion,omitempty"`
+}
+
+type viJSONEvent struct {
+	Key                  int64      `json:"key"`
+	ChainID              int64      `json:"chainId"`
+	UserName             string     `json:"userName"`
+	CreatedTime          *time.Time `json:"createdTime"`
+	FullFormattedMessage string     `json:"fullFormattedMessage"`
+	EventTypeID          string     `json:"eventTypeId"`
+	TypeName             string     `json:"_typeName"`
+}
+
 type viJSONSnapshotInfo struct {
 	RootSnapshotList []viJSONSnapshotTree `json:"rootSnapshotList"`
 }
@@ -62,6 +82,7 @@ type entitySignals struct {
 	OverallStatus string
 	Alarms        []InventoryAlarm
 	RecentTasks   []InventoryTask
+	RecentEvents  []InventoryEvent
 }
 
 func (c *Client) validateSignalFloor(
@@ -69,6 +90,7 @@ func (c *Client) validateSignalFloor(
 	release string,
 	sessionID string,
 	perfManagerMoID string,
+	eventManagerMoID string,
 	snapshot *InventorySnapshot,
 	perfCounters perfCounterCatalog,
 ) error {
@@ -79,7 +101,7 @@ func (c *Client) validateSignalFloor(
 	cache := &alarmNameCache{names: make(map[string]string)}
 	if len(snapshot.Hosts) > 0 {
 		host := snapshot.Hosts[0]
-		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", host.Host, cache, false); err != nil {
+		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", host.Host, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
 			return err
 		}
 		hostMetrics, err := c.collectHostPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, host)
@@ -92,7 +114,7 @@ func (c *Client) validateSignalFloor(
 	}
 	if len(snapshot.VMs) > 0 {
 		vm := snapshot.VMs[0]
-		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", vm.VM, cache, false); err != nil {
+		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", vm.VM, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
 			return err
 		}
 		if _, err := c.collectVMSnapshotCount(ctx, release, sessionID, vm.VM); err != nil && !isVIJSONNotFound(err) {
@@ -108,7 +130,7 @@ func (c *Client) validateSignalFloor(
 	}
 	if len(snapshot.Datastores) > 0 {
 		datastore := snapshot.Datastores[0]
-		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Datastore", datastore.Datastore, cache, false); err != nil {
+		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Datastore", datastore.Datastore, perfManagerMoID, eventManagerMoID, cache, false); err != nil {
 			return err
 		}
 	}
@@ -120,6 +142,7 @@ func (c *Client) enrichInventorySnapshot(
 	release string,
 	sessionID string,
 	perfManagerMoID string,
+	eventManagerMoID string,
 	perfCounters perfCounterCatalog,
 	snapshot *InventorySnapshot,
 ) error {
@@ -153,7 +176,7 @@ func (c *Client) enrichInventorySnapshot(
 	for i := range snapshot.Hosts {
 		i := i
 		run(func() error {
-			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", snapshot.Hosts[i].Host, cache, true)
+			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", snapshot.Hosts[i].Host, perfManagerMoID, eventManagerMoID, cache, true)
 			if err != nil {
 				return err
 			}
@@ -164,6 +187,7 @@ func (c *Client) enrichInventorySnapshot(
 			snapshot.Hosts[i].OverallStatus = signals.OverallStatus
 			snapshot.Hosts[i].TriggeredAlarms = signals.Alarms
 			snapshot.Hosts[i].RecentTasks = signals.RecentTasks
+			snapshot.Hosts[i].RecentEvents = signals.RecentEvents
 			snapshot.Hosts[i].Metrics = metrics
 			return nil
 		})
@@ -172,13 +196,14 @@ func (c *Client) enrichInventorySnapshot(
 	for i := range snapshot.VMs {
 		i := i
 		run(func() error {
-			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", snapshot.VMs[i].VM, cache, true)
+			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", snapshot.VMs[i].VM, perfManagerMoID, eventManagerMoID, cache, true)
 			if err != nil {
 				return err
 			}
 			snapshot.VMs[i].OverallStatus = signals.OverallStatus
 			snapshot.VMs[i].TriggeredAlarms = signals.Alarms
 			snapshot.VMs[i].RecentTasks = signals.RecentTasks
+			snapshot.VMs[i].RecentEvents = signals.RecentEvents
 			snapshot.VMs[i].SnapshotCount, err = c.collectVMSnapshotCount(ctx, release, sessionID, snapshot.VMs[i].VM)
 			if err != nil && !isVIJSONNotFound(err) {
 				return err
@@ -195,13 +220,14 @@ func (c *Client) enrichInventorySnapshot(
 	for i := range snapshot.Datastores {
 		i := i
 		run(func() error {
-			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Datastore", snapshot.Datastores[i].Datastore, cache, true)
+			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Datastore", snapshot.Datastores[i].Datastore, perfManagerMoID, eventManagerMoID, cache, true)
 			if err != nil {
 				return err
 			}
 			snapshot.Datastores[i].OverallStatus = signals.OverallStatus
 			snapshot.Datastores[i].TriggeredAlarms = signals.Alarms
 			snapshot.Datastores[i].RecentTasks = signals.RecentTasks
+			snapshot.Datastores[i].RecentEvents = signals.RecentEvents
 			return nil
 		})
 	}
@@ -213,7 +239,7 @@ func (c *Client) enrichInventorySnapshot(
 	return firstErr
 }
 
-func (c *Client) collectManagedEntitySignals(ctx context.Context, release, sessionID, managedType, managedObjectID string, cache *alarmNameCache, allowNotFound bool) (entitySignals, error) {
+func (c *Client) collectManagedEntitySignals(ctx context.Context, release, sessionID, managedType, managedObjectID, perfManagerMoID, eventManagerMoID string, cache *alarmNameCache, allowNotFound bool) (entitySignals, error) {
 	managedObjectID = strings.TrimSpace(managedObjectID)
 	if managedObjectID == "" {
 		return entitySignals{}, nil
@@ -246,6 +272,15 @@ func (c *Client) collectManagedEntitySignals(ctx context.Context, release, sessi
 		}
 	} else {
 		signals.RecentTasks = tasks
+	}
+
+	events, err := c.collectRecentEvents(ctx, release, sessionID, eventManagerMoID, managedType, managedObjectID)
+	if err != nil {
+		if !allowNotFound || !isVIJSONNotFound(err) {
+			return entitySignals{}, err
+		}
+	} else {
+		signals.RecentEvents = events
 	}
 
 	return signals, nil
@@ -366,6 +401,60 @@ func (c *Client) collectTaskInfo(ctx context.Context, release, sessionID, taskID
 	return task, nil
 }
 
+func (c *Client) collectRecentEvents(ctx context.Context, release, sessionID, eventManagerMoID, managedType, managedObjectID string) ([]InventoryEvent, error) {
+	eventManagerMoID = strings.TrimSpace(eventManagerMoID)
+	if eventManagerMoID == "" {
+		return nil, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include an event manager reference"}
+	}
+
+	var payload []viJSONEvent
+	path := fmt.Sprintf("/sdk/vim25/%s/EventManager/%s/QueryEvents", release, eventManagerMoID)
+	body := map[string]any{
+		"filter": viJSONEventFilterSpec{
+			Entity: &viJSONEventFilterEntity{
+				Entity:    viJSONReference{Type: strings.TrimSpace(managedType), Value: strings.TrimSpace(managedObjectID)},
+				Recursion: "self",
+			},
+			MaxCount: 3,
+		},
+	}
+	if err := c.postVIJSONJSON(ctx, sessionID, path, managedType+" recent events", body, &payload); err != nil {
+		return nil, err
+	}
+	if len(payload) == 0 {
+		return nil, nil
+	}
+
+	events := make([]InventoryEvent, 0, len(payload))
+	for _, event := range payload {
+		eventID := ""
+		if event.Key > 0 {
+			eventID = fmt.Sprintf("event-%d", event.Key)
+		}
+		var createdAt time.Time
+		if event.CreatedTime != nil {
+			createdAt = event.CreatedTime.UTC()
+		}
+		events = append(events, InventoryEvent{
+			Event:     eventID,
+			Type:      firstNonEmptyTrimmed(event.EventTypeID, event.TypeName),
+			Message:   strings.TrimSpace(event.FullFormattedMessage),
+			User:      strings.TrimSpace(event.UserName),
+			CreatedAt: createdAt,
+		})
+	}
+	sort.SliceStable(events, func(i, j int) bool {
+		left := inventoryEventSortTime(events[i])
+		right := inventoryEventSortTime(events[j])
+		if !left.Equal(right) {
+			return left.After(right)
+		}
+		return vmwareSortKey(events[i].Event, firstNonEmptyTrimmed(events[i].Type, events[i].Message)) <
+			vmwareSortKey(events[j].Event, firstNonEmptyTrimmed(events[j].Type, events[j].Message))
+	})
+	return events, nil
+}
+
 func (c *Client) collectVMSnapshotCount(ctx context.Context, release, sessionID, managedObjectID string) (int, error) {
 	var payload viJSONSnapshotInfo
 	path := fmt.Sprintf("/sdk/vim25/%s/VirtualMachine/%s/snapshot", release, managedObjectID)
@@ -463,6 +552,13 @@ func inventoryTaskSortTime(task InventoryTask) time.Time {
 		return task.CompletedAt.UTC()
 	}
 	return time.Time{}
+}
+
+func inventoryEventSortTime(event InventoryEvent) time.Time {
+	if event.CreatedAt.IsZero() {
+		return time.Time{}
+	}
+	return event.CreatedAt.UTC()
 }
 
 func countSnapshotTrees(roots []viJSONSnapshotTree) int {

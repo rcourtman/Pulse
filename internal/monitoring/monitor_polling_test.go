@@ -86,6 +86,7 @@ type testSupplementalPollProvider struct {
 	source           unifiedresources.DataSource
 	ownedSources     []unifiedresources.DataSource
 	recordsByOrg     map[string][]unifiedresources.IngestRecord
+	changesByOrg     map[string][]unifiedresources.ResourceChange
 	lastRequestedOrg string
 }
 
@@ -101,6 +102,11 @@ func (p *testSupplementalPollProvider) SupplementalRecords(_ *Monitor, orgID str
 	return out
 }
 
+func (p *testSupplementalPollProvider) SupplementalChanges(_ *Monitor, orgID string) []unifiedresources.ResourceChange {
+	p.lastRequestedOrg = orgID
+	return cloneTestResourceChanges(p.changesByOrg[orgID])
+}
+
 func (p *testSupplementalPollProvider) SnapshotOwnedSources(_ *Monitor) []unifiedresources.DataSource {
 	out := make([]unifiedresources.DataSource, len(p.ownedSources))
 	copy(out, p.ownedSources)
@@ -109,6 +115,7 @@ func (p *testSupplementalPollProvider) SnapshotOwnedSources(_ *Monitor) []unifie
 
 type testMonitorSupplementalProvider struct {
 	recordsByOrg     map[string][]unifiedresources.IngestRecord
+	changesByOrg     map[string][]unifiedresources.ResourceChange
 	ownedSources     []unifiedresources.DataSource
 	lastRequestedOrg string
 }
@@ -121,12 +128,41 @@ func ptrInt64(value int64) *int64 {
 	return &value
 }
 
+func cloneTestResourceChanges(in []unifiedresources.ResourceChange) []unifiedresources.ResourceChange {
+	if in == nil {
+		return nil
+	}
+	out := make([]unifiedresources.ResourceChange, len(in))
+	for i := range in {
+		out[i] = in[i]
+		if in[i].OccurredAt != nil {
+			occurredAt := in[i].OccurredAt.UTC()
+			out[i].OccurredAt = &occurredAt
+		}
+		if in[i].RelatedResources != nil {
+			out[i].RelatedResources = append([]string(nil), in[i].RelatedResources...)
+		}
+		if in[i].Metadata != nil {
+			out[i].Metadata = make(map[string]any, len(in[i].Metadata))
+			for key, value := range in[i].Metadata {
+				out[i].Metadata[key] = value
+			}
+		}
+	}
+	return out
+}
+
 func (p *testMonitorSupplementalProvider) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
 	p.lastRequestedOrg = orgID
 	records := p.recordsByOrg[orgID]
 	out := make([]unifiedresources.IngestRecord, len(records))
 	copy(out, records)
 	return out
+}
+
+func (p *testMonitorSupplementalProvider) SupplementalChanges(_ *Monitor, orgID string) []unifiedresources.ResourceChange {
+	p.lastRequestedOrg = orgID
+	return cloneTestResourceChanges(p.changesByOrg[orgID])
 }
 
 func (p *testMonitorSupplementalProvider) SnapshotOwnedSources() []unifiedresources.DataSource {
@@ -139,6 +175,7 @@ type testSupplementalResourceStore struct {
 	snapshotCalls   int
 	lastSnapshot    models.StateSnapshot
 	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord
+	recordedChanges []unifiedresources.ResourceChange
 }
 
 func (s *testSupplementalResourceStore) ShouldSkipAPIPolling(string) bool { return false }
@@ -159,6 +196,11 @@ func (s *testSupplementalResourceStore) PopulateSupplementalRecords(source unifi
 	cloned := make([]unifiedresources.IngestRecord, len(records))
 	copy(cloned, records)
 	s.recordsBySource[source] = append(s.recordsBySource[source], cloned...)
+}
+
+func (s *testSupplementalResourceStore) RecordChange(change unifiedresources.ResourceChange) error {
+	s.recordedChanges = append(s.recordedChanges, cloneTestResourceChanges([]unifiedresources.ResourceChange{change})...)
+	return nil
 }
 
 type testAtomicResourceStore struct {
@@ -1788,6 +1830,63 @@ func TestUpdateResourceStore_IngestsSupplementalRecords(t *testing.T) {
 	}
 	if records[0].SourceID != "xcp-host-1" {
 		t.Fatalf("expected supplemental source ID xcp-host-1, got %q", records[0].SourceID)
+	}
+}
+
+func TestUpdateResourceStore_RecordsSupplementalChanges(t *testing.T) {
+	store := &testSupplementalResourceStore{}
+	occurredAt := time.Date(2026, 3, 30, 18, 30, 0, 0, time.UTC)
+	provider := &testSupplementalPollProvider{
+		testPollProvider: testPollProvider{
+			providerType: InstanceType("vmware"),
+			instances:    []string{"vc-1"},
+			interval:     30 * time.Second,
+		},
+		source: unifiedresources.SourceVMware,
+		changesByOrg: map[string][]unifiedresources.ResourceChange{
+			"default": {
+				{
+					ID:            "activity-1",
+					ResourceID:    "vc-1:vm:vm-201",
+					ObservedAt:    occurredAt,
+					OccurredAt:    &occurredAt,
+					Kind:          unifiedresources.ChangeActivity,
+					SourceType:    unifiedresources.SourcePlatformEvent,
+					SourceAdapter: unifiedresources.AdapterVMware,
+					Confidence:    unifiedresources.ConfidenceHigh,
+					Reason:        "Create snapshot (success)",
+					Metadata: map[string]any{
+						unifiedresources.MetadataActivityType: "vmware_task",
+					},
+				},
+			},
+		},
+	}
+
+	monitor := &Monitor{
+		resourceStore: store,
+	}
+	if err := monitor.RegisterPollProvider(provider); err != nil {
+		t.Fatalf("RegisterPollProvider failed: %v", err)
+	}
+
+	monitor.updateResourceStore(models.StateSnapshot{})
+
+	if len(store.recordedChanges) != 1 {
+		t.Fatalf("expected 1 supplemental change recorded, got %d", len(store.recordedChanges))
+	}
+	recorded := store.recordedChanges[0]
+	if recorded.Kind != unifiedresources.ChangeActivity {
+		t.Fatalf("recorded change kind = %q, want %q", recorded.Kind, unifiedresources.ChangeActivity)
+	}
+	if recorded.SourceAdapter != unifiedresources.AdapterVMware {
+		t.Fatalf("recorded change source adapter = %q, want %q", recorded.SourceAdapter, unifiedresources.AdapterVMware)
+	}
+	if recorded.OccurredAt == nil || !recorded.OccurredAt.Equal(occurredAt) {
+		t.Fatalf("recorded change occurred_at = %v, want %v", recorded.OccurredAt, occurredAt)
+	}
+	if got := recorded.Metadata[unifiedresources.MetadataActivityType]; got != "vmware_task" {
+		t.Fatalf("recorded activity_type = %#v, want vmware_task", got)
 	}
 }
 

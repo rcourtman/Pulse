@@ -677,7 +677,7 @@ func (s *SQLiteResourceStore) RecordChange(change ResourceChange) error {
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO resource_changes (`+strings.Join(columns, ", ")+`) VALUES (`+strings.Join(placeholders, ", ")+`)`,
+		`INSERT INTO resource_changes (`+strings.Join(columns, ", ")+`) VALUES (`+strings.Join(placeholders, ", ")+`) ON CONFLICT(id) DO NOTHING`,
 		values...,
 	)
 	if err != nil {
@@ -1198,6 +1198,11 @@ func (m *MemoryStore) Close() error {
 func (m *MemoryStore) RecordChange(change ResourceChange) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	for _, existing := range m.changes {
+		if existing.ID == change.ID && change.ID != "" {
+			return nil
+		}
+	}
 	m.changes = append(m.changes, change)
 	return nil
 }

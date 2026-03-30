@@ -301,6 +301,69 @@ func TestResourceChangeFilterParsingIsOwnedByUnifiedResources(t *testing.T) {
 	}
 }
 
+func TestPlatformActivityTimelineContractStaysCanonical(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		filepath.Join(".", "changes.go"): {
+			`ChangeActivity            ChangeKind = "activity"`,
+			`AdapterVMware   ChangeSourceAdapter = "vmware_adapter"`,
+		},
+		filepath.Join(".", "activity_changes.go"): {
+			"type PlatformActivityChange struct {",
+			"func BuildPlatformActivityChange(resourceID string, activity PlatformActivityChange) *ResourceChange {",
+			"Kind:          ChangeActivity,",
+			"SourceType:    SourcePlatformEvent,",
+			"func platformActivityChangeID(resourceID string, sourceAdapter ChangeSourceAdapter, activityType, nativeID string, occurredAt time.Time, title, message string) string {",
+		},
+		filepath.Join(".", "change_filters.go"): {
+			"case string(ChangeActivity):",
+			"case string(AdapterVMware):",
+		},
+		filepath.Join(".", "change_presentation.go"): {
+			"case ChangeActivity:",
+		},
+		filepath.Join(".", "store.go"): {
+			"ON CONFLICT(id) DO NOTHING",
+			"if existing.ID == change.ID && change.ID != \"\" {",
+		},
+		filepath.Join("..", "monitoring", "monitor.go"): {
+			"type MonitorSupplementalChangesProvider interface {",
+			"recordSupplementalResourceChanges(store, supplementalChanges)",
+			"func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {",
+		},
+		filepath.Join("..", "monitoring", "vmware_poller.go"): {
+			"cachedChangesByOrg map[string]map[string][]unifiedresources.ResourceChange",
+			"p.cachedChangesByOrg[entry.orgID][entry.connectionID] = changes",
+			"func (p *VMwarePoller) SupplementalChanges(_ *Monitor, orgID string) []unifiedresources.ResourceChange {",
+		},
+		filepath.Join("..", "vmware", "activity_changes.go"): {
+			"func (p *Provider) ActivityChanges() []unifiedresources.ResourceChange {",
+			`ActivityType:  "vmware_task",`,
+			`ActivityType:  "vmware_event",`,
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "types", "resource.ts"): {
+			"| 'activity'",
+			"| 'vmware_adapter'",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "utils", "resourceChangePresentation.ts"): {
+			"activity: {",
+			"vmware_adapter: {",
+			"case 'activity':",
+		},
+	}
+
+	for name, snippets := range requiredSnippets {
+		data, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", name, err)
+		}
+		for _, snippet := range snippets {
+			if !strings.Contains(string(data), snippet) {
+				t.Fatalf("%s must contain %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestResourcePolicyPresentationUsesCanonicalLabels(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(".", "policy_presentation.go"))
 	if err != nil {

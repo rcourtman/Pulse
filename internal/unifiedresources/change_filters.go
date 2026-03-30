@@ -49,6 +49,8 @@ func parseResourceChangeKinds(values []string) ([]ChangeKind, error) {
 		switch normalized {
 		case string(ChangeStateTransition):
 			parsed = append(parsed, ChangeStateTransition)
+		case string(ChangeActivity):
+			parsed = append(parsed, ChangeActivity)
 		case string(ChangeRestart):
 			parsed = append(parsed, ChangeRestart)
 		case string(ChangeConfigUpdate):
@@ -109,6 +111,8 @@ func parseResourceChangeSourceAdapters(values []string) ([]ChangeSourceAdapter, 
 			parsed = append(parsed, AdapterProxmox)
 		case string(AdapterTrueNAS):
 			parsed = append(parsed, AdapterTrueNAS)
+		case string(AdapterVMware):
+			parsed = append(parsed, AdapterVMware)
 		case string(AdapterOpsAgent):
 			parsed = append(parsed, AdapterOpsAgent)
 		default:

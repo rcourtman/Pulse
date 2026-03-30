@@ -372,6 +372,8 @@ func resourceChangeSourceAdapter(resource *Resource) ChangeSourceAdapter {
 		return AdapterProxmox
 	case resource.TrueNAS != nil || hasDataSource(resource.Sources, SourceTrueNAS):
 		return AdapterTrueNAS
+	case resource.VMware != nil || hasDataSource(resource.Sources, SourceVMware):
+		return AdapterVMware
 	case resource.Agent != nil || hasDataSource(resource.Sources, SourceAgent):
 		return AdapterOpsAgent
 	default:
@@ -387,6 +389,8 @@ func changeSourceAdapterForDataSource(source DataSource) ChangeSourceAdapter {
 		return AdapterProxmox
 	case SourceTrueNAS:
 		return AdapterTrueNAS
+	case SourceVMware:
+		return AdapterVMware
 	case SourceAgent:
 		return AdapterOpsAgent
 	default:

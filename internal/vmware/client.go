@@ -97,6 +97,7 @@ type Client struct {
 type viJSONServiceContentRefs struct {
 	SessionManagerMoID string
 	PerfManagerMoID    string
+	EventManagerMoID   string
 }
 
 // NewClient constructs a VMware client from saved connection input.
@@ -159,7 +160,7 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 	if err != nil {
 		return nil, err
 	}
-	if err := c.validateSignalFloor(ctx, release, sessionID, refs.PerfManagerMoID, inventory, perfCounters); err != nil {
+	if err := c.validateSignalFloor(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, inventory, perfCounters); err != nil {
 		return nil, err
 	}
 	return &InventorySummary{
@@ -189,7 +190,7 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := c.enrichInventorySnapshot(ctx, release, sessionID, refs.PerfManagerMoID, perfCounters, inventory); err != nil {
+	if err := c.enrichInventorySnapshot(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, perfCounters, inventory); err != nil {
 		return nil, err
 	}
 	if err := c.enrichInventoryTopology(ctx, automationSessionID, release, sessionID, inventory); err != nil {
@@ -405,6 +406,7 @@ func (c *Client) fetchVIJSONServiceContentRefs(ctx context.Context, release stri
 	var payload struct {
 		SessionManager viJSONReference `json:"sessionManager"`
 		PerfManager    viJSONReference `json:"perfManager"`
+		EventManager   viJSONReference `json:"eventManager"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response was not valid JSON"}
@@ -412,12 +414,16 @@ func (c *Client) fetchVIJSONServiceContentRefs(ctx context.Context, release stri
 	refs := viJSONServiceContentRefs{
 		SessionManagerMoID: strings.TrimSpace(payload.SessionManager.Value),
 		PerfManagerMoID:    strings.TrimSpace(payload.PerfManager.Value),
+		EventManagerMoID:   strings.TrimSpace(payload.EventManager.Value),
 	}
 	if refs.SessionManagerMoID == "" {
 		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include a session manager reference"}
 	}
 	if refs.PerfManagerMoID == "" {
 		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include a performance manager reference"}
+	}
+	if refs.EventManagerMoID == "" {
+		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include an event manager reference"}
 	}
 	return refs, nil
 }

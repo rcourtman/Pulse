@@ -142,6 +142,12 @@ type MonitorSupplementalRecordsProvider interface {
 	SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord
 }
 
+// MonitorSupplementalChangesProvider optionally emits canonical resource
+// timeline changes alongside supplemental records.
+type MonitorSupplementalChangesProvider interface {
+	SupplementalChanges(m *Monitor, orgID string) []unifiedresources.ResourceChange
+}
+
 // MonitorPhysicalDiskTemperatureHistoryProvider optionally exposes source-native
 // physical-disk temperature history through the canonical monitoring chart
 // boundary when Pulse's own stored history is shallow.
@@ -4141,8 +4147,10 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	recordsBySource := m.collectSupplementalRecordsBySource()
+	supplementalChanges := m.collectSupplementalChanges()
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
+		recordSupplementalResourceChanges(store, supplementalChanges)
 		m.syncUnifiedAgentMetrics(store)
 		m.syncUnifiedVMMetrics(store)
 		m.syncUnifiedStorageMetrics(store)
@@ -4177,12 +4185,35 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 		}
 	}
 
+	recordSupplementalResourceChanges(store, supplementalChanges)
 	m.syncUnifiedAgentMetrics(store)
 	m.syncUnifiedVMMetrics(store)
 	m.syncUnifiedStorageMetrics(store)
 	m.syncUnifiedPhysicalDiskMetrics(store)
 	m.syncUnifiedAppContainerMetrics(store)
 	m.syncUnifiedResourceAlertsToState(store.GetAll())
+}
+
+func recordSupplementalResourceChanges(store ResourceStoreInterface, changes []unifiedresources.ResourceChange) {
+	if store == nil || len(changes) == 0 {
+		return
+	}
+
+	recorder, ok := store.(canonicalResourceChangeRecorder)
+	if !ok || recorder == nil {
+		return
+	}
+
+	for _, change := range changes {
+		if err := recorder.RecordChange(change); err != nil {
+			log.Warn().
+				Err(err).
+				Str("resource_id", change.ResourceID).
+				Str("change_id", change.ID).
+				Str("kind", string(change.Kind)).
+				Msg("failed to record supplemental canonical resource change")
+		}
+	}
 }
 
 func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {

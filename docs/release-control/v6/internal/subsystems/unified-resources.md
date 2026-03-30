@@ -1131,6 +1131,10 @@ integration source while the store still owns the filtered total counts.
 Invalid `sourceAdapter` values are rejected at the API boundary, keeping the
 timeline query contract aligned with the canonical adapter set instead of
 silently accepting arbitrary strings.
+That same filter contract now includes provider `activity` entries and the
+`vmware_adapter` value, so VMware task/event breadcrumbs are narrowed through
+the same shared timeline API used for alert, relationship, and action history
+instead of adding a provider-specific query surface.
 The Connected infrastructure settings surface now also depends on a backend
 owned `connectedInfrastructure` projection derived from unified resources plus
 reporting-ignore state. That projection is now also the only v6 client
@@ -1385,6 +1389,13 @@ recent-change slice plus facet counts it actually renders. The store now also
 owns a `resource_changes` persistence table with `RecordChange` and
 `GetRecentChanges` methods so change history is queryable by canonical ID and
 time window.
+That same shared timeline vocabulary now includes the `activity` change kind
+for provider-read breadcrumbs such as VMware tasks and events, plus the
+`vmware_adapter` source-adapter token for canonical provenance drill-down.
+`BuildPlatformActivityChange` must keep those provider reads inside the shared
+change model instead of introducing a second event shape, and `RecordChange`
+must stay idempotent by canonical change ID so poller refreshes and replayed
+supplemental snapshots do not duplicate resource history.
 Action plans in `actions.go` now keep stale-plan protection to the canonical
 `resourceVersion`, `policyVersion`, and `planHash` fields, so the durable
 audit record stays minimal and does not need extra relationship-topology

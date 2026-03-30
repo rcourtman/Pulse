@@ -145,6 +145,7 @@ export type ResourceApprovalLevel = 'none' | 'dry_run_only' | 'admin' | 'mfa';
 export type ResourceChangeConfidence = 'high' | 'medium' | 'low';
 export type ResourceChangeKind =
   | 'state_transition'
+  | 'activity'
   | 'restart'
   | 'config_update'
   | 'metric_anomaly'
@@ -166,6 +167,7 @@ export type ResourceChangeSourceAdapter =
   | 'docker_adapter'
   | 'proxmox_adapter'
   | 'truenas_adapter'
+  | 'vmware_adapter'
   | 'agent:ops-helper'
   | string;
 
@@ -173,6 +175,7 @@ export type ResourceFacetSourceAdapter =
   | 'docker_adapter'
   | 'proxmox_adapter'
   | 'truenas_adapter'
+  | 'vmware_adapter'
   | 'agent:ops-helper';
 
 export interface ResourceFacetCounts {

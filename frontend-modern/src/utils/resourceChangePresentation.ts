@@ -10,6 +10,7 @@ export interface ResourceChangeLabelPresentation {
 
 export const RESOURCE_CHANGE_KIND_ORDER: ResourceChangeKind[] = [
   'state_transition',
+  'activity',
   'restart',
   'config_update',
   'metric_anomaly',
@@ -31,6 +32,11 @@ const RESOURCE_CHANGE_KIND_PRESENTATIONS: Record<
     label: 'State transition',
     plural: 'State transitions',
     className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  },
+  activity: {
+    label: 'Activity',
+    plural: 'Activities',
+    className: 'bg-sky-100 text-sky-700 dark:bg-sky-900 dark:text-sky-300',
   },
   restart: {
     label: 'Restart',
@@ -139,6 +145,7 @@ export const RESOURCE_CHANGE_SOURCE_ADAPTER_ORDER: ResourceFacetSourceAdapter[] 
   'docker_adapter',
   'proxmox_adapter',
   'truenas_adapter',
+  'vmware_adapter',
   'agent:ops-helper',
 ];
 
@@ -160,6 +167,11 @@ const RESOURCE_CHANGE_SOURCE_ADAPTER_PRESENTATIONS: Record<
     label: 'TrueNAS adapter',
     plural: 'TrueNAS adapters',
     className: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900 dark:text-emerald-300',
+  },
+  vmware_adapter: {
+    label: 'VMware adapter',
+    plural: 'VMware adapters',
+    className: 'bg-cyan-100 text-cyan-700 dark:bg-cyan-900 dark:text-cyan-300',
   },
   'agent:ops-helper': {
     label: 'Ops helper',
@@ -212,6 +224,8 @@ export function formatResourceChangeKind(kind: ResourceChange['kind']): string {
   switch (kind) {
     case 'state_transition':
       return 'State transition';
+    case 'activity':
+      return 'Activity';
     case 'restart':
       return 'Restart';
     case 'config_update':

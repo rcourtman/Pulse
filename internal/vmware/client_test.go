@@ -55,6 +55,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if len(host.RecentTasks) != 1 || host.RecentTasks[0].Name != "Reconnect host" {
 		t.Fatalf("expected host recent task summary, got %+v", host.RecentTasks)
 	}
+	if len(host.RecentEvents) != 1 || host.RecentEvents[0].Type != "HostConnectionStateEvent" {
+		t.Fatalf("expected host recent event summary, got %+v", host.RecentEvents)
+	}
 
 	vm := snapshot.VMs[0]
 	if vm.Metrics == nil || vm.Metrics.MemoryPercent == nil || *vm.Metrics.MemoryPercent != 57.5 {
@@ -78,6 +81,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if len(vm.RecentTasks) != 1 || vm.RecentTasks[0].State != "success" {
 		t.Fatalf("expected VM recent task info, got %+v", vm.RecentTasks)
 	}
+	if len(vm.RecentEvents) != 1 || vm.RecentEvents[0].Type != "VmMessageEvent" {
+		t.Fatalf("expected VM recent event info, got %+v", vm.RecentEvents)
+	}
 
 	datastore := snapshot.Datastores[0]
 	if datastore.OverallStatus != "yellow" {
@@ -94,6 +100,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	}
 	if len(datastore.RecentTasks) != 1 || datastore.RecentTasks[0].Name != "Refresh datastore" {
 		t.Fatalf("expected datastore recent task info, got %+v", datastore.RecentTasks)
+	}
+	if len(datastore.RecentEvents) != 1 || datastore.RecentEvents[0].Type != "DatastoreRenamedEvent" {
+		t.Fatalf("expected datastore recent event info, got %+v", datastore.RecentEvents)
 	}
 }
 
@@ -203,6 +212,7 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 		writeJSON(w, map[string]any{
 			"sessionManager": map[string]any{"value": "SessionManager"},
 			"perfManager":    map[string]any{"value": "PerformanceManager"},
+			"eventManager":   map[string]any{"value": "EventManager"},
 		})
 	})
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/SessionManager/SessionManager/Login", func(w http.ResponseWriter, r *http.Request) {
@@ -303,6 +313,61 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 					{"id": map[string]any{"counterId": 6, "instance": "2000"}, "value": []int64{5}},
 					{"id": map[string]any{"counterId": 7, "instance": "2000"}, "value": []int64{6}},
 				},
+			}})
+		default:
+			writeJSON(w, []map[string]any{})
+		}
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/EventManager/EventManager/QueryEvents", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		var request struct {
+			Filter struct {
+				Entity *struct {
+					Entity struct {
+						Type  string `json:"type"`
+						Value string `json:"value"`
+					} `json:"entity"`
+					Recursion string `json:"recursion"`
+				} `json:"entity"`
+				MaxCount int `json:"maxCount"`
+			} `json:"filter"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode query events request: %v", err)
+		}
+		if request.Filter.Entity == nil {
+			t.Fatal("expected event filter entity")
+		}
+		if request.Filter.Entity.Recursion != "self" {
+			t.Fatalf("event recursion = %q, want self", request.Filter.Entity.Recursion)
+		}
+		if request.Filter.MaxCount != 3 {
+			t.Fatalf("event maxCount = %d, want 3", request.Filter.MaxCount)
+		}
+		switch request.Filter.Entity.Entity.Type {
+		case "HostSystem":
+			writeJSON(w, []map[string]any{{
+				"key":                  101,
+				"userName":             "administrator@vsphere.local",
+				"createdTime":          "2026-03-30T18:15:00Z",
+				"fullFormattedMessage": "Host entered maintenance evaluation",
+				"eventTypeId":          "HostConnectionStateEvent",
+			}})
+		case "VirtualMachine":
+			writeJSON(w, []map[string]any{{
+				"key":                  201,
+				"userName":             "vpxuser",
+				"createdTime":          "2026-03-30T18:12:00Z",
+				"fullFormattedMessage": "Snapshot completed successfully",
+				"eventTypeId":          "VmMessageEvent",
+			}})
+		case "Datastore":
+			writeJSON(w, []map[string]any{{
+				"key":                  301,
+				"userName":             "storage-admin",
+				"createdTime":          "2026-03-30T18:09:00Z",
+				"fullFormattedMessage": "Datastore metadata refreshed",
+				"eventTypeId":          "DatastoreRenamedEvent",
 			}})
 		default:
 			writeJSON(w, []map[string]any{})

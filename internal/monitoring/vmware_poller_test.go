@@ -40,6 +40,12 @@ func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
 				ConnectionState: "CONNECTED",
 				PowerState:      "POWERED_ON",
 				HostUUID:        "uuid-host-1",
+				RecentTasks: []vmware.InventoryTask{{
+					Task:      "task-11",
+					Name:      "Reconnect host",
+					State:     "running",
+					StartedAt: time.Now().UTC().Add(-time.Minute),
+				}},
 			}},
 			VMs: []vmware.InventoryVM{{
 				VM:            "vm-201",
@@ -47,6 +53,13 @@ func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
 				PowerState:    "POWERED_ON",
 				CPUCount:      2,
 				MemorySizeMiB: 4096,
+				RecentEvents: []vmware.InventoryEvent{{
+					Event:     "event-201",
+					Type:      "VmMessageEvent",
+					Message:   "Snapshot completed successfully",
+					User:      "vpxuser",
+					CreatedAt: time.Now().UTC().Add(-2 * time.Minute),
+				}},
 			}},
 			Datastores: []vmware.InventoryDatastore{{
 				Datastore: "datastore-11",
@@ -86,6 +99,20 @@ func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
 	ownedSources := poller.SnapshotOwnedSourcesForOrg("default")
 	if len(ownedSources) != 1 || ownedSources[0] != unifiedresources.SourceVMware {
 		t.Fatalf("owned sources = %#v, want [%q]", ownedSources, unifiedresources.SourceVMware)
+	}
+
+	changes := poller.GetCurrentChangesForOrg("default")
+	if len(changes) != 2 {
+		t.Fatalf("expected 2 VMware activity changes, got %d", len(changes))
+	}
+	if changes[0].Kind != unifiedresources.ChangeActivity {
+		t.Fatalf("latest VMware change kind = %q, want %q", changes[0].Kind, unifiedresources.ChangeActivity)
+	}
+	if changes[0].SourceAdapter != unifiedresources.AdapterVMware {
+		t.Fatalf("latest VMware change source adapter = %q, want %q", changes[0].SourceAdapter, unifiedresources.AdapterVMware)
+	}
+	if supplemental := poller.SupplementalChanges(nil, "default"); len(supplemental) != 2 {
+		t.Fatalf("expected SupplementalChanges to mirror cached VMware changes, got %d", len(supplemental))
 	}
 }
 

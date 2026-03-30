@@ -18,6 +18,7 @@ const defaultVMwarePollInterval = 60 * time.Second
 type vmwarePollerProvider interface {
 	Refresh(ctx context.Context) error
 	Records() []unifiedresources.IngestRecord
+	ActivityChanges() []unifiedresources.ResourceChange
 	Close()
 }
 
@@ -32,6 +33,8 @@ type VMwarePoller struct {
 	configsByOrg map[string]map[string]config.VMwareVCenterInstance
 	// cachedRecordsByOrg is keyed by orgID, then connection ID.
 	cachedRecordsByOrg map[string]map[string][]unifiedresources.IngestRecord
+	// cachedChangesByOrg is keyed by orgID, then connection ID.
+	cachedChangesByOrg map[string]map[string][]unifiedresources.ResourceChange
 	newProvider        func(config.VMwareVCenterInstance) (vmwarePollerProvider, error)
 	cancel             context.CancelFunc
 	stopped            chan struct{}
@@ -60,6 +63,7 @@ func NewVMwarePoller(multiTenant *config.MultiTenantPersistence, interval time.D
 		providersByOrg:     make(map[string]map[string]vmwarePollerProvider),
 		configsByOrg:       make(map[string]map[string]config.VMwareVCenterInstance),
 		cachedRecordsByOrg: make(map[string]map[string][]unifiedresources.IngestRecord),
+		cachedChangesByOrg: make(map[string]map[string][]unifiedresources.ResourceChange),
 		stopped:            stopped,
 		interval:           interval,
 		explicitInterval:   explicitInterval,
@@ -234,6 +238,9 @@ func (p *VMwarePoller) syncConnections() {
 		if p.cachedRecordsByOrg[orgID] == nil {
 			p.cachedRecordsByOrg[orgID] = make(map[string][]unifiedresources.IngestRecord)
 		}
+		if p.cachedChangesByOrg[orgID] == nil {
+			p.cachedChangesByOrg[orgID] = make(map[string][]unifiedresources.ResourceChange)
+		}
 
 		for connectionID, instance := range connectionMap {
 			existingConfig, exists := p.configsByOrg[orgID][connectionID]
@@ -256,6 +263,7 @@ func (p *VMwarePoller) syncConnections() {
 					Msg("VMware poller failed to build provider")
 				delete(p.providersByOrg[orgID], connectionID)
 				delete(p.cachedRecordsByOrg[orgID], connectionID)
+				delete(p.cachedChangesByOrg[orgID], connectionID)
 				p.configsByOrg[orgID][connectionID] = instance
 				continue
 			}
@@ -278,6 +286,9 @@ func (p *VMwarePoller) syncConnections() {
 			if p.cachedRecordsByOrg[orgID] != nil {
 				delete(p.cachedRecordsByOrg[orgID], connectionID)
 			}
+			if p.cachedChangesByOrg[orgID] != nil {
+				delete(p.cachedChangesByOrg[orgID], connectionID)
+			}
 			if p.configsByOrg[orgID] != nil {
 				delete(p.configsByOrg[orgID], connectionID)
 			}
@@ -287,6 +298,7 @@ func (p *VMwarePoller) syncConnections() {
 			delete(p.providersByOrg, orgID)
 			delete(p.configsByOrg, orgID)
 			delete(p.cachedRecordsByOrg, orgID)
+			delete(p.cachedChangesByOrg, orgID)
 		}
 	}
 }
@@ -317,12 +329,17 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 	}
 
 	records := cloneIngestRecords(entry.provider.Records())
+	changes := cloneResourceChanges(entry.provider.ActivityChanges())
 
 	p.mu.Lock()
 	if p.cachedRecordsByOrg[entry.orgID] == nil {
 		p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
 	}
+	if p.cachedChangesByOrg[entry.orgID] == nil {
+		p.cachedChangesByOrg[entry.orgID] = make(map[string][]unifiedresources.ResourceChange)
+	}
 	p.cachedRecordsByOrg[entry.orgID][entry.connectionID] = records
+	p.cachedChangesByOrg[entry.orgID][entry.connectionID] = changes
 	p.mu.Unlock()
 }
 
@@ -392,6 +409,11 @@ func (p *VMwarePoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedre
 	return p.GetCurrentRecordsForOrg(orgID)
 }
 
+// SupplementalChanges implements the monitor supplemental-change provider contract.
+func (p *VMwarePoller) SupplementalChanges(_ *Monitor, orgID string) []unifiedresources.ResourceChange {
+	return p.GetCurrentChangesForOrg(orgID)
+}
+
 // SnapshotOwnedSources declares that VMware records are ingested through the
 // supplemental resource path rather than legacy monitor snapshot slices.
 func (p *VMwarePoller) SnapshotOwnedSources() []unifiedresources.DataSource {
@@ -441,4 +463,68 @@ func (p *VMwarePoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources.
 		records = append(records, cloneIngestRecords(recordsByConnection[connectionID])...)
 	}
 	return records
+}
+
+// GetCurrentChangesForOrg returns the latest known VMware timeline changes for the specified org.
+func (p *VMwarePoller) GetCurrentChangesForOrg(orgID string) []unifiedresources.ResourceChange {
+	if p == nil {
+		return nil
+	}
+
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		orgID = "default"
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	changesByConnection := p.cachedChangesByOrg[orgID]
+	if len(changesByConnection) == 0 {
+		return nil
+	}
+
+	connectionIDs := make([]string, 0, len(changesByConnection))
+	for connectionID := range changesByConnection {
+		connectionIDs = append(connectionIDs, connectionID)
+	}
+	sort.Strings(connectionIDs)
+
+	total := 0
+	for _, connectionID := range connectionIDs {
+		total += len(changesByConnection[connectionID])
+	}
+	if total == 0 {
+		return nil
+	}
+
+	changes := make([]unifiedresources.ResourceChange, 0, total)
+	for _, connectionID := range connectionIDs {
+		changes = append(changes, cloneResourceChanges(changesByConnection[connectionID])...)
+	}
+	return changes
+}
+
+func cloneResourceChanges(in []unifiedresources.ResourceChange) []unifiedresources.ResourceChange {
+	if in == nil {
+		return nil
+	}
+	out := make([]unifiedresources.ResourceChange, len(in))
+	for i := range in {
+		out[i] = in[i]
+		if in[i].OccurredAt != nil {
+			occurredAt := in[i].OccurredAt.UTC()
+			out[i].OccurredAt = &occurredAt
+		}
+		if in[i].RelatedResources != nil {
+			out[i].RelatedResources = append([]string(nil), in[i].RelatedResources...)
+		}
+		if in[i].Metadata != nil {
+			out[i].Metadata = make(map[string]any, len(in[i].Metadata))
+			for key, value := range in[i].Metadata {
+				out[i].Metadata[key] = value
+			}
+		}
+	}
+	return out
 }

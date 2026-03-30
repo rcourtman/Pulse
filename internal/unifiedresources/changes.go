@@ -18,6 +18,7 @@ type ChangeKind string
 
 const (
 	ChangeStateTransition     ChangeKind = "state_transition"
+	ChangeActivity            ChangeKind = "activity"
 	ChangeRestart             ChangeKind = "restart"
 	ChangeConfigUpdate        ChangeKind = "config_update"
 	ChangeAnomaly             ChangeKind = "metric_anomaly"
@@ -49,6 +50,7 @@ const (
 	AdapterDocker   ChangeSourceAdapter = "docker_adapter"
 	AdapterProxmox  ChangeSourceAdapter = "proxmox_adapter"
 	AdapterTrueNAS  ChangeSourceAdapter = "truenas_adapter"
+	AdapterVMware   ChangeSourceAdapter = "vmware_adapter"
 	AdapterOpsAgent ChangeSourceAdapter = "agent:ops-helper"
 )
 

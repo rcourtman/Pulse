@@ -505,6 +505,80 @@ func TestRecordChange_RoundTrip(t *testing.T) {
 	}
 }
 
+func TestRecordChange_IgnoresDuplicateIDs(t *testing.T) {
+	store := newTestStore(t)
+	now := time.Date(2026, 3, 30, 18, 20, 0, 0, time.UTC)
+
+	initial := ResourceChange{
+		ID:            "chg-dup-1",
+		ResourceID:    "vm:dup",
+		ObservedAt:    now,
+		Kind:          ChangeActivity,
+		SourceType:    SourcePlatformEvent,
+		SourceAdapter: AdapterVMware,
+		Confidence:    ConfidenceHigh,
+		Reason:        "Create snapshot (success)",
+	}
+	if err := store.RecordChange(initial); err != nil {
+		t.Fatalf("RecordChange initial: %v", err)
+	}
+
+	duplicate := initial
+	duplicate.Reason = "should be ignored"
+	duplicate.Metadata = map[string]any{"ignored": true}
+	if err := store.RecordChange(duplicate); err != nil {
+		t.Fatalf("RecordChange duplicate: %v", err)
+	}
+
+	results, err := store.GetRecentChanges("vm:dup", now.Add(-time.Minute), 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 change after duplicate insert, got %d", len(results))
+	}
+	if results[0].Reason != initial.Reason {
+		t.Fatalf("Reason = %q, want original %q", results[0].Reason, initial.Reason)
+	}
+	if len(results[0].Metadata) != 0 {
+		t.Fatalf("Metadata = %#v, want original empty metadata", results[0].Metadata)
+	}
+}
+
+func TestMemoryStore_RecordChangeIgnoresDuplicateIDs(t *testing.T) {
+	store := NewMemoryStore()
+	now := time.Date(2026, 3, 30, 18, 25, 0, 0, time.UTC)
+
+	change := ResourceChange{
+		ID:            "chg-mem-dup-1",
+		ResourceID:    "vm:memdup",
+		ObservedAt:    now,
+		Kind:          ChangeActivity,
+		SourceType:    SourcePlatformEvent,
+		SourceAdapter: AdapterVMware,
+		Confidence:    ConfidenceHigh,
+		Reason:        "Host entered maintenance evaluation",
+	}
+	if err := store.RecordChange(change); err != nil {
+		t.Fatalf("RecordChange initial: %v", err)
+	}
+	change.Reason = "should be ignored"
+	if err := store.RecordChange(change); err != nil {
+		t.Fatalf("RecordChange duplicate: %v", err)
+	}
+
+	results, err := store.GetRecentChanges("vm:memdup", now.Add(-time.Minute), 10)
+	if err != nil {
+		t.Fatalf("GetRecentChanges: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 change after duplicate insert, got %d", len(results))
+	}
+	if results[0].Reason != "Host entered maintenance evaluation" {
+		t.Fatalf("Reason = %q, want original reason", results[0].Reason)
+	}
+}
+
 func TestRecordChange_PreservesTimelineMetadata(t *testing.T) {
 	store := newTestStore(t)
 	now := time.Date(2026, 3, 18, 12, 0, 0, 0, time.UTC)

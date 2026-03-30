@@ -415,6 +415,15 @@ may collect VI JSON overall status, active alarms, recent tasks, and VM
 snapshot counts, but they must project those reads onto shared canonical
 resources plus shared alert/resource history metadata instead of persisting a
 VMware-only signal cache, event log, or provider-specific incident timeline.
+That same monitoring boundary now also owns VMware recent-task and recent-event
+breadcrumbs on the shared canonical resource timeline. `internal/vmware/`
+provider code plus `internal/monitoring/vmware_poller.go` and
+`internal/monitoring/monitor.go` may emit read-only `activity` changes through
+the shared supplemental-ingest path, but those entries must land in the same
+canonical `resource_changes` store used by every other resource timeline read.
+Pulse must not add a VMware-only task/event table, replay log, or provider
+history reader just because the VI JSON event surfaces differ from alert and
+metrics collection.
 That same monitoring boundary now also owns VMware performance telemetry on
 the shared chart/history paths. `internal/vmware/client_metrics.go` must use
 the VI JSON `PerformanceManager` read surfaces to resolve current-support,

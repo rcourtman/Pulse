@@ -52,6 +52,14 @@ type SupplementalRecordsPollProvider interface {
 	SupplementalRecords(m *Monitor, orgID string) []unifiedresources.IngestRecord
 }
 
+// SupplementalChangesPollProvider is an optional PollProvider extension for
+// providers that can emit canonical timeline changes alongside supplemental
+// source-native records.
+type SupplementalChangesPollProvider interface {
+	SupplementalSource() unifiedresources.DataSource
+	SupplementalChanges(m *Monitor, orgID string) []unifiedresources.ResourceChange
+}
+
 // SnapshotOwnedSourcesPollProvider is an optional SupplementalRecordsPollProvider
 // extension for providers that fully own source-native resource ingest.
 // When set, legacy snapshot slices for these sources are suppressed.
@@ -1069,4 +1077,50 @@ func (m *Monitor) collectSupplementalRecordsBySource() map[unifiedresources.Data
 		return nil
 	}
 	return recordsBySource
+}
+
+func (m *Monitor) collectSupplementalChanges() []unifiedresources.ResourceChange {
+	providers := m.pollProviderSnapshotWithBuiltins()
+	manualProviders := m.supplementalProviderSnapshot()
+	if len(providers) == 0 && len(manualProviders) == 0 {
+		return nil
+	}
+
+	orgID := "default"
+	if m != nil {
+		if trimmed := strings.TrimSpace(m.orgID); trimmed != "" {
+			orgID = trimmed
+		}
+	}
+
+	changes := make([]unifiedresources.ResourceChange, 0)
+	for _, provider := range providers {
+		changeProvider, ok := provider.(SupplementalChangesPollProvider)
+		if !ok {
+			continue
+		}
+		changes = append(changes, changeProvider.SupplementalChanges(m, orgID)...)
+	}
+
+	if len(manualProviders) > 0 {
+		sources := make([]string, 0, len(manualProviders))
+		for source := range manualProviders {
+			sources = append(sources, string(source))
+		}
+		sort.Strings(sources)
+		for _, sourceName := range sources {
+			source := unifiedresources.DataSource(sourceName)
+			provider := manualProviders[source]
+			changeProvider, ok := provider.(MonitorSupplementalChangesProvider)
+			if !ok || changeProvider == nil {
+				continue
+			}
+			changes = append(changes, changeProvider.SupplementalChanges(m, orgID)...)
+		}
+	}
+
+	if len(changes) == 0 {
+		return nil
+	}
+	return changes
 }

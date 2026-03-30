@@ -7,18 +7,18 @@ import (
 
 func TestParseResourceChangeFilters(t *testing.T) {
 	filters, err := ParseResourceChangeFilters(
-		[]string{" state_transition,RESTART ", "config_update", "alert_fired,command_executed"},
+		[]string{" state_transition,RESTART ", "config_update", "activity,alert_fired,command_executed"},
 		[]string{" platform_event ", "pulse_diff, HEURISTIC"},
-		[]string{" docker_adapter ", "proxmox_adapter,agent:ops-helper"},
+		[]string{" docker_adapter ", "proxmox_adapter,vmware_adapter,agent:ops-helper"},
 	)
 	if err != nil {
 		t.Fatalf("ParseResourceChangeFilters() error = %v", err)
 	}
 
-	if got, want := len(filters.Kinds), 5; got != want {
+	if got, want := len(filters.Kinds), 6; got != want {
 		t.Fatalf("kinds length = %d, want %d", got, want)
 	}
-	if filters.Kinds[0] != ChangeStateTransition || filters.Kinds[1] != ChangeRestart || filters.Kinds[2] != ChangeConfigUpdate || filters.Kinds[3] != ChangeAlertFired || filters.Kinds[4] != ChangeCommandExecuted {
+	if filters.Kinds[0] != ChangeStateTransition || filters.Kinds[1] != ChangeRestart || filters.Kinds[2] != ChangeConfigUpdate || filters.Kinds[3] != ChangeActivity || filters.Kinds[4] != ChangeAlertFired || filters.Kinds[5] != ChangeCommandExecuted {
 		t.Fatalf("unexpected parsed kinds: %#v", filters.Kinds)
 	}
 	if got, want := len(filters.SourceTypes), 3; got != want {
@@ -27,10 +27,10 @@ func TestParseResourceChangeFilters(t *testing.T) {
 	if filters.SourceTypes[0] != SourcePlatformEvent || filters.SourceTypes[1] != SourcePulseDiff || filters.SourceTypes[2] != SourceHeuristic {
 		t.Fatalf("unexpected parsed source types: %#v", filters.SourceTypes)
 	}
-	if got, want := len(filters.SourceAdapters), 3; got != want {
+	if got, want := len(filters.SourceAdapters), 4; got != want {
 		t.Fatalf("source adapters length = %d, want %d", got, want)
 	}
-	if filters.SourceAdapters[0] != AdapterDocker || filters.SourceAdapters[1] != AdapterProxmox || filters.SourceAdapters[2] != AdapterOpsAgent {
+	if filters.SourceAdapters[0] != AdapterDocker || filters.SourceAdapters[1] != AdapterProxmox || filters.SourceAdapters[2] != AdapterVMware || filters.SourceAdapters[3] != AdapterOpsAgent {
 		t.Fatalf("unexpected parsed source adapters: %#v", filters.SourceAdapters)
 	}
 }

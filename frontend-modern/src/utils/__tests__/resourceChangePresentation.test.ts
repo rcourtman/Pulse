@@ -12,6 +12,7 @@ import { formatConfidencePercentage } from '@/utils/confidencePresentation';
 
 describe('resourceChangePresentation utils', () => {
   it('formats canonical resource change kinds', () => {
+    expect(formatResourceChangeKind('activity')).toBe('Activity');
     expect(formatResourceChangeKind('config_update')).toBe('Config update');
     expect(formatResourceChangeKind('metric_anomaly')).toBe('Metric anomaly');
     expect(formatResourceChangeKind('relationship_change')).toBe('Relationship change');
@@ -47,6 +48,10 @@ describe('resourceChangePresentation utils', () => {
       label: 'Restart',
       plural: 'Restarts',
     });
+    expect(getResourceChangeKindPresentation('activity')).toMatchObject({
+      label: 'Activity',
+      plural: 'Activities',
+    });
     expect(getResourceChangeKindPresentation('alert_resolved')).toMatchObject({
       label: 'Alert resolved',
       plural: 'Alerts resolved',
@@ -58,6 +63,10 @@ describe('resourceChangePresentation utils', () => {
     expect(getResourceChangeSourceAdapterPresentation('proxmox_adapter')).toMatchObject({
       label: 'Proxmox adapter',
       plural: 'Proxmox adapters',
+    });
+    expect(getResourceChangeSourceAdapterPresentation('vmware_adapter')).toMatchObject({
+      label: 'VMware adapter',
+      plural: 'VMware adapters',
     });
   });
 

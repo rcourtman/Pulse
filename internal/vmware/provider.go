@@ -30,6 +30,14 @@ type InventoryTask struct {
 	ErrorMessage  string    `json:"error_message,omitempty"`
 }
 
+type InventoryEvent struct {
+	Event     string    `json:"event,omitempty"`
+	Type      string    `json:"type,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	User      string    `json:"user,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+}
+
 // InventoryMetrics captures the current runtime metric floor projected onto
 // canonical Pulse metrics for VMware-backed hosts and VMs.
 type InventoryMetrics struct {
@@ -64,6 +72,7 @@ type InventoryHost struct {
 	OverallStatus       string            `json:"overall_status,omitempty"`
 	TriggeredAlarms     []InventoryAlarm  `json:"triggered_alarms,omitempty"`
 	RecentTasks         []InventoryTask   `json:"recent_tasks,omitempty"`
+	RecentEvents        []InventoryEvent  `json:"recent_events,omitempty"`
 	Metrics             *InventoryMetrics `json:"metrics,omitempty"`
 }
 
@@ -97,6 +106,7 @@ type InventoryVM struct {
 	OverallStatus       string            `json:"overall_status,omitempty"`
 	TriggeredAlarms     []InventoryAlarm  `json:"triggered_alarms,omitempty"`
 	RecentTasks         []InventoryTask   `json:"recent_tasks,omitempty"`
+	RecentEvents        []InventoryEvent  `json:"recent_events,omitempty"`
 	SnapshotCount       int               `json:"snapshot_count,omitempty"`
 	Metrics             *InventoryMetrics `json:"metrics,omitempty"`
 }
@@ -124,6 +134,7 @@ type InventoryDatastore struct {
 	OverallStatus      string           `json:"overall_status,omitempty"`
 	TriggeredAlarms    []InventoryAlarm `json:"triggered_alarms,omitempty"`
 	RecentTasks        []InventoryTask  `json:"recent_tasks,omitempty"`
+	RecentEvents       []InventoryEvent `json:"recent_events,omitempty"`
 }
 
 // InventorySnapshot captures the projected inventory floor for one vCenter
@@ -555,6 +566,7 @@ func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
 		out[i].DatastoreNames = cloneStringSlice(in[i].DatastoreNames)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -572,6 +584,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i].GuestIPAddresses = cloneStringSlice(in[i].GuestIPAddresses)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
 		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
@@ -592,6 +605,7 @@ func cloneInventoryDatastores(in []InventoryDatastore) []InventoryDatastore {
 		out[i].MultipleHostAccess = cloneBoolPointer(in[i].MultipleHostAccess)
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+		out[i].RecentEvents = cloneInventoryEvents(in[i].RecentEvents)
 	}
 	return out
 }
@@ -610,6 +624,15 @@ func cloneInventoryTasks(in []InventoryTask) []InventoryTask {
 		return nil
 	}
 	out := make([]InventoryTask, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneInventoryEvents(in []InventoryEvent) []InventoryEvent {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryEvent, len(in))
 	copy(out, in)
 	return out
 }

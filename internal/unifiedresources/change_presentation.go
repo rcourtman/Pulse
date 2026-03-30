@@ -28,6 +28,8 @@ func ChangeKindLabel(kind ChangeKind) string {
 	switch kind {
 	case ChangeStateTransition:
 		return "State transition"
+	case ChangeActivity:
+		return "Activity"
 	case ChangeRestart:
 		return "Restart"
 	case ChangeConfigUpdate:
