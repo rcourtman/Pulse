@@ -53,6 +53,42 @@ func TestRouterRouteInventory(t *testing.T) {
 	}
 }
 
+func TestRouterRouteInventory_VMwarePhase1ExclusionIntegrity(t *testing.T) {
+	literalRoutes, _, _ := parseRouterRoutes(t)
+	actual := sliceToSet(t, literalRoutes, "router routes")
+
+	forbidden := []string{
+		"/api/vmware/hosts",
+		"/api/vmware/vms",
+		"/api/vmware/datastores",
+		"/api/vmware/events",
+		"/api/vmware/tasks",
+		"/api/vmware/alarms",
+	}
+	for _, route := range forbidden {
+		if _, ok := actual[route]; ok {
+			t.Fatalf("vmware phase-1 exclusion failed: unexpected route %q is registered", route)
+		}
+	}
+
+	var vmwareRoutes []string
+	for route := range actual {
+		if strings.HasPrefix(route, "/api/vmware/") {
+			vmwareRoutes = append(vmwareRoutes, route)
+		}
+	}
+	sort.Strings(vmwareRoutes)
+
+	expected := []string{
+		"/api/vmware/connections",
+		"/api/vmware/connections/",
+		"/api/vmware/connections/test",
+	}
+	if strings.Join(vmwareRoutes, ",") != strings.Join(expected, ",") {
+		t.Fatalf("vmware phase-1 route family drifted: got %v, want %v", vmwareRoutes, expected)
+	}
+}
+
 func parseRouterRoutes(t *testing.T) ([]string, []string, []string) {
 	t.Helper()
 

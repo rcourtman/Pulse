@@ -111,11 +111,7 @@ func (e *PulseToolExecutor) executeControlResource(ctx context.Context, args map
 		return NewErrorResult(fmt.Errorf("resource '%s' has not been discovered in this session. Use pulse_query to find it first", resourceRef)), nil
 	}
 	if validation.ErrorMsg != "" {
-		log.Warn().
-			Str("resource", resourceRef).
-			Str("action", action).
-			Str("validation_error", validation.ErrorMsg).
-			Msg("[ControlResource] Continuing with discovered resource despite validation warning")
+		return NewErrorResult(errors.New(validation.ErrorMsg)), nil
 	}
 
 	resolved := validation.Resource
@@ -530,6 +526,9 @@ func (e *PulseToolExecutor) executeControlGuest(ctx context.Context, args map[st
 		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
 	}
 	if validation.ErrorMsg != "" {
+		if validation.Resource != nil {
+			return NewErrorResult(errors.New(validation.ErrorMsg)), nil
+		}
 		// Soft validation - log warning but allow operation
 		log.Warn().
 			Str("guest_id", guestID).

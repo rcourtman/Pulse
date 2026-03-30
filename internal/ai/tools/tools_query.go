@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -2242,10 +2243,22 @@ func metricTotalGB(value *unifiedresources.MetricValue) float64 {
 	return float64(*value.Total) / (1024 * 1024 * 1024)
 }
 
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
+}
+
 func canonicalResourcePlatform(resource unifiedresources.Resource) string {
 	switch {
 	case resource.TrueNAS != nil || resourceHasTag(resource, "truenas"):
 		return "truenas"
+	case resource.VMware != nil:
+		return "vmware-vsphere"
 	case resource.Proxmox != nil:
 		return "proxmox"
 	case resource.Docker != nil:
@@ -2359,6 +2372,218 @@ func findCanonicalAppContainerResource(provider UnifiedResourceProvider, resourc
 
 func guestExecutorActions() []string {
 	return []string{"query", "get", "logs", "console", "exec", "start", "stop", "shutdown", "restart", "delete"}
+}
+
+func readOnlyResourceActions() []string {
+	return []string{"query", "get"}
+}
+
+func canonicalGuestResourceType(kind string) (unifiedresources.ResourceType, bool) {
+	switch strings.TrimSpace(kind) {
+	case "vm":
+		return unifiedresources.ResourceTypeVM, true
+	case "system-container":
+		return unifiedresources.ResourceTypeSystemContainer, true
+	default:
+		return "", false
+	}
+}
+
+func canonicalGuestManagedID(resource unifiedresources.Resource) string {
+	if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+		return strconv.Itoa(resource.Proxmox.VMID)
+	}
+	if resource.VMware != nil {
+		return strings.TrimSpace(resource.VMware.ManagedObjectID)
+	}
+	return ""
+}
+
+func canonicalGuestTarget(resource unifiedresources.Resource) string {
+	if resource.Proxmox != nil {
+		return strings.TrimSpace(resource.Proxmox.NodeName)
+	}
+	if resource.VMware != nil {
+		return firstNonEmptyString(
+			resource.VMware.RuntimeHostName,
+			resource.VMware.RuntimeHostID,
+			resource.ParentName,
+			resource.VMware.ConnectionName,
+		)
+	}
+	return strings.TrimSpace(resource.ParentName)
+}
+
+func canonicalGuestSearchCandidates(kind string, resource unifiedresources.Resource) []string {
+	candidates := []string{
+		resourceDisplayName(resource),
+		strings.TrimSpace(resource.ID),
+	}
+	if managedID := canonicalGuestManagedID(resource); managedID != "" {
+		candidates = append(candidates, managedID)
+	}
+	if host := canonicalGuestTarget(resource); host != "" {
+		candidates = append(candidates, host)
+	}
+	candidates = append(candidates, resource.Identity.IPAddresses...)
+	candidates = append(candidates, resource.Tags...)
+
+	if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+		vmid := strconv.Itoa(resource.Proxmox.VMID)
+		switch strings.TrimSpace(kind) {
+		case "vm":
+			candidates = append(candidates, "vm"+vmid)
+		case "system-container":
+			candidates = append(candidates, "system-container"+vmid)
+		}
+	}
+
+	return candidates
+}
+
+func canonicalGuestMatchesResourceID(kind, resourceID string, resource unifiedresources.Resource) bool {
+	query := strings.TrimSpace(resourceID)
+	if query == "" {
+		return false
+	}
+	for _, candidate := range canonicalGuestSearchCandidates(kind, resource) {
+		if strings.EqualFold(strings.TrimSpace(candidate), query) {
+			return true
+		}
+	}
+	return false
+}
+
+func findCanonicalGuestResource(provider UnifiedResourceProvider, kind, resourceID string) (unifiedresources.Resource, bool) {
+	if provider == nil {
+		return unifiedresources.Resource{}, false
+	}
+	resourceType, ok := canonicalGuestResourceType(kind)
+	if !ok {
+		return unifiedresources.Resource{}, false
+	}
+	for _, resource := range provider.GetByType(resourceType) {
+		if canonicalGuestMatchesResourceID(kind, resourceID, resource) {
+			return resource, true
+		}
+	}
+	return unifiedresources.Resource{}, false
+}
+
+func canonicalGuestRegistration(kind string, resource unifiedresources.Resource) (ResourceRegistration, bool) {
+	kind = strings.TrimSpace(kind)
+	name := strings.TrimSpace(resourceDisplayName(resource))
+	providerUID := firstNonEmptyString(canonicalGuestManagedID(resource), resource.ID)
+	if kind == "" || name == "" || providerUID == "" {
+		return ResourceRegistration{}, false
+	}
+
+	host := canonicalGuestTarget(resource)
+	aliases := appendUniqueStrings(nil, canonicalGuestSearchCandidates(kind, resource)...)
+	reg := ResourceRegistration{
+		Kind:        kind,
+		ProviderUID: providerUID,
+		Name:        name,
+		Aliases:     aliases,
+		HostUID:     host,
+		HostName:    host,
+		Node:        host,
+	}
+
+	switch kind {
+	case "vm":
+		reg.LocationChain = []string{"agent:" + firstNonEmptyString(host, name), "vm:" + name}
+	case "system-container":
+		reg.LocationChain = []string{"agent:" + firstNonEmptyString(host, name), "system-container:" + name}
+	}
+
+	switch canonicalResourcePlatform(resource) {
+	case "proxmox":
+		if resource.Proxmox == nil || host == "" {
+			return ResourceRegistration{}, false
+		}
+		reg.VMID = resource.Proxmox.VMID
+		reg.HostUID = strings.TrimSpace(resource.Proxmox.NodeName)
+		reg.HostName = strings.TrimSpace(resource.Proxmox.NodeName)
+		reg.Node = strings.TrimSpace(resource.Proxmox.NodeName)
+		adapter := "qm"
+		if kind == "system-container" {
+			adapter = "pct"
+		}
+		reg.Executors = []ExecutorRegistration{{
+			ExecutorID: reg.Node,
+			Adapter:    adapter,
+			Actions:    guestExecutorActions(),
+			Priority:   10,
+		}}
+	default:
+		executorID := firstNonEmptyString(host, name)
+		reg.Executors = []ExecutorRegistration{{
+			ExecutorID: executorID,
+			Adapter:    canonicalResourcePlatform(resource),
+			Actions:    readOnlyResourceActions(),
+			Priority:   10,
+		}}
+	}
+
+	return reg, true
+}
+
+func canonicalGuestResponse(kind string, resource unifiedresources.Resource, governance *governedQueryMetadataResolver) ResourceResponse {
+	candidates := append([]string{resourceDisplayName(resource), resource.ID}, canonicalGuestSearchCandidates(kind, resource)...)
+	response := EmptyResourceResponse()
+	response.GovernedResourceMetadata = governance.Resolve(candidates...)
+	response.Type = kind
+	response.ID = firstNonEmptyString(resource.ID, canonicalGuestManagedID(resource))
+	response.Name = resourceDisplayName(resource)
+	response.Status = string(resource.Status)
+	response.Platform = canonicalResourcePlatform(resource)
+	response.Node = canonicalGuestTarget(resource)
+	response.Host = canonicalGuestTarget(resource)
+	response.CPU = ResourceCPU{
+		Percent: metricPercent(resourceMetric(resource, "cpu")),
+	}
+	response.Memory = ResourceMemory{
+		Percent: metricPercent(resourceMetric(resource, "memory")),
+		UsedGB:  metricUsedGB(resourceMetric(resource, "memory")),
+		TotalGB: metricTotalGB(resourceMetric(resource, "memory")),
+	}
+	if diskMetric := resourceMetric(resource, "disk"); diskMetric != nil {
+		response.Disk = &ResourceDisk{
+			Percent: metricPercent(diskMetric),
+			UsedGB:  metricUsedGB(diskMetric),
+			TotalGB: metricTotalGB(diskMetric),
+		}
+	}
+	response.Tags = append([]string{}, resource.Tags...)
+
+	if resource.Proxmox != nil {
+		response.ID = firstNonEmptyString(resource.ID, resource.Proxmox.SourceID)
+		response.Node = strings.TrimSpace(resource.Proxmox.NodeName)
+		response.CPU.Cores = resource.Proxmox.CPUs
+		response.OS = strings.TrimSpace(resource.Proxmox.OSName)
+		if !resource.Proxmox.LastBackup.IsZero() {
+			t := resource.Proxmox.LastBackup
+			response.LastBackup = &t
+		}
+	}
+
+	if resource.VMware != nil {
+		response.ID = firstNonEmptyString(resource.ID, resource.VMware.ManagedObjectID)
+		response.Node = firstNonEmptyString(response.Node, resource.VMware.RuntimeHostName, resource.ParentName)
+		response.Host = firstNonEmptyString(response.Host, resource.VMware.RuntimeHostName, resource.ParentName)
+		if response.CPU.Cores == 0 {
+			response.CPU.Cores = resource.VMware.CPUCount
+		}
+		if response.Memory.TotalGB == 0 && resource.VMware.MemorySizeMiB > 0 {
+			response.Memory.TotalGB = float64(resource.VMware.MemorySizeMiB) / 1024
+		}
+		if response.OS == "" {
+			response.OS = strings.TrimSpace(resource.VMware.GuestOSFamily)
+		}
+	}
+
+	return response.NormalizeCollections()
 }
 
 func canonicalAppContainerAdapter(resource unifiedresources.Resource) string {
@@ -3775,6 +4000,13 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "vm":
+		if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "vm", resourceID); ok {
+			response := canonicalGuestResponse("vm", resource, governance)
+			if reg, ok := canonicalGuestRegistration("vm", resource); ok {
+				e.registerResolvedResourceWithExplicitAccess(reg)
+			}
+			return NewJSONResult(response), nil
+		}
 		for _, vm := range rs.VMs() {
 			if fmt.Sprintf("%d", vm.VMID()) == resourceID || vm.Name() == resourceID || vm.ID() == resourceID {
 				used := vm.MemoryUsed()
@@ -3830,6 +4062,13 @@ func (e *PulseToolExecutor) executeGetResource(_ context.Context, args map[strin
 		}), nil
 
 	case "system-container":
+		if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "system-container", resourceID); ok {
+			response := canonicalGuestResponse("system-container", resource, governance)
+			if reg, ok := canonicalGuestRegistration("system-container", resource); ok {
+				e.registerResolvedResourceWithExplicitAccess(reg)
+			}
+			return NewJSONResult(response), nil
+		}
 		for _, ct := range rs.Containers() {
 			if fmt.Sprintf("%d", ct.VMID()) == resourceID || ct.Name() == resourceID || ct.ID() == resourceID {
 				used := ct.MemoryUsed()
@@ -4561,11 +4800,15 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 	}
 
 	systemResources := []unifiedresources.Resource{}
+	vmResources := []unifiedresources.Resource{}
+	systemContainerResources := []unifiedresources.Resource{}
 	appContainerResources := []unifiedresources.Resource{}
 	storagePoolResources := []unifiedresources.Resource{}
 	physicalDiskResources := []unifiedresources.Resource{}
 	if e.unifiedResourceProvider != nil {
 		systemResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAgent))
+		vmResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeVM))
+		systemContainerResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeSystemContainer))
 		appContainerResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypeAppContainer))
 		physicalDiskResources = sortedResourcesByName(e.unifiedResourceProvider.GetByType(unifiedresources.ResourceTypePhysicalDisk))
 		storagePoolResources = canonicalStoragePoolResources(e.unifiedResourceProvider)
@@ -4636,7 +4879,37 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "vm" {
+	if (typeFilter == "" || typeFilter == "vm") && len(vmResources) > 0 {
+		for _, resource := range vmResources {
+			status := string(resource.Status)
+			if !statusMatchesFilter(status, statusFilter) {
+				continue
+			}
+			candidates := canonicalGuestSearchCandidates("vm", resource)
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+
+			vmid := 0
+			if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+				vmid = resource.Proxmox.VMID
+			}
+			node := canonicalGuestTarget(resource)
+			metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
+			addMatch(ResourceMatch{
+				GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
+				Type:                     "vm",
+				ID:                       resource.ID,
+				Name:                     resourceDisplayName(resource),
+				Status:                   status,
+				Node:                     node,
+				NodeHasAgent:             connectedAgentHostnames[node],
+				Platform:                 canonicalResourcePlatform(resource),
+				VMID:                     vmid,
+				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+			})
+		}
+	} else if typeFilter == "" || typeFilter == "vm" {
 		for _, vm := range rs.VMs() {
 			status := string(vm.Status())
 			if !statusMatchesFilter(status, statusFilter) {
@@ -4659,13 +4932,44 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Status:                   status,
 				Node:                     vm.Node(),
 				NodeHasAgent:             connectedAgentHostnames[vm.Node()],
+				Platform:                 "proxmox",
 				VMID:                     vm.VMID(),
 				AgentConnected:           connectedAgentHostnames[vm.Name()],
 			})
 		}
 	}
 
-	if typeFilter == "" || typeFilter == "system-container" {
+	if (typeFilter == "" || typeFilter == "system-container") && len(systemContainerResources) > 0 {
+		for _, resource := range systemContainerResources {
+			status := string(resource.Status)
+			if !statusMatchesFilter(status, statusFilter) {
+				continue
+			}
+			candidates := canonicalGuestSearchCandidates("system-container", resource)
+			if !matchesQuery(queryLower, candidates...) {
+				continue
+			}
+
+			vmid := 0
+			if resource.Proxmox != nil && resource.Proxmox.VMID > 0 {
+				vmid = resource.Proxmox.VMID
+			}
+			node := canonicalGuestTarget(resource)
+			metadataCandidates := append([]string{resourceDisplayName(resource), resource.ID}, candidates...)
+			addMatch(ResourceMatch{
+				GovernedResourceMetadata: governance.Resolve(metadataCandidates...),
+				Type:                     "system-container",
+				ID:                       resource.ID,
+				Name:                     resourceDisplayName(resource),
+				Status:                   status,
+				Node:                     node,
+				NodeHasAgent:             connectedAgentHostnames[node],
+				Platform:                 canonicalResourcePlatform(resource),
+				VMID:                     vmid,
+				AgentConnected:           resourceAgentConnected(resource, connectedAgentHostnames),
+			})
+		}
+	} else if typeFilter == "" || typeFilter == "system-container" {
 		for _, ct := range rs.Containers() {
 			status := string(ct.Status())
 			if !statusMatchesFilter(status, statusFilter) {
@@ -4688,6 +4992,7 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				Status:                   status,
 				Node:                     ct.Node(),
 				NodeHasAgent:             connectedAgentHostnames[ct.Node()],
+				Platform:                 "proxmox",
 				VMID:                     ct.VMID(),
 				AgentConnected:           connectedAgentHostnames[ct.Name()],
 			})
@@ -4935,40 +5240,52 @@ func (e *PulseToolExecutor) executeSearchResources(_ context.Context, args map[s
 				}},
 			}
 		case "vm":
-			reg = ResourceRegistration{
-				Kind:          "vm",
-				ProviderUID:   fmt.Sprintf("%d", match.VMID),
-				Name:          match.Name,
-				Aliases:       []string{match.Name, fmt.Sprintf("%d", match.VMID), match.ID},
-				HostUID:       match.Node,
-				HostName:      match.Node,
-				VMID:          match.VMID,
-				Node:          match.Node,
-				LocationChain: []string{"node:" + match.Node, "vm:" + match.Name},
-				Executors: []ExecutorRegistration{{
-					ExecutorID: match.Node,
-					Adapter:    "qm",
-					Actions:    guestExecutorActions(),
-					Priority:   10,
-				}},
+			if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "vm", match.ID); ok {
+				reg, _ = canonicalGuestRegistration("vm", resource)
+			} else if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "vm", match.Name); ok {
+				reg, _ = canonicalGuestRegistration("vm", resource)
+			} else {
+				reg = ResourceRegistration{
+					Kind:          "vm",
+					ProviderUID:   fmt.Sprintf("%d", match.VMID),
+					Name:          match.Name,
+					Aliases:       []string{match.Name, fmt.Sprintf("%d", match.VMID), match.ID},
+					HostUID:       match.Node,
+					HostName:      match.Node,
+					VMID:          match.VMID,
+					Node:          match.Node,
+					LocationChain: []string{"node:" + match.Node, "vm:" + match.Name},
+					Executors: []ExecutorRegistration{{
+						ExecutorID: match.Node,
+						Adapter:    "qm",
+						Actions:    guestExecutorActions(),
+						Priority:   10,
+					}},
+				}
 			}
 		case "system-container":
-			reg = ResourceRegistration{
-				Kind:          "system-container",
-				ProviderUID:   fmt.Sprintf("%d", match.VMID),
-				Name:          match.Name,
-				Aliases:       []string{match.Name, fmt.Sprintf("%d", match.VMID), match.ID},
-				HostUID:       match.Node,
-				HostName:      match.Node,
-				VMID:          match.VMID,
-				Node:          match.Node,
-				LocationChain: []string{"node:" + match.Node, "system-container:" + match.Name},
-				Executors: []ExecutorRegistration{{
-					ExecutorID: match.Node,
-					Adapter:    "pct",
-					Actions:    guestExecutorActions(),
-					Priority:   10,
-				}},
+			if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "system-container", match.ID); ok {
+				reg, _ = canonicalGuestRegistration("system-container", resource)
+			} else if resource, ok := findCanonicalGuestResource(e.unifiedResourceProvider, "system-container", match.Name); ok {
+				reg, _ = canonicalGuestRegistration("system-container", resource)
+			} else {
+				reg = ResourceRegistration{
+					Kind:          "system-container",
+					ProviderUID:   fmt.Sprintf("%d", match.VMID),
+					Name:          match.Name,
+					Aliases:       []string{match.Name, fmt.Sprintf("%d", match.VMID), match.ID},
+					HostUID:       match.Node,
+					HostName:      match.Node,
+					VMID:          match.VMID,
+					Node:          match.Node,
+					LocationChain: []string{"node:" + match.Node, "system-container:" + match.Name},
+					Executors: []ExecutorRegistration{{
+						ExecutorID: match.Node,
+						Adapter:    "pct",
+						Actions:    guestExecutorActions(),
+						Priority:   10,
+					}},
+				}
 			}
 		case "docker-host":
 			reg = ResourceRegistration{

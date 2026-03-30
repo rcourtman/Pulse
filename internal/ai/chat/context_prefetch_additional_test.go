@@ -381,6 +381,9 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 	if mentions[0].ResourceType != "vm" || mentions[0].ResourceID != "vm-201" || mentions[0].TargetID != "esxi-01.lab.local" {
 		t.Fatalf("expected VMware VM routing coordinates, got %+v", mentions[0])
 	}
+	if mentions[0].SupportsControl {
+		t.Fatalf("expected VMware VM mention to stay read-only, got %+v", mentions[0])
+	}
 	if mentions[0].UnifiedResourceID != vmResourceID {
 		t.Fatalf("expected VMware VM unified resource id, got %+v", mentions[0])
 	}
@@ -510,6 +513,30 @@ func TestContextPrefetcher_FormatContextSummary(t *testing.T) {
 	}
 	if !strings.Contains(summary, "Log commands") {
 		t.Fatalf("expected log command formatting in summary")
+	}
+}
+
+func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+
+	summary := prefetcher.formatContextSummary([]ResourceMention{{
+		Name:              "app-01",
+		ResourceType:      "vm",
+		ResourceID:        "vm-201",
+		TargetID:          "esxi-01.lab.local",
+		TargetHost:        "esxi-01.lab.local",
+		UnifiedResourceID: "vmware-vm-1",
+		SupportsControl:   false,
+	}}, nil)
+
+	if !strings.Contains(summary, "read-only in Pulse") {
+		t.Fatalf("expected VMware read-only note, got %q", summary)
+	}
+	if strings.Contains(summary, "To control this guest, use: pulse_control") {
+		t.Fatalf("expected VMware summary to avoid guest-control instructions, got %q", summary)
+	}
+	if !strings.Contains(summary, "Use pulse_query or pulse_read only") {
+		t.Fatalf("expected VMware summary to direct the assistant to read-only tools, got %q", summary)
 	}
 }
 

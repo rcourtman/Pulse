@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/agentexec"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -256,6 +257,60 @@ func newTrueNASUnifiedQueryProvider(t *testing.T) *registryUnifiedQueryProvider 
 		t.Fatal("expected TrueNAS fixture records")
 	}
 	registry.IngestRecords(unifiedresources.SourceTrueNAS, records)
+	return &registryUnifiedQueryProvider{ResourceRegistry: registry}
+}
+
+func newVMwareUnifiedQueryProvider(t *testing.T) *registryUnifiedQueryProvider {
+	t.Helper()
+
+	now := time.Now().UTC()
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceVMware, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vc-1:host:host-101",
+			Resource: unifiedresources.Resource{
+				ID:        "vmware-host-1",
+				Type:      unifiedresources.ResourceTypeAgent,
+				Name:      "esxi-01.lab.local",
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"esxi-01.lab.local"}},
+		},
+		{
+			SourceID: "vc-1:vm:vm-201",
+			Resource: unifiedresources.Resource{
+				ID:         "vmware-vm-1",
+				Type:       unifiedresources.ResourceTypeVM,
+				Name:       "app-01",
+				Status:     unifiedresources.StatusOnline,
+				LastSeen:   now,
+				UpdatedAt:  now,
+				ParentName: "esxi-01.lab.local",
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "vm-201",
+					EntityType:      "vm",
+					RuntimeHostName: "esxi-01.lab.local",
+					GuestOSFamily:   "ubuntu64Guest",
+					CPUCount:        4,
+					MemorySizeMiB:   8192,
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames:   []string{"app-01"},
+				IPAddresses: []string{"192.0.2.50"},
+			},
+		},
+	})
 	return &registryUnifiedQueryProvider{ResourceRegistry: registry}
 }
 
@@ -936,6 +991,104 @@ func TestExecuteGetResource_RegistersTrueNASAppContainerForCanonicalControl(t *t
 		if !strings.Contains(allowed, action) {
 			t.Fatalf("expected allowed actions to include %q, got %v", action, info.GetAllowedActions())
 		}
+	}
+}
+
+func TestExecuteGetResource_RegistersVMwareVMAsReadOnly(t *testing.T) {
+	provider := newVMwareUnifiedQueryProvider(t)
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	result, err := executor.executeGetResource(context.Background(), map[string]interface{}{
+		"resource_type": "vm",
+		"resource_id":   "app-01",
+	})
+	if err != nil {
+		t.Fatalf("get vm: unexpected error: %v", err)
+	}
+
+	var response ResourceResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Platform != "vmware-vsphere" {
+		t.Fatalf("expected VMware platform on response, got %+v", response)
+	}
+	if response.Node != "esxi-01.lab.local" {
+		t.Fatalf("expected VMware runtime host in node field, got %+v", response)
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("app-01")
+	if !found {
+		t.Fatal("expected resolved context to include VMware VM by alias")
+	}
+	if info.GetAdapter() != "vmware-vsphere" {
+		t.Fatalf("expected VMware adapter, got %q", info.GetAdapter())
+	}
+	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
+		t.Fatalf("expected VMware VM to register read-only actions, got %v", info.GetAllowedActions())
+	}
+
+	controlResult, err := executor.executeControl(context.Background(), map[string]interface{}{
+		"type":        "resource",
+		"resource_id": "app-01",
+		"action":      "restart",
+	})
+	if err != nil {
+		t.Fatalf("executeControl(type=resource): unexpected error: %v", err)
+	}
+	if !controlResult.IsError {
+		t.Fatalf("expected VMware VM restart to be rejected, got %+v", controlResult)
+	}
+	if !strings.Contains(controlResult.Content[0].Text, "not permitted") {
+		t.Fatalf("expected read-only rejection, got %q", controlResult.Content[0].Text)
+	}
+}
+
+func TestExecuteSearchResources_RegistersVMwareVMAsReadOnly(t *testing.T) {
+	provider := newVMwareUnifiedQueryProvider(t)
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	executor := NewPulseToolExecutor(ExecutorConfig{
+		UnifiedResourceProvider: provider,
+		ReadState:               provider.ResourceRegistry,
+	})
+	executor.SetResolvedContext(resolved)
+
+	result, err := executor.executeSearchResources(context.Background(), map[string]interface{}{
+		"query": "app-01",
+		"type":  "vm",
+	})
+	if err != nil {
+		t.Fatalf("search vm: unexpected error: %v", err)
+	}
+
+	var response ResourceSearchResponse
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &response); err != nil {
+		t.Fatalf("decode search response: %v", err)
+	}
+	if len(response.Matches) != 1 {
+		t.Fatalf("expected one VMware search match, got %+v", response.Matches)
+	}
+	if response.Matches[0].Platform != "vmware-vsphere" {
+		t.Fatalf("expected VMware platform on search match, got %+v", response.Matches[0])
+	}
+
+	info, found := resolved.GetResolvedResourceByAlias("app-01")
+	if !found {
+		t.Fatal("expected VMware VM search result to register in resolved context")
+	}
+	if got := strings.Join(info.GetAllowedActions(), ","); got != "query,get" && got != "get,query" {
+		t.Fatalf("expected VMware search registration to remain read-only, got %v", info.GetAllowedActions())
 	}
 }
 

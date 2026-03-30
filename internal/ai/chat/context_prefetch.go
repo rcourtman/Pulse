@@ -21,6 +21,7 @@ type ResourceMention struct {
 	Policy            *unifiedresources.ResourcePolicy
 	AISafeSummary     string
 	UnifiedResourceID string
+	SupportsControl   bool
 	// Docker-specific: bind mounts (source -> destination)
 	BindMounts []MountInfo
 	// Full routing chain (for Docker containers)
@@ -60,6 +61,20 @@ func NewContextPrefetcher(readState unifiedresources.ReadState, discoveryProvide
 
 func resourceMentionGovernance(resource *unifiedresources.Resource) (*unifiedresources.ResourcePolicy, string) {
 	return unifiedresources.CanonicalGovernanceMetadata(resource)
+}
+
+func resourceSupportsControl(resourceType string, resource *unifiedresources.Resource) bool {
+	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	case "vm", "system-container":
+		return resource != nil && resource.Proxmox != nil
+	case "app-container":
+		if resource == nil {
+			return false
+		}
+		return resource.Docker != nil || resource.TrueNAS != nil
+	default:
+		return false
+	}
 }
 
 // Prefetch analyzes a user message and proactively gathers relevant context.
@@ -209,6 +224,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
 						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						SupportsControl:   resourceSupportsControl("vm", resolved.Resource),
 					})
 				}
 			}
@@ -244,6 +260,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
 						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						SupportsControl:   resourceSupportsControl("system-container", resolved.Resource),
 					})
 				}
 			}
@@ -555,6 +572,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				AISafeSummary:     aiSafeSummary,
 				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
 				TargetHost:        loc.TargetHost,
+				SupportsControl:   resourceSupportsControl("vm", resolved.Resource),
 			})
 
 		case "system-container":
@@ -576,6 +594,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				AISafeSummary:     aiSafeSummary,
 				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
 				TargetHost:        loc.TargetHost,
+				SupportsControl:   resourceSupportsControl("system-container", resolved.Resource),
 			})
 
 		case "app-container":
@@ -977,7 +996,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 
 	var sb strings.Builder
 	sb.WriteString("=== PULSE MONITORING DATA (AUTHORITATIVE) ===\n")
-	sb.WriteString("This is verified data from Pulse agents. Canonical resource policy is enforced below.\n")
+	sb.WriteString("This is verified data from Pulse monitoring sources. Canonical resource policy is enforced below.\n")
 	sb.WriteString(unifiedresources.ResourcePolicyGovernedSummaryPreamble())
 	sb.WriteString("\n\n")
 
@@ -1052,10 +1071,15 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		sb.WriteString(fmt.Sprintf("## %s\n", mention.Name))
 		sb.WriteString(fmt.Sprintf("Type: %s | Target: %s\n", mention.ResourceType, mention.TargetID))
 
-		// Include VMID for VMs and system containers — the AI needs this for pulse_control guest operations
+		// Include guest identifier, but only emit control instructions for platforms
+		// that are actually on the shared control surface.
 		if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && mention.ResourceID != "" {
 			sb.WriteString(fmt.Sprintf("VMID: %s\n", mention.ResourceID))
-			sb.WriteString(fmt.Sprintf("To control this guest, use: pulse_control type=\"guest\", guest_id=\"%s\", action=\"start|stop|shutdown|restart\"\n", mention.ResourceID))
+			if mention.SupportsControl {
+				sb.WriteString(fmt.Sprintf("To control this guest, use: pulse_control type=\"guest\", guest_id=\"%s\", action=\"start|stop|shutdown|restart\"\n", mention.ResourceID))
+			} else {
+				sb.WriteString("This guest is read-only in Pulse. Do NOT use pulse_control for this resource.\n")
+			}
 		}
 
 		if hasDiscovery {
@@ -1132,7 +1156,9 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		} else {
 			// No discovery - provide basic routing without suggesting discovery calls
 			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
-			if mention.ResourceType == "system-container" || mention.ResourceType == "vm" {
+			if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && !mention.SupportsControl {
+				sb.WriteString("Use pulse_query or pulse_read only — do NOT call pulse_control or pulse_discovery.\n")
+			} else if mention.ResourceType == "system-container" || mention.ResourceType == "vm" {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
 			} else {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")

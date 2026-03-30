@@ -205,6 +205,14 @@ canonical resource capabilities and tool routing must stay read-only in phase
 1: shared `pulse_read` and `pulse_query` may expose VMware-backed context, but
 `pulse_control` must not grow VMware verbs and VMware-backed resources must not
 advertise action metadata that implies a supported VMware admin plane.
+That same capability boundary also governs resolved-context enforcement inside
+`internal/ai/chat/context_prefetch.go`, `internal/ai/tools/tools_query.go`, and
+`internal/ai/tools/tools_control.go`. Once the shared runtime has resolved a
+canonical VMware-backed `vm` or `system-container`, Assistant summaries may not
+emit `pulse_control` guest instructions for it, shared resource registrations
+must stay limited to read-side actions, and any attempted `pulse_control`
+restart/stop/shutdown path must fail as a read-only denial instead of falling
+through to legacy guest resolution or provider-local control assumptions.
 That same VMware AI rule also includes the investigation path. Alarm, health,
 event, task, metrics-history, and snapshot-tree context for VMware-backed
 resources must stay reachable through those same shared read/query surfaces
