@@ -19,7 +19,7 @@ export const ALERTS_PAGE_OVERVIEW_DESCRIPTION =
   'Monitor active alerts, acknowledgements, and recent status changes across platforms.';
 export const ALERTS_PAGE_THRESHOLDS_TITLE = 'Alert Thresholds';
 export const ALERTS_PAGE_THRESHOLDS_DESCRIPTION =
-  'Tune resource thresholds and override rules for nodes, guests, and containers.';
+  'Tune threshold and override rules for infrastructure, systems, storage, and containers.';
 export const ALERTS_PAGE_DESTINATIONS_TITLE = 'Notification Destinations';
 export const ALERTS_PAGE_DESTINATIONS_DESCRIPTION =
   'Configure email, webhooks, and escalation paths for alert delivery.';

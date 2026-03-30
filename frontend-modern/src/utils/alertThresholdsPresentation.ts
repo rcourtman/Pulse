@@ -1,6 +1,6 @@
 export const PBS_THRESHOLDS_EMPTY_STATE = 'No PBS servers configured.';
 export const GUEST_THRESHOLDS_EMPTY_STATE = 'No VMs or containers found.';
-export const NODE_THRESHOLDS_FILTER_EMPTY_STATE = 'No nodes match the current filters.';
+export const NODE_THRESHOLDS_FILTER_EMPTY_STATE = 'No virtualization hosts match the current filters.';
 export const PBS_THRESHOLDS_FILTER_EMPTY_STATE = 'No PBS servers match the current filters.';
 export const GUEST_THRESHOLDS_FILTER_EMPTY_STATE = 'No VMs or containers match the current filters.';
 export const GUEST_FILTERING_EMPTY_STATE = 'Configure guest filtering rules.';
@@ -11,10 +11,10 @@ export const STORAGE_THRESHOLDS_FILTER_EMPTY_STATE = 'No storage devices match t
 export const PMG_THRESHOLDS_EMPTY_STATE =
   'No mail gateways configured yet. Add a PMG instance in Settings to manage thresholds.';
 export const PMG_THRESHOLDS_FILTER_EMPTY_STATE = 'No mail gateways match the current filters.';
-export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No agents match the current filters.';
+export const AGENT_THRESHOLDS_FILTER_EMPTY_STATE = 'No systems match the current filters.';
 export const AGENT_DISKS_EMPTY_STATE =
-  'No agent disks found. Agents with mounted filesystems will appear here.';
-export const AGENT_DISKS_FILTER_EMPTY_STATE = 'No agent disks match the current filters.';
+  'No system disks found. Systems with mounted filesystems will appear here.';
+export const AGENT_DISKS_FILTER_EMPTY_STATE = 'No system disks match the current filters.';
 export const CONTAINER_RUNTIMES_FILTER_EMPTY_STATE =
   'No container runtimes match the current filters.';
 export const CONTAINERS_FILTER_EMPTY_STATE = 'No containers match the current filters.';
@@ -61,7 +61,7 @@ export const ALERT_THRESHOLDS_DOCKER_SERVICES_CRITICAL_GAP_DESCRIPTION =
   'Raise a critical alert when the missing replica gap meets or exceeds this value.';
 export const ALERT_THRESHOLDS_DOCKER_SERVICES_GAP_VALIDATION_MESSAGE =
   'Critical gap must be greater than or equal to the warning gap when enabled.';
-export const ALERT_THRESHOLDS_SECTION_TITLE_NODES = 'Proxmox Nodes';
+export const ALERT_THRESHOLDS_SECTION_TITLE_NODES = 'Virtualization Hosts';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PBS = 'PBS Servers';
 export const ALERT_THRESHOLDS_SECTION_TITLE_GUESTS = 'VMs & Containers';
 export const ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING = 'Guest Filtering';
@@ -69,8 +69,8 @@ export const ALERT_THRESHOLDS_SECTION_TITLE_BACKUPS = 'Recovery';
 export const ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS = 'Snapshot Age';
 export const ALERT_THRESHOLDS_SECTION_TITLE_STORAGE = 'Storage Devices';
 export const ALERT_THRESHOLDS_SECTION_TITLE_PMG = 'Mail Gateway Thresholds';
-export const ALERT_THRESHOLDS_SECTION_TITLE_AGENTS = 'Agents';
-export const ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS = 'Agent Disks';
+export const ALERT_THRESHOLDS_SECTION_TITLE_AGENTS = 'Systems';
+export const ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS = 'System Disks';
 export const ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_HOSTS = 'Container Runtimes';
 export const ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_CONTAINERS = 'Containers';
 

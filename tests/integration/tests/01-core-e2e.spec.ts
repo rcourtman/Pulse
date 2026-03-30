@@ -49,16 +49,16 @@ test.describe.serial('Core E2E flows', () => {
     await page.getByRole('button', { name: 'Thresholds' }).click();
     await expect(page).toHaveURL(/\/alerts\/thresholds/);
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
-    // Proxmox Nodes section only appears when PVE nodes exist in unified resources.
+    // Virtualization Hosts only appears when PVE nodes exist in unified resources.
     // In v6 the unified registry may not include PVE nodes — skip gracefully in that case.
-    const proxmoxNodesHeading = page.getByRole('heading', { name: 'Proxmox Nodes' });
+    const proxmoxNodesHeading = page.getByRole('heading', { name: 'Virtualization Hosts' });
     const hasProxmoxNodes = await proxmoxNodesHeading.isVisible({ timeout: 5000 }).catch(() => false);
     if (!hasProxmoxNodes) {
-      test.skip(true, 'Proxmox Nodes section not present (nodes not in unified resources)');
+      test.skip(true, 'Virtualization Hosts section not present (nodes not in unified resources)');
     }
 
     const proxmoxNodesSection = page
-      .getByRole('heading', { name: 'Proxmox Nodes' })
+      .getByRole('heading', { name: 'Virtualization Hosts' })
       .locator('xpath=ancestor::*[.//table][1]');
 
     const globalDefaultsRow = proxmoxNodesSection.locator('table tbody tr').filter({
@@ -86,7 +86,7 @@ test.describe.serial('Core E2E flows', () => {
       break;
     }
     if (targetRowIndex < 0) {
-      test.skip(true, 'No Proxmox node row without an existing override was found');
+      test.skip(true, 'No virtualization host row without an existing override was found');
     }
 
     const targetRow = nodeRows.nth(targetRowIndex);
@@ -160,7 +160,7 @@ test.describe.serial('Core E2E flows', () => {
 
     await expect(page.getByRole('heading', { name: 'Alert Thresholds' })).toBeVisible();
     const rowAfterReload = page
-      .getByRole('heading', { name: 'Proxmox Nodes' })
+      .getByRole('heading', { name: 'Virtualization Hosts' })
       .locator('xpath=ancestor::*[.//table][1]')
       .locator('table tbody tr')
       .filter({ hasText: resourceName })

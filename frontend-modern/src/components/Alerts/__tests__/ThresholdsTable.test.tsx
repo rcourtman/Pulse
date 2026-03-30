@@ -258,14 +258,31 @@ describe('ThresholdsTable basics', () => {
 });
 
 describe('ThresholdsTable navigation and redirection', () => {
-  it('redirects from base path to proxmox', () => {
+  it('redirects from base path to infrastructure', () => {
     setPathname('/alerts/thresholds');
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/proxmox', { replace: true });
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/infrastructure', {
+      replace: true,
+    });
   });
 
-  it('loads agents tab from canonical route', async () => {
+  it('redirects legacy thresholds sub-routes onto canonical infrastructure and systems paths', () => {
+    setPathname('/alerts/thresholds/proxmox');
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/infrastructure', {
+      replace: true,
+    });
+
+    cleanup();
+    mockNavigate.mockReset();
+
     setPathname('/alerts/thresholds/agents');
+    render(() => <ThresholdsTable {...(baseProps() as any)} />);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/systems', { replace: true });
+  });
+
+  it('loads systems tab from canonical route', async () => {
+    setPathname('/alerts/thresholds/systems');
     const host: Agent = {
       id: 'legacy-h1',
       hostname: 'legacy-host',
@@ -278,16 +295,24 @@ describe('ThresholdsTable navigation and redirection', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
     });
   });
 
   it('navigates to correct route when tabs are clicked', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} />);
 
-    const hostsTab = screen.getAllByRole('button').find((el) => el.textContent?.includes('Agents'));
-    if (hostsTab) fireEvent.click(hostsTab);
-    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/agents');
+    const infrastructureTab = screen
+      .getAllByRole('button')
+      .find((el) => el.textContent?.includes('Infrastructure'));
+    if (infrastructureTab) fireEvent.click(infrastructureTab);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/infrastructure');
+
+    const systemsTab = screen
+      .getAllByRole('button')
+      .find((el) => el.textContent?.includes('Systems'));
+    if (systemsTab) fireEvent.click(systemsTab);
+    expect(mockNavigate).toHaveBeenCalledWith('/alerts/thresholds/systems');
 
     const mailTab = screen
       .getAllByRole('button')
@@ -298,8 +323,8 @@ describe('ThresholdsTable navigation and redirection', () => {
 });
 
 describe('ThresholdsTable Resource Rendering', () => {
-  it('renders agents correctly', async () => {
-    setPathname('/alerts/thresholds/agents');
+  it('renders systems correctly', async () => {
+    setPathname('/alerts/thresholds/systems');
     const host: Agent = {
       id: 'h1',
       hostname: 'host1',
@@ -312,15 +337,15 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
     });
 
-    expect(screen.getByTestId('resource-count-Agents')).toHaveTextContent('1');
+    expect(screen.getByTestId('resource-count-Systems')).toHaveTextContent('1');
     expect(screen.getByTestId('resource-name-h1')).toHaveTextContent('Host 1');
   });
 
-  it('renders governed agents with the policy-aware display label', async () => {
-    setPathname('/alerts/thresholds/agents');
+  it('renders governed systems with the policy-aware display label', async () => {
+    setPathname('/alerts/thresholds/systems');
     const host = {
       id: 'h2',
       hostname: 'secret-host',
@@ -338,15 +363,43 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => <ThresholdsTable {...(baseProps() as any)} agents={[host]} />);
 
     await waitFor(() => {
-      expect(screen.getByTestId('resource-table-Agents')).toBeInTheDocument();
+      expect(screen.getByTestId('resource-table-Systems')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('resource-name-h2')).toHaveTextContent('redacted by policy');
     expect(screen.getByTestId('resource-name-h2')).not.toHaveTextContent('secret-host');
   });
 
-  it('renders proxmox nodes and guests correctly', async () => {
-    setPathname('/alerts/thresholds/proxmox');
+  it('renders TrueNAS appliances on the canonical systems tab with their disk surface', async () => {
+    setPathname('/alerts/thresholds/systems');
+    const truenasSystem = {
+      id: 'truenas-resource',
+      type: 'truenas',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+      status: 'online',
+      lastSeen: 123,
+      platformData: {
+        agent: {
+          agentId: 'truenas-main',
+          disks: [{ mountpoint: '/mnt/tank', type: 'zfs', used: 50, total: 100 }],
+        },
+      },
+    } as any;
+
+    render(() => <ThresholdsTable {...(baseProps() as any)} agents={[truenasSystem]} />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-name-truenas-main')).toHaveTextContent('TrueNAS Main');
+    });
+
+    expect(
+      screen.getByTestId('resource-row-agent:truenas-main/disk:mnt-tank'),
+    ).toBeInTheDocument();
+  });
+
+  it('renders infrastructure hosts and guests correctly', async () => {
+    setPathname('/alerts/thresholds/infrastructure');
     const node = {
       id: 'node1',
       name: 'pve1',
@@ -366,7 +419,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     ));
 
     await waitFor(() => {
-      expect(screen.getByTestId('section-Proxmox Nodes')).toBeInTheDocument();
+      expect(screen.getByTestId('section-Virtualization Hosts')).toBeInTheDocument();
     });
 
     expect(screen.getByTestId('resource-name-node1')).toHaveTextContent('PVE');
@@ -376,7 +429,7 @@ describe('ThresholdsTable Resource Rendering', () => {
   });
 
   it('renders governed guests with the policy-aware display label', async () => {
-    setPathname('/alerts/thresholds/proxmox');
+    setPathname('/alerts/thresholds/infrastructure');
     const guest = {
       id: 'guest2',
       name: 'secret-vm-2',
@@ -402,7 +455,7 @@ describe('ThresholdsTable Resource Rendering', () => {
   });
 
   it('renders governed guest groups with the policy-aware node header label', async () => {
-    setPathname('/alerts/thresholds/proxmox');
+    setPathname('/alerts/thresholds/infrastructure');
     const node = {
       id: 'node-governed',
       name: 'secret-node',
@@ -438,7 +491,7 @@ describe('ThresholdsTable Resource Rendering', () => {
   });
 
   it('renders governed storage with the policy-aware display label', async () => {
-    setPathname('/alerts/thresholds/proxmox');
+    setPathname('/alerts/thresholds/infrastructure');
     const storage = {
       id: 'storage1',
       name: 'secret-datastore',
@@ -514,7 +567,7 @@ describe('ThresholdsTable Resource Rendering', () => {
   });
 
   it('renders governed agent disk node labels with the policy-aware display label', async () => {
-    setPathname('/alerts/thresholds/agents');
+    setPathname('/alerts/thresholds/systems');
     const host = {
       id: 'agent-governed',
       type: 'agent',
@@ -552,7 +605,7 @@ describe('ThresholdsTable Resource Rendering', () => {
 
 describe('ThresholdsTable Metric Formatting', () => {
   it('formats metrics correctly', async () => {
-    setPathname('/alerts/thresholds/agents');
+    setPathname('/alerts/thresholds/systems');
     const host: Agent = {
       id: 'h1',
       hostname: 'host1',
@@ -583,7 +636,7 @@ describe('ThresholdsTable Metric Formatting', () => {
 
 describe('ThresholdsTable V6 ID compatibility', () => {
   it('matches agent overrides keyed by actionable agent ID', async () => {
-    setPathname('/alerts/thresholds/agents');
+    setPathname('/alerts/thresholds/systems');
     const host = {
       id: 'resource:host:abc123',
       type: 'agent',
@@ -749,7 +802,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
   });
 
   it('removes PBS offline alerts using legacy compatibility IDs when disabled', async () => {
-    setPathname('/alerts/thresholds/proxmox');
+    setPathname('/alerts/thresholds/infrastructure');
     const removeAlerts = vi.fn();
     const pbs = {
       id: 'pbs-main',

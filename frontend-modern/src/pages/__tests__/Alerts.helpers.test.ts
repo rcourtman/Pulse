@@ -203,6 +203,8 @@ describe('tab path helpers', () => {
   it('resolves tab from path', () => {
     expect(tabFromPath('/alerts')).toBe('overview');
     expect(tabFromPath('/alerts/thresholds')).toBe('thresholds');
+    expect(tabFromPath('/alerts/thresholds/infrastructure')).toBe('thresholds');
+    expect(tabFromPath('/alerts/thresholds/systems')).toBe('thresholds');
     expect(tabFromPath('/alerts/thresholds/proxmox')).toBe('thresholds');
     expect(tabFromPath('/alerts/custom-rules')).toBe('thresholds');
     expect(tabFromPath('/foo/bar')).toBe('overview');

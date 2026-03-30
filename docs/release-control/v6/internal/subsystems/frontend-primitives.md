@@ -1230,7 +1230,15 @@ and the tab render owners live in
 `frontend-modern/src/components/Alerts/ThresholdsTablePMGTab.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`, and
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
-The Proxmox tab is itself now a shell that composes
+`frontend-modern/src/features/alerts/thresholds/hooks/useThresholdsTableState.ts`
+owns the neutral thresholds sub-route contract:
+`/alerts/thresholds/infrastructure`, `/alerts/thresholds/systems`,
+`/alerts/thresholds/mail-gateway`, and `/alerts/thresholds/containers`.
+Legacy `/alerts/thresholds/proxmox` and `/alerts/thresholds/agents` links
+must redirect to the neutral infrastructure and systems routes so API-backed
+platforms such as TrueNAS stay on canonical page language rather than
+provider-specific aliases.
+The infrastructure tab is itself now a shell that composes
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx`,
@@ -1240,7 +1248,7 @@ The Proxmox tab is itself now a shell that composes
 and `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx`
 using the shared contract in
 `frontend-modern/src/features/alerts/thresholds/thresholdsTableSectionProps.ts`.
-Future Proxmox thresholds presentation changes should extend those section
+Future infrastructure-thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`.
 The Docker tab now follows that same composition pattern through
@@ -1251,10 +1259,10 @@ and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSectio
 Future Docker thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`.
-The agents tab now follows that same composition pattern through
+The systems tab now follows that same composition pattern through
 `frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx`
 and `frontend-modern/src/components/Alerts/ThresholdsTableAgentDisksSection.tsx`.
-Future agent thresholds presentation changes should extend those section
+Future systems-thresholds presentation changes should extend those section
 surfaces rather than restoring mixed JSX ownership to
 `frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`.
 The thresholds tab adapter contract now lives in

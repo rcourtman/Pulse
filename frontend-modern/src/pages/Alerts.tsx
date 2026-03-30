@@ -134,7 +134,7 @@ export function Alerts() {
 
     const expectedPath = pathForTab(tab);
 
-    // Allow sub-paths for thresholds tab (e.g., /alerts/thresholds/proxmox)
+    // Allow sub-paths for thresholds tab (e.g., /alerts/thresholds/infrastructure)
     const isThresholdsSubPath =
       tab === 'thresholds' && currentPath.startsWith('/alerts/thresholds/');
 

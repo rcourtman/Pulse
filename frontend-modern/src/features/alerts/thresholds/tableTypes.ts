@@ -2,7 +2,7 @@ import type { ResourcePolicy } from '@/types/resource';
 import type { BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
 import type { AlertResourceThresholdMap } from '@/components/Alerts/alertResourceTableModel';
 
-export type ThresholdsActiveTab = 'proxmox' | 'pmg' | 'agents' | 'docker';
+export type ThresholdsActiveTab = 'infrastructure' | 'pmg' | 'systems' | 'docker';
 
 export interface Resource {
   id: string;

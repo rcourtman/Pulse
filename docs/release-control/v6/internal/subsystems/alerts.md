@@ -234,7 +234,14 @@ tab render owners live in
 threshold row grouping, override-ID compatibility, resource normalization,
 thresholds-table controller logic, or per-tab runtime should land in those
 feature hooks and tab owners rather than being rebuilt inside the shell.
-Within the Proxmox tab, render-heavy ownership now further routes through
+The shell-owned thresholds sub-routes are now the neutral user-facing paths
+`/alerts/thresholds/infrastructure`, `/alerts/thresholds/systems`,
+`/alerts/thresholds/mail-gateway`, and `/alerts/thresholds/containers`.
+Legacy `/alerts/thresholds/proxmox` and `/alerts/thresholds/agents` links
+must redirect to the neutral infrastructure and systems routes so API-backed
+platforms like TrueNAS do not remain stranded behind provider-specific deep
+links.
+Within the infrastructure tab, render-heavy ownership now further routes through
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxNodesSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxPBSSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxGuestsSection.tsx`,
@@ -244,7 +251,7 @@ Within the Proxmox tab, render-heavy ownership now further routes through
 and `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxStorageSection.tsx`
 with the shared section contract in
 `frontend-modern/src/features/alerts/thresholds/thresholdsTableSectionProps.ts`.
-Future Proxmox thresholds presentation work should extend those section owners
+Future infrastructure-thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableProxmoxTab.tsx`
 back into a mixed render surface.
 The Docker tab now follows that same section-owner shape through
@@ -255,10 +262,10 @@ and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSectio
 Future Docker thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
 back into a mixed render surface.
-The agents tab now follows that same shell-versus-section pattern through
+The systems tab now follows that same shell-versus-section pattern through
 `frontend-modern/src/components/Alerts/ThresholdsTableAgentsResourcesSection.tsx`
 and `frontend-modern/src/components/Alerts/ThresholdsTableAgentDisksSection.tsx`.
-Future agent thresholds presentation work should extend those section owners
+Future systems-thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableAgentsTab.tsx`
 back into a mixed render surface.
 The alert resource thresholds editor now follows the same shape: shared metric

@@ -98,7 +98,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const [bulkEditIds, setBulkEditIds] = createSignal<string[]>([]);
   const [bulkEditColumns, setBulkEditColumns] = createSignal<string[]>([]);
   const [isBulkEditDialogOpen, setIsBulkEditDialogOpen] = createSignal(false);
-  const [activeTab, setActiveTab] = createSignal<ThresholdsActiveTab>('proxmox');
+  const [activeTab, setActiveTab] = createSignal<ThresholdsActiveTab>('infrastructure');
   const [dockerIgnoredInput, setDockerIgnoredInput] = createSignal(
     props.dockerIgnoredPrefixes().join('\n'),
   );
@@ -131,9 +131,9 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
   const getActiveTabFromRoute = (): ThresholdsActiveTab => {
     const path = location.pathname;
     if (path.includes('/thresholds/containers')) return 'docker';
-    if (path.includes('/thresholds/agents')) return 'agents';
+    if (path.includes('/thresholds/systems') || path.includes('/thresholds/agents')) return 'systems';
     if (path.includes('/thresholds/mail-gateway')) return 'pmg';
-    return 'proxmox';
+    return 'infrastructure';
   };
 
   createEffect(() => {
@@ -145,16 +145,26 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
 
   createEffect(() => {
     if (location.pathname === '/alerts/thresholds') {
-      navigate('/alerts/thresholds/proxmox', { replace: true });
+      navigate('/alerts/thresholds/infrastructure', { replace: true });
+      return;
+    }
+
+    if (location.pathname === '/alerts/thresholds/proxmox') {
+      navigate('/alerts/thresholds/infrastructure', { replace: true });
+      return;
+    }
+
+    if (location.pathname === '/alerts/thresholds/agents') {
+      navigate('/alerts/thresholds/systems', { replace: true });
     }
   });
 
   const handleTabClick = (tab: ThresholdsActiveTab) => {
     const tabRoutes: Record<ThresholdsActiveTab, string> = {
-      agents: '/alerts/thresholds/agents',
+      infrastructure: '/alerts/thresholds/infrastructure',
       docker: '/alerts/thresholds/containers',
       pmg: '/alerts/thresholds/mail-gateway',
-      proxmox: '/alerts/thresholds/proxmox',
+      systems: '/alerts/thresholds/systems',
     };
     navigate(tabRoutes[tab]);
   };
@@ -284,9 +294,9 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
       const items: ThresholdsSummaryItem[] = [
         {
           key: 'nodes',
-          label: 'Nodes',
+          label: 'Virtualization Hosts',
           overrides: countOverrides(nodesWithOverrides()),
-          tab: 'proxmox',
+          tab: 'infrastructure',
           total: props.nodes?.length ?? 0,
         },
         {
@@ -298,44 +308,44 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
         },
         {
           key: 'agents',
-          label: 'Agents',
+          label: 'Systems',
           overrides: countOverrides(agentsWithOverrides()),
-          tab: 'agents',
+          tab: 'systems',
           total: props.agents?.length ?? 0,
         },
         {
           key: 'agentDisks',
-          label: 'Agent Disks',
+          label: 'System Disks',
           overrides: countOverrides(agentDisksWithOverrides()),
-          tab: 'agents',
+          tab: 'systems',
           total: agentDisksWithOverrides().length,
         },
         {
           key: 'storage',
           label: 'Storage',
           overrides: countOverrides(storageWithOverrides()),
-          tab: 'proxmox',
+          tab: 'infrastructure',
           total: props.storage?.length ?? 0,
         },
         {
           key: 'backups',
           label: 'Recovery',
           overrides: backupOverridesCount(),
-          tab: 'proxmox',
+          tab: 'infrastructure',
           total: 1,
         },
         {
           key: 'snapshots',
           label: 'Snapshot Age',
           overrides: snapshotOverridesCount(),
-          tab: 'proxmox',
+          tab: 'infrastructure',
           total: 1,
         },
         {
           key: 'pbs',
           label: 'PBS Servers',
           overrides: countOverrides(pbsServersWithOverrides()),
-          tab: 'proxmox',
+          tab: 'infrastructure',
           total: props.pbsInstances?.length ?? 0,
         },
         {
@@ -356,7 +366,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           key: 'guests',
           label: 'VMs & Containers',
           overrides: countOverrides(guestsFlat()),
-          tab: 'proxmox',
+          tab: 'infrastructure',
           total: props.allGuests?.()?.length ?? 0,
         },
       ];

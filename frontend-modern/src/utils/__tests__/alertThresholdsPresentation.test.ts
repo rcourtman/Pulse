@@ -59,7 +59,9 @@ describe('alertThresholdsPresentation', () => {
   it('exports canonical thresholds empty-state copy', () => {
     expect(PBS_THRESHOLDS_EMPTY_STATE).toBe('No PBS servers configured.');
     expect(GUEST_THRESHOLDS_EMPTY_STATE).toBe('No VMs or containers found.');
-    expect(NODE_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No nodes match the current filters.');
+    expect(NODE_THRESHOLDS_FILTER_EMPTY_STATE).toBe(
+      'No virtualization hosts match the current filters.',
+    );
     expect(PBS_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No PBS servers match the current filters.');
     expect(GUEST_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No VMs or containers match the current filters.');
     expect(GUEST_FILTERING_EMPTY_STATE).toBe('Configure guest filtering rules.');
@@ -69,9 +71,9 @@ describe('alertThresholdsPresentation', () => {
     expect(STORAGE_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No storage devices match the current filters.');
     expect(PMG_THRESHOLDS_EMPTY_STATE).toContain('No mail gateways configured yet.');
     expect(PMG_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No mail gateways match the current filters.');
-    expect(AGENT_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No agents match the current filters.');
-    expect(AGENT_DISKS_EMPTY_STATE).toContain('Agents with mounted filesystems will appear here.');
-    expect(AGENT_DISKS_FILTER_EMPTY_STATE).toBe('No agent disks match the current filters.');
+    expect(AGENT_THRESHOLDS_FILTER_EMPTY_STATE).toBe('No systems match the current filters.');
+    expect(AGENT_DISKS_EMPTY_STATE).toContain('Systems with mounted filesystems will appear here.');
+    expect(AGENT_DISKS_FILTER_EMPTY_STATE).toBe('No system disks match the current filters.');
     expect(CONTAINER_RUNTIMES_FILTER_EMPTY_STATE).toBe('No container runtimes match the current filters.');
     expect(CONTAINERS_FILTER_EMPTY_STATE).toBe('No containers match the current filters.');
   });
@@ -167,7 +169,7 @@ describe('alertThresholdsPresentation', () => {
   });
 
   it('exports canonical thresholds section titles', () => {
-    expect(ALERT_THRESHOLDS_SECTION_TITLE_NODES).toBe('Proxmox Nodes');
+    expect(ALERT_THRESHOLDS_SECTION_TITLE_NODES).toBe('Virtualization Hosts');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_PBS).toBe('PBS Servers');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_GUESTS).toBe('VMs & Containers');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_GUEST_FILTERING).toBe('Guest Filtering');
@@ -175,12 +177,12 @@ describe('alertThresholdsPresentation', () => {
     expect(ALERT_THRESHOLDS_SECTION_TITLE_SNAPSHOTS).toBe('Snapshot Age');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_STORAGE).toBe('Storage Devices');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_PMG).toBe('Mail Gateway Thresholds');
-    expect(ALERT_THRESHOLDS_SECTION_TITLE_AGENTS).toBe('Agents');
-    expect(ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS).toBe('Agent Disks');
+    expect(ALERT_THRESHOLDS_SECTION_TITLE_AGENTS).toBe('Systems');
+    expect(ALERT_THRESHOLDS_SECTION_TITLE_AGENT_DISKS).toBe('System Disks');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_HOSTS).toBe('Container Runtimes');
     expect(ALERT_THRESHOLDS_SECTION_TITLE_DOCKER_CONTAINERS).toBe('Containers');
     expect(getAlertThresholdsSectionTitles()).toEqual({
-      nodes: 'Proxmox Nodes',
+      nodes: 'Virtualization Hosts',
       pbs: 'PBS Servers',
       guests: 'VMs & Containers',
       guestFiltering: 'Guest Filtering',
@@ -188,8 +190,8 @@ describe('alertThresholdsPresentation', () => {
       snapshots: 'Snapshot Age',
       storage: 'Storage Devices',
       pmg: 'Mail Gateway Thresholds',
-      agents: 'Agents',
-      agentDisks: 'Agent Disks',
+      agents: 'Systems',
+      agentDisks: 'System Disks',
       dockerHosts: 'Container Runtimes',
       dockerContainers: 'Containers',
     });

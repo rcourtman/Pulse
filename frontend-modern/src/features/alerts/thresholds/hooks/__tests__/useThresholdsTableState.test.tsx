@@ -4,7 +4,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import type { ThresholdsTableProps } from '@/features/alerts/thresholds/types';
 import { useThresholdsTableState } from '../useThresholdsTableState';
 
-let mockPathname = '/alerts/thresholds/agents';
+let mockPathname = '/alerts/thresholds/systems';
 const navigateSpy = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
@@ -161,7 +161,7 @@ const buildProps = (): ThresholdsTableProps =>
   }) as unknown as ThresholdsTableProps;
 
 beforeEach(() => {
-  mockPathname = '/alerts/thresholds/agents';
+  mockPathname = '/alerts/thresholds/systems';
   navigateSpy.mockReset();
   localStorage.clear();
 });
@@ -182,7 +182,7 @@ describe('useThresholdsTableState', () => {
     render(() => <Harness />);
 
     expect(captured).toBeDefined();
-    expect(captured!.activeTab()).toBe('agents');
+    expect(captured!.activeTab()).toBe('systems');
 
     captured!.dismissHelpBanner();
     expect(captured!.helpBannerDismissed()).toBe(true);

@@ -101,7 +101,7 @@ describe('alertOverviewPresentation', () => {
       thresholds: {
         title: 'Alert Thresholds',
         description:
-          'Tune resource thresholds and override rules for nodes, guests, and containers.',
+          'Tune threshold and override rules for infrastructure, systems, storage, and containers.',
       },
       destinations: {
         title: 'Notification Destinations',

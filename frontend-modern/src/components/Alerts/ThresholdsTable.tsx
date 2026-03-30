@@ -87,12 +87,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         <nav class="-mb-px flex gap-4 sm:gap-6" aria-label="Tabs">
           <button
             type="button"
-            onClick={() => state.handleTabClick('proxmox')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'proxmox' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
+            onClick={() => state.handleTabClick('infrastructure')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'infrastructure' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Server class="w-4 h-4" />
-            <span class="hidden sm:inline">Proxmox / PBS</span>
-            <span class="sm:hidden">Proxmox</span>
+            <span>Infrastructure</span>
           </button>
           <button
             type="button"
@@ -105,11 +104,11 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           </button>
           <button
             type="button"
-            onClick={() => state.handleTabClick('agents')}
-            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'agents' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
+            onClick={() => state.handleTabClick('systems')}
+            class={`py-3 px-1 border-b-2 font-medium text-sm transition-colors cursor-pointer flex items-center gap-1.5 ${state.activeTab() === 'systems' ? 'border-blue-500 text-blue-600 dark:text-blue-400' : 'border-transparent text-muted hover:text-base-content hover:border-slate-300'}`}
           >
             <Users class="w-4 h-4" />
-            <span>Agents</span>
+            <span>Systems</span>
           </button>
           <button
             type="button"
@@ -122,7 +121,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
         </nav>
       </div>
 
-      <Show when={state.activeTab() === 'proxmox'}>
+      <Show when={state.activeTab() === 'infrastructure'}>
         <div class="flex justify-end gap-2">
           <button
             type="button"
@@ -143,7 +142,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
       </Show>
 
       <div class="space-y-6">
-        <Show when={state.activeTab() === 'proxmox'}>
+        <Show when={state.activeTab() === 'infrastructure'}>
           <ThresholdsTableProxmoxTab state={state} tableProps={props} />
         </Show>
 
@@ -151,7 +150,7 @@ export function ThresholdsTable(props: ThresholdsTableProps) {
           <ThresholdsTablePMGTab state={state} tableProps={props} />
         </Show>
 
-        <Show when={state.activeTab() === 'agents'}>
+        <Show when={state.activeTab() === 'systems'}>
           <ThresholdsTableAgentsTab state={state} tableProps={props} />
         </Show>
 
