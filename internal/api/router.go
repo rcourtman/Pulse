@@ -52,6 +52,7 @@ import (
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/internal/websocket"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/auth"
@@ -70,6 +71,7 @@ type Router struct {
 	alertHandlers              *AlertHandlers
 	configHandlers             *ConfigHandlers
 	trueNASHandlers            *TrueNASHandlers
+	vmwareHandlers             *VMwareHandlers
 	notificationHandlers       *NotificationHandlers
 	notificationQueueHandlers  *NotificationQueueHandlers
 	dockerAgentHandlers        *DockerAgentHandlers
@@ -350,6 +352,9 @@ func (r *Router) setupRoutes() {
 		getMonitor:     r.configHandlers.getMonitor,
 		getPoller:      func(context.Context) *monitoring.TrueNASPoller { return r.trueNASPoller },
 	}
+	r.vmwareHandlers = &VMwareHandlers{
+		getPersistence: r.configHandlers.getPersistence,
+	}
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)
 	if r.mtMonitor != nil {
@@ -373,6 +378,7 @@ func (r *Router) setupRoutes() {
 	}
 	if mock.IsMockEnabled() {
 		truenas.SetFeatureEnabled(true)
+		vmware.SetFeatureEnabled(true)
 		mockTrueNASProvider := truenas.NewDefaultProvider()
 		adapter := trueNASRecordsAdapter{provider: mockTrueNASProvider}
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, adapter)

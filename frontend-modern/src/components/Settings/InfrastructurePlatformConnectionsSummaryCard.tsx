@@ -7,6 +7,8 @@ interface InfrastructurePlatformConnectionsSummaryCardProps {
   pmgCount: number;
   truenasCount: number;
   truenasAvailable: boolean;
+  vmwareCount: number;
+  vmwareAvailable: boolean;
   onManagePlatformConnections: () => void;
 }
 
@@ -20,8 +22,8 @@ export const InfrastructurePlatformConnectionsSummaryCard: Component<
           <div>
             <h3 class="text-base font-semibold text-base-content">Platform connections</h3>
             <p class="text-sm text-muted">
-              Manage the API-backed platforms Pulse polls directly. Proxmox VE, PBS, PMG, and
-              TrueNAS all live in the same shared platform-connections workspace.
+              Manage the API-backed platforms Pulse polls directly. Proxmox VE, PBS, PMG, TrueNAS,
+              and VMware all live in the same shared platform-connections workspace.
             </p>
           </div>
           <button
@@ -33,7 +35,7 @@ export const InfrastructurePlatformConnectionsSummaryCard: Component<
           </button>
         </div>
 
-        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           <div
             class="rounded-lg border border-border bg-surface-alt px-4 py-3"
             data-testid="platform-connections-pve"
@@ -68,6 +70,22 @@ export const InfrastructurePlatformConnectionsSummaryCard: Component<
             <p class="mt-1 text-xs text-muted">
               {props.truenasAvailable
                 ? 'API-backed NAS connections'
+                : 'Explicitly disabled on this Pulse server.'}
+            </p>
+          </div>
+          <div
+            class="rounded-lg border border-border bg-surface-alt px-4 py-3"
+            data-testid="platform-connections-vmware"
+          >
+            <div class="text-sm font-medium text-base-content">VMware</div>
+            <div
+              class={`mt-1 ${props.vmwareAvailable ? 'text-xl font-semibold text-base-content' : 'text-sm font-medium text-muted'}`}
+            >
+              {props.vmwareAvailable ? props.vmwareCount : 'Disabled'}
+            </div>
+            <p class="mt-1 text-xs text-muted">
+              {props.vmwareAvailable
+                ? 'vCenter platform connections'
                 : 'Explicitly disabled on this Pulse server.'}
             </p>
           </div>

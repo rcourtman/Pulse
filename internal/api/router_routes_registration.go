@@ -223,6 +223,53 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
+	// VMware vCenter connection management
+	r.mux.HandleFunc("/api/vmware/connections", func(w http.ResponseWriter, req *http.Request) {
+		if r.vmwareHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "vmware_unavailable", "VMware service unavailable", nil)
+			return
+		}
+
+		switch req.Method {
+		case http.MethodGet:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsRead, r.vmwareHandlers.HandleList))(w, req)
+		case http.MethodPost:
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleAdd))(w, req)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/vmware/connections/test", func(w http.ResponseWriter, req *http.Request) {
+		if r.vmwareHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "vmware_unavailable", "VMware service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleTestConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	r.mux.HandleFunc("/api/vmware/connections/", func(w http.ResponseWriter, req *http.Request) {
+		if r.vmwareHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "vmware_unavailable", "VMware service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleTestSavedConnection))(w, req)
+		} else if req.Method == http.MethodDelete {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleDelete))(w, req)
+		} else if req.Method == http.MethodPut {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleUpdate))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	// Config Profile Routes - Protected by Admin Auth, Settings Scope, and Pro License
 	// SECURITY: Require settings:write scope to prevent low-privilege tokens from modifying agent profiles
 	// r.configProfileHandler.ServeHTTP implements http.Handler, so we wrap it

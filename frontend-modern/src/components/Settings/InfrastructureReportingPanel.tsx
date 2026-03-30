@@ -27,6 +27,8 @@ export const InfrastructureReportingPanel: Component<InfrastructureReportingPane
           pmgCount={props.platformConnectionsSummary().pmgCount}
           truenasCount={props.platformConnectionsSummary().truenasCount}
           truenasAvailable={props.platformConnectionsSummary().truenasAvailable}
+          vmwareCount={props.platformConnectionsSummary().vmwareCount}
+          vmwareAvailable={props.platformConnectionsSummary().vmwareAvailable}
           onManagePlatformConnections={props.onManagePlatformConnections}
         />
       </div>

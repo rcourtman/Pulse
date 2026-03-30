@@ -3,10 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import { useSettingsInfrastructurePanelProps } from '../useSettingsInfrastructurePanelProps';
 
-const createServiceResource = (
-  type: 'pbs' | 'pmg',
-  overrides: Partial<Resource> = {},
-): Resource =>
+const createServiceResource = (type: 'pbs' | 'pmg', overrides: Partial<Resource> = {}): Resource =>
   ({
     id: `${type}-1`,
     type,
@@ -31,6 +28,8 @@ const mountHook = (
   options?: {
     truenasConnections?: Array<{ id: string }>;
     truenasFeatureDisabled?: boolean;
+    vmwareConnections?: Array<{ id: string }>;
+    vmwareFeatureDisabled?: boolean;
     pveCount?: number;
     pbsCount?: number;
     pmgCount?: number;
@@ -65,17 +64,21 @@ const mountHook = (
         disableDockerUpdateActionsLocked: () => false,
         savingDockerUpdateActions: () => false,
         handleDisableDockerUpdateActionsChange: async () => {},
-      } as Parameters<typeof useSettingsInfrastructurePanelProps>[0]['systemSettings'],
+      } as unknown as Parameters<typeof useSettingsInfrastructurePanelProps>[0]['systemSettings'],
       infrastructureSettings: {
         initialLoadComplete: () => true,
         discoveryScanStatus: () => ({ scanning: false }),
         discoveredNodes: () => [],
-        pveNodes: () => Array.from({ length: options?.pveCount ?? 0 }, () => ({} as any)),
-        pbsNodes: () => Array.from({ length: options?.pbsCount ?? 0 }, () => ({} as any)),
-        pmgNodes: () => Array.from({ length: options?.pmgCount ?? 0 }, () => ({} as any)),
+        pveNodes: () => Array.from({ length: options?.pveCount ?? 0 }, () => ({}) as any),
+        pbsNodes: () => Array.from({ length: options?.pbsCount ?? 0 }, () => ({}) as any),
+        pmgNodes: () => Array.from({ length: options?.pmgCount ?? 0 }, () => ({}) as any),
         trueNASSettings: {
           connections: () => options?.truenasConnections ?? [],
           featureDisabled: () => options?.truenasFeatureDisabled ?? false,
+        },
+        vmwareSettings: {
+          connections: () => options?.vmwareConnections ?? [],
+          featureDisabled: () => options?.vmwareFeatureDisabled ?? false,
         },
         triggerDiscoveryScan: async () => {},
         loadDiscoveredNodes: async () => {},
@@ -101,7 +104,9 @@ const mountHook = (
         nodePendingDeleteHost: () => '',
         nodePendingDeleteType: () => '',
         nodePendingDeleteTypeLabel: () => '',
-      } as Parameters<typeof useSettingsInfrastructurePanelProps>[0]['infrastructureSettings'],
+      } as unknown as Parameters<
+        typeof useSettingsInfrastructurePanelProps
+      >[0]['infrastructureSettings'],
       securityStatus: () => null,
     });
   });
@@ -134,18 +139,16 @@ describe('useSettingsInfrastructurePanelProps', () => {
 
     const panelProps = hookState.getInfrastructurePanelProps();
 
-    expect(panelProps.pbsInstances()).toEqual([
-      expect.objectContaining({ name: 'PBS Main' }),
-    ]);
-    expect(panelProps.pmgInstances()).toEqual([
-      expect.objectContaining({ name: 'PMG Main' }),
-    ]);
+    expect(panelProps.pbsInstances()).toEqual([expect.objectContaining({ name: 'PBS Main' })]);
+    expect(panelProps.pmgInstances()).toEqual([expect.objectContaining({ name: 'PMG Main' })]);
     expect(panelProps.platformConnectionsSummary()).toMatchObject({
       pveCount: 0,
       pbsCount: 0,
       pmgCount: 0,
       truenasCount: 0,
       truenasAvailable: true,
+      vmwareCount: 0,
+      vmwareAvailable: true,
     });
 
     dispose();
@@ -157,6 +160,7 @@ describe('useSettingsInfrastructurePanelProps', () => {
       pbsCount: 2,
       pmgCount: 3,
       truenasConnections: [{ id: 'truenas-1' }, { id: 'truenas-2' }],
+      vmwareConnections: [{ id: 'vmware-1' }],
     });
 
     const panelProps = hookState.getInfrastructurePanelProps();
@@ -167,6 +171,8 @@ describe('useSettingsInfrastructurePanelProps', () => {
       pmgCount: 3,
       truenasCount: 2,
       truenasAvailable: true,
+      vmwareCount: 1,
+      vmwareAvailable: true,
     });
 
     dispose();

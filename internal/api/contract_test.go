@@ -32,6 +32,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/updates"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -134,6 +135,62 @@ func TestContract_TrueNASSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) 
 	summary := poller.ConnectionSummaries("default", []config.TrueNASInstance{connection})[connection.ID]
 	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
 		t.Fatalf("expected saved manual test to refresh poll summary, got %+v", summary.Poll)
+	}
+}
+
+func TestContract_VMwareConnectionsDisabledMessageIsExplicit(t *testing.T) {
+	setVMwareFeatureForTest(t, false)
+	handler, _ := newVMwareHandlersForTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 when VMware integration is disabled, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "explicitly disabled") {
+		t.Fatalf("expected explicit disable message, got %s", rec.Body.String())
+	}
+}
+
+func TestContract_VMwareSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	connection := config.VMwareVCenterInstance{
+		ID:       "conn-1",
+		Name:     "lab-vcenter",
+		Host:     "vcsa.lab.local",
+		Port:     443,
+		Username: "administrator@vsphere.local",
+		Password: "super-secret",
+		Enabled:  true,
+	}
+	handler, persistence := newVMwareHandlersForTest(t)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+	handler.newClient = func(cfg vmware.ClientConfig) (vmwareClient, error) {
+		return &fakeVMwareClient{
+			testConnection: func(context.Context) (*vmware.InventorySummary, error) {
+				return &vmware.InventorySummary{Hosts: 3, VMs: 20, Datastores: 4, VIRelease: "8.0.3"}, nil
+			},
+		}, nil
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/conn-1/test", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleTestSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	status := handler.runtimeStatus(connection.ID)
+	if status.Test == nil || status.Test.LastSuccessAt == nil {
+		t.Fatalf("expected saved manual test to refresh runtime summary, got %+v", status.Test)
+	}
+	if status.Observed == nil || status.Observed.VMs != 20 {
+		t.Fatalf("expected saved manual test to refresh observed summary, got %+v", status.Observed)
 	}
 }
 

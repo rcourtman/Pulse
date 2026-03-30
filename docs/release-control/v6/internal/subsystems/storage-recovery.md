@@ -91,6 +91,7 @@ querying, and the operator-facing storage health presentation layer.
 25. Keep provider-backed poll cadence and settings-runtime health on the adjacent platform-connections contract. When shared `internal/api/` and poller wiring expose TrueNAS last-sync status, failure summaries, discovered contribution counts, manual saved-test status refresh, or platform handoff links in settings, storage and recovery may consume the resulting datasets, apps, disks, and recovery artifacts but must not redefine those settings-runtime health semantics or connection-level handoffs in storage/recovery-local transport or page flows.
 26. Keep cross-surface recovery handoffs on the shared route-helper contract. When infrastructure or other unified-resource consumers expose TrueNAS recovery links, they must reuse the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder with owned `platform` and `node` queries instead of inventing drawer-local recovery URLs or treating PBS services as the only infrastructure-to-recovery path.
 27. Keep alert-side recovery drill-ins on that same shared route-helper contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder instead of freezing alert-local recovery URLs or introducing another provider-shaped recovery handoff vocabulary.
+28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
 
 ## Forbidden Paths
 
@@ -1635,3 +1636,11 @@ Storage and recovery must not treat vSphere snapshots, changed-disk/block
 visibility, or datastore presence as canonical Pulse recovery artifacts,
 restore capability, or recovery-backed Assistant control until a later
 governed slice adds those contracts explicitly.
+That same storage/recovery boundary also keeps the onboarding runtime separate
+from recovery semantics. `internal/api/router.go`,
+`internal/api/router_routes_registration.go`, and
+`internal/api/vmware_handlers.go` may expose VMware connection CRUD, saved-test
+health refresh, and observed datastore/VM snapshot visibility on the shared
+platform-connections surface, but storage and recovery must treat that data as
+setup/runtime context only, not as proof that VMware has joined the canonical
+recovery artifact or restore plane.

@@ -9,6 +9,7 @@ import type {
   NodeType,
 } from './infrastructureSettingsModel';
 import type { TrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
+import type { VMwareSettingsPanelState } from './useVMwareSettingsPanelState';
 
 export type DiscoveryMode = 'auto' | 'custom';
 
@@ -18,6 +19,8 @@ export interface PlatformConnectionsSummary {
   pmgCount: number;
   truenasCount: number;
   truenasAvailable: boolean;
+  vmwareCount: number;
+  vmwareAvailable: boolean;
 }
 
 export interface InfrastructurePlatformSettingsProps {
@@ -37,6 +40,7 @@ export interface InfrastructurePlatformSettingsProps {
   pbsNodes: Accessor<NodeConfigWithStatus[]>;
   pmgNodes: Accessor<NodeConfigWithStatus[]>;
   trueNASSettings: TrueNASSettingsPanelState;
+  vmwareSettings: VMwareSettingsPanelState;
   platformConnectionsSummary: Accessor<PlatformConnectionsSummary>;
   temperatureMonitoringEnabled: Accessor<boolean>;
   triggerDiscoveryScan: (options?: { quiet?: boolean }) => Promise<void>;
@@ -57,6 +61,10 @@ export interface InfrastructurePlatformSettingsProps {
   temperatureMonitoringLocked: Accessor<boolean>;
   savingTemperatureSetting: Accessor<boolean>;
   handleTemperatureMonitoringChange: (enabled: boolean) => Promise<void>;
+  disableDockerUpdateActions: Accessor<boolean>;
+  disableDockerUpdateActionsLocked: Accessor<boolean>;
+  savingDockerUpdateActions: Accessor<boolean>;
+  handleDisableDockerUpdateActionsChange: (enabled: boolean) => Promise<void>;
   handleNodeTemperatureMonitoringChange: (nodeId: string, enabled: boolean | null) => Promise<void>;
   saveNode: (nodeData: Partial<NodeConfig>) => Promise<void>;
   showDeleteNodeModal: Accessor<boolean>;

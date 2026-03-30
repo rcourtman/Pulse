@@ -25,13 +25,15 @@ export function useSettingsInfrastructurePanelProps(
     params.resources().filter((resource) => resource.type === 'agent'),
   );
   const pbsInstances = createMemo(() =>
-    params.resources()
+    params
+      .resources()
       .filter((resource) => resource.type === 'pbs')
       .map(pbsInstanceFromResource)
       .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
   );
   const pmgInstances = createMemo(() =>
-    params.resources()
+    params
+      .resources()
       .filter((resource) => resource.type === 'pmg')
       .map(pmgInstanceFromResource)
       .filter((instance): instance is NonNullable<typeof instance> => Boolean(instance)),
@@ -43,6 +45,8 @@ export function useSettingsInfrastructurePanelProps(
     pmgCount: params.infrastructureSettings.pmgNodes().length,
     truenasCount: params.infrastructureSettings.trueNASSettings.connections().length,
     truenasAvailable: !params.infrastructureSettings.trueNASSettings.featureDisabled(),
+    vmwareCount: params.infrastructureSettings.vmwareSettings.connections().length,
+    vmwareAvailable: !params.infrastructureSettings.vmwareSettings.featureDisabled(),
   }));
 
   const getInfrastructurePanelProps = (): InfrastructurePlatformSettingsProps => ({
@@ -62,6 +66,7 @@ export function useSettingsInfrastructurePanelProps(
     pbsNodes: params.infrastructureSettings.pbsNodes,
     pmgNodes: params.infrastructureSettings.pmgNodes,
     trueNASSettings: params.infrastructureSettings.trueNASSettings,
+    vmwareSettings: params.infrastructureSettings.vmwareSettings,
     platformConnectionsSummary,
     temperatureMonitoringEnabled: params.systemSettings.temperatureMonitoringEnabled,
     triggerDiscoveryScan: params.infrastructureSettings.triggerDiscoveryScan,

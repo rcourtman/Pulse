@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/frontend-primitives.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": []
+  "dependency_subsystem_ids": ["agent-lifecycle"]
 }
 ```
 
@@ -78,6 +78,7 @@ work extends shared components instead of creating new local variants.
 47. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
 48. `frontend-modern/src/features/`
 49. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+50. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
 50. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
 51. `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
 52. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
@@ -141,6 +142,7 @@ work extends shared components instead of creating new local variants.
    instead of introducing page-local framing
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
+5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
 
 ## Forbidden Paths
 
@@ -257,16 +259,18 @@ work extends shared components instead of creating new local variants.
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
 16. Keep infrastructure settings-shell API alternatives on the shared shell
-    contract. `InfrastructureWorkspace.tsx`, `settingsHeaderMeta.ts`,
-    `settingsNavigationModel.ts`, and shared empty-state/setup guidance must
+    contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
+    `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
+    `frontend-modern/src/components/Settings/settingsNavigationModel.ts`, and
+    shared empty-state/setup guidance must
     present `Platform connections` as the canonical API-backed alternative for
     Proxmox, TrueNAS, and future provider integrations instead of reviving
     top-level `Direct Proxmox` wording or shell-local provider routes.
 17. Keep the infrastructure settings platform-connections summary and provider
-    workspaces on one shared state source. `useInfrastructureSettingsState.ts`,
-    `useSettingsInfrastructurePanelProps.ts`,
-    `InfrastructurePlatformConnectionsSummaryCard.tsx`,
-    `PlatformConnectionsWorkspace.tsx`, and `TrueNASSettingsPanel.tsx` must
+    workspaces on one shared state source. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
+    `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
+    `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
+    `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`, and `frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx` must
     derive TrueNAS connection counts and availability from the shared
     infrastructure settings state instead of letting the reporting summary and
     the provider-specific panel issue separate connection fetches.
@@ -1594,21 +1598,28 @@ reference cases, and
 locks that direct-root contract so single-surface pages do not quietly regain
 redundant outer spacing chrome.
 The same shared settings-shell boundary now also owns the API-backed
-alternative path inside Infrastructure Operations. `InfrastructureWorkspace.tsx`,
-`InfrastructurePlatformConnectionsSummaryCard.tsx`, `settingsHeaderMeta.ts`,
-`settingsNavigationModel.ts`, `dashboardEmptyStatePresentation.ts`,
-`infrastructureEmptyStatePresentation.ts`, and adjacent setup guidance must
+alternative path inside Infrastructure Operations. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
+`frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
+`frontend-modern/src/components/Settings/settingsNavigationModel.ts`, `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`,
+`frontend-modern/src/utils/infrastructureEmptyStatePresentation.ts`, and adjacent setup guidance must
 treat `Platform connections` as the canonical API-backed alternative for
 Proxmox, TrueNAS, and future provider integrations instead of reviving
 top-level `Direct Proxmox` wording or shell-local provider routes.
 That same settings-shell contract also owns the shared platform-connections
-summary state. `useInfrastructureSettingsState.ts`,
-`useSettingsInfrastructurePanelProps.ts`,
-`InfrastructurePlatformConnectionsSummaryCard.tsx`,
-`PlatformConnectionsWorkspace.tsx`, and `TrueNASSettingsPanel.tsx` must derive
-Proxmox/PBS/PMG/TrueNAS counts and availability from one shared infrastructure
-settings state source instead of letting the reporting summary and the
-provider-specific panel fetch the same TrueNAS connection state separately.
+summary state. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
+`frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
+`frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
+`frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`, `frontend-modern/src/components/Settings/TrueNASSettingsPanel.tsx`, and
+`frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx` must derive Proxmox/PBS/PMG/TrueNAS/VMware counts
+and availability from one shared infrastructure settings state source instead
+of letting the reporting summary and the provider-specific panels fetch the
+same connection state separately.
+That same shared settings-shell boundary also owns provider parity inside the
+platform workspace. Adding VMware to the shared `Platform connections`
+subtabs may extend the same card, empty-state, dialog, and summary-shell
+patterns used by TrueNAS, but it must not introduce a VMware-only outer page
+shell, alternate settings route hierarchy, or another summary vocabulary for
+connection health and contribution counts.
 That same shared filter-presentation boundary also owns infrastructure
 route-filter continuity. `frontend-modern/src/features/infrastructure/`
 must keep a route-owned canonical source option such as `truenas` visible in

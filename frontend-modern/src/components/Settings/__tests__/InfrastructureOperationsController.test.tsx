@@ -89,10 +89,14 @@ let securityStatusResponse = { requiresAuth: true, apiTokenConfigured: false };
 
 describe('InfrastructureOperationsController ownership guardrails', () => {
   it('routes controller and workspace panels through the shared infrastructure operations state owner', () => {
-    expect(infrastructureOperationsControllerSource).toContain('InfrastructureOperationsStateProvider');
+    expect(infrastructureOperationsControllerSource).toContain(
+      'InfrastructureOperationsStateProvider',
+    );
     expect(infrastructureOperationsControllerSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureOperationsControllerSource).toContain('InfrastructureInventorySection');
-    expect(infrastructureOperationsControllerSource).toContain('InfrastructureStopMonitoringDialog');
+    expect(infrastructureOperationsControllerSource).toContain(
+      'InfrastructureStopMonitoringDialog',
+    );
     expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
     expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
     expect(infrastructureReportingPanelSource).toContain('InfrastructureOperationsStateProvider');
@@ -102,11 +106,10 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
       './InfrastructurePlatformConnectionsSummaryCard',
     );
     expect(infrastructureReportingPanelSource).not.toContain('Platform connections');
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
-      'Platform connections',
-    );
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('Platform connections');
     expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('TrueNAS');
-    expect(infrastructureOperationsStateSource).toContain("./infrastructureOperationsModel");
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('VMware');
+    expect(infrastructureOperationsStateSource).toContain('./infrastructureOperationsModel');
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureInstallState');
     expect(infrastructureOperationsStateSource).toContain('./useInfrastructureReportingState');
     expect(infrastructureOperationsStateSource).toContain(
@@ -118,7 +121,9 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
     expect(infrastructureOperationsStateSource).not.toContain('renderInstallerSection');
     expect(infrastructureOperationsStateSource).not.toContain('renderInventorySection');
     expect(infrastructureOperationsStateSource).not.toContain('renderStopMonitoringDialog');
-    expect(infrastructureInstallStateSource).toContain('export const useInfrastructureInstallState');
+    expect(infrastructureInstallStateSource).toContain(
+      'export const useInfrastructureInstallState',
+    );
     expect(infrastructureInstallStateSource).toContain('MonitoringAPI.getState()');
     expect(infrastructureInstallStateSource).toContain('./infrastructureWorkspaceModel');
     expect(infrastructureInstallStateSource).toContain(
@@ -140,16 +145,18 @@ describe('InfrastructureOperationsController ownership guardrails', () => {
       'export const useInfrastructureDiscoveryRuntimeState',
     );
     expect(infrastructureDiscoveryRuntimeStateSource).toContain("apiFetch('/api/discover'");
-    expect(infrastructureDiscoveryRuntimeStateSource).toContain(
-      'SettingsAPI.updateSystemSettings',
-    );
+    expect(infrastructureDiscoveryRuntimeStateSource).toContain('SettingsAPI.updateSystemSettings');
     expect(infrastructureInstallerSectionSource).toContain('useInfrastructureOperationsContext');
-    expect(infrastructureInstallerSectionSource).toContain('Advanced connection and install options');
+    expect(infrastructureInstallerSectionSource).toContain(
+      'Advanced connection and install options',
+    );
     expect(infrastructureInstallerSectionSource).toContain(
       'Show advanced connection and install options',
     );
     expect(infrastructureInventorySectionSource).toContain('useInfrastructureOperationsContext');
-    expect(infrastructureStopMonitoringDialogSource).toContain('useInfrastructureOperationsContext');
+    expect(infrastructureStopMonitoringDialogSource).toContain(
+      'useInfrastructureOperationsContext',
+    );
     expect(infrastructureOperationsModelSource).toContain('export const getRowReportingSummary');
     expect(infrastructureOperationsModelSource).toContain(
       'export const getPowerShellInstallProfileEnvFromFlags',
@@ -168,6 +175,8 @@ describe('InfrastructurePlatformConnectionsSummaryCard', () => {
         pmgCount={3}
         truenasCount={4}
         truenasAvailable={true}
+        vmwareCount={5}
+        vmwareAvailable={true}
         onManagePlatformConnections={onManagePlatformConnections}
       />
     ));
@@ -176,8 +185,11 @@ describe('InfrastructurePlatformConnectionsSummaryCard', () => {
     expect(screen.getByText('PBS')).toBeInTheDocument();
     expect(screen.getByText('PMG')).toBeInTheDocument();
     expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getByText('VMware')).toBeInTheDocument();
     expect(screen.getByTestId('platform-connections-truenas')).toHaveTextContent('4');
+    expect(screen.getByTestId('platform-connections-vmware')).toHaveTextContent('5');
     expect(screen.getByText('API-backed NAS connections')).toBeInTheDocument();
+    expect(screen.getByText('vCenter platform connections')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Open platform connections' }));
     expect(onManagePlatformConnections).toHaveBeenCalledTimes(1);
@@ -191,12 +203,19 @@ describe('InfrastructurePlatformConnectionsSummaryCard', () => {
         pmgCount={0}
         truenasCount={0}
         truenasAvailable={false}
+        vmwareCount={0}
+        vmwareAvailable={false}
         onManagePlatformConnections={() => {}}
       />
     ));
 
-    expect(screen.getByText('Disabled')).toBeInTheDocument();
-    expect(screen.getByText('Explicitly disabled on this Pulse server.')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('platform-connections-truenas')).getByText('Disabled'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('platform-connections-vmware')).getByText('Disabled'),
+    ).toBeInTheDocument();
+    expect(screen.getAllByText('Explicitly disabled on this Pulse server.')).toHaveLength(2);
   });
 });
 
@@ -633,7 +652,10 @@ const setupComponent = (
   ));
 };
 
-const setupWithResources = (resources: any[], connectedInfrastructure: ConnectedInfrastructureItem[]) => {
+const setupWithResources = (
+  resources: any[],
+  connectedInfrastructure: ConnectedInfrastructureItem[],
+) => {
   setMockResources(resources);
 
   const [state] = createStore<Pick<State, 'connectedInfrastructure'>>({
@@ -730,10 +752,13 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
   vi.stubGlobal('navigator', { clipboard: { writeText: clipboardSpy } } as unknown as Navigator);
   vi.stubGlobal('Blob', MockBlob as unknown as typeof Blob);
-  vi.stubGlobal('URL', Object.assign(URL, {
-    createObjectURL: createObjectURLMock,
-    revokeObjectURL: revokeObjectURLMock,
-  }));
+  vi.stubGlobal(
+    'URL',
+    Object.assign(URL, {
+      createObjectURL: createObjectURLMock,
+      revokeObjectURL: revokeObjectURLMock,
+    }),
+  );
 
   listProfilesMock.mockResolvedValue([]);
   listAssignmentsMock.mockResolvedValue([]);
@@ -790,7 +815,9 @@ describe('InfrastructureOperationsController token generation', () => {
       'setup_handoff',
     );
     expect(notificationSuccessMock).not.toHaveBeenCalled();
-    expect(screen.getByText(/Security configured\. Save these first-run credentials now\./i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Security configured\. Save these first-run credentials now\./i),
+    ).toBeInTheDocument();
     expect(
       screen.getByText(/Pulse already prepared the first scoped install token for this handoff/i),
     ).toBeInTheDocument();
@@ -933,7 +960,9 @@ describe('InfrastructureOperationsController agent lookup', () => {
     const host = createAgent({ hostname: 'first-host.local', displayName: 'First Host' });
     getStateMock
       .mockResolvedValueOnce(buildMonitoringState())
-      .mockResolvedValue(buildMonitoringState(buildConnectedInfrastructureFromFixtures({ hosts: [host] })));
+      .mockResolvedValue(
+        buildMonitoringState(buildConnectedInfrastructureFromFixtures({ hosts: [host] })),
+      );
 
     setupComponent();
 
@@ -1099,7 +1128,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
     expect(detailsRow).not.toBeNull();
     const details = within(detailsRow as HTMLElement);
     expect(screen.getByText('Browse reporting items')).toBeInTheDocument();
-    expect(screen.getByText('Select a reporting item to open its details drawer.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Select a reporting item to open its details drawer.'),
+    ).toBeInTheDocument();
     expect(details.getByText('Selected reporting item')).toBeInTheDocument();
     expect(details.getByText('Machine overview')).toBeInTheDocument();
     expect(details.getByText('Surface controls')).toBeInTheDocument();
@@ -1261,45 +1292,44 @@ describe('InfrastructureOperationsController managed agents table', () => {
     expect(
       details.getByText('Container runtime coverage reported from this machine.'),
     ).toBeInTheDocument();
-    expect(
-      details.getByText('Proxmox node telemetry linked to this machine.'),
-    ).toBeInTheDocument();
+    expect(details.getByText('Proxmox node telemetry linked to this machine.')).toBeInTheDocument();
     expect(details.getByText('Agent ID')).toBeInTheDocument();
     expect(details.getByText('Docker runtime ID')).toBeInTheDocument();
     expect(details.getByText('Node ID')).toBeInTheDocument();
     expect(details.getAllByText('delly-resource').length).toBeGreaterThan(0);
-    expect(
-      details.getByRole('button', { name: /Open platform connections/i }),
-    ).toBeInTheDocument();
+    expect(details.getByRole('button', { name: /Open platform connections/i })).toBeInTheDocument();
     expect(details.getAllByText('delly-agent').length).toBeGreaterThan(0);
     expect(details.getAllByText('delly-docker').length).toBeGreaterThan(0);
   });
 
   it('routes api-backed truenas rows to platform connections instead of machine uninstall actions', async () => {
-    setupWithResources([], [
-      {
-        id: 'truenas-main',
-        name: 'Tower NAS',
-        displayName: 'Tower NAS',
-        hostname: 'truenas.local',
-        status: 'active',
-        healthStatus: 'online',
-        lastSeen: Date.now(),
-        version: '25.04.0',
-        upgradePlatform: 'linux',
-        surfaces: [
-          {
-            id: 'truenas:truenas.local',
-            kind: 'truenas',
-            label: 'TrueNAS data',
-            detail:
-              'System, storage, app, and recovery telemetry polled through the configured TrueNAS connection.',
-            idLabel: 'Hostname',
-            idValue: 'truenas.local',
-          },
-        ],
-      },
-    ]);
+    setupWithResources(
+      [],
+      [
+        {
+          id: 'truenas-main',
+          name: 'Tower NAS',
+          displayName: 'Tower NAS',
+          hostname: 'truenas.local',
+          status: 'active',
+          healthStatus: 'online',
+          lastSeen: Date.now(),
+          version: '25.04.0',
+          upgradePlatform: 'linux',
+          surfaces: [
+            {
+              id: 'truenas:truenas.local',
+              kind: 'truenas',
+              label: 'TrueNAS data',
+              detail:
+                'System, storage, app, and recovery telemetry polled through the configured TrueNAS connection.',
+              idLabel: 'Hostname',
+              idValue: 'truenas.local',
+            },
+          ],
+        },
+      ],
+    );
 
     await waitFor(() => {
       expect(screen.getAllByText('Reporting now').length).toBeGreaterThan(0);
@@ -1313,7 +1343,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
     const details = within(detailsRow as HTMLElement);
 
     expect(details.queryByText('Machine actions')).not.toBeInTheDocument();
-    expect(details.queryByRole('button', { name: /Copy uninstall command/i })).not.toBeInTheDocument();
+    expect(
+      details.queryByRole('button', { name: /Copy uninstall command/i }),
+    ).not.toBeInTheDocument();
 
     const openPlatformConnectionsButton = details.getByRole('button', {
       name: /Open platform connections/i,
@@ -1427,7 +1459,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Proxmox data')).not.toBeInTheDocument();
     expect(
-      screen.getByText('Pulse is currently receiving live reports from 1 host, 1 Docker runtime, and 1 PBS server.'),
+      screen.getByText(
+        'Pulse is currently receiving live reports from 1 host, 1 Docker runtime, and 1 PBS server.',
+      ),
     ).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /details for Tower/i }));
@@ -1569,7 +1603,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
       expect(screen.getAllByText('delly').length).toBeGreaterThan(0);
     });
     expect(
-      screen.queryByText('Pulse is receiving host telemetry, Docker runtime data, and Proxmox data from this item.'),
+      screen.queryByText(
+        'Pulse is receiving host telemetry, Docker runtime data, and Proxmox data from this item.',
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -2209,12 +2245,12 @@ describe('InfrastructureOperationsController managed agents table', () => {
     expect(screen.getByText('Docker runtime')).toBeInTheDocument();
     expect(screen.getByText('1 item(s) are currently ignored by Pulse.')).toBeInTheDocument();
     expect(
-      screen.getByText(
-        'Pulse is currently receiving live reports from 1 host.',
-      ),
+      screen.getByText('Pulse is currently receiving live reports from 1 host.'),
     ).toBeInTheDocument();
     expect(screen.queryByText('Missing expected coverage')).not.toBeInTheDocument();
-    expect(screen.queryByText('No Kubernetes reporter is currently connected.')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('No Kubernetes reporter is currently connected.'),
+    ).not.toBeInTheDocument();
     expect(
       screen.getByText(
         /Items you explicitly told Pulse to ignore stay out of live reporting until reconnect is allowed\./i,
@@ -2263,8 +2299,12 @@ describe('InfrastructureOperationsController managed agents table', () => {
     expect(screen.getAllByText('Docker runtime data').length).toBeGreaterThan(0);
     const ignoredDrawer = screen.getByRole('dialog', { name: 'Ignored item details' });
     const ignoredDetails = within(ignoredDrawer);
-    expect(ignoredDetails.getByRole('button', { name: /Allow Docker reconnect/i })).toBeInTheDocument();
-    expect(ignoredDetails.queryByRole('button', { name: 'Stop monitoring' })).not.toBeInTheDocument();
+    expect(
+      ignoredDetails.getByRole('button', { name: /Allow Docker reconnect/i }),
+    ).toBeInTheDocument();
+    expect(
+      ignoredDetails.queryByRole('button', { name: 'Stop monitoring' }),
+    ).not.toBeInTheDocument();
     expect(screen.getByText('Showing 0 of 0 active records.')).toBeInTheDocument();
     expect(screen.getByText('1 item(s) are currently ignored by Pulse.')).toBeInTheDocument();
   });
@@ -2354,7 +2394,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
     );
     expect(screen.getAllByText('Tower').length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByText('Tower')[0]);
-    expect(screen.getAllByRole('button', { name: 'Allow host reconnect' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Allow host reconnect' }).length).toBeGreaterThan(
+      0,
+    );
     expect(notificationSuccessMock).toHaveBeenCalledWith(
       'Monitoring stopped for Tower. Pulse will ignore future reports until reconnect is allowed.',
     );
@@ -2421,7 +2463,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
     });
     expect(screen.getAllByText('Ignored by Pulse').length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByText('Tower')[0]);
-    expect(screen.getAllByRole('button', { name: 'Allow host reconnect' }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: 'Allow host reconnect' }).length).toBeGreaterThan(
+      0,
+    );
   });
 
   it('force-removes docker runtimes from Pulse inventory', async () => {
@@ -2451,7 +2495,9 @@ describe('InfrastructureOperationsController managed agents table', () => {
       },
     );
     fireEvent.click(screen.getAllByText('Tower')[0]);
-    expect(screen.getAllByRole('button', { name: 'Allow Docker reconnect' }).length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: 'Allow Docker reconnect' }).length,
+    ).toBeGreaterThan(0);
     expect(notificationSuccessMock).toHaveBeenCalledWith(
       'Monitoring stopped for Tower. Pulse will ignore future reports until reconnect is allowed.',
     );

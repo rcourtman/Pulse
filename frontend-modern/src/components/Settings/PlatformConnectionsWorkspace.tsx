@@ -9,6 +9,7 @@ import {
   getPlatformConnectionsViewFromPath,
 } from './platformConnectionsModel';
 import { TrueNASSettingsPanel } from './TrueNASSettingsPanel';
+import { VMwareSettingsPanel } from './VMwareSettingsPanel';
 import type { InfrastructurePlatformSettingsProps } from './proxmoxSettingsModel';
 
 export const PlatformConnectionsWorkspace: Component<InfrastructurePlatformSettingsProps> = (
@@ -22,7 +23,9 @@ export const PlatformConnectionsWorkspace: Component<InfrastructurePlatformSetti
     <div class="space-y-6">
       <Subtabs
         value={activeView()}
-        onChange={(value) => navigate(buildPlatformConnectionsPath(value as 'proxmox' | 'truenas'))}
+        onChange={(value) =>
+          navigate(buildPlatformConnectionsPath(value as 'proxmox' | 'truenas' | 'vmware'))
+        }
         ariaLabel="Platform connections"
         tabs={PLATFORM_CONNECTIONS_TABS.map((tab) => ({
           value: tab.id,
@@ -33,6 +36,10 @@ export const PlatformConnectionsWorkspace: Component<InfrastructurePlatformSetti
       <Switch>
         <Match when={activeView() === 'truenas'}>
           <TrueNASSettingsPanel state={props.trueNASSettings} />
+        </Match>
+
+        <Match when={activeView() === 'vmware'}>
+          <VMwareSettingsPanel state={props.vmwareSettings} />
         </Match>
 
         <Match when={activeView() === 'proxmox'}>

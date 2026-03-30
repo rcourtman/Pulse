@@ -33,6 +33,7 @@ type ConfigPersistence struct {
 	appriseFile          string
 	nodesFile            string
 	trueNASFile          string
+	vmwareFile           string
 	systemFile           string
 	ssoFile              string
 	apiTokensFile        string
@@ -95,6 +96,7 @@ type resolvedConfigPersistencePaths struct {
 	appriseFile          string
 	nodesFile            string
 	trueNASFile          string
+	vmwareFile           string
 	systemFile           string
 	ssoFile              string
 	apiTokensFile        string
@@ -142,6 +144,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	trueNASFile, err := resolveLeaf("truenas.enc")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve truenas.enc: %w", err)
+	}
+	vmwareFile, err := resolveLeaf("vmware.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve vmware.enc: %w", err)
 	}
 	systemFile, err := resolveLeaf("system.json")
 	if err != nil {
@@ -199,6 +205,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		appriseFile:          appriseFile,
 		nodesFile:            nodesFile,
 		trueNASFile:          trueNASFile,
+		vmwareFile:           vmwareFile,
 		systemFile:           systemFile,
 		ssoFile:              ssoFile,
 		apiTokensFile:        apiTokensFile,
@@ -248,6 +255,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		appriseFile:          resolvedPaths.appriseFile,
 		nodesFile:            resolvedPaths.nodesFile,
 		trueNASFile:          resolvedPaths.trueNASFile,
+		vmwareFile:           resolvedPaths.vmwareFile,
 		systemFile:           resolvedPaths.systemFile,
 		ssoFile:              resolvedPaths.ssoFile,
 		apiTokensFile:        resolvedPaths.apiTokensFile,
@@ -602,6 +610,18 @@ func (c *ConfigPersistence) SaveTrueNASConfig(instances []TrueNASInstance) error
 // LoadTrueNASConfig loads TrueNAS instance configuration from encrypted storage.
 func (c *ConfigPersistence) LoadTrueNASConfig() ([]TrueNASInstance, error) {
 	return loadSlice[TrueNASInstance](c, c.trueNASFile, true)
+}
+
+// SaveVMwareConfig persists VMware vCenter instance configuration to encrypted
+// storage.
+func (c *ConfigPersistence) SaveVMwareConfig(instances []VMwareVCenterInstance) error {
+	return saveJSON(c, c.vmwareFile, instances, true)
+}
+
+// LoadVMwareConfig loads VMware vCenter instance configuration from encrypted
+// storage.
+func (c *ConfigPersistence) LoadVMwareConfig() ([]VMwareVCenterInstance, error) {
+	return loadSlice[VMwareVCenterInstance](c, c.vmwareFile, true)
 }
 
 // SaveAPITokens persists API token metadata to disk.

@@ -16,6 +16,7 @@ import infrastructureOperationsModelSource from '../infrastructureOperationsMode
 import infrastructureReportingPanelSource from '../InfrastructureReportingPanel.tsx?raw';
 import infrastructurePlatformConnectionsSummaryCardSource from '../InfrastructurePlatformConnectionsSummaryCard.tsx?raw';
 import trueNASSettingsPanelSource from '../TrueNASSettingsPanel.tsx?raw';
+import vmwareSettingsPanelSource from '../VMwareSettingsPanel.tsx?raw';
 import infrastructureInventorySectionSource from '../InfrastructureInventorySection.tsx?raw';
 import infrastructureActiveRowDetailsSource from '../InfrastructureActiveRowDetails.tsx?raw';
 import infrastructureIgnoredRowDetailsSource from '../InfrastructureIgnoredRowDetails.tsx?raw';
@@ -31,6 +32,7 @@ import infrastructureInstallStateSource from '../useInfrastructureInstallState.t
 import infrastructureOperationsStateSource from '../useInfrastructureOperationsState.tsx?raw';
 import infrastructureReportingStateSource from '../useInfrastructureReportingState.tsx?raw';
 import trueNASSettingsStateSource from '../useTrueNASSettingsPanelState.ts?raw';
+import vmwareSettingsStateSource from '../useVMwareSettingsPanelState.ts?raw';
 import infrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
 import infrastructureSettingsModelSource from '../infrastructureSettingsModel.ts?raw';
 import infrastructureConfiguredNodesStateSource from '../useInfrastructureConfiguredNodesState.ts?raw';
@@ -171,10 +173,12 @@ const extractedModules = [
   '../PlatformConnectionsWorkspace.tsx',
   '../platformConnectionsModel.ts',
   '../TrueNASSettingsPanel.tsx',
+  '../VMwareSettingsPanel.tsx',
   '../useInfrastructureInstallState.tsx',
   '../useInfrastructureOperationsState.tsx',
   '../useInfrastructureReportingState.tsx',
   '../useTrueNASSettingsPanelState.ts',
+  '../useVMwareSettingsPanelState.ts',
   '../infrastructureSettingsModel.ts',
   '../useInfrastructureConfiguredNodesState.ts',
   '../useInfrastructureDiscoveryRuntimeState.ts',
@@ -498,7 +502,7 @@ describe('Settings architecture guardrails', () => {
     );
     expect(settingsNavigationModelSource).toContain('export function resolveCanonicalSettingsPath');
     expect(settingsNavigationModelSource).toContain('export function settingsTabPath');
-    expect(settingsNavigationModelSource).toContain("return INFRASTRUCTURE_INSTALL_PREFIX;");
+    expect(settingsNavigationModelSource).toContain('return INFRASTRUCTURE_INSTALL_PREFIX;');
     expect(settingsNavigationHookSource).toContain('deriveTabFromPath');
     expect(settingsNavigationHookSource).toContain('resolveCanonicalSettingsPath');
     expect(settingsNavigationHookSource).toContain('settingsTabPath');
@@ -512,7 +516,7 @@ describe('Settings architecture guardrails', () => {
     expect(settingsShellStateSource).toContain('showPasswordModal');
     expect(settingsNavCatalogSource).toContain('export const SETTINGS_NAV_GROUPS');
     expect(settingsNavCatalogSource).toContain('export function getSettingsNavItem');
-    expect(settingsNavCatalogSource).toContain("./selfHostedBillingPresentation");
+    expect(settingsNavCatalogSource).toContain('./selfHostedBillingPresentation');
     expect(settingsNavCatalogSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle');
     expect(settingsNavCatalogSource).not.toContain("label: 'Pulse Pro'");
     expect(settingsNavVisibilitySource).toContain('export function shouldHideSettingsNavItem');
@@ -587,18 +591,12 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemDisclosureToggleLabel',
     );
-    expect(selfHostedCommercialActivationSectionSource).toContain(
-      '@/utils/licensePresentation',
-    );
+    expect(selfHostedCommercialActivationSectionSource).toContain('@/utils/licensePresentation');
     expect(selfHostedCommercialActivationSectionSource).toContain(
       'SELF_HOSTED_ACTIVATION_PRESENTATION',
     );
-    expect(selfHostedCommercialActivationSectionSource).not.toContain(
-      'License / Activation Key',
-    );
-    expect(selfHostedCommercialActivationSectionSource).not.toContain(
-      'Start 14-day Pro Trial',
-    );
+    expect(selfHostedCommercialActivationSectionSource).not.toContain('License / Activation Key');
+    expect(selfHostedCommercialActivationSectionSource).not.toContain('Start 14-day Pro Trial');
     expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');
     expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
     expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
@@ -872,9 +870,10 @@ describe('Settings architecture guardrails', () => {
     expect(platformConnectionsWorkspaceSource).toContain('./platformConnectionsModel');
     expect(platformConnectionsWorkspaceSource).toContain('./ProxmoxSettingsPanel');
     expect(platformConnectionsWorkspaceSource).toContain('./TrueNASSettingsPanel');
+    expect(platformConnectionsWorkspaceSource).toContain('./VMwareSettingsPanel');
     expect(platformConnectionsModelSource).toContain('export const PLATFORM_CONNECTIONS_TABS');
     expect(platformConnectionsModelSource).toContain(
-      "export function getPlatformConnectionsViewFromPath",
+      'export function getPlatformConnectionsViewFromPath',
     );
     expect(infrastructureInstallPanelSource).toContain('InfrastructureOperationsStateProvider');
     expect(infrastructureInstallPanelSource).toContain('InfrastructureInstallerSection');
@@ -906,9 +905,13 @@ describe('Settings architecture guardrails', () => {
       'export const useInfrastructureOperationsContext',
     );
     expect(trueNASSettingsPanelSource).toContain('state: TrueNASSettingsPanelState');
+    expect(vmwareSettingsPanelSource).toContain('state: VMwareSettingsPanelState');
     expect(trueNASSettingsStateSource).toContain('@/api/truenas');
     expect(trueNASSettingsStateSource).toContain('export function useTrueNASSettingsPanelState');
+    expect(vmwareSettingsStateSource).toContain('@/api/vmware');
+    expect(vmwareSettingsStateSource).toContain('export function useVMwareSettingsPanelState');
     expect(infrastructureSettingsStateSource).toContain('./useTrueNASSettingsPanelState');
+    expect(infrastructureSettingsStateSource).toContain('./useVMwareSettingsPanelState');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInstallerSection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderInventorySection =');
     expect(infrastructureOperationsStateSource).not.toContain('const renderStopMonitoringDialog =');
@@ -934,10 +937,9 @@ describe('Settings architecture guardrails', () => {
     expect(infrastructureWorkspaceModelSource).toContain(
       'export function buildInfrastructureWorkspacePath',
     );
-    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
-      'Platform connections',
-    );
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('Platform connections');
     expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('TrueNAS');
+    expect(infrastructurePlatformConnectionsSummaryCardSource).toContain('VMware');
     expect(infrastructurePlatformConnectionsSummaryCardSource).toContain(
       'Open platform connections',
     );
@@ -1186,7 +1188,9 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).not.toContain("'advanced_reporting'");
     expect(reportingPanelStateSource).not.toContain('getTrialAlreadyUsedMessage()');
     expect(reportingCatalogModelSource).toContain('export function buildReportingCatalogRequest');
-    expect(reportingCatalogModelSource).toContain('export function buildLegacyReportingCatalogFallback');
+    expect(reportingCatalogModelSource).toContain(
+      'export function buildLegacyReportingCatalogFallback',
+    );
     expect(reportingCatalogModelSource).toContain('export function parseReportingCatalog');
     expect(reportingCatalogModelSource).toContain('interface ReportingLockedStateDefinition');
     expect(reportingCatalogModelSource).toContain('interface ReportingGuidanceDefinition');
@@ -1312,14 +1316,18 @@ describe('Settings architecture guardrails', () => {
       'export function getStartUpdateErrorMessage',
     );
     expect(docsLinksSource).toContain("export const SHIPPED_DOCS_ROOT = '/docs'");
-    expect(docsLinksSource).toContain("export const PRIVACY_DOC_URL = getShippedDocUrl('PRIVACY.md')");
+    expect(docsLinksSource).toContain(
+      "export const PRIVACY_DOC_URL = getShippedDocUrl('PRIVACY.md')",
+    );
     expect(docsLinksSource).toContain(
       "export const CONFIGURATION_DOC_URL = getShippedDocUrl('CONFIGURATION.md')",
     );
     expect(docsLinksSource).toContain(
       "export const PROXY_AUTH_DOC_URL = getShippedDocUrl('PROXY_AUTH.md')",
     );
-    expect(docsLinksSource).toContain("export const SECURITY_DOC_URL = getShippedDocUrl('SECURITY.md')");
+    expect(docsLinksSource).toContain(
+      "export const SECURITY_DOC_URL = getShippedDocUrl('SECURITY.md')",
+    );
     expect(docsLinksSource).toContain("export const TERMS_DOC_URL = getShippedDocUrl('TERMS.md')");
   });
 

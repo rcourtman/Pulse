@@ -5,6 +5,7 @@ import type { SettingsTab } from './settingsTypes';
 import { useInfrastructureConfiguredNodesState } from './useInfrastructureConfiguredNodesState';
 import { useInfrastructureDiscoveryRuntimeState } from './useInfrastructureDiscoveryRuntimeState';
 import { useTrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
+import { useVMwareSettingsPanelState } from './useVMwareSettingsPanelState';
 
 export type {
   DiscoveryScanStatus,
@@ -77,6 +78,7 @@ export function useInfrastructureSettingsState({
     setSavingTemperatureSetting,
   });
   const trueNASSettings = useTrueNASSettingsPanelState();
+  const vmwareSettings = useVMwareSettingsPanelState();
 
   const discoveryRuntime = useInfrastructureDiscoveryRuntimeState({
     eventBus,
@@ -156,6 +158,7 @@ export function useInfrastructureSettingsState({
   return {
     initialLoadComplete,
     trueNASSettings,
+    vmwareSettings,
     ...configuredNodes,
     ...discoveryRuntime,
   };
