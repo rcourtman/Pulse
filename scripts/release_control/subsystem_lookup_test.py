@@ -3560,6 +3560,157 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_orgs_api_to_shared_organization_settings_and_api_contracts(
+        self,
+    ) -> None:
+        result = lookup_paths(["frontend-modern/src/api/orgs.ts"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"api-contracts", "organization-settings"},
+        )
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["api-contracts", "organization-settings"],
+        )
+
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        self.assertEqual(set(by_subsystem), {"api-contracts", "organization-settings"})
+
+        api_match = by_subsystem["api-contracts"]
+        self.assertEqual(
+            api_match["contract"],
+            "docs/release-control/v6/internal/subsystems/api-contracts.md",
+        )
+        self.assertEqual(
+            api_match["verification_requirement"]["id"],
+            "frontend-api-clients",
+        )
+        self.assertEqual(
+            api_match["verification_requirement"]["exact_files"],
+            ["frontend-modern/src/types/api.ts"],
+        )
+
+        organization_match = by_subsystem["organization-settings"]
+        self.assertEqual(
+            organization_match["contract"],
+            "docs/release-control/v6/internal/subsystems/organization-settings.md",
+        )
+        self.assertEqual(organization_match["lane_context"]["lane_id"], "L14")
+        self.assertEqual(
+            organization_match["verification_requirement"]["id"],
+            "organization-api-clients",
+        )
+        self.assertEqual(
+            organization_match["verification_requirement"]["exact_files"],
+            [
+                "frontend-modern/src/api/__tests__/orgs.test.ts",
+                "frontend-modern/src/api/__tests__/rbac.test.ts",
+            ],
+        )
+        self.assertEqual(
+            organization_match["matched_contract_references"],
+            [
+                {
+                    "heading": "## Canonical Files",
+                    "path": "frontend-modern/src/api/orgs.ts",
+                    "line": 24,
+                    "heading_line": 22,
+                },
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "frontend-modern/src/api/orgs.ts",
+                    "line": 61,
+                    "heading_line": 59,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "frontend-modern/src/api/orgs.ts",
+                    "line": 72,
+                    "heading_line": 68,
+                },
+            ],
+        )
+
+    def test_lookup_paths_assigns_rbac_backend_to_shared_organization_settings_and_api_contracts(
+        self,
+    ) -> None:
+        result = lookup_paths(["internal/api/access_control_handlers.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"api-contracts", "organization-settings"},
+        )
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            file_entry["shared_ownership"]["subsystems"],
+            ["api-contracts", "organization-settings"],
+        )
+
+        by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        self.assertEqual(set(by_subsystem), {"api-contracts", "organization-settings"})
+
+        api_match = by_subsystem["api-contracts"]
+        self.assertEqual(
+            api_match["verification_requirement"]["id"],
+            "backend-payload-contracts",
+        )
+        self.assertEqual(
+            api_match["matched_contract_references"],
+            [
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/api/access_control_handlers.go",
+                    "line": 109,
+                    "heading_line": 77,
+                }
+            ],
+        )
+
+        organization_match = by_subsystem["organization-settings"]
+        self.assertEqual(
+            organization_match["verification_requirement"]["id"],
+            "organization-rbac-transport",
+        )
+        self.assertEqual(
+            organization_match["verification_requirement"]["exact_files"],
+            [
+                "internal/api/enterprise_extension_rbac_admin_test.go",
+                "internal/api/rbac_admin_handlers_test.go",
+                "internal/api/rbac_handlers_additional_test.go",
+                "internal/api/rbac_handlers_more_test.go",
+                "internal/api/rbac_handlers_test.go",
+            ],
+        )
+        self.assertEqual(
+            organization_match["matched_contract_references"],
+            [
+                {
+                    "heading": "## Canonical Files",
+                    "path": "internal/api/access_control_handlers.go",
+                    "line": 53,
+                    "heading_line": 22,
+                },
+                {
+                    "heading": "## Shared Boundaries",
+                    "path": "internal/api/access_control_handlers.go",
+                    "line": 63,
+                    "heading_line": 59,
+                },
+                {
+                    "heading": "## Extension Points",
+                    "path": "internal/api/access_control_handlers.go",
+                    "line": 74,
+                    "heading_line": 68,
+                },
+            ],
+        )
+
     def test_lookup_paths_assigns_ai_intelligence_page_to_patrol_intelligence(self) -> None:
         result = lookup_paths(["frontend-modern/src/pages/AIIntelligence.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -4504,20 +4655,20 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/api/ai_handler.go",
-                    "line": 108,
+                    "line": 111,
                     "heading_line": 77,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/ai_handler.go",
-                    "line": 167,
-                    "heading_line": 125,
+                    "line": 173,
+                    "heading_line": 131,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/ai_handler.go",
-                    "line": 168,
-                    "heading_line": 125,
+                    "line": 174,
+                    "heading_line": 131,
                 },
             ],
         )
@@ -4539,12 +4690,12 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertIn("paid-feature-entitlement-gating", api_match["lane_context"]["release_gate_ids"])
         self.assertEqual(
             [reference["line"] for reference in api_match["matched_contract_references"]],
-            [108, 167, 168],
+            [111, 173, 174],
         )
 
     def test_render_pretty_shows_contract_focus_for_lean_lookup(self) -> None:
         rendered = render_pretty(lookup_paths(["internal/api/ai_handler.go"], lean=True))
-        self.assertIn("contract focus: ## Shared Boundaries @L108: internal/api/ai_handler.go", rendered)
+        self.assertIn("contract focus: ## Shared Boundaries @L111: internal/api/ai_handler.go", rendered)
         self.assertIn("contract focus: ## Canonical Files @L24: internal/api/ai_handler.go", rendered)
 
     def test_lookup_paths_maps_unified_agent_runtime_to_agent_lifecycle(self) -> None:

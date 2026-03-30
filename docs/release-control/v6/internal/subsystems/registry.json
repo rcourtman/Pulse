@@ -34,11 +34,27 @@
       ]
     },
     {
+      "path": "frontend-modern/src/api/orgs.ts",
+      "rationale": "the organization frontend client is both an organization settings control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "organization-settings"
+      ]
+    },
+    {
       "path": "frontend-modern/src/api/patrol.ts",
       "rationale": "the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary",
       "subsystems": [
         "ai-runtime",
         "api-contracts"
+      ]
+    },
+    {
+      "path": "frontend-modern/src/api/rbac.ts",
+      "rationale": "the RBAC frontend client is both an organization settings control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "organization-settings"
       ]
     },
     {
@@ -362,6 +378,14 @@
       ]
     },
     {
+      "path": "internal/api/access_control_handlers.go",
+      "rationale": "RBAC role and user-assignment handlers are both an organization settings control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "organization-settings"
+      ]
+    },
+    {
       "path": "internal/api/agent_install_command_shared.go",
       "rationale": "agent install command assembly is both an agent lifecycle control surface and a canonical API payload contract boundary",
       "subsystems": [
@@ -402,6 +426,14 @@
       ]
     },
     {
+      "path": "internal/api/enterprise_extension_rbac_admin.go",
+      "rationale": "RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "organization-settings"
+      ]
+    },
+    {
       "path": "internal/api/licensing_bridge.go",
       "rationale": "commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership",
       "subsystems": [
@@ -423,6 +455,22 @@
       "subsystems": [
         "api-contracts",
         "notifications"
+      ]
+    },
+    {
+      "path": "internal/api/org_handlers.go",
+      "rationale": "organization management handlers are both an organization settings control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "organization-settings"
+      ]
+    },
+    {
+      "path": "internal/api/org_lifecycle_handlers.go",
+      "rationale": "organization lifecycle handlers are both an organization settings control surface and a canonical API payload contract boundary",
+      "subsystems": [
+        "api-contracts",
+        "organization-settings"
       ]
     },
     {
@@ -3056,6 +3104,8 @@
       "contract": "docs/release-control/v6/internal/subsystems/organization-settings.md",
       "owned_prefixes": [],
       "owned_files": [
+        "frontend-modern/src/api/orgs.ts",
+        "frontend-modern/src/api/rbac.ts",
         "frontend-modern/src/components/Settings/OrganizationAccessLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationAccessManagementSection.tsx",
         "frontend-modern/src/components/Settings/OrganizationAccessMembersSection.tsx",
@@ -3083,6 +3133,10 @@
         "frontend-modern/src/utils/organizationRolePresentation.ts",
         "frontend-modern/src/utils/organizationSettingsPresentation.ts",
         "frontend-modern/src/utils/orgUtils.ts",
+        "internal/api/access_control_handlers.go",
+        "internal/api/enterprise_extension_rbac_admin.go",
+        "internal/api/org_handlers.go",
+        "internal/api/org_lifecycle_handlers.go",
         "internal/models/organization.go"
       ],
       "verification": {
@@ -3098,6 +3152,21 @@
         "require_explicit_path_policy_coverage": true,
         "path_policies": [
           {
+            "id": "organization-api-clients",
+            "label": "organization and RBAC API client proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/api/orgs.ts",
+              "frontend-modern/src/api/rbac.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/api/__tests__/orgs.test.ts",
+              "frontend-modern/src/api/__tests__/rbac.test.ts"
+            ]
+          },
+          {
             "id": "organization-domain-model",
             "label": "organization domain model proof",
             "match_prefixes": [],
@@ -3111,6 +3180,24 @@
               "internal/api/org_lifecycle_handlers_test.go",
               "internal/api/org_validation_test.go",
               "internal/models/organization_additional_test.go"
+            ]
+          },
+          {
+            "id": "organization-rbac-transport",
+            "label": "organization RBAC backend transport proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/access_control_handlers.go",
+              "internal/api/enterprise_extension_rbac_admin.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/enterprise_extension_rbac_admin_test.go",
+              "internal/api/rbac_admin_handlers_test.go",
+              "internal/api/rbac_handlers_additional_test.go",
+              "internal/api/rbac_handlers_more_test.go",
+              "internal/api/rbac_handlers_test.go"
             ]
           },
           {
@@ -3159,6 +3246,22 @@
               "frontend-modern/src/utils/__tests__/organizationRolePresentation.test.ts",
               "frontend-modern/src/utils/__tests__/organizationSettingsPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/orgUtils.test.ts"
+            ]
+          },
+          {
+            "id": "organization-transport-backend",
+            "label": "organization backend transport proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/api/org_handlers.go",
+              "internal/api/org_lifecycle_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/api/org_handlers_test.go",
+              "internal/api/org_lifecycle_handlers_test.go",
+              "internal/api/org_validation_test.go"
             ]
           }
         ]

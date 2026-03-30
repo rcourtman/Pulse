@@ -838,6 +838,118 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
             ],
         )
 
+    def test_organization_client_change_requires_organization_settings_and_api_contracts(self):
+        required = infer_impacted_subsystems(["frontend-modern/src/api/orgs.ts"])
+        self.assertEqual(set(required), {"api-contracts", "organization-settings"})
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(
+            api_contracts["contract"],
+            "docs/release-control/v6/internal/subsystems/api-contracts.md",
+        )
+        self.assertEqual(
+            api_contracts["touched_runtime_files"],
+            ["frontend-modern/src/api/orgs.ts"],
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "frontend-api-clients",
+                    "label": "frontend API client proof",
+                    "touched_runtime_files": ["frontend-modern/src/api/orgs.ts"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": ["frontend-modern/src/api/__tests__/"],
+                    "exact_files": ["frontend-modern/src/types/api.ts"],
+                }
+            ],
+        )
+
+        organization_settings = required["organization-settings"]
+        self.assertEqual(
+            organization_settings["contract"],
+            "docs/release-control/v6/internal/subsystems/organization-settings.md",
+        )
+        self.assertEqual(
+            organization_settings["touched_runtime_files"],
+            ["frontend-modern/src/api/orgs.ts"],
+        )
+        self.assertEqual(
+            organization_settings["verification_requirements"],
+            [
+                {
+                    "id": "organization-api-clients",
+                    "label": "organization and RBAC API client proof",
+                    "touched_runtime_files": ["frontend-modern/src/api/orgs.ts"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "frontend-modern/src/api/__tests__/orgs.test.ts",
+                        "frontend-modern/src/api/__tests__/rbac.test.ts",
+                    ],
+                }
+            ],
+        )
+
+    def test_organization_rbac_backend_change_requires_organization_settings_and_api_contracts(self):
+        required = infer_impacted_subsystems(["internal/api/access_control_handlers.go"])
+        self.assertEqual(set(required), {"api-contracts", "organization-settings"})
+
+        api_contracts = required["api-contracts"]
+        self.assertEqual(
+            api_contracts["contract"],
+            "docs/release-control/v6/internal/subsystems/api-contracts.md",
+        )
+        self.assertEqual(
+            api_contracts["touched_runtime_files"],
+            ["internal/api/access_control_handlers.go"],
+        )
+        self.assertEqual(
+            api_contracts["verification_requirements"],
+            [
+                {
+                    "id": "backend-payload-contracts",
+                    "label": "backend API payload proof",
+                    "touched_runtime_files": ["internal/api/access_control_handlers.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": ["frontend-modern/src/api/__tests__/"],
+                    "exact_files": [
+                        "frontend-modern/src/types/api.ts",
+                        "internal/api/contract_test.go",
+                    ],
+                }
+            ],
+        )
+
+        organization_settings = required["organization-settings"]
+        self.assertEqual(
+            organization_settings["contract"],
+            "docs/release-control/v6/internal/subsystems/organization-settings.md",
+        )
+        self.assertEqual(
+            organization_settings["touched_runtime_files"],
+            ["internal/api/access_control_handlers.go"],
+        )
+        self.assertEqual(
+            organization_settings["verification_requirements"],
+            [
+                {
+                    "id": "organization-rbac-transport",
+                    "label": "organization RBAC backend transport proof",
+                    "touched_runtime_files": ["internal/api/access_control_handlers.go"],
+                    "allow_same_subsystem_tests": False,
+                    "test_prefixes": [],
+                    "exact_files": [
+                        "internal/api/enterprise_extension_rbac_admin_test.go",
+                        "internal/api/rbac_admin_handlers_test.go",
+                        "internal/api/rbac_handlers_additional_test.go",
+                        "internal/api/rbac_handlers_more_test.go",
+                        "internal/api/rbac_handlers_test.go",
+                    ],
+                }
+            ],
+        )
+
     def test_recovery_route_change_requires_storage_recovery_contract(self):
         required = infer_impacted_subsystems(["frontend-modern/src/pages/RecoveryRoute.tsx"])
         self.assertEqual(set(required), {"storage-recovery"})
