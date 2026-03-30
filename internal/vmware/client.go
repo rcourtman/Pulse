@@ -94,6 +94,11 @@ type Client struct {
 	password   string
 }
 
+type viJSONServiceContentRefs struct {
+	SessionManagerMoID string
+	PerfManagerMoID    string
+}
+
 // NewClient constructs a VMware client from saved connection input.
 func NewClient(cfg ClientConfig) (*Client, error) {
 	baseURL, err := normalizeBaseURL(cfg.Host, cfg.Port)
@@ -142,15 +147,19 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 	if err != nil {
 		return nil, err
 	}
-	release, sessionManagerMoID, err := c.resolveVIJSONRelease(ctx)
+	release, refs, err := c.resolveVIJSONRelease(ctx)
 	if err != nil {
 		return nil, err
 	}
-	sessionID, err := c.loginVIJSON(ctx, release, sessionManagerMoID)
+	sessionID, err := c.loginVIJSON(ctx, release, refs.SessionManagerMoID)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.validateSignalFloor(ctx, release, sessionID, inventory); err != nil {
+	perfCounters, err := c.loadPerfCounterCatalog(ctx, release, sessionID, refs.PerfManagerMoID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.validateSignalFloor(ctx, release, sessionID, refs.PerfManagerMoID, inventory, perfCounters); err != nil {
 		return nil, err
 	}
 	return &InventorySummary{
@@ -168,15 +177,19 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err != nil {
 		return nil, err
 	}
-	release, sessionManagerMoID, err := c.resolveVIJSONRelease(ctx)
+	release, refs, err := c.resolveVIJSONRelease(ctx)
 	if err != nil {
 		return nil, err
 	}
-	sessionID, err := c.loginVIJSON(ctx, release, sessionManagerMoID)
+	sessionID, err := c.loginVIJSON(ctx, release, refs.SessionManagerMoID)
 	if err != nil {
 		return nil, err
 	}
-	if err := c.enrichInventorySnapshot(ctx, release, sessionID, inventory); err != nil {
+	perfCounters, err := c.loadPerfCounterCatalog(ctx, release, sessionID, refs.PerfManagerMoID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.enrichInventorySnapshot(ctx, release, sessionID, refs.PerfManagerMoID, perfCounters, inventory); err != nil {
 		return nil, err
 	}
 	inventory.CollectedAt = time.Now().UTC()
@@ -319,61 +332,66 @@ func (c *Client) listAutomationResources(
 	return nil
 }
 
-func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, string, error) {
+func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, viJSONServiceContentRefs, error) {
 	releases := []string{"9.0.0.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
 	var lastErr error
 	for _, release := range releases {
-		moID, err := c.fetchSessionManagerMoID(ctx, release)
+		refs, err := c.fetchVIJSONServiceContentRefs(ctx, release)
 		if err == nil {
-			return release, moID, nil
+			return release, refs, nil
 		}
 		lastErr = err
 		connectionErr, ok := err.(*ConnectionError)
 		if !ok || connectionErr.Category != "endpoint" {
-			return "", "", err
+			return "", viJSONServiceContentRefs{}, err
 		}
 	}
 	if lastErr != nil {
-		return "", "", lastErr
+		return "", viJSONServiceContentRefs{}, lastErr
 	}
-	return "", "", &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API release negotiation failed"}
+	return "", viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API release negotiation failed"}
 }
 
-func (c *Client) fetchSessionManagerMoID(ctx context.Context, release string) (string, error) {
+func (c *Client) fetchVIJSONServiceContentRefs(ctx context.Context, release string) (viJSONServiceContentRefs, error) {
 	endpoint := fmt.Sprintf("%s/sdk/vim25/%s/ServiceInstance/ServiceInstance/content", c.baseURL.String(), release)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return "", fmt.Errorf("build vi-json service instance request: %w", err)
+		return viJSONServiceContentRefs{}, fmt.Errorf("build vi-json service instance request: %w", err)
 	}
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return "", classifyTransportError("vi-json service content", err)
+		return viJSONServiceContentRefs{}, classifyTransportError("vi-json service content", err)
 	}
 	defer resp.Body.Close()
 	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if readErr != nil {
-		return "", fmt.Errorf("read vi-json service content response: %w", readErr)
+		return viJSONServiceContentRefs{}, fmt.Errorf("read vi-json service content response: %w", readErr)
 	}
 	if resp.StatusCode == http.StatusNotFound {
-		return "", &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API release %s is unavailable", release)}
+		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API release %s is unavailable", release)}
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API service-instance request failed with HTTP %d", resp.StatusCode)}
+		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API service-instance request failed with HTTP %d", resp.StatusCode)}
 	}
 	var payload struct {
-		SessionManager struct {
-			Value string `json:"value"`
-		} `json:"sessionManager"`
+		SessionManager viJSONReference `json:"sessionManager"`
+		PerfManager    viJSONReference `json:"perfManager"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
-		return "", &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response was not valid JSON"}
+		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response was not valid JSON"}
 	}
-	moID := strings.TrimSpace(payload.SessionManager.Value)
-	if moID == "" {
-		return "", &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include a session manager reference"}
+	refs := viJSONServiceContentRefs{
+		SessionManagerMoID: strings.TrimSpace(payload.SessionManager.Value),
+		PerfManagerMoID:    strings.TrimSpace(payload.PerfManager.Value),
 	}
-	return moID, nil
+	if refs.SessionManagerMoID == "" {
+		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include a session manager reference"}
+	}
+	if refs.PerfManagerMoID == "" {
+		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API service-instance response did not include a performance manager reference"}
+	}
+	return refs, nil
 }
 
 func (c *Client) loginVIJSON(ctx context.Context, release string, sessionManagerMoID string) (string, error) {

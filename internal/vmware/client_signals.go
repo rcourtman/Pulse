@@ -64,7 +64,14 @@ type entitySignals struct {
 	RecentTasks   []InventoryTask
 }
 
-func (c *Client) validateSignalFloor(ctx context.Context, release, sessionID string, snapshot *InventorySnapshot) error {
+func (c *Client) validateSignalFloor(
+	ctx context.Context,
+	release string,
+	sessionID string,
+	perfManagerMoID string,
+	snapshot *InventorySnapshot,
+	perfCounters perfCounterCatalog,
+) error {
 	if snapshot == nil {
 		return nil
 	}
@@ -75,6 +82,13 @@ func (c *Client) validateSignalFloor(ctx context.Context, release, sessionID str
 		if _, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", host.Host, cache, false); err != nil {
 			return err
 		}
+		hostMetrics, err := c.collectHostPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, host)
+		if err != nil {
+			return err
+		}
+		if hostMetrics == nil || hostMetrics.CPUPercent == nil || hostMetrics.MemoryPercent == nil {
+			return &ConnectionError{Category: "endpoint", Message: "VMware performance metrics are unavailable for host inventory"}
+		}
 	}
 	if len(snapshot.VMs) > 0 {
 		vm := snapshot.VMs[0]
@@ -83,6 +97,13 @@ func (c *Client) validateSignalFloor(ctx context.Context, release, sessionID str
 		}
 		if _, err := c.collectVMSnapshotCount(ctx, release, sessionID, vm.VM); err != nil && !isVIJSONNotFound(err) {
 			return err
+		}
+		vmMetrics, err := c.collectVMPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, vm)
+		if err != nil {
+			return err
+		}
+		if vmMetrics == nil || vmMetrics.CPUPercent == nil || vmMetrics.MemoryPercent == nil {
+			return &ConnectionError{Category: "endpoint", Message: "VMware performance metrics are unavailable for vm inventory"}
 		}
 	}
 	if len(snapshot.Datastores) > 0 {
@@ -94,7 +115,14 @@ func (c *Client) validateSignalFloor(ctx context.Context, release, sessionID str
 	return nil
 }
 
-func (c *Client) enrichInventorySnapshot(ctx context.Context, release, sessionID string, snapshot *InventorySnapshot) error {
+func (c *Client) enrichInventorySnapshot(
+	ctx context.Context,
+	release string,
+	sessionID string,
+	perfManagerMoID string,
+	perfCounters perfCounterCatalog,
+	snapshot *InventorySnapshot,
+) error {
 	if snapshot == nil {
 		return nil
 	}
@@ -129,9 +157,14 @@ func (c *Client) enrichInventorySnapshot(ctx context.Context, release, sessionID
 			if err != nil {
 				return err
 			}
+			metrics, err := c.collectHostPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, snapshot.Hosts[i])
+			if err != nil {
+				return err
+			}
 			snapshot.Hosts[i].OverallStatus = signals.OverallStatus
 			snapshot.Hosts[i].TriggeredAlarms = signals.Alarms
 			snapshot.Hosts[i].RecentTasks = signals.RecentTasks
+			snapshot.Hosts[i].Metrics = metrics
 			return nil
 		})
 	}
@@ -150,6 +183,11 @@ func (c *Client) enrichInventorySnapshot(ctx context.Context, release, sessionID
 			if err != nil && !isVIJSONNotFound(err) {
 				return err
 			}
+			metrics, err := c.collectVMPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, snapshot.VMs[i])
+			if err != nil {
+				return err
+			}
+			snapshot.VMs[i].Metrics = metrics
 			return nil
 		})
 	}

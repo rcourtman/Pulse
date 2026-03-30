@@ -256,6 +256,26 @@ func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
 	}
 }
 
+func TestUnifiedVMMetricsUseCanonicalVMHistoryPath(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"m.syncUnifiedVMMetrics(store)",
+		`if target == nil || target.ResourceType != "vm" || strings.TrimSpace(target.ResourceID) == "" {`,
+		`if source == unifiedresources.SourceProxmox {`,
+		`m.metricsStore.Write("vm", targetID, "cpu", value, now)`,
+		`m.metricsStore.Write("vm", targetID, "diskwrite", metric.Value, now)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

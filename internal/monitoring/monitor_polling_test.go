@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pbs"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/pmg"
@@ -110,6 +111,14 @@ type testMonitorSupplementalProvider struct {
 	recordsByOrg     map[string][]unifiedresources.IngestRecord
 	ownedSources     []unifiedresources.DataSource
 	lastRequestedOrg string
+}
+
+func ptrFloat64(value float64) *float64 {
+	return &value
+}
+
+func ptrInt64(value int64) *int64 {
+	return &value
 }
 
 func (p *testMonitorSupplementalProvider) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {
@@ -595,6 +604,166 @@ func TestSyncUnifiedAgentMetricsRecordsTrueNASHostHistory(t *testing.T) {
 	storeBacked := monitor.GetGuestMetricsForChart("agent:truenas-main", "agent", "truenas-main", 7*24*time.Hour)
 	if got := len(storeBacked["cpu"]); got == 0 {
 		t.Fatalf("expected persisted cpu history for truenas-main")
+	}
+}
+
+func TestSyncUnifiedAgentMetricsRecordsVMwareHostHistory(t *testing.T) {
+	previous := vmware.IsFeatureEnabled()
+	vmware.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		vmware.SetFeatureEnabled(previous)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	records := vmware.NewProvider(vmware.InventorySnapshot{
+		ConnectionID:   "vc-1",
+		ConnectionName: "Lab VC",
+		VCenterHost:    "vc.lab.local",
+		CollectedAt:    time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC),
+		Hosts: []vmware.InventoryHost{{
+			Host:            "host-101",
+			Name:            "esxi-01.lab.local",
+			ConnectionState: "CONNECTED",
+			PowerState:      "POWERED_ON",
+			HostUUID:        "uuid-host-1",
+			Metrics: &vmware.InventoryMetrics{
+				CPUPercent:              ptrFloat64(21.4),
+				MemoryPercent:           ptrFloat64(63.2),
+				MemoryUsedBytes:         ptrInt64(27144105984),
+				MemoryTotalBytes:        ptrInt64(42949672960),
+				NetInBytesPerSecond:     ptrFloat64(1024),
+				NetOutBytesPerSecond:    ptrFloat64(2048),
+				DiskReadBytesPerSecond:  ptrFloat64(4096),
+				DiskWriteBytesPerSecond: ptrFloat64(8192),
+			},
+		}},
+	}).Records()
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: records,
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+
+	var systemResourceID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Name == "esxi-01.lab.local" {
+			systemResourceID = resource.ID
+			break
+		}
+	}
+	if systemResourceID == "" {
+		t.Fatal("expected VMware host resource in unified store")
+	}
+
+	target := resourceStore.MetricsTargetForResource(systemResourceID)
+	if target == nil || target.ResourceType != "agent" || target.ResourceID != "vc-1:host:host-101" {
+		t.Fatalf("unexpected agent metrics target %+v", target)
+	}
+
+	inMemory := monitor.GetGuestMetrics("agent:vc-1:host:host-101", time.Hour)
+	if got := len(inMemory["cpu"]); got == 0 {
+		t.Fatalf("expected in-memory cpu history for VMware host")
+	}
+	if got := len(inMemory["netin"]); got == 0 {
+		t.Fatalf("expected in-memory network history for VMware host")
+	}
+
+	storeBacked := monitor.GetGuestMetricsForChart("agent:vc-1:host:host-101", "agent", "vc-1:host:host-101", 7*24*time.Hour)
+	if got := len(storeBacked["cpu"]); got == 0 {
+		t.Fatalf("expected persisted cpu history for VMware host")
+	}
+}
+
+func TestSyncUnifiedVMMetricsRecordsVMwareVMHistory(t *testing.T) {
+	previous := vmware.IsFeatureEnabled()
+	vmware.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		vmware.SetFeatureEnabled(previous)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	records := vmware.NewProvider(vmware.InventorySnapshot{
+		ConnectionID:   "vc-1",
+		ConnectionName: "Lab VC",
+		VCenterHost:    "vc.lab.local",
+		CollectedAt:    time.Date(2026, time.March, 30, 18, 15, 0, 0, time.UTC),
+		VMs: []vmware.InventoryVM{{
+			VM:            "vm-201",
+			Name:          "app-01",
+			PowerState:    "POWERED_ON",
+			CPUCount:      4,
+			MemorySizeMiB: 8192,
+			Metrics: &vmware.InventoryMetrics{
+				CPUPercent:              ptrFloat64(38.1),
+				MemoryPercent:           ptrFloat64(57.5),
+				MemoryUsedBytes:         ptrInt64(5033164800),
+				MemoryTotalBytes:        ptrInt64(8589934592),
+				NetInBytesPerSecond:     ptrFloat64(512),
+				NetOutBytesPerSecond:    ptrFloat64(768),
+				DiskReadBytesPerSecond:  ptrFloat64(1536),
+				DiskWriteBytesPerSecond: ptrFloat64(2048),
+			},
+		}},
+	}).Records()
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: records,
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedVMMetrics(resourceStore)
+
+	var vmResourceID string
+	for _, resource := range resourceStore.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeVM && resource.Name == "app-01" {
+			vmResourceID = resource.ID
+			break
+		}
+	}
+	if vmResourceID == "" {
+		t.Fatal("expected VMware VM resource in unified store")
+	}
+
+	target := resourceStore.MetricsTargetForResource(vmResourceID)
+	if target == nil || target.ResourceType != "vm" || target.ResourceID != "vc-1:vm:vm-201" {
+		t.Fatalf("unexpected vm metrics target %+v", target)
+	}
+
+	inMemory := monitor.GetGuestMetrics("vc-1:vm:vm-201", time.Hour)
+	if got := len(inMemory["cpu"]); got == 0 {
+		t.Fatalf("expected in-memory cpu history for VMware VM")
+	}
+	if got := len(inMemory["netin"]); got == 0 {
+		t.Fatalf("expected in-memory network history for VMware VM")
+	}
+
+	storeBacked := monitor.GetGuestMetricsForChart("vc-1:vm:vm-201", "vm", "vc-1:vm:vm-201", 7*24*time.Hour)
+	if got := len(storeBacked["cpu"]); got == 0 {
+		t.Fatalf("expected persisted cpu history for VMware VM")
 	}
 }
 

@@ -405,3 +405,14 @@ may collect VI JSON overall status, active alarms, recent tasks, and VM
 snapshot counts, but they must project those reads onto shared canonical
 resources plus shared alert/resource history metadata instead of persisting a
 VMware-only signal cache, event log, or provider-specific incident timeline.
+That same monitoring boundary now also owns VMware performance telemetry on
+the shared chart/history paths. `internal/vmware/client_metrics.go` must use
+the VI JSON `PerformanceManager` read surfaces to resolve current-support,
+available counters, and current samples from the supported `vCenter` release
+floor; `internal/vmware/provider.go` must project ESXi host readings onto
+canonical `agent` `ResourceMetrics` and VM readings onto canonical `vm`
+`ResourceMetrics`; and `internal/monitoring/monitor.go` must sync those
+metrics into the existing shared `agent` and `vm` history stores. Pulse must
+not add a VMware-only charts cache, host history model, or VM metrics store
+just because vSphere performance collection uses a different API family from
+inventory and alarm reads.

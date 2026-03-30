@@ -40,6 +40,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	if host.OverallStatus != "yellow" {
 		t.Fatalf("host overall status = %q, want yellow", host.OverallStatus)
 	}
+	if host.Metrics == nil || host.Metrics.CPUPercent == nil || *host.Metrics.CPUPercent != 21.4 {
+		t.Fatalf("expected host cpu metrics, got %+v", host.Metrics)
+	}
 	if len(host.TriggeredAlarms) != 1 || host.TriggeredAlarms[0].Name != "Host connection degraded" {
 		t.Fatalf("expected resolved host alarm metadata, got %+v", host.TriggeredAlarms)
 	}
@@ -48,6 +51,9 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	}
 
 	vm := snapshot.VMs[0]
+	if vm.Metrics == nil || vm.Metrics.MemoryPercent == nil || *vm.Metrics.MemoryPercent != 57.5 {
+		t.Fatalf("expected VM memory metrics, got %+v", vm.Metrics)
+	}
 	if len(vm.TriggeredAlarms) != 1 || vm.TriggeredAlarms[0].OverallStatus != "red" {
 		t.Fatalf("expected VM alarm signals, got %+v", vm.TriggeredAlarms)
 	}
@@ -155,11 +161,111 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/ServiceInstance/ServiceInstance/content", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{
 			"sessionManager": map[string]any{"value": "SessionManager"},
+			"perfManager":    map[string]any{"value": "PerformanceManager"},
 		})
 	})
 	mux.HandleFunc("/sdk/vim25/9.0.0.0/SessionManager/SessionManager/Login", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("vmware-api-session-id", "vi-session")
 		writeJSON(w, map[string]any{"value": "ok"})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/PerformanceManager/PerformanceManager/perfCounter", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, []map[string]any{
+			{"key": 1, "groupInfo": map[string]any{"key": "cpu"}, "nameInfo": map[string]any{"key": "usage"}, "rollupType": "average"},
+			{"key": 2, "groupInfo": map[string]any{"key": "mem"}, "nameInfo": map[string]any{"key": "usage"}, "rollupType": "average"},
+			{"key": 3, "groupInfo": map[string]any{"key": "mem"}, "nameInfo": map[string]any{"key": "totalCapacity"}, "rollupType": "average"},
+			{"key": 4, "groupInfo": map[string]any{"key": "net"}, "nameInfo": map[string]any{"key": "bytesRx"}, "rollupType": "average"},
+			{"key": 5, "groupInfo": map[string]any{"key": "net"}, "nameInfo": map[string]any{"key": "bytesTx"}, "rollupType": "average"},
+			{"key": 6, "groupInfo": map[string]any{"key": "disk"}, "nameInfo": map[string]any{"key": "read"}, "rollupType": "average"},
+			{"key": 7, "groupInfo": map[string]any{"key": "disk"}, "nameInfo": map[string]any{"key": "write"}, "rollupType": "average"},
+		})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/PerformanceManager/PerformanceManager/QueryPerfProviderSummary", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		writeJSON(w, map[string]any{
+			"currentSupported": true,
+			"refreshRate":      20,
+		})
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/PerformanceManager/PerformanceManager/QueryAvailablePerfMetric", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		var request struct {
+			Entity struct {
+				Type string `json:"type"`
+			} `json:"entity"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode available perf request: %v", err)
+		}
+		switch request.Entity.Type {
+		case "HostSystem":
+			writeJSON(w, []map[string]any{
+				{"counterId": 1, "instance": ""},
+				{"counterId": 2, "instance": ""},
+				{"counterId": 3, "instance": ""},
+				{"counterId": 4, "instance": "vmnic0"},
+				{"counterId": 5, "instance": "vmnic0"},
+				{"counterId": 6, "instance": "naa.1"},
+				{"counterId": 7, "instance": "naa.1"},
+			})
+		case "VirtualMachine":
+			writeJSON(w, []map[string]any{
+				{"counterId": 1, "instance": ""},
+				{"counterId": 2, "instance": ""},
+				{"counterId": 4, "instance": "4000"},
+				{"counterId": 5, "instance": "4000"},
+				{"counterId": 6, "instance": "2000"},
+				{"counterId": 7, "instance": "2000"},
+			})
+		default:
+			writeJSON(w, []map[string]any{})
+		}
+	})
+	mux.HandleFunc("/sdk/vim25/9.0.0.0/PerformanceManager/PerformanceManager/QueryPerf", func(w http.ResponseWriter, r *http.Request) {
+		requireVISession(t, r)
+		var request struct {
+			QuerySpec []struct {
+				Entity struct {
+					Type  string `json:"type"`
+					Value string `json:"value"`
+				} `json:"entity"`
+			} `json:"querySpec"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode query perf request: %v", err)
+		}
+		if len(request.QuerySpec) != 1 {
+			t.Fatalf("expected single query spec, got %d", len(request.QuerySpec))
+		}
+		switch request.QuerySpec[0].Entity.Type {
+		case "HostSystem":
+			writeJSON(w, []map[string]any{{
+				"entity": map[string]any{"type": "HostSystem", "value": "host-101"},
+				"value": []map[string]any{
+					{"id": map[string]any{"counterId": 1, "instance": ""}, "value": []int64{2140}},
+					{"id": map[string]any{"counterId": 2, "instance": ""}, "value": []int64{6320}},
+					{"id": map[string]any{"counterId": 3, "instance": ""}, "value": []int64{40960}},
+					{"id": map[string]any{"counterId": 4, "instance": "vmnic0"}, "value": []int64{1}},
+					{"id": map[string]any{"counterId": 5, "instance": "vmnic0"}, "value": []int64{2}},
+					{"id": map[string]any{"counterId": 6, "instance": "naa.1"}, "value": []int64{4}},
+					{"id": map[string]any{"counterId": 7, "instance": "naa.1"}, "value": []int64{8}},
+				},
+			}})
+		case "VirtualMachine":
+			writeJSON(w, []map[string]any{{
+				"entity": map[string]any{"type": "VirtualMachine", "value": "vm-201"},
+				"value": []map[string]any{
+					{"id": map[string]any{"counterId": 1, "instance": ""}, "value": []int64{3810}},
+					{"id": map[string]any{"counterId": 2, "instance": ""}, "value": []int64{5750}},
+					{"id": map[string]any{"counterId": 4, "instance": "4000"}, "value": []int64{3}},
+					{"id": map[string]any{"counterId": 5, "instance": "4000"}, "value": []int64{4}},
+					{"id": map[string]any{"counterId": 6, "instance": "2000"}, "value": []int64{5}},
+					{"id": map[string]any{"counterId": 7, "instance": "2000"}, "value": []int64{6}},
+				},
+			}})
+		default:
+			writeJSON(w, []map[string]any{})
+		}
 	})
 
 	if !cfg.omitHostOverallStatus {

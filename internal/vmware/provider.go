@@ -30,31 +30,46 @@ type InventoryTask struct {
 	ErrorMessage  string    `json:"error_message,omitempty"`
 }
 
+// InventoryMetrics captures the current runtime metric floor projected onto
+// canonical Pulse metrics for VMware-backed hosts and VMs.
+type InventoryMetrics struct {
+	CPUPercent              *float64 `json:"cpu_percent,omitempty"`
+	MemoryPercent           *float64 `json:"memory_percent,omitempty"`
+	MemoryUsedBytes         *int64   `json:"memory_used_bytes,omitempty"`
+	MemoryTotalBytes        *int64   `json:"memory_total_bytes,omitempty"`
+	NetInBytesPerSecond     *float64 `json:"net_in_bytes_per_second,omitempty"`
+	NetOutBytesPerSecond    *float64 `json:"net_out_bytes_per_second,omitempty"`
+	DiskReadBytesPerSecond  *float64 `json:"disk_read_bytes_per_second,omitempty"`
+	DiskWriteBytesPerSecond *float64 `json:"disk_write_bytes_per_second,omitempty"`
+}
+
 // InventoryHost is the canonical phase-1 host summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryHost struct {
-	Host            string           `json:"host"`
-	Name            string           `json:"name"`
-	ConnectionState string           `json:"connection_state"`
-	PowerState      string           `json:"power_state,omitempty"`
-	HostUUID        string           `json:"host_uuid,omitempty"`
-	OverallStatus   string           `json:"overall_status,omitempty"`
-	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
-	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
+	Host            string            `json:"host"`
+	Name            string            `json:"name"`
+	ConnectionState string            `json:"connection_state"`
+	PowerState      string            `json:"power_state,omitempty"`
+	HostUUID        string            `json:"host_uuid,omitempty"`
+	OverallStatus   string            `json:"overall_status,omitempty"`
+	TriggeredAlarms []InventoryAlarm  `json:"triggered_alarms,omitempty"`
+	RecentTasks     []InventoryTask   `json:"recent_tasks,omitempty"`
+	Metrics         *InventoryMetrics `json:"metrics,omitempty"`
 }
 
 // InventoryVM is the canonical phase-1 VM summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryVM struct {
-	VM              string           `json:"vm"`
-	Name            string           `json:"name"`
-	PowerState      string           `json:"power_state"`
-	CPUCount        int              `json:"cpu_count,omitempty"`
-	MemorySizeMiB   int64            `json:"memory_size_mib,omitempty"`
-	OverallStatus   string           `json:"overall_status,omitempty"`
-	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
-	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
-	SnapshotCount   int              `json:"snapshot_count,omitempty"`
+	VM              string            `json:"vm"`
+	Name            string            `json:"name"`
+	PowerState      string            `json:"power_state"`
+	CPUCount        int               `json:"cpu_count,omitempty"`
+	MemorySizeMiB   int64             `json:"memory_size_mib,omitempty"`
+	OverallStatus   string            `json:"overall_status,omitempty"`
+	TriggeredAlarms []InventoryAlarm  `json:"triggered_alarms,omitempty"`
+	RecentTasks     []InventoryTask   `json:"recent_tasks,omitempty"`
+	SnapshotCount   int               `json:"snapshot_count,omitempty"`
+	Metrics         *InventoryMetrics `json:"metrics,omitempty"`
 }
 
 // InventoryDatastore is the canonical phase-1 datastore summary returned by
@@ -260,6 +275,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
 			Incidents:  incidents,
+			Metrics:    inventoryMetricsResourceMetrics(host.Metrics),
 			VMware: &unifiedresources.VMwareData{
 				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
 				ConnectionName:     connectionName,
@@ -310,6 +326,7 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
 			Incidents:  incidents,
+			Metrics:    inventoryMetricsResourceMetrics(vm.Metrics),
 			VMware: &unifiedresources.VMwareData{
 				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
 				ConnectionName:     connectionName,
@@ -434,6 +451,7 @@ func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
 		out[i] = in[i]
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
 }
@@ -447,6 +465,7 @@ func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
 		out[i] = in[i]
 		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
 		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+		out[i].Metrics = cloneInventoryMetrics(in[i].Metrics)
 	}
 	return out
 }
@@ -480,6 +499,22 @@ func cloneInventoryTasks(in []InventoryTask) []InventoryTask {
 	out := make([]InventoryTask, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneInventoryMetrics(in *InventoryMetrics) *InventoryMetrics {
+	if in == nil {
+		return nil
+	}
+	out := *in
+	out.CPUPercent = cloneFloat64Pointer(in.CPUPercent)
+	out.MemoryPercent = cloneFloat64Pointer(in.MemoryPercent)
+	out.MemoryUsedBytes = cloneInt64Pointer(in.MemoryUsedBytes)
+	out.MemoryTotalBytes = cloneInt64Pointer(in.MemoryTotalBytes)
+	out.NetInBytesPerSecond = cloneFloat64Pointer(in.NetInBytesPerSecond)
+	out.NetOutBytesPerSecond = cloneFloat64Pointer(in.NetOutBytesPerSecond)
+	out.DiskReadBytesPerSecond = cloneFloat64Pointer(in.DiskReadBytesPerSecond)
+	out.DiskWriteBytesPerSecond = cloneFloat64Pointer(in.DiskWriteBytesPerSecond)
+	return &out
 }
 
 func vmwareSourceID(connectionID, entityType, managedObjectID string) string {
@@ -695,6 +730,91 @@ func diskMetric(total, used int64) *unifiedresources.MetricValue {
 		Percent: percent,
 		Unit:    "bytes",
 	}
+}
+
+func inventoryMetricsResourceMetrics(in *InventoryMetrics) *unifiedresources.ResourceMetrics {
+	if in == nil {
+		return nil
+	}
+
+	metrics := &unifiedresources.ResourceMetrics{}
+	if in.CPUPercent != nil {
+		metrics.CPU = &unifiedresources.MetricValue{
+			Value:   *in.CPUPercent,
+			Percent: *in.CPUPercent,
+			Unit:    "percent",
+			Source:  unifiedresources.SourceVMware,
+		}
+	}
+	if in.MemoryPercent != nil {
+		metrics.Memory = &unifiedresources.MetricValue{
+			Percent: *in.MemoryPercent,
+			Unit:    "bytes",
+			Source:  unifiedresources.SourceVMware,
+		}
+		if in.MemoryUsedBytes != nil {
+			used := *in.MemoryUsedBytes
+			metrics.Memory.Used = &used
+		}
+		if in.MemoryTotalBytes != nil {
+			total := *in.MemoryTotalBytes
+			metrics.Memory.Total = &total
+		}
+	}
+	if in.NetInBytesPerSecond != nil {
+		metrics.NetIn = &unifiedresources.MetricValue{
+			Value:  *in.NetInBytesPerSecond,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceVMware,
+		}
+	}
+	if in.NetOutBytesPerSecond != nil {
+		metrics.NetOut = &unifiedresources.MetricValue{
+			Value:  *in.NetOutBytesPerSecond,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceVMware,
+		}
+	}
+	if in.DiskReadBytesPerSecond != nil {
+		metrics.DiskRead = &unifiedresources.MetricValue{
+			Value:  *in.DiskReadBytesPerSecond,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceVMware,
+		}
+	}
+	if in.DiskWriteBytesPerSecond != nil {
+		metrics.DiskWrite = &unifiedresources.MetricValue{
+			Value:  *in.DiskWriteBytesPerSecond,
+			Unit:   "bytes/s",
+			Source: unifiedresources.SourceVMware,
+		}
+	}
+
+	if metrics.CPU == nil &&
+		metrics.Memory == nil &&
+		metrics.NetIn == nil &&
+		metrics.NetOut == nil &&
+		metrics.DiskRead == nil &&
+		metrics.DiskWrite == nil {
+		return nil
+	}
+	return metrics
+}
+
+func cloneFloat64Pointer(in *float64) *float64 {
+	if in == nil {
+		return nil
+	}
+	value := *in
+	return &value
+}
+
+func cloneInt64Pointer(in *int64) *int64 {
+	if in == nil {
+		return nil
+	}
+	value := *in
+	return &value
 }
 
 func firstNonEmptyTrimmed(values ...string) string {

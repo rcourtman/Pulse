@@ -25,6 +25,16 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 			PowerState:      "POWERED_ON",
 			HostUUID:        "uuid-host-1",
 			OverallStatus:   "yellow",
+			Metrics: &InventoryMetrics{
+				CPUPercent:              float64Ptr(21.4),
+				MemoryPercent:           float64Ptr(63.2),
+				MemoryUsedBytes:         int64Ptr(27144105984),
+				MemoryTotalBytes:        int64Ptr(42949672960),
+				NetInBytesPerSecond:     float64Ptr(1024),
+				NetOutBytesPerSecond:    float64Ptr(2048),
+				DiskReadBytesPerSecond:  float64Ptr(4096),
+				DiskWriteBytesPerSecond: float64Ptr(8192),
+			},
 			TriggeredAlarms: []InventoryAlarm{{
 				Alarm:         "alarm-11",
 				Name:          "Host connection degraded",
@@ -45,6 +55,16 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 			CPUCount:      4,
 			MemorySizeMiB: 8192,
 			OverallStatus: "green",
+			Metrics: &InventoryMetrics{
+				CPUPercent:              float64Ptr(38.1),
+				MemoryPercent:           float64Ptr(57.5),
+				MemoryUsedBytes:         int64Ptr(5033164800),
+				MemoryTotalBytes:        int64Ptr(8589934592),
+				NetInBytesPerSecond:     float64Ptr(512),
+				NetOutBytesPerSecond:    float64Ptr(768),
+				DiskReadBytesPerSecond:  float64Ptr(1536),
+				DiskWriteBytesPerSecond: float64Ptr(2048),
+			},
 			TriggeredAlarms: []InventoryAlarm{{
 				Alarm:         "alarm-21",
 				Name:          "VM replication fault",
@@ -99,6 +119,15 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	if got := hostRecord.Resource.VMware.RecentTaskSummary; got != "Reconnect host (running)" {
 		t.Fatalf("host recent task summary = %q, want %q", got, "Reconnect host (running)")
 	}
+	if hostRecord.Resource.Metrics == nil || hostRecord.Resource.Metrics.CPU == nil || hostRecord.Resource.Metrics.Memory == nil {
+		t.Fatalf("expected VMware host metrics, got %+v", hostRecord.Resource.Metrics)
+	}
+	if got := hostRecord.Resource.Metrics.CPU.Percent; got != 21.4 {
+		t.Fatalf("host cpu percent = %v, want 21.4", got)
+	}
+	if got := hostRecord.Resource.Metrics.NetOut.Value; got != 2048 {
+		t.Fatalf("host net out = %v, want 2048", got)
+	}
 	if len(hostRecord.Resource.Incidents) != 1 || hostRecord.Resource.Incidents[0].Code != "vmware_alarm_state" {
 		t.Fatalf("expected host VMware incident projection, got %+v", hostRecord.Resource.Incidents)
 	}
@@ -127,6 +156,15 @@ func TestProviderRecords_ProjectCanonicalVMwareResources(t *testing.T) {
 	}
 	if got := vmRecord.Resource.VMware.SnapshotCount; got != 2 {
 		t.Fatalf("vm snapshot count = %d, want 2", got)
+	}
+	if vmRecord.Resource.Metrics == nil || vmRecord.Resource.Metrics.CPU == nil || vmRecord.Resource.Metrics.Memory == nil {
+		t.Fatalf("expected VMware VM metrics, got %+v", vmRecord.Resource.Metrics)
+	}
+	if got := vmRecord.Resource.Metrics.Memory.Percent; got != 57.5 {
+		t.Fatalf("vm memory percent = %v, want 57.5", got)
+	}
+	if got := vmRecord.Resource.Metrics.DiskWrite.Value; got != 2048 {
+		t.Fatalf("vm disk write = %v, want 2048", got)
 	}
 	if len(vmRecord.Resource.Incidents) != 1 || vmRecord.Resource.Incidents[0].Code != "vmware_alarm_state" {
 		t.Fatalf("expected VMware VM incident projection, got %+v", vmRecord.Resource.Incidents)

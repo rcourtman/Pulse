@@ -4144,6 +4144,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	if atomicStore, ok := store.(AtomicSnapshotResourceStore); ok {
 		atomicStore.PopulateSnapshotAndSupplemental(snapshotForStore, recordsBySource)
 		m.syncUnifiedAgentMetrics(store)
+		m.syncUnifiedVMMetrics(store)
 		m.syncUnifiedStorageMetrics(store)
 		m.syncUnifiedPhysicalDiskMetrics(store)
 		m.syncUnifiedAppContainerMetrics(store)
@@ -4177,6 +4178,7 @@ func (m *Monitor) updateResourceStore(state models.StateSnapshot) {
 	}
 
 	m.syncUnifiedAgentMetrics(store)
+	m.syncUnifiedVMMetrics(store)
 	m.syncUnifiedStorageMetrics(store)
 	m.syncUnifiedPhysicalDiskMetrics(store)
 	m.syncUnifiedAppContainerMetrics(store)
@@ -4282,6 +4284,115 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 			}
 			if m.metricsStore != nil {
 				m.metricsStore.Write("agent", targetID, "diskwrite", metric.Value, now)
+			}
+		}
+	}
+}
+
+func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
+	if store == nil || (m.metricsHistory == nil && m.metricsStore == nil) {
+		return
+	}
+
+	resolver, ok := store.(MetricsTargetResourceStore)
+	if !ok {
+		return
+	}
+
+	now := time.Now()
+	seenTargets := make(map[string]struct{})
+	for _, resource := range store.GetAll() {
+		if resource.Type != unifiedresources.ResourceTypeVM || resource.Metrics == nil {
+			continue
+		}
+
+		hasNativeVMWriter := false
+		for _, source := range resource.Sources {
+			if source == unifiedresources.SourceProxmox {
+				hasNativeVMWriter = true
+				break
+			}
+		}
+		if hasNativeVMWriter {
+			continue
+		}
+
+		target := resolver.MetricsTargetForResource(resource.ID)
+		if target == nil || target.ResourceType != "vm" || strings.TrimSpace(target.ResourceID) == "" {
+			continue
+		}
+		targetID := strings.TrimSpace(target.ResourceID)
+		if _, ok := seenTargets[targetID]; ok {
+			continue
+		}
+		seenTargets[targetID] = struct{}{}
+
+		if metric := resource.Metrics.CPU; metric != nil {
+			value := metric.Percent
+			if value == 0 {
+				value = metric.Value
+			}
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "cpu", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "cpu", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.Memory; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
+			value := metric.Percent
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "memory", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "memory", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.Disk; metric != nil && (metric.Total != nil || metric.Percent > 0 || metric.Used != nil) {
+			value := metric.Percent
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "disk", value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "disk", value, now)
+			}
+		}
+
+		if metric := resource.Metrics.NetIn; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "netin", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "netin", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.NetOut; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "netout", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "netout", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.DiskRead; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "diskread", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "diskread", metric.Value, now)
+			}
+		}
+
+		if metric := resource.Metrics.DiskWrite; metric != nil {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(targetID, "diskwrite", metric.Value, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("vm", targetID, "diskwrite", metric.Value, now)
 			}
 		}
 	}
