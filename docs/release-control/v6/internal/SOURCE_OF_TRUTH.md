@@ -469,6 +469,57 @@ owning subsystem contracts; user-facing claims must not exceed this floor.
    tools, host command execution without the unified agent, or broader action
    promises ahead of the existing action-governance coverage gap.
 
+## VMware vSphere Admission Model
+
+Pulse v6 now has one locked architecture recommendation for any future VMware
+vSphere work. This is not a current support claim. It defines the only
+acceptable phase-1 model if implementation starts.
+
+1. Architecture boundary:
+   VMware vSphere should enter Pulse only as the first-class
+   `vmware-vsphere` platform. Phase 1 is `vCenter` only; direct `ESXi` is
+   deferred work and must not inherit support by implication.
+2. Ingestion model:
+   VMware should be API-first. The baseline path is the official vCenter
+   Automation API plus the Virtual Infrastructure JSON API. A Pulse-managed
+   agent may augment a VMware environment later, but it is not part of the
+   bootstrap or baseline support contract.
+3. Canonical resource projections:
+   ESXi hosts must project as canonical `agent`, guest workloads as canonical
+   `vm`, and datastores as canonical `storage`. vCenter, datacenter, cluster,
+   folder, and resource-pool objects remain topology or relationship metadata,
+   not top-level Pulse resource types. Out of scope for phase 1: provider-local
+   `esxi-host` or `vsphere-vm` types plus `physical-disk`, `system-container`,
+   or `app-container` projections.
+4. Visibility, workloads, and storage:
+   The phase-1 floor is read-first infrastructure support through shared Pulse
+   surfaces: host inventory, VM inventory/runtime/guest identity when the API
+   exposes it, snapshot-tree visibility, datastore capacity/accessibility, and
+   metrics/alarm context routed onto the shared resource model.
+5. Recovery:
+   vSphere snapshots and changed-disk visibility are useful read-side signals,
+   but they do not make VMware a recovery-supported platform in Pulse by
+   themselves. Until shared recovery artifacts and restore flows exist on the
+   governed path, VMware recovery stays out of the support claim.
+6. Alerts:
+   The phase-1 floor may include vSphere alarm state, overall health state,
+   and related event/task history when those signals are projected through the
+   shared alerts, incidents, and resource-timeline contracts instead of a
+   provider-local incident surface.
+7. Assistant read/control:
+   Assistant read may be supported on those canonical resources once the
+   shared read paths land. Assistant control stays read-only in phase 1 even
+   though VMware exposes power, snapshot, and guest-operation APIs, because
+   Pulse is not yet claiming a broad VMware action plane ahead of the existing
+   action-governance coverage gap.
+8. Support gate:
+   Do not call VMware supported until a real vCenter proves connection
+   onboarding, the minimum privilege bundle, the supported version floor,
+   canonical `agent`/`vm`/`storage` projection, alert and metrics-history
+   truth, and assistant read behavior. If those proofs do not hold,
+   implementation should stop at governance rather than shipping an inflated
+   support claim.
+
 ## Cross-Repo Contracts
 
 These contracts must not drift:

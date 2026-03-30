@@ -3915,6 +3915,24 @@
         "L15",
         "L16"
       ]
+    },
+    {
+      "id": "vmware-vsphere-vcenter-first-admission-model",
+      "summary": "VMware vSphere is architecture-locked as a vCenter-first, API-first platform candidate: phase 1 projects ESXi hosts as `agent`, VMs as `vm`, datastores as `storage`, keeps direct ESXi out of scope, treats snapshots as read-side workload context rather than recovery support, and leaves assistant control read-only until the governed action model expands.",
+      "kind": "architecture",
+      "decided_at": "2026-03-30",
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15"
+      ]
     }
   ]
 }

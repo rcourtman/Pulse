@@ -170,6 +170,16 @@ assembly branch.
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface.
+VMware vSphere now follows the same admission rule. If `vmware-vsphere`
+implementation starts, vCenter is the phase-1 connection authority but not a
+top-level unified resource: ESXi hosts must project as canonical `agent`
+resources, virtual machines as canonical `vm`, and datastores as canonical
+`storage`. Datacenters, clusters, folders, and resource pools stay topology or
+relationship metadata under those shared resources rather than becoming new
+top-level types. Phase-1 vSphere work must not invent `esxi-host`,
+`vsphere-vm`, `vsphere-cluster`, `system-container`, `app-container`, or
+`physical-disk` projections just because the upstream APIs expose additional
+object classes.
 TrueNAS disk telemetry now follows the same rule. API-backed TrueNAS disks must
 populate canonical `physicalDisk.temperature` and reuse the shared
 physical-disk risk semantics, so infrastructure, storage, charts, and AI read

@@ -269,22 +269,78 @@ all of these questions before implementation starts:
 If those answers are not yet stable, the work must stop at a governed
 open-decision or resolved-decision update instead of starting runtime code.
 
-## Likely vSphere Path
+## VMware vSphere Admission Model
 
-If VMware vSphere is added in v6 or later, the default evaluation path is:
+Pulse now has a resolved architecture recommendation for any future VMware
+vSphere work. This does not admit `vmware-vsphere` into the current support
+matrix yet. It defines the only acceptable phase-1 model if implementation
+starts.
 
-1. treat it as a separate first-class platform id such as `vmware-vsphere`,
-   not as another Proxmox subtype and not as a generic future-label shortcut
-2. assume API-backed primary ingestion unless governance explicitly chooses an
-   agent-first or hybrid contract
-3. reuse canonical `agent` for host-like top-level systems when that model is
-   appropriate, `vm` for guests, and `storage` for datastores; do not invent
-   `esxi-host` or `vsphere-vm` types by default
-4. require explicit answers for host-versus-cluster top-level identity,
-   vCenter-versus-direct-ESXi support, storage/datastore scope, recovery
-   truth, alerts floor, assistant read, assistant control, and any agent
-   augmentation rule before implementation starts
+1. treat VMware as one separate first-class platform id,
+   `vmware-vsphere`, not as another Proxmox subtype and not as a generic
+   future-label shortcut
+2. use `vCenter` as the only supported phase-1 entry point
+3. treat direct `ESXi` onboarding as deferred work, not as an implied part of
+   the vCenter claim
+4. keep the primary ingestion mode `api-backed`
+5. use official VMware APIs first: vCenter Automation API for modern inventory
+   and VM control surfaces, plus the Virtual Infrastructure JSON API for
+   alarm, event, snapshot, and performance/detail paths
+6. treat a Pulse-managed agent only as future augmentation for deeper host or
+   guest behavior, not as a bootstrap requirement or primary support contract
+7. project ESXi hosts as canonical `agent`, guest workloads as canonical `vm`,
+   and datastores as canonical `storage`
+8. keep vCenter, datacenter, cluster, folder, and resource-pool objects as
+   topology or relationship metadata under those shared resources rather than
+   inventing top-level `esxi-host`, `vsphere-cluster`, or `vsphere-vm` types
+9. keep `physical-disk`, `system-container`, `app-container`, and recovery
+   artifacts out of the phase-1 projection contract unless a later governed
+   slice proves they belong on the shared path
 
-Adding `vmware-vsphere` to a label helper, filter list, or presentation badge
-does not admit the platform. Admission happens only when this model, the
-owning contracts, and the required proof surfaces are updated together.
+| Platform | Family | Entry point | Primary mode | Optional augmentation | Canonical projections | Admission state |
+| --- | --- | --- | --- | --- | --- | --- |
+| `vmware-vsphere` | VMware | `vCenter` only in phase 1 | `api-backed` | host or guest agent later, not phase 1 | `agent`, `vm`, `storage` | architecture locked, not yet admitted |
+
+## VMware vSphere Proposed Phase-1 Floor
+
+This is the proposed phase-1 support floor once implementation and proof land.
+It is not a claim that VMware is currently supported in Pulse.
+
+| Platform | Setup | Visibility | Workloads | Storage | Recovery | Alerts | Assistant read | Assistant control |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `vmware-vsphere` | platform connections to `vCenter` only | supported | supported | supported | `n/a` | supported | supported | read-only |
+
+Phase-1 floor details:
+
+1. visibility means inventory and topology read across vCenter-backed ESXi
+   hosts, VM placement, and datastore relationships
+2. workloads means VM inventory, power/runtime state, guest identity when the
+   API exposes it, snapshot-tree visibility, and metrics/alarm context
+3. storage means datastore inventory, capacity/free-space/accessibility, host
+   attachments, and VM-to-datastore usage
+4. recovery stays `n/a` in the platform matrix because vSphere snapshots and
+   changed-disk APIs are recovery-adjacent read signals, not a governed Pulse
+   recovery-artifact or restore surface by themselves
+5. alerts means vSphere alarm state, overall health state, and related
+   event/task history projected through shared alert and incident paths
+6. assistant control stays read-only even though VMware exposes real control
+   APIs, because Pulse has not yet expanded the governed action surface into a
+   general VMware admin plane
+
+Phase-1 exclusions:
+
+1. direct `ESXi` onboarding
+2. `physical-disk` projection, including vSAN-only physical disk health APIs
+3. `system-container` or `app-container` projections
+4. treating vSphere snapshots as shared Pulse recovery support
+5. assistant or operator control claims for VM power, snapshot lifecycle, or
+   guest operations
+6. any provider-local resource type, page shell, or AI tool family
+
+Support gate:
+
+Pulse should not call VMware supported until a real vCenter proves the declared
+floor end to end: connection onboarding, minimum privilege bundle, supported
+version floor, canonical `agent`/`vm`/`storage` projections, alert and metrics
+history truth, and assistant read behavior. If that proof does not hold,
+implementation must stop at governance rather than widening the support claim.

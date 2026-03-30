@@ -71,6 +71,15 @@ This subsystem now sits under the dedicated core monitoring runtime lane so
 discovery, metrics-history correctness, and platform-specific runtime coverage
 can be governed as first-class product work instead of staying diluted inside
 architecture coherence.
+VMware vSphere now also has a locked phase-1 ingestion boundary under this
+lane. If `vmware-vsphere` implementation starts, monitoring must treat vCenter
+as the only supported phase-1 entry point and must stay API-first through the
+official vCenter Automation API plus the Virtual Infrastructure JSON API.
+Direct ESXi remains out of phase 1 because the standalone host-agent hierarchy
+is materially narrower than the vCenter inventory and the declared support
+floor depends on vCenter-backed topology, shared datastore scope, alarm state,
+and historical performance access. Any later direct-ESXi work must be admitted
+explicitly instead of inheriting vCenter support by implication.
 
 The monitor adapter now also acts as the canonical bridge from live registry
 rebuilds and supplemental ingest into the unified-resource timeline. That means
