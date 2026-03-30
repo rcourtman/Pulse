@@ -55,6 +55,9 @@ func canonicalPrimaryID(resource Resource) string {
 	if instanceID := strings.TrimSpace(canonicalPMGInstanceID(resource)); instanceID != "" {
 		return "pmg:" + instanceID
 	}
+	if identity := canonicalVMwarePrimaryID(resource); identity != "" {
+		return identity
+	}
 	return strings.TrimSpace(resource.ID)
 }
 
@@ -80,6 +83,8 @@ func canonicalAliases(resource Resource, primaryID, platformID, hostname string)
 		canonicalAgentID(resource),
 		canonicalPBSInstanceID(resource),
 		canonicalPMGInstanceID(resource),
+		canonicalVMwareManagedObjectID(resource),
+		canonicalVMwareHostUUID(resource),
 		platformID,
 		hostname,
 		strings.TrimSpace(resource.Identity.MachineID),
@@ -216,6 +221,39 @@ func canonicalPMGInstanceID(resource Resource) string {
 		return ""
 	}
 	return strings.TrimSpace(resource.PMG.InstanceID)
+}
+
+func canonicalVMwarePrimaryID(resource Resource) string {
+	if resource.VMware == nil {
+		return ""
+	}
+	managedObjectID := strings.TrimSpace(resource.VMware.ManagedObjectID)
+	if managedObjectID == "" {
+		return ""
+	}
+	entityType := strings.TrimSpace(resource.VMware.EntityType)
+	if entityType == "" {
+		entityType = string(CanonicalResourceType(resource.Type))
+	}
+	connectionID := strings.TrimSpace(resource.VMware.ConnectionID)
+	if connectionID != "" {
+		return "vmware:" + connectionID + ":" + entityType + ":" + managedObjectID
+	}
+	return "vmware:" + entityType + ":" + managedObjectID
+}
+
+func canonicalVMwareManagedObjectID(resource Resource) string {
+	if resource.VMware == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.VMware.ManagedObjectID)
+}
+
+func canonicalVMwareHostUUID(resource Resource) string {
+	if resource.VMware == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.VMware.HostUUID)
 }
 
 func firstIdentityHostname(identity ResourceIdentity) string {

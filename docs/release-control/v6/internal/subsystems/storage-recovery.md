@@ -92,6 +92,7 @@ querying, and the operator-facing storage health presentation layer.
 26. Keep cross-surface recovery handoffs on the shared route-helper contract. When infrastructure or other unified-resource consumers expose TrueNAS recovery links, they must reuse the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder with owned `platform` and `node` queries instead of inventing drawer-local recovery URLs or treating PBS services as the only infrastructure-to-recovery path.
 27. Keep alert-side recovery drill-ins on that same shared route-helper contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder instead of freezing alert-local recovery URLs or introducing another provider-shaped recovery handoff vocabulary.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
+29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
 
 ## Forbidden Paths
 
@@ -1644,3 +1645,12 @@ health refresh, and observed datastore/VM snapshot visibility on the shared
 platform-connections surface, but storage and recovery must treat that data as
 setup/runtime context only, not as proof that VMware has joined the canonical
 recovery artifact or restore plane.
+That same bounded phase-1 slice now also includes the shared unified-resource
+adapter floor. `frontend-modern/src/hooks/useUnifiedResources.ts`,
+`frontend-modern/src/routing/resourceLinks.ts`, and adjacent storage filters
+may surface VMware-backed datastores as canonical `storage` resources under
+the shared `vmware-vsphere` source/platform vocabulary, but that operator-
+facing storage visibility still ends at inventory, capacity, and navigation.
+Storage and recovery must not infer VMware restore support, recovery rollups,
+or VMware-local protection semantics from the presence of those datastores or
+VM snapshot-read context on the shared pages.

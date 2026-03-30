@@ -846,17 +846,29 @@ func (v HostView) Name() string {
 }
 
 func (v HostView) Hostname() string {
-	if v.r == nil || v.r.Agent == nil {
+	if v.r == nil {
 		return ""
 	}
-	return v.r.Agent.Hostname
+	if v.r.Agent != nil {
+		return v.r.Agent.Hostname
+	}
+	if v.r.VMware != nil {
+		return firstTrimmed(firstIdentityHostname(v.r.Identity), v.r.Name)
+	}
+	return ""
 }
 
 func (v HostView) MachineID() string {
-	if v.r == nil || v.r.Agent == nil {
+	if v.r == nil {
 		return ""
 	}
-	return v.r.Agent.MachineID
+	if v.r.Agent != nil {
+		return v.r.Agent.MachineID
+	}
+	if v.r.VMware != nil {
+		return strings.TrimSpace(v.r.VMware.HostUUID)
+	}
+	return ""
 }
 
 func (v HostView) TokenID() string {
@@ -889,10 +901,16 @@ func (v HostView) TokenLastUsedAt() *time.Time {
 }
 
 func (v HostView) Platform() string {
-	if v.r == nil || v.r.Agent == nil {
+	if v.r == nil {
 		return ""
 	}
-	return v.r.Agent.Platform
+	if v.r.Agent != nil {
+		return v.r.Agent.Platform
+	}
+	if v.r.VMware != nil {
+		return "vmware-vsphere"
+	}
+	return ""
 }
 
 func (v HostView) OSName() string {

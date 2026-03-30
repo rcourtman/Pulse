@@ -34,6 +34,7 @@ truth for live infrastructure data.
 10. `internal/monitoring/reload.go`
 11. `docker-entrypoint.sh`
 12. `internal/monitoring/truenas_poller.go`
+13. `internal/monitoring/vmware_poller.go`
 
 ## Shared Boundaries
 
@@ -100,6 +101,14 @@ health record, even if that provider keeps separate authenticated Automation
 API and VI JSON clients internally. Connection edits that change host, auth,
 TLS, or poll cadence must replace that live provider state instead of leaving
 stale VMware sessions resident until restart.
+That provider ownership now has a concrete phase-1 runtime seam:
+`internal/monitoring/vmware_poller.go` must keep VMware inventory on the
+shared supplemental-ingest path, declare `SourceVMware` as its owned source,
+and cache per-organization, per-connection provider records instead of
+projecting VMware through `StateSnapshot`-local host or storage arrays.
+`internal/api/router.go` may start and stop that poller as shared runtime
+infrastructure, but monitoring still owns the provider lifecycle, source
+ownership, and canonical record emission rules for VMware.
 That same VMware monitoring boundary now also includes the proof rule for
 history depth. `PerformanceManager.QueryPerfComposite` clearly supports
 host-plus-child metric collection, but exact VM and datastore history fidelity

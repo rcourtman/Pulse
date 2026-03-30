@@ -84,6 +84,7 @@ type Router struct {
 	resourceHandlers           *ResourceHandlers
 	resourceRegistry           *unifiedresources.ResourceRegistry
 	trueNASPoller              *monitoring.TrueNASPoller
+	vmwarePoller               *monitoring.VMwarePoller
 	monitorResourceAdapter     *unifiedresources.MonitorAdapter
 	monitorResourceAdapters    map[string]*unifiedresources.MonitorAdapter
 	monitorAdapterMu           sync.Mutex
@@ -365,6 +366,8 @@ func (r *Router) setupRoutes() {
 	}
 	r.trueNASPoller = monitoring.NewTrueNASPoller(r.multiTenant, 0, recoveryManager)
 	r.trueNASPoller.Start(r.lifecycleCtx)
+	r.vmwarePoller = monitoring.NewVMwarePoller(r.multiTenant, 0)
+	r.vmwarePoller.Start(r.lifecycleCtx)
 	updateHandlers := NewUpdateHandlersWithContext(r.updateManager, r.updateHistory, r.lifecycleCtx)
 	r.dockerAgentHandlers = NewDockerAgentHandlers(r.mtMonitor, r.monitor, r.wsHub, r.config)
 	r.kubernetesAgentHandlers = NewKubernetesAgentHandlers(r.mtMonitor, r.monitor, r.wsHub)
@@ -386,6 +389,10 @@ func (r *Router) setupRoutes() {
 	} else if r.trueNASPoller != nil {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
 		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+	}
+	if r.vmwarePoller != nil {
+		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
+		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
 	}
 	if r.monitor != nil {
 		r.configureMonitorDependencies(r.monitor)
@@ -2106,6 +2113,9 @@ func (r *Router) shutdownBackgroundWorkers() {
 	}
 	if r.trueNASPoller != nil {
 		r.trueNASPoller.Stop()
+	}
+	if r.vmwarePoller != nil {
+		r.vmwarePoller.Stop()
 	}
 	if r.deployStore != nil {
 		if err := r.deployStore.Close(); err != nil {

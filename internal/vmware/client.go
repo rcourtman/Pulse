@@ -22,8 +22,9 @@ import (
 const (
 	// FeatureVMware allows explicit opt-out of the default-on VMware vCenter
 	// platform integration.
-	FeatureVMware  = "PULSE_ENABLE_VMWARE"
-	defaultTimeout = 10 * time.Second
+	FeatureVMware              = "PULSE_ENABLE_VMWARE"
+	defaultTimeout             = 10 * time.Second
+	inventoryResponseLimitByte = 8 << 20
 )
 
 var featureVMwareEnabled atomic.Bool
@@ -137,19 +138,7 @@ func (c *Client) Close() {
 // TestConnection validates both the Automation API and VI JSON API families and
 // returns a minimal inventory summary on success.
 func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) {
-	automationSessionID, err := c.createAutomationSession(ctx)
-	if err != nil {
-		return nil, err
-	}
-	hosts, err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/host", "host inventory")
-	if err != nil {
-		return nil, err
-	}
-	vms, err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/vm", "vm inventory")
-	if err != nil {
-		return nil, err
-	}
-	datastores, err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/datastore", "datastore inventory")
+	inventory, err := c.CollectInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -161,10 +150,41 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 		return nil, err
 	}
 	return &InventorySummary{
-		Hosts:      len(hosts),
-		VMs:        len(vms),
-		Datastores: len(datastores),
+		Hosts:      len(inventory.Hosts),
+		VMs:        len(inventory.VMs),
+		Datastores: len(inventory.Datastores),
 		VIRelease:  release,
+	}, nil
+}
+
+// CollectInventory fetches the phase-1 VMware inventory floor used by the
+// supplemental-ingest provider.
+func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, error) {
+	automationSessionID, err := c.createAutomationSession(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var hosts []InventoryHost
+	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/host", "host inventory", &hosts); err != nil {
+		return nil, err
+	}
+
+	var vms []InventoryVM
+	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/vm", "vm inventory", &vms); err != nil {
+		return nil, err
+	}
+
+	var datastores []InventoryDatastore
+	if err := c.listAutomationResources(ctx, automationSessionID, "/api/vcenter/datastore", "datastore inventory", &datastores); err != nil {
+		return nil, err
+	}
+
+	return &InventorySnapshot{
+		CollectedAt: time.Now().UTC(),
+		Hosts:       hosts,
+		VMs:         vms,
+		Datastores:  datastores,
 	}, nil
 }
 
@@ -241,39 +261,39 @@ func (c *Client) listAutomationResources(
 	sessionID string,
 	path string,
 	label string,
-) ([]json.RawMessage, error) {
+	target any,
+) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL.String()+path, nil)
 	if err != nil {
-		return nil, fmt.Errorf("build %s request: %w", label, err)
+		return fmt.Errorf("build %s request: %w", label, err)
 	}
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("vmware-api-session-id", sessionID)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, classifyTransportError(label, err)
+		return classifyTransportError(label, err)
 	}
 	defer resp.Body.Close()
-	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, inventoryResponseLimitByte))
 	if readErr != nil {
-		return nil, fmt.Errorf("read %s response: %w", label, readErr)
+		return fmt.Errorf("read %s response: %w", label, readErr)
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusUnauthorized:
-		return nil, &ConnectionError{Category: "auth", Message: fmt.Sprintf("VMware authentication failed while reading %s", label)}
+		return &ConnectionError{Category: "auth", Message: fmt.Sprintf("VMware authentication failed while reading %s", label)}
 	case http.StatusForbidden:
-		return nil, &ConnectionError{Category: "permission", Message: fmt.Sprintf("VMware permissions are insufficient for %s", label)}
+		return &ConnectionError{Category: "permission", Message: fmt.Sprintf("VMware permissions are insufficient for %s", label)}
 	default:
-		return nil, &ConnectionError{
+		return &ConnectionError{
 			Category: "endpoint",
 			Message:  fmt.Sprintf("VMware %s request failed with HTTP %d", label, resp.StatusCode),
 		}
 	}
-	var items []json.RawMessage
-	if err := json.Unmarshal(body, &items); err != nil {
-		return nil, &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
+	if err := json.Unmarshal(body, target); err != nil {
+		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
 	}
-	return items, nil
+	return nil
 }
 
 func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, string, error) {

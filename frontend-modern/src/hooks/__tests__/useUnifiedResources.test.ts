@@ -302,6 +302,53 @@ describe('useUnifiedResources', () => {
     dispose();
   });
 
+  it('projects raw VMware sources onto the canonical vSphere platform model', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            ...v2Resource,
+            id: 'vmware-host-1',
+            name: 'esxi-01.lab.local',
+            sources: ['vmware'],
+            canonicalIdentity: {
+              displayName: 'ESXi 01',
+              hostname: 'esxi-01.lab.local',
+              platformId: 'vmware-host-1',
+            },
+            vmware: {
+              connectionId: 'vc-1',
+              connectionName: 'Lab VC',
+              vCenterHost: 'vc.lab.local',
+              managedObjectId: 'host-101',
+              entityType: 'host',
+            },
+          },
+        ],
+      }),
+    });
+
+    let dispose = () => {};
+    let result: ReturnType<UseUnifiedResourcesModule['useUnifiedResources']> | undefined;
+    createRoot((d) => {
+      dispose = d;
+      result = useUnifiedResources();
+    });
+
+    await result!.refetch();
+    expect(result!.resources()[0].platformType).toBe('vmware-vsphere');
+    expect(result!.resources()[0].sourceType).toBe('api');
+    expect(result!.resources()[0].platformData?.sources).toEqual(['vmware']);
+    expect(result!.resources()[0].vmware).toMatchObject({
+      connectionId: 'vc-1',
+      managedObjectId: 'host-101',
+      entityType: 'host',
+    });
+
+    dispose();
+  });
+
   it('maps discoveryTarget.agentId into canonical discovery agentId', async () => {
     apiFetchMock.mockResolvedValueOnce({
       ok: true,

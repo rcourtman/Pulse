@@ -75,6 +75,7 @@ describe('sourcePlatforms', () => {
         hasPbs: true,
         hasPmg: false,
         hasTrueNAS: false,
+        hasVMware: false,
       });
     });
 
@@ -87,6 +88,7 @@ describe('sourcePlatforms', () => {
         hasPbs: false,
         hasPmg: false,
         hasTrueNAS: false,
+        hasVMware: false,
       });
     });
 
@@ -99,6 +101,20 @@ describe('sourcePlatforms', () => {
         hasPbs: false,
         hasPmg: false,
         hasTrueNAS: true,
+        hasVMware: false,
+      });
+    });
+
+    it('tracks VMware as a canonical API-backed platform source', () => {
+      expect(readSourcePlatformFlags(['agent', 'vmware'])).toEqual({
+        hasAgent: true,
+        hasProxmox: false,
+        hasDocker: false,
+        hasKubernetes: false,
+        hasPbs: false,
+        hasPmg: false,
+        hasTrueNAS: false,
+        hasVMware: true,
       });
     });
   });
@@ -108,6 +124,7 @@ describe('sourcePlatforms', () => {
       expect(resolvePlatformTypeFromSources(['agent', 'docker'])).toBe('docker');
       expect(resolvePlatformTypeFromSources(['agent', 'pbs'])).toBe('proxmox-pbs');
       expect(resolvePlatformTypeFromSources(['pmg', 'docker'])).toBe('proxmox-pmg');
+      expect(resolvePlatformTypeFromSources(['agent', 'vmware'])).toBe('vmware-vsphere');
       expect(resolvePlatformTypeFromSources(['agent', 'truenas'])).toBe('truenas');
       expect(resolvePlatformTypeFromSources(['agent'])).toBe('agent');
       expect(resolvePlatformTypeFromSources(['custom-source'])).toBeUndefined();
@@ -119,6 +136,7 @@ describe('sourcePlatforms', () => {
       expect(resolveSourceTypeFromSources(['agent'])).toBe('agent');
       expect(resolveSourceTypeFromSources(['pve'])).toBe('api');
       expect(resolveSourceTypeFromSources(['agent', 'proxmox'])).toBe('hybrid');
+      expect(resolveSourceTypeFromSources(['agent', 'vmware'])).toBe('hybrid');
       expect(resolveSourceTypeFromSources(['agent', 'truenas'])).toBe('hybrid');
       expect(resolveSourceTypeFromSources(['custom-source'])).toBe('api');
     });

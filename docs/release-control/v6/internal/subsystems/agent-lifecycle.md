@@ -533,6 +533,17 @@ may show one VMware connection's poll health, last error classification, and
 observed contribution summary, but it must not force the operator to manage
 separate Automation API versus VI JSON sessions or understand multi-client
 runtime wiring just to use the shared platform-connections path.
+That lifecycle-owned VMware slice now also includes the first live runtime
+handoff rule. `frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx`,
+`frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`,
+`frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx`,
+`frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
+and `internal/api/router.go` must keep VMware on the shared platform-
+connections workflow with one `vCenter` connection family and one summary card
+count. Lifecycle-adjacent install or discovery surfaces must not fork that
+into a VMware-only install wizard, direct-ESXi setup branch, or agent-first
+bootstrap story just because the runtime now has a live VMware connection
+panel and poller.
 That same lifecycle-owned settings slice now also owns the shared VMware
 summary and handoff framing. `InfrastructurePlatformConnectionsSummaryCard.tsx`,
 `InfrastructureReportingPanel.tsx`, `useInfrastructureSettingsState.ts`, and

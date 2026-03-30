@@ -64,6 +64,7 @@ type Resource struct {
 	PhysicalDisk *PhysicalDiskMeta `json:"physicalDisk,omitempty"`
 	Ceph         *CephMeta         `json:"ceph,omitempty"`
 	TrueNAS      *TrueNASData      `json:"truenas,omitempty"`
+	VMware       *VMwareData       `json:"vmware,omitempty"`
 }
 
 // ResourceFacetCounts captures the total count of each resource facet that
@@ -151,6 +152,7 @@ const (
 	SourcePMG     DataSource = "pmg"
 	SourceK8s     DataSource = "kubernetes"
 	SourceTrueNAS DataSource = "truenas"
+	SourceVMware  DataSource = "vmware"
 )
 
 // SourceStatus describes the freshness of data from a source.
@@ -924,6 +926,22 @@ type PMGData struct {
 	RelayDomains     []PMGRelayDomainMeta `json:"relayDomains,omitempty"`
 	DomainStats      []PMGDomainStatMeta  `json:"domainStats,omitempty"`
 	DomainStatsAsOf  time.Time            `json:"domainStatsAsOf,omitempty"`
+}
+
+// VMwareData contains VMware vSphere metadata for canonical agent, vm, and
+// storage resources projected from one vCenter connection.
+type VMwareData struct {
+	ConnectionID    string `json:"connectionId,omitempty"`
+	ConnectionName  string `json:"connectionName,omitempty"`
+	VCenterHost     string `json:"vcenterHost,omitempty"`
+	ManagedObjectID string `json:"managedObjectId,omitempty"`
+	EntityType      string `json:"entityType,omitempty"`
+	HostUUID        string `json:"hostUuid,omitempty"`
+	ConnectionState string `json:"connectionState,omitempty"`
+	PowerState      string `json:"powerState,omitempty"`
+	CPUCount        int    `json:"cpuCount,omitempty"`
+	MemorySizeMiB   int64  `json:"memorySizeMib,omitempty"`
+	DatastoreType   string `json:"datastoreType,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for system host resources.

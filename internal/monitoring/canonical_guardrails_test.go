@@ -111,6 +111,25 @@ func TestConnectedInfrastructureKeepsPlatformConnectionsAndProjectsTrueNAS(t *te
 	}
 }
 
+func TestVMwarePollerUsesCanonicalSupplementalIngestOwnership(t *testing.T) {
+	data, err := os.ReadFile("vmware_poller.go")
+	if err != nil {
+		t.Fatalf("failed to read vmware_poller.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"func (p *VMwarePoller) SupplementalRecords(_ *Monitor, orgID string) []unifiedresources.IngestRecord {",
+		"func (p *VMwarePoller) SnapshotOwnedSources() []unifiedresources.DataSource {",
+		"return []unifiedresources.DataSource{unifiedresources.SourceVMware}",
+		"return vmware.NewAPIProvider(vmware.ProviderMetadata{",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("vmware_poller.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 	t.Parallel()
 

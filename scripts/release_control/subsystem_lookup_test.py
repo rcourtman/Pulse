@@ -4614,8 +4614,8 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "internal/unifiedresources/views.go",
-                    "line": 46,
-                    "heading_line": 42,
+                    "line": 47,
+                    "heading_line": 43,
                 },
             ],
         )

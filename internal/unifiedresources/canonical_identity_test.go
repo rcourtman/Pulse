@@ -240,3 +240,56 @@ func TestRefreshCanonicalIdentityIgnoresProxmoxPoolAsPlatformIdentity(t *testing
 		}
 	}
 }
+
+func TestRefreshCanonicalIdentityScopesVMwareManagedObjectsByConnection(t *testing.T) {
+	resource := Resource{
+		ID:   "vmware-host-1",
+		Type: ResourceTypeAgent,
+		Name: "esxi-01.lab.local",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"esxi-01.lab.local"},
+		},
+		VMware: &VMwareData{
+			ConnectionID:    "vc-1",
+			ConnectionName:  "Lab VC",
+			VCenterHost:     "vc.lab.local",
+			ManagedObjectID: "host-101",
+			EntityType:      "host",
+			HostUUID:        "uuid-host-1",
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.DisplayName; got != "esxi-01.lab.local" {
+		t.Fatalf("displayName = %q, want esxi-01.lab.local", got)
+	}
+	if got := resource.Canonical.Hostname; got != "esxi-01.lab.local" {
+		t.Fatalf("hostname = %q, want esxi-01.lab.local", got)
+	}
+	if got := resource.Canonical.PlatformID; got != "esxi-01.lab.local" {
+		t.Fatalf("platformId = %q, want esxi-01.lab.local", got)
+	}
+	if got := resource.Canonical.PrimaryID; got != "vmware:vc-1:host:host-101" {
+		t.Fatalf("primaryId = %q, want vmware:vc-1:host:host-101", got)
+	}
+
+	wantAliases := []string{
+		"vmware:vc-1:host:host-101",
+		"host-101",
+		"uuid-host-1",
+		"esxi-01.lab.local",
+		"vmware-host-1",
+	}
+	if len(resource.Canonical.Aliases) != len(wantAliases) {
+		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
+	}
+	for i, want := range wantAliases {
+		if got := resource.Canonical.Aliases[i]; got != want {
+			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
+		}
+	}
+}

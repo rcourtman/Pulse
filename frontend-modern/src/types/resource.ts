@@ -47,6 +47,7 @@ export type PlatformType =
   | 'docker'
   | 'kubernetes'
   | 'truenas'
+  | 'vmware-vsphere'
   | 'agent';
 
 // Source types - how data is collected
@@ -400,6 +401,20 @@ export interface ResourceKubernetesMeta {
   metricCapabilities?: ResourceKubernetesMetricCapabilities;
 }
 
+export interface ResourceVMwareMeta {
+  connectionId?: string;
+  connectionName?: string;
+  vcenterHost?: string;
+  managedObjectId?: string;
+  entityType?: string;
+  hostUuid?: string;
+  connectionState?: string;
+  powerState?: string;
+  cpuCount?: number;
+  memorySizeMib?: number;
+  datastoreType?: string;
+}
+
 /**
  * The core unified Resource type.
  * This is what the frontend receives from WebSocket state.resources[].
@@ -468,6 +483,7 @@ export interface Resource {
   // Prefer these over casting `platformData` when available.
   agent?: ResourceAgentMeta;
   kubernetes?: ResourceKubernetesMeta;
+  vmware?: ResourceVMwareMeta;
   proxmox?: ResourceProxmoxMeta;
   pbs?: ResourcePBSMeta;
   physicalDisk?: ResourcePhysicalDiskMeta;

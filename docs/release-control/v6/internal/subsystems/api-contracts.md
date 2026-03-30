@@ -715,6 +715,15 @@ the stored summary until a real save succeeds. The explicit disabled path also
 stays on this boundary: `404 vmware_disabled` means the operator or runtime has
 opted out of the default-on VMware candidate, not that the platform requires a
 different onboarding contract.
+That same VMware API boundary now also owns the phase-1 runtime negative
+space around inventory projection. `internal/api/router.go` may wire VMware's
+supplemental ingest into the shared `/api/resources` surface so canonical
+`agent`, `vm`, and `storage` records can appear elsewhere in Pulse, but the
+public backend contract must still stop at `/api/vmware/connections*` for
+provider-local routes. Phase 1 must not add public `/api/vmware/resources`,
+`/api/vmware/history`, `/api/vmware/alerts`, or VMware-specific recovery
+transport just because the internal poller now projects VMware-backed
+resources into the shared canonical inventory.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

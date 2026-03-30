@@ -118,4 +118,28 @@ describe('infrastructurePageModel', () => {
     expect(derivation.activeFilterCount).toBe(1);
     expect(derivation.hasActiveFilters).toBe(true);
   });
+
+  it('normalizes raw VMware sources into the canonical vSphere infrastructure filter', () => {
+    const derivation = buildInfrastructurePageFilterDerivation(
+      [
+        makeResource({
+          id: 'resource-vmware-1',
+          displayName: 'ESXi 01',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          platformData: { sources: ['vmware'] },
+        }),
+      ],
+      'vmware-vsphere',
+      '',
+      '',
+    );
+
+    expect(Array.from(derivation.availableSources)).toEqual(['vmware-vsphere']);
+    expect(derivation.sourceOptions).toEqual([{ key: 'vmware-vsphere', label: 'vSphere' }]);
+    expect(derivation.filteredResources.map((resource) => resource.id)).toEqual([
+      'resource-vmware-1',
+    ]);
+    expect(derivation.hasFilteredResources).toBe(true);
+  });
 });

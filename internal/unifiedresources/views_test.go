@@ -1740,3 +1740,44 @@ func TestView_ReadStateInterfaceUsage(t *testing.T) {
 		t.Fatalf("expected 3 infrastructure resources (node + host + docker) via ReadState, got %d", len(got))
 	}
 }
+
+func TestViews_HostsIncludesVMwareInfrastructureResources(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Now().UTC()
+
+	rr.IngestRecords(SourceVMware, []IngestRecord{{
+		SourceID: "vc-1:host:host-101",
+		Resource: Resource{
+			Type:      ResourceTypeAgent,
+			Name:      "esxi-01.lab.local",
+			Status:    StatusOnline,
+			LastSeen:  now,
+			UpdatedAt: now,
+			VMware: &VMwareData{
+				ConnectionID:    "vc-1",
+				ConnectionName:  "Lab VC",
+				ManagedObjectID: "host-101",
+				EntityType:      "host",
+				HostUUID:        "uuid-host-1",
+			},
+		},
+		Identity: ResourceIdentity{
+			DMIUUID:   "uuid-host-1",
+			Hostnames: []string{"esxi-01.lab.local"},
+		},
+	}})
+
+	hosts := rr.Hosts()
+	if len(hosts) != 1 {
+		t.Fatalf("expected 1 VMware host view, got %d", len(hosts))
+	}
+	if got := hosts[0].Hostname(); got != "esxi-01.lab.local" {
+		t.Fatalf("Hostname() = %q, want esxi-01.lab.local", got)
+	}
+	if got := hosts[0].Platform(); got != "vmware-vsphere" {
+		t.Fatalf("Platform() = %q, want vmware-vsphere", got)
+	}
+	if got := hosts[0].MachineID(); got != "uuid-host-1" {
+		t.Fatalf("MachineID() = %q, want uuid-host-1", got)
+	}
+}

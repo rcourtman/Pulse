@@ -31,6 +31,7 @@ export interface SourcePlatformFlags {
   hasPbs: boolean;
   hasPmg: boolean;
   hasTrueNAS: boolean;
+  hasVMware: boolean;
 }
 
 export const SOURCE_PLATFORM_PRESENTATION: Record<KnownSourcePlatform, SourcePlatformPresentation> =
@@ -103,6 +104,7 @@ const PLATFORM_ALIASES: Record<string, KnownSourcePlatform> = {
   pbs: 'proxmox-pbs',
   pmg: 'proxmox-pmg',
   k8s: 'kubernetes',
+  vmware: 'vmware-vsphere',
 };
 
 export const normalizeSourcePlatformKey = (
@@ -143,6 +145,7 @@ export const readSourcePlatformFlags = (sources?: string[]): SourcePlatformFlags
     hasPbs: false,
     hasPmg: false,
     hasTrueNAS: false,
+    hasVMware: false,
   };
 
   if (!sources || sources.length === 0) {
@@ -172,6 +175,9 @@ export const readSourcePlatformFlags = (sources?: string[]): SourcePlatformFlags
       case 'truenas':
         flags.hasTrueNAS = true;
         break;
+      case 'vmware-vsphere':
+        flags.hasVMware = true;
+        break;
       default:
         break;
     }
@@ -185,6 +191,7 @@ export const resolvePlatformTypeFromSources = (sources?: string[]): PlatformType
   if (flags.hasProxmox) return 'proxmox-pve';
   if (flags.hasPbs) return 'proxmox-pbs';
   if (flags.hasPmg) return 'proxmox-pmg';
+  if (flags.hasVMware) return 'vmware-vsphere';
   if (flags.hasTrueNAS) return 'truenas';
   if (flags.hasKubernetes) return 'kubernetes';
   if (flags.hasDocker) return 'docker';
@@ -200,7 +207,8 @@ export const resolveSourceTypeFromSources = (sources?: string[]): SourceType => 
     flags.hasKubernetes ||
     flags.hasPbs ||
     flags.hasPmg ||
-    flags.hasTrueNAS;
+    flags.hasTrueNAS ||
+    flags.hasVMware;
   if (flags.hasAgent && hasOther) return 'hybrid';
   if (flags.hasAgent) return 'agent';
   return 'api';

@@ -16,6 +16,7 @@ import type {
   ResourceStatus,
   ResourceStorageMeta,
   ResourceType,
+  ResourceVMwareMeta,
 } from '@/types/resource';
 import { normalizeDiskArray } from '@/utils/format';
 import { logger } from '@/utils/logger';
@@ -305,6 +306,19 @@ type APIResource = {
     lastUpdated?: string;
   };
   kubernetes?: APIKubernetesData;
+  vmware?: {
+    connectionId?: string;
+    connectionName?: string;
+    vcenterHost?: string;
+    managedObjectId?: string;
+    entityType?: string;
+    hostUuid?: string;
+    connectionState?: string;
+    powerState?: string;
+    cpuCount?: number;
+    memorySizeMib?: number;
+    datastoreType?: string;
+  };
   recentChanges?: ResourceChange[];
   facetCounts?: ResourceFacetCounts;
   physicalDisk?: {
@@ -564,6 +578,7 @@ const toResource = (v2: APIResource): Resource => {
     incidentAction: v2.incidentAction,
     agent: v2.agent,
     kubernetes: v2.kubernetes,
+    vmware: v2.vmware as ResourceVMwareMeta | undefined,
     pbs: v2.pbs as ResourcePBSMeta | undefined,
     physicalDisk: v2.physicalDisk,
     storage: v2.storage as ResourceStorageMeta | undefined,
@@ -633,6 +648,7 @@ const toResource = (v2: APIResource): Resource => {
       storage: v2.storage,
       pmg: v2.pmg,
       kubernetes: v2.kubernetes,
+      vmware: v2.vmware,
       physicalDisk: v2.physicalDisk,
       ceph: v2.ceph,
       metrics: v2.metrics,

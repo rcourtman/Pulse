@@ -23,6 +23,9 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		if st, ok := bySource[SourceProxmox]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
+		if st, ok := bySource[SourceVMware]; ok {
+			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
+		}
 		if st, ok := bySource[SourceAgent]; ok {
 			return &MetricsTarget{ResourceType: "agent", ResourceID: st.SourceID}
 		}
@@ -36,6 +39,9 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		}
 	case ResourceTypeVM:
 		if st, ok := bySource[SourceProxmox]; ok {
+			return &MetricsTarget{ResourceType: "vm", ResourceID: st.SourceID}
+		}
+		if st, ok := bySource[SourceVMware]; ok {
 			return &MetricsTarget{ResourceType: "vm", ResourceID: st.SourceID}
 		}
 	case ResourceTypeSystemContainer:
@@ -53,6 +59,9 @@ func BuildMetricsTarget(resource Resource, sourceTargets []SourceTarget) *Metric
 		}
 	case ResourceTypeStorage, ResourceTypeCeph:
 		if st, ok := bySource[SourceProxmox]; ok {
+			return &MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
+		}
+		if st, ok := bySource[SourceVMware]; ok {
 			return &MetricsTarget{ResourceType: "storage", ResourceID: st.SourceID}
 		}
 		if st, ok := bySource[SourceTrueNAS]; ok {

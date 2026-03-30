@@ -94,6 +94,9 @@ cross-source deduplication.
 72. `frontend-modern/src/utils/resourceIdentity.ts`
 73. `frontend-modern/src/components/Infrastructure/resourceDetailDrawerIdentityModel.ts`
 74. `frontend-modern/src/hooks/useDashboardTrends.ts`
+75. `frontend-modern/src/hooks/useUnifiedResources.ts`
+76. `frontend-modern/src/types/resource.ts`
+77. `frontend-modern/src/utils/sourcePlatforms.ts`
 
 ## Shared Boundaries
 
@@ -187,6 +190,16 @@ VMware source key plus `platformType: vmware-vsphere`, not through separate
 host, VM, or datastore from VMware should therefore still look like one shared
 Pulse `agent`, `vm`, or `storage` resource to downstream selectors, drawers,
 alerts, AI, and route filters.
+That shared source boundary now also has a concrete frontend/runtime adapter
+floor. `internal/unifiedresources/types.go`, `internal/unifiedresources/registry.go`,
+`internal/unifiedresources/views.go`, `frontend-modern/src/hooks/useUnifiedResources.ts`,
+`frontend-modern/src/types/resource.ts`, and
+`frontend-modern/src/utils/sourcePlatforms.ts` must keep raw VMware ingest on
+`SourceVMware` while projecting the operator-facing platform as
+`vmware-vsphere`. Shared filters, route state, and badges may normalize that
+single source onto the canonical platform vocabulary, but they must not invent
+separate `vcenter` or `esxi` filter keys or a VMware-only top-level resource
+family to make the phase-1 slice render.
 That same VMware contract now also includes the identity rule. VMware managed
 object identifiers are phase-1 provider identities, but they must be scoped by
 the owning `vCenter` connection or discovered vCenter identity so bare object

@@ -21,6 +21,17 @@ func TestBuildMetricsTarget_UsesCanonicalAgentTypeForInfrastructureFamilies(t *t
 			wantID: "pve-node-1",
 		},
 		{
+			name: "vmware host",
+			resource: Resource{
+				Type: ResourceTypeAgent,
+			},
+			sourceTargets: []SourceTarget{{
+				Source:   SourceVMware,
+				SourceID: "vc-1:host:host-101",
+			}},
+			wantID: "vc-1:host:host-101",
+		},
+		{
 			name: "pbs instance",
 			resource: Resource{
 				Type: ResourceTypePBS,
@@ -103,6 +114,56 @@ func TestBuildMetricsTarget_CanonicalizesSourceIDWhitespace(t *testing.T) {
 			}},
 			wantType: string(ResourceTypePod),
 			wantID:   "ns/pod-1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := BuildMetricsTarget(tt.resource, tt.sourceTargets)
+			if target == nil {
+				t.Fatal("BuildMetricsTarget() returned nil")
+			}
+			if target.ResourceType != tt.wantType {
+				t.Fatalf("ResourceType = %q, want %q", target.ResourceType, tt.wantType)
+			}
+			if target.ResourceID != tt.wantID {
+				t.Fatalf("ResourceID = %q, want %q", target.ResourceID, tt.wantID)
+			}
+		})
+	}
+}
+
+func TestBuildMetricsTarget_UsesCanonicalTargetsForVMwareWorkloadAndStorage(t *testing.T) {
+	tests := []struct {
+		name          string
+		resource      Resource
+		sourceTargets []SourceTarget
+		wantType      string
+		wantID        string
+	}{
+		{
+			name: "vmware vm",
+			resource: Resource{
+				Type: ResourceTypeVM,
+			},
+			sourceTargets: []SourceTarget{{
+				Source:   SourceVMware,
+				SourceID: "vc-1:vm:vm-201",
+			}},
+			wantType: "vm",
+			wantID:   "vc-1:vm:vm-201",
+		},
+		{
+			name: "vmware datastore",
+			resource: Resource{
+				Type: ResourceTypeStorage,
+			},
+			sourceTargets: []SourceTarget{{
+				Source:   SourceVMware,
+				SourceID: "vc-1:datastore:datastore-11",
+			}},
+			wantType: "storage",
+			wantID:   "vc-1:datastore:datastore-11",
 		},
 	}
 

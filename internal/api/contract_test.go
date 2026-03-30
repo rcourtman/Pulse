@@ -194,6 +194,69 @@ func TestContract_VMwareSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
 	}
 }
 
+func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	connection := config.VMwareVCenterInstance{
+		ID:       "conn-1",
+		Name:     "lab-vcenter",
+		Host:     "vcsa.lab.local",
+		Port:     443,
+		Username: "administrator@vsphere.local",
+		Password: "super-secret",
+		Enabled:  true,
+	}
+	handler, persistence := newVMwareHandlersForTest(t)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	collectedAt := time.Date(2026, 3, 30, 18, 0, 0, 0, time.UTC)
+	handler.recordTestSuccess(connection.ID, &vmware.InventorySummary{
+		Hosts:      4,
+		VMs:        24,
+		Datastores: 6,
+		VIRelease:  "8.0.3",
+	}, collectedAt)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var responses []vmwareConnectionResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &responses); err != nil {
+		t.Fatalf("unmarshal vmware list response: %v", err)
+	}
+	if len(responses) != 1 {
+		t.Fatalf("expected 1 vmware connection response, got %d", len(responses))
+	}
+	if responses[0].Password != "********" {
+		t.Fatalf("expected redacted password in vmware list response, got %q", responses[0].Password)
+	}
+	if responses[0].Observed == nil {
+		t.Fatalf("expected observed summary in vmware list response, got %+v", responses[0])
+	}
+	if got := responses[0].Observed.Hosts; got != 4 {
+		t.Fatalf("observed hosts = %d, want 4", got)
+	}
+	if got := responses[0].Observed.VMs; got != 24 {
+		t.Fatalf("observed vms = %d, want 24", got)
+	}
+	if got := responses[0].Observed.Datastores; got != 6 {
+		t.Fatalf("observed datastores = %d, want 6", got)
+	}
+	if got := responses[0].Observed.VIRelease; got != "8.0.3" {
+		t.Fatalf("observed viRelease = %q, want 8.0.3", got)
+	}
+	if responses[0].Observed.CollectedAt == nil || !responses[0].Observed.CollectedAt.Equal(collectedAt) {
+		t.Fatalf("observed collectedAt = %+v, want %s", responses[0].Observed.CollectedAt, collectedAt.Format(time.RFC3339))
+	}
+}
+
 func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {
 	called := make(chan struct{}, 1)
 	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

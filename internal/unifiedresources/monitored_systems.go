@@ -376,12 +376,14 @@ func monitoredSystemResourcePriority(resource *Resource) int {
 	switch {
 	case resource.Proxmox != nil:
 		return 0
-	case resource.TrueNAS != nil:
+	case resource.VMware != nil:
 		return 1
-	case resource.Docker != nil:
+	case resource.TrueNAS != nil:
 		return 2
-	case resource.Agent != nil:
+	case resource.Docker != nil:
 		return 3
+	case resource.Agent != nil:
+		return 4
 	case resource.PBS != nil:
 		return 10
 	case resource.PMG != nil:
@@ -415,6 +417,8 @@ func monitoredSystemResourceDisplayName(resource *Resource) string {
 	switch {
 	case resource.Proxmox != nil && strings.TrimSpace(resource.Proxmox.NodeName) != "":
 		return strings.TrimSpace(resource.Proxmox.NodeName)
+	case resource.VMware != nil && strings.TrimSpace(resource.Name) != "":
+		return strings.TrimSpace(resource.Name)
 	case resource.Agent != nil && strings.TrimSpace(resource.Agent.Hostname) != "":
 		return strings.TrimSpace(resource.Agent.Hostname)
 	case resource.Docker != nil && strings.TrimSpace(resource.Docker.Hostname) != "":
@@ -440,6 +444,8 @@ func monitoredSystemType(resource *Resource) string {
 	switch {
 	case resource.Proxmox != nil:
 		return "proxmox-node"
+	case resource.VMware != nil:
+		return "vmware-host"
 	case resource.TrueNAS != nil:
 		return "truenas-system"
 	case resource.Docker != nil:
@@ -928,6 +934,8 @@ func monitoredSystemPrimarySource(resource *Resource) string {
 	switch {
 	case resource.Proxmox != nil:
 		return string(SourceProxmox)
+	case resource.VMware != nil:
+		return string(SourceVMware)
 	case resource.TrueNAS != nil:
 		return string(SourceTrueNAS)
 	case resource.Docker != nil:
@@ -963,6 +971,8 @@ func monitoredSystemStatusSourceLabel(value string) string {
 		return "Proxmox"
 	case "truenas":
 		return "TrueNAS"
+	case "vmware":
+		return "VMware"
 	case "", "unknown":
 		return "Unknown source"
 	default:

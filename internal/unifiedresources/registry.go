@@ -23,6 +23,7 @@ var defaultStaleThresholds = map[DataSource]time.Duration{
 	SourcePMG:     120 * time.Second,
 	SourceK8s:     120 * time.Second,
 	SourceTrueNAS: 120 * time.Second,
+	SourceVMware:  120 * time.Second,
 }
 
 // IngestRecord is a source-native resource entry normalized for registry ingestion.
@@ -83,6 +84,7 @@ func NewRegistry(store ResourceStore) *ResourceRegistry {
 	rr.bySource[SourcePMG] = make(map[string]string)
 	rr.bySource[SourceK8s] = make(map[string]string)
 	rr.bySource[SourceTrueNAS] = make(map[string]string)
+	rr.bySource[SourceVMware] = make(map[string]string)
 
 	rr.loadOverrides()
 	return rr
@@ -917,6 +919,8 @@ func (rr *ResourceRegistry) mergeInto(existing *Resource, incoming Resource, sou
 		existing.Kubernetes = incoming.Kubernetes
 	case SourcePMG:
 		existing.PMG = incoming.PMG
+	case SourceVMware:
+		existing.VMware = mergeVMwareData(existing.VMware, incoming.VMware)
 	}
 
 	existing.Sources = addSource(existing.Sources, source)
@@ -1085,6 +1089,52 @@ func mergePhysicalDiskData(existing *PhysicalDiskMeta, incoming *PhysicalDiskMet
 		merged.SMART = &smart
 	}
 	merged.Risk = physicalDiskRiskFromAssessment(physicalDiskAssessmentFromMeta(&merged))
+
+	return &merged
+}
+
+func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
+	if existing == nil {
+		return incoming
+	}
+	if incoming == nil {
+		return existing
+	}
+
+	merged := *existing
+	if incoming.ConnectionID != "" {
+		merged.ConnectionID = incoming.ConnectionID
+	}
+	if incoming.ConnectionName != "" {
+		merged.ConnectionName = incoming.ConnectionName
+	}
+	if incoming.VCenterHost != "" {
+		merged.VCenterHost = incoming.VCenterHost
+	}
+	if incoming.ManagedObjectID != "" {
+		merged.ManagedObjectID = incoming.ManagedObjectID
+	}
+	if incoming.EntityType != "" {
+		merged.EntityType = incoming.EntityType
+	}
+	if incoming.HostUUID != "" {
+		merged.HostUUID = incoming.HostUUID
+	}
+	if incoming.ConnectionState != "" {
+		merged.ConnectionState = incoming.ConnectionState
+	}
+	if incoming.PowerState != "" {
+		merged.PowerState = incoming.PowerState
+	}
+	if incoming.CPUCount > 0 {
+		merged.CPUCount = incoming.CPUCount
+	}
+	if incoming.MemorySizeMiB > 0 {
+		merged.MemorySizeMiB = incoming.MemorySizeMiB
+	}
+	if incoming.DatastoreType != "" {
+		merged.DatastoreType = incoming.DatastoreType
+	}
 
 	return &merged
 }
@@ -1649,6 +1699,8 @@ func sourcePriority(source DataSource) int {
 		return 2
 	case SourceDocker:
 		return 1
+	case SourceVMware:
+		return 2
 	default:
 		return 0
 	}
@@ -1782,7 +1834,7 @@ func (rr *ResourceRegistry) rebuildViews() {
 				v := NewNodeView(viewResource)
 				rr.cachedNodes = append(rr.cachedNodes, &v)
 			}
-			if r.Agent != nil {
+			if r.Agent != nil || r.VMware != nil {
 				v := NewHostView(viewResource)
 				rr.cachedHosts = append(rr.cachedHosts, &v)
 			}

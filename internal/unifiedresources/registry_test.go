@@ -154,6 +154,53 @@ func TestResourceRegistry_MergesPhysicalDiskTemperatureAggregate(t *testing.T) {
 	}
 }
 
+func TestResourceRegistry_IngestsVMwareSourceAsCanonicalResources(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 30, 18, 30, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-1:host:host-101",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-01.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					VCenterHost:     "vc.lab.local",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+					HostUUID:        "uuid-host-1",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+
+	agents := rr.ListByType(ResourceTypeAgent)
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 VMware agent resource, got %d", len(agents))
+	}
+	agent := agents[0]
+	if len(agent.Sources) != 1 || agent.Sources[0] != SourceVMware {
+		t.Fatalf("expected VMware source ownership, got %+v", agent.Sources)
+	}
+	if agent.VMware == nil {
+		t.Fatalf("expected VMware metadata on merged resource, got %+v", agent)
+	}
+	if got := agent.VMware.ConnectionID; got != "vc-1" {
+		t.Fatalf("vmware connection id = %q, want vc-1", got)
+	}
+	if got := agent.Canonical.PrimaryID; got != "vmware:vc-1:host:host-101" {
+		t.Fatalf("canonical primary id = %q, want vmware:vc-1:host:host-101", got)
+	}
+}
+
 func TestResourceRegistryClonesCarryPolicyMetadata(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 17, 12, 0, 0, 0, time.UTC)
