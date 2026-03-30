@@ -399,6 +399,39 @@ export const AIChat: Component<AIChatProps> = (props) => {
         resource.id
       );
     };
+    const getAppContainerMentionHost = (resource: Resource): string => {
+      const platformData = readPlatformData(resource);
+      const platformDocker = asRecord(platformData?.docker);
+      const platformTrueNAS = asRecord(platformData?.truenas);
+      return (
+        resource.parentName ||
+        asString(platformDocker?.hostname) ||
+        asString(platformTrueNAS?.hostname) ||
+        getPreferredResourceHostname(resource) ||
+        ''
+      );
+    };
+    const getAppContainerMentionId = (resource: Resource): string => {
+      if (resource.id.startsWith('app-container:')) {
+        return resource.id;
+      }
+
+      const host = getAppContainerMentionHost(resource);
+      const platformData = readPlatformData(resource);
+      const platformDocker = asRecord(platformData?.docker);
+      const containerID =
+        asString(platformDocker?.containerId) ||
+        asString(platformDocker?.name) ||
+        asString(resource.canonicalIdentity?.primaryId) ||
+        asString(resource.name) ||
+        asString(resource.id);
+
+      if (host && containerID) {
+        return `app-container:${host}:${containerID}`;
+      }
+
+      return resource.id;
+    };
 
     const parseLegacyVmid = (
       resource: Resource,
@@ -419,7 +452,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
     const vms = byType('vm');
     const containers = [...byType('system-container'), ...byType('oci-container')];
     const dockerHosts = byType('docker-host');
-    const dockerContainers = byType('app-container');
+    const appContainers = byType('app-container');
     const agentResources = allResources().filter(
       (resource) =>
         (resource.type === 'agent' ||
@@ -460,18 +493,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       });
     }
 
-    // Add Docker runtimes
-    const dockerContainersByRuntimeId = new Map<string, Resource[]>();
-    for (const dockerContainer of dockerContainers) {
-      if (!dockerContainer.parentId) continue;
-      const existing = dockerContainersByRuntimeId.get(dockerContainer.parentId);
-      if (existing) {
-        existing.push(dockerContainer);
-      } else {
-        dockerContainersByRuntimeId.set(dockerContainer.parentId, [dockerContainer]);
-      }
-    }
-
+    // Add container runtimes
     for (const runtime of dockerHosts) {
       const dockerActionId = getDockerActionId(runtime);
       const label = getPreferredResourceDisplayName(runtime);
@@ -486,20 +508,19 @@ export const AIChat: Component<AIChatProps> = (props) => {
         type: 'agent',
         status: runtimeStatus,
       });
+    }
 
-      // Add Docker containers
-      for (const container of dockerContainersByRuntimeId.get(runtime.id) || []) {
-        const originalContainerId = container.id.includes('/')
-          ? container.id.split('/').pop() || container.id
-          : container.id;
-        mentionCandidates.push({
-          id: `docker:${dockerActionId}:${originalContainerId}`,
-          label: getPreferredResourceDisplayName(container),
-          type: 'app-container',
-          status: container.status === 'running' ? 'running' : 'exited',
-          node: hostnameOrId,
-        });
-      }
+    // Add app containers through canonical unified resource identity rather than
+    // a Docker-only transport shape, so API-backed platforms such as TrueNAS use
+    // the same mention contract as Docker-backed workloads.
+    for (const container of appContainers) {
+      mentionCandidates.push({
+        id: getAppContainerMentionId(container),
+        label: getPreferredResourceDisplayName(container),
+        type: 'app-container',
+        status: container.status === 'running' ? 'running' : 'exited',
+        node: getAppContainerMentionHost(container),
+      });
     }
 
     // Add nodes

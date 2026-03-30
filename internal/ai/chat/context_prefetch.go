@@ -466,7 +466,8 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	for _, sm := range structured {
 		// Parse the structured ID to extract resource details.
 		// Frontend ID formats: "vm:node:vmid", "system-container:node:vmid",
-		// "docker:hostId:containerId", "agent:id", "node:instance:name"
+		// "app-container:host:providerUid" (canonical), legacy "docker:hostId:containerId",
+		// "agent:id", "node:instance:name"
 		parts := strings.Split(sm.ID, ":")
 
 		// Enforce canonical v6 frontend mention types only.
@@ -523,7 +524,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 			})
 
 		case "app-container":
-			hostID, containerID := parseStructuredDockerMentionID(sm.ID, rs)
+			hostID, containerID := parseStructuredAppContainerMentionID(sm.ID, rs)
 
 			// Gather bind mounts via ReadState
 			var mounts []MountInfo
@@ -616,6 +617,101 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 	}
 
 	return mentions
+}
+
+type appContainerResourceGetter interface {
+	GetByType(unifiedresources.ResourceType) []unifiedresources.Resource
+}
+
+type appContainerResourceLister interface {
+	ListByType(unifiedresources.ResourceType) []unifiedresources.Resource
+}
+
+func appContainerResourcesFromReadState(rs unifiedresources.ReadState) []unifiedresources.Resource {
+	if rs == nil {
+		return nil
+	}
+	if getter, ok := any(rs).(appContainerResourceGetter); ok {
+		return getter.GetByType(unifiedresources.ResourceTypeAppContainer)
+	}
+	if lister, ok := any(rs).(appContainerResourceLister); ok {
+		return lister.ListByType(unifiedresources.ResourceTypeAppContainer)
+	}
+	return nil
+}
+
+func appContainerResourceHost(resource unifiedresources.Resource) string {
+	if host := strings.TrimSpace(resource.ParentName); host != "" {
+		return host
+	}
+	if resource.Docker != nil {
+		if host := strings.TrimSpace(resource.Docker.Hostname); host != "" {
+			return host
+		}
+	}
+	if resource.TrueNAS != nil {
+		if host := strings.TrimSpace(resource.TrueNAS.Hostname); host != "" {
+			return host
+		}
+	}
+	for _, host := range resource.Identity.Hostnames {
+		if host = strings.TrimSpace(host); host != "" {
+			return host
+		}
+	}
+	return ""
+}
+
+func parseStructuredAppContainerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {
+	const canonicalPrefix = "app-container:"
+	if strings.HasPrefix(mentionID, canonicalPrefix) {
+		if rs != nil {
+			for _, resource := range appContainerResourcesFromReadState(rs) {
+				if !strings.EqualFold(strings.TrimSpace(resource.ID), mentionID) {
+					continue
+				}
+				host := appContainerResourceHost(resource)
+				if host == "" {
+					continue
+				}
+				if providerUID := appContainerProviderUID(resource, host); providerUID != "" {
+					return host, providerUID
+				}
+			}
+		}
+
+		raw := strings.TrimPrefix(mentionID, canonicalPrefix)
+		parts := strings.SplitN(raw, ":", 2)
+		if len(parts) == 2 && strings.TrimSpace(parts[0]) != "" && strings.TrimSpace(parts[1]) != "" {
+			return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		}
+		return "", ""
+	}
+
+	return parseStructuredDockerMentionID(mentionID, rs)
+}
+
+func appContainerProviderUID(resource unifiedresources.Resource, host string) string {
+	prefix := "app-container:" + strings.TrimSpace(host) + ":"
+	if strings.HasPrefix(resource.ID, prefix) {
+		if providerUID := strings.TrimSpace(strings.TrimPrefix(resource.ID, prefix)); providerUID != "" {
+			return providerUID
+		}
+	}
+	if resource.Docker != nil {
+		if containerID := strings.TrimSpace(resource.Docker.ContainerID); containerID != "" {
+			return containerID
+		}
+	}
+	if resource.Canonical != nil {
+		if primaryID := strings.TrimSpace(resource.Canonical.PrimaryID); primaryID != "" {
+			return primaryID
+		}
+	}
+	if name := strings.TrimSpace(resource.Name); name != "" {
+		return name
+	}
+	return ""
 }
 
 func parseStructuredDockerMentionID(mentionID string, rs unifiedresources.ReadState) (hostID string, containerID string) {

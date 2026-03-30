@@ -127,14 +127,15 @@ vi.mock('../MentionAutocomplete', () => ({
   MentionAutocomplete: (props: {
     visible: boolean;
     query: string;
-    resources: Array<{ id: string; label: string }>;
-    onSelect: (resource: { id: string; label: string }) => void;
+    resources: Array<{ id: string; label: string; node?: string }>;
+    onSelect: (resource: { id: string; label: string; node?: string }) => void;
   }) => (
     <div
       data-testid="mention-autocomplete"
       data-visible={String(props.visible)}
       data-query={props.query}
       data-resource-count={String(props.resources.length)}
+      data-resource-ids={props.resources.map((resource) => resource.id).join('|')}
       data-resource-labels={props.resources.map((resource) => resource.label).join('|')}
     >
       <button
@@ -559,6 +560,53 @@ describe('AIChat', () => {
       expect(autocomplete).toHaveAttribute(
         'data-resource-labels',
         'redacted by policy|redacted by policy',
+      );
+    });
+
+    it('surfaces TrueNAS app containers through canonical app-container mention IDs', async () => {
+      const nextcloud = {
+        id: 'app-container:truenas-main:nextcloud',
+        type: 'app-container' as const,
+        name: 'nextcloud',
+        displayName: 'Nextcloud',
+        status: 'running',
+        parentId: 'agent:truenas-main',
+        parentName: 'truenas-main',
+        platformType: 'truenas',
+        sourceType: 'truenas',
+        tags: ['truenas', 'app'],
+      };
+      mockByType.mockImplementation((type: string) => (type === 'app-container' ? [nextcloud] : []));
+      mockResources.mockReturnValue([nextcloud]);
+
+      renderChat();
+      const textarea = screen.getByPlaceholderText(
+        'Ask about your infrastructure...',
+      ) as HTMLTextAreaElement;
+      Object.defineProperty(textarea, 'selectionStart', { value: 5, writable: true });
+      fireEvent.input(textarea, { target: { value: '@next' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mention-autocomplete')).toHaveAttribute(
+          'data-resource-ids',
+          'app-container:truenas-main:nextcloud',
+        );
+      });
+
+      fireEvent.click(screen.getByTestId('mention-select-first'));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(mockChat.sendMessage).toHaveBeenCalledWith(
+        '@Nextcloud',
+        [
+          expect.objectContaining({
+            id: 'app-container:truenas-main:nextcloud',
+            name: 'Nextcloud',
+            type: 'app-container',
+            node: 'truenas-main',
+          }),
+        ],
+        undefined,
       );
     });
 

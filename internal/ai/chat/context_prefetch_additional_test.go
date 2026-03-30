@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
@@ -163,6 +164,7 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 
 	structured := []StructuredMention{
 		{ID: "docker:dock1:cid:part", Name: "homepage", Type: "app-container"},
+		{ID: "app-container:dock1:cid:part", Name: "homepage", Type: "app-container"},
 		{ID: "agent:host1", Name: "host1", Type: "agent"},
 		{ID: "system-container:node1:201", Name: "beta", Type: "system-container", Node: "node1"},
 		{ID: "docker:resource:docker:abc:cid-simple", Name: "homepage2", Type: "app-container"},
@@ -181,8 +183,8 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	prefetcher := NewContextPrefetcher(rs, nil)
 
 	mentions := prefetcher.resolveStructuredMentions(structured)
-	if len(mentions) != 4 {
-		t.Fatalf("expected 4 mentions, got %d", len(mentions))
+	if len(mentions) != 5 {
+		t.Fatalf("expected 5 mentions, got %d", len(mentions))
 	}
 
 	if mentions[0].ResourceID != "cid:part" {
@@ -191,17 +193,20 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	if len(mentions[0].BindMounts) == 0 {
 		t.Fatalf("expected bind mounts on docker mention")
 	}
-	if mentions[1].ResourceType != "agent" {
-		t.Fatalf("expected agent mention, got %q", mentions[1].ResourceType)
+	if mentions[1].TargetID != "dock1" || mentions[1].ResourceID != "cid:part" {
+		t.Fatalf("expected canonical app-container mention to resolve through docker host, got %+v", mentions[1])
 	}
-	if mentions[2].ResourceType != "system-container" {
-		t.Fatalf("expected system-container mention type, got %q", mentions[2].ResourceType)
+	if mentions[2].ResourceType != "agent" {
+		t.Fatalf("expected agent mention, got %q", mentions[2].ResourceType)
 	}
-	if mentions[3].TargetID != "resource:docker:abc" {
-		t.Fatalf("expected docker target ID with colons preserved, got %q", mentions[3].TargetID)
+	if mentions[3].ResourceType != "system-container" {
+		t.Fatalf("expected system-container mention type, got %q", mentions[3].ResourceType)
 	}
-	if mentions[3].ResourceID != "cid-simple" {
-		t.Fatalf("expected docker container ID parsed correctly, got %q", mentions[3].ResourceID)
+	if mentions[4].TargetID != "resource:docker:abc" {
+		t.Fatalf("expected docker target ID with colons preserved, got %q", mentions[4].TargetID)
+	}
+	if mentions[4].ResourceID != "cid-simple" {
+		t.Fatalf("expected docker container ID parsed correctly, got %q", mentions[4].ResourceID)
 	}
 
 	unknown := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "weird:1", Name: "mystery", Type: "weird"}})
@@ -212,6 +217,74 @@ func TestContextPrefetcher_ResolveStructuredMentions(t *testing.T) {
 	legacyHost := prefetcher.resolveStructuredMentions([]StructuredMention{{ID: "host:host1", Name: "host1", Type: "host"}})
 	if len(legacyHost) != 0 {
 		t.Fatalf("expected legacy host mention to be ignored, got %#v", legacyHost)
+	}
+}
+
+func TestContextPrefetcher_ResolveStructuredMentions_TrueNASCanonicalAppContainer(t *testing.T) {
+	rr := unifiedresources.NewRegistry(nil)
+	now := time.Now().UTC()
+	hostID := "agent:truenas-main"
+	hostSourceID := "truenas-system:truenas-main"
+	rr.IngestRecords(unifiedresources.SourceTrueNAS, []unifiedresources.IngestRecord{
+		{
+			SourceID: hostSourceID,
+			Resource: unifiedresources.Resource{
+				ID:        hostID,
+				Type:      unifiedresources.ResourceTypeAgent,
+				Name:      "truenas-main",
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Agent: &unifiedresources.AgentData{
+					Hostname: "truenas-main",
+					Platform: "truenas",
+				},
+				TrueNAS: &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+			},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"truenas-main"}},
+		},
+		{
+			SourceID:       "app:nextcloud",
+			ParentSourceID: hostSourceID,
+			Resource: unifiedresources.Resource{
+				ID:         "app-container:truenas-main:nextcloud",
+				Type:       unifiedresources.ResourceTypeAppContainer,
+				Name:       "Nextcloud",
+				Status:     unifiedresources.StatusOnline,
+				LastSeen:   now,
+				UpdatedAt:  now,
+				ParentID:   &hostID,
+				ParentName: "truenas-main",
+				TrueNAS:    &unifiedresources.TrueNASData{Hostname: "truenas-main"},
+				Canonical: &unifiedresources.CanonicalIdentity{
+					DisplayName: "Nextcloud",
+					Hostname:    "truenas-main",
+					PrimaryID:   "nextcloud",
+					Aliases:     []string{"Nextcloud", "nextcloud"},
+				},
+				Tags: []string{"truenas", "app"},
+			},
+			Identity: unifiedresources.ResourceIdentity{Hostnames: []string{"truenas-main"}},
+		},
+	})
+
+	prefetcher := NewContextPrefetcher(rr, nil)
+	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{{
+		ID:   "app-container:truenas-main:nextcloud",
+		Name: "Nextcloud",
+		Type: "app-container",
+	}})
+	if len(mentions) != 1 {
+		t.Fatalf("expected one mention, got %#v", mentions)
+	}
+	if mentions[0].ResourceType != "app-container" {
+		t.Fatalf("expected app-container mention type, got %q", mentions[0].ResourceType)
+	}
+	if mentions[0].TargetID != "truenas-main" || mentions[0].TargetHost != "truenas-main" {
+		t.Fatalf("expected TrueNAS host routing, got %+v", mentions[0])
+	}
+	if mentions[0].ResourceID != "nextcloud" {
+		t.Fatalf("expected canonical provider uid, got %+v", mentions[0])
 	}
 }
 

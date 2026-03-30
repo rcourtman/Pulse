@@ -118,9 +118,9 @@ describe('aiChatUtils', () => {
       expect(id).toMatch(/^lxc:[^:]+:\d+$/);
     });
 
-    it('docker mention IDs follow docker:agentId:containerId format', () => {
-      const id = 'docker:agent-1:abc123';
-      expect(id).toMatch(/^docker:[^:]+:[^:]+$/);
+    it('app-container mention IDs follow app-container:host:providerUid format', () => {
+      const id = 'app-container:truenas-main:nextcloud';
+      expect(id).toMatch(/^app-container:[^:]+:[^:]+$/);
     });
 
     it('node mention IDs follow node:instance:name format', () => {

@@ -282,6 +282,12 @@ label as `label` through the structured mention payload, and the insertion
 path uses that same label for prompt text and cursor placement, so mention
 search, selection, and submission do not depend on a raw `displayName` field
 fork.
+Structured `app-container` mentions must now use canonical unified-resource
+identity (`app-container:<host>:<provider_uid>`) instead of a Docker-transport
+ID. Frontend mention pickers should emit that canonical ID for every
+app-container, including API-backed platforms such as TrueNAS, while backend
+structured-mention resolution may continue to accept legacy `docker:...`
+mentions only as a compatibility path.
 The same governed-context rule also applies to the main unified AI resource
 overview: infrastructure, workload, alert-label, and top-consumer summaries
 must not leak raw resource names, cluster labels, IP addresses, or unresolved
