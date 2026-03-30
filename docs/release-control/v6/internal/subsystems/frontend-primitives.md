@@ -208,12 +208,18 @@ work extends shared components instead of creating new local variants.
    connections` visible as the API-backed alternative for Proxmox and
    TrueNAS, and expose the same first-host next step instead of falling back
    to passive “nothing here yet” wording.
-13. Keep the authenticated app root aligned with that same first-session path.
+13. Keep cross-surface investigation handoffs on shared route ownership.
+    Feature shells such as Alerts and Patrol may decide which governed
+    destination chips to render, but canonical href, label, dedupe, and
+    infrastructure-fallback truth must stay in
+    `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
+    route strings or provider-local link builders inside feature panels.
+14. Keep the authenticated app root aligned with that same first-session path.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
-14. Keep relay settings shell copy on the shared presentation owner in
+15. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability
@@ -1514,6 +1520,14 @@ must keep platform-service recovery links on canonical recovery-events
 framing and route state, so upstream service surfaces do not drift back to
 PBS-backup wording or inherit the page-default inventory workspace when they
 are actually deep-linking into recovery activity.
+That same shared primitive boundary also owns resource handoff chip framing for
+cross-surface investigation UI. Alerts, Patrol, and similar feature shells may
+choose which governed surfaces to show, but they must build those links through
+the shared resolved-resource route helpers in
+`frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw route
+strings, local link dedupe, or provider-specific link chips inside feature
+panels. Shared chip styling belongs in the feature shell; canonical href and
+label truth belongs in the shared route helper.
 That same shared primitive boundary now also owns persisted column-identity
 migration for governed surfaces. When a v6 surface canonicalizes saved column
 IDs, `frontend-modern/src/hooks/useColumnVisibility.ts` must accept explicit

@@ -11,14 +11,16 @@
  */
 
 import { Component, createSignal, createEffect, Show, For, createMemo } from 'solid-js';
-import { useLocation } from '@solidjs/router';
+import { A, useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { aiIntelligenceStore, type UnifiedFinding } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
+import { useResources } from '@/hooks/useResources';
 import { InvestigationSection, ApprovalSection } from '@/components/patrol';
 import { AIAPI, type RemediationPlan } from '@/api/ai';
 import type { PatrolRunRecord, PatrolRuntimeState } from '@/api/patrol';
+import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { getFindingAlertIdentifier, hasTriggeringAlert } from '@/utils/findingAlertIdentity';
@@ -85,6 +87,7 @@ interface FindingsPanelProps {
 
 export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
   const location = useLocation();
+  const { get: getResource } = useResources();
   const [filter, setFilter] = createSignal<
     'all' | 'active' | 'resolved' | 'approvals' | 'attention'
   >(props.filterOverride ?? 'active');
@@ -465,6 +468,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
     const title = getFindingTitlePresentation(finding);
     const manualControls = getFindingManualControlsPresentation(finding);
     const severityPresentation = getFindingSeverityPresentation(finding);
+    const surfaceLinks = buildResolvedResourceSurfaceLinks({
+      resourceId: finding.resourceId,
+      displayName: String(finding.resourceName || '').trim() || subject.label,
+      resource: getResource(finding.resourceId),
+    });
 
     return (
       <div
@@ -711,45 +719,63 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </div>
 
       {/* Expanded content */}
-      <Show when={expandedId() === finding.id}>{renderExpandedContent(finding)}</Show>
+      <Show when={expandedId() === finding.id}>{renderExpandedContent(finding, surfaceLinks)}</Show>
       </div>
     );
   };
 
   // Render expanded content for a finding
-  const renderExpandedContent = (finding: UnifiedFinding) => (
-    <div class="mt-3 pt-3 border-t border-border-subtle">
-      {(() => {
-        const primaryAction = getFindingPrimaryActionPresentation(finding);
-        return (
-          <Show when={primaryAction}>
-            {(action) => (
-              <div class="mb-3">
-                <a
-                  href={action().href}
+  const renderExpandedContent = (
+    finding: UnifiedFinding,
+    surfaceLinks: ReturnType<typeof buildResolvedResourceSurfaceLinks>,
+  ) => {
+    const primaryAction = getFindingPrimaryActionPresentation(finding);
+    const manualControls = getFindingManualControlsPresentation(finding);
+
+    return (
+      <div class="mt-3 pt-3 border-t border-border-subtle">
+        <Show when={primaryAction}>
+          {(action) => (
+            <div class="mb-3">
+              <a
+                href={action().href}
+                onClick={(e) => e.stopPropagation()}
+                class="inline-flex items-center rounded border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+              >
+                {action().label}
+              </a>
+            </div>
+          )}
+        </Show>
+        <Show when={surfaceLinks.length > 0}>
+          <div class="mb-3 flex flex-wrap gap-2">
+            <For each={surfaceLinks}>
+              {(link) => (
+                <A
+                  href={link.href}
+                  aria-label={link.ariaLabel}
                   onClick={(e) => e.stopPropagation()}
-                  class="inline-flex items-center rounded border border-border bg-surface px-2.5 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                  class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
                 >
-                  {action().label}
-                </a>
-              </div>
-            )}
-          </Show>
-        );
-      })()}
-      <Show when={hasTriggeringAlert(finding)}>
+                  {link.compactLabel}
+                </A>
+              )}
+            </For>
+          </div>
+        </Show>
+        <Show when={hasTriggeringAlert(finding)}>
         <div class="text-xs text-amber-700 dark:text-amber-300 mb-2">
           Triggered by alert{finding.alertType ? ` (${finding.alertType})` : ''} • Identifier{' '}
           {getFindingAlertIdentifier(finding)}
         </div>
-      </Show>
-      <p class="text-sm text-muted">{finding.description}</p>
-      <Show when={finding.recommendation}>
+        </Show>
+        <p class="text-sm text-muted">{finding.description}</p>
+        <Show when={finding.recommendation}>
         <p class="text-sm text-base-content mt-2">
           <span class="font-medium">Recommendation:</span> {finding.recommendation}
         </p>
-      </Show>
-      <Show when={(finding.regressionCount || 0) > 0}>
+        </Show>
+        <Show when={(finding.regressionCount || 0) > 0}>
         <p class="text-xs text-amber-700 dark:text-amber-300 mt-2">
           Regressions: {finding.regressionCount}
           <Show when={finding.lastRegressionAt}>
@@ -757,7 +783,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             (last {formatRelativeTime(finding.lastRegressionAt)})
           </Show>
         </p>
-      </Show>
+        </Show>
 
       <Show when={finding.lifecycle && finding.lifecycle.length > 0}>
         <div class="mt-3 p-2 rounded border border-border bg-surface-alt">
@@ -790,7 +816,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
       </Show>
 
       {/* User note display / editor */}
-      <Show when={editingNoteId() === finding.id}>
+        <Show when={editingNoteId() === finding.id}>
         <div
           class="mt-3 p-2 rounded border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900"
           onClick={(e) => e.stopPropagation()}
@@ -820,8 +846,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </button>
           </div>
         </div>
-      </Show>
-      <Show when={editingNoteId() !== finding.id && finding.userNote}>
+        </Show>
+        <Show when={editingNoteId() !== finding.id && finding.userNote}>
         <div class="mt-3 p-2 rounded border border-border bg-surface-alt flex items-start gap-2">
           <svg
             class="w-4 h-4 text-muted mt-0.5 flex-shrink-0"
@@ -853,11 +879,11 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </svg>
           </button>
         </div>
-      </Show>
+        </Show>
 
-      {/* Add Note / Discuss with Assistant buttons */}
-      <div class="mt-3 flex flex-wrap gap-2 text-xs">
-        <Show when={editingNoteId() !== finding.id && !finding.userNote}>
+        {/* Add Note / Discuss with Assistant buttons */}
+        <div class="mt-3 flex flex-wrap gap-2 text-xs">
+          <Show when={editingNoteId() !== finding.id && !finding.userNote}>
           <button
             type="button"
             onClick={(e) => handleStartEditNote(finding, e)}
@@ -873,8 +899,8 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </svg>
             Add Note
           </button>
-        </Show>
-        <button
+          </Show>
+          <button
           type="button"
           onClick={(e) => handleDiscussWithAssistant(finding, e)}
           class="px-2 py-1 rounded bg-blue-50 text-blue-700 dark:bg-blue-900 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900 flex items-center gap-1 transition-colors"
@@ -888,10 +914,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             />
           </svg>
           Discuss with Assistant
-        </button>
-      </div>
+          </button>
+        </div>
 
-      <Show when={finding.status === 'active'}>
+        <Show when={finding.status === 'active'}>
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
           <Show when={manualControls.acknowledge && !finding.acknowledgedAt}>
             <button
@@ -960,9 +986,9 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </>
           </Show>
         </div>
-      </Show>
-      {/* Inline dismiss confirmation */}
-      <Show when={dismissingId() === finding.id}>
+        </Show>
+        {/* Inline dismiss confirmation */}
+        <Show when={dismissingId() === finding.id}>
         <div class="mt-2 p-2 rounded border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900">
           <div class="flex items-center gap-2 mb-1.5">
             <span class="text-xs font-medium text-red-700 dark:text-red-300">
@@ -995,25 +1021,25 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             </button>
           </div>
         </div>
-      </Show>
-      <Show when={finding.correlatedFindingIds && finding.correlatedFindingIds.length > 0}>
+        </Show>
+        <Show when={finding.correlatedFindingIds && finding.correlatedFindingIds.length > 0}>
         <div class="mt-2 text-xs text-muted">
           Related findings: {finding.correlatedFindingIds?.length}
         </div>
-      </Show>
+        </Show>
 
-      {/* Inline Investigation Section (replaces drawer) */}
-      <Show when={hasFindingInvestigationDetails(finding)}>
+        {/* Inline Investigation Section (replaces drawer) */}
+        <Show when={hasFindingInvestigationDetails(finding)}>
         <InvestigationSection
           findingId={finding.id}
           investigationStatus={finding.investigationStatus}
           investigationOutcome={finding.investigationOutcome}
           investigationAttempts={finding.investigationAttempts}
         />
-      </Show>
+        </Show>
 
-      {/* Inline Approval Section (replaces manual approval JSX) */}
-      <Show
+        {/* Inline Approval Section (replaces manual approval JSX) */}
+        <Show
         when={
           finding.status === 'active' &&
           (finding.investigationOutcome === 'fix_queued' ||
@@ -1023,7 +1049,7 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             finding.investigationOutcome === 'fix_verification_failed' ||
             finding.investigationOutcome === 'fix_verification_unknown')
         }
-      >
+        >
         <ApprovalSection
           findingId={finding.id}
           investigationOutcome={finding.investigationOutcome}
@@ -1032,10 +1058,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
           resourceType={finding.resourceType}
           resourceId={finding.resourceId}
         />
-      </Show>
+        </Show>
 
-      {/* Remediation Plan artifact (generated by Patrol and/or an investigation) */}
-      <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
+        {/* Remediation Plan artifact (generated by Patrol and/or an investigation) */}
+        <Show when={finding.status === 'active' && plansByFindingId().get(finding.id)}>
         {(plan) => (
           <div class="mt-3 pt-3 border-t border-border-subtle">
             {(() => {
@@ -1117,9 +1143,10 @@ export const FindingsPanel: Component<FindingsPanelProps> = (props) => {
             })()}
           </div>
         )}
-      </Show>
-    </div>
-  );
+        </Show>
+      </div>
+    );
+  };
 
   return (
     <div class="space-y-4">

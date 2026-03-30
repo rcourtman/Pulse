@@ -5,8 +5,7 @@ import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Card } from '@/components/shared/Card';
 import {
-  buildInfrastructureResourceLink,
-  buildResourceSurfaceLinksForResource,
+  buildResolvedResourceSurfaceLinks,
   type ResourceSurfaceLink,
 } from '@/routing/resourceLinks';
 import type { Resource } from '@/types/resource';
@@ -57,22 +56,11 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
           return selection().resourceName;
         };
         const links = (): ResourceSurfaceLink[] => {
-          const nextLinks: ResourceSurfaceLink[] = [];
-          const infrastructure = buildInfrastructureResourceLink(resourceId, resourceDisplayName());
-          if (infrastructure) {
-            nextLinks.push(infrastructure);
-          }
-
-          const current = resource();
-          if (current) {
-            nextLinks.push(...buildResourceSurfaceLinksForResource(current, resourceDisplayName()));
-          }
-
-          const seen = new Set<string>();
-          return nextLinks.filter((link) => {
-            if (seen.has(link.href)) return false;
-            seen.add(link.href);
-            return true;
+          return buildResolvedResourceSurfaceLinks({
+            resourceId,
+            displayName: resourceDisplayName(),
+            resource: resource(),
+            allowInfrastructureFallback: true,
           });
         };
 

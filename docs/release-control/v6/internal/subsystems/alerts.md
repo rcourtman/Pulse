@@ -402,6 +402,13 @@ shared workloads, storage, and recovery surfaces through
 `frontend-modern/src/routing/resourceLinks.ts` rather than leaving the panel
 as a dead-end investigation card or rebuilding provider-local route strings for
 platforms such as TrueNAS.
+That same alert handoff must now stay on the shared resolved-resource link
+builder. `AlertResourceIncidentsPanel.tsx` must resolve its chip set through
+`buildResolvedResourceSurfaceLinks(...)`, which owns exact unified-resource
+handoffs plus the infrastructure fallback when alert history still references a
+resource ID before the backing unified record has hydrated. Future incident-link
+work must not reintroduce local infrastructure-link assembly, local dedupe, or
+provider-local route strings inside the alert feature shell.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through

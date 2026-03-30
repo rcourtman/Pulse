@@ -368,6 +368,13 @@ falling back to page-local UI state. Focused recovery routes with an active
 `rollupId` or `day` remain recovery-events-first by default, but the explicit
 workspace selection must still serialize through the owned recovery URL model
 whenever an operator overrides that implied default.
+That same shared route-helper contract now also has to preserve exact storage
+and recovery handoffs for unified resources discovered outside the storage or
+recovery pages. When alerts, Patrol, or infrastructure drawers route a
+TrueNAS-backed disk, app, or system into `/storage` or `/recovery`, the shared
+helper must keep the owned `source`, `node`, `platform`, `view`, and exact
+`resource` semantics intact instead of collapsing those handoffs back to
+provider-local URLs or generic top-level tabs.
 That history table layout now also derives its minimum width from the same
 canonical column-width spec that owns the header sizing in
 `frontend-modern/src/utils/recoveryTablePresentation.ts`, so longer governed

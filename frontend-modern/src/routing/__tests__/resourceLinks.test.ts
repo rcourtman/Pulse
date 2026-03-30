@@ -9,6 +9,7 @@ import {
   buildRecoveryHrefForResource,
   buildInfrastructurePath,
   buildInfrastructureResourceHref,
+  buildResolvedResourceSurfaceLinks,
   buildResourceSurfaceLinksForResource,
   buildStorageHrefForResource,
   buildStoragePath,
@@ -189,6 +190,25 @@ describe('resource link routing contract', () => {
     ).toBe('/workloads?type=app-container&platform=truenas&agent=truenas-main');
   });
 
+  it('builds exact workloads links for TrueNAS app-container resources', () => {
+    expect(
+      buildWorkloadsHrefForResource({
+        id: 'app-container:truenas-main:nextcloud',
+        type: 'app-container',
+        name: 'nextcloud',
+        displayName: 'Nextcloud',
+        parentId: 'truenas-main',
+        platformId: 'truenas-main',
+        platformType: 'truenas',
+        sourceType: 'api',
+        status: 'running',
+        lastSeen: Date.now(),
+      } as any),
+    ).toBe(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+    );
+  });
+
   it('maps pod workloads to kubernetes infrastructure source with cluster query', () => {
     const href = buildInfrastructureHrefForWorkload(
       baseGuest({
@@ -262,6 +282,28 @@ describe('resource link routing contract', () => {
     } as any);
 
     expect(href).toBe('/storage?source=truenas&resource=storage-truenas-display');
+  });
+
+  it('builds storage deep links for TrueNAS physical disks on the disks tab', () => {
+    const href = buildStorageHrefForResource({
+      id: 'disk:truenas-main:sda',
+      type: 'physical_disk',
+      name: 'sda',
+      displayName: 'Seagate IronWolf',
+      parentId: 'truenas-main',
+      platformId: 'truenas-main',
+      platformType: 'truenas',
+      sourceType: 'api',
+      status: 'online',
+      lastSeen: Date.now(),
+      physicalDisk: {
+        serial: '',
+      },
+    } as any);
+
+    expect(href).toBe(
+      '/storage?tab=disks&source=truenas&node=truenas-main&resource=disk%3Atruenas-main%3Asda',
+    );
   });
 
   it('builds storage deep links for top-level TrueNAS systems', () => {
@@ -369,6 +411,40 @@ describe('resource link routing contract', () => {
         label: 'Open in Recovery',
         compactLabel: 'Recovery',
         ariaLabel: 'Open related recovery for TrueNAS Main',
+      },
+    ]);
+  });
+
+  it('builds canonical surface links for exact TrueNAS app-container resources', () => {
+    expect(
+      buildResolvedResourceSurfaceLinks({
+        resourceId: 'app-container:truenas-main:nextcloud',
+        displayName: 'Nextcloud',
+        resource: {
+          id: 'app-container:truenas-main:nextcloud',
+          type: 'app-container',
+          name: 'nextcloud',
+          displayName: 'Nextcloud',
+          parentId: 'truenas-main',
+          platformId: 'truenas-main',
+          platformType: 'truenas',
+          sourceType: 'api',
+          status: 'running',
+          lastSeen: Date.now(),
+        } as any,
+      }),
+    ).toEqual([
+      {
+        href: '/infrastructure?resource=app-container%3Atruenas-main%3Anextcloud',
+        label: 'Open in Infrastructure',
+        compactLabel: 'Infrastructure',
+        ariaLabel: 'Open related infrastructure for Nextcloud',
+      },
+      {
+        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+        label: 'Open in Workloads',
+        compactLabel: 'Workloads',
+        ariaLabel: 'Open related workloads for Nextcloud',
       },
     ]);
   });

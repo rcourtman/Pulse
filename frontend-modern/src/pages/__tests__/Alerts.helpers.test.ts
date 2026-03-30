@@ -361,10 +361,11 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).toContain('export function AlertResourceIncidentsPanel');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
-    expect(alertResourceIncidentsPanelSource).toContain('buildInfrastructureResourceLink');
-    expect(alertResourceIncidentsPanelSource).toContain('buildResourceSurfaceLinksForResource');
-    expect(alertResourceIncidentsPanelSource).toContain(
-      'buildInfrastructureResourceLink(resourceId, resourceDisplayName())',
+    expect(alertResourceIncidentsPanelSource).toContain('buildResolvedResourceSurfaceLinks');
+    expect(alertResourceIncidentsPanelSource).toContain('allowInfrastructureFallback: true');
+    expect(alertResourceIncidentsPanelSource).not.toContain('buildInfrastructureResourceLink');
+    expect(alertResourceIncidentsPanelSource).not.toContain(
+      'buildResourceSurfaceLinksForResource',
     );
     expect(alertResourceIncidentsPanelSource).toContain('{link.compactLabel}');
     expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
@@ -463,11 +464,14 @@ describe('tab path helpers', () => {
     expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_QUIET_HOURS_TITLE');
     expect(alertScheduleTabSource).not.toContain('ALERT_CONFIG_ESCALATION_TITLE');
     expect(alertThresholdsTabSource).toContain('ThresholdsTable');
-    expect(alertThresholdsTabSource).toContain('buildThresholdsTableProps');
-    expect(alertThresholdsTabSource).not.toContain('pmgThresholds={props.pmgThresholds}');
+    expect(alertThresholdsTabSource).toContain('pmgThresholds={props.pmgThresholds}');
+    expect(alertThresholdsTabSource).toContain('guestDefaults={props.guestDefaults()}');
+    expect(alertThresholdsTabSource).not.toContain('buildThresholdsTableProps');
     expect(thresholdsTabModelSource).toContain('export interface ThresholdsTabProps');
-    expect(thresholdsTabModelSource).toContain('export function buildThresholdsTableProps');
-    expect(thresholdsTabModelSource).toContain('guestDefaults: props.guestDefaults()');
+    expect(thresholdsTabModelSource).toContain('extends Omit<');
+    expect(thresholdsTabModelSource).toContain(
+      "guestDefaults: Accessor<ThresholdsTableProps['guestDefaults']>;",
+    );
     expect(thresholdsTabModelSource).not.toContain('hasUnsavedChanges');
     expect(thresholdsTableSource).toContain(
       "import { useThresholdsTableState } from '@/features/alerts/thresholds/hooks/useThresholdsTableState';",

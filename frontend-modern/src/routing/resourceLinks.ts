@@ -100,6 +100,15 @@ const firstNonEmpty = (values: Array<string | undefined | null>): string | undef
   return undefined;
 };
 
+const dedupeResourceSurfaceLinks = (links: ResourceSurfaceLink[]): ResourceSurfaceLink[] => {
+  const seen = new Set<string>();
+  return links.filter((link) => {
+    if (seen.has(link.href)) return false;
+    seen.add(link.href);
+    return true;
+  });
+};
+
 type WorkloadsLinkOptions = {
   type?: string | null;
   platform?: string | null;
@@ -151,6 +160,13 @@ export type ResourceSurfaceLink = {
   label: string;
   compactLabel: string;
   ariaLabel: string;
+};
+
+type ResolvedResourceSurfaceLinkOptions = {
+  resourceId: string;
+  displayName: string;
+  resource?: Resource | null;
+  allowInfrastructureFallback?: boolean;
 };
 
 const RECOVERY_LEGACY_PLATFORM_QUERY_PARAM = 'provider';
@@ -269,6 +285,9 @@ const resolveKubernetesContextForResource = (resource: Resource): string | undef
   if (resource.type === 'k8s-node') {
     return kubernetesContext;
   }
+  if (resource.type === 'pod') {
+    return kubernetesContext;
+  }
   return undefined;
 };
 
@@ -315,6 +334,47 @@ export const buildWorkloadsHrefForResource = (resource: Resource): string | null
     return buildWorkloadsPath({ agent });
   }
 
+  if (
+    resource.type === 'vm' ||
+    resource.type === 'system-container' ||
+    resource.type === 'oci-container' ||
+    resource.type === 'jail'
+  ) {
+    return buildWorkloadsPath({
+      type: resource.type,
+      platform: resource.platformType,
+      agent: firstNonEmpty([resource.parentId, resource.platformId]),
+      resource: resource.id,
+    });
+  }
+
+  if (resource.type === 'app-container') {
+    const isTrueNAS = resource.platformType === 'truenas' || hasMergedSource(resource, 'truenas');
+    const isDocker = resource.platformType === 'docker' || hasMergedSource(resource, 'docker');
+    return buildWorkloadsPath({
+      type: 'app-container',
+      platform: isTrueNAS ? 'truenas' : isDocker ? 'docker' : resource.platformType,
+      agent: isDocker
+        ? firstNonEmpty([
+            getActionableDockerRuntimeIdFromResource(resource),
+            resource.parentId,
+            resource.platformId,
+          ])
+        : firstNonEmpty([resource.parentId, resource.platformId]),
+      resource: resource.id,
+    });
+  }
+
+  if (resource.type === 'pod') {
+    return buildWorkloadsPath({
+      type: 'pod',
+      platform: 'kubernetes',
+      context: resolveKubernetesContextForResource(resource),
+      namespace: firstNonEmpty([resource.kubernetes?.namespace, resource.labels?.namespace]),
+      resource: resource.id,
+    });
+  }
+
   return null;
 };
 
@@ -356,12 +416,7 @@ export const buildResourceSurfaceLinksForResource = (
     });
   }
 
-  const seen = new Set<string>();
-  return links.filter((link) => {
-    if (seen.has(link.href)) return false;
-    seen.add(link.href);
-    return true;
-  });
+  return dedupeResourceSurfaceLinks(links);
 };
 
 const resolveStorageRouteSource = (resource: Resource): string => {
@@ -378,9 +433,24 @@ export const buildStorageHrefForResource = (resource: Resource): string | null =
   const source = resolveStorageRouteSource(resource);
   if (!source || source === 'all') return null;
 
-  if (resource.type === 'storage' || resource.type === 'datastore') {
+  if (
+    resource.type === 'storage' ||
+    resource.type === 'datastore' ||
+    resource.type === 'pool' ||
+    resource.type === 'dataset' ||
+    resource.type === 'ceph'
+  ) {
     return buildStoragePath({
       source,
+      resource: resource.id,
+    });
+  }
+
+  if (resource.type === 'physical_disk') {
+    return buildStoragePath({
+      tab: 'disks',
+      source,
+      node: firstNonEmpty([resource.parentId, resource.platformId]),
       resource: resource.id,
     });
   }
@@ -400,6 +470,33 @@ export const buildStorageHrefForResource = (resource: Resource): string | null =
   }
 
   return null;
+};
+
+export const buildResolvedResourceSurfaceLinks = ({
+  resourceId,
+  displayName,
+  resource,
+  allowInfrastructureFallback = false,
+}: ResolvedResourceSurfaceLinkOptions): ResourceSurfaceLink[] => {
+  const links: ResourceSurfaceLink[] = [];
+
+  if (resource) {
+    const infrastructure = buildInfrastructureResourceLink(resource.id, displayName);
+    if (infrastructure) {
+      links.push(infrastructure);
+    }
+    links.push(...buildResourceSurfaceLinksForResource(resource, displayName));
+    return dedupeResourceSurfaceLinks(links);
+  }
+
+  if (allowInfrastructureFallback) {
+    const infrastructure = buildInfrastructureResourceLink(resourceId, displayName);
+    if (infrastructure) {
+      links.push(infrastructure);
+    }
+  }
+
+  return dedupeResourceSurfaceLinks(links);
 };
 
 export const buildRecoveryHrefForResource = (resource: Resource): string | null => {

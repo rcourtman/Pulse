@@ -531,6 +531,12 @@ then into shared workloads, storage, and recovery surfaces via
 `frontend-modern/src/routing/resourceLinks.ts`, instead of treating alert
 investigation as a provider-local dead end or freezing per-surface route
 strings outside the unified-resource contract.
+That same routing contract also owns Patrol finding handoffs. Expanded
+Patrol-finding rows and scoped-run finding snapshots must resolve the backing
+unified resource and surface the same canonical infrastructure/workloads/
+storage/recovery links there, including exact workload and physical-disk route
+state when the selected resource is itself the workload or disk, instead of
+stopping at finding text or rebuilding patrol-local route strings.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`,

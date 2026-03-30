@@ -443,6 +443,17 @@ describe('aiFindingPresentation', () => {
       expect(findingsPanelSource).toContain("href={action().href}");
     });
 
+    it('resolves unified resources and shared route links for expanded finding handoffs', () => {
+      expect(findingsPanelSource).toContain("import { useResources } from '@/hooks/useResources';");
+      expect(findingsPanelSource).toContain(
+        "import { buildResolvedResourceSurfaceLinks } from '@/routing/resourceLinks';",
+      );
+      expect(findingsPanelSource).toContain('const { get: getResource } = useResources();');
+      expect(findingsPanelSource).toContain('buildResolvedResourceSurfaceLinks({');
+      expect(findingsPanelSource).toContain('resource: getResource(finding.resourceId)');
+      expect(findingsPanelSource).toContain("{link.compactLabel}");
+    });
+
     it('routes generic finding controls through the shared manual-controls helper', () => {
       expect(findingsPanelSource).toContain('getFindingManualControlsPresentation(finding)');
       expect(findingsPanelSource).toContain('manualControls.acknowledge');

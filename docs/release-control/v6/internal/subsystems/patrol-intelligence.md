@@ -537,3 +537,10 @@ Patrol finding dismissal reasons and Patrol status labels now also route
 through the shared frontend identifier-label helper, so the Patrol surfaces
 do not keep their own underscore-stripping behavior separate from the rest
 of the governed presentation helpers.
+That same Patrol findings surface must also stop being a route dead end.
+Expanded finding rows should resolve the backing unified resource and surface
+canonical `Infrastructure`, `Workloads`, `Storage`, and `Recovery` handoffs
+through `frontend-modern/src/routing/resourceLinks.ts` where those surfaces
+exist, rather than forcing operators to pivot manually through search or
+assistant prompts to continue investigating API-backed platforms such as
+TrueNAS.
