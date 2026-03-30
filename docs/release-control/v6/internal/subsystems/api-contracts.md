@@ -625,6 +625,10 @@ inventing a settings-local shadow fetch path. Zero-value legacy
 `pollIntervalSeconds` config must normalize back to the canonical 60-second
 default at this same boundary instead of leaking ambiguous `0` values to the
 frontend.
+That same `/api/truenas/connections` boundary also owns explicit disabled-path
+semantics: the `truenas_disabled` response exists only when the server has
+explicitly opted out of the default-on TrueNAS integration, not as the normal
+bootstrap state for a supported platform.
 That same backend API boundary now also owns the negative space around
 assistant control. Wiring native TrueNAS app actions into
 `internal/api/router.go`, `internal/api/ai_handler.go`, or adjacent backend

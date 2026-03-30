@@ -161,12 +161,17 @@ describe('TrueNASSettingsPanel', () => {
 
   it('shows the feature gate warning when the backend path is disabled', () => {
     mockState.featureDisabled.mockReturnValue(true);
-    mockState.featureDisabledMessage.mockReturnValue('truenas_disabled');
+    mockState.featureDisabledMessage.mockReturnValue(
+      'TrueNAS integration has been explicitly disabled',
+    );
 
     renderPanel();
 
     expect(screen.getByText('TrueNAS integration is disabled')).toBeInTheDocument();
-    expect(screen.getByText('truenas_disabled')).toBeInTheDocument();
+    expect(
+      screen.getByText('TrueNAS integration has been explicitly disabled'),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/PULSE_ENABLE_TRUENAS=false/)).toBeInTheDocument();
     expect(screen.queryByText('TrueNAS connections')).not.toBeInTheDocument();
   });
 });

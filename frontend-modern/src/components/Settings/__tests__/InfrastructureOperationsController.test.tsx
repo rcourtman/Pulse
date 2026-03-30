@@ -196,9 +196,7 @@ describe('InfrastructurePlatformConnectionsSummaryCard', () => {
     ));
 
     expect(screen.getByText('Disabled')).toBeInTheDocument();
-    expect(
-      screen.getByText('Enable the TrueNAS integration to add API-backed NAS systems.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Explicitly disabled on this Pulse server.')).toBeInTheDocument();
   });
 });
 

@@ -36,13 +36,15 @@ describe('useTrueNASSettingsPanelState', () => {
   it('treats a 404 list response as a feature-disabled integration state', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockRejectedValueOnce({
       status: 404,
-      message: 'truenas_disabled',
+      message: 'TrueNAS integration has been explicitly disabled',
     });
 
     const { result } = renderHook(() => useTrueNASSettingsPanelState());
 
     await waitFor(() => expect(result.featureDisabled()).toBe(true));
-    expect(result.featureDisabledMessage()).toBe('truenas_disabled');
+    expect(result.featureDisabledMessage()).toBe(
+      'TrueNAS integration has been explicitly disabled',
+    );
     expect(result.connections()).toEqual([]);
   });
 

@@ -22,6 +22,18 @@ func TestProviderFeatureFlagGatesFixtureRecords(t *testing.T) {
 	}
 }
 
+func TestFeatureFlagDefaultsTrueNASOnUnlessExplicitlyDisabled(t *testing.T) {
+	if !parseFeatureEnabled("") {
+		t.Fatal("expected empty TrueNAS feature env to default to enabled")
+	}
+	if !parseFeatureEnabled("   ") {
+		t.Fatal("expected blank TrueNAS feature env to default to enabled")
+	}
+	if parseFeatureEnabled("false") {
+		t.Fatal("expected explicit false TrueNAS feature env to disable the integration")
+	}
+}
+
 func TestRegistryIngestRecordsTreatsTrueNASAsGenericDataSource(t *testing.T) {
 	previous := IsFeatureEnabled()
 	SetFeatureEnabled(true)

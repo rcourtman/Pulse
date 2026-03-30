@@ -68,7 +68,7 @@ export const InfrastructurePlatformConnectionsSummaryCard: Component<
             <p class="mt-1 text-xs text-muted">
               {props.truenasAvailable
                 ? 'API-backed NAS connections'
-                : 'Enable the TrueNAS integration to add API-backed NAS systems.'}
+                : 'Explicitly disabled on this Pulse server.'}
             </p>
           </div>
         </div>

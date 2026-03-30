@@ -172,7 +172,9 @@ export function useTrueNASSettingsPanelState() {
     } catch (error) {
       if (apiErrorStatus(error) === 404) {
         setFeatureDisabled(true);
-        setFeatureDisabledMessage(getErrorMessage(error, 'TrueNAS integration is not enabled'));
+        setFeatureDisabledMessage(
+          getErrorMessage(error, 'TrueNAS integration has been explicitly disabled'),
+        );
         setConnections([]);
         return;
       }

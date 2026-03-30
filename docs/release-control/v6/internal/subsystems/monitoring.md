@@ -233,6 +233,9 @@ TrueNAS connection's `pollIntervalSeconds`, keep the next poll schedule plus
 last success/failure state in one canonical runtime owner, and project the most
 recent discovered host/pool/dataset/app/disk/recovery counts there instead of
 recomputing settings health panel-by-panel.
+That same runtime owner also defines the feature-default contract for TrueNAS:
+the API-backed integration is on by default, and `PULSE_ENABLE_TRUENAS` is an
+explicit opt-out switch rather than a required bootstrap toggle.
 That same monitoring boundary now also owns live TrueNAS disk temperatures.
 `internal/truenas/client.go` and `internal/truenas/provider.go` must ingest
 `disk.temperatures` from the TrueNAS API, fall back to modern

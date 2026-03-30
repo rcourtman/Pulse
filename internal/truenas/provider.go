@@ -16,19 +16,21 @@ import (
 )
 
 const (
-	// FeatureTrueNAS gates fixture-first TrueNAS ingestion.
+	// FeatureTrueNAS allows explicit opt-out of the default-on TrueNAS API-backed
+	// platform integration.
 	FeatureTrueNAS = "PULSE_ENABLE_TRUENAS"
 )
 
 var featureTrueNASEnabled atomic.Bool
 
 func init() {
-	featureTrueNASEnabled.Store(parseBool(os.Getenv(FeatureTrueNAS)))
+	featureTrueNASEnabled.Store(parseFeatureEnabled(os.Getenv(FeatureTrueNAS)))
 }
 
 var errNilSnapshot = errors.New("truenas provider fetcher returned nil snapshot")
 
-// IsFeatureEnabled returns whether fixture-driven TrueNAS ingestion is enabled.
+// IsFeatureEnabled returns whether the TrueNAS API-backed platform integration
+// is enabled.
 func IsFeatureEnabled() bool {
 	return featureTrueNASEnabled.Load()
 }
@@ -1558,6 +1560,13 @@ func parentPoolFromDataset(datasetName string) string {
 		return ""
 	}
 	return strings.TrimSpace(parts[0])
+}
+
+func parseFeatureEnabled(raw string) bool {
+	if strings.TrimSpace(raw) == "" {
+		return true
+	}
+	return parseBool(raw)
 }
 
 func parseBool(raw string) bool {

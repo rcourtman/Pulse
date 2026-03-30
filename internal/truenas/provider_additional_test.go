@@ -66,6 +66,15 @@ func TestStatusFromSystemAndParseBoolBranches(t *testing.T) {
 		t.Fatalf("statusFromSystem(unhealthy) = %q, want %q", got, unifiedresources.StatusWarning)
 	}
 
+	if !parseFeatureEnabled("") {
+		t.Fatal("expected parseFeatureEnabled to default empty values to true")
+	}
+	if !parseFeatureEnabled(" \t ") {
+		t.Fatal("expected parseFeatureEnabled to default blank values to true")
+	}
+	if parseFeatureEnabled("off") {
+		t.Fatal("expected parseFeatureEnabled to treat explicit off as false")
+	}
 	if !parseBool("  YeS ") {
 		t.Fatal("expected parseBool to treat yes as true")
 	}

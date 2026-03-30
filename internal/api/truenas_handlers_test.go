@@ -110,6 +110,9 @@ func TestTrueNASHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 		if rec.Code != http.StatusNotFound {
 			t.Fatalf("expected 404, got %d: %s", rec.Code, rec.Body.String())
 		}
+		if !strings.Contains(rec.Body.String(), "explicitly disabled") {
+			t.Fatalf("expected explicit disable message, got %s", rec.Body.String())
+		}
 	})
 }
 

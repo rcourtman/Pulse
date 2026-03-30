@@ -316,4 +316,40 @@ test.describe('TrueNAS platform connections settings', () => {
     fs.mkdirSync(path.dirname(OPERATIONS_SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: OPERATIONS_SCREENSHOT_PATH, fullPage: true });
   });
+
+  test('treats disabled TrueNAS as an explicit opt-out instead of a setup prerequisite', async ({
+    page,
+  }) => {
+    await page.route('**/api/truenas/connections', async (route) => {
+      if (route.request().method() !== 'GET') {
+        await route.continue();
+        return;
+      }
+
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          error: 'truenas_disabled',
+          message: 'TrueNAS integration has been explicitly disabled',
+        }),
+      });
+    });
+
+    await page.goto('/settings/infrastructure/platforms/truenas', {
+      waitUntil: 'domcontentloaded',
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
+      timeout: 15_000,
+    });
+
+    await expect(page.getByText('TrueNAS integration is disabled')).toBeVisible();
+    await expect(
+      page.getByText('TrueNAS integration has been explicitly disabled'),
+    ).toBeVisible();
+    await expect(page.getByText(/PULSE_ENABLE_TRUENAS=false/)).toBeVisible();
+    await expect(page.getByText(/set it back to true/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add TrueNAS connection' })).not.toBeVisible();
+    await expect(page.locator('[data-testid^=\"truenas-connection-\"]')).toHaveCount(0);
+  });
 });

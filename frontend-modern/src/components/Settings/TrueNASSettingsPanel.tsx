@@ -165,10 +165,14 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
           title="TrueNAS integration is disabled"
           description={
             <>
-              <p>{state.featureDisabledMessage() || 'TrueNAS integration is not enabled.'}</p>
+              <p>
+                {state.featureDisabledMessage() ||
+                  'TrueNAS integration has been explicitly disabled on this Pulse server.'}
+              </p>
               <p class="mt-2">
-                Enable <code>PULSE_ENABLE_TRUENAS=true</code> on the Pulse server and restart the
-                service before adding TrueNAS connections.
+                Remove <code>PULSE_ENABLE_TRUENAS=false</code> or set it back to{' '}
+                <code>true</code> on the Pulse server, then restart the service before managing
+                TrueNAS connections.
               </p>
             </>
           }

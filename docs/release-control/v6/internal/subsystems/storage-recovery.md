@@ -63,6 +63,10 @@ querying, and the operator-facing storage health presentation layer.
 2. Add or change recovery page UX through `frontend-modern/src/components/Recovery/` and keep canonical route/query/filter state ownership in `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`
 3. Add or change storage page UX through `frontend-modern/src/pages/Storage.tsx`, `frontend-modern/src/components/Storage/`, `frontend-modern/src/features/storageBackups/`, and the shared storage-source contract in `frontend-modern/src/utils/storageSources.ts`
 4. Route transport changes for storage and recovery endpoints through `internal/api/` and the owning `api-contracts` proof routes
+   That same adjacent API boundary also owns TrueNAS feature-default semantics for
+   provider-backed recovery: storage and recovery must treat `truenas_disabled`
+   as an explicit platform opt-out, not as the baseline onboarding state for a
+   supported platform.
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
 6. Preserve API-owned node identity continuity in shared `internal/api/` helpers so storage and recovery transport attachments do not fork by hostname-versus-IP drift across the same runtime.
@@ -1563,6 +1567,10 @@ in the TrueNAS settings workspace. Storage and recovery may consume the
 resulting datasets, apps, disks, and recovery artifacts, but they must not
 redefine those settings-runtime health semantics or handoff routes inside
 storage/recovery-local transport or page contracts.
+That same adjacent platform boundary also owns the feature-default truth for
+TrueNAS: storage and recovery must treat provider-backed TrueNAS recovery as
+available by default and only treat `truenas_disabled` as an explicit platform
+opt-out, not as the baseline onboarding state for a supported platform.
 That same shared boundary also owns the line between recovery data and
 assistant control. Backend-native TrueNAS app actions may refresh the poller
 and recovery ingest after a control event, but storage and recovery surfaces

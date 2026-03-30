@@ -320,7 +320,7 @@ func (h *TrueNASHandlers) featureEnabled(w http.ResponseWriter) bool {
 	if truenas.IsFeatureEnabled() {
 		return true
 	}
-	writeErrorResponse(w, http.StatusNotFound, "truenas_disabled", "TrueNAS integration is not enabled", nil)
+	writeErrorResponse(w, http.StatusNotFound, "truenas_disabled", "TrueNAS integration has been explicitly disabled", nil)
 	return false
 }
 

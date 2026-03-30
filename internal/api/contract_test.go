@@ -84,6 +84,22 @@ func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testin
 	}
 }
 
+func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
+	setTrueNASFeatureForTest(t, false)
+	handler, _, _ := newTrueNASHandlersForTest(t, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 when TrueNAS integration is disabled, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "explicitly disabled") {
+		t.Fatalf("expected explicit disable message, got %s", rec.Body.String())
+	}
+}
+
 func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {
 	called := make(chan struct{}, 1)
 	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

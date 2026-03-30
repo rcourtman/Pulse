@@ -454,6 +454,10 @@ and `useTrueNASSettingsPanelState.ts` must surface the shared runtime health,
 poll cadence, discovered contribution summary, and canonical infrastructure /
 workloads / storage / recovery handoffs coming from `/api/truenas/connections`
 instead of falling back to panel-local inference or agent-first setup guidance.
+When that same platform workspace reports TrueNAS as unavailable, the disabled
+state must mean the server has explicitly opted out of the default-on TrueNAS
+integration, not that operators still need to enable a hidden feature gate for
+normal product use.
 That same API-backed platform workspace owner now also includes the shared
 presentation helpers `frontend-modern/src/utils/clusterEndpointPresentation.ts`
 and `frontend-modern/src/utils/proxmoxSettingsPresentation.ts`, so endpoint
