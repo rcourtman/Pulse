@@ -1,5 +1,4 @@
 import { Component, createSignal, Show, onMount } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { isPulseHttps } from '@/utils/url';
 import { logger } from '@/utils/logger';
@@ -120,141 +119,137 @@ export const SecurityWarning: Component = () => {
 
   return (
     <Show when={shouldShow()}>
-      <Portal>
-        <div
-          class={`fixed top-0 left-0 right-0 z-50 border-b shadow-sm ${warningPresentation().background} ${warningPresentation().border}`}
-        >
-          <div class="max-w-7xl mx-auto px-4 py-3">
-            <div class="flex items-start justify-between">
-              <div class="flex items-start space-x-3">
-                <span class={`text-2xl ${scorePresentation().tone.icon}`}>
-                  {getSecurityScoreSymbol(scorePercentage())}
-                </span>
-                <div>
-                  <div class="flex items-center gap-3">
-                    <SectionHeader
-                      title={
-                        <span>
-                          Security score:{' '}
-                          <span class={getSecurityScoreTextClass(scorePercentage())}>
-                            {status()!.score}/{status()!.maxScore}
-                          </span>
-                        </span>
-                      }
-                      size="sm"
-                      class="flex-1"
-                      titleClass="text-base-content"
-                    />
+      <div
+        class={`relative z-20 border-b shadow-sm ${warningPresentation().background} ${warningPresentation().border}`}
+        role="status"
+        aria-live="polite"
+      >
+        <div class="max-w-7xl mx-auto px-4 py-3">
+          <div class="flex items-start space-x-3">
+            <span class={`text-2xl ${scorePresentation().tone.icon}`}>
+              {getSecurityScoreSymbol(scorePercentage())}
+            </span>
+            <div class="min-w-0 flex-1">
+              <div class="flex flex-wrap items-center gap-3">
+                <SectionHeader
+                  title={
+                    <span>
+                      Security score:{' '}
+                      <span class={getSecurityScoreTextClass(scorePercentage())}>
+                        {status()!.score}/{status()!.maxScore}
+                      </span>
+                    </span>
+                  }
+                  size="sm"
+                  class="flex-1 min-w-[12rem]"
+                  titleClass="text-base-content"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowDetails(!showDetails())}
+                  class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  {showDetails() ? 'Hide' : 'Show'} Details
+                </button>
+              </div>
+
+              <p class="text-sm text-base-content mt-1">
+                <span class={warningPresentation().messageClass}>{warningPresentation().message}</span>
+              </p>
+
+              <Show when={showDetails()}>
+                <div class="mt-3 space-y-1">
+                  <div class="text-xs space-y-1">
+                    <div class="flex items-center gap-2">
+                      <span
+                        class={getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).className}
+                      >
+                        {getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).label}
+                      </span>
+                      <span>Credentials encrypted at rest</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class={getSecurityFeatureStatePresentation(status()!.exportProtected).className}>
+                        {getSecurityFeatureStatePresentation(status()!.exportProtected).label}
+                      </span>
+                      <span>Export requires authentication</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span
+                        class={getSecurityFeatureStatePresentation(status()!.hasAuthentication).className}
+                      >
+                        {getSecurityFeatureStatePresentation(status()!.hasAuthentication).label}
+                      </span>
+                      <span>Authentication enabled</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class={getSecurityFeatureStatePresentation(status()!.hasHTTPS).className}>
+                        {getSecurityFeatureStatePresentation(status()!.hasHTTPS).label}
+                      </span>
+                      <span>HTTPS connection</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <span class={getSecurityFeatureStatePresentation(status()!.hasAuditLogging).className}>
+                        {getSecurityFeatureStatePresentation(status()!.hasAuditLogging).label}
+                      </span>
+                      <span>Audit logging enabled</span>
+                    </div>
+                  </div>
+                </div>
+              </Show>
+
+              <div class="mt-3 flex flex-wrap items-center gap-3">
+                <a
+                  href="/settings/security-overview"
+                  class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Enable Security →
+                </a>
+                <a
+                  href={SECURITY_DOC_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-sm text-muted hover:underline"
+                >
+                  Learn More
+                </a>
+                <div class="relative group">
+                  <button
+                    type="button"
+                    onClick={() => handleDismiss('day')}
+                    class="text-sm text-muted hover:text-base-content"
+                  >
+                    Dismiss ▼
+                  </button>
+                  <div class="absolute left-0 top-full mt-1 bg-surface rounded shadow-sm border border-border opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
                     <button
                       type="button"
-                      onClick={() => setShowDetails(!showDetails())}
-                      class="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                      onClick={() => handleDismiss('day')}
+                      class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
                     >
-                      {showDetails() ? 'Hide' : 'Show'} Details
+                      For 1 day
                     </button>
-                  </div>
-
-                  <p class="text-sm text-base-content mt-1">
-                    <span class={warningPresentation().messageClass}>
-                      {warningPresentation().message}
-                    </span>
-                  </p>
-
-                  <Show when={showDetails()}>
-                    <div class="mt-3 space-y-1">
-                      <div class="text-xs space-y-1">
-                        <div class="flex items-center gap-2">
-                          <span
-                            class={getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).className}
-                          >
-                            {getSecurityFeatureStatePresentation(status()!.credentialsEncrypted).label}
-                          </span>
-                          <span>Credentials encrypted at rest</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span class={getSecurityFeatureStatePresentation(status()!.exportProtected).className}>
-                            {getSecurityFeatureStatePresentation(status()!.exportProtected).label}
-                          </span>
-                          <span>Export requires authentication</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span
-                            class={getSecurityFeatureStatePresentation(status()!.hasAuthentication).className}
-                          >
-                            {getSecurityFeatureStatePresentation(status()!.hasAuthentication).label}
-                          </span>
-                          <span>Authentication enabled</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span class={getSecurityFeatureStatePresentation(status()!.hasHTTPS).className}>
-                            {getSecurityFeatureStatePresentation(status()!.hasHTTPS).label}
-                          </span>
-                          <span>HTTPS connection</span>
-                        </div>
-                        <div class="flex items-center gap-2">
-                          <span class={getSecurityFeatureStatePresentation(status()!.hasAuditLogging).className}>
-                            {getSecurityFeatureStatePresentation(status()!.hasAuditLogging).label}
-                          </span>
-                          <span>Audit logging enabled</span>
-                        </div>
-                      </div>
-                    </div>
-                  </Show>
-
-                  <div class="flex items-center gap-3 mt-3">
-                    <a
-                      href="/settings/security-overview"
-                      class="text-sm font-medium text-blue-600 dark:text-blue-400 hover:underline"
+                    <button
+                      type="button"
+                      onClick={() => handleDismiss('week')}
+                      class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
                     >
-                      Enable Security →
-                    </a>
-                    <a
-                      href={SECURITY_DOC_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="text-sm text-muted hover:underline"
+                      For 1 week
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDismiss('forever')}
+                      class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
                     >
-                      Learn More
-                    </a>
-                    <div class="relative group">
-                      <button
-                        type="button"
-                        onClick={() => handleDismiss('day')}
-                        class="text-sm text-muted hover:text-base-content"
-                      >
-                        Dismiss ▼
-                      </button>
-                      <div class="absolute left-0 top-full mt-1 bg-surface rounded shadow-sm border border-border opacity-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => handleDismiss('day')}
-                          class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
-                        >
-                          For 1 day
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDismiss('week')}
-                          class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
-                        >
-                          For 1 week
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDismiss('forever')}
-                          class="block w-full text-left px-3 py-1.5 text-sm hover:bg-surface-hover"
-                        >
-                          Forever
-                        </button>
-                      </div>
-                    </div>
+                      Forever
+                    </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </Portal>
+      </div>
     </Show>
   );
 };

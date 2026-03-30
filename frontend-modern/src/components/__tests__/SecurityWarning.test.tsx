@@ -62,6 +62,8 @@ describe('SecurityWarning', () => {
     expect(
       screen.queryByText(/accessible without authentication/i),
     ).not.toBeInTheDocument();
+    const banner = screen.getByRole('status');
+    expect(banner).not.toHaveClass('fixed');
     expect(screen.getByRole('link', { name: 'Learn More' })).toHaveAttribute(
       'href',
       '/docs/SECURITY.md',
