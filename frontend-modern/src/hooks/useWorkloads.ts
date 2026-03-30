@@ -319,8 +319,13 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
 
   const cpuPercent = resource.metrics?.cpu?.percent ?? resource.metrics?.cpu?.value ?? 0;
 
-  // For Proxmox guests, use the metrics API guest ID format (instance:node:vmid)
-  // so sparklines resolve to the backend's chart keys.
+  const appContainerRuntimeId =
+    workloadType === 'app-container' ? (resource.docker?.containerId || '').trim() : '';
+
+  // Keep workload identity on the canonical unified resource id. Platform-native
+  // runtime ids such as Docker container ids must stay separate so workload
+  // routing, discovery, anomalies, and drawer selection align with the shared
+  // resource model.
   const guestId = (() => {
     if (
       (workloadType === 'vm' || workloadType === 'system-container') &&
@@ -329,9 +334,6 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
       vmid > 0
     ) {
       return `${instance}:${node}:${vmid}`;
-    }
-    if (workloadType === 'app-container') {
-      return resource.docker?.containerId || resource.id;
     }
     if (workloadType === 'pod') {
       const clusterId = resource.kubernetes?.clusterId;
@@ -401,6 +403,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
     osTemplate: undefined,
     workloadType,
     displayId,
+    containerId: appContainerRuntimeId || undefined,
     image:
       workloadType === 'app-container'
         ? resource.docker?.image || resource.docker?.imageName || resource.docker?.imageRef

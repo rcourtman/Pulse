@@ -168,14 +168,14 @@ describe('getCanonicalWorkloadId', () => {
 
   it('returns id for app-container workloads (no instance/node/vmid)', () => {
     const guest = {
-      id: 'docker-123',
+      id: 'app-container:docker-main:container-123',
       type: 'docker',
       workloadType: 'app-container' as const,
       instance: '',
       node: '',
       vmid: 0,
     };
-    expect(getCanonicalWorkloadId(guest)).toBe('docker-123');
+    expect(getCanonicalWorkloadId(guest)).toBe('app-container:docker-main:container-123');
   });
 
   it('returns id for pod workloads (no instance/node/vmid)', () => {

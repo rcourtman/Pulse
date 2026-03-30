@@ -821,6 +821,13 @@ separate from the governed display-label contract.
 The shared workloads projection in `useWorkloads` also uses that helper for
 pod context labels, so dashboard Kubernetes grouping follows the same
 canonical cluster-name contract instead of re-encoding the fallback locally.
+That same shared workloads projection now also owns canonical app-container
+identity on the `/workloads` surface. Frontend workload records must keep the
+unified resource `id` intact for drawer selection, deep links, anomalies, and
+discovery, while Docker-native action fields such as `containerId` stay
+separate and are only consumed by Docker-specific controls. API-backed
+platforms such as TrueNAS must not regress that path back to runtime-native
+container ids just because they expose Docker-compatible runtime metadata.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the dashboard path stay aligned on the
 same cluster-name source of truth.

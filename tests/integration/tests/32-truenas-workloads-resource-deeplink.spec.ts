@@ -10,7 +10,7 @@ type WorkerFixtures = {
   authStorageStatePath: string;
 };
 
-const SCREENSHOT_PATH = '/tmp/truenas-workloads-platform-filter.png';
+const SCREENSHOT_PATH = '/tmp/truenas-workloads-resource-deeplink.png';
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -23,7 +23,7 @@ const test = base.extend<{}, WorkerFixtures>({
       '..',
       'tmp',
       'playwright-auth',
-      `truenas-workloads-platform-filter-${workerInfo.project.name}.json`,
+      `truenas-workloads-resource-deeplink-${workerInfo.project.name}.json`,
     );
     fs.mkdirSync(path.dirname(storageStatePath), { recursive: true });
     await createAuthenticatedStorageState(browser, storageStatePath);
@@ -35,10 +35,10 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
-test.describe('TrueNAS workloads platform filter', () => {
+test.describe('TrueNAS workloads resource deep links', () => {
   test.setTimeout(180_000);
 
-  test('keeps canonical platform scoping on the workloads route', async ({ page }) => {
+  test('opens the canonical workload drawer without inventing a node scope', async ({ page }) => {
     await page.route('**/api/resources**', async (route) => {
       const requestUrl = new URL(route.request().url());
       if (
@@ -61,6 +61,7 @@ test.describe('TrueNAS workloads platform filter', () => {
               status: 'running',
               lastSeen: '2026-03-29T21:00:00Z',
               node: 'truenas-main',
+              instance: 'truenas-main',
               sources: ['truenas'],
               parentName: 'truenas-main',
               metrics: {
@@ -78,39 +79,18 @@ test.describe('TrueNAS workloads platform filter', () => {
                 imageName: 'nextcloud:29',
                 runtime: 'docker',
                 hostSourceId: 'truenas-main',
-                updateStatus: {
-                  updateAvailable: true,
-                  currentDigest: 'sha256:1111111111111111111111111111111111111111111111111111111111111111',
-                  latestDigest: 'sha256:2222222222222222222222222222222222222222222222222222222222222222',
-                  lastChecked: 1743362400000,
-                },
               },
             },
             {
-              id: 'app-container:docker-main:grafana',
-              type: 'app-container',
-              name: 'grafana',
+              id: 'cluster-a:pve1:101',
+              type: 'vm',
+              name: 'vm-101',
               status: 'running',
               lastSeen: '2026-03-29T21:00:00Z',
-              node: 'docker-main',
-              sources: ['docker'],
-              parentName: 'docker-main',
-              metrics: {
-                cpu: { value: 8, percent: 8 },
-                memory: { total: 4 * 1024 * 1024 * 1024, used: 1 * 1024 * 1024 * 1024 },
-                disk: { total: 40 * 1024 * 1024 * 1024, used: 10 * 1024 * 1024 * 1024 },
-                netIn: { value: 1024 },
-                netOut: { value: 512 },
-                diskRead: { value: 128 },
-                diskWrite: { value: 64 },
-              },
-              docker: {
-                containerId: 'docker-grafana',
-                hostname: 'docker-main',
-                imageName: 'grafana:11',
-                runtime: 'docker',
-                hostSourceId: 'docker-main',
-              },
+              node: 'pve1',
+              instance: 'cluster-a',
+              vmid: 101,
+              sources: ['proxmox'],
             },
           ],
           meta: {
@@ -123,23 +103,24 @@ test.describe('TrueNAS workloads platform filter', () => {
       });
     });
 
-    await page.goto('/workloads?type=app-container&platform=truenas&agent=truenas-main', {
-      waitUntil: 'domcontentloaded',
-    });
+    await page.goto(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+      {
+        waitUntil: 'domcontentloaded',
+      },
+    );
 
-    await page.waitForURL(/\/workloads\?type=app-container&platform=truenas&agent=.*truenas-main/);
+    await page.waitForURL(
+      /\/workloads\?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud/,
+    );
     await expect(page.locator('#dashboard-type-filter')).toHaveValue('app-container');
     await expect(page.locator('#workloads-platform-filter')).toHaveValue('truenas');
     await expect(page.locator('#workloads-node-filter')).toHaveValue(/truenas-main/);
-
-    const workloadTable = page.locator('table').first();
-    await expect(workloadTable).toContainText('nextcloud');
-    await expect(workloadTable).not.toContainText('grafana');
     await expect(
-      page.locator(
-        'tr[data-guest-id="app-container:truenas-main:nextcloud"] [data-prevent-toggle]',
-      ),
-    ).toHaveCount(0);
+      page.locator('tr[data-guest-id="app-container:truenas-main:nextcloud"]'),
+    ).toContainText('nextcloud');
+    await expect(page.getByText('Open related infrastructure', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible();
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

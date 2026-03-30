@@ -7,6 +7,9 @@ export type WorkloadGuest = (VM | Container) & {
   workloadType?: WorkloadType;
   displayId?: string;
   image?: string;
+  // Provider/runtime-native identifier for app-container actions such as Docker image updates.
+  // Canonical workload identity remains `id`.
+  containerId?: string;
   namespace?: string;
   contextLabel?: string;
   /** Cluster name from Proxmox (for badge display in workloads table). */

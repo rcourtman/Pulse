@@ -71,4 +71,21 @@ describe('useDashboardSelectionState', () => {
     setFilteredGuests([]);
     expect(result.hoveredWorkloadId()).toBeNull();
   });
+
+  it('does not invent node filters for canonical app-container deep links', () => {
+    locationSearch = '?type=app-container&resource=app-container:truenas-main:nextcloud';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+    const setSelectedNode = vi.fn();
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        setSelectedNode,
+      }),
+    );
+
+    expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
+    expect(setSelectedNode).not.toHaveBeenCalled();
+    expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBeNull();
+  });
 });

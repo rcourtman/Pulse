@@ -13,6 +13,7 @@ const { isMobileMock } = vi.hoisted(() => {
 // ── Module mocks ───────────────────────────────────────────────────────
 
 const mockNavigate = vi.fn();
+const updateButtonSpy = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mockNavigate,
@@ -88,7 +89,10 @@ vi.mock('@/components/shared/TagBadges', () => ({
 }));
 
 vi.mock('@/components/shared/ContainerUpdateBadge', () => ({
-  UpdateButton: () => <div data-testid="update-button" />,
+  UpdateButton: (props: { agentId: string; containerId: string; containerName: string }) => {
+    updateButtonSpy(props);
+    return <div data-testid="update-button" />;
+  },
 }));
 
 vi.mock('@/components/shared/workloadTypeBadges', () => ({
@@ -964,6 +968,10 @@ describe('event propagation', () => {
 });
 
 describe('app-container update button visibility', () => {
+  afterEach(() => {
+    updateButtonSpy.mockReset();
+  });
+
   it('does not show update button when dockerHostId is missing', () => {
     renderGuestRow({
       guest: makeGuest({
@@ -979,14 +987,24 @@ describe('app-container update button visibility', () => {
   it('shows update button when dockerHostId is present', () => {
     renderGuestRow({
       guest: makeGuest({
+        id: 'app-container:docker-main:grafana',
         type: 'app-container',
         workloadType: 'app-container',
         platformType: 'docker',
         dockerHostId: 'host-1',
+        containerId: 'docker-grafana',
+        name: 'grafana',
       }),
       visibleColumnIds: ['name', 'update'],
     });
     expect(screen.getByTestId('update-button')).toBeTruthy();
+    expect(updateButtonSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentId: 'host-1',
+        containerId: 'docker-grafana',
+        containerName: 'grafana',
+      }),
+    );
   });
 
   it('does not show Docker update button for TrueNAS app containers', () => {

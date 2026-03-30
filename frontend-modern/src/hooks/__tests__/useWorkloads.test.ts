@@ -139,7 +139,7 @@ describe('useWorkloads', () => {
         { ...sampleResource, id: 'vm-pmg', sources: ['pmg'], name: 'vm-pmg' },
         {
           ...sampleResource,
-          id: 'truenas-nextcloud',
+          id: 'app-container:truenas-main:nextcloud',
           type: 'app-container',
           name: 'nextcloud',
           status: 'healthy',
@@ -170,6 +170,8 @@ describe('useWorkloads', () => {
     expect(byName.get('vm-pbs')?.platformType).toBe('proxmox-pbs');
     expect(byName.get('vm-pmg')?.platformType).toBe('proxmox-pmg');
     expect(byName.get('nextcloud')?.platformType).toBe('truenas');
+    expect(byName.get('nextcloud')?.id).toBe('app-container:truenas-main:nextcloud');
+    expect(byName.get('nextcloud')?.containerId).toBe('nextcloud-ctr');
     expect(byName.get('nextcloud')?.dockerHostId).toBeUndefined();
 
     dispose();

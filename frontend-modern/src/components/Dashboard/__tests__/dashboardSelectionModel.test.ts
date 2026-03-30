@@ -13,6 +13,20 @@ describe('dashboardSelectionModel', () => {
       resourceId: 'cluster-a:node-1:101',
       selectedNode: 'cluster-a-node-1',
     });
+    expect(
+      resolveDashboardResourceSelection(
+        '?type=app-container&resource=app-container:truenas-main:nextcloud',
+      ),
+    ).toEqual({
+      resourceId: 'app-container:truenas-main:nextcloud',
+      selectedNode: null,
+    });
+    expect(
+      resolveDashboardResourceSelection('?resource=app-container:docker-main:container-123'),
+    ).toEqual({
+      resourceId: 'app-container:docker-main:container-123',
+      selectedNode: null,
+    });
     expect(resolveDashboardResourceSelection('?resource=guest-1')).toEqual({
       resourceId: 'guest-1',
       selectedNode: null,

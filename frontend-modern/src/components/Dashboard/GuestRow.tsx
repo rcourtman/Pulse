@@ -534,7 +534,7 @@ export function GuestRow(props: GuestRowProps) {
                 <UpdateButton
                   updateStatus={props.guest.updateStatus}
                   agentId={dockerHostId()}
-                  containerId={props.guest.id ?? ''}
+                  containerId={props.guest.containerId ?? ''}
                   containerName={props.guest.name}
                   compact={true}
                 />
