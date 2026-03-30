@@ -255,6 +255,15 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
     the panel can render shared route chips without creating another page-local
     resource lookup or provider-specific handoff layer.
+19. Keep the alert-thresholds containers surface on the canonical shared owner.
+    `alertOverridesModel.ts`, `useAlertOverridesState.ts`, and
+    `useAlertsConfigurationState.ts` must surface API-backed `app-container`
+    parents such as TrueNAS as first-class `Container Runtimes`, while
+    `ThresholdsTab.tsx` must bridge function-valued selectors into
+    `ThresholdsTable.tsx` explicitly instead of relying on spread-based adapter
+    props that can collapse functions on the live Solid surface. Docker-only
+    controls in `ThresholdsTableDockerTab.tsx` must remain gated to real
+    `docker-host` resources instead of leaking onto platform-managed runtimes.
 
 ## Current State
 
@@ -1280,7 +1289,11 @@ surfaces rather than restoring mixed JSX ownership to
 The thresholds tab adapter contract now lives in
 `frontend-modern/src/features/alerts/thresholds/thresholdsTabModel.ts`, so
 `frontend-modern/src/features/alerts/tabs/ThresholdsTab.tsx` stays a thin shell
-instead of carrying a duplicate table adapter contract inline.
+instead of carrying a duplicate table adapter contract inline. That adapter
+must bridge function-valued selectors and mutation props into
+`frontend-modern/src/components/Alerts/ThresholdsTable.tsx` explicitly; spread-
+based table prop adapters are not allowed here because they can collapse
+function props on the live Solid surface and break thresholds runtime state.
 Canonical threshold row shaping now routes through
 `frontend-modern/src/features/alerts/thresholds/thresholdsResourceModel.ts`
 plus the family-owned feature hooks
@@ -1314,6 +1327,13 @@ for reactive override state and thresholds-facing resource selectors, and
 destination config normalization and payload shaping, and
 `frontend-modern/src/features/alerts/useAlertDestinationsState.ts` for
 notification destination reload and persistence orchestration.
+Within that alerts configuration runtime, canonical container-runtime projection
+now belongs to `alertOverridesModel.ts`,
+`useAlertOverridesState.ts`, and `useAlertsConfigurationState.ts`. The
+thresholds `Containers` workspace must treat API-backed `app-container`
+parents such as TrueNAS as first-class `Container Runtimes`, while Docker-only
+controls in `ThresholdsTableDockerTab.tsx` remain gated to real
+`docker-host` resources instead of leaking onto platform-managed runtimes.
 `frontend-modern/src/features/alerts/useAlertWebhookDestinationsState.ts` now
 owns webhook runtime, and
 `frontend-modern/src/components/Alerts/ResourceTable.tsx` now follows the same

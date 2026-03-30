@@ -68,6 +68,7 @@ export interface ThresholdsTableProps {
   nodes: Resource[];
   agents: Resource[];
   storage: Resource[];
+  containerRuntimes: Resource[];
   dockerHosts: Resource[];
   allResources: Resource[];
   pbsInstances?: PBSInstance[]; // PBS instances derived from unified resources

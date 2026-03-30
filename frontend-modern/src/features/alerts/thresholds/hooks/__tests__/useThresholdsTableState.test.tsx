@@ -69,6 +69,7 @@ const buildProps = (): ThresholdsTableProps =>
     allGuests: () => [],
     allResources: [],
     backupDefaults: () => ({ criticalDays: 7, enabled: false, warningDays: 3 }),
+    containerRuntimes: [],
     disableAllAgents: () => false,
     disableAllAgentsOffline: () => false,
     disableAllDockerContainers: () => false,
@@ -183,6 +184,7 @@ describe('useThresholdsTableState', () => {
 
     expect(captured).toBeDefined();
     expect(captured!.activeTab()).toBe('systems');
+    expect(captured!.hasDockerSpecificControls()).toBe(false);
 
     captured!.dismissHelpBanner();
     expect(captured!.helpBannerDismissed()).toBe(true);

@@ -137,6 +137,7 @@ const baseProps = () => ({
   nodes: [],
   agents: [],
   storage: [],
+  containerRuntimes: [],
   dockerHosts: [],
   pbsInstances: [],
   pmgInstances: [],
@@ -549,6 +550,7 @@ describe('ThresholdsTable Resource Rendering', () => {
     render(() => (
       <ThresholdsTable
         {...(baseProps() as any)}
+        containerRuntimes={[dockerHost]}
         dockerHosts={[dockerHost]}
         allResources={[container]}
       />
@@ -564,6 +566,52 @@ describe('ThresholdsTable Resource Rendering', () => {
     expect(
       screen.getByTestId('resource-name-docker:docker-host-1/container-governed'),
     ).not.toHaveTextContent('secret-nginx');
+  });
+
+  it('renders TrueNAS app containers under canonical container runtimes without Docker-only controls', async () => {
+    setPathname('/alerts/thresholds/containers');
+    const truenasRuntime = {
+      id: 'truenas-resource',
+      type: 'truenas',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+      platformId: 'truenas-main',
+      platformType: 'truenas',
+      sourceType: 'hybrid',
+      status: 'online',
+      lastSeen: 789,
+    } as any;
+    const container = {
+      id: 'ix-nextcloud',
+      parentId: 'truenas-resource',
+      type: 'app-container',
+      name: 'nextcloud',
+      displayName: 'Nextcloud',
+      platformId: 'truenas-main',
+      platformType: 'truenas',
+      sourceType: 'api',
+      status: 'running',
+      lastSeen: 789,
+    } as any;
+
+    render(() => (
+      <ThresholdsTable
+        {...(baseProps() as any)}
+        containerRuntimes={[truenasRuntime]}
+        allResources={[container]}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('resource-table-Container Runtimes')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId('resource-name-truenas-resource')).toHaveTextContent('TrueNAS');
+    expect(screen.getByTestId('resource-name-docker:truenas-resource/ix-nextcloud')).toHaveTextContent(
+      'Nextcloud',
+    );
+    expect(screen.queryByText('Ignored container prefixes')).not.toBeInTheDocument();
+    expect(screen.queryByText('Swarm service alerts')).not.toBeInTheDocument();
   });
 
   it('renders governed agent disk node labels with the policy-aware display label', async () => {
@@ -693,6 +741,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     render(() => (
       <ThresholdsTable
         {...(baseProps() as any)}
+        containerRuntimes={[dockerHost]}
         dockerHosts={[dockerHost]}
         overrides={() => [override]}
       />
@@ -741,6 +790,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     render(() => (
       <ThresholdsTable
         {...(baseProps() as any)}
+        containerRuntimes={[dockerHost]}
         dockerHosts={[dockerHost]}
         allResources={[container]}
         overrides={() => [override]}
@@ -774,6 +824,7 @@ describe('ThresholdsTable V6 ID compatibility', () => {
     render(() => (
       <ThresholdsTable
         {...(baseProps() as any)}
+        containerRuntimes={[dockerHost]}
         dockerHosts={[dockerHost]}
         removeAlerts={removeAlerts}
       />

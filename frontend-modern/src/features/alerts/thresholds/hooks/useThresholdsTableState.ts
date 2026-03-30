@@ -128,6 +128,8 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     return '';
   });
 
+  const hasDockerSpecificControls = createMemo(() => (props.dockerHosts?.length ?? 0) > 0);
+
   const getActiveTabFromRoute = (): ThresholdsActiveTab => {
     const path = location.pathname;
     if (path.includes('/thresholds/containers')) return 'docker';
@@ -304,7 +306,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
           label: 'Container Runtimes',
           overrides: countOverrides(dockerHostsWithOverrides()),
           tab: 'docker',
-          total: props.dockerHosts?.length ?? 0,
+          total: props.containerRuntimes?.length ?? 0,
         },
         {
           key: 'agents',
@@ -547,6 +549,7 @@ export function useThresholdsTableState(props: ThresholdsTableProps) {
     hasActiveAlert,
     hasSection,
     helpBannerDismissed,
+    hasDockerSpecificControls,
     isBulkEditDialogOpen,
     isCollapsed,
     nodesWithOverrides,

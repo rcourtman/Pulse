@@ -6,7 +6,11 @@ import type { Resource, ResourceType } from '@/types/resource';
 import { hasAgentFacet } from '@/utils/agentResources';
 import { pbsInstanceFromResource, pmgInstanceFromResource } from '@/utils/resourceStateAdapters';
 
-import { buildProjectedOverrides, normalizeRawOverridesConfig } from './alertOverridesModel';
+import {
+  buildContainerRuntimeResources,
+  buildProjectedOverrides,
+  normalizeRawOverridesConfig,
+} from './alertOverridesModel';
 import type { Override } from './types';
 
 export interface AlertOverridesStateProps {
@@ -71,6 +75,13 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
       .filter((resource): resource is PMGInstance => Boolean(resource)),
   );
 
+  const containerRuntimeResources = createMemo(() =>
+    buildContainerRuntimeResources({
+      allResources: props.allResources(),
+      dockerHostResources: props.byType('docker-host'),
+    }),
+  );
+
   createEffect(() => {
     if (props.hasUnsavedChanges()) {
       return;
@@ -94,7 +105,6 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
       .allResources()
       .filter((resource) => resource.type === 'storage' || resource.type === 'datastore');
     const agentResourceList = agentResources();
-    const dockerHostResources = props.byType('docker-host');
     const overridesList = buildProjectedOverrides({
       rawConfig,
       nodeResources,
@@ -102,7 +112,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
       containerResources,
       storageResources,
       agentResourceList,
-      dockerHostResources,
+      containerRuntimeResources: containerRuntimeResources(),
       getChildren: props.children,
       pbsInstanceById: pbsInstanceById(),
     });
@@ -145,6 +155,7 @@ export function useAlertOverridesState(props: AlertOverridesStateProps) {
     replaceRawOverridesConfig,
     allGuests,
     agentResources,
+    containerRuntimeResources,
     pbsInstances,
     pmgInstances,
   };

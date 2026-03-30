@@ -112,4 +112,45 @@ describe('useAlertOverridesState', () => {
     await waitFor(() => expect(result.overrides()).toEqual([]));
     expect(overviewOverrides()).toEqual([]);
   });
+
+  it('exposes canonical container runtimes for TrueNAS-backed app workloads', async () => {
+    const [hasUnsavedChanges] = createSignal(false);
+    const [overviewOverrides, setOverviewOverrides] = createSignal([]);
+    const resources = [
+      makeResource({
+        id: 'truenas-main',
+        name: 'truenas-main',
+        displayName: 'TrueNAS Main',
+        type: 'truenas',
+        platformData: {
+          agent: {
+            agentId: 'truenas-main',
+          },
+        },
+      }),
+      makeResource({
+        id: 'ix-nextcloud',
+        name: 'nextcloud',
+        displayName: 'Nextcloud',
+        type: 'app-container',
+        parentId: 'truenas-main',
+      }),
+    ];
+
+    const { result } = renderHook(() =>
+      useAlertOverridesState({
+        allResources: () => resources,
+        byType: (resourceType) => resources.filter((resource) => resource.type === resourceType),
+        children: (resourceId) => resources.filter((resource) => resource.parentId === resourceId),
+        hasUnsavedChanges,
+        setOverviewOverrides,
+      }),
+    );
+
+    await waitFor(() => expect(result.containerRuntimeResources()).toHaveLength(1));
+    expect(result.containerRuntimeResources()[0]).toMatchObject({
+      id: 'truenas-main',
+      type: 'truenas',
+    });
+  });
 });

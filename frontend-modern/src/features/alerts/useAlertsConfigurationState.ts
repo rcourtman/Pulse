@@ -128,6 +128,7 @@ export function useAlertsConfigurationState(props: AlertsConfigurationSurfacePro
     ...configurationSnapshotState,
     allGuests: overridesState.allGuests,
     agentResources: overridesState.agentResources,
+    containerRuntimeResources: overridesState.containerRuntimeResources,
     pbsInstances: overridesState.pbsInstances,
     pmgInstances: overridesState.pmgInstances,
     loadAlertConfiguration,

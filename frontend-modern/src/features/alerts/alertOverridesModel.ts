@@ -92,6 +92,37 @@ export const dockerContainerOverrideIdCandidates = (
     ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
   );
 
+export const buildContainerRuntimeResources = ({
+  allResources,
+  dockerHostResources,
+}: {
+  allResources: Resource[];
+  dockerHostResources: Resource[];
+}): Resource[] => {
+  const resourceById = new Map(allResources.map((resource) => [resource.id, resource]));
+  const runtimes: Resource[] = [];
+  const seen = new Set<string>();
+
+  const addRuntime = (resource: Resource | undefined) => {
+    if (!resource || seen.has(resource.id)) return;
+    seen.add(resource.id);
+    runtimes.push(resource);
+  };
+
+  dockerHostResources.forEach(addRuntime);
+  allResources.forEach((resource) => {
+    if (resource.type === 'truenas') {
+      addRuntime(resource);
+    }
+  });
+  allResources.forEach((resource) => {
+    if (resource.type !== 'app-container' || !resource.parentId) return;
+    addRuntime(resourceById.get(resource.parentId));
+  });
+
+  return runtimes;
+};
+
 interface BuildProjectedOverridesArgs {
   rawConfig: Record<string, RawOverrideConfig>;
   nodeResources: Resource[];
@@ -99,7 +130,7 @@ interface BuildProjectedOverridesArgs {
   containerResources: Resource[];
   storageResources: Resource[];
   agentResourceList: Resource[];
-  dockerHostResources: Resource[];
+  containerRuntimeResources: Resource[];
   getChildren: (resourceId: string) => Resource[];
   pbsInstanceById: Map<string, PBSInstance>;
 }
@@ -111,7 +142,7 @@ export const buildProjectedOverrides = ({
   containerResources,
   storageResources,
   agentResourceList,
-  dockerHostResources,
+  containerRuntimeResources,
   getChildren,
   pbsInstanceById,
 }: BuildProjectedOverridesArgs): Override[] => {
@@ -141,7 +172,7 @@ export const buildProjectedOverrides = ({
     };
   };
 
-  dockerHostResources.forEach((host) => {
+  containerRuntimeResources.forEach((host) => {
     dockerHostOverrideIdCandidates(host).forEach((id) => {
       dockerHostMap.set(id, host);
     });

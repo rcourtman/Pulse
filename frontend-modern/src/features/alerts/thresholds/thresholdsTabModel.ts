@@ -13,14 +13,3 @@ export interface ThresholdsTabProps
   agentDefaults: Accessor<ThresholdsTableProps['agentDefaults']>;
   dockerDefaults: Accessor<ThresholdsTableProps['dockerDefaults']>;
 }
-
-export function buildThresholdsTableProps(props: ThresholdsTabProps): ThresholdsTableProps {
-  return {
-    ...props,
-    guestDefaults: props.guestDefaults(),
-    nodeDefaults: props.nodeDefaults(),
-    pbsDefaults: props.pbsDefaults(),
-    agentDefaults: props.agentDefaults(),
-    dockerDefaults: props.dockerDefaults(),
-  };
-}

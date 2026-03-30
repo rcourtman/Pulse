@@ -29,7 +29,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
     const overridesMap = createOverridesMap(props.overrides());
     const seen = new Set<string>();
 
-    const hosts: TableResource[] = (props.dockerHosts ?? []).map((host) => {
+    const hosts: TableResource[] = (props.containerRuntimes ?? []).map((host) => {
       const idCandidates = dockerHostOverrideIdCandidates(host);
       const originalName = getAlertResourceDisplayLabel(host);
       const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
@@ -109,7 +109,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
     const groups: Record<string, TableResource[]> = {};
     const seen = new Set<string>();
 
-    (props.dockerHosts ?? []).forEach((host) => {
+    (props.containerRuntimes ?? []).forEach((host) => {
       const dockerHostIds = dockerHostOverrideIdCandidates(host);
       const dockerHostIdForActions = dockerHostIds[0] || host.id;
       const hostLabel = getAlertResourceDisplayLabel(host);
@@ -220,7 +220,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
   );
 
   const totalDockerContainers = createMemo(() =>
-    (props.dockerHosts ?? []).reduce(
+    (props.containerRuntimes ?? []).reduce(
       (sum, host) => sum + (dockerContainersByHostId().get(host.id)?.length ?? 0),
       0,
     ),
@@ -228,7 +228,7 @@ export function useThresholdsDockerData(inputs: ThresholdsDataInputs) {
 
   const dockerHostGroupMeta = createMemo<Record<string, GroupHeaderMeta>>(() => {
     const meta: Record<string, GroupHeaderMeta> = {};
-    (props.dockerHosts ?? []).forEach((host) => {
+    (props.containerRuntimes ?? []).forEach((host) => {
       const originalName = getAlertResourceDisplayLabel(host);
       const friendlyName = getFriendlyAlertNodeName(originalName, host.policy);
       const headerMeta: GroupHeaderMeta = {

@@ -1,14 +1,110 @@
-import { createMemo } from 'solid-js';
-
 import { ThresholdsTable } from '@/components/Alerts/ThresholdsTable';
 
-import {
-  buildThresholdsTableProps,
-  type ThresholdsTabProps,
-} from '../thresholds/thresholdsTabModel';
+import type { ThresholdsTabProps } from '../thresholds/thresholdsTabModel';
 
 export function ThresholdsTab(props: ThresholdsTabProps) {
-  const tableProps = createMemo(() => buildThresholdsTableProps(props));
-
-  return <ThresholdsTable {...tableProps()} />;
+  return (
+    <ThresholdsTable
+      overrides={props.overrides}
+      setOverrides={props.setOverrides}
+      rawOverridesConfig={props.rawOverridesConfig}
+      setRawOverridesConfig={props.setRawOverridesConfig}
+      allGuests={props.allGuests}
+      nodes={props.nodes}
+      agents={props.agents}
+      storage={props.storage}
+      containerRuntimes={props.containerRuntimes}
+      dockerHosts={props.dockerHosts}
+      allResources={props.allResources}
+      pbsInstances={props.pbsInstances}
+      pmgInstances={props.pmgInstances}
+      pmgThresholds={props.pmgThresholds}
+      setPMGThresholds={props.setPMGThresholds}
+      guestDefaults={props.guestDefaults()}
+      setGuestDefaults={props.setGuestDefaults}
+      guestDisableConnectivity={props.guestDisableConnectivity}
+      setGuestDisableConnectivity={props.setGuestDisableConnectivity}
+      guestPoweredOffSeverity={props.guestPoweredOffSeverity}
+      setGuestPoweredOffSeverity={props.setGuestPoweredOffSeverity}
+      nodeDefaults={props.nodeDefaults()}
+      pbsDefaults={props.pbsDefaults()}
+      agentDefaults={props.agentDefaults()}
+      setNodeDefaults={props.setNodeDefaults}
+      setPBSDefaults={props.setPBSDefaults}
+      setAgentDefaults={props.setAgentDefaults}
+      dockerDefaults={props.dockerDefaults()}
+      dockerDisableConnectivity={props.dockerDisableConnectivity}
+      setDockerDisableConnectivity={props.setDockerDisableConnectivity}
+      dockerPoweredOffSeverity={props.dockerPoweredOffSeverity}
+      setDockerPoweredOffSeverity={props.setDockerPoweredOffSeverity}
+      setDockerDefaults={props.setDockerDefaults}
+      dockerIgnoredPrefixes={props.dockerIgnoredPrefixes}
+      setDockerIgnoredPrefixes={props.setDockerIgnoredPrefixes}
+      ignoredGuestPrefixes={props.ignoredGuestPrefixes}
+      setIgnoredGuestPrefixes={props.setIgnoredGuestPrefixes}
+      guestTagWhitelist={props.guestTagWhitelist}
+      setGuestTagWhitelist={props.setGuestTagWhitelist}
+      guestTagBlacklist={props.guestTagBlacklist}
+      setGuestTagBlacklist={props.setGuestTagBlacklist}
+      storageDefault={props.storageDefault}
+      setStorageDefault={props.setStorageDefault}
+      resetGuestDefaults={props.resetGuestDefaults}
+      resetNodeDefaults={props.resetNodeDefaults}
+      resetPBSDefaults={props.resetPBSDefaults}
+      resetAgentDefaults={props.resetAgentDefaults}
+      resetDockerDefaults={props.resetDockerDefaults}
+      resetDockerIgnoredPrefixes={props.resetDockerIgnoredPrefixes}
+      resetStorageDefault={props.resetStorageDefault}
+      factoryGuestDefaults={props.factoryGuestDefaults}
+      factoryNodeDefaults={props.factoryNodeDefaults}
+      factoryPBSDefaults={props.factoryPBSDefaults}
+      factoryAgentDefaults={props.factoryAgentDefaults}
+      factoryDockerDefaults={props.factoryDockerDefaults}
+      factoryStorageDefault={props.factoryStorageDefault}
+      timeThresholds={props.timeThresholds}
+      metricTimeThresholds={props.metricTimeThresholds}
+      setMetricTimeThresholds={props.setMetricTimeThresholds}
+      snapshotDefaults={props.snapshotDefaults}
+      setSnapshotDefaults={props.setSnapshotDefaults}
+      snapshotFactoryDefaults={props.snapshotFactoryDefaults}
+      resetSnapshotDefaults={props.resetSnapshotDefaults}
+      backupDefaults={props.backupDefaults}
+      setBackupDefaults={props.setBackupDefaults}
+      backupFactoryDefaults={props.backupFactoryDefaults}
+      resetBackupDefaults={props.resetBackupDefaults}
+      setHasUnsavedChanges={props.setHasUnsavedChanges}
+      activeAlerts={props.activeAlerts}
+      removeAlerts={props.removeAlerts}
+      disableAllNodes={props.disableAllNodes}
+      setDisableAllNodes={props.setDisableAllNodes}
+      disableAllGuests={props.disableAllGuests}
+      setDisableAllGuests={props.setDisableAllGuests}
+      disableAllAgents={props.disableAllAgents}
+      setDisableAllAgents={props.setDisableAllAgents}
+      disableAllStorage={props.disableAllStorage}
+      setDisableAllStorage={props.setDisableAllStorage}
+      disableAllPBS={props.disableAllPBS}
+      setDisableAllPBS={props.setDisableAllPBS}
+      disableAllPMG={props.disableAllPMG}
+      setDisableAllPMG={props.setDisableAllPMG}
+      disableAllDockerHosts={props.disableAllDockerHosts}
+      setDisableAllDockerHosts={props.setDisableAllDockerHosts}
+      disableAllDockerServices={props.disableAllDockerServices}
+      setDisableAllDockerServices={props.setDisableAllDockerServices}
+      disableAllDockerContainers={props.disableAllDockerContainers}
+      setDisableAllDockerContainers={props.setDisableAllDockerContainers}
+      disableAllNodesOffline={props.disableAllNodesOffline}
+      setDisableAllNodesOffline={props.setDisableAllNodesOffline}
+      disableAllGuestsOffline={props.disableAllGuestsOffline}
+      setDisableAllGuestsOffline={props.setDisableAllGuestsOffline}
+      disableAllAgentsOffline={props.disableAllAgentsOffline}
+      setDisableAllAgentsOffline={props.setDisableAllAgentsOffline}
+      disableAllPBSOffline={props.disableAllPBSOffline}
+      setDisableAllPBSOffline={props.setDisableAllPBSOffline}
+      disableAllPMGOffline={props.disableAllPMGOffline}
+      setDisableAllPMGOffline={props.setDisableAllPMGOffline}
+      disableAllDockerHostsOffline={props.disableAllDockerHostsOffline}
+      setDisableAllDockerHostsOffline={props.setDisableAllDockerHostsOffline}
+    />
+  );
 }

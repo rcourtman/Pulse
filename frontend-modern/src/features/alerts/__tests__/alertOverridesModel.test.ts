@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 
 import {
+  buildContainerRuntimeResources,
   buildProjectedOverrides,
   normalizeRawOverridesConfig,
 } from '../alertOverridesModel';
@@ -56,7 +57,7 @@ describe('alertOverridesModel', () => {
         containerResources: [],
         storageResources: [],
         agentResourceList: [],
-        dockerHostResources: [],
+        containerRuntimeResources: [],
         getChildren: () => [],
         pbsInstanceById: new Map(),
       }),
@@ -66,6 +67,77 @@ describe('alertOverridesModel', () => {
         type: 'guest',
         resourceType: 'VM',
         disabled: true,
+        thresholds: {
+          cpu: 95,
+        },
+      }),
+    ]);
+  });
+
+  it('derives canonical container runtimes from explicit docker hosts and TrueNAS app parents', () => {
+    const truenas = makeResource({
+      id: 'truenas-main',
+      type: 'truenas',
+      name: 'truenas-main',
+    });
+    const dockerHost = makeResource({
+      id: 'docker-main',
+      type: 'docker-host',
+      name: 'docker-main',
+    });
+    const app = makeResource({
+      id: 'ix-nextcloud',
+      type: 'app-container',
+      name: 'nextcloud',
+      parentId: 'truenas-main',
+    });
+
+    expect(
+      buildContainerRuntimeResources({
+        allResources: [truenas, dockerHost, app],
+        dockerHostResources: [dockerHost],
+      }).map((resource) => resource.id),
+    ).toEqual(['docker-main', 'truenas-main']);
+  });
+
+  it('projects TrueNAS app overrides through the canonical container runtime surface', () => {
+    const truenas = makeResource({
+      id: 'truenas-main',
+      type: 'truenas',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+    });
+    const app = makeResource({
+      id: 'ix-nextcloud',
+      type: 'app-container',
+      name: 'nextcloud',
+      displayName: 'Nextcloud',
+      parentId: 'truenas-main',
+      status: 'running',
+    });
+
+    expect(
+      buildProjectedOverrides({
+        rawConfig: {
+          'docker:truenas-main/ix-nextcloud': {
+            cpu: { trigger: 95, clear: 90 },
+          } as any,
+        },
+        nodeResources: [],
+        vmResources: [],
+        containerResources: [],
+        storageResources: [],
+        agentResourceList: [truenas],
+        containerRuntimeResources: [truenas],
+        getChildren: (resourceId) => (resourceId === 'truenas-main' ? [app] : []),
+        pbsInstanceById: new Map(),
+      }),
+    ).toEqual([
+      expect.objectContaining({
+        id: 'docker:truenas-main/ix-nextcloud',
+        type: 'dockerContainer',
+        name: 'Nextcloud',
+        node: 'TrueNAS Main',
         thresholds: {
           cpu: 95,
         },

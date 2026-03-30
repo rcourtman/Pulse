@@ -38,7 +38,7 @@ const test = base.extend<{}, WorkerFixtures>({
 test.describe('TrueNAS alert thresholds', () => {
   test.setTimeout(180_000);
 
-  test('routes TrueNAS through the neutral infrastructure and systems thresholds surfaces', async ({
+  test('routes TrueNAS through the neutral infrastructure, systems, and containers thresholds surfaces', async ({
     page,
   }) => {
     await page.route('**/api/resources**', async (route) => {
@@ -101,6 +101,27 @@ test.describe('TrueNAS alert thresholds', () => {
               },
             },
             {
+              id: 'ix-nextcloud',
+              type: 'app-container',
+              name: 'nextcloud',
+              displayName: 'Nextcloud',
+              parentId: 'truenas-resource',
+              parentName: 'TrueNAS Main',
+              platformId: 'truenas-main',
+              platformType: 'truenas',
+              sourceType: 'api',
+              sources: ['truenas'],
+              status: 'running',
+              lastSeen: '2026-03-29T22:00:00Z',
+              canonicalIdentity: {
+                displayName: 'Nextcloud',
+                platformId: 'truenas-main',
+              },
+              platformData: {
+                sources: ['truenas'],
+              },
+            },
+            {
               id: 'storage-truenas-tank',
               type: 'storage',
               name: 'tank',
@@ -133,7 +154,7 @@ test.describe('TrueNAS alert thresholds', () => {
           meta: {
             page: 1,
             limit: 200,
-            total: 2,
+            total: 3,
             totalPages: 1,
           },
         }),
@@ -189,7 +210,7 @@ test.describe('TrueNAS alert thresholds', () => {
       });
     });
 
-    await page.goto('/alerts/thresholds/proxmox', {
+    await page.goto('/alerts/thresholds/infrastructure', {
       waitUntil: 'domcontentloaded',
     });
 
@@ -209,6 +230,17 @@ test.describe('TrueNAS alert thresholds', () => {
     await expect(systemsTable.getByText('TrueNAS Main', { exact: true })).toBeVisible();
     await expect(systemDisksSection.getByText('TrueNAS Main', { exact: true })).toBeVisible();
     await expect(systemDisksSection.getByText('/mnt/tank', { exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Containers' }).click();
+
+    await expect(page).toHaveURL(/\/alerts\/thresholds\/containers/);
+    const runtimeTable = page.locator('table').nth(0);
+    const containersTable = page.locator('table').nth(1);
+    await expect(page.getByText('Container Runtimes')).toBeVisible();
+    await expect(runtimeTable.getByText('TrueNAS', { exact: true })).toBeVisible();
+    await expect(containersTable.getByText('Nextcloud', { exact: true })).toBeVisible();
+    await expect(page.getByText('Ignored container prefixes')).toHaveCount(0);
+    await expect(page.getByText('Swarm service alerts')).toHaveCount(0);
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });

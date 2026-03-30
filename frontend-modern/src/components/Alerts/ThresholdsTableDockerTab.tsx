@@ -1,3 +1,5 @@
+import { Show } from 'solid-js';
+
 import { ThresholdsTableDockerContainersSection } from './ThresholdsTableDockerContainersSection';
 import { ThresholdsTableDockerHostsSection } from './ThresholdsTableDockerHostsSection';
 import { ThresholdsTableDockerIgnoredPrefixesSection } from './ThresholdsTableDockerIgnoredPrefixesSection';
@@ -7,8 +9,10 @@ import type { ThresholdsTableSectionProps } from '@/features/alerts/thresholds/t
 export function ThresholdsTableDockerTab(props: ThresholdsTableSectionProps) {
   return (
     <>
-      <ThresholdsTableDockerIgnoredPrefixesSection {...props} />
-      <ThresholdsTableDockerServiceGapSection {...props} />
+      <Show when={props.state.hasDockerSpecificControls()}>
+        <ThresholdsTableDockerIgnoredPrefixesSection {...props} />
+        <ThresholdsTableDockerServiceGapSection {...props} />
+      </Show>
       <ThresholdsTableDockerHostsSection {...props} />
       <ThresholdsTableDockerContainersSection {...props} />
     </>

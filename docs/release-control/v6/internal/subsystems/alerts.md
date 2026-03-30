@@ -259,6 +259,12 @@ The Docker tab now follows that same section-owner shape through
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerServiceGapSection.tsx`,
 `frontend-modern/src/components/Alerts/ThresholdsTableDockerHostsSection.tsx`,
 and `frontend-modern/src/components/Alerts/ThresholdsTableDockerContainersSection.tsx`.
+The containers thresholds surface must consume canonical `app-container`
+parents through the shared alert-overrides state rather than assuming
+`docker-host` is the only runtime shape. API-backed TrueNAS parents belong in
+the same `Container Runtimes` / `Containers` surface, while Docker-specific
+controls like ignored prefixes and Swarm service gap settings must stay gated
+to real Docker runtimes instead of leaking onto non-Docker platforms.
 Future Docker thresholds presentation work should extend those section owners
 instead of expanding `frontend-modern/src/components/Alerts/ThresholdsTableDockerTab.tsx`
 back into a mixed render surface.
