@@ -208,11 +208,14 @@ advertise action metadata that implies a supported VMware admin plane.
 That same capability boundary also governs resolved-context enforcement inside
 `internal/ai/chat/context_prefetch.go`, `internal/ai/tools/tools_query.go`, and
 `internal/ai/tools/tools_control.go`. Once the shared runtime has resolved a
-canonical VMware-backed `vm` or `system-container`, Assistant summaries may not
-emit `pulse_control` guest instructions for it, shared resource registrations
-must stay limited to read-side actions, and any attempted `pulse_control`
-restart/stop/shutdown path must fail as a read-only denial instead of falling
-through to legacy guest resolution or provider-local control assumptions.
+canonical VMware-backed `agent`, `vm`, or `storage`, Assistant summaries may
+not emit `pulse_control` instructions for it. Phase-1 VMware host and
+datastore summaries without discovery must direct `pulse_query` or
+`pulse_read` only, VMware guest summaries must stay explicitly read-only, shared
+resource registrations must stay limited to read-side actions, and any
+attempted `pulse_control` restart/stop/shutdown path must fail as a read-only
+denial instead of falling through to legacy guest resolution or provider-local
+control assumptions.
 That same boundary also governs shared Assistant wording in
 `internal/ai/chat/service.go` and `internal/ai/tools/tools_control.go`: the
 base system prompt and `pulse_control` schema/description must not claim that a

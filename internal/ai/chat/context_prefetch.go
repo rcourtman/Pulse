@@ -72,6 +72,17 @@ func resourceSupportsControl(resourceType string, resource *unifiedresources.Res
 			return false
 		}
 		return resource.Docker != nil || resource.TrueNAS != nil
+	case "agent":
+		return resource != nil && resource.Agent != nil && resource.Agent.CommandsEnabled
+	default:
+		return false
+	}
+}
+
+func resourceRequiresReadOnlyGuidance(resourceType string, supportsControl bool) bool {
+	switch tools.CanonicalDiscoveryResourceType(resourceType) {
+	case "vm", "system-container", "agent", "storage":
+		return !supportsControl
 	default:
 		return false
 	}
@@ -355,6 +366,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
 						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						SupportsControl:   resourceSupportsControl("storage", resolved.Resource),
 					})
 				}
 			}
@@ -416,6 +428,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
 						UnifiedResourceID: resolvedUnifiedResourceID(resolved.Resource),
+						SupportsControl:   resourceSupportsControl("agent", resolved.Resource),
 						TargetHost:        loc.TargetHost,
 					})
 				}
@@ -655,6 +668,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
 				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				SupportsControl:   resourceSupportsControl("storage", resolved.Resource),
 				TargetHost:        firstNonEmptyTrimmed(loc.TargetHost, targetID),
 			})
 
@@ -685,6 +699,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
 				UnifiedResourceID: resolvedStructuredUnifiedResourceID(sm.ID, resolved.Resource),
+				SupportsControl:   resourceSupportsControl("agent", resolved.Resource),
 				TargetHost:        loc.TargetHost,
 			})
 
@@ -1156,10 +1171,8 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		} else {
 			// No discovery - provide basic routing without suggesting discovery calls
 			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
-			if (mention.ResourceType == "system-container" || mention.ResourceType == "vm") && !mention.SupportsControl {
+			if resourceRequiresReadOnlyGuidance(mention.ResourceType, mention.SupportsControl) {
 				sb.WriteString("Use pulse_query or pulse_read only — do NOT call pulse_control or pulse_discovery.\n")
-			} else if mention.ResourceType == "system-container" || mention.ResourceType == "vm" {
-				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
 			} else {
 				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
 			}

@@ -620,8 +620,27 @@ describe('AIChat', () => {
       );
     });
 
-    it('preserves canonical VMware vm and storage mention IDs in the shared payload', async () => {
+    it('preserves canonical VMware agent, vm, and storage mention IDs in the shared payload', async () => {
       const vmwareResources = [
+        {
+          id: 'vmware-host-1',
+          type: 'agent' as const,
+          name: 'esxi-01.lab.local',
+          displayName: 'ESXi 01',
+          status: 'online',
+          platformType: 'vmware-vsphere',
+          sourceType: 'api',
+          agent: {
+            agentId: 'vc-1:host:host-101',
+            hostname: 'esxi-01.lab.local',
+            platform: 'VMware ESXi',
+          },
+          vmware: {
+            managedObjectId: 'host-101',
+            connectionName: 'Lab VC',
+            entityType: 'host',
+          },
+        },
         {
           id: 'vmware-vm-1',
           type: 'vm' as const,
@@ -655,10 +674,12 @@ describe('AIChat', () => {
       ];
       mockByType.mockImplementation((type: string) => {
         switch (type) {
-          case 'vm':
+          case 'agent':
             return [vmwareResources[0]];
-          case 'storage':
+          case 'vm':
             return [vmwareResources[1]];
+          case 'storage':
+            return [vmwareResources[2]];
           default:
             return [];
         }
@@ -670,6 +691,36 @@ describe('AIChat', () => {
         'Ask about your infrastructure...',
       ) as HTMLTextAreaElement;
 
+      Object.defineProperty(textarea, 'selectionStart', { value: 5, writable: true });
+      fireEvent.input(textarea, { target: { value: '@esxi' } });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('mention-autocomplete').getAttribute('data-resource-ids')).toContain(
+          'agent:vc-1:host:host-101',
+        );
+      });
+
+      fireEvent.click(screen.getByTestId('mention-select-agent:vc-1:host:host-101'));
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      await waitFor(() => {
+        expect(mockChat.sendMessage).toHaveBeenCalledWith(
+          '@ESXi 01',
+          [
+            expect.objectContaining({
+              id: 'agent:vc-1:host:host-101',
+              name: 'ESXi 01',
+              type: 'agent',
+            }),
+          ],
+          undefined,
+        );
+      });
+
+      mockChat.sendMessage.mockClear();
+      await waitFor(() => {
+        expect(textarea.value).toBe('');
+      });
       Object.defineProperty(textarea, 'selectionStart', { value: 4, writable: true });
       fireEvent.input(textarea, { target: { value: '@app' } });
 

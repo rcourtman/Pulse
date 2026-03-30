@@ -220,9 +220,19 @@ test.describe('VMware AI chat mentions', () => {
 
     const textarea = page.getByPlaceholder('Ask about your infrastructure...');
     await textarea.click();
-    await textarea.pressSequentially('@app');
+    await textarea.pressSequentially('@esxi');
 
     const mentionSurface = page.locator('[data-mention-autocomplete]');
+    const hostOption = mentionSurface.getByRole('button', { name: /ESXi 01 agent/ }).first();
+    await expect(mentionSurface.getByText('Resources')).toBeVisible();
+    await expect(hostOption).toBeVisible();
+    await expect(mentionSurface).toContainText('agent');
+    await hostOption.click();
+    await expect(textarea).toHaveValue('@ESXi 01 ');
+
+    await textarea.fill('');
+    await textarea.pressSequentially('@app');
+
     await expect(mentionSurface.getByText('Resources')).toBeVisible();
     await expect(mentionSurface.getByRole('button', { name: /App 01/ })).toBeVisible();
     await expect(mentionSurface).toContainText('vm');

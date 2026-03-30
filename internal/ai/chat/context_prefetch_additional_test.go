@@ -309,6 +309,12 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 				Status:    unifiedresources.StatusOnline,
 				LastSeen:  now,
 				UpdatedAt: now,
+				Agent: &unifiedresources.AgentData{
+					AgentID:         "vc-1:host:host-101",
+					Hostname:        "esxi-01.lab.local",
+					Platform:        "VMware ESXi",
+					CommandsEnabled: false,
+				},
 				VMware: &unifiedresources.VMwareData{
 					ConnectionID:    "vc-1",
 					ConnectionName:  "Lab VC",
@@ -363,6 +369,10 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 	if len(vmResources) != 1 {
 		t.Fatalf("expected one VMware VM resource, got %d", len(vmResources))
 	}
+	agentResources := rr.ListByType(unifiedresources.ResourceTypeAgent)
+	if len(agentResources) != 1 {
+		t.Fatalf("expected one VMware agent resource, got %d", len(agentResources))
+	}
 	storageResources := rr.ListByType(unifiedresources.ResourceTypeStorage)
 	if len(storageResources) != 1 {
 		t.Fatalf("expected one VMware storage resource, got %d", len(storageResources))
@@ -372,26 +382,36 @@ func TestContextPrefetcher_ResolveStructuredMentions_VMwareCanonicalIDs(t *testi
 
 	prefetcher := NewContextPrefetcher(rr, nil)
 	mentions := prefetcher.resolveStructuredMentions([]StructuredMention{
+		{ID: "agent:vc-1:host:host-101", Name: "ESXi 01", Type: "agent"},
 		{ID: vmResourceID, Name: "app-01", Type: "vm"},
 		{ID: storageResourceID, Name: "nvme-primary", Type: "storage"},
 	})
-	if len(mentions) != 2 {
-		t.Fatalf("expected two mentions, got %#v", mentions)
+	if len(mentions) != 3 {
+		t.Fatalf("expected three mentions, got %#v", mentions)
 	}
-	if mentions[0].ResourceType != "vm" || mentions[0].ResourceID != "vm-201" || mentions[0].TargetID != "esxi-01.lab.local" {
-		t.Fatalf("expected VMware VM routing coordinates, got %+v", mentions[0])
+	if mentions[0].ResourceType != "agent" || mentions[0].ResourceID != "vc-1:host:host-101" || mentions[0].TargetID != "vc-1:host:host-101" {
+		t.Fatalf("expected VMware host routing coordinates, got %+v", mentions[0])
 	}
 	if mentions[0].SupportsControl {
-		t.Fatalf("expected VMware VM mention to stay read-only, got %+v", mentions[0])
+		t.Fatalf("expected VMware host mention to stay read-only, got %+v", mentions[0])
 	}
-	if mentions[0].UnifiedResourceID != vmResourceID {
-		t.Fatalf("expected VMware VM unified resource id, got %+v", mentions[0])
+	if mentions[0].UnifiedResourceID != "agent:vc-1:host:host-101" {
+		t.Fatalf("expected VMware host unified resource id, got %+v", mentions[0])
 	}
-	if mentions[1].ResourceType != "storage" || mentions[1].ResourceID != storageResourceID || mentions[1].TargetID != "Lab VC" {
-		t.Fatalf("expected VMware datastore shared coordinates, got %+v", mentions[1])
+	if mentions[1].ResourceType != "vm" || mentions[1].ResourceID != "vm-201" || mentions[1].TargetID != "esxi-01.lab.local" {
+		t.Fatalf("expected VMware VM routing coordinates, got %+v", mentions[1])
 	}
-	if mentions[1].UnifiedResourceID != storageResourceID {
-		t.Fatalf("expected VMware datastore unified resource id, got %+v", mentions[1])
+	if mentions[1].SupportsControl {
+		t.Fatalf("expected VMware VM mention to stay read-only, got %+v", mentions[1])
+	}
+	if mentions[1].UnifiedResourceID != vmResourceID {
+		t.Fatalf("expected VMware VM unified resource id, got %+v", mentions[1])
+	}
+	if mentions[2].ResourceType != "storage" || mentions[2].ResourceID != storageResourceID || mentions[2].TargetID != "Lab VC" {
+		t.Fatalf("expected VMware datastore shared coordinates, got %+v", mentions[2])
+	}
+	if mentions[2].UnifiedResourceID != storageResourceID {
+		t.Fatalf("expected VMware datastore unified resource id, got %+v", mentions[2])
 	}
 }
 
@@ -537,6 +557,36 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 	}
 	if !strings.Contains(summary, "Use pulse_query or pulse_read only") {
 		t.Fatalf("expected VMware summary to direct the assistant to read-only tools, got %q", summary)
+	}
+}
+
+func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+
+	summary := prefetcher.formatContextSummary([]ResourceMention{
+		{
+			Name:              "esxi-01.lab.local",
+			ResourceType:      "agent",
+			ResourceID:        "vc-1:host:host-101",
+			TargetID:          "vc-1:host:host-101",
+			UnifiedResourceID: "vmware-host-1",
+			SupportsControl:   false,
+		},
+		{
+			Name:              "nvme-primary",
+			ResourceType:      "storage",
+			ResourceID:        "vmware-datastore-1",
+			TargetID:          "Lab VC",
+			UnifiedResourceID: "vmware-datastore-1",
+			SupportsControl:   false,
+		},
+	}, nil)
+
+	if strings.Contains(summary, "Proceed directly with pulse_control") {
+		t.Fatalf("expected VMware host and datastore summary to avoid control instructions, got %q", summary)
+	}
+	if got := strings.Count(summary, "Use pulse_query or pulse_read only"); got != 2 {
+		t.Fatalf("expected read-only guidance for VMware host and datastore, got count=%d summary=%q", got, summary)
 	}
 }
 
