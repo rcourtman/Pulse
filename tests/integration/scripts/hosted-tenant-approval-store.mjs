@@ -6,6 +6,13 @@ import os from 'node:os';
 import path from 'node:path';
 import process from 'node:process';
 
+import {
+  resolveHostedTenantOrgDataDir,
+  restartHostedTenantRuntime,
+  runRemote,
+  shellQuote,
+} from './hosted-tenant-runtime.mjs';
+
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..', '..', '..');
 function usage(message) {
   if (message) {
@@ -17,10 +24,6 @@ function usage(message) {
     'usage: node ./tests/integration/scripts/hosted-tenant-approval-store.mjs <create|get> --tenant-id <id> [--org-id <id>] [--cloud-host <host>] [approval options]',
   );
   process.exit(1);
-}
-
-function shellQuote(value) {
-  return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
 function parseArgs(argv) {
@@ -73,14 +76,6 @@ function parseArgs(argv) {
   return parsed;
 }
 
-function resolveTenantDataDir(tenantId, orgId) {
-  const scopedOrgId = String(orgId || tenantId).trim();
-  if (scopedOrgId === '' || scopedOrgId === 'default') {
-    return `/data/tenants/${tenantId}`;
-  }
-  return `/data/tenants/${tenantId}/orgs/${scopedOrgId}`;
-}
-
 function buildLocalHelper(tempDir) {
   const binaryPath = path.join(tempDir, 'approval-store-helper');
   execFileSync('go', [
@@ -103,43 +98,12 @@ function buildLocalHelper(tempDir) {
   return binaryPath;
 }
 
-function runRemote(cloudHost, command) {
-  return execFileSync('ssh', [cloudHost, command], {
-    encoding: 'utf8',
-    stdio: 'pipe',
-    maxBuffer: 32 * 1024 * 1024,
-  });
-}
-
-function restartHostedTenantRuntime(cloudHost, tenantId) {
-  const containerName = `pulse-${tenantId}`;
-  const script = `
-set -eu
-container=${shellQuote(containerName)}
-docker restart "$container" >/dev/null
-deadline=$(( $(date +%s) + 60 ))
-while [ "$(date +%s)" -lt "$deadline" ]; do
-  state="$(docker inspect --format '{{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$container" 2>/dev/null || true)"
-  case "$state" in
-    "running healthy"|"running none")
-      exit 0
-      ;;
-  esac
-  sleep 1
-done
-echo "timed out waiting for $container to become ready" >&2
-docker inspect --format '{{json .State}}' "$container" >&2 || true
-exit 1
-`;
-  runRemote(cloudHost, `sh -lc ${shellQuote(script)}`);
-}
-
 function main() {
   const args = parseArgs(process.argv.slice(2));
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-hosted-approval-helper-'));
   const localBinaryPath = buildLocalHelper(tempDir);
   const remoteBinaryPath = `/tmp/approval-store-helper-${process.pid}-${Date.now()}`;
-  const tenantDataDir = resolveTenantDataDir(args.tenantId, args.orgId);
+  const tenantDataDir = resolveHostedTenantOrgDataDir(args.tenantId, args.orgId);
 
   try {
     execFileSync('scp', [localBinaryPath, `${args.cloudHost}:${remoteBinaryPath}`], {
