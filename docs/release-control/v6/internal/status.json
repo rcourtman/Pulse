@@ -3483,6 +3483,50 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "platform-admission-execution",
+      "summary": "The platform support model now governs admission decisions, but the lane map still underrepresents the cross-surface work needed to carry a newly admitted first-class platform such as VMware vSphere from architecture lock to a proved support floor across setup, canonical projections, alerts, assistant read, and bounded control classification.",
+      "owner": "project-owner",
+      "status": "planned",
+      "recorded_at": "2026-03-30",
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "proposed_resolution": "new-lane",
+      "coverage_impact": 12,
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/monitoring.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/unified-resources.md",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "candidate_lanes": [
@@ -3581,6 +3625,30 @@
       ],
       "subsystem_ids": [
         "cloud-paid"
+      ]
+    },
+    {
+      "id": "platform-admission-execution",
+      "name": "Platform admission execution",
+      "summary": "Promote newly admitted first-class platforms from architecture lock to proved support floors through one governed lane covering shared onboarding, canonical resource projection, support-floor proof, and bounded assistant/control classification, starting with VMware vSphere.",
+      "status": "planned",
+      "recorded_at": "2026-03-30",
+      "target_id": "v6-product-lane-expansion",
+      "current_lane_ids": [
+        "L6",
+        "L13",
+        "L15"
+      ],
+      "coverage_gap_ids": [
+        "platform-admission-execution"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
       ]
     }
   ],
