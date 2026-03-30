@@ -90,6 +90,9 @@ Owners:
 - `agent-lifecycle`
 - `api-contracts`
 
+Slice contract:
+- `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md`
+
 Deliver:
 
 - `vCenter` added only through the shared platform-connections workspace
@@ -104,6 +107,8 @@ Required proof:
 - auth, TLS, endpoint, and permission failures classify cleanly
 - minimum privilege bundle is written down from live validation, not inferred
 - supported version floor is written down from live validation, not inferred
+- a real `vCenter` capability is recorded in `LOCAL_CAPABILITIES.md` so the
+  support-floor proof path is explicit and reusable
 
 ### 2. Canonical Projection Floor
 

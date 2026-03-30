@@ -3548,6 +3548,11 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ONBOARDING_SPEC.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md",
           "kind": "file"
         }
