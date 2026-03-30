@@ -513,12 +513,12 @@ acceptable phase-1 model if implementation starts.
    Pulse is not yet claiming a broad VMware action plane ahead of the existing
    action-governance coverage gap.
 8. Support gate:
-   Do not call VMware supported until a real vCenter proves connection
-   onboarding, the minimum privilege bundle, the supported version floor,
-   canonical `agent`/`vm`/`storage` projection, alert and metrics-history
-   truth, and assistant read behavior. If those proofs do not hold,
-   implementation should stop at governance rather than shipping an inflated
-   support claim.
+   Do not call VMware supported until one real `vCenter` capability is
+   recorded in `LOCAL_CAPABILITIES.md` and proves connection onboarding, the
+   minimum privilege bundle, the supported version floor, canonical
+   `agent`/`vm`/`storage` projection, alert and metrics-history truth, and
+   assistant read behavior. If those proofs do not hold, implementation
+   should stop at governance rather than shipping an inflated support claim.
 9. Execution sequence:
    If implementation starts, it should follow
    `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`

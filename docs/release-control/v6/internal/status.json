@@ -4061,6 +4061,27 @@
         "L13",
         "L15"
       ]
+    },
+    {
+      "id": "vmware-vsphere-vcenter-support-claim-ratchet",
+      "summary": "VMware vSphere remains a planned vCenter-first platform candidate rather than a supported Pulse platform until one real vCenter capability is recorded in LOCAL_CAPABILITIES.md and the governed phase-1 proof matrix passes; implementation may proceed against the locked contracts before that point, but product, settings, and assistant surfaces must not claim VMware support.",
+      "kind": "governance",
+      "decided_at": "2026-03-30",
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15",
+        "L16"
+      ]
     }
   ]
 }
