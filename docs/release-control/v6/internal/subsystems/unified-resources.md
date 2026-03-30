@@ -524,6 +524,13 @@ TrueNAS-backed top-level systems through canonical `/recovery` route state
 there, using owned `platform` and `node` queries instead of rebuilding
 drawer-local recovery links or assuming only PBS services can expose recovery
 handoffs from infrastructure.
+That same shared routing boundary now also owns alert-investigation handoffs.
+Resource-incident panels and other alert-side resource drill-down consumers
+must route operators back through canonical infrastructure resource detail and
+then into shared workloads, storage, and recovery surfaces via
+`frontend-modern/src/routing/resourceLinks.ts`, instead of treating alert
+investigation as a provider-local dead end or freezing per-surface route
+strings outside the unified-resource contract.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`,

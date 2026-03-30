@@ -3,13 +3,16 @@ import type { WorkloadGuest } from '@/types/workloads';
 import {
   PMG_THRESHOLDS_PATH,
   RECOVERY_QUERY_PARAMS,
+  buildInfrastructureResourceLink,
   buildInfrastructureHrefForWorkload,
   buildRecoveryPath,
   buildRecoveryHrefForResource,
   buildInfrastructurePath,
   buildInfrastructureResourceHref,
+  buildResourceSurfaceLinksForResource,
   buildStorageHrefForResource,
   buildStoragePath,
+  buildWorkloadsHrefForResource,
   buildWorkloadsPath,
   parseRecoveryLinkSearch,
   INFRASTRUCTURE_QUERY_PARAMS,
@@ -125,6 +128,15 @@ describe('resource link routing contract', () => {
     expect(buildInfrastructureResourceHref('')).toBeNull();
   });
 
+  it('builds canonical infrastructure resource link metadata', () => {
+    expect(buildInfrastructureResourceLink(' truenas-main ', 'TrueNAS Main')).toEqual({
+      href: '/infrastructure?resource=truenas-main',
+      label: 'Open in Infrastructure',
+      compactLabel: 'Infrastructure',
+      ariaLabel: 'Open related infrastructure for TrueNAS Main',
+    });
+  });
+
   it('maps vm workloads to proxmox infrastructure source with node query', () => {
     const href = buildInfrastructureHrefForWorkload(
       baseGuest({
@@ -159,6 +171,22 @@ describe('resource link routing contract', () => {
       }),
     );
     expect(href).toBe('/infrastructure?source=truenas&q=truenas-main');
+  });
+
+  it('builds TrueNAS workloads links from canonical unified resources', () => {
+    expect(
+      buildWorkloadsHrefForResource({
+        id: 'truenas-main',
+        type: 'truenas',
+        name: 'truenas-main',
+        displayName: 'TrueNAS Main',
+        platformId: 'truenas-main',
+        platformType: 'truenas',
+        sourceType: 'hybrid',
+        status: 'online',
+        lastSeen: Date.now(),
+      } as any),
+    ).toBe('/workloads?type=app-container&platform=truenas&agent=truenas-main');
   });
 
   it('maps pod workloads to kubernetes infrastructure source with cluster query', () => {
@@ -304,6 +332,45 @@ describe('resource link routing contract', () => {
     } as any);
 
     expect(href).toBe('/recovery?platform=truenas&node=truenas-main');
+  });
+
+  it('builds canonical shared surface links for top-level truenas systems', () => {
+    expect(
+      buildResourceSurfaceLinksForResource(
+        {
+          id: 'truenas-main',
+          type: 'truenas',
+          name: 'truenas-main',
+          displayName: 'TrueNAS Main',
+          platformId: 'truenas-main',
+          platformType: 'truenas',
+          sourceType: 'hybrid',
+          status: 'online',
+          lastSeen: Date.now(),
+          platformData: { sources: ['truenas'] },
+        } as any,
+        'TrueNAS Main',
+      ),
+    ).toEqual([
+      {
+        href: '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+        label: 'Open in Workloads',
+        compactLabel: 'Workloads',
+        ariaLabel: 'Open related workloads for TrueNAS Main',
+      },
+      {
+        href: '/storage?source=truenas&node=truenas-main',
+        label: 'Open in Storage',
+        compactLabel: 'Storage',
+        ariaLabel: 'Open related storage for TrueNAS Main',
+      },
+      {
+        href: '/recovery?platform=truenas&node=truenas-main',
+        label: 'Open in Recovery',
+        compactLabel: 'Recovery',
+        ariaLabel: 'Open related recovery for TrueNAS Main',
+      },
+    ]);
   });
 
   it('canonicalizes legacy storage source aliases when parsing links', () => {

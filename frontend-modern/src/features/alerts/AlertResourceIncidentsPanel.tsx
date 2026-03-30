@@ -1,8 +1,16 @@
+import { A } from '@solidjs/router';
 import { For, Show } from 'solid-js';
 
 import { IncidentEventFilters } from '@/components/Alerts/IncidentEventFilters';
 import { IncidentTimelineEventCard } from '@/components/Alerts/IncidentTimelineEventCard';
 import { Card } from '@/components/shared/Card';
+import {
+  buildInfrastructureResourceLink,
+  buildResourceSurfaceLinksForResource,
+  type ResourceSurfaceLink,
+} from '@/routing/resourceLinks';
+import type { Resource } from '@/types/resource';
+import { getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import {
   getAlertIncidentLevelBadgeClass,
   getAlertIncidentStatusPresentation,
@@ -30,6 +38,7 @@ import type { AlertHistoryState } from './useAlertHistoryState';
 
 interface AlertResourceIncidentsPanelProps {
   state: AlertHistoryState;
+  getResource: (resourceId: string) => Resource | undefined;
 }
 
 export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelProps) {
@@ -39,6 +48,33 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
         const resourceId = selection().resourceId;
         const incidents = () => props.state.resourceIncidents()[resourceId] || [];
         const isLoading = () => props.state.resourceIncidentLoading()[resourceId];
+        const resource = () => props.getResource(resourceId);
+        const resourceDisplayName = () => {
+          const current = resource();
+          if (current) {
+            return getPreferredResourceDisplayName(current);
+          }
+          return selection().resourceName;
+        };
+        const links = (): ResourceSurfaceLink[] => {
+          const nextLinks: ResourceSurfaceLink[] = [];
+          const infrastructure = buildInfrastructureResourceLink(resourceId, resourceDisplayName());
+          if (infrastructure) {
+            nextLinks.push(infrastructure);
+          }
+
+          const current = resource();
+          if (current) {
+            nextLinks.push(...buildResourceSurfaceLinksForResource(current, resourceDisplayName()));
+          }
+
+          const seen = new Set<string>();
+          return nextLinks.filter((link) => {
+            if (seen.has(link.href)) return false;
+            seen.add(link.href);
+            return true;
+          });
+        };
 
         return (
           <Card padding="md">
@@ -48,11 +84,26 @@ export function AlertResourceIncidentsPanel(props: AlertResourceIncidentsPanelPr
                   {getAlertResourceIncidentPanelTitle()}
                 </h3>
                 <p class="text-xs text-muted">
-                  {selection().resourceName}
+                  {resourceDisplayName()}
                   <Show when={incidents().length > 0}>
                     <span> · {getAlertResourceIncidentCountLabel(incidents().length)}</span>
                   </Show>
                 </p>
+                <Show when={links().length > 0}>
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    <For each={links()}>
+                      {(link) => (
+                        <A
+                          href={link.href}
+                          aria-label={link.ariaLabel}
+                          class="inline-flex items-center rounded-md border border-border px-2 py-1 text-xs text-muted transition-colors hover:bg-surface-hover hover:text-base-content"
+                        >
+                          {link.compactLabel}
+                        </A>
+                      )}
+                    </For>
+                  </div>
+                </Show>
               </div>
               <div class="flex items-center gap-2">
                 <button

@@ -51,7 +51,7 @@ export function HistoryTab(props: HistoryTabProps) {
 
   createEffect(() => {
     location.hash;
-    historyState.filteredAlerts().length;
+    historyState.alertData().length;
     if (hashScrollRafId !== undefined) {
       cancelAnimationFrame(hashScrollRafId);
     }
@@ -72,7 +72,7 @@ export function HistoryTab(props: HistoryTabProps) {
     <div class="space-y-4">
       <AlertHistoryFrequencyCard state={historyState} />
       <AlertHistoryFiltersCard state={historyState} isMobile={isMobile()} />
-      <AlertResourceIncidentsPanel state={historyState} />
+      <AlertResourceIncidentsPanel state={historyState} getResource={props.getResource} />
       <AlertHistoryTableSection
         state={historyState}
         hasAIAlertsFeature={props.hasAIAlertsFeature}

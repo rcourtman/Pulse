@@ -1,4 +1,5 @@
 import {
+  normalizeSourcePlatformKey,
   normalizeSourcePlatformQueryValue,
   resolvePlatformTypeFromSources,
 } from '@/utils/sourcePlatforms';
@@ -10,6 +11,17 @@ import {
 } from '@/utils/workloads';
 import type { WorkloadGuest } from '@/types/workloads';
 import type { Resource } from '@/types/resource';
+import {
+  getActionableDockerRuntimeIdFromResource,
+  getPlatformDataRecord,
+  hasDockerWorkloadsScope,
+} from '@/utils/agentResources';
+import {
+  getPreferredInfrastructureDisplayName,
+  getPreferredResourceKubernetesContext,
+  getPreferredWorkloadsAgentHint,
+} from '@/utils/resourceIdentity';
+import { requiresGovernedResourceDisplay } from '@/types/resource';
 
 export const WORKLOADS_QUERY_PARAMS = {
   type: 'type',
@@ -134,6 +146,13 @@ type RecoveryLinkOptions = {
   query?: string | null;
 };
 
+export type ResourceSurfaceLink = {
+  href: string;
+  label: string;
+  compactLabel: string;
+  ariaLabel: string;
+};
+
 const RECOVERY_LEGACY_PLATFORM_QUERY_PARAM = 'provider';
 
 export const parseWorkloadsLinkSearch = (search: string) => {
@@ -195,6 +214,20 @@ export const buildInfrastructureResourceHref = (resourceId: string): string | nu
   return trimmed ? buildInfrastructurePath({ resource: trimmed }) : null;
 };
 
+export const buildInfrastructureResourceLink = (
+  resourceId: string,
+  displayName: string,
+): ResourceSurfaceLink | null => {
+  const href = buildInfrastructureResourceHref(resourceId);
+  if (!href) return null;
+  return {
+    href,
+    label: 'Open in Infrastructure',
+    compactLabel: 'Infrastructure',
+    ariaLabel: `Open related infrastructure for ${displayName}`,
+  };
+};
+
 export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string => {
   const type = resolveWorkloadType(guest);
 
@@ -223,6 +256,112 @@ export const buildInfrastructureHrefForWorkload = (guest: WorkloadGuest): string
   }
 
   return buildInfrastructurePath();
+};
+
+const resolveKubernetesContextForResource = (resource: Resource): string | undefined => {
+  const kubernetesContext = getPreferredResourceKubernetesContext(resource);
+  if (resource.type === 'k8s-cluster') {
+    const displayLabel = requiresGovernedResourceDisplay(resource.policy)
+      ? getPreferredInfrastructureDisplayName(resource)
+      : resource.displayName?.trim() || resource.name?.trim() || undefined;
+    return firstNonEmpty([kubernetesContext, displayLabel]);
+  }
+  if (resource.type === 'k8s-node') {
+    return kubernetesContext;
+  }
+  return undefined;
+};
+
+const resolveHostHintForResource = (resource: Resource): string | undefined =>
+  getPreferredWorkloadsAgentHint(resource);
+
+const resolveDockerWorkloadsHintForResource = (resource: Resource): string | undefined =>
+  getActionableDockerRuntimeIdFromResource(resource) || resolveHostHintForResource(resource);
+
+const hasMergedSource = (resource: Resource, source: string): boolean => {
+  const platformData = getPlatformDataRecord(resource);
+  const mergedSources = Array.isArray(platformData?.sources) ? platformData.sources : [];
+  return mergedSources.some((value) => normalizeSourcePlatformKey(value) === source);
+};
+
+export const buildWorkloadsHrefForResource = (resource: Resource): string | null => {
+  if (resource.type === 'k8s-cluster' || resource.type === 'k8s-node') {
+    const context = resolveKubernetesContextForResource(resource);
+    return buildWorkloadsPath({ type: 'pod', platform: 'kubernetes', context });
+  }
+
+  if (resource.type === 'docker-host') {
+    const agent = resolveDockerWorkloadsHintForResource(resource);
+    return buildWorkloadsPath({ type: 'app-container', platform: 'docker', agent });
+  }
+
+  if (resource.type === 'truenas') {
+    const agent = resolveHostHintForResource(resource);
+    return buildWorkloadsPath({ type: 'app-container', platform: 'truenas', agent });
+  }
+
+  if (resource.type === 'agent') {
+    const agent = resolveHostHintForResource(resource);
+    if (resource.platformType === 'truenas' || hasMergedSource(resource, 'truenas')) {
+      return buildWorkloadsPath({ type: 'app-container', platform: 'truenas', agent });
+    }
+    if (hasDockerWorkloadsScope(resource)) {
+      return buildWorkloadsPath({
+        type: 'app-container',
+        platform: 'docker',
+        agent: resolveDockerWorkloadsHintForResource(resource),
+      });
+    }
+    return buildWorkloadsPath({ agent });
+  }
+
+  return null;
+};
+
+export const buildResourceSurfaceLinksForResource = (
+  resource: Resource,
+  displayName: string,
+): ResourceSurfaceLink[] => {
+  const links: ResourceSurfaceLink[] = [];
+  const workloads = buildWorkloadsHrefForResource(resource);
+  const workloadSearch = workloads ? new URLSearchParams(workloads.split('?')[1] ?? '') : null;
+  const scopedWorkloadType = workloadSearch?.get('type')?.trim() ?? '';
+
+  if (workloads && scopedWorkloadType) {
+    links.push({
+      href: workloads,
+      label: 'Open in Workloads',
+      compactLabel: 'Workloads',
+      ariaLabel: `Open related workloads for ${displayName}`,
+    });
+  }
+
+  const storage = buildStorageHrefForResource(resource);
+  if (storage) {
+    links.push({
+      href: storage,
+      label: 'Open in Storage',
+      compactLabel: 'Storage',
+      ariaLabel: `Open related storage for ${displayName}`,
+    });
+  }
+
+  const recovery = buildRecoveryHrefForResource(resource);
+  if (recovery) {
+    links.push({
+      href: recovery,
+      label: 'Open in Recovery',
+      compactLabel: 'Recovery',
+      ariaLabel: `Open related recovery for ${displayName}`,
+    });
+  }
+
+  const seen = new Set<string>();
+  return links.filter((link) => {
+    if (seen.has(link.href)) return false;
+    seen.add(link.href);
+    return true;
+  });
 };
 
 const resolveStorageRouteSource = (resource: Resource): string => {

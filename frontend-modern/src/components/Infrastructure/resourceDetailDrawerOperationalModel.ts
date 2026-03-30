@@ -1,8 +1,7 @@
 import type { Resource } from '@/types/resource';
 import type { KubernetesMetricCapabilities, PlatformData } from './resourceDetailMappers';
 import { buildServiceDetailLinks, type ServiceDetailLink } from './serviceDetailLinks';
-import { buildWorkloadsHref } from './workloadsLink';
-import { buildRecoveryHrefForResource, buildStorageHrefForResource } from '@/routing/resourceLinks';
+import { buildResourceSurfaceLinksForResource } from '@/routing/resourceLinks';
 
 export type ResourceDetailDrawerOperationalBadge = {
   label: string;
@@ -198,36 +197,9 @@ export const buildRelatedLinks = (
   resource: Resource,
   displayName: string,
 ): ResourceDetailDrawerOperationalLink[] => {
-  const links: ResourceDetailDrawerOperationalLink[] = [];
-  const workloads = buildWorkloadsHref(resource);
-  const workloadSearch = workloads ? new URLSearchParams(workloads.split('?')[1] ?? '') : null;
-  const scopedWorkloadType = workloadSearch?.get('type')?.trim() ?? '';
-  if (workloads && scopedWorkloadType) {
-    links.push({
-      href: workloads,
-      label: 'Open in Workloads',
-      compactLabel: 'Workloads',
-      ariaLabel: `Open related workloads for ${displayName}`,
-    });
-  }
-  const storage = buildStorageHrefForResource(resource);
-  if (storage) {
-    links.push({
-      href: storage,
-      label: 'Open in Storage',
-      compactLabel: 'Storage',
-      ariaLabel: `Open related storage for ${displayName}`,
-    });
-  }
-  const recovery = buildRecoveryHrefForResource(resource);
-  if (recovery) {
-    links.push({
-      href: recovery,
-      label: 'Open in Recovery',
-      compactLabel: 'Recovery',
-      ariaLabel: `Open related recovery for ${displayName}`,
-    });
-  }
+  const links: ResourceDetailDrawerOperationalLink[] = [
+    ...buildResourceSurfaceLinksForResource(resource, displayName),
+  ];
   links.push(...buildServiceDetailLinks(resource));
 
   const seen = new Set<string>();

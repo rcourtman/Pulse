@@ -248,6 +248,13 @@ work extends shared components instead of creating new local variants.
     derive TrueNAS connection counts and availability from the shared
     infrastructure settings state instead of letting the reporting summary and
     the provider-specific panel issue separate connection fetches.
+18. Keep alert-history feature composition on the current owned state contract.
+    `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
+    shared `alertData()` history state instead of reviving deleted aliases, and
+    it must pass unified-resource resolution through to
+    `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
+    the panel can render shared route chips without creating another page-local
+    resource lookup or provider-specific handoff layer.
 
 ## Current State
 
@@ -1379,6 +1386,15 @@ now route through
 Future alert-history control flow should extend the hook, pure history analytics
 should extend the model, and section rendering should extend those owners
 rather than rebuilding any of those concerns in the tab shell.
+That same feature shell now owns the resource-resolution handoff into the
+resource-incident panel. `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`
+must pass the unified-resource resolver through to
+`frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`, and the
+tab shell itself should only react to the current `alertData()` contract rather
+than reviving deleted history-state aliases such as `filteredAlerts()`. The
+panel may render compact route chips, but it must stay on shared route helpers
+and feature-owned composition instead of growing provider-local routing logic
+or another page-local resource lookup path.
 Top-level settings surfaces must route through `Settings.tsx`,
 `SettingsPageShell.tsx`, and
 `frontend-modern/src/components/shared/SettingsPanel.tsx` instead of

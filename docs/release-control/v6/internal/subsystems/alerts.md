@@ -388,6 +388,14 @@ Future alert-history control-flow work should extend the feature hook, new
 grouping or trend semantics should extend the history model, and render-heavy
 history surfaces should extend those section owners instead of putting fetch,
 resource-incident state, or table rendering back into the shell.
+That same history surface now also owns the canonical resource-incident
+handoff. `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx`
+must treat the selected incident resource as a unified-resource consumer,
+linking back into canonical infrastructure/resource detail first and then into
+shared workloads, storage, and recovery surfaces through
+`frontend-modern/src/routing/resourceLinks.ts` rather than leaving the panel
+as a dead-end investigation card or rebuilding provider-local route strings for
+platforms such as TrueNAS.
 
 Alert configuration load/save state, notification config reloads, and threshold
 override normalization now route through

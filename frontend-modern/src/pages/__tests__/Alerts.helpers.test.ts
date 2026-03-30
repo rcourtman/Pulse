@@ -326,6 +326,11 @@ describe('tab path helpers', () => {
     expect(alertHistoryTabSource).toContain('AlertResourceIncidentsPanel');
     expect(alertHistoryTabSource).toContain('AlertHistoryTableSection');
     expect(alertHistoryTabSource).toContain('AlertHistoryAdministrationCard');
+    expect(alertHistoryTabSource).toContain('historyState.alertData().length');
+    expect(alertHistoryTabSource).not.toContain('historyState.filteredAlerts().length');
+    expect(alertHistoryTabSource).toContain(
+      '<AlertResourceIncidentsPanel state={historyState} getResource={props.getResource} />',
+    );
     expect(alertDestinationsTabSource).toContain('useAlertDestinationsTabState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadingState');
     expect(alertDestinationsTabSource).toContain('AlertDestinationsLoadErrorCard');
@@ -356,6 +361,12 @@ describe('tab path helpers', () => {
     expect(alertResourceIncidentsPanelSource).toContain('export function AlertResourceIncidentsPanel');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentEventFilters');
     expect(alertResourceIncidentsPanelSource).toContain('IncidentTimelineEventCard');
+    expect(alertResourceIncidentsPanelSource).toContain('buildInfrastructureResourceLink');
+    expect(alertResourceIncidentsPanelSource).toContain('buildResourceSurfaceLinksForResource');
+    expect(alertResourceIncidentsPanelSource).toContain(
+      'buildInfrastructureResourceLink(resourceId, resourceDisplayName())',
+    );
+    expect(alertResourceIncidentsPanelSource).toContain('{link.compactLabel}');
     expect(alertHistoryTableSectionSource).toContain('export function AlertHistoryTableSection');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableGroupRow');
     expect(alertHistoryTableSectionSource).toContain('AlertHistoryTableAlertRow');
