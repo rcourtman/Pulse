@@ -310,6 +310,8 @@ export function alertTypeDisplayLabel(type: string): string {
       return 'Disk Wearout';
     case 'raid':
       return 'RAID';
+    case 'resource-incident':
+      return 'Resource Health';
 
     // Other
     case 'pbs':

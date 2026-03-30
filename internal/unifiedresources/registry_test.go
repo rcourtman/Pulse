@@ -201,6 +201,62 @@ func TestResourceRegistry_IngestsVMwareSourceAsCanonicalResources(t *testing.T) 
 	}
 }
 
+func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *testing.T) {
+	existing := &VMwareData{
+		ConnectionID:       "vc-1",
+		ConnectionName:     "Lab VC",
+		VCenterHost:        "vc.lab.local",
+		ManagedObjectID:    "vm-101",
+		EntityType:         "vm",
+		HostUUID:           "uuid-host-1",
+		ConnectionState:    "connected",
+		PowerState:         "poweredOn",
+		OverallStatus:      "green",
+		ActiveAlarmCount:   1,
+		ActiveAlarmSummary: "old alarm",
+		RecentTaskCount:    1,
+		RecentTaskSummary:  "old task",
+		SnapshotCount:      1,
+	}
+	incoming := &VMwareData{
+		OverallStatus:      "yellow",
+		ActiveAlarmCount:   3,
+		ActiveAlarmSummary: "Host connection lost; datastore latency elevated",
+		RecentTaskCount:    2,
+		RecentTaskSummary:  "vMotion task completed",
+		SnapshotCount:      4,
+	}
+
+	merged := mergeVMwareData(existing, incoming)
+	if merged == nil {
+		t.Fatal("expected merged VMware metadata")
+	}
+	if got := merged.ConnectionID; got != "vc-1" {
+		t.Fatalf("connection id = %q, want vc-1", got)
+	}
+	if got := merged.ManagedObjectID; got != "vm-101" {
+		t.Fatalf("managed object id = %q, want vm-101", got)
+	}
+	if got := merged.OverallStatus; got != "yellow" {
+		t.Fatalf("overall status = %q, want yellow", got)
+	}
+	if got := merged.ActiveAlarmCount; got != 3 {
+		t.Fatalf("active alarm count = %d, want 3", got)
+	}
+	if got := merged.ActiveAlarmSummary; got != "Host connection lost; datastore latency elevated" {
+		t.Fatalf("active alarm summary = %q", got)
+	}
+	if got := merged.RecentTaskCount; got != 2 {
+		t.Fatalf("recent task count = %d, want 2", got)
+	}
+	if got := merged.RecentTaskSummary; got != "vMotion task completed" {
+		t.Fatalf("recent task summary = %q", got)
+	}
+	if got := merged.SnapshotCount; got != 4 {
+		t.Fatalf("snapshot count = %d, want 4", got)
+	}
+}
+
 func TestResourceRegistryClonesCarryPolicyMetadata(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 17, 12, 0, 0, 0, time.UTC)

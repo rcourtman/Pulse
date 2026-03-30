@@ -16,6 +16,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
+	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/utils"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -219,6 +220,28 @@ func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
 	m.mu.RUnlock()
 	if stillExists {
 		t.Errorf("expected alert to be cleared when threshold is nil")
+	}
+}
+
+func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *testing.T) {
+	availability := &Alert{
+		Type: "resource-incident",
+		Metadata: map[string]interface{}{
+			"incidentCategory": unifiedresources.IncidentCategoryAvailability,
+		},
+	}
+	if got := quietHoursCategoryForAlert(availability); got != "offline" {
+		t.Fatalf("availability resource incident category = %q, want offline", got)
+	}
+
+	health := &Alert{
+		Type: "resource-incident",
+		Metadata: map[string]interface{}{
+			"incidentCategory": unifiedresources.IncidentCategoryHealth,
+		},
+	}
+	if got := quietHoursCategoryForAlert(health); got != "performance" {
+		t.Fatalf("health resource incident category = %q, want performance", got)
 	}
 }
 

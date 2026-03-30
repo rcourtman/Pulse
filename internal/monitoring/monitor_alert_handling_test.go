@@ -61,6 +61,10 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 		Threshold:  80,
 		StartTime:  startedAt,
 		AckTime:    &ackAt,
+		Metadata: map[string]interface{}{
+			"incidentCategory":   "health",
+			"vmwareConnectionId": "vc-1",
+		},
 	}
 
 	m.handleAlertFired(alert)
@@ -86,6 +90,12 @@ func TestMonitor_HandleAlertLifecycle_WritesCanonicalChanges(t *testing.T) {
 	}
 	if got := changes[2].Metadata["alert_identifier"]; got != "alert-canonical-1" {
 		t.Fatalf("alert_identifier = %#v, want alert-canonical-1", got)
+	}
+	if got := changes[2].Metadata["incidentCategory"]; got != "health" {
+		t.Fatalf("incidentCategory = %#v, want health", got)
+	}
+	if got := changes[2].Metadata["vmwareConnectionId"]; got != "vc-1" {
+		t.Fatalf("vmwareConnectionId = %#v, want vc-1", got)
 	}
 }
 

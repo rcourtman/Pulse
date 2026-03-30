@@ -130,6 +130,23 @@ func TestVMwarePollerUsesCanonicalSupplementalIngestOwnership(t *testing.T) {
 	}
 }
 
+func TestMonitorAlertTimelineWritesCanonicalAlertMetadata(t *testing.T) {
+	data, err := os.ReadFile("monitor_alerts.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_alerts.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"change := unifiedresources.BuildAlertTimelineChange(",
+		"AlertMetadata:   alert.Metadata,",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_alerts.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 	t.Parallel()
 

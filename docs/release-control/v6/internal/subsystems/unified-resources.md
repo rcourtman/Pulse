@@ -167,12 +167,19 @@ assembly branch.
    projections there before adding platform-local branches here, and runtime
    variants such as `podman` must stay inside the owning platform contract
    instead of becoming new top-level platforms or resource types.
+8. Keep provider-backed signal metadata on shared canonical resource fields.
+   VMware status, alarm, task, and snapshot signals must flow through shared
+   `vmware` metadata plus shared `resource-incident` timeline entries on
+   canonical `agent`, `vm`, and `storage` resources instead of creating
+   provider-only resource kinds, identities, or history schemas.
 
 ## Current State
 
 This subsystem now sits under the dedicated core monitoring runtime lane so
 canonical resource identity, discovery normalization, and platform-runtime
-coverage stay governed as a first-class Pulse product surface.
+coverage stay governed as a first-class Pulse product surface, including the
+shared VMware signal-metadata and `resource-incident` timeline vocabulary that
+canonical resources expose to alerts, AI, and frontend consumers.
 VMware vSphere now follows the same admission rule. If `vmware-vsphere`
 implementation starts, vCenter is the phase-1 connection authority but not a
 top-level unified resource: ESXi hosts must project as canonical `agent`

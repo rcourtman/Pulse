@@ -398,3 +398,10 @@ poller/provider path also owns assistant-driven app start/stop, logs, and
 config refresh for those canonical workloads. Pulse does not promise a
 separate TrueNAS runtime model, broader NAS administration, or agent-required
 bootstrap at this floor.
+That same monitoring boundary now also owns VMware signal enrichment on the
+canonical alert timeline. `internal/vmware/client_signals.go`,
+`internal/vmware/provider.go`, and `internal/monitoring/monitor_alerts.go`
+may collect VI JSON overall status, active alarms, recent tasks, and VM
+snapshot counts, but they must project those reads onto shared canonical
+resources plus shared alert/resource history metadata instead of persisting a
+VMware-only signal cache, event log, or provider-specific incident timeline.

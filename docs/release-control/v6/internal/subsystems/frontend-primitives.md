@@ -295,7 +295,12 @@ work extends shared components instead of creating new local variants.
 
 The frontend already has several guardrail tests. The next step is to keep
 turning repeated local patterns into explicit shared primitives with hard usage
-bounds.
+bounds, including provider-backed alert-history wording. `frontend-modern/src/features/alerts/helpers.ts`,
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx`, and
+`frontend-modern/src/features/alerts/OverviewTab.tsx` must present VMware-
+backed host and VM incidents with the shared `resource-incident` vocabulary
+and existing alert-history shells instead of introducing VMware-only labels,
+badges, or panel copy just because the underlying signal came from vSphere.
 
 The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table

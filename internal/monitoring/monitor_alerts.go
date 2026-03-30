@@ -181,6 +181,7 @@ func (m *Monitor) recordAlertTimelineChange(alert *alerts.Alert, kind unifiedres
 		AlertMessage:    alert.Message,
 		AlertValue:      alert.Value,
 		AlertThreshold:  alert.Threshold,
+		AlertMetadata:   alert.Metadata,
 	})
 	if change == nil {
 		return

@@ -1326,6 +1326,26 @@ func TestQuietHoursCategoryForAlert(t *testing.T) {
 			alert: &Alert{Type: "backup-posture-incident"},
 			want:  "storage",
 		},
+		{
+			name: "resource-incident availability returns offline",
+			alert: &Alert{
+				Type: "resource-incident",
+				Metadata: map[string]interface{}{
+					"incidentCategory": "availability",
+				},
+			},
+			want: "offline",
+		},
+		{
+			name: "resource-incident health returns performance",
+			alert: &Alert{
+				Type: "resource-incident",
+				Metadata: map[string]interface{}{
+					"incidentCategory": "health",
+				},
+			},
+			want: "performance",
+		},
 
 		// Offline metrics
 		{

@@ -931,17 +931,23 @@ type PMGData struct {
 // VMwareData contains VMware vSphere metadata for canonical agent, vm, and
 // storage resources projected from one vCenter connection.
 type VMwareData struct {
-	ConnectionID    string `json:"connectionId,omitempty"`
-	ConnectionName  string `json:"connectionName,omitempty"`
-	VCenterHost     string `json:"vcenterHost,omitempty"`
-	ManagedObjectID string `json:"managedObjectId,omitempty"`
-	EntityType      string `json:"entityType,omitempty"`
-	HostUUID        string `json:"hostUuid,omitempty"`
-	ConnectionState string `json:"connectionState,omitempty"`
-	PowerState      string `json:"powerState,omitempty"`
-	CPUCount        int    `json:"cpuCount,omitempty"`
-	MemorySizeMiB   int64  `json:"memorySizeMib,omitempty"`
-	DatastoreType   string `json:"datastoreType,omitempty"`
+	ConnectionID       string `json:"connectionId,omitempty"`
+	ConnectionName     string `json:"connectionName,omitempty"`
+	VCenterHost        string `json:"vcenterHost,omitempty"`
+	ManagedObjectID    string `json:"managedObjectId,omitempty"`
+	EntityType         string `json:"entityType,omitempty"`
+	HostUUID           string `json:"hostUuid,omitempty"`
+	ConnectionState    string `json:"connectionState,omitempty"`
+	PowerState         string `json:"powerState,omitempty"`
+	OverallStatus      string `json:"overallStatus,omitempty"`
+	CPUCount           int    `json:"cpuCount,omitempty"`
+	MemorySizeMiB      int64  `json:"memorySizeMib,omitempty"`
+	DatastoreType      string `json:"datastoreType,omitempty"`
+	ActiveAlarmCount   int    `json:"activeAlarmCount,omitempty"`
+	ActiveAlarmSummary string `json:"activeAlarmSummary,omitempty"`
+	RecentTaskCount    int    `json:"recentTaskCount,omitempty"`
+	RecentTaskSummary  string `json:"recentTaskSummary,omitempty"`
+	SnapshotCount      int    `json:"snapshotCount,omitempty"`
 }
 
 // TrueNASData contains TrueNAS-specific metadata for system host resources.

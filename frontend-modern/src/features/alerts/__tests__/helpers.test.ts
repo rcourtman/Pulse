@@ -195,6 +195,7 @@ describe('alerts helpers', () => {
       expect(alertTypeDisplayLabel('zfs-pool-errors')).toBe('Pool Errors');
       expect(alertTypeDisplayLabel('disk-health')).toBe('Disk Health');
       expect(alertTypeDisplayLabel('disk-wearout')).toBe('Disk Wearout');
+      expect(alertTypeDisplayLabel('resource-incident')).toBe('Resource Health');
     });
 
     it('maps infrastructure alert types', () => {

@@ -186,6 +186,10 @@ func TestBuildIncidentTimelineChanges(t *testing.T) {
 		AlertMessage:    "CPU normalized",
 		AlertValue:      91.4,
 		AlertThreshold:  80,
+		AlertMetadata: map[string]any{
+			"incidentCategory": "health",
+			"canonicalSpecID":  "alertspec:provider-incident:test",
+		},
 	})
 	if alertChange == nil {
 		t.Fatal("expected alert change")
@@ -198,6 +202,12 @@ func TestBuildIncidentTimelineChanges(t *testing.T) {
 	}
 	if got := alertChange.Metadata[MetadataAlertIdentifier]; got != "alert-1" {
 		t.Fatalf("alert_identifier = %#v, want alert-1", got)
+	}
+	if got := alertChange.Metadata["incidentCategory"]; got != "health" {
+		t.Fatalf("incidentCategory = %#v, want health", got)
+	}
+	if got := alertChange.Metadata["canonicalSpecID"]; got != "alertspec:provider-incident:test" {
+		t.Fatalf("canonicalSpecID = %#v, want alertspec:provider-incident:test", got)
 	}
 
 	commandChange := BuildCommandExecutionChange("vm-1", "alert-1", "agent:pulse-assistant", "systemctl restart nginx", true, strings.Repeat("x", 700), map[string]any{

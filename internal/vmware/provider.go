@@ -8,37 +8,66 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
+
+type InventoryAlarm struct {
+	Alarm         string    `json:"alarm,omitempty"`
+	Name          string    `json:"name,omitempty"`
+	OverallStatus string    `json:"overall_status,omitempty"`
+	Acknowledged  bool      `json:"acknowledged,omitempty"`
+	TriggeredAt   time.Time `json:"triggered_at,omitempty"`
+}
+
+type InventoryTask struct {
+	Task          string    `json:"task,omitempty"`
+	Name          string    `json:"name,omitempty"`
+	State         string    `json:"state,omitempty"`
+	DescriptionID string    `json:"description_id,omitempty"`
+	StartedAt     time.Time `json:"started_at,omitempty"`
+	CompletedAt   time.Time `json:"completed_at,omitempty"`
+	ErrorMessage  string    `json:"error_message,omitempty"`
+}
 
 // InventoryHost is the canonical phase-1 host summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryHost struct {
-	Host            string `json:"host"`
-	Name            string `json:"name"`
-	ConnectionState string `json:"connection_state"`
-	PowerState      string `json:"power_state,omitempty"`
-	HostUUID        string `json:"host_uuid,omitempty"`
+	Host            string           `json:"host"`
+	Name            string           `json:"name"`
+	ConnectionState string           `json:"connection_state"`
+	PowerState      string           `json:"power_state,omitempty"`
+	HostUUID        string           `json:"host_uuid,omitempty"`
+	OverallStatus   string           `json:"overall_status,omitempty"`
+	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
+	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
 }
 
 // InventoryVM is the canonical phase-1 VM summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryVM struct {
-	VM            string `json:"vm"`
-	Name          string `json:"name"`
-	PowerState    string `json:"power_state"`
-	CPUCount      int    `json:"cpu_count,omitempty"`
-	MemorySizeMiB int64  `json:"memory_size_mib,omitempty"`
+	VM              string           `json:"vm"`
+	Name            string           `json:"name"`
+	PowerState      string           `json:"power_state"`
+	CPUCount        int              `json:"cpu_count,omitempty"`
+	MemorySizeMiB   int64            `json:"memory_size_mib,omitempty"`
+	OverallStatus   string           `json:"overall_status,omitempty"`
+	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
+	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
+	SnapshotCount   int              `json:"snapshot_count,omitempty"`
 }
 
 // InventoryDatastore is the canonical phase-1 datastore summary returned by
 // the vCenter Automation API list endpoint.
 type InventoryDatastore struct {
-	Datastore string `json:"datastore"`
-	Name      string `json:"name"`
-	Type      string `json:"type"`
-	FreeSpace int64  `json:"free_space,omitempty"`
-	Capacity  int64  `json:"capacity,omitempty"`
+	Datastore       string           `json:"datastore"`
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	FreeSpace       int64            `json:"free_space,omitempty"`
+	Capacity        int64            `json:"capacity,omitempty"`
+	OverallStatus   string           `json:"overall_status,omitempty"`
+	TriggeredAlarms []InventoryAlarm `json:"triggered_alarms,omitempty"`
+	RecentTasks     []InventoryTask  `json:"recent_tasks,omitempty"`
 }
 
 // InventorySnapshot captures the projected inventory floor for one vCenter
@@ -222,22 +251,29 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		if name == "" {
 			continue
 		}
+		incidents := hostIncidents(host)
 		resource := unifiedresources.Resource{
 			Type:       unifiedresources.ResourceTypeAgent,
 			Technology: "vmware",
 			Name:       name,
-			Status:     hostStatus(host),
+			Status:     unifiedresources.IncidentsStatus(hostStatus(host), incidents),
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
+			Incidents:  incidents,
 			VMware: &unifiedresources.VMwareData{
-				ConnectionID:    strings.TrimSpace(snapshot.ConnectionID),
-				ConnectionName:  connectionName,
-				VCenterHost:     vcenterHost,
-				ManagedObjectID: strings.TrimSpace(host.Host),
-				EntityType:      "host",
-				HostUUID:        strings.TrimSpace(host.HostUUID),
-				ConnectionState: strings.TrimSpace(host.ConnectionState),
-				PowerState:      strings.TrimSpace(host.PowerState),
+				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:     connectionName,
+				VCenterHost:        vcenterHost,
+				ManagedObjectID:    strings.TrimSpace(host.Host),
+				EntityType:         "host",
+				HostUUID:           strings.TrimSpace(host.HostUUID),
+				ConnectionState:    strings.TrimSpace(host.ConnectionState),
+				PowerState:         strings.TrimSpace(host.PowerState),
+				OverallStatus:      strings.TrimSpace(host.OverallStatus),
+				ActiveAlarmCount:   len(host.TriggeredAlarms),
+				ActiveAlarmSummary: vmwareAlarmSummary(host.TriggeredAlarms),
+				RecentTaskCount:    len(host.RecentTasks),
+				RecentTaskSummary:  vmwareRecentTaskSummary(host.RecentTasks),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -265,22 +301,30 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		if name == "" {
 			continue
 		}
+		incidents := vmIncidents(vm)
 		resource := unifiedresources.Resource{
 			Type:       unifiedresources.ResourceTypeVM,
 			Technology: "vmware",
 			Name:       name,
-			Status:     vmStatus(vm),
+			Status:     unifiedresources.IncidentsStatus(vmStatus(vm), incidents),
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
+			Incidents:  incidents,
 			VMware: &unifiedresources.VMwareData{
-				ConnectionID:    strings.TrimSpace(snapshot.ConnectionID),
-				ConnectionName:  connectionName,
-				VCenterHost:     vcenterHost,
-				ManagedObjectID: strings.TrimSpace(vm.VM),
-				EntityType:      "vm",
-				PowerState:      strings.TrimSpace(vm.PowerState),
-				CPUCount:        vm.CPUCount,
-				MemorySizeMiB:   vm.MemorySizeMiB,
+				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:     connectionName,
+				VCenterHost:        vcenterHost,
+				ManagedObjectID:    strings.TrimSpace(vm.VM),
+				EntityType:         "vm",
+				PowerState:         strings.TrimSpace(vm.PowerState),
+				CPUCount:           vm.CPUCount,
+				MemorySizeMiB:      vm.MemorySizeMiB,
+				OverallStatus:      strings.TrimSpace(vm.OverallStatus),
+				ActiveAlarmCount:   len(vm.TriggeredAlarms),
+				ActiveAlarmSummary: vmwareAlarmSummary(vm.TriggeredAlarms),
+				RecentTaskCount:    len(vm.RecentTasks),
+				RecentTaskSummary:  vmwareRecentTaskSummary(vm.RecentTasks),
+				SnapshotCount:      vm.SnapshotCount,
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -306,13 +350,15 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 		if used < 0 {
 			used = 0
 		}
+		incidents := datastoreIncidents(datastore)
 		resource := unifiedresources.Resource{
 			Type:       unifiedresources.ResourceTypeStorage,
 			Technology: "vmware",
 			Name:       name,
-			Status:     datastoreStatus(datastore),
+			Status:     unifiedresources.IncidentsStatus(datastoreStatus(datastore), incidents),
 			LastSeen:   collectedAt,
 			UpdatedAt:  collectedAt,
+			Incidents:  incidents,
 			Metrics: &unifiedresources.ResourceMetrics{
 				Disk: diskMetric(datastore.Capacity, used),
 			},
@@ -323,12 +369,17 @@ func (p *Provider) Records() []unifiedresources.IngestRecord {
 				Enabled:  true,
 			},
 			VMware: &unifiedresources.VMwareData{
-				ConnectionID:    strings.TrimSpace(snapshot.ConnectionID),
-				ConnectionName:  connectionName,
-				VCenterHost:     vcenterHost,
-				ManagedObjectID: strings.TrimSpace(datastore.Datastore),
-				EntityType:      "datastore",
-				DatastoreType:   strings.TrimSpace(datastore.Type),
+				ConnectionID:       strings.TrimSpace(snapshot.ConnectionID),
+				ConnectionName:     connectionName,
+				VCenterHost:        vcenterHost,
+				ManagedObjectID:    strings.TrimSpace(datastore.Datastore),
+				EntityType:         "datastore",
+				DatastoreType:      strings.TrimSpace(datastore.Type),
+				OverallStatus:      strings.TrimSpace(datastore.OverallStatus),
+				ActiveAlarmCount:   len(datastore.TriggeredAlarms),
+				ActiveAlarmSummary: vmwareAlarmSummary(datastore.TriggeredAlarms),
+				RecentTaskCount:    len(datastore.RecentTasks),
+				RecentTaskSummary:  vmwareRecentTaskSummary(datastore.RecentTasks),
 			},
 			Tags: filterNonEmptyStrings(
 				"vmware",
@@ -368,10 +419,67 @@ func cloneInventorySnapshot(in *InventorySnapshot) *InventorySnapshot {
 		return nil
 	}
 	out := *in
-	out.Hosts = append([]InventoryHost(nil), in.Hosts...)
-	out.VMs = append([]InventoryVM(nil), in.VMs...)
-	out.Datastores = append([]InventoryDatastore(nil), in.Datastores...)
+	out.Hosts = cloneInventoryHosts(in.Hosts)
+	out.VMs = cloneInventoryVMs(in.VMs)
+	out.Datastores = cloneInventoryDatastores(in.Datastores)
 	return &out
+}
+
+func cloneInventoryHosts(in []InventoryHost) []InventoryHost {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryHost, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
+		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+	}
+	return out
+}
+
+func cloneInventoryVMs(in []InventoryVM) []InventoryVM {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryVM, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
+		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+	}
+	return out
+}
+
+func cloneInventoryDatastores(in []InventoryDatastore) []InventoryDatastore {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryDatastore, len(in))
+	for i := range in {
+		out[i] = in[i]
+		out[i].TriggeredAlarms = cloneInventoryAlarms(in[i].TriggeredAlarms)
+		out[i].RecentTasks = cloneInventoryTasks(in[i].RecentTasks)
+	}
+	return out
+}
+
+func cloneInventoryAlarms(in []InventoryAlarm) []InventoryAlarm {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryAlarm, len(in))
+	copy(out, in)
+	return out
+}
+
+func cloneInventoryTasks(in []InventoryTask) []InventoryTask {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryTask, len(in))
+	copy(out, in)
+	return out
 }
 
 func vmwareSourceID(connectionID, entityType, managedObjectID string) string {
@@ -413,6 +521,160 @@ func datastoreStatus(datastore InventoryDatastore) unifiedresources.ResourceStat
 		return unifiedresources.StatusUnknown
 	}
 	return unifiedresources.StatusOnline
+}
+
+func hostIncidents(host InventoryHost) []unifiedresources.ResourceIncident {
+	return appendVMwareAlarmsAndHealthIncidents("host", host.Host, strings.TrimSpace(host.OverallStatus), host.TriggeredAlarms)
+}
+
+func vmIncidents(vm InventoryVM) []unifiedresources.ResourceIncident {
+	return appendVMwareAlarmsAndHealthIncidents("vm", vm.VM, strings.TrimSpace(vm.OverallStatus), vm.TriggeredAlarms)
+}
+
+func datastoreIncidents(datastore InventoryDatastore) []unifiedresources.ResourceIncident {
+	return appendVMwareAlarmsAndHealthIncidents("datastore", datastore.Datastore, strings.TrimSpace(datastore.OverallStatus), datastore.TriggeredAlarms)
+}
+
+func appendVMwareAlarmsAndHealthIncidents(entityType, managedObjectID, overallStatus string, alarms []InventoryAlarm) []unifiedresources.ResourceIncident {
+	incidents := make([]unifiedresources.ResourceIncident, 0, len(alarms)+1)
+	for _, alarm := range alarms {
+		severity, ok := vmwareRiskLevel(alarm.OverallStatus)
+		if !ok {
+			continue
+		}
+		nativeID := firstNonEmptyTrimmed(alarm.Alarm, alarm.Name, managedObjectID)
+		summary := vmwareAlarmIncidentSummary(entityType, managedObjectID, alarm)
+		startedAt := alarm.TriggeredAt
+		incidents = append(incidents, unifiedresources.ResourceIncident{
+			Provider:  "vmware",
+			NativeID:  nativeID,
+			Code:      "vmware_alarm_state",
+			Severity:  severity,
+			Source:    string(unifiedresources.SourceVMware),
+			Summary:   summary,
+			StartedAt: startedAt,
+		})
+	}
+	if len(incidents) == 0 {
+		if severity, ok := vmwareRiskLevel(overallStatus); ok {
+			incidents = append(incidents, unifiedresources.ResourceIncident{
+				Provider: "vmware",
+				NativeID: firstNonEmptyTrimmed(managedObjectID, entityType),
+				Code:     "vmware_health_state",
+				Severity: severity,
+				Source:   string(unifiedresources.SourceVMware),
+				Summary:  vmwareOverallStatusSummary(entityType, overallStatus),
+			})
+		}
+	}
+	return incidents
+}
+
+func vmwareRiskLevel(status string) (storagehealth.RiskLevel, bool) {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "red":
+		return storagehealth.RiskCritical, true
+	case "yellow":
+		return storagehealth.RiskWarning, true
+	default:
+		return "", false
+	}
+}
+
+func vmwareAlarmIncidentSummary(entityType, managedObjectID string, alarm InventoryAlarm) string {
+	entityLabel := vmwareEntityLabel(entityType)
+	alarmName := firstNonEmptyTrimmed(alarm.Name, alarm.Alarm)
+	status := strings.ToLower(strings.TrimSpace(alarm.OverallStatus))
+	if alarmName == "" {
+		alarmName = "VMware alarm"
+	}
+	if status == "" {
+		status = "active"
+	}
+	if ref := strings.TrimSpace(managedObjectID); ref != "" {
+		return fmt.Sprintf("%s %s has VMware alarm %s (%s)", entityLabel, ref, alarmName, status)
+	}
+	return fmt.Sprintf("%s has VMware alarm %s (%s)", entityLabel, alarmName, status)
+}
+
+func vmwareOverallStatusSummary(entityType, overallStatus string) string {
+	entityLabel := vmwareEntityLabel(entityType)
+	status := strings.ToLower(strings.TrimSpace(overallStatus))
+	if status == "" {
+		status = "degraded"
+	}
+	return fmt.Sprintf("%s has VMware overall status %s", entityLabel, status)
+}
+
+func vmwareEntityLabel(entityType string) string {
+	switch strings.ToLower(strings.TrimSpace(entityType)) {
+	case "host":
+		return "Host"
+	case "vm":
+		return "VM"
+	case "datastore":
+		return "Datastore"
+	default:
+		return "Resource"
+	}
+}
+
+func vmwareAlarmSummary(alarms []InventoryAlarm) string {
+	if len(alarms) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(alarms))
+	for _, alarm := range alarms {
+		name := firstNonEmptyTrimmed(alarm.Name, alarm.Alarm)
+		if name == "" {
+			continue
+		}
+		status := strings.ToLower(strings.TrimSpace(alarm.OverallStatus))
+		if status == "" {
+			parts = append(parts, name)
+			continue
+		}
+		parts = append(parts, name+" ("+status+")")
+		if len(parts) == 3 {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(alarms) > len(parts) {
+		return strings.Join(parts, ", ") + fmt.Sprintf(", and %d more", len(alarms)-len(parts))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func vmwareRecentTaskSummary(tasks []InventoryTask) string {
+	if len(tasks) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(tasks))
+	for _, task := range tasks {
+		name := firstNonEmptyTrimmed(task.Name, task.DescriptionID, task.Task)
+		if name == "" {
+			continue
+		}
+		state := strings.ToLower(strings.TrimSpace(task.State))
+		if state == "" {
+			parts = append(parts, name)
+		} else {
+			parts = append(parts, name+" ("+state+")")
+		}
+		if len(parts) == 3 {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	if len(tasks) > len(parts) {
+		return strings.Join(parts, ", ") + fmt.Sprintf(", and %d more", len(tasks)-len(parts))
+	}
+	return strings.Join(parts, ", ")
 }
 
 func normalizeDatastoreType(value string) string {

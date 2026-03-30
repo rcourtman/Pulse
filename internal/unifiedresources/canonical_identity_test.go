@@ -241,6 +241,48 @@ func TestRefreshCanonicalIdentityIgnoresProxmoxPoolAsPlatformIdentity(t *testing
 	}
 }
 
+func TestRefreshCanonicalIdentityScopesVMwarePrimaryIDToConnection(t *testing.T) {
+	resource := Resource{
+		ID:   "vm-1",
+		Type: ResourceTypeVM,
+		Name: "db-vm",
+		VMware: &VMwareData{
+			ConnectionID:    "vc-1",
+			ManagedObjectID: "vm-101",
+			EntityType:      "vm",
+			HostUUID:        "uuid-host-1",
+		},
+		Identity: ResourceIdentity{
+			Hostnames: []string{"db-vm.lab.local"},
+		},
+	}
+
+	RefreshCanonicalIdentity(&resource)
+
+	if resource.Canonical == nil {
+		t.Fatalf("expected canonical identity")
+	}
+	if got := resource.Canonical.PrimaryID; got != "vmware:vc-1:vm:vm-101" {
+		t.Fatalf("primaryId = %q, want vmware:vc-1:vm:vm-101", got)
+	}
+	wantAliases := []string{
+		"vmware:vc-1:vm:vm-101",
+		"vm-101",
+		"uuid-host-1",
+		"db-vm",
+		"db-vm.lab.local",
+		"vm-1",
+	}
+	if len(resource.Canonical.Aliases) != len(wantAliases) {
+		t.Fatalf("aliases len = %d, want %d (%v)", len(resource.Canonical.Aliases), len(wantAliases), resource.Canonical.Aliases)
+	}
+	for i, want := range wantAliases {
+		if got := resource.Canonical.Aliases[i]; got != want {
+			t.Fatalf("alias[%d] = %q, want %q", i, got, want)
+		}
+	}
+}
+
 func TestRefreshCanonicalIdentityScopesVMwareManagedObjectsByConnection(t *testing.T) {
 	resource := Resource{
 		ID:   "vmware-host-1",

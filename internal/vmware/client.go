@@ -138,7 +138,7 @@ func (c *Client) Close() {
 // TestConnection validates both the Automation API and VI JSON API families and
 // returns a minimal inventory summary on success.
 func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) {
-	inventory, err := c.CollectInventory(ctx)
+	inventory, err := c.collectInventoryBase(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,11 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 	if err != nil {
 		return nil, err
 	}
-	if err := c.loginVIJSON(ctx, release, sessionManagerMoID); err != nil {
+	sessionID, err := c.loginVIJSON(ctx, release, sessionManagerMoID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.validateSignalFloor(ctx, release, sessionID, inventory); err != nil {
 		return nil, err
 	}
 	return &InventorySummary{
@@ -160,6 +164,26 @@ func (c *Client) TestConnection(ctx context.Context) (*InventorySummary, error) 
 // CollectInventory fetches the phase-1 VMware inventory floor used by the
 // supplemental-ingest provider.
 func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, error) {
+	inventory, err := c.collectInventoryBase(ctx)
+	if err != nil {
+		return nil, err
+	}
+	release, sessionManagerMoID, err := c.resolveVIJSONRelease(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sessionID, err := c.loginVIJSON(ctx, release, sessionManagerMoID)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.enrichInventorySnapshot(ctx, release, sessionID, inventory); err != nil {
+		return nil, err
+	}
+	inventory.CollectedAt = time.Now().UTC()
+	return inventory, nil
+}
+
+func (c *Client) collectInventoryBase(ctx context.Context) (*InventorySnapshot, error) {
 	automationSessionID, err := c.createAutomationSession(ctx)
 	if err != nil {
 		return nil, err
@@ -181,10 +205,9 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	}
 
 	return &InventorySnapshot{
-		CollectedAt: time.Now().UTC(),
-		Hosts:       hosts,
-		VMs:         vms,
-		Datastores:  datastores,
+		Hosts:      hosts,
+		VMs:        vms,
+		Datastores: datastores,
 	}, nil
 }
 
@@ -353,37 +376,38 @@ func (c *Client) fetchSessionManagerMoID(ctx context.Context, release string) (s
 	return moID, nil
 }
 
-func (c *Client) loginVIJSON(ctx context.Context, release string, sessionManagerMoID string) error {
+func (c *Client) loginVIJSON(ctx context.Context, release string, sessionManagerMoID string) (string, error) {
 	body, err := json.Marshal(map[string]string{
 		"userName": c.username,
 		"password": c.password,
 	})
 	if err != nil {
-		return fmt.Errorf("marshal vi-json login request: %w", err)
+		return "", fmt.Errorf("marshal vi-json login request: %w", err)
 	}
 	endpoint := fmt.Sprintf("%s/sdk/vim25/%s/SessionManager/%s/Login", c.baseURL.String(), release, sessionManagerMoID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(body)))
 	if err != nil {
-		return fmt.Errorf("build vi-json login request: %w", err)
+		return "", fmt.Errorf("build vi-json login request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return classifyTransportError("vi-json login", err)
+		return "", classifyTransportError("vi-json login", err)
 	}
 	defer resp.Body.Close()
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	switch resp.StatusCode {
 	case http.StatusOK:
-		if strings.TrimSpace(resp.Header.Get("vmware-api-session-id")) == "" {
-			return &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API login succeeded without returning a session id"}
+		sessionID := strings.TrimSpace(resp.Header.Get("vmware-api-session-id"))
+		if sessionID == "" {
+			return "", &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API login succeeded without returning a session id"}
 		}
-		return nil
+		return sessionID, nil
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &ConnectionError{Category: "auth", Message: "VMware authentication failed while creating the VI JSON API session"}
+		return "", &ConnectionError{Category: "auth", Message: "VMware authentication failed while creating the VI JSON API session"}
 	default:
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API login failed with HTTP %d", resp.StatusCode)}
+		return "", &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API login failed with HTTP %d", resp.StatusCode)}
 	}
 }
 

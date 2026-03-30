@@ -228,6 +228,8 @@ func resourceSupportsUnifiedIncidentAlerts(resource unifiedresources.Resource) b
 		return true
 	case unifiedresources.ResourceTypeAgent:
 		return len(resource.Incidents) > 0
+	case unifiedresources.ResourceTypeVM:
+		return len(resource.Incidents) > 0
 	case unifiedresources.ResourceTypePBS:
 		return len(resource.Incidents) > 0
 	default:
@@ -320,6 +322,8 @@ func unifiedIncidentInstance(resource unifiedresources.Resource) string {
 		return "TrueNAS"
 	case resource.PBS != nil:
 		return "PBS"
+	case resource.VMware != nil:
+		return "VMware"
 	case resource.Storage != nil && strings.TrimSpace(resource.Storage.Platform) != "":
 		platform := strings.TrimSpace(resource.Storage.Platform)
 		if platform == "" {
@@ -351,7 +355,7 @@ func unifiedIncidentAlertType(resource unifiedresources.Resource, incident unifi
 		}
 		return "storage-incident"
 	default:
-		return "storage-incident"
+		return "resource-incident"
 	}
 }
 
@@ -713,6 +717,42 @@ func unifiedIncidentMetadata(resource unifiedresources.Resource, incident unifie
 		if len(resource.PBS.ProtectedWorkloadNames) > 0 {
 			metadata["topConsumerNames"] = append([]string(nil), resource.PBS.ProtectedWorkloadNames...)
 			metadata["protectedWorkloadNames"] = append([]string(nil), resource.PBS.ProtectedWorkloadNames...)
+		}
+	}
+
+	if resource.VMware != nil {
+		if connectionID := strings.TrimSpace(resource.VMware.ConnectionID); connectionID != "" {
+			metadata["vmwareConnectionId"] = connectionID
+		}
+		if connectionName := strings.TrimSpace(resource.VMware.ConnectionName); connectionName != "" {
+			metadata["vmwareConnectionName"] = connectionName
+		}
+		if vcenterHost := strings.TrimSpace(resource.VMware.VCenterHost); vcenterHost != "" {
+			metadata["vmwareVcenterHost"] = vcenterHost
+		}
+		if entityType := strings.TrimSpace(resource.VMware.EntityType); entityType != "" {
+			metadata["vmwareEntityType"] = entityType
+		}
+		if managedObjectID := strings.TrimSpace(resource.VMware.ManagedObjectID); managedObjectID != "" {
+			metadata["vmwareManagedObjectId"] = managedObjectID
+		}
+		if overallStatus := strings.TrimSpace(resource.VMware.OverallStatus); overallStatus != "" {
+			metadata["vmwareOverallStatus"] = overallStatus
+		}
+		if alarmCount := resource.VMware.ActiveAlarmCount; alarmCount > 0 {
+			metadata["vmwareActiveAlarmCount"] = alarmCount
+		}
+		if summary := strings.TrimSpace(resource.VMware.ActiveAlarmSummary); summary != "" {
+			metadata["vmwareActiveAlarmSummary"] = summary
+		}
+		if taskCount := resource.VMware.RecentTaskCount; taskCount > 0 {
+			metadata["vmwareRecentTaskCount"] = taskCount
+		}
+		if summary := strings.TrimSpace(resource.VMware.RecentTaskSummary); summary != "" {
+			metadata["vmwareRecentTaskSummary"] = summary
+		}
+		if snapshotCount := resource.VMware.SnapshotCount; snapshotCount > 0 {
+			metadata["vmwareSnapshotCount"] = snapshotCount
 		}
 	}
 

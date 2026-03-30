@@ -142,6 +142,69 @@ func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedResourceIncidentsSupportsVMwareVMs(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	resource := unifiedresources.Resource{
+		ID:   "vm:app-01",
+		Type: unifiedresources.ResourceTypeVM,
+		Name: "app-01",
+		VMware: &unifiedresources.VMwareData{
+			ConnectionID:       "vc-1",
+			ConnectionName:     "Lab VC",
+			VCenterHost:        "vc.lab.local",
+			EntityType:         "vm",
+			ManagedObjectID:    "vm-201",
+			OverallStatus:      "red",
+			ActiveAlarmCount:   1,
+			ActiveAlarmSummary: "VM replication fault (red)",
+			RecentTaskCount:    1,
+			RecentTaskSummary:  "Create snapshot (success)",
+			SnapshotCount:      2,
+		},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "vmware",
+			NativeID: "alarm-21",
+			Code:     "vmware_alarm_state",
+			Severity: storagehealth.RiskCritical,
+			Source:   string(unifiedresources.SourceVMware),
+			Summary:  "VM vm-201 has VMware alarm VM replication fault (red)",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resource})
+
+	alertID := unifiedIncidentAlertID(resource, resource.Incidents[0])
+	assertAlertPresent(t, m, alertID)
+
+	m.mu.RLock()
+	alert := testRequireActiveAlert(t, m, alertID)
+	m.mu.RUnlock()
+
+	if alert.Type != "resource-incident" {
+		t.Fatalf("alert type = %q, want resource-incident", alert.Type)
+	}
+	if alert.Message != "VM vm-201 has VMware alarm VM replication fault (red)" {
+		t.Fatalf("message = %q", alert.Message)
+	}
+	if got := alert.Metadata["incidentLabel"]; got != "VM Health Issue" {
+		t.Fatalf("incidentLabel = %v, want VM Health Issue", got)
+	}
+	if got := alert.Metadata["incidentAction"]; got != "Investigate resource health immediately" {
+		t.Fatalf("incidentAction = %v, want Investigate resource health immediately", got)
+	}
+	if got := alert.Metadata["vmwareConnectionId"]; got != "vc-1" {
+		t.Fatalf("vmwareConnectionId = %v, want vc-1", got)
+	}
+	if got := alert.Metadata["vmwareActiveAlarmSummary"]; got != "VM replication fault (red)" {
+		t.Fatalf("vmwareActiveAlarmSummary = %v", got)
+	}
+	if got := alert.Metadata["vmwareSnapshotCount"]; got != 2 {
+		t.Fatalf("vmwareSnapshotCount = %v, want 2", got)
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsMarksBackupTargetExposure(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

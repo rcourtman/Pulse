@@ -2424,6 +2424,11 @@ func quietHoursCategoryForAlert(alert *Alert) string {
 		return "performance"
 	case "usage", "disk-health", "disk-wearout", "zfs-pool-state", "zfs-pool-errors", "zfs-device", "storage-incident", "backup-storage-incident", "backup-posture-incident":
 		return "storage"
+	case "resource-incident":
+		if metadataStringValue(alert.Metadata, "incidentCategory") == unifiedresources.IncidentCategoryAvailability {
+			return "offline"
+		}
+		return "performance"
 	case "connectivity", "offline", "powered-off", "docker-host-offline":
 		return "offline"
 	}
@@ -7529,6 +7534,8 @@ func alertTypeSortRank(alert Alert) int {
 		return 5
 	case "storage-incident", "zfs-pool-state", "zfs-pool-errors":
 		return 4
+	case "resource-incident":
+		return 4
 	case "disk-health", "disk-wearout", "zfs-device":
 		return 3
 	case "offline", "connectivity", "powered-off", "docker-host-offline":
@@ -7574,6 +7581,26 @@ func metadataIntValue(value interface{}) int {
 		}
 	}
 	return 0
+}
+
+func metadataStringValue(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value, ok := metadata[key]
+	if !ok {
+		return ""
+	}
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case []byte:
+		return strings.TrimSpace(string(v))
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
 }
 
 func metadataBoolValue(metadata map[string]interface{}, key string) bool {

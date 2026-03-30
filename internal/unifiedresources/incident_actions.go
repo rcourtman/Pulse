@@ -10,6 +10,7 @@ const (
 )
 
 func IncidentActionForResource(resource *Resource, incident ResourceIncident, category string) (string, string) {
+	baseType := resourceBaseType(resource)
 	switch category {
 	case IncidentCategoryProtection:
 		if incident.Severity == storagehealth.RiskCritical {
@@ -37,11 +38,23 @@ func IncidentActionForResource(resource *Resource, incident ResourceIncident, ca
 		}
 		return IncidentUrgencyToday, "Investigate disk health and schedule replacement if degradation continues"
 	case IncidentCategoryAvailability:
+		if baseType == ResourceTypeAgent || baseType == ResourceTypeVM {
+			if incident.Severity == storagehealth.RiskCritical {
+				return IncidentUrgencyNow, "Restore resource availability immediately"
+			}
+			return IncidentUrgencyToday, "Investigate degraded resource availability"
+		}
 		if incident.Severity == storagehealth.RiskCritical {
 			return IncidentUrgencyNow, "Restore storage availability immediately"
 		}
 		return IncidentUrgencyToday, "Investigate degraded storage availability"
 	default:
+		if baseType == ResourceTypeAgent || baseType == ResourceTypeVM {
+			if incident.Severity == storagehealth.RiskCritical {
+				return IncidentUrgencyToday, "Investigate resource health immediately"
+			}
+			return IncidentUrgencyPlan, "Review resource health and plan corrective action"
+		}
 		if incident.Severity == storagehealth.RiskCritical {
 			return IncidentUrgencyToday, "Investigate storage health immediately"
 		}

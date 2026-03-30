@@ -410,9 +410,15 @@ export interface ResourceVMwareMeta {
   hostUuid?: string;
   connectionState?: string;
   powerState?: string;
+  overallStatus?: string;
   cpuCount?: number;
   memorySizeMib?: number;
   datastoreType?: string;
+  activeAlarmCount?: number;
+  activeAlarmSummary?: string;
+  recentTaskCount?: number;
+  recentTaskSummary?: string;
+  snapshotCount?: number;
 }
 
 /**

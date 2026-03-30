@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 )
 
 func strPointer(v string) *string {
@@ -450,6 +451,78 @@ func TestUnifiedAIAdapterGetTopByMetric(t *testing.T) {
 	topDisk := adapter.GetTopByDisk(0, []ResourceType{ResourceTypeVM})
 	if len(topDisk) != 1 || topDisk[0].ID != "vm-a" {
 		t.Fatalf("expected disk ranking to include vm-a only, got %#v", topDisk)
+	}
+}
+
+func TestUnifiedAIAdapterIncludesVMwareCanonicalReadSurface(t *testing.T) {
+	registry := testRegistry(
+		Resource{
+			ID:      "vmware-host-1",
+			Type:    ResourceTypeAgent,
+			Name:    "esxi-01.lab.local",
+			Status:  StatusWarning,
+			Sources: []DataSource{SourceVMware},
+			VMware: &VMwareData{
+				ConnectionID:       "vc-1",
+				EntityType:         "host",
+				ManagedObjectID:    "host-101",
+				OverallStatus:      "yellow",
+				ActiveAlarmCount:   1,
+				ActiveAlarmSummary: "Host connection degraded (yellow)",
+			},
+			Incidents: []ResourceIncident{{
+				Provider: "vmware",
+				Code:     "vmware_alarm_state",
+				Severity: storagehealth.RiskWarning,
+				Summary:  "Host host-101 has VMware alarm Host connection degraded (yellow)",
+			}},
+		},
+		Resource{
+			ID:      "vmware-vm-1",
+			Type:    ResourceTypeVM,
+			Name:    "app-01",
+			Status:  StatusWarning,
+			Sources: []DataSource{SourceVMware},
+			VMware: &VMwareData{
+				ConnectionID:      "vc-1",
+				EntityType:        "vm",
+				ManagedObjectID:   "vm-201",
+				OverallStatus:     "red",
+				SnapshotCount:     2,
+				RecentTaskSummary: "Create snapshot (success)",
+			},
+		},
+		Resource{
+			ID:      "vmware-ds-1",
+			Type:    ResourceTypeStorage,
+			Name:    "nvme-primary",
+			Status:  StatusWarning,
+			Sources: []DataSource{SourceVMware},
+			VMware: &VMwareData{
+				ConnectionID:      "vc-1",
+				EntityType:        "datastore",
+				ManagedObjectID:   "datastore-11",
+				OverallStatus:     "yellow",
+				RecentTaskSummary: "Refresh datastore (queued)",
+			},
+		},
+	)
+
+	adapter := NewUnifiedAIAdapter(registry)
+	infrastructure := adapter.GetInfrastructure()
+	if len(infrastructure) != 1 || infrastructure[0].ID != "vmware-host-1" {
+		t.Fatalf("expected VMware host on infrastructure read path, got %#v", infrastructure)
+	}
+	workloads := adapter.GetWorkloads()
+	if len(workloads) != 1 || workloads[0].ID != "vmware-vm-1" {
+		t.Fatalf("expected VMware VM on workload read path, got %#v", workloads)
+	}
+	all := adapter.GetAll()
+	if len(all) != 3 {
+		t.Fatalf("expected all canonical VMware resources, got %d", len(all))
+	}
+	if all[0].VMware == nil && all[1].VMware == nil && all[2].VMware == nil {
+		t.Fatal("expected VMware metadata on assistant read surface")
 	}
 }
 

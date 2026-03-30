@@ -35,6 +35,7 @@ type AlertTimelineChange struct {
 	AlertMessage    string
 	AlertValue      float64
 	AlertThreshold  float64
+	AlertMetadata   map[string]any
 }
 
 // BuildAlertTimelineChange constructs a canonical resource change for alert
@@ -67,6 +68,12 @@ func BuildAlertTimelineChange(resourceID string, kind ChangeKind, occurredAt tim
 			MetadataAlertValue:      alert.AlertValue,
 			MetadataAlertThreshold:  alert.AlertThreshold,
 		},
+	}
+	for key, value := range cloneChangeMetadata(alert.AlertMetadata) {
+		if _, exists := change.Metadata[key]; exists {
+			continue
+		}
+		change.Metadata[key] = value
 	}
 	if !occurredAt.IsZero() {
 		change.OccurredAt = cloneTimePtr(&occurredAt)

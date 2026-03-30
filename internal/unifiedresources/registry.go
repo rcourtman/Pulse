@@ -1126,6 +1126,9 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	if incoming.PowerState != "" {
 		merged.PowerState = incoming.PowerState
 	}
+	if incoming.OverallStatus != "" {
+		merged.OverallStatus = incoming.OverallStatus
+	}
 	if incoming.CPUCount > 0 {
 		merged.CPUCount = incoming.CPUCount
 	}
@@ -1134,6 +1137,21 @@ func mergeVMwareData(existing *VMwareData, incoming *VMwareData) *VMwareData {
 	}
 	if incoming.DatastoreType != "" {
 		merged.DatastoreType = incoming.DatastoreType
+	}
+	if incoming.ActiveAlarmCount > 0 {
+		merged.ActiveAlarmCount = incoming.ActiveAlarmCount
+	}
+	if incoming.ActiveAlarmSummary != "" {
+		merged.ActiveAlarmSummary = incoming.ActiveAlarmSummary
+	}
+	if incoming.RecentTaskCount > 0 {
+		merged.RecentTaskCount = incoming.RecentTaskCount
+	}
+	if incoming.RecentTaskSummary != "" {
+		merged.RecentTaskSummary = incoming.RecentTaskSummary
+	}
+	if incoming.SnapshotCount > 0 {
+		merged.SnapshotCount = incoming.SnapshotCount
 	}
 
 	return &merged

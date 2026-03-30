@@ -11,6 +11,7 @@ import {
   getDiskPercent,
   type ResourceChangeKind,
   type ResourceProxmoxMeta,
+  type ResourceVMwareMeta,
   type Resource,
   type ResourceType,
 } from '@/types/resource';
@@ -102,6 +103,29 @@ describe('Resource Helper Functions', () => {
       };
 
       expect(proxmox.pool).toBe('prod-vms');
+    });
+  });
+
+  describe('ResourceVMwareMeta', () => {
+    it('accepts VMware signal metadata on canonical resources', () => {
+      const vmware: ResourceVMwareMeta = {
+        connectionId: 'vc-1',
+        connectionName: 'Lab VC',
+        vcenterHost: 'vc.lab.local',
+        managedObjectId: 'vm-101',
+        entityType: 'vm',
+        overallStatus: 'yellow',
+        activeAlarmCount: 2,
+        activeAlarmSummary: 'CPU ready alarm; snapshot age warning',
+        recentTaskCount: 1,
+        recentTaskSummary: 'Clone VM task finished',
+        snapshotCount: 3,
+      };
+
+      expect(vmware.overallStatus).toBe('yellow');
+      expect(vmware.activeAlarmCount).toBe(2);
+      expect(vmware.recentTaskSummary).toBe('Clone VM task finished');
+      expect(vmware.snapshotCount).toBe(3);
     });
   });
 

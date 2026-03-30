@@ -498,3 +498,13 @@ canonical `agent` and `node` header boundary when reusing shared filter
 primitives. Frontend alert tables may not drift back to ad hoc host-key
 grouping or narrow filter key predicates that drop optional hostname values
 before alert group metadata is derived.
+That same shared alert boundary now also owns provider-backed `resource-incident`
+alerts beyond storage-only cases. `internal/alerts/alerts.go`,
+`internal/alerts/unified_incidents.go`, and
+`frontend-modern/src/utils/alertIncidentPresentation.ts` must treat VMware-
+backed host and VM incidents as the same canonical `resource-incident`
+vocabulary used everywhere else, with quiet-hours routing derived from the
+shared incident category and provider context carried only as shared alert and
+timeline metadata. Alert history may surface VMware alarm, task, and snapshot
+context inside that shared model, but it must not fork into VMware-only alert
+types, badges, or incident chrome.

@@ -13,8 +13,29 @@ func IncidentLabelForResource(resource *Resource, incident ResourceIncident, cat
 	case IncidentCategoryDiskHealth:
 		return "Disk Health Risk"
 	case IncidentCategoryAvailability:
-		return "Storage Availability Issue"
+		switch resourceBaseType(resource) {
+		case ResourceTypeAgent:
+			return "Host Availability Issue"
+		case ResourceTypeVM:
+			return "VM Availability Issue"
+		default:
+			return "Availability Issue"
+		}
 	default:
-		return "Storage Health Issue"
+		switch resourceBaseType(resource) {
+		case ResourceTypeAgent:
+			return "Host Health Issue"
+		case ResourceTypeVM:
+			return "VM Health Issue"
+		default:
+			return "Resource Health Issue"
+		}
 	}
+}
+
+func resourceBaseType(resource *Resource) ResourceType {
+	if resource == nil {
+		return ""
+	}
+	return CanonicalResourceType(resource.Type)
 }
