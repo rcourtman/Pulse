@@ -182,6 +182,16 @@ only claim the instance is accessible without authentication when
 missing HTTPS, API tokens, or protected exports must not reuse the
 unauthenticated credential-exposure warning just because the aggregate score
 remains below the banner threshold.
+That same shared runtime-warning boundary must also keep the global banner
+reserved for active exposure states rather than generic setup debt:
+`frontend-modern/src/components/SecurityWarning.tsx` and
+`frontend-modern/src/utils/securityScorePresentation.ts` may surface an
+always-visible app-wide warning when authentication is disabled, export
+protection is disabled, or a publicly reachable instance is still serving over
+HTTP, but private authenticated runtimes that are only missing optional
+hardening controls such as HTTPS on localhost or an API token must route that
+guidance through the governed Security Overview posture surfaces instead of
+covering the primary app chrome with a persistent warning.
 That same shared security transport boundary must stay under explicit proof
 routing on both sides: `frontend-modern/src/api/security.ts`,
 `internal/api/security.go`, `internal/api/security_tokens.go`, and

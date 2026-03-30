@@ -26,6 +26,13 @@ export interface SecurityWarningPresentation {
   messageClass: string;
 }
 
+export interface SecurityRuntimeWarningVisibilityOptions {
+  hasAuthentication: boolean;
+  exportProtected: boolean;
+  hasHTTPS?: boolean;
+  publicAccess?: boolean;
+}
+
 export interface SecurityFeatureStatePresentation {
   label: 'Yes' | 'No';
   className: string;
@@ -172,6 +179,20 @@ export function getSecurityWarningPresentation(options: {
     message,
     messageClass: 'text-base-content',
   };
+}
+
+export function shouldShowGlobalSecurityWarning(
+  options: SecurityRuntimeWarningVisibilityOptions,
+): boolean {
+  if (!options.hasAuthentication) {
+    return true;
+  }
+
+  if (!options.exportProtected) {
+    return true;
+  }
+
+  return Boolean(options.publicAccess && !options.hasHTTPS);
 }
 
 export function getSecurityScoreTextClass(score: number): string {

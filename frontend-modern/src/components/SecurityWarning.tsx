@@ -10,6 +10,7 @@ import {
   getSecurityScoreSymbol,
   getSecurityScoreTextClass,
   getSecurityWarningPresentation,
+  shouldShowGlobalSecurityWarning,
 } from '@/utils/securityScorePresentation';
 
 import type { SecurityStatus } from '@/types/config';
@@ -94,15 +95,16 @@ export const SecurityWarning: Component = () => {
   // Show more aggressively if public access detected
   const shouldShow = () => {
     if (dismissed()) return false;
-    if (!status()) return false;
 
-    // Always show if public access without auth
-    if (status()!.publicAccess && !status()!.hasAuthentication) {
-      return true;
-    }
+    const currentStatus = status();
+    if (!currentStatus) return false;
 
-    // Show if score is low
-    return status()!.score < 4;
+    return shouldShowGlobalSecurityWarning({
+      hasAuthentication: currentStatus.hasAuthentication,
+      exportProtected: currentStatus.exportProtected,
+      hasHTTPS: currentStatus.hasHTTPS,
+      publicAccess: currentStatus.publicAccess,
+    });
   };
 
   const scorePercentage = () => (status()!.score / status()!.maxScore) * 100;

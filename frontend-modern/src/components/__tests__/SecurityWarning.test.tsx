@@ -31,7 +31,7 @@ describe('SecurityWarning', () => {
 
   afterEach(cleanup);
 
-  it('renders after the async security status resolves to a low score', async () => {
+  it('does not render for private authenticated setup debt', async () => {
     const pendingStatus = deferred<any>();
     apiFetchJSONMock.mockReturnValue(pendingStatus.promise);
 
@@ -43,7 +43,7 @@ describe('SecurityWarning', () => {
     pendingStatus.resolve({
       apiTokenConfigured: false,
       credentialsEncrypted: true,
-      exportProtected: false,
+      exportProtected: true,
       hasAuditLogging: false,
       hasAuthentication: true,
       hasHTTPS: false,
@@ -51,17 +51,37 @@ describe('SecurityWarning', () => {
     });
 
     await waitFor(() => {
+      expect(apiFetchJSONMock).toHaveBeenCalled();
+    });
+
+    expect(screen.queryByText(/Security score:/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('renders for active exposure states', async () => {
+    const pendingStatus = deferred<any>();
+    apiFetchJSONMock.mockReturnValue(pendingStatus.promise);
+
+    const { SecurityWarning } = await import('../SecurityWarning');
+    render(() => <SecurityWarning />);
+
+    pendingStatus.resolve({
+      apiTokenConfigured: false,
+      credentialsEncrypted: true,
+      exportProtected: true,
+      hasAuditLogging: false,
+      hasAuthentication: false,
+      hasHTTPS: false,
+      publicAccess: true,
+    });
+
+    await waitFor(() => {
       expect(screen.getByText(/Security score:/i)).toBeInTheDocument();
     });
 
     expect(
-      screen.getByText(
-        'Authentication is enabled, but this Pulse instance is still missing HTTPS, an API token, and protected exports.',
-      ),
+      screen.getByText(/public network access detected/i),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/accessible without authentication/i),
-    ).not.toBeInTheDocument();
     const banner = screen.getByRole('status');
     expect(banner).not.toHaveClass('fixed');
     expect(screen.getByRole('link', { name: 'Learn More' })).toHaveAttribute(

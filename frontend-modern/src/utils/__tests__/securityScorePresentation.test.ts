@@ -9,6 +9,7 @@ import {
   getSecurityScoreSymbol,
   getSecurityScoreTextClass,
   getSecurityWarningPresentation,
+  shouldShowGlobalSecurityWarning,
 } from '@/utils/securityScorePresentation';
 
 describe('securityScorePresentation', () => {
@@ -107,6 +108,44 @@ describe('securityScorePresentation', () => {
         hasHTTPS: false,
       }).message,
     ).toBe('Authentication is enabled, but this Pulse instance is still missing HTTPS and an API token.');
+  });
+
+  it('keeps global warnings off for private authenticated setup debt', () => {
+    expect(
+      shouldShowGlobalSecurityWarning({
+        hasAuthentication: true,
+        exportProtected: true,
+        hasHTTPS: false,
+        publicAccess: false,
+      }),
+    ).toBe(false);
+  });
+
+  it('keeps global warnings on for active exposure states', () => {
+    expect(
+      shouldShowGlobalSecurityWarning({
+        hasAuthentication: false,
+        exportProtected: true,
+        hasHTTPS: true,
+        publicAccess: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowGlobalSecurityWarning({
+        hasAuthentication: true,
+        exportProtected: false,
+        hasHTTPS: true,
+        publicAccess: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowGlobalSecurityWarning({
+        hasAuthentication: true,
+        exportProtected: true,
+        hasHTTPS: false,
+        publicAccess: true,
+      }),
+    ).toBe(true);
   });
 
   it('returns canonical yes/no feature-state presentation', () => {
