@@ -263,6 +263,24 @@ export const buildStorageHrefForResource = (resource: Resource): string | null =
   return null;
 };
 
+export const buildRecoveryHrefForResource = (resource: Resource): string | null => {
+  const mergedPlatform = Array.isArray(resource.platformData?.sources)
+    ? resolvePlatformTypeFromSources(resource.platformData.sources)
+    : undefined;
+  const platform = normalizeSourcePlatformQueryValue(
+    resource.storage?.platform || mergedPlatform || resource.platformType || resource.type,
+  );
+
+  if (platform === 'truenas' && (resource.type === 'truenas' || resource.type === 'agent')) {
+    return buildRecoveryPath({
+      platform: 'truenas',
+      node: resource.id,
+    });
+  }
+
+  return null;
+};
+
 export const parseStorageLinkSearch = (search: string) => {
   const params = new URLSearchParams(search);
   return {

@@ -2,7 +2,7 @@ import type { Resource } from '@/types/resource';
 import type { KubernetesMetricCapabilities, PlatformData } from './resourceDetailMappers';
 import { buildServiceDetailLinks, type ServiceDetailLink } from './serviceDetailLinks';
 import { buildWorkloadsHref } from './workloadsLink';
-import { buildStorageHrefForResource } from '@/routing/resourceLinks';
+import { buildRecoveryHrefForResource, buildStorageHrefForResource } from '@/routing/resourceLinks';
 
 export type ResourceDetailDrawerOperationalBadge = {
   label: string;
@@ -217,6 +217,15 @@ export const buildRelatedLinks = (
       label: 'Open in Storage',
       compactLabel: 'Storage',
       ariaLabel: `Open related storage for ${displayName}`,
+    });
+  }
+  const recovery = buildRecoveryHrefForResource(resource);
+  if (recovery) {
+    links.push({
+      href: recovery,
+      label: 'Open in Recovery',
+      compactLabel: 'Recovery',
+      ariaLabel: `Open related recovery for ${displayName}`,
     });
   }
   links.push(...buildServiceDetailLinks(resource));

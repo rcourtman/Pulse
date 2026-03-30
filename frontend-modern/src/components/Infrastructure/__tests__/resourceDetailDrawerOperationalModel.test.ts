@@ -168,6 +168,12 @@ describe('resourceDetailDrawerOperationalModel', () => {
         compactLabel: 'Storage',
         ariaLabel: 'Open related storage for TrueNAS Main',
       },
+      {
+        href: '/recovery?platform=truenas&node=truenas-main',
+        label: 'Open in Recovery',
+        compactLabel: 'Recovery',
+        ariaLabel: 'Open related recovery for TrueNAS Main',
+      },
     ]);
   });
 
@@ -197,6 +203,12 @@ describe('resourceDetailDrawerOperationalModel', () => {
         label: 'Open in Storage',
         compactLabel: 'Storage',
         ariaLabel: 'Open related storage for TrueNAS Main',
+      },
+      {
+        href: '/recovery?platform=truenas&node=truenas-main',
+        label: 'Open in Recovery',
+        compactLabel: 'Recovery',
+        ariaLabel: 'Open related recovery for TrueNAS Main',
       },
     ]);
   });

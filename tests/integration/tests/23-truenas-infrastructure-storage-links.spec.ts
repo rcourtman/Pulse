@@ -10,7 +10,7 @@ type WorkerFixtures = {
   authStorageStatePath: string;
 };
 
-const SCREENSHOT_PATH = '/tmp/truenas-infrastructure-storage-links.png';
+const SCREENSHOT_PATH = '/tmp/truenas-infrastructure-storage-recovery-links.png';
 
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
@@ -35,10 +35,10 @@ const test = base.extend<{}, WorkerFixtures>({
   }, { scope: 'worker' }],
 });
 
-test.describe('TrueNAS infrastructure storage links', () => {
+test.describe('TrueNAS infrastructure storage and recovery links', () => {
   test.setTimeout(180_000);
 
-  test('surfaces canonical workloads and storage links for top-level TrueNAS systems', async ({
+  test('surfaces canonical workloads, storage, and recovery links for top-level TrueNAS systems', async ({
     page,
   }) => {
     await page.route('**/api/resources**', async (route) => {
@@ -139,6 +139,7 @@ test.describe('TrueNAS infrastructure storage links', () => {
 
     const workloadsLink = page.getByRole('link', { name: 'Open related workloads for TrueNAS Main' });
     const storageLink = page.getByRole('link', { name: 'Open related storage for TrueNAS Main' });
+    const recoveryLink = page.getByRole('link', { name: 'Open related recovery for TrueNAS Main' });
 
     await expect(workloadsLink).toHaveAttribute(
       'href',
@@ -147,6 +148,10 @@ test.describe('TrueNAS infrastructure storage links', () => {
     await expect(storageLink).toHaveAttribute(
       'href',
       '/storage?source=truenas&node=truenas-main',
+    );
+    await expect(recoveryLink).toHaveAttribute(
+      'href',
+      '/recovery?platform=truenas&node=truenas-main',
     );
 
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });

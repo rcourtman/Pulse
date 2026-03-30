@@ -5,6 +5,7 @@ import {
   RECOVERY_QUERY_PARAMS,
   buildInfrastructureHrefForWorkload,
   buildRecoveryPath,
+  buildRecoveryHrefForResource,
   buildInfrastructurePath,
   buildInfrastructureResourceHref,
   buildStorageHrefForResource,
@@ -268,6 +269,41 @@ describe('resource link routing contract', () => {
     } as any);
 
     expect(href).toBe('/storage?source=truenas&node=truenas-main');
+  });
+
+  it('builds recovery deep links for top-level TrueNAS systems', () => {
+    const href = buildRecoveryHrefForResource({
+      id: 'truenas-main',
+      type: 'truenas',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+      platformId: 'truenas-main',
+      platformType: 'truenas',
+      sourceType: 'hybrid',
+      status: 'online',
+      lastSeen: Date.now(),
+    } as any);
+
+    expect(href).toBe('/recovery?platform=truenas&node=truenas-main');
+  });
+
+  it('builds recovery deep links for hybrid agent resources with merged truenas sources', () => {
+    const href = buildRecoveryHrefForResource({
+      id: 'truenas-main',
+      type: 'agent',
+      name: 'truenas-main',
+      displayName: 'TrueNAS Main',
+      platformId: 'truenas-main',
+      platformType: 'agent',
+      sourceType: 'hybrid',
+      status: 'online',
+      lastSeen: Date.now(),
+      platformData: {
+        sources: ['agent', 'truenas'],
+      },
+    } as any);
+
+    expect(href).toBe('/recovery?platform=truenas&node=truenas-main');
   });
 
   it('canonicalizes legacy storage source aliases when parsing links', () => {

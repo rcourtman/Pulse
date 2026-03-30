@@ -518,6 +518,12 @@ back to generic agent or Docker-only semantics when host telemetry is also
 present. Runtime-local filters like `agent` or cluster context may still be
 added as secondary scope, but the canonical platform query must remain the
 first-class route boundary for shared workload navigation.
+That same routing contract now also owns recovery deep links for unified
+resources. Infrastructure drawers and other cross-surface consumers must route
+TrueNAS-backed top-level systems through canonical `/recovery` route state
+there, using owned `platform` and `node` queries instead of rebuilding
+drawer-local recovery links or assuming only PBS services can expose recovery
+handoffs from infrastructure.
 That drawer shell now routes its canonical timeline filter, facet-bundle, and
 resource-intelligence state through
 `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`,
