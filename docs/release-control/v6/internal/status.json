@@ -4113,6 +4113,27 @@
         "L15",
         "L16"
       ]
+    },
+    {
+      "id": "platform-admission-first-lab-ready-stage",
+      "summary": "Admitted but not yet supported platforms now have one governed pre-support checkpoint, `first-lab-ready`: the architecture is locked, the shared phase floor is implemented, automated non-live proof is strong enough that the next highest-value step is live validation, and the support claim remains blocked until that live proof passes.",
+      "kind": "governance",
+      "decided_at": "2026-03-31",
+      "subsystem_ids": [
+        "agent-lifecycle",
+        "ai-runtime",
+        "alerts",
+        "api-contracts",
+        "monitoring",
+        "storage-recovery",
+        "unified-resources"
+      ],
+      "lane_ids": [
+        "L6",
+        "L13",
+        "L15",
+        "L16"
+      ]
     }
   ]
 }

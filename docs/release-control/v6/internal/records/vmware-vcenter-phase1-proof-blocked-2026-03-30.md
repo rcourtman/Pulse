@@ -27,6 +27,14 @@
 Pulse has enough evidence to say what the VMware support model should be, but
 not enough evidence to say VMware is supported in practice.
 
+Current non-live checkpoint:
+
+1. VMware is now `first-lab-ready`.
+2. The shared phase-1 implementation floor and automated non-live proof are
+   far enough along that the next proper move is a real `vCenter` run.
+3. Additional non-live work should be justified only when it closes a newly
+   discovered shared-contract gap or materially reduces first-lab risk.
+
 The support-claim ratchet now requires both:
 
 1. one real `vCenter` capability recorded in `LOCAL_CAPABILITIES.md`

@@ -1,7 +1,7 @@
 # VMware vSphere Phase-1 Execution Plan
 
-Last updated: 2026-03-30
-Status: PLANNED
+Last updated: 2026-03-31
+Status: ACTIVE
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `status.json.resolved_decisions.vmware-vsphere-vcenter-first-admission-model`
@@ -10,7 +10,25 @@ Governance surfaces:
 
 Pulse now has a locked architecture recommendation for VMware vSphere.
 This document turns that recommendation into an executable phase-1 plan so
-implementation can start without drifting into a provider-specific island.
+implementation can proceed without drifting into a provider-specific island,
+and so the harness can distinguish real pre-support progress from the final
+support claim.
+
+## Current Checkpoint
+
+Current governed checkpoint: `first-lab-ready`, not `supported`.
+
+That means:
+
+1. the architecture and support floor are locked
+2. the bounded shared phase-1 implementation floor is landed
+3. automated non-live proof covers the shared onboarding, projection,
+   alerts/history, Assistant-read, and exclusion boundaries well enough that
+   the next highest-value step is a real `vCenter` run
+4. the remaining blockers to a support claim are live-only facts: privilege
+   floor, supported version floor, and real-signal fidelity
+
+This checkpoint is an implementation handoff, not a product support claim.
 
 ## Support Decision
 
@@ -24,7 +42,7 @@ Pulse should add VMware support, but only in one narrow form:
 6. assistant control: `read-only`
 7. recovery support: `n/a`
 
-Implementation may start next on that basis.
+Implementation may continue on that basis.
 If live validation disproves the minimum privilege bundle, supported version
 floor, or declared support-floor coverage, Pulse should stop at governance and
 must not widen the support claim.
@@ -258,9 +276,16 @@ VMware/Broadcom APIs:
 5. performance/history:
    [PerformanceManager QueryPerfComposite](https://developer.broadcom.com/xapis/virtual-infrastructure-json-api/latest/sdk/vim25/release/PerformanceManager/moId/QueryPerfComposite/post/)
 
-## Start Decision
+## Next Decision
 
-Implementation should start next only as slice 1 of this plan.
-If slice 1 cannot prove the minimum privilege bundle and supported version
-floor on a real `vCenter`, Pulse should stop and record that gap instead of
-moving forward as if VMware were already supportable.
+The next proper move is the first real `vCenter` proof run.
+
+Additional non-live VMware work is still valid only when it:
+
+1. closes a newly found shared-contract or shared-runtime gap
+2. materially reduces first-lab risk
+3. strengthens the same governed phase-1 floor instead of adding synthetic
+   VMware-local polish
+
+Do not keep extending VMware through repetitive non-live polish once this plan
+is already `first-lab-ready`.

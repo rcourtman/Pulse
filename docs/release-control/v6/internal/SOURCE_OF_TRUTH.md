@@ -499,6 +499,12 @@ VMware is the current admitted next-platform direction for Pulse, but it is
 not yet a supported platform claim. This section defines the only acceptable
 phase-1 floor while support remains proof-gated.
 
+Pulse also now distinguishes an admitted platform that is merely
+`architecture-locked` from one that is `first-lab-ready`: `first-lab-ready`
+means the bounded non-live phase floor is implemented and regression-proofed
+well enough that the next proper move is a real lab run, while the support
+claim stays blocked until live proof passes.
+
 1. Architecture boundary:
    VMware vSphere should enter Pulse only as the first-class
    `vmware-vsphere` platform. Phase 1 is `vCenter` only; direct `ESXi` is
@@ -536,29 +542,35 @@ phase-1 floor while support remains proof-gated.
    though VMware exposes power, snapshot, and guest-operation APIs, because
    Pulse is not yet claiming a broad VMware action plane ahead of the existing
    action-governance coverage gap.
-8. Support gate:
+8. Current implementation checkpoint:
+   VMware may be described internally as `first-lab-ready` once the shared
+   phase-1 onboarding, projection, alert/history, and Assistant-read floor is
+   implemented with automated non-live proof. `first-lab-ready` is an
+   implementation milestone only; it does not change the support matrix or any
+   user-facing support wording.
+9. Support gate:
    Do not call VMware supported until one real `vCenter` capability is
    recorded in `LOCAL_CAPABILITIES.md` and proves connection onboarding, the
    minimum privilege bundle, the supported version floor, canonical
    `agent`/`vm`/`storage` projection, alert and metrics-history truth, and
    assistant read behavior. If those proofs do not hold, implementation
    should stop at governance rather than shipping an inflated support claim.
-9. Execution sequence:
+10. Execution sequence:
    VMware phase-1 execution should follow
    `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`
    as the concrete slice order and stop/go contract for the first admitted
    VMware support floor.
-10. Projection contract:
+11. Projection contract:
    VMware phase-1 projection should also follow
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_RESOURCE_PROJECTION_SPEC.md`
    as the canonical source, identity, topology, alert-mapping, and
    non-projection boundary for phase-1 VMware resources.
-11. Alerts and Assistant contract:
+12. Alerts and Assistant contract:
    VMware phase-1 alerts and Assistant work should also follow
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_ALERTS_AND_ASSISTANT_SPEC.md`
    as the canonical shared-alert, shared-timeline, Assistant-read, and
    Assistant-control-exclusion boundary for the VMware phase-1 floor.
-12. Backend API/runtime contract:
+13. Backend API/runtime contract:
    VMware phase-1 backend API/runtime work should also follow
    `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
    as the canonical public API-boundary, session-ownership, provider-health,

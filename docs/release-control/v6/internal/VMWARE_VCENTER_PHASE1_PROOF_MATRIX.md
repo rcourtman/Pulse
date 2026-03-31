@@ -1,7 +1,7 @@
 # VMware vCenter Phase-1 Proof Matrix
 
 Last updated: 2026-03-31
-Status: PLANNED
+Status: ACTIVE
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
 - `docs/release-control/v6/internal/VMWARE_VCENTER_PHASE1_API_RUNTIME_SPEC.md`
@@ -14,12 +14,14 @@ Use this matrix as the live-proof runbook for the trust-critical boundary
 between:
 
 1. a planned VMware architecture
-2. an implemented VMware onboarding and projection path
+2. an implemented VMware phase-1 floor that may be `first-lab-ready`
 3. an honest claim that VMware is actually supported in Pulse
 
 This matrix does not replace repo-local tests.
 It exists because VMware can look correct in isolated API, poller, or UI work
 while still failing the real support floor on a live `vCenter`.
+It also defines when the non-live harness may honestly say `first-lab-ready`
+instead of collapsing all progress into the same `not supported` bucket.
 
 ## Governing Policy
 
@@ -127,6 +129,30 @@ boundary:
    `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
    prove the shipped route and browser surface stay out of direct `ESXi`,
    recovery, and VMware admin-plane territory.
+
+## First-Lab-Ready Checkpoint
+
+Pulse may classify VMware `first-lab-ready` before live proof only when all of
+these are true:
+
+1. the governed architecture is locked
+2. the bounded phase-1 floor is implemented on shared paths
+3. automated non-live proof covers shared onboarding, canonical projection,
+   alerts/history, Assistant read, and exclusion integrity
+4. the remaining blockers to a support claim are live-only facts rather than
+   missing shared product work
+
+`first-lab-ready` means the next proper move is a real `vCenter` run.
+It does not mean VMware is supported, marketed, or admitted into the support
+matrix.
+
+Current state as of 2026-03-31:
+
+1. VMware meets the governed `first-lab-ready` checkpoint.
+2. The next highest-value step is a real `vCenter` proof pass through
+   `VC-0` through `VC-7`.
+3. Repeating `not supported` without also reporting `first-lab-ready` is no
+   longer an accurate description of implementation progress.
 
 ## Scenario Matrix
 

@@ -1,6 +1,6 @@
 # Pulse v6 Platform Support Model
 
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 Status: ACTIVE
 
 This file is the canonical governed model for platform support in Pulse v6.
@@ -170,6 +170,32 @@ is not acceptable.
 3. `read-only`
 4. `n/a`
 
+## Pre-Support Readiness Stages
+
+An admitted first-class platform may be real engineering work long before it
+is honest to call it supported. Pulse therefore uses one governed pre-support
+checkpoint so delivery progress is visible without inflating the support claim.
+
+1. `architecture-locked`
+   The admission model is resolved and implementation may start, but the
+   platform is still only a planned or admitted direction.
+2. `first-lab-ready`
+   The architecture is locked, the bounded shared phase floor is implemented,
+   automated non-live proof covers that floor well enough to catch regression,
+   and the next highest-value step is a real lab or customer environment run.
+   `first-lab-ready` is an implementation checkpoint, not a support claim.
+3. `supported`
+   Live proof validates the declared floor and the platform is admitted into
+   the current support matrix.
+
+Rules:
+
+1. Only `supported` changes the current support matrix.
+2. `first-lab-ready` may be used in execution plans, proof matrices,
+   blocked-proof records, and progress reporting for admitted platforms.
+3. `first-lab-ready` must not leak into product wording, settings wording, or
+   Assistant behavior as if support already exists.
+
 ## Current Classification
 
 ### First-class platforms
@@ -297,9 +323,9 @@ starts.
    artifacts out of the phase-1 projection contract unless a later governed
    slice proves they belong on the shared path
 
-| Platform | Family | Entry point | Primary mode | Optional augmentation | Canonical projections | Admission state |
-| --- | --- | --- | --- | --- | --- | --- |
-| `vmware-vsphere` | VMware | `vCenter` only in phase 1 | `api-backed` | host or guest agent later, not phase 1 | `agent`, `vm`, `storage` | architecture locked, not yet admitted |
+| Platform | Family | Entry point | Primary mode | Optional augmentation | Canonical projections | Admission state | Readiness stage |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `vmware-vsphere` | VMware | `vCenter` only in phase 1 | `api-backed` | host or guest agent later, not phase 1 | `agent`, `vm`, `storage` | architecture locked, not yet in support matrix | `first-lab-ready` |
 
 ## VMware vSphere Proposed Phase-1 Floor
 
@@ -346,3 +372,7 @@ history truth, and assistant read behavior. If that proof does not hold,
 implementation must stop at governance rather than widening the support claim.
 The concrete first-implementation slice order and stop/go checks live in
 `docs/release-control/v6/internal/VMWARE_VSPHERE_PHASE1_EXECUTION_PLAN.md`.
+As of 2026-03-31, VMware has reached the governed `first-lab-ready`
+checkpoint: the non-live phase-1 floor is implemented and regression-proofed
+well enough that the next proper step is a real `vCenter` proof run rather
+than more architecture work.
