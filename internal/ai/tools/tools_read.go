@@ -459,10 +459,6 @@ func (e *PulseToolExecutor) executeReadLogs(ctx context.Context, args map[string
 }
 
 func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Context, resourceRef, container string, lines int) (CallToolResult, error) {
-	if e.appContainerReadProvider == nil {
-		return NewErrorResult(fmt.Errorf("native app-container read provider is not available")), nil
-	}
-
 	validation := e.validateResolvedResource(resourceRef, "query", false)
 	if validation.IsBlocked() {
 		return NewToolResponseResult(validation.StrictError.ToToolResponse()), nil
@@ -482,10 +478,13 @@ func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Contex
 
 	resolved := validation.Resource
 	if resolved.GetKind() != "app-container" {
-		return NewErrorResult(fmt.Errorf("resource '%s' of kind %q does not support native logs through pulse_read", resourceRef, resolved.GetKind())), nil
+		return blockedNativeReadLogsResult(resolved, resourceRef, container), nil
 	}
 	if !strings.EqualFold(strings.TrimSpace(resolved.GetAdapter()), "truenas") {
-		return NewErrorResult(fmt.Errorf("resource '%s' uses unsupported read adapter %q", resourceRef, resolved.GetAdapter())), nil
+		return blockedNativeReadLogsResult(resolved, resourceRef, container), nil
+	}
+	if e.appContainerReadProvider == nil {
+		return NewErrorResult(fmt.Errorf("native app-container read provider is not available")), nil
 	}
 
 	resourceName := resolvedResourceDisplayName(resolved)
@@ -524,6 +523,73 @@ func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Contex
 		return NewTextResult(title + ":\n(no output)"), nil
 	}
 	return NewTextResult(fmt.Sprintf("%s:\n%s", title, output)), nil
+}
+
+func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, container string) CallToolResult {
+	resourceRef = strings.TrimSpace(resourceRef)
+	if resolved == nil {
+		return NewErrorResult(fmt.Errorf("resource '%s' does not support native logs through pulse_read", resourceRef))
+	}
+
+	resourceName := resolvedResourceDisplayName(resolved)
+	if resourceName == "" {
+		resourceName = resourceRef
+	}
+	kind := strings.TrimSpace(resolved.GetKind())
+	if kind == "" {
+		kind = strings.TrimSpace(resolved.GetResourceType())
+	}
+	adapter := strings.TrimSpace(resolved.GetAdapter())
+	canonicalResourceID := strings.TrimSpace(resolved.GetResourceID())
+	details := map[string]interface{}{
+		"resource_ref":     resourceRef,
+		"resource_id":      canonicalResourceID,
+		"resource_type":    kind,
+		"adapter":          adapter,
+		"allowed_actions":  resolved.GetAllowedActions(),
+		"native_logs_path": false,
+	}
+
+	if kind == "app-container" {
+		targetHost := strings.TrimSpace(resolved.GetTargetHost())
+		containerName := strings.TrimSpace(container)
+		if containerName == "" {
+			containerName = resourceName
+		}
+		if targetHost != "" {
+			details["target_host"] = targetHost
+			details["container"] = containerName
+			details["recovery_hint"] = fmt.Sprintf(
+				"Use pulse_read action=logs target_host=%q container=%q for app logs on this platform.",
+				targetHost,
+				containerName,
+			)
+			return NewToolResponseResult(NewToolBlockedError(
+				ErrCodeActionNotAllowed,
+				fmt.Sprintf("Resource %q does not expose native app logs through pulse_read resource_id on adapter %q.", resourceName, adapter),
+				details,
+			))
+		}
+	}
+
+	queryType := kind
+	if queryType == "" {
+		queryType = "resource"
+	}
+	queryResourceID := canonicalResourceID
+	if queryResourceID == "" {
+		queryResourceID = resourceRef
+	}
+	details["recovery_hint"] = fmt.Sprintf(
+		"Use pulse_query action=get resource_type=%q resource_id=%q to inspect status, alerts, activity, and metrics for this resource.",
+		queryType,
+		queryResourceID,
+	)
+	return NewToolResponseResult(NewToolBlockedError(
+		ErrCodeActionNotAllowed,
+		fmt.Sprintf("Resource %q does not expose native logs through pulse_read for adapter %q.", resourceName, adapter),
+		details,
+	))
 }
 
 // truncateCommand truncates a command for display/logging

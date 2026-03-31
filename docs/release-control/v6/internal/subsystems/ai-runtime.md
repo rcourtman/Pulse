@@ -236,6 +236,11 @@ agent-routed platforms. Shared AI context should carry canonical
 `resource_id` guidance for those resources, and `pulse_read action=logs` may
 only be suggested when the runtime has an explicit native resource read path
 such as supported TrueNAS `app-container` logs.
+If a caller still targets `pulse_read action=logs` with `resource_id` for a
+resource that lacks that native log path, the shared tool boundary must fail
+as a structured blocked response with a governed recovery hint toward the
+correct shared path, such as `pulse_query action=get` for API-backed read-only
+resources or `target_host` plus `container` for agent-routed app logs.
 That same VMware AI rule also now includes mention resolution. Frontend
 Assistant mention payloads for VMware-backed `agent`, `vm`, `storage`, and
 canonical `app-container` resources must preserve the shared unified resource

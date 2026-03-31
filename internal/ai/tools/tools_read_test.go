@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -228,4 +229,111 @@ func TestExecuteReadLogs_TrueNASAppUsesNativeReadProvider(t *testing.T) {
 	if call.OrgID != "default" || call.ProviderUID != "nextcloud" || call.Host != "truenas-main" || call.Container != "nextcloud" || call.Lines != 25 {
 		t.Fatalf("unexpected native app read request: %+v", call)
 	}
+}
+
+func TestExecuteReadLogs_VMwareResourcesReturnStructuredQueryGuidance(t *testing.T) {
+	tests := []struct {
+		name         string
+		resourceType string
+		resourceID   string
+		resourceRef  string
+		wantKind     string
+	}{
+		{name: "vm", resourceType: "vm", resourceID: "app-01", resourceRef: "app-01", wantKind: "vm"},
+		{name: "agent", resourceType: "agent", resourceID: "esxi-01.lab.local", resourceRef: "esxi-01.lab.local", wantKind: "agent"},
+		{name: "storage", resourceType: "storage", resourceID: "nvme-primary", resourceRef: "nvme-primary", wantKind: "storage"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := newVMwareUnifiedQueryProvider(t)
+			resolved := &mockResolvedContext{
+				resources: make(map[string]ResolvedResourceInfo),
+				aliases:   make(map[string]ResolvedResourceInfo),
+			}
+			exec := NewPulseToolExecutor(ExecutorConfig{
+				UnifiedResourceProvider: provider,
+				ReadState:               provider.ResourceRegistry,
+			})
+			exec.SetResolvedContext(resolved)
+
+			_, err := exec.executeGetResource(context.Background(), map[string]interface{}{
+				"resource_type": tc.resourceType,
+				"resource_id":   tc.resourceID,
+			})
+			require.NoError(t, err)
+
+			result, err := exec.executeReadLogs(context.Background(), map[string]interface{}{
+				"action":      "logs",
+				"resource_id": tc.resourceRef,
+			})
+			require.NoError(t, err)
+			assert.True(t, result.IsError)
+
+			payload := decodeToolResponse(t, result)
+			require.NotNil(t, payload.Error)
+			assert.Equal(t, ErrCodeActionNotAllowed, payload.Error.Code)
+			assert.True(t, payload.Error.Blocked)
+			assert.Contains(t, payload.Error.Message, "does not expose native logs through pulse_read")
+			assert.Equal(t, tc.wantKind, payload.Error.Details["resource_type"])
+			assert.Equal(t, "vmware-vsphere", payload.Error.Details["adapter"])
+
+			hint, ok := payload.Error.Details["recovery_hint"].(string)
+			require.True(t, ok)
+			assert.Contains(t, hint, `pulse_query action=get`)
+			assert.Contains(t, hint, `resource_type="`+tc.wantKind+`"`)
+		})
+	}
+}
+
+func TestExecuteReadLogs_NonNativeAppContainersReturnStructuredTargetHostGuidance(t *testing.T) {
+	resolved := &mockResolvedContext{
+		resources: make(map[string]ResolvedResourceInfo),
+		aliases:   make(map[string]ResolvedResourceInfo),
+	}
+	resource := &mockResource{
+		resourceID:     "app-container:docker-host:homepage",
+		resourceType:   "app-container",
+		targetHost:     "docker-host",
+		adapter:        "docker",
+		allowedActions: []string{"query", "get", "start", "stop", "restart"},
+		providerUID:    "homepage",
+		kind:           "app-container",
+		aliases:        []string{"homepage"},
+	}
+	resolved.resources[resource.resourceID] = resource
+	resolved.aliases["homepage"] = resource
+
+	exec := NewPulseToolExecutor(ExecutorConfig{})
+	exec.SetResolvedContext(resolved)
+
+	result, err := exec.executeReadLogs(context.Background(), map[string]interface{}{
+		"action":      "logs",
+		"resource_id": "homepage",
+	})
+	require.NoError(t, err)
+	assert.True(t, result.IsError)
+
+	payload := decodeToolResponse(t, result)
+	require.NotNil(t, payload.Error)
+	assert.Equal(t, ErrCodeActionNotAllowed, payload.Error.Code)
+	assert.True(t, payload.Error.Blocked)
+	assert.Contains(t, payload.Error.Message, "does not expose native app logs through pulse_read resource_id")
+	assert.Equal(t, "app-container", payload.Error.Details["resource_type"])
+	assert.Equal(t, "docker-host", payload.Error.Details["target_host"])
+	assert.Equal(t, "homepage", payload.Error.Details["container"])
+
+	hint, ok := payload.Error.Details["recovery_hint"].(string)
+	require.True(t, ok)
+	assert.Contains(t, hint, `target_host="docker-host"`)
+	assert.Contains(t, hint, `container="homepage"`)
+}
+
+func decodeToolResponse(t *testing.T, result CallToolResult) ToolResponse {
+	t.Helper()
+	require.NotEmpty(t, result.Content)
+
+	var payload ToolResponse
+	require.NoError(t, json.Unmarshal([]byte(result.Content[0].Text), &payload))
+	return payload
 }
