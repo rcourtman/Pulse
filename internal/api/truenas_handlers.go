@@ -99,6 +99,10 @@ func (h *TrueNASHandlers) HandleList(w http.ResponseWriter, r *http.Request) {
 	if !h.featureEnabled(w) {
 		return
 	}
+	if mock.IsMockEnabled() {
+		writeJSON(w, http.StatusOK, mockTrueNASConnectionResponses())
+		return
+	}
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {

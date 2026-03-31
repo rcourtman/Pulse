@@ -703,6 +703,15 @@ remains the saved connection retest surface. The explicit disabled path also
 stays on this boundary: `404 vmware_disabled` means the operator or runtime has
 opted out of the default-on VMware candidate, not that the platform requires a
 different onboarding contract.
+That same TrueNAS and VMware platform-connections contract now also owns
+runtime mock continuity. When `/api/system/mock-mode` flips on a running
+server, `/api/truenas/connections` and `/api/vmware/connections` must
+immediately return the canonical mock connection payloads without restart, and
+the shared `/api/resources` surface must expose the corresponding platform
+inventory through `source=truenas` and `source=vmware-vsphere`. Shared query
+parsing may accept `vmware-vsphere` as the operator-facing VMware alias, but
+the emitted canonical resource source remains the shared `vmware` source
+family rather than a second backend source key.
 That same VMware test contract now also owns structured setup-failure
 classification. When `POST /api/vmware/connections/test` or
 `POST /api/vmware/connections/{id}/test` fails, the backend payload must

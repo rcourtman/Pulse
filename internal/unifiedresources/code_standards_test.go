@@ -218,6 +218,25 @@ func TestNoDirectStateAccessForMigratedResources(t *testing.T) {
 	}
 }
 
+func TestAPIResourcesKeepsOwnedSupplementalGapFillAndVMwareAlias(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
+	if err != nil {
+		t.Fatalf("failed to read ../api/resources.go: %v", err)
+	}
+	source := string(data)
+
+	requiredSnippets := []string{
+		"seedSources := unifiedSeedSources(seed.resources)",
+		"!sourceOwnedBySupplementalProvider(source, ownedSources) || unifiedSeedIncludesSource(seedSources, source)",
+		`case "vmware", "vmware-vsphere":`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("../api/resources.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
 	if err != nil {

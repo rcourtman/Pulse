@@ -109,6 +109,12 @@ with no edit overlay must refresh that same summary owner, and
 recomputing or shadowing it inside handler-local runtime state. Internal
 sub-second test harness intervals must not leak `intervalSeconds: 0` onto that
 operator-facing contract.
+That same monitoring boundary now also owns runtime mock rebind continuity for
+API-backed supplemental providers. When `/api/system/mock-mode` flips on a
+running server, the live TrueNAS and VMware provider bindings must swap to the
+mock-backed supplemental records and refresh canonical read-state immediately
+instead of waiting for a process restart before shared resource consumers can
+see the platform inventory.
 That same summary owner also owns VMware partial-success classification.
 Optional VI JSON or Automation enrichment reads that fail after base
 host/VM/datastore inventory succeeds must not collapse the whole poll into a
@@ -354,6 +360,11 @@ physical-disk resources such as TrueNAS disks into the shared `disk`
 metrics-store contract via the existing SMART-temperature writer, so physical
 disk charts and disk-health consumers read one history path instead of a
 TrueNAS-only temperature cache.
+That same TrueNAS monitoring ownership also includes runtime mock continuity.
+When `/api/system/mock-mode` changes on a live server, the TrueNAS supplemental
+provider must rebind immediately and repopulate the canonical read state so
+settings, infrastructure, storage, and other shared consumers see the same
+mock-backed inventory without restart.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

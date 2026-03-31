@@ -12,6 +12,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
 )
@@ -927,6 +928,78 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("dataset", dataset.Name, "disk", diskPercent, now)
 	}
 
+	vmwareFixtures := vmware.DefaultFixtures()
+	vmwareDatastoreUsage := vmwareDatastoreUsageByID(vmwareFixtures.Datastores)
+	log.Debug().
+		Int("hosts", len(vmwareFixtures.Hosts)).
+		Int("vms", len(vmwareFixtures.VMs)).
+		Int("datastores", len(vmwareFixtures.Datastores)).
+		Msg("mock seeding: processing VMware fixtures")
+
+	for _, host := range vmwareFixtures.Hosts {
+		sourceID := vmware.SourceID(vmwareFixtures.ConnectionID, "host", host.Host)
+		if sourceID == "" {
+			continue
+		}
+		recordGuest(
+			"agent:"+sourceID,
+			"agent",
+			sourceID,
+			vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.CPUPercent }),
+			vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.MemoryPercent }),
+			vmwareAverageDatastoreUsage(vmwareDatastoreUsage, host.DatastoreIDs),
+			vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }),
+			vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }),
+			vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetInBytesPerSecond }),
+			vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }),
+			true,
+			true,
+			true,
+		)
+	}
+
+	for _, guest := range vmwareFixtures.VMs {
+		sourceID := vmware.SourceID(vmwareFixtures.ConnectionID, "vm", guest.VM)
+		if sourceID == "" {
+			continue
+		}
+		recordGuest(
+			sourceID,
+			"vm",
+			sourceID,
+			vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.CPUPercent }),
+			vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.MemoryPercent }),
+			vmwareAverageDatastoreUsage(vmwareDatastoreUsage, guest.DatastoreIDs),
+			vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }),
+			vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }),
+			vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetInBytesPerSecond }),
+			vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }),
+			true,
+			true,
+			true,
+		)
+	}
+
+	for _, datastore := range vmwareFixtures.Datastores {
+		usage := vmwareDatastoreUsagePercent(datastore)
+		if usage <= 0 {
+			continue
+		}
+		sourceID := vmware.SourceID(vmwareFixtures.ConnectionID, "datastore", datastore.Datastore)
+		if sourceID == "" {
+			continue
+		}
+		numPoints := len(seedTimestamps)
+		usageSeries := GenerateSeededSeries(usage, numPoints, HashSeed("vmware-datastore", sourceID, "usage"), 0, 100, styleFlat)
+		for i := 0; i < numPoints; i++ {
+			ts := seedTimestamps[i]
+			mh.AddStorageMetric(sourceID, "usage", usageSeries[i], ts)
+			queueMetric("storage", sourceID, "usage", usageSeries[i], ts)
+		}
+		mh.AddStorageMetric(sourceID, "usage", usage, now)
+		queueMetric("storage", sourceID, "usage", usage, now)
+	}
+
 	if ms != nil && len(seedBatch) > 0 {
 		ms.WriteBatchSync(seedBatch)
 	}
@@ -973,6 +1046,123 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time
 			}
 		}
 	}
+}
+
+func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
+	snapshot := vmware.DefaultFixtures()
+	datastoreUsage := vmwareDatastoreUsageByID(snapshot.Datastores)
+
+	for _, host := range snapshot.Hosts {
+		sourceID := vmware.SourceID(snapshot.ConnectionID, "host", host.Host)
+		if sourceID == "" {
+			continue
+		}
+		mh.AddGuestMetric("agent:"+sourceID, "cpu", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.CPUPercent }), ts)
+		mh.AddGuestMetric("agent:"+sourceID, "memory", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.MemoryPercent }), ts)
+		mh.AddGuestMetric("agent:"+sourceID, "disk", vmwareAverageDatastoreUsage(datastoreUsage, host.DatastoreIDs), ts)
+		mh.AddGuestMetric("agent:"+sourceID, "diskread", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }), ts)
+		mh.AddGuestMetric("agent:"+sourceID, "diskwrite", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }), ts)
+		mh.AddGuestMetric("agent:"+sourceID, "netin", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetInBytesPerSecond }), ts)
+		mh.AddGuestMetric("agent:"+sourceID, "netout", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }), ts)
+		if ms != nil {
+			ms.Write("agent", sourceID, "cpu", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.CPUPercent }), ts)
+			ms.Write("agent", sourceID, "memory", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.MemoryPercent }), ts)
+			ms.Write("agent", sourceID, "disk", vmwareAverageDatastoreUsage(datastoreUsage, host.DatastoreIDs), ts)
+			ms.Write("agent", sourceID, "diskread", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }), ts)
+			ms.Write("agent", sourceID, "diskwrite", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }), ts)
+			ms.Write("agent", sourceID, "netin", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetInBytesPerSecond }), ts)
+			ms.Write("agent", sourceID, "netout", vmwareFloat64Metric(host.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }), ts)
+		}
+	}
+
+	for _, guest := range snapshot.VMs {
+		sourceID := vmware.SourceID(snapshot.ConnectionID, "vm", guest.VM)
+		if sourceID == "" {
+			continue
+		}
+		mh.AddGuestMetric(sourceID, "cpu", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.CPUPercent }), ts)
+		mh.AddGuestMetric(sourceID, "memory", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.MemoryPercent }), ts)
+		mh.AddGuestMetric(sourceID, "disk", vmwareAverageDatastoreUsage(datastoreUsage, guest.DatastoreIDs), ts)
+		mh.AddGuestMetric(sourceID, "diskread", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }), ts)
+		mh.AddGuestMetric(sourceID, "diskwrite", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }), ts)
+		mh.AddGuestMetric(sourceID, "netin", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetInBytesPerSecond }), ts)
+		mh.AddGuestMetric(sourceID, "netout", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }), ts)
+		if ms != nil {
+			ms.Write("vm", sourceID, "cpu", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.CPUPercent }), ts)
+			ms.Write("vm", sourceID, "memory", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.MemoryPercent }), ts)
+			ms.Write("vm", sourceID, "disk", vmwareAverageDatastoreUsage(datastoreUsage, guest.DatastoreIDs), ts)
+			ms.Write("vm", sourceID, "diskread", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }), ts)
+			ms.Write("vm", sourceID, "diskwrite", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }), ts)
+			ms.Write("vm", sourceID, "netin", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetInBytesPerSecond }), ts)
+			ms.Write("vm", sourceID, "netout", vmwareFloat64Metric(guest.Metrics, func(m *vmware.InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }), ts)
+		}
+	}
+
+	for _, datastore := range snapshot.Datastores {
+		sourceID := vmware.SourceID(snapshot.ConnectionID, "datastore", datastore.Datastore)
+		if sourceID == "" {
+			continue
+		}
+		usage := vmwareDatastoreUsagePercent(datastore)
+		mh.AddStorageMetric(sourceID, "usage", usage, ts)
+		if ms != nil {
+			ms.Write("storage", sourceID, "usage", usage, ts)
+		}
+	}
+}
+
+func vmwareFloat64Metric(metrics *vmware.InventoryMetrics, pick func(*vmware.InventoryMetrics) *float64) float64 {
+	if metrics == nil || pick == nil {
+		return 0
+	}
+	value := pick(metrics)
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+func vmwareDatastoreUsageByID(datastores []vmware.InventoryDatastore) map[string]float64 {
+	out := make(map[string]float64, len(datastores))
+	for _, datastore := range datastores {
+		id := strings.TrimSpace(datastore.Datastore)
+		if id == "" {
+			continue
+		}
+		out[id] = vmwareDatastoreUsagePercent(datastore)
+	}
+	return out
+}
+
+func vmwareAverageDatastoreUsage(byID map[string]float64, ids []string) float64 {
+	if len(ids) == 0 || len(byID) == 0 {
+		return 0
+	}
+	var total float64
+	var count int
+	for _, id := range ids {
+		usage, ok := byID[strings.TrimSpace(id)]
+		if !ok {
+			continue
+		}
+		total += usage
+		count++
+	}
+	if count == 0 {
+		return 0
+	}
+	return total / float64(count)
+}
+
+func vmwareDatastoreUsagePercent(datastore vmware.InventoryDatastore) float64 {
+	if datastore.Capacity <= 0 {
+		return 0
+	}
+	used := datastore.Capacity - datastore.FreeSpace
+	if used < 0 {
+		used = 0
+	}
+	return clampFloat((float64(used)/float64(datastore.Capacity))*100, 0, 100)
 }
 
 type guestMetricSource interface {
@@ -1265,6 +1455,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 
 	// Record TrueNAS pool/dataset disk-usage live ticks
 	recordTrueNASFixturesMetrics(mh, ms, ts)
+	recordVMwareFixturesMetrics(mh, ms, ts)
 }
 
 func diskMetricsResourceID(disk models.PhysicalDisk) string {

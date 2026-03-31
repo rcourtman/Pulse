@@ -25,6 +25,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
@@ -262,6 +263,89 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 	if responses[0].Observed.CollectedAt == nil || !responses[0].Observed.CollectedAt.Equal(collectedAt) {
 		t.Fatalf("observed collectedAt = %+v, want %s", responses[0].Observed.CollectedAt, collectedAt.Format(time.RFC3339))
 	}
+}
+
+func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *testing.T) {
+	t.Setenv("PULSE_MOCK_MODE", "false")
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(false)
+	t.Cleanup(func() {
+		mock.SetEnabled(prevMock)
+	})
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	monitor, err := monitoring.New(cfg)
+	if err != nil {
+		t.Fatalf("new monitor: %v", err)
+	}
+	monitor.SetMockMode(false)
+
+	router := NewRouter(cfg, monitor, nil, nil, nil, "1.0.0")
+	t.Cleanup(func() {
+		router.shutdownBackgroundWorkers()
+	})
+
+	toggleReq := httptest.NewRequest(http.MethodPost, "/api/system/mock-mode", strings.NewReader(`{"enabled":true}`))
+	toggleRec := httptest.NewRecorder()
+	router.configHandlers.HandleUpdateMockMode(toggleRec, toggleReq)
+	if toggleRec.Code != http.StatusOK {
+		t.Fatalf("toggle status = %d, body=%s", toggleRec.Code, toggleRec.Body.String())
+	}
+
+	truenasListRec := httptest.NewRecorder()
+	truenasListReq := httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil)
+	router.trueNASHandlers.HandleList(truenasListRec, truenasListReq)
+	if truenasListRec.Code != http.StatusOK {
+		t.Fatalf("truenas connections status = %d, body=%s", truenasListRec.Code, truenasListRec.Body.String())
+	}
+	var truenasConnections []trueNASConnectionResponse
+	if err := json.Unmarshal(truenasListRec.Body.Bytes(), &truenasConnections); err != nil {
+		t.Fatalf("decode truenas connections: %v", err)
+	}
+	if len(truenasConnections) != 1 || truenasConnections[0].ID != "truenas-mock-1" {
+		t.Fatalf("expected mock truenas connection, got %#v", truenasConnections)
+	}
+
+	vmwareListRec := httptest.NewRecorder()
+	vmwareListReq := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+	router.vmwareHandlers.HandleList(vmwareListRec, vmwareListReq)
+	if vmwareListRec.Code != http.StatusOK {
+		t.Fatalf("vmware connections status = %d, body=%s", vmwareListRec.Code, vmwareListRec.Body.String())
+	}
+	var vmwareConnections []vmwareConnectionResponse
+	if err := json.Unmarshal(vmwareListRec.Body.Bytes(), &vmwareConnections); err != nil {
+		t.Fatalf("decode vmware connections: %v", err)
+	}
+	if len(vmwareConnections) != 1 || vmwareConnections[0].ID != "vc-mock-1" {
+		t.Fatalf("expected mock vmware connection, got %#v", vmwareConnections)
+	}
+
+	assertResourceSource := func(path string, wantSource unifiedresources.DataSource) {
+		t.Helper()
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		router.resourceHandlers.HandleListResources(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body=%s", path, rec.Code, rec.Body.String())
+		}
+
+		var resp ResourcesResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode %s response: %v", path, err)
+		}
+		for _, resource := range resp.Data {
+			for _, source := range resource.Sources {
+				if source == wantSource {
+					return
+				}
+			}
+		}
+		t.Fatalf("expected %s response to include source %q, got %#v", path, wantSource, resp.Data)
+	}
+
+	assertResourceSource("/api/resources?source=truenas", unifiedresources.SourceTrueNAS)
+	assertResourceSource("/api/resources?source=vmware-vsphere", unifiedresources.SourceVMware)
 }
 
 func TestContract_VMwareConnectionListCarriesDegradedObservedSummary(t *testing.T) {

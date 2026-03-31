@@ -3916,6 +3916,8 @@ func (m *Monitor) SetSupplementalRecordsProvider(source unifiedresources.DataSou
 		m.supplementalProviders[normalized] = provider
 	}
 	m.mu.Unlock()
+
+	m.updateResourceStore(m.GetState())
 }
 
 // SetRecoveryManager wires the recovery store manager for best-effort ingestion of

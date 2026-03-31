@@ -260,6 +260,11 @@ func NewProvider(snapshot InventorySnapshot) *Provider {
 	return provider
 }
 
+// NewDefaultProvider returns a provider loaded with the default VMware fixtures.
+func NewDefaultProvider() *Provider {
+	return NewProvider(DefaultFixtures())
+}
+
 // Refresh fetches and caches the latest snapshot.
 func (p *Provider) Refresh(ctx context.Context) error {
 	if p == nil {
@@ -691,6 +696,12 @@ func cloneInventoryMetrics(in *InventoryMetrics) *InventoryMetrics {
 func vmwareSourceID(connectionID, entityType, managedObjectID string) string {
 	parts := filterNonEmptyStrings(strings.TrimSpace(connectionID), strings.TrimSpace(entityType), strings.TrimSpace(managedObjectID))
 	return strings.Join(parts, ":")
+}
+
+// SourceID returns the canonical VMware source identifier used for projected
+// records, metrics targets, and mock/runtime history.
+func SourceID(connectionID, entityType, managedObjectID string) string {
+	return vmwareSourceID(connectionID, entityType, managedObjectID)
 }
 
 func hostStatus(host InventoryHost) unifiedresources.ResourceStatus {

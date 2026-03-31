@@ -179,6 +179,41 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 	}
 }
 
+func TestVMwareHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, true)
+
+	handler, _ := newVMwareHandlersForTest(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var listed []vmwareConnectionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 mock VMware connection, got %d", len(listed))
+	}
+	if listed[0].Host != "vcsa.lab.local" {
+		t.Fatalf("expected mock VMware host vcsa.lab.local, got %q", listed[0].Host)
+	}
+	if listed[0].Password != "********" {
+		t.Fatalf("expected redacted mock VMware password, got %q", listed[0].Password)
+	}
+	if listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
+		t.Fatalf("expected mock VMware poll summary, got %+v", listed[0].Poll)
+	}
+	if listed[0].Observed == nil || listed[0].Observed.Hosts == 0 || listed[0].Observed.VMs == 0 {
+		t.Fatalf("expected populated mock VMware observed summary, got %+v", listed[0].Observed)
+	}
+}
+
 func TestVMwareHandlers_HandleDelete_RemovesAndClearsRuntimeSummary(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 	setMockModeForVMwareTest(t, false)

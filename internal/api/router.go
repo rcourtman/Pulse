@@ -347,6 +347,7 @@ func (r *Router) setupRoutes() {
 	if r.monitor != nil {
 		r.configHandlers.SetMonitor(r.monitor)
 	}
+	r.configHandlers.SetMockModeChangeHook(r.syncPlatformSupplementalProviders)
 	r.trueNASHandlers = &TrueNASHandlers{
 		getPersistence: r.configHandlers.getPersistence,
 		getConfig:      r.configHandlers.getConfig,
@@ -380,21 +381,7 @@ func (r *Router) setupRoutes() {
 			r.monitorResourceAdapter = unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(store))
 		}
 	}
-	if mock.IsMockEnabled() {
-		truenas.SetFeatureEnabled(true)
-		vmware.SetFeatureEnabled(true)
-		mockTrueNASProvider := truenas.NewDefaultProvider()
-		adapter := trueNASRecordsAdapter{provider: mockTrueNASProvider}
-		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, adapter)
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, adapter)
-	} else if r.trueNASPoller != nil {
-		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
-	}
-	if r.vmwarePoller != nil {
-		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
-		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
-	}
+	r.syncPlatformSupplementalProviders(mock.IsMockEnabled())
 	if r.monitor != nil {
 		r.configureMonitorDependencies(r.monitor)
 		if r.resourceHandlers != nil {
@@ -1264,6 +1251,35 @@ func (r *Router) setMonitorSupplementalRecordsProvider(source unifiedresources.D
 	if r.mtMonitor != nil {
 		r.mtMonitor.SetMonitorInitializer(r.configureMonitorDependencies)
 	}
+}
+
+func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
+	if r == nil {
+		return
+	}
+
+	if mockEnabled {
+		truenas.SetFeatureEnabled(true)
+		vmware.SetFeatureEnabled(true)
+
+		trueNASAdapter := trueNASRecordsAdapter{provider: truenas.NewDefaultProvider()}
+		vmwareAdapter := vmwareRecordsAdapter{provider: vmware.NewDefaultProvider()}
+
+		if r.resourceHandlers != nil {
+			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
+			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
+		}
+		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
+		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
+		return
+	}
+
+	if r.resourceHandlers != nil {
+		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
+	}
+	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
+	r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, r.vmwarePoller)
 }
 
 // getTenantMonitor returns the appropriate monitor for the current request's tenant.
@@ -9077,6 +9093,36 @@ func (a trueNASRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSou
 
 func (a trueNASRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
 	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
+}
+
+type vmwareRecordsAdapter struct {
+	provider *vmware.Provider
+}
+
+func (a vmwareRecordsAdapter) GetCurrentRecords() []unifiedresources.IngestRecord {
+	return a.GetCurrentRecordsForOrg("default")
+}
+
+func (a vmwareRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
+	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != "default" {
+		return nil
+	}
+	if a.provider == nil {
+		return nil
+	}
+	return a.provider.Records()
+}
+
+func (a vmwareRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
+	return a.GetCurrentRecordsForOrg(orgID)
+}
+
+func (a vmwareRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceVMware}
+}
+
+func (a vmwareRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceVMware}
 }
 
 // trigger rebuild Fri Jan 16 10:52:41 UTC 2026

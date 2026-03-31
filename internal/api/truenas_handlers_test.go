@@ -221,6 +221,38 @@ func TestTrueNASHandlers_HandleList_RedactsSensitiveFields(t *testing.T) {
 	}
 }
 
+func TestTrueNASHandlers_HandleList_ReturnsMockConnectionsInMockMode(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, true)
+
+	handler, _, _ := newTrueNASHandlersForTest(t, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var listed []trueNASConnectionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("expected 1 mock TrueNAS connection, got %d", len(listed))
+	}
+	if listed[0].Host != "truenas-main" {
+		t.Fatalf("expected mock TrueNAS host truenas-main, got %q", listed[0].Host)
+	}
+	if listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
+		t.Fatalf("expected mock poll summary, got %+v", listed[0].Poll)
+	}
+	if listed[0].Observed == nil || listed[0].Observed.Systems != 1 || listed[0].Observed.StoragePools == 0 {
+		t.Fatalf("expected populated mock observed summary, got %+v", listed[0].Observed)
+	}
+}
+
 func TestTrueNASHandlers_HandleList_IncludesPollAndObservedSummary(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 

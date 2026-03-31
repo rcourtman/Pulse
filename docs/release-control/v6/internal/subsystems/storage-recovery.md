@@ -142,6 +142,12 @@ querying, and the operator-facing storage health presentation layer.
    a platform should be treated as recovery-capable only when that model marks
    recovery as part of its support floor and the owning ingest/projection path
    exists in the same governed slice.
+10. Keep runtime mock inventory on the same bounded support contract. When
+    `/api/system/mock-mode` surfaces mock TrueNAS pools/datasets or mock
+    VMware datastores through shared storage/recovery-adjacent pages, that
+    data remains inventory-only context and must not be treated as proof of
+    restore capability, recovery artifacts, or widened platform recovery
+    support.
 
 ## Current State
 
@@ -1660,6 +1666,11 @@ recovery-protected targets. Shared storage rows may show datastore topology,
 capacity, accessibility, and multi-host context, but they must keep fallback
 protection semantics neutral unless a separately governed recovery slice adds
 real VMware protection contracts.
+That same inventory-only contract also applies when the operator turns on
+runtime mock data. Mock TrueNAS pools/datasets and mock VMware datastores may
+surface through the shared storage and recovery-adjacent pages as canonical
+inventory context, but that visibility still does not widen Pulse's recovery
+support claim or imply restore capability for either platform.
 Storage and recovery must not infer VMware restore support, recovery rollups,
 or VMware-local protection semantics from the presence of those datastores or
 VM snapshot-read context on the shared pages.

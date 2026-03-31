@@ -260,6 +260,12 @@ but the canonical contract is that a successful handoff exchange must reconcile
 tenant organization membership for the handed-off account member before the
 browser follows the new session into protected routes, rather than landing on a
 fresh `access_denied` immediately after session minting.
+That same platform-connections ownership now also includes mock-runtime
+continuity for API-backed platforms. When `/api/system/mock-mode` flips a
+running server between real and mock data, the canonical TrueNAS and VMware
+settings routes must keep surfacing through the same Platform connections
+workspace and handoff URLs instead of depending on process-start-only wiring
+or a mock-only alternate shell.
 That same hosted continuity contract also applies to the older direct tenant
 magic-link path. Lifecycle-adjacent control-plane redirects through
 `/auth/cloud-handoff` must preserve canonical account/user/role identity in the

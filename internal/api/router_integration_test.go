@@ -1225,6 +1225,63 @@ func TestMockModeToggleEndpoint(t *testing.T) {
 	}
 }
 
+func TestMockModeToggleFromRealDataRebindsPlatformSupplementalProviders(t *testing.T) {
+	srv := newIntegrationServerWithoutMock(t, nil)
+
+	if mock.IsMockEnabled() {
+		t.Fatalf("mock mode should be disabled at start of test")
+	}
+
+	enablePayload := bytes.NewBufferString(`{"enabled": true}`)
+	resEnable, err := http.Post(srv.server.URL+"/api/system/mock-mode", "application/json", enablePayload)
+	if err != nil {
+		t.Fatalf("enable mock mode request failed: %v", err)
+	}
+	defer resEnable.Body.Close()
+
+	if resEnable.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status enabling mock mode: got %d want %d", resEnable.StatusCode, http.StatusOK)
+	}
+
+	checkResourceSource := func(path string, wantSource string) {
+		t.Helper()
+
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			res, err := http.Get(srv.server.URL + path)
+			if err != nil {
+				t.Fatalf("GET %s failed: %v", path, err)
+			}
+
+			var payload api.ResourcesResponse
+			decodeErr := json.NewDecoder(res.Body).Decode(&payload)
+			res.Body.Close()
+			if decodeErr != nil {
+				t.Fatalf("decode %s response: %v", path, decodeErr)
+			}
+			if res.StatusCode != http.StatusOK {
+				t.Fatalf("unexpected %s status: got %d want %d", path, res.StatusCode, http.StatusOK)
+			}
+
+			for _, resource := range payload.Data {
+				for _, source := range resource.Sources {
+					if string(source) == wantSource {
+						return
+					}
+				}
+			}
+
+			if time.Now().After(deadline) {
+				t.Fatalf("expected %s resources after mock toggle, got %#v", wantSource, payload.Data)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
+	checkResourceSource("/api/resources?source=truenas", "truenas")
+	checkResourceSource("/api/resources?source=vmware-vsphere", "vmware")
+}
+
 func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 	const apiToken = "test-token"
 

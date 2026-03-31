@@ -836,22 +836,28 @@ func (h *ResourceHandlers) buildRegistry(orgID string) (*unified.ResourceRegistr
 	h.supplementalMu.RUnlock()
 
 	registry := unified.NewRegistry(store)
+	ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
 	if seed.unifiedSource {
 		registry.IngestResources(seed.resources)
+		seedSources := unifiedSeedSources(seed.resources)
+		for source, provider := range supplementalProviders {
+			if provider == nil || !sourceOwnedBySupplementalProvider(source, ownedSources) || unifiedSeedIncludesSource(seedSources, source) {
+				continue
+			}
+			records := supplementalRecordsForOrg(provider, orgID)
+			if len(records) == 0 {
+				continue
+			}
+			registry.IngestRecords(source, records)
+		}
 	} else {
-		ownedSources := supplementalSnapshotOwnedSources(supplementalProviders, orgID)
 		registry.IngestSnapshot(unified.SnapshotWithoutSources(seed.snapshot, ownedSources))
 
 		for source, provider := range supplementalProviders {
 			if provider == nil {
 				continue
 			}
-			var records []unified.IngestRecord
-			if tenantProvider, ok := any(provider).(TenantSupplementalRecordsProvider); ok {
-				records = tenantProvider.GetCurrentRecordsForOrg(orgID)
-			} else {
-				records = provider.GetCurrentRecords()
-			}
+			records := supplementalRecordsForOrg(provider, orgID)
 			if len(records) == 0 {
 				continue
 			}
@@ -939,6 +945,87 @@ func supplementalSnapshotOwnedSources(providers map[unified.DataSource]Supplemen
 		out = append(out, owned[key])
 	}
 	return out
+}
+
+func supplementalRecordsForOrg(provider SupplementalRecordsProvider, orgID string) []unified.IngestRecord {
+	if provider == nil {
+		return nil
+	}
+
+	var records []unified.IngestRecord
+	if tenantProvider, ok := any(provider).(TenantSupplementalRecordsProvider); ok {
+		records = tenantProvider.GetCurrentRecordsForOrg(orgID)
+	} else {
+		records = provider.GetCurrentRecords()
+	}
+	if len(records) == 0 {
+		return nil
+	}
+
+	out := make([]unified.IngestRecord, len(records))
+	copy(out, records)
+	return out
+}
+
+func unifiedSeedSources(resources []unified.Resource) map[unified.DataSource]struct{} {
+	if len(resources) == 0 {
+		return nil
+	}
+
+	sources := make(map[unified.DataSource]struct{})
+	for _, resource := range resources {
+		for _, source := range resource.Sources {
+			if normalized := normalizeDataSourceAlias(source); normalized != "" {
+				sources[normalized] = struct{}{}
+			}
+		}
+		for source := range resource.SourceStatus {
+			if normalized := normalizeDataSourceAlias(source); normalized != "" {
+				sources[normalized] = struct{}{}
+			}
+		}
+		switch {
+		case resource.TrueNAS != nil:
+			sources[unified.SourceTrueNAS] = struct{}{}
+		case resource.VMware != nil:
+			sources[unified.SourceVMware] = struct{}{}
+		}
+	}
+	return sources
+}
+
+func unifiedSeedIncludesSource(seedSources map[unified.DataSource]struct{}, source unified.DataSource) bool {
+	if len(seedSources) == 0 {
+		return false
+	}
+	_, ok := seedSources[normalizeDataSourceAlias(source)]
+	return ok
+}
+
+func sourceOwnedBySupplementalProvider(source unified.DataSource, ownedSources []unified.DataSource) bool {
+	normalized := normalizeDataSourceAlias(source)
+	if normalized == "" {
+		return false
+	}
+	for _, ownedSource := range ownedSources {
+		if normalizeDataSourceAlias(ownedSource) == normalized {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeDataSourceAlias(source unified.DataSource) unified.DataSource {
+	switch strings.ToLower(strings.TrimSpace(string(source))) {
+	case "", "all":
+		return ""
+	case "k8s":
+		return unified.SourceK8s
+	case "vmware-vsphere":
+		return unified.SourceVMware
+	default:
+		return unified.DataSource(strings.ToLower(strings.TrimSpace(string(source))))
+	}
 }
 
 func (h *ResourceHandlers) getStore(orgID string) (unified.ResourceStore, error) {
@@ -1710,6 +1797,8 @@ func parseSources(raw string) map[unified.DataSource]struct{} {
 			result[unified.SourceK8s] = struct{}{}
 		case "truenas":
 			result[unified.SourceTrueNAS] = struct{}{}
+		case "vmware", "vmware-vsphere":
+			result[unified.SourceVMware] = struct{}{}
 		}
 	}
 	return result

@@ -193,6 +193,7 @@ type ConfigHandlers struct {
 
 	reloadFunc               func() error
 	reloadSystemSettingsFunc func() // Function to reload cached system settings
+	mockModeChanged          func(bool)
 	wsHub                    *websocket.Hub
 	guestMetadataHandler     *GuestMetadataHandler
 	setupTokens              map[string]*SetupTokenRecord // Map of token hash -> setup token details
@@ -288,6 +289,13 @@ func (h *ConfigHandlers) SetConfig(cfg *config.Config) {
 	h.stateMu.Lock()
 	defer h.stateMu.Unlock()
 	h.defaultConfig = cfg
+}
+
+// SetMockModeChangeHook registers a callback invoked after mock mode changes.
+func (h *ConfigHandlers) SetMockModeChangeHook(hook func(bool)) {
+	h.stateMu.Lock()
+	defer h.stateMu.Unlock()
+	h.mockModeChanged = hook
 }
 
 // getContextState helper to retrieve tenant-specific state

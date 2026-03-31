@@ -243,6 +243,13 @@ func (h *ConfigHandlers) handleUpdateMockMode(w http.ResponseWriter, r *http.Req
 		} else {
 			mock.SetEnabled(*req.Enabled)
 		}
+
+		h.stateMu.RLock()
+		mockModeChanged := h.mockModeChanged
+		h.stateMu.RUnlock()
+		if mockModeChanged != nil {
+			mockModeChanged(*req.Enabled)
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

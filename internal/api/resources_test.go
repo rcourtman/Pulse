@@ -3370,6 +3370,72 @@ func TestResourceListUnifiedSeedSkipsSupplementalReingest(t *testing.T) {
 	}
 }
 
+func TestResourceListUnifiedSeedIngestsOwnedSupplementalWhenSourceMissing(t *testing.T) {
+	now := time.Now().UTC()
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	h := NewResourceHandlers(cfg)
+	h.SetStateProvider(resourceUnifiedSeedProvider{
+		snapshot: models.StateSnapshot{LastUpdate: now},
+		resources: []unified.Resource{
+			{
+				ID:        "agent-generic-seeded",
+				Type:      unified.ResourceTypeAgent,
+				Name:      "generic-host",
+				Status:    unified.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Sources:   []unified.DataSource{unified.SourceAgent},
+				Identity: unified.ResourceIdentity{
+					MachineID: "generic-host",
+					Hostnames: []string{"generic-host"},
+				},
+			},
+		},
+	})
+	h.SetSupplementalRecordsProvider(unified.SourceVMware, mockSupplementalRecordsProvider{
+		ownedSources: []unified.DataSource{unified.SourceVMware},
+		records: []unified.IngestRecord{
+			{
+				SourceID: "vmware:host-1",
+				Resource: unified.Resource{
+					Type:      unified.ResourceTypeAgent,
+					Name:      "esxi-01.lab.local",
+					Status:    unified.StatusOnline,
+					LastSeen:  now,
+					UpdatedAt: now,
+				},
+				Identity: unified.ResourceIdentity{
+					MachineID: "esxi-01",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		},
+	})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/resources?source=vmware-vsphere", nil)
+	h.HandleListResources(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp ResourcesResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.Data) != 1 {
+		t.Fatalf("expected 1 vmware resource from owned supplemental provider, got %d", len(resp.Data))
+	}
+	if got := resp.Data[0].Name; got != "esxi-01.lab.local" {
+		t.Fatalf("resource name = %q, want esxi-01.lab.local", got)
+	}
+	if !containsSource(resp.Data[0].Sources, unified.SourceVMware) {
+		t.Fatalf("expected vmware source, got %+v", resp.Data[0].Sources)
+	}
+}
+
 func TestResourceListSupplementalOwnerSuppressesSnapshotSource(t *testing.T) {
 	now := time.Now().UTC()
 	snapshot := models.StateSnapshot{
@@ -3485,5 +3551,17 @@ func TestSupplementalSnapshotOwnedSources_TrueNASProviders(t *testing.T) {
 
 	if len(sources) != 1 || sources[0] != unified.SourceTrueNAS {
 		t.Fatalf("expected owned sources [%q], got %#v", unified.SourceTrueNAS, sources)
+	}
+}
+
+func TestParseSources_AcceptsVMwareAliases(t *testing.T) {
+	for _, raw := range []string{"vmware", "vmware-vsphere"} {
+		sources := parseSources(raw)
+		if len(sources) != 1 {
+			t.Fatalf("parseSources(%q) returned %d entries, want 1", raw, len(sources))
+		}
+		if _, ok := sources[unified.SourceVMware]; !ok {
+			t.Fatalf("parseSources(%q) did not normalize to vmware: %#v", raw, sources)
+		}
 	}
 }

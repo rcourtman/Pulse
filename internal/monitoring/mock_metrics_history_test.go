@@ -265,6 +265,51 @@ func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 	}
 }
 
+func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
+	now := time.Now()
+	state := models.StateSnapshot{}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.RetentionRaw = 90 * 24 * time.Hour
+	cfg.RetentionMinute = 90 * 24 * time.Hour
+	cfg.RetentionHourly = 90 * 24 * time.Hour
+	cfg.RetentionDaily = 90 * 24 * time.Hour
+	cfg.WriteBufferSize = 500
+
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	mh := NewMetricsHistory(1000, 7*24*time.Hour)
+	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+
+	hostPoints, err := store.Query("agent", "vc-mock-1:host:host-101", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query VMware host cpu metrics: %v", err)
+	}
+	if len(hostPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded VMware host cpu points")
+	}
+
+	vmPoints, err := store.Query("vm", "vc-mock-1:vm:vm-201", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query VMware VM cpu metrics: %v", err)
+	}
+	if len(vmPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded VMware VM cpu points")
+	}
+
+	storagePoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "usage", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query VMware datastore usage metrics: %v", err)
+	}
+	if len(storagePoints) == 0 {
+		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
+	}
+}
+
 func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing.T) {
 	t.Setenv("PULSE_MOCK_NODES", "1")
 	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "0")

@@ -488,6 +488,35 @@ func TestHandleGetMockMode(t *testing.T) {
 	}
 }
 
+func TestHandleUpdateMockMode_InvokesChangeHook(t *testing.T) {
+	prevEnabled := mock.IsMockEnabled()
+	t.Cleanup(func() {
+		mock.SetEnabled(prevEnabled)
+	})
+
+	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})
+	called := false
+	gotEnabled := false
+	handler.SetMockModeChangeHook(func(enabled bool) {
+		called = true
+		gotEnabled = enabled
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/mock", bytes.NewReader([]byte(`{"enabled":true}`)))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateMockMode(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status OK, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !called {
+		t.Fatal("expected mock mode change hook to be invoked")
+	}
+	if !gotEnabled {
+		t.Fatal("expected mock mode change hook to receive enabled=true")
+	}
+}
+
 func TestHandleAgentInstallCommand(t *testing.T) {
 	cfg := &config.Config{DataPath: t.TempDir(), AuthUser: "admin", AuthPass: "hashed-password"}
 	handler := newTestConfigHandlers(t, cfg)

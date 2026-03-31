@@ -25,6 +25,16 @@ var bannedSnapshotResourceAccessPatterns = []struct {
 	},
 }
 
+type guardrailSupplementalProvider struct {
+	records []unifiedresources.IngestRecord
+}
+
+func (p guardrailSupplementalProvider) SupplementalRecords(*Monitor, string) []unifiedresources.IngestRecord {
+	out := make([]unifiedresources.IngestRecord, len(p.records))
+	copy(out, p.records)
+	return out
+}
+
 func readMonitoringRuntimeFiles(t *testing.T) map[string]string {
 	t.Helper()
 
@@ -435,6 +445,48 @@ func TestAlertLifecycleCanonicalChangesRemainWritable(t *testing.T) {
 	if len(timeline.Events) != 1 || timeline.Events[0].Type != memory.IncidentEventAlertFired {
 		t.Fatalf("expected projected alert-fired event, got %#v", timeline.Events)
 	}
+}
+
+func TestSupplementalProviderChangesRefreshCanonicalReadState(t *testing.T) {
+	now := time.Now().UTC()
+	state := models.NewState()
+	state.UpsertHost(models.Host{
+		ID:       "host-1",
+		Hostname: "seed-host",
+		Status:   "online",
+		LastSeen: now,
+	})
+
+	store := unifiedresources.NewMonitorAdapter(unifiedresources.NewRegistry(nil))
+	monitor := &Monitor{state: state}
+	monitor.SetResourceStore(store)
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceVMware, guardrailSupplementalProvider{
+		records: []unifiedresources.IngestRecord{
+			{
+				SourceID: "vmware:esxi-01",
+				Resource: unifiedresources.Resource{
+					Type:      unifiedresources.ResourceTypeAgent,
+					Name:      "esxi-01.lab.local",
+					Status:    unifiedresources.StatusOnline,
+					LastSeen:  now,
+					UpdatedAt: now,
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		},
+	})
+
+	resources := store.GetAll()
+	for _, resource := range resources {
+		for _, source := range resource.Sources {
+			if source == unifiedresources.SourceVMware {
+				return
+			}
+		}
+	}
+	t.Fatalf("expected resource store refresh to surface vmware supplemental records, got %#v", resources)
 }
 
 func TestTelemetrySnapshotAggregationUsesProvisionedTenantSet(t *testing.T) {

@@ -208,6 +208,13 @@ floor. `internal/unifiedresources/types.go`, `internal/unifiedresources/registry
 single source onto the canonical platform vocabulary, but they must not invent
 separate `vcenter` or `esxi` filter keys or a VMware-only top-level resource
 family to make the phase-1 slice render.
+That same shared source boundary also applies when unified seeds and
+supplemental providers coexist. If a canonical unified-resource seed omits an
+owned supplemental source such as TrueNAS or VMware, the shared resource API
+must still ingest that provider-owned source instead of letting the seed
+silence the platform entirely. Operator-facing source filters may accept the
+`vmware-vsphere` alias for the VMware platform, but the emitted shared source
+family remains canonical `vmware`.
 That same VMware contract now also includes the identity rule. VMware managed
 object identifiers are phase-1 provider identities, but they must be scoped by
 the owning `vCenter` connection or discovered vCenter identity so bare object
@@ -250,6 +257,11 @@ history. When a provider such as TrueNAS can supply `disk.temperature_agg`
 min/avg/max readings, it must project those onto
 `physicalDisk.temperatureAggregate` instead of introducing a provider-local
 history blob or a parallel disk-temperature presentation model.
+That same canonical source and seed contract now also applies to runtime mock
+mode. When mock-backed TrueNAS or VMware supplemental records are present, they
+must enter the shared resource graph through the same canonical source/type
+rules as live providers instead of introducing a mock-only source family or
+resource kind.
 TrueNAS-managed applications now follow the same canonical workload rule. One
 TrueNAS app instance from `app.query` must project as one canonical
 `app-container` resource under `SourceTrueNAS`, reusing the shared workload and
