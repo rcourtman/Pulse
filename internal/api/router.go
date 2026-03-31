@@ -5501,7 +5501,7 @@ func appContainerChartRequest(container *unifiedresources.DockerContainerView) (
 	}, true
 }
 
-func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
+func capMetricPointSeriesByIndex(points []MetricPoint, maxPoints int) []MetricPoint {
 	if len(points) <= maxPoints || maxPoints <= 0 {
 		return points
 	}
@@ -5534,7 +5534,104 @@ func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
 const (
 	infrastructureSummaryMinSeriesPoints = 24
 	infrastructureSummaryMaxSeriesPoints = 96
+	workloadsSummaryMinSeriesPoints      = 24
+	workloadsSummaryMaxSeriesPoints      = 96
 )
+
+// capMetricPointSeries keeps mixed-cadence series visually proportional across
+// the selected time window. Index-based capping over-selects recent dense
+// samples, which bunches the right edge on long ranges.
+func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
+	if len(points) <= maxPoints || maxPoints <= 0 {
+		return points
+	}
+	if maxPoints == 1 {
+		return []MetricPoint{points[len(points)-1]}
+	}
+
+	startTimestamp := points[0].Timestamp
+	endTimestamp := points[len(points)-1].Timestamp
+	if endTimestamp <= startTimestamp {
+		return capMetricPointSeriesByIndex(points, maxPoints)
+	}
+
+	bucketSpan := float64(endTimestamp-startTimestamp) / float64(maxPoints-1)
+	if bucketSpan < 1 {
+		return capMetricPointSeriesByIndex(points, maxPoints)
+	}
+
+	type timeBucketRepresentative struct {
+		point    MetricPoint
+		distance float64
+		ok       bool
+	}
+
+	buckets := make([]timeBucketRepresentative, maxPoints)
+	for _, point := range points {
+		index := int(math.Round(float64(point.Timestamp-startTimestamp) / bucketSpan))
+		if index < 0 {
+			index = 0
+		}
+		if index >= maxPoints {
+			index = maxPoints - 1
+		}
+
+		targetTimestamp := float64(startTimestamp) + bucketSpan*float64(index)
+		distance := math.Abs(float64(point.Timestamp) - targetTimestamp)
+		current := buckets[index]
+		if !current.ok ||
+			distance < current.distance ||
+			(distance == current.distance && point.Timestamp > current.point.Timestamp) {
+			buckets[index] = timeBucketRepresentative{
+				point:    point,
+				distance: distance,
+				ok:       true,
+			}
+		}
+	}
+
+	result := make([]MetricPoint, 0, maxPoints)
+	result = append(result, points[0])
+	lastAddedTimestamp := points[0].Timestamp
+	for index := 1; index < maxPoints-1; index++ {
+		bucket := buckets[index]
+		if !bucket.ok {
+			continue
+		}
+		if bucket.point.Timestamp <= lastAddedTimestamp {
+			continue
+		}
+		result = append(result, bucket.point)
+		lastAddedTimestamp = bucket.point.Timestamp
+	}
+
+	lastPoint := points[len(points)-1]
+	if lastPoint.Timestamp <= lastAddedTimestamp {
+		result[len(result)-1] = lastPoint
+		return result
+	}
+
+	result = append(result, lastPoint)
+	return result
+}
+
+func targetBoundedSummarySeriesPoints(duration time.Duration, minPoints, maxPoints int) int {
+	if duration <= 0 {
+		return minPoints
+	}
+
+	target := int(duration / time.Minute)
+	if target < minPoints {
+		target = minPoints
+	}
+	if target > maxPoints {
+		target = maxPoints
+	}
+	if target < 2 {
+		target = 2
+	}
+	return target
+}
 
 type infrastructureSummaryBucket struct {
 	count          int
@@ -5546,21 +5643,19 @@ type infrastructureSummaryBucket struct {
 }
 
 func targetInfrastructureSummarySeriesPoints(duration time.Duration) int {
-	if duration <= 0 {
-		return infrastructureSummaryMinSeriesPoints
-	}
+	return targetBoundedSummarySeriesPoints(
+		duration,
+		infrastructureSummaryMinSeriesPoints,
+		infrastructureSummaryMaxSeriesPoints,
+	)
+}
 
-	target := int(duration / time.Minute)
-	if target < infrastructureSummaryMinSeriesPoints {
-		target = infrastructureSummaryMinSeriesPoints
-	}
-	if target > infrastructureSummaryMaxSeriesPoints {
-		target = infrastructureSummaryMaxSeriesPoints
-	}
-	if target < 2 {
-		target = 2
-	}
-	return target
+func targetWorkloadsSummarySeriesPoints(duration time.Duration) int {
+	return targetBoundedSummarySeriesPoints(
+		duration,
+		workloadsSummaryMinSeriesPoints,
+		workloadsSummaryMaxSeriesPoints,
+	)
 }
 
 func aggregateInfrastructureSummaryBucketValue(
@@ -6840,6 +6935,16 @@ func summaryMetricPointCount(metric WorkloadsSummaryMetricData) int {
 	return len(metric.P50) + len(metric.P95)
 }
 
+func normalizeWorkloadsSummaryMetricPointSeries(
+	metric WorkloadsSummaryMetricData,
+	duration time.Duration,
+) WorkloadsSummaryMetricData {
+	targetPoints := targetWorkloadsSummarySeriesPoints(duration)
+	metric.P50 = capMetricPointSeries(metric.P50, targetPoints)
+	metric.P95 = capMetricPointSeries(metric.P95, targetPoints)
+	return metric
+}
+
 func latestSummaryMetricValue(points []monitoring.MetricPoint, fallback float64, clamp func(float64) float64) float64 {
 	if len(points) == 0 {
 		return clamp(fallback)
@@ -7397,6 +7502,10 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	networkMetric := buildWorkloadsSummaryMetric(buckets, func(bucket *workloadSummaryBuckets) []float64 {
 		return bucket.network
 	})
+	cpuMetric = normalizeWorkloadsSummaryMetricPointSeries(cpuMetric, duration)
+	memoryMetric = normalizeWorkloadsSummaryMetricPointSeries(memoryMetric, duration)
+	diskMetric = normalizeWorkloadsSummaryMetricPointSeries(diskMetric, duration)
+	networkMetric = normalizeWorkloadsSummaryMetricPointSeries(networkMetric, duration)
 
 	summaryPointCount := summaryMetricPointCount(cpuMetric) +
 		summaryMetricPointCount(memoryMetric) +

@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/performance-and-scalability.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["frontend-primitives"]
+  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives"]
 }
 ```
 
@@ -165,6 +165,7 @@ regression protection.
 23. Extend grouped dashboard row windowing, reveal-index clamping, overscan math, and per-group visible-slice derivation through `frontend-modern/src/components/Dashboard/useGroupedTableWindowing.ts`, and extend viewport event wiring through `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts` rather than rebuilding scroll handlers, mounted-row budgets, viewport listeners, or group-slice math inside `frontend-modern/src/components/Dashboard/useDashboardWorkloadDerivedState.ts`
 24. Extend dashboard shell rendering through `frontend-modern/src/components/Dashboard/DashboardStateCards.tsx`, `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`, and `frontend-modern/src/components/Dashboard/DashboardStatsStrip.tsx` rather than accreting loading cards, workload table markup, or stats-strip presentation back into `frontend-modern/src/components/Dashboard/Dashboard.tsx`
 25. Extend dashboard workload table shell ownership through `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Dashboard/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`
+26. Keep long-range workload chart capping time-proportional across `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`, `frontend-modern/src/api/charts.ts`, and `internal/api/router.go`: when the workload hot path caps mixed-cadence history for top cards, it must bucket by time window rather than raw point index so 7-day and 30-day workload cards stay visually even without relaxing the protected payload budget.
 
 ## Forbidden Paths
 

@@ -349,6 +349,237 @@ func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.
 	}
 }
 
+func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
+	store := newTestMetricsStore(t)
+	monitor, state, _ := newTestMonitor(t)
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	state.Nodes = []models.Node{{
+		ID:       "node-contract-1",
+		Name:     "node-contract-1",
+		Instance: "pve1",
+		Status:   "online",
+	}}
+	state.VMs = []models.VM{{
+		ID:         "vm-contract-1",
+		VMID:       101,
+		Name:       "vm-contract-1",
+		Node:       "node-contract-1",
+		Instance:   "pve1",
+		Status:     "running",
+		CPU:        0.75,
+		Memory:     models.Memory{Usage: 42.0},
+		Disk:       models.Disk{Usage: 55.0},
+		NetworkIn:  128,
+		NetworkOut: 256,
+		DiskRead:   512,
+		DiskWrite:  256,
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	vms := readState.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 vm view, got %d", len(vms))
+	}
+	sourceID := strings.TrimSpace(vms[0].SourceID())
+	if sourceID == "" {
+		t.Fatal("expected vm source ID")
+	}
+
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	windowStart := now.Add(-7 * 24 * time.Hour)
+	seed := make([]metrics.WriteMetric, 0, 2000)
+	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
+		for _, metricType := range []string{"cpu", "memory", "disk"} {
+			seed = append(seed, metrics.WriteMetric{
+				ResourceType: "vm",
+				ResourceID:   sourceID,
+				MetricType:   metricType,
+				Value:        percentValue,
+				Timestamp:    ts,
+				Tier:         metrics.TierMinute,
+			})
+		}
+		for _, metricType := range []string{"diskread", "diskwrite", "netin", "netout"} {
+			seed = append(seed, metrics.WriteMetric{
+				ResourceType: "vm",
+				ResourceID:   sourceID,
+				MetricType:   metricType,
+				Value:        rateValue,
+				Timestamp:    ts,
+				Tier:         metrics.TierMinute,
+			})
+		}
+	}
+	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
+		appendMetric(ts, 20, 50)
+	}
+	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
+		appendMetric(ts, 40, 75)
+	}
+	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
+		appendMetric(ts, 60, 100)
+	}
+	appendMetric(now, 75, 125)
+	store.WriteBatchSync(seed)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=7d&maxPoints=30", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded WorkloadChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal workload charts response: %v", err)
+	}
+
+	if len(decoded.ChartData) != 1 {
+		t.Fatalf("expected 1 workload chart entry, got %d", len(decoded.ChartData))
+	}
+	var cpuSeries []MetricPoint
+	for _, chartData := range decoded.ChartData {
+		cpuSeries = chartData["cpu"]
+		break
+	}
+	if len(cpuSeries) == 0 {
+		t.Fatal("expected capped cpu series")
+	}
+	if len(cpuSeries) > 30 {
+		t.Fatalf("expected cpu series <= 30 points, got %d", len(cpuSeries))
+	}
+	if cpuSeries[len(cpuSeries)-1].Timestamp != now.UnixMilli() {
+		t.Fatalf("expected latest cpu timestamp %d, got %d", now.UnixMilli(), cpuSeries[len(cpuSeries)-1].Timestamp)
+	}
+
+	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
+	recentCount := 0
+	for _, point := range cpuSeries {
+		if point.Timestamp >= recentWindowStart {
+			recentCount++
+		}
+	}
+	if recentCount > 8 {
+		t.Fatalf("expected day-proportional capped workload points, got %d recent cpu points", recentCount)
+	}
+}
+
+func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testing.T) {
+	store := newTestMetricsStore(t)
+	monitor, state, _ := newTestMonitor(t)
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	state.Nodes = []models.Node{{
+		ID:       "node-contract-1",
+		Name:     "node-contract-1",
+		Instance: "pve1",
+		Status:   "online",
+	}}
+	state.VMs = []models.VM{{
+		ID:         "vm-contract-1",
+		VMID:       101,
+		Name:       "vm-contract-1",
+		Node:       "node-contract-1",
+		Instance:   "pve1",
+		Status:     "running",
+		CPU:        0.75,
+		Memory:     models.Memory{Usage: 42.0},
+		Disk:       models.Disk{Usage: 55.0},
+		NetworkIn:  128,
+		NetworkOut: 256,
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	vms := readState.VMs()
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 vm view, got %d", len(vms))
+	}
+	sourceID := strings.TrimSpace(vms[0].SourceID())
+	if sourceID == "" {
+		t.Fatal("expected vm source ID")
+	}
+
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	windowStart := now.Add(-7 * 24 * time.Hour)
+	seed := make([]metrics.WriteMetric, 0, 1500)
+	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
+		for _, metricType := range []string{"cpu", "memory", "disk"} {
+			seed = append(seed, metrics.WriteMetric{
+				ResourceType: "vm",
+				ResourceID:   sourceID,
+				MetricType:   metricType,
+				Value:        percentValue,
+				Timestamp:    ts,
+				Tier:         metrics.TierMinute,
+			})
+		}
+		for _, metricType := range []string{"netin", "netout"} {
+			seed = append(seed, metrics.WriteMetric{
+				ResourceType: "vm",
+				ResourceID:   sourceID,
+				MetricType:   metricType,
+				Value:        rateValue,
+				Timestamp:    ts,
+				Tier:         metrics.TierMinute,
+			})
+		}
+	}
+	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
+		appendMetric(ts, 20, 50)
+	}
+	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
+		appendMetric(ts, 40, 75)
+	}
+	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
+		appendMetric(ts, 60, 100)
+	}
+	appendMetric(now, 75, 125)
+	store.WriteBatchSync(seed)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=7d", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadsSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal workloads summary charts response: %v", err)
+	}
+
+	if len(decoded.CPU.P50) == 0 {
+		t.Fatal("expected normalized workload summary p50 series")
+	}
+	if len(decoded.CPU.P50) > workloadsSummaryMaxSeriesPoints {
+		t.Fatalf("expected workload summary p50 <= %d points, got %d", workloadsSummaryMaxSeriesPoints, len(decoded.CPU.P50))
+	}
+	if len(decoded.CPU.P95) > workloadsSummaryMaxSeriesPoints {
+		t.Fatalf("expected workload summary p95 <= %d points, got %d", workloadsSummaryMaxSeriesPoints, len(decoded.CPU.P95))
+	}
+	if decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp != now.UnixMilli() {
+		t.Fatalf("expected latest workload summary timestamp %d, got %d", now.UnixMilli(), decoded.CPU.P50[len(decoded.CPU.P50)-1].Timestamp)
+	}
+
+	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
+	recentCount := 0
+	for _, point := range decoded.CPU.P50 {
+		if point.Timestamp >= recentWindowStart {
+			recentCount++
+		}
+	}
+	if recentCount > 20 {
+		t.Fatalf("expected day-proportional summary buckets, got %d recent p50 points", recentCount)
+	}
+}
+
 func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *testing.T) {
 	t.Setenv("PULSE_MOCK_MODE", "false")
 	prevMock := mock.IsMockEnabled()
