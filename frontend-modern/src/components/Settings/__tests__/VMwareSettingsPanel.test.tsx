@@ -108,6 +108,34 @@ describe('VMwareSettingsPanel', () => {
         insecureSkipVerify: true,
         enabled: false,
       },
+      {
+        id: 'conn-3',
+        name: 'partial-vcenter',
+        host: 'partial.lab.local',
+        username: 'readonly@vsphere.local',
+        insecureSkipVerify: false,
+        enabled: true,
+        poll: {
+          lastSuccessAt: new Date(Date.now() - 120_000).toISOString(),
+        },
+        observed: {
+          collectedAt: new Date(Date.now() - 120_000).toISOString(),
+          hosts: 2,
+          vms: 18,
+          datastores: 4,
+          viRelease: '8.0.3',
+          degraded: true,
+          issueCount: 3,
+          issues: [
+            {
+              stage: 'signals',
+              category: 'permission',
+              message: 'VMware permissions are insufficient for host overall status',
+              occurrences: 2,
+            },
+          ],
+        },
+      },
     ]);
 
     renderPanel();
@@ -119,10 +147,22 @@ describe('VMwareSettingsPanel', () => {
     expect(
       within(screen.getByTestId('vmware-connection-conn-2')).getAllByText('Disabled'),
     ).toHaveLength(2);
+    expect(screen.getByText('partial-vcenter')).toBeInTheDocument();
+    expect(screen.getByText('Degraded')).toBeInTheDocument();
     expect(screen.getByText('3 hosts')).toBeInTheDocument();
     expect(screen.getByText('42 vms')).toBeInTheDocument();
     expect(screen.getByText('6 datastores')).toBeInTheDocument();
-    expect(screen.getByText('VI JSON 8.0.3')).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('vmware-connection-conn-1')).getByText('VI JSON 8.0.3'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('vmware-connection-conn-3')).getByText('3 degraded reads'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByTestId('vmware-connection-conn-3')).getByText(
+        /VMware permissions are insufficient for host overall status/,
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add VMware connection' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add VMware connection' }));

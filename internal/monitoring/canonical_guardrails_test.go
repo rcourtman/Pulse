@@ -125,6 +125,9 @@ func TestVMwarePollerUsesCanonicalSupplementalIngestOwnership(t *testing.T) {
 		"func (p *VMwarePoller) ConnectionSummaries(orgID string, instances []config.VMwareVCenterInstance) map[string]VMwareConnectionSummary {",
 		"func (p *VMwarePoller) RecordConnectionTestSuccess(orgID, connID string, summary *vmware.InventorySummary, at time.Time) {",
 		"func (p *VMwarePoller) RecordConnectionTestFailure(orgID, connID string, err error, at time.Time) {",
+		"summary.Degraded = true",
+		"summary.IssueCount = len(snapshot.EnrichmentIssues)",
+		"summary.Issues = summarizeVMwareObservedIssues(snapshot.EnrichmentIssues)",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

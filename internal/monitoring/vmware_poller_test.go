@@ -259,3 +259,50 @@ func TestVMwarePollerLiveFailureKeepsCachedRecords(t *testing.T) {
 		t.Fatalf("expected permission poll error after live failure, got %+v", summary.Poll)
 	}
 }
+
+func TestVMwarePollerPublishesDegradedObservedSummaryOnPartialSuccess(t *testing.T) {
+	poller := NewVMwarePoller(nil, time.Minute)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-partial"
+	connection.Host = "vc.partial.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+
+	collectedAt := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+	poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+		return vmware.NewProvider(vmware.InventorySnapshot{
+			ConnectionID: instance.ID,
+			CollectedAt:  collectedAt,
+			VIRelease:    "8.0.3",
+			Hosts:        []vmware.InventoryHost{{Host: "host-101", Name: "esxi-01"}},
+			EnrichmentIssues: []vmware.InventoryEnrichmentIssue{
+				{Stage: "signals", EntityType: "host", EntityID: "host-101", Category: "permission", Message: "VMware permissions are insufficient for HostSystem overall status"},
+				{Stage: "signals", EntityType: "vm", EntityID: "vm-201", Category: "permission", Message: "VMware permissions are insufficient for HostSystem overall status"},
+				{Stage: "topology", EntityType: "vm", EntityID: "vm-201", Category: "unavailable", Message: "VMware vm guest identity is temporarily unavailable"},
+			},
+		}), nil
+	}
+	poller.providersByOrg["default"] = map[string]vmwarePollerProvider{}
+	provider, err := poller.newProvider(connection)
+	if err != nil {
+		t.Fatalf("newProvider() error = %v", err)
+	}
+	poller.providersByOrg["default"][connection.ID] = provider
+	poller.configsByOrg["default"] = map[string]config.VMwareVCenterInstance{connection.ID: connection}
+
+	poller.pollAll(context.Background())
+
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || summary.Poll.LastError != nil {
+		t.Fatalf("expected successful degraded poll summary, got %+v", summary.Poll)
+	}
+	if summary.Observed == nil || !summary.Observed.Degraded || summary.Observed.IssueCount != 3 {
+		t.Fatalf("expected degraded observed summary, got %+v", summary.Observed)
+	}
+	if len(summary.Observed.Issues) != 2 {
+		t.Fatalf("expected aggregated observed issues, got %+v", summary.Observed.Issues)
+	}
+	if summary.Observed.Issues[0].Occurrences != 2 || summary.Observed.Issues[0].Category != "permission" {
+		t.Fatalf("expected aggregated permission issue first, got %+v", summary.Observed.Issues[0])
+	}
+}

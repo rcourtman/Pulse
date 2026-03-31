@@ -37,11 +37,23 @@ type VMwareConnectionPollStatus struct {
 // VMwareConnectionObservedSummary summarizes the canonical resources the most
 // recent successful poll contributed for one configured VMware connection.
 type VMwareConnectionObservedSummary struct {
-	CollectedAt *time.Time `json:"collectedAt,omitempty"`
-	Hosts       int        `json:"hosts"`
-	VMs         int        `json:"vms"`
-	Datastores  int        `json:"datastores"`
-	VIRelease   string     `json:"viRelease,omitempty"`
+	CollectedAt *time.Time                      `json:"collectedAt,omitempty"`
+	Hosts       int                             `json:"hosts"`
+	VMs         int                             `json:"vms"`
+	Datastores  int                             `json:"datastores"`
+	VIRelease   string                          `json:"viRelease,omitempty"`
+	Degraded    bool                            `json:"degraded,omitempty"`
+	IssueCount  int                             `json:"issueCount,omitempty"`
+	Issues      []VMwareConnectionObservedIssue `json:"issues,omitempty"`
+}
+
+// VMwareConnectionObservedIssue summarizes one class of optional VMware reads
+// that degraded an otherwise successful inventory refresh.
+type VMwareConnectionObservedIssue struct {
+	Stage       string `json:"stage,omitempty"`
+	Category    string `json:"category,omitempty"`
+	Message     string `json:"message,omitempty"`
+	Occurrences int    `json:"occurrences,omitempty"`
 }
 
 // VMwareConnectionSummary merges poll health with the most recent discovered
@@ -390,6 +402,15 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 	records := cloneIngestRecords(entry.provider.Records())
 	changes := cloneResourceChanges(entry.provider.ActivityChanges())
 	snapshot := entry.provider.Snapshot()
+	if snapshot != nil && len(snapshot.EnrichmentIssues) > 0 {
+		log.Warn().
+			Str("component", "vmware_poller").
+			Str("action", "refresh_partial").
+			Str("org_id", entry.orgID).
+			Str("connection_id", entry.connectionID).
+			Int("issue_count", len(snapshot.EnrichmentIssues)).
+			Msg("VMware poller refreshed base inventory with degraded optional enrichment")
+	}
 
 	p.mu.Lock()
 	p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)
@@ -769,13 +790,19 @@ func buildVMwareObservedSummary(snapshot *vmware.InventorySnapshot) *VMwareConne
 		return nil
 	}
 	collectedAt := snapshot.CollectedAt
-	return &VMwareConnectionObservedSummary{
+	summary := &VMwareConnectionObservedSummary{
 		CollectedAt: timePointerIfSet(collectedAt),
 		Hosts:       len(snapshot.Hosts),
 		VMs:         len(snapshot.VMs),
 		Datastores:  len(snapshot.Datastores),
 		VIRelease:   strings.TrimSpace(snapshot.VIRelease),
 	}
+	if len(snapshot.EnrichmentIssues) > 0 {
+		summary.Degraded = true
+		summary.IssueCount = len(snapshot.EnrichmentIssues)
+		summary.Issues = summarizeVMwareObservedIssues(snapshot.EnrichmentIssues)
+	}
+	return summary
 }
 
 func classifyVMwarePollError(err error) string {
@@ -818,5 +845,72 @@ func cloneVMwareObservedSummary(value *VMwareConnectionObservedSummary) *VMwareC
 		VMs:         value.VMs,
 		Datastores:  value.Datastores,
 		VIRelease:   strings.TrimSpace(value.VIRelease),
+		Degraded:    value.Degraded,
+		IssueCount:  value.IssueCount,
+		Issues:      cloneVMwareObservedIssues(value.Issues),
 	}
+}
+
+func summarizeVMwareObservedIssues(issues []vmware.InventoryEnrichmentIssue) []VMwareConnectionObservedIssue {
+	if len(issues) == 0 {
+		return nil
+	}
+
+	type aggregate struct {
+		issue VMwareConnectionObservedIssue
+	}
+
+	byKey := make(map[string]*aggregate, len(issues))
+	for _, issue := range issues {
+		key := strings.ToLower(strings.TrimSpace(issue.Stage)) + "\x00" +
+			strings.ToLower(strings.TrimSpace(issue.Category)) + "\x00" +
+			strings.ToLower(strings.TrimSpace(issue.Message))
+		entry := byKey[key]
+		if entry == nil {
+			entry = &aggregate{
+				issue: VMwareConnectionObservedIssue{
+					Stage:    strings.TrimSpace(issue.Stage),
+					Category: strings.TrimSpace(issue.Category),
+					Message:  strings.TrimSpace(issue.Message),
+				},
+			}
+			byKey[key] = entry
+		}
+		entry.issue.Occurrences++
+	}
+
+	summary := make([]VMwareConnectionObservedIssue, 0, len(byKey))
+	for _, entry := range byKey {
+		summary = append(summary, entry.issue)
+	}
+	sort.Slice(summary, func(i, j int) bool {
+		if summary[i].Occurrences != summary[j].Occurrences {
+			return summary[i].Occurrences > summary[j].Occurrences
+		}
+		if summary[i].Stage != summary[j].Stage {
+			return summary[i].Stage < summary[j].Stage
+		}
+		if summary[i].Category != summary[j].Category {
+			return summary[i].Category < summary[j].Category
+		}
+		return summary[i].Message < summary[j].Message
+	})
+	if len(summary) > 3 {
+		summary = summary[:3]
+	}
+	return summary
+}
+
+func cloneVMwareObservedIssues(in []VMwareConnectionObservedIssue) []VMwareConnectionObservedIssue {
+	if in == nil {
+		return nil
+	}
+	out := make([]VMwareConnectionObservedIssue, len(in))
+	copy(out, in)
+	for i := range out {
+		out[i].Stage = strings.TrimSpace(out[i].Stage)
+		out[i].Category = strings.TrimSpace(out[i].Category)
+		out[i].Message = strings.TrimSpace(out[i].Message)
+	}
+	return out
 }

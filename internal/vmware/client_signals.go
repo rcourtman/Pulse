@@ -145,9 +145,9 @@ func (c *Client) enrichInventorySnapshot(
 	eventManagerMoID string,
 	perfCounters perfCounterCatalog,
 	snapshot *InventorySnapshot,
-) error {
+) ([]InventoryEnrichmentIssue, error) {
 	if snapshot == nil {
-		return nil
+		return nil, nil
 	}
 
 	cache := &alarmNameCache{names: make(map[string]string)}
@@ -155,6 +155,17 @@ func (c *Client) enrichInventorySnapshot(
 	var wg sync.WaitGroup
 	var firstErr error
 	var firstErrMu sync.Mutex
+	var issues []InventoryEnrichmentIssue
+	var issuesMu sync.Mutex
+
+	recordIssue := func(issue *InventoryEnrichmentIssue) {
+		if issue == nil {
+			return
+		}
+		issuesMu.Lock()
+		issues = append(issues, *issue)
+		issuesMu.Unlock()
+	}
 
 	run := func(fn func() error) {
 		wg.Add(1)
@@ -177,11 +188,15 @@ func (c *Client) enrichInventorySnapshot(
 		i := i
 		run(func() error {
 			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "HostSystem", snapshot.Hosts[i].Host, perfManagerMoID, eventManagerMoID, cache, true)
-			if err != nil {
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "host", snapshot.Hosts[i].Host, err); ok {
+				recordIssue(issue)
+			} else if err != nil {
 				return err
 			}
 			metrics, err := c.collectHostPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, snapshot.Hosts[i])
-			if err != nil {
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "host", snapshot.Hosts[i].Host, err); ok {
+				recordIssue(issue)
+			} else if err != nil {
 				return err
 			}
 			snapshot.Hosts[i].OverallStatus = signals.OverallStatus
@@ -197,7 +212,9 @@ func (c *Client) enrichInventorySnapshot(
 		i := i
 		run(func() error {
 			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "VirtualMachine", snapshot.VMs[i].VM, perfManagerMoID, eventManagerMoID, cache, true)
-			if err != nil {
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "vm", snapshot.VMs[i].VM, err); ok {
+				recordIssue(issue)
+			} else if err != nil {
 				return err
 			}
 			snapshot.VMs[i].OverallStatus = signals.OverallStatus
@@ -205,11 +222,15 @@ func (c *Client) enrichInventorySnapshot(
 			snapshot.VMs[i].RecentTasks = signals.RecentTasks
 			snapshot.VMs[i].RecentEvents = signals.RecentEvents
 			snapshot.VMs[i].SnapshotCount, err = c.collectVMSnapshotCount(ctx, release, sessionID, snapshot.VMs[i].VM)
-			if err != nil && !isVIJSONNotFound(err) {
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "vm", snapshot.VMs[i].VM, err); ok {
+				recordIssue(issue)
+			} else if err != nil && !isVIJSONNotFound(err) {
 				return err
 			}
 			metrics, err := c.collectVMPerformanceMetrics(ctx, release, sessionID, perfManagerMoID, perfCounters, snapshot.VMs[i])
-			if err != nil {
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "vm", snapshot.VMs[i].VM, err); ok {
+				recordIssue(issue)
+			} else if err != nil {
 				return err
 			}
 			snapshot.VMs[i].Metrics = metrics
@@ -221,7 +242,9 @@ func (c *Client) enrichInventorySnapshot(
 		i := i
 		run(func() error {
 			signals, err := c.collectManagedEntitySignals(ctx, release, sessionID, "Datastore", snapshot.Datastores[i].Datastore, perfManagerMoID, eventManagerMoID, cache, true)
-			if err != nil {
+			if issue, ok := classifyInventoryEnrichmentIssue("signals", "storage", snapshot.Datastores[i].Datastore, err); ok {
+				recordIssue(issue)
+			} else if err != nil {
 				return err
 			}
 			snapshot.Datastores[i].OverallStatus = signals.OverallStatus
@@ -235,8 +258,15 @@ func (c *Client) enrichInventorySnapshot(
 	wg.Wait()
 
 	firstErrMu.Lock()
-	defer firstErrMu.Unlock()
-	return firstErr
+	err := firstErr
+	firstErrMu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(issues, func(i, j int) bool {
+		return inventoryEnrichmentIssueSortKey(issues[i]) < inventoryEnrichmentIssueSortKey(issues[j])
+	})
+	return issues, nil
 }
 
 func (c *Client) collectManagedEntitySignals(ctx context.Context, release, sessionID, managedType, managedObjectID, perfManagerMoID, eventManagerMoID string, cache *alarmNameCache, allowNotFound bool) (entitySignals, error) {

@@ -51,6 +51,17 @@ type InventoryMetrics struct {
 	DiskWriteBytesPerSecond *float64 `json:"disk_write_bytes_per_second,omitempty"`
 }
 
+// InventoryEnrichmentIssue captures one optional VMware read that degraded a
+// successful base inventory refresh without invalidating the core phase-1
+// resource floor.
+type InventoryEnrichmentIssue struct {
+	Stage      string `json:"stage,omitempty"`
+	EntityType string `json:"entity_type,omitempty"`
+	EntityID   string `json:"entity_id,omitempty"`
+	Category   string `json:"category,omitempty"`
+	Message    string `json:"message,omitempty"`
+}
+
 // InventoryHost is the canonical phase-1 host summary returned by the vCenter
 // Automation API list endpoint.
 type InventoryHost struct {
@@ -140,14 +151,15 @@ type InventoryDatastore struct {
 // InventorySnapshot captures the projected inventory floor for one vCenter
 // connection at one point in time.
 type InventorySnapshot struct {
-	ConnectionID   string
-	ConnectionName string
-	VCenterHost    string
-	VIRelease      string
-	CollectedAt    time.Time
-	Hosts          []InventoryHost
-	VMs            []InventoryVM
-	Datastores     []InventoryDatastore
+	ConnectionID     string
+	ConnectionName   string
+	VCenterHost      string
+	VIRelease        string
+	CollectedAt      time.Time
+	Hosts            []InventoryHost
+	VMs              []InventoryVM
+	Datastores       []InventoryDatastore
+	EnrichmentIssues []InventoryEnrichmentIssue
 }
 
 // ProviderMetadata carries operator-owned vCenter connection labels onto the
@@ -543,6 +555,10 @@ func sortInventorySnapshot(snapshot *InventorySnapshot) {
 	sort.Slice(snapshot.Datastores, func(i, j int) bool {
 		return vmwareSortKey(snapshot.Datastores[i].Datastore, snapshot.Datastores[i].Name) < vmwareSortKey(snapshot.Datastores[j].Datastore, snapshot.Datastores[j].Name)
 	})
+	sort.Slice(snapshot.EnrichmentIssues, func(i, j int) bool {
+		return inventoryEnrichmentIssueSortKey(snapshot.EnrichmentIssues[i]) <
+			inventoryEnrichmentIssueSortKey(snapshot.EnrichmentIssues[j])
+	})
 }
 
 func cloneInventorySnapshot(in *InventorySnapshot) *InventorySnapshot {
@@ -553,6 +569,7 @@ func cloneInventorySnapshot(in *InventorySnapshot) *InventorySnapshot {
 	out.Hosts = cloneInventoryHosts(in.Hosts)
 	out.VMs = cloneInventoryVMs(in.VMs)
 	out.Datastores = cloneInventoryDatastores(in.Datastores)
+	out.EnrichmentIssues = cloneInventoryEnrichmentIssues(in.EnrichmentIssues)
 	return &out
 }
 
@@ -636,6 +653,23 @@ func cloneInventoryEvents(in []InventoryEvent) []InventoryEvent {
 	out := make([]InventoryEvent, len(in))
 	copy(out, in)
 	return out
+}
+
+func cloneInventoryEnrichmentIssues(in []InventoryEnrichmentIssue) []InventoryEnrichmentIssue {
+	if in == nil {
+		return nil
+	}
+	out := make([]InventoryEnrichmentIssue, len(in))
+	copy(out, in)
+	return out
+}
+
+func inventoryEnrichmentIssueSortKey(issue InventoryEnrichmentIssue) string {
+	return strings.ToLower(strings.TrimSpace(issue.Stage)) + "\x00" +
+		strings.ToLower(strings.TrimSpace(issue.EntityType)) + "\x00" +
+		strings.ToLower(strings.TrimSpace(issue.EntityID)) + "\x00" +
+		strings.ToLower(strings.TrimSpace(issue.Category)) + "\x00" +
+		strings.ToLower(strings.TrimSpace(issue.Message))
 }
 
 func cloneInventoryMetrics(in *InventoryMetrics) *InventoryMetrics {

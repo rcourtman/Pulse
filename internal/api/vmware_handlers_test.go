@@ -212,6 +212,71 @@ func TestVMwareHandlers_HandleDelete_RemovesAndClearsRuntimeSummary(t *testing.T
 	}
 }
 
+func TestVMwareHandlers_HandleList_CarriesDegradedObservedSummary(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
+		{
+			ID:       "vc-1",
+			Name:     "lab-a",
+			Host:     "vcsa-a.lab.local",
+			Port:     443,
+			Username: "administrator@vsphere.local",
+			Password: "secret-a",
+			Enabled:  true,
+		},
+	}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	recordedAt := time.Date(2026, 3, 31, 10, 11, 12, 0, time.UTC)
+	handler.statusMu.Lock()
+	handler.statuses = map[string]vmwareConnectionRuntimeStatus{
+		"vc-1": {
+			Poll: &monitoring.VMwareConnectionPollStatus{
+				IntervalSeconds: 60,
+				LastSuccessAt:   &recordedAt,
+			},
+			Observed: &monitoring.VMwareConnectionObservedSummary{
+				CollectedAt: &recordedAt,
+				Hosts:       3,
+				VMs:         42,
+				Datastores:  6,
+				VIRelease:   "8.0.3",
+				Degraded:    true,
+				IssueCount:  2,
+				Issues: []monitoring.VMwareConnectionObservedIssue{
+					{Stage: "signals", Category: "permission", Message: "VMware permissions are insufficient for host overall status", Occurrences: 2},
+				},
+			},
+		},
+	}
+	handler.statusMu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var listed []vmwareConnectionResponse
+	if err := json.NewDecoder(rec.Body).Decode(&listed); err != nil {
+		t.Fatalf("decode list response: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Observed == nil {
+		t.Fatalf("expected degraded observed summary, got %+v", listed)
+	}
+	if !listed[0].Observed.Degraded || listed[0].Observed.IssueCount != 2 {
+		t.Fatalf("unexpected degraded observed summary: %+v", listed[0].Observed)
+	}
+	if len(listed[0].Observed.Issues) != 1 || listed[0].Observed.Issues[0].Occurrences != 2 {
+		t.Fatalf("unexpected observed issues: %+v", listed[0].Observed.Issues)
+	}
+}
+
 func TestVMwareHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 	setMockModeForVMwareTest(t, false)

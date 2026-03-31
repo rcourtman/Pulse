@@ -109,6 +109,13 @@ with no edit overlay must refresh that same summary owner, and
 recomputing or shadowing it inside handler-local runtime state. Internal
 sub-second test harness intervals must not leak `intervalSeconds: 0` onto that
 operator-facing contract.
+That same summary owner also owns VMware partial-success classification.
+Optional VI JSON or Automation enrichment reads that fail after base
+host/VM/datastore inventory succeeds must not collapse the whole poll into a
+runtime failure. The client should preserve the usable base snapshot, record
+degraded enrichment issues on the snapshot, and let the poller publish those
+as `observed.degraded` plus summarized issue metadata instead of clearing the
+observed contribution or pretending the refresh was fully healthy.
 That provider ownership now has a concrete phase-1 runtime seam:
 `internal/monitoring/vmware_poller.go` must keep VMware inventory on the
 shared supplemental-ingest path, declare `SourceVMware` as its owned source,

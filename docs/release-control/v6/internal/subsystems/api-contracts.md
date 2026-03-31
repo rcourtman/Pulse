@@ -707,7 +707,11 @@ implementation contract under `internal/api/vmware_handlers.go`,
 stored connection shape plus canonical `poll` health and `observed`
 contribution summary (`hosts`, `vms`, `datastores`, `viRelease`) so the shared
 settings workspace can render VMware status without another provider-local
-inventory route. That `poll` payload is the canonical runtime contract:
+inventory route. When base inventory succeeds but optional signal or topology
+reads degrade, that same `observed` payload must carry the canonical
+partial-success shape (`degraded`, `issueCount`, summarized `issues`) instead
+of collapsing the whole connection to `poll.lastError` or pretending the
+refresh was fully healthy. That `poll` payload is the canonical runtime contract:
 backend handlers must source it from the poller-owned per-connection summary,
 saved row-level retests with no payload must refresh that same summary owner,
 and edit-form overlay tests must preserve the stored summary until a real save

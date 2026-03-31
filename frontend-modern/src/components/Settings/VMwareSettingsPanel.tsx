@@ -27,13 +27,25 @@ const dangerButtonClass =
 const connectionMetaBadgeClass =
   'inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-muted';
 
+const getObservedIssueSummary = (connection: VMwareConnection): string | null => {
+  const observed = connection.observed;
+  const firstIssue = observed?.issues?.find((issue) => !!issue.message);
+  if (!firstIssue?.message) return null;
+  const issueCount = observed?.issueCount ?? observed?.issues?.length ?? 0;
+  if (issueCount > 1) {
+    return `${firstIssue.message} (+${issueCount - 1} more degraded reads)`;
+  }
+  return firstIssue.message;
+};
+
 const getConnectionHealthPresentation = (connection: VMwareConnection) => {
   if (!connection.enabled) {
     return {
       label: 'Disabled',
       className: 'bg-surface text-muted',
       detail: 'Manual validation paused',
-      error: null,
+      note: null,
+      noteClassName: '',
     };
   }
 
@@ -51,7 +63,18 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
       detail: lastError.at
         ? `Last check ${formatRelativeTime(lastError.at, { compact: true })}`
         : 'Last check failed',
-      error: lastError.message || null,
+      note: lastError.message || null,
+      noteClassName: 'text-red-700 dark:text-red-300',
+    };
+  }
+
+  if (lastSuccessAt && connection.observed?.degraded) {
+    return {
+      label: 'Degraded',
+      className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+      detail: `Last check ${formatRelativeTime(lastSuccessAt, { compact: true })} with partial enrichment`,
+      note: getObservedIssueSummary(connection),
+      noteClassName: 'text-amber-700 dark:text-amber-300',
     };
   }
 
@@ -60,7 +83,8 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
       label: 'Healthy',
       className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
       detail: `Last check ${formatRelativeTime(lastSuccessAt, { compact: true })}`,
-      error: null,
+      note: null,
+      noteClassName: '',
     };
   }
 
@@ -68,7 +92,8 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
     label: 'Awaiting first poll',
     className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
     detail: 'Pulse has not completed the first vCenter poll yet',
-    error: null,
+    note: null,
+    noteClassName: '',
   };
 };
 
@@ -255,9 +280,9 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
                                 </Show>
                               </div>
 
-                              <Show when={health().error}>
-                                <p class="text-xs font-medium text-red-700 dark:text-red-300">
-                                  {health().error}
+                              <Show when={health().note}>
+                                <p class={`text-xs font-medium ${health().noteClassName}`}>
+                                  {health().note}
                                 </p>
                               </Show>
                             </div>
@@ -284,6 +309,12 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
                                   <Show when={connection.observed?.viRelease}>
                                     <span class={connectionMetaBadgeClass}>
                                       VI JSON {connection.observed?.viRelease}
+                                    </span>
+                                  </Show>
+                                  <Show when={connection.observed?.degraded}>
+                                    <span class="inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                                      {formatNumber(connection.observed?.issueCount ?? 0)} degraded{' '}
+                                      {pluralize(connection.observed?.issueCount ?? 0, 'read')}
                                     </span>
                                   </Show>
                                 </div>

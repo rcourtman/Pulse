@@ -80,9 +80,9 @@ func (c *Client) enrichInventoryTopology(
 	release string,
 	sessionID string,
 	snapshot *InventorySnapshot,
-) error {
+) ([]InventoryEnrichmentIssue, error) {
 	if snapshot == nil {
-		return nil
+		return nil, nil
 	}
 
 	hostNamesByID := make(map[string]string, len(snapshot.Hosts))
@@ -103,6 +103,17 @@ func (c *Client) enrichInventoryTopology(
 	var wg sync.WaitGroup
 	var firstErr error
 	var firstErrMu sync.Mutex
+	var issues []InventoryEnrichmentIssue
+	var issuesMu sync.Mutex
+
+	recordIssues := func(values []InventoryEnrichmentIssue) {
+		if len(values) == 0 {
+			return
+		}
+		issuesMu.Lock()
+		issues = append(issues, values...)
+		issuesMu.Unlock()
+	}
 
 	run := func(fn func() error) {
 		wg.Add(1)
@@ -124,10 +135,11 @@ func (c *Client) enrichInventoryTopology(
 	for i := range snapshot.Hosts {
 		i := i
 		run(func() error {
-			host, err := c.enrichHostTopology(ctx, release, sessionID, snapshot.Hosts[i], cache, datastoreNamesByID)
+			host, hostIssues, err := c.enrichHostTopology(ctx, release, sessionID, snapshot.Hosts[i], cache, datastoreNamesByID)
 			if err != nil {
 				return err
 			}
+			recordIssues(hostIssues)
 			snapshot.Hosts[i] = host
 			return nil
 		})
@@ -136,7 +148,7 @@ func (c *Client) enrichInventoryTopology(
 	for i := range snapshot.VMs {
 		i := i
 		run(func() error {
-			vm, err := c.enrichVMTopology(
+			vm, vmIssues, err := c.enrichVMTopology(
 				ctx,
 				automationSessionID,
 				release,
@@ -149,6 +161,7 @@ func (c *Client) enrichInventoryTopology(
 			if err != nil {
 				return err
 			}
+			recordIssues(vmIssues)
 			snapshot.VMs[i] = vm
 			return nil
 		})
@@ -157,10 +170,11 @@ func (c *Client) enrichInventoryTopology(
 	for i := range snapshot.Datastores {
 		i := i
 		run(func() error {
-			datastore, err := c.enrichDatastoreTopology(ctx, release, sessionID, snapshot.Datastores[i], cache, hostNamesByID, vmNamesByID)
+			datastore, datastoreIssues, err := c.enrichDatastoreTopology(ctx, release, sessionID, snapshot.Datastores[i], cache, hostNamesByID, vmNamesByID)
 			if err != nil {
 				return err
 			}
+			recordIssues(datastoreIssues)
 			snapshot.Datastores[i] = datastore
 			return nil
 		})
@@ -169,8 +183,15 @@ func (c *Client) enrichInventoryTopology(
 	wg.Wait()
 
 	firstErrMu.Lock()
-	defer firstErrMu.Unlock()
-	return firstErr
+	err := firstErr
+	firstErrMu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(issues, func(i, j int) bool {
+		return inventoryEnrichmentIssueSortKey(issues[i]) < inventoryEnrichmentIssueSortKey(issues[j])
+	})
+	return issues, nil
 }
 
 func (c *Client) enrichHostTopology(
@@ -180,22 +201,33 @@ func (c *Client) enrichHostTopology(
 	host InventoryHost,
 	cache *vmwareTopologyCache,
 	datastoreNamesByID map[string]string,
-) (InventoryHost, error) {
+) (InventoryHost, []InventoryEnrichmentIssue, error) {
+	var issues []InventoryEnrichmentIssue
+	recordIssue := func(issue *InventoryEnrichmentIssue) {
+		if issue != nil {
+			issues = append(issues, *issue)
+		}
+	}
+
 	ref := viJSONReference{Type: "HostSystem", Value: strings.TrimSpace(host.Host)}
 	placement, err := cache.resolvePlacement(ctx, c, release, sessionID, ref)
-	if err != nil && !isVIJSONNotFound(err) {
-		return host, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "host", host.Host, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return host, nil, err
 	}
 	applyPlacementToHost(&host, placement)
 
 	datastoreRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "HostSystem", host.Host, "datastore", "host datastore attachments")
-	if err != nil && !isVIJSONNotFound(err) {
-		return host, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "host", host.Host, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return host, nil, err
 	}
 	host.DatastoreIDs = idsForReferences(datastoreRefs)
 	host.DatastoreNames = namesForReferences(datastoreRefs, datastoreNamesByID)
 
-	return host, nil
+	return host, issues, nil
 }
 
 func (c *Client) enrichVMTopology(
@@ -207,10 +239,19 @@ func (c *Client) enrichVMTopology(
 	cache *vmwareTopologyCache,
 	hostNamesByID map[string]string,
 	datastoreNamesByID map[string]string,
-) (InventoryVM, error) {
+) (InventoryVM, []InventoryEnrichmentIssue, error) {
+	var issues []InventoryEnrichmentIssue
+	recordIssue := func(issue *InventoryEnrichmentIssue) {
+		if issue != nil {
+			issues = append(issues, *issue)
+		}
+	}
+
 	vmInfo, err := c.collectVMAutomationInfo(ctx, automationSessionID, vm.VM)
-	if err != nil && !isAutomationNotFound(err) {
-		return vm, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isAutomationNotFound(err) {
+		return vm, nil, err
 	}
 	if vmInfo != nil && vmInfo.Identity != nil {
 		vm.InstanceUUID = strings.TrimSpace(vmInfo.Identity.InstanceUUID)
@@ -218,8 +259,10 @@ func (c *Client) enrichVMTopology(
 	}
 
 	guestIdentity, err := c.collectVMGuestIdentity(ctx, automationSessionID, vm.VM)
-	if err != nil && !isAutomationNotFound(err) && !isAutomationUnavailable(err) {
-		return vm, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isAutomationNotFound(err) && !isAutomationUnavailable(err) {
+		return vm, nil, err
 	}
 	if guestIdentity != nil {
 		vm.GuestOSFamily = strings.TrimSpace(guestIdentity.Family)
@@ -232,65 +275,83 @@ func (c *Client) enrichVMTopology(
 	var placement vmwarePlacement
 
 	parentRef, err := c.collectEntityReference(ctx, release, sessionID, "VirtualMachine", vm.VM, "parent", "vm parent placement")
-	if err != nil && !isVIJSONNotFound(err) {
-		return vm, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return vm, nil, err
 	}
 	if parentRef != nil {
 		parentPlacement, err := cache.resolvePlacement(ctx, c, release, sessionID, *parentRef)
-		if err != nil && !isVIJSONNotFound(err) {
-			return vm, err
+		if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+			recordIssue(issue)
+		} else if err != nil && !isVIJSONNotFound(err) {
+			return vm, nil, err
 		}
 		mergePlacement(&placement, parentPlacement)
 	}
 
 	runtimeHostRef, err := c.collectVMRuntimeHostReference(ctx, release, sessionID, vm.VM)
-	if err != nil && !isVIJSONNotFound(err) {
-		return vm, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return vm, nil, err
 	}
 	if runtimeHostRef != nil {
 		vm.RuntimeHostID = strings.TrimSpace(runtimeHostRef.Value)
 		vm.RuntimeHostName = firstNonEmptyTrimmed(hostNamesByID[vm.RuntimeHostID], vm.RuntimeHostID)
 		hostPlacement, err := cache.resolvePlacement(ctx, c, release, sessionID, *runtimeHostRef)
-		if err != nil && !isVIJSONNotFound(err) {
-			return vm, err
+		if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+			recordIssue(issue)
+		} else if err != nil && !isVIJSONNotFound(err) {
+			return vm, nil, err
 		}
 		mergePlacement(&placement, hostPlacement)
 	}
 
 	resourcePoolRef, err := c.collectEntityReference(ctx, release, sessionID, "VirtualMachine", vm.VM, "resourcePool", "vm resource pool")
-	if err != nil && !isVIJSONNotFound(err) {
-		return vm, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return vm, nil, err
 	}
 	if resourcePoolRef != nil {
 		vm.ResourcePoolID = strings.TrimSpace(resourcePoolRef.Value)
 		resourcePoolName, err := cache.resolveName(ctx, c, release, sessionID, *resourcePoolRef)
-		if err != nil && !isVIJSONNotFound(err) {
-			return vm, err
+		if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+			recordIssue(issue)
+		} else if err != nil && !isVIJSONNotFound(err) {
+			return vm, nil, err
 		}
 		vm.ResourcePoolName = firstNonEmptyTrimmed(resourcePoolName, vm.ResourcePoolID)
 
 		ownerRef, err := cache.resolveResourcePoolOwner(ctx, c, release, sessionID, *resourcePoolRef)
-		if err != nil && !isVIJSONNotFound(err) {
-			return vm, err
+		if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+			recordIssue(issue)
+		} else if err != nil && !isVIJSONNotFound(err) {
+			return vm, nil, err
 		}
 		if ownerRef != nil {
 			ownerPlacement, err := cache.resolvePlacement(ctx, c, release, sessionID, *ownerRef)
-			if err != nil && !isVIJSONNotFound(err) {
-				return vm, err
+			if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+				recordIssue(issue)
+			} else if err != nil && !isVIJSONNotFound(err) {
+				return vm, nil, err
 			}
 			mergePlacement(&placement, ownerPlacement)
 		}
 	}
 
 	datastoreRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "VirtualMachine", vm.VM, "datastore", "vm datastore attachments")
-	if err != nil && !isVIJSONNotFound(err) {
-		return vm, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "vm", vm.VM, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return vm, nil, err
 	}
 	vm.DatastoreIDs = idsForReferences(datastoreRefs)
 	vm.DatastoreNames = namesForReferences(datastoreRefs, datastoreNamesByID)
 
 	applyPlacementToVM(&vm, placement)
-	return vm, nil
+	return vm, issues, nil
 }
 
 func (c *Client) enrichDatastoreTopology(
@@ -301,17 +362,28 @@ func (c *Client) enrichDatastoreTopology(
 	cache *vmwareTopologyCache,
 	hostNamesByID map[string]string,
 	vmNamesByID map[string]string,
-) (InventoryDatastore, error) {
+) (InventoryDatastore, []InventoryEnrichmentIssue, error) {
+	var issues []InventoryEnrichmentIssue
+	recordIssue := func(issue *InventoryEnrichmentIssue) {
+		if issue != nil {
+			issues = append(issues, *issue)
+		}
+	}
+
 	ref := viJSONReference{Type: "Datastore", Value: strings.TrimSpace(datastore.Datastore)}
 	placement, err := cache.resolvePlacement(ctx, c, release, sessionID, ref)
-	if err != nil && !isVIJSONNotFound(err) {
-		return datastore, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "storage", datastore.Datastore, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return datastore, nil, err
 	}
 	applyPlacementToDatastore(&datastore, placement)
 
 	summary, err := c.collectDatastoreSummary(ctx, release, sessionID, datastore.Datastore)
-	if err != nil && !isVIJSONNotFound(err) {
-		return datastore, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "storage", datastore.Datastore, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return datastore, nil, err
 	}
 	if summary != nil {
 		datastore.Accessible = summary.Accessible
@@ -321,20 +393,24 @@ func (c *Client) enrichDatastoreTopology(
 	}
 
 	hostRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "Datastore", datastore.Datastore, "host", "datastore host attachments")
-	if err != nil && !isVIJSONNotFound(err) {
-		return datastore, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "storage", datastore.Datastore, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return datastore, nil, err
 	}
 	datastore.HostIDs = idsForReferences(hostRefs)
 	datastore.HostNames = namesForReferences(hostRefs, hostNamesByID)
 
 	vmRefs, err := c.collectEntityReferenceList(ctx, release, sessionID, "Datastore", datastore.Datastore, "vm", "datastore vm attachments")
-	if err != nil && !isVIJSONNotFound(err) {
-		return datastore, err
+	if issue, ok := classifyInventoryEnrichmentIssue("topology", "storage", datastore.Datastore, err); ok {
+		recordIssue(issue)
+	} else if err != nil && !isVIJSONNotFound(err) {
+		return datastore, nil, err
 	}
 	datastore.VMIDs = idsForReferences(vmRefs)
 	datastore.VMNames = namesForReferences(vmRefs, vmNamesByID)
 
-	return datastore, nil
+	return datastore, issues, nil
 }
 
 func (c *Client) collectVMAutomationInfo(

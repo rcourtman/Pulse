@@ -14,6 +14,7 @@ const REDACTED_SECRET = '********';
 type RawVMwareConnection = Partial<VMwareConnection>;
 type RawVMwareConnectionPollError = Partial<VMwareConnectionPollError>;
 type RawVMwareConnectionPoll = Partial<VMwareConnectionPollStatus>;
+type RawVMwareConnectionObservedIssue = Partial<VMwareConnectionObservedIssue>;
 type RawVMwareConnectionObservedSummary = Partial<VMwareConnectionObservedSummary>;
 
 export interface VMwareConnectionPollError {
@@ -36,6 +37,16 @@ export interface VMwareConnectionObservedSummary {
   vms: number;
   datastores: number;
   viRelease?: string;
+  degraded?: boolean;
+  issueCount?: number;
+  issues?: VMwareConnectionObservedIssue[];
+}
+
+export interface VMwareConnectionObservedIssue {
+  stage?: string;
+  category?: string;
+  message?: string;
+  occurrences?: number;
 }
 
 export interface VMwareConnection {
@@ -99,6 +110,14 @@ const normalizeVMwareConnectionObservedSummary = (
     vms: finiteNumberOrUndefined(observed.vms) ?? 0,
     datastores: finiteNumberOrUndefined(observed.datastores) ?? 0,
     viRelease: optionalTrimmedString(observed.viRelease),
+    degraded: strictBoolean(observed.degraded),
+    issueCount: finiteNumberOrUndefined(observed.issueCount),
+    issues: arrayOrUndefined<RawVMwareConnectionObservedIssue>(observed.issues)?.map((issue) => ({
+      stage: optionalTrimmedString(issue.stage),
+      category: optionalTrimmedString(issue.category),
+      message: optionalTrimmedString(issue.message),
+      occurrences: finiteNumberOrUndefined(issue.occurrences),
+    })),
   };
 };
 

@@ -34,6 +34,16 @@ describe('VMwareAPI', () => {
           vms: 42,
           datastores: 6,
           viRelease: ' 8.0.3 ',
+          degraded: true,
+          issueCount: 3,
+          issues: [
+            {
+              stage: ' signals ',
+              category: ' permission ',
+              message: ' VMware permissions are insufficient for host overall status ',
+              occurrences: 2,
+            },
+          ],
         },
       },
     ]);
@@ -61,6 +71,16 @@ describe('VMwareAPI', () => {
           vms: 42,
           datastores: 6,
           viRelease: '8.0.3',
+          degraded: true,
+          issueCount: 3,
+          issues: [
+            {
+              stage: 'signals',
+              category: 'permission',
+              message: 'VMware permissions are insufficient for host overall status',
+              occurrences: 2,
+            },
+          ],
         },
       },
     ]);

@@ -106,6 +106,64 @@ func TestClientCollectInventoryEnrichesSignals(t *testing.T) {
 	}
 }
 
+func TestClientCollectInventoryPreservesBaseInventoryWhenOptionalEnrichmentDegrades(t *testing.T) {
+	server := newVMwareTestServer(t, vmwareTestServerConfig{
+		denyHostOverallStatus:  true,
+		unavailableVMGuestInfo: true,
+	})
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	snapshot, err := client.CollectInventory(context.Background())
+	if err != nil {
+		t.Fatalf("CollectInventory: %v", err)
+	}
+	if snapshot == nil {
+		t.Fatal("expected inventory snapshot")
+	}
+	if len(snapshot.Hosts) != 1 || len(snapshot.VMs) != 1 || len(snapshot.Datastores) != 1 {
+		t.Fatalf("unexpected inventory sizes: hosts=%d vms=%d datastores=%d", len(snapshot.Hosts), len(snapshot.VMs), len(snapshot.Datastores))
+	}
+	if len(snapshot.EnrichmentIssues) != 2 {
+		t.Fatalf("expected 2 enrichment issues, got %+v", snapshot.EnrichmentIssues)
+	}
+	if snapshot.EnrichmentIssues[0].Category != "permission" || snapshot.EnrichmentIssues[0].Stage != "signals" {
+		t.Fatalf("unexpected first enrichment issue: %+v", snapshot.EnrichmentIssues[0])
+	}
+	if snapshot.EnrichmentIssues[1].Category != "unavailable" || snapshot.EnrichmentIssues[1].Stage != "topology" {
+		t.Fatalf("unexpected second enrichment issue: %+v", snapshot.EnrichmentIssues[1])
+	}
+
+	host := snapshot.Hosts[0]
+	if host.OverallStatus != "" {
+		t.Fatalf("expected missing host overall status after degraded read, got %q", host.OverallStatus)
+	}
+	if host.Metrics == nil || host.Metrics.CPUPercent == nil || *host.Metrics.CPUPercent != 21.4 {
+		t.Fatalf("expected host metrics to survive degraded signal read, got %+v", host.Metrics)
+	}
+	if host.ClusterName != "Prod Compute" || host.DatacenterName != "DC1" {
+		t.Fatalf("expected host placement enrichment to survive degraded signal read, got cluster=%q datacenter=%q", host.ClusterName, host.DatacenterName)
+	}
+
+	vm := snapshot.VMs[0]
+	if vm.GuestHostname != "" || len(vm.GuestIPAddresses) != 0 {
+		t.Fatalf("expected guest identity to stay empty after degraded topology read, got host=%q ips=%v", vm.GuestHostname, vm.GuestIPAddresses)
+	}
+	if vm.RuntimeHostName != "esxi-01.lab.local" || vm.ResourcePoolName != "Tier 1" {
+		t.Fatalf("expected other topology enrichment to survive degraded guest read, got host=%q pool=%q", vm.RuntimeHostName, vm.ResourcePoolName)
+	}
+}
+
 func TestClientTestConnectionRequiresSignalFloor(t *testing.T) {
 	server := newVMwareTestServer(t, vmwareTestServerConfig{
 		omitHostOverallStatus: true,
@@ -206,7 +264,9 @@ func TestClientResolveVIJSONReleaseClassifiesUnsupportedVersionFloor(t *testing.
 }
 
 type vmwareTestServerConfig struct {
-	omitHostOverallStatus bool
+	omitHostOverallStatus  bool
+	denyHostOverallStatus  bool
+	unavailableVMGuestInfo bool
 }
 
 func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Server {
@@ -270,6 +330,10 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	})
 	mux.HandleFunc("/api/vcenter/vm/vm-201/guest/identity", func(w http.ResponseWriter, r *http.Request) {
 		requireAutomationSession(t, r)
+		if cfg.unavailableVMGuestInfo {
+			http.Error(w, "service unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		writeJSON(w, map[string]any{
 			"family":     "LINUX",
 			"host_name":  "app-01.internal",
@@ -446,6 +510,10 @@ func newVMwareTestServer(t *testing.T, cfg vmwareTestServerConfig) *httptest.Ser
 	if !cfg.omitHostOverallStatus {
 		mux.HandleFunc("/sdk/vim25/9.0.0.0/HostSystem/host-101/overallStatus", func(w http.ResponseWriter, r *http.Request) {
 			requireVISession(t, r)
+			if cfg.denyHostOverallStatus {
+				http.Error(w, "forbidden", http.StatusForbidden)
+				return
+			}
 			writeJSON(w, "yellow")
 		})
 	}

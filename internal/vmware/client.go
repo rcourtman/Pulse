@@ -192,14 +192,18 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := c.enrichInventorySnapshot(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, perfCounters, inventory); err != nil {
+	signalIssues, err := c.enrichInventorySnapshot(ctx, release, sessionID, refs.PerfManagerMoID, refs.EventManagerMoID, perfCounters, inventory)
+	if err != nil {
 		return nil, err
 	}
-	if err := c.enrichInventoryTopology(ctx, automationSessionID, release, sessionID, inventory); err != nil {
+	topologyIssues, err := c.enrichInventoryTopology(ctx, automationSessionID, release, sessionID, inventory)
+	if err != nil {
 		return nil, err
 	}
 	inventory.VIRelease = strings.TrimSpace(release)
 	inventory.CollectedAt = time.Now().UTC()
+	inventory.EnrichmentIssues = append(inventory.EnrichmentIssues, signalIssues...)
+	inventory.EnrichmentIssues = append(inventory.EnrichmentIssues, topologyIssues...)
 	return inventory, nil
 }
 
