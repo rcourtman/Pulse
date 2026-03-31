@@ -137,6 +137,11 @@ supporting evidence. Secondary metric strips must not render `No issues found`
 when the same governed overall-health summary says coverage is incomplete or
 health still requires attention; that compact summary state now belongs to the
 shared `frontend-modern/src/utils/patrolSummaryPresentation.ts` helper.
+That primary assessment shell must also stay inside the shared Pulse card
+language. The top summary should use the same neutral `bg-surface` page-card
+base as adjacent Pulse surfaces, carrying severity through compact header
+accents, icon treatments, and badges instead of tinting the entire full-width
+assessment panel as a one-off warning banner.
 That supporting score chip must also avoid overstating infrastructure truth.
 When the current state is dominated by incomplete coverage or Patrol-owned
 runtime failures, the chip should read as an `Assessment` grade rather than an

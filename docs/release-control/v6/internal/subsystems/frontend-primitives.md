@@ -448,6 +448,10 @@ The same hierarchy also applies inside the Patrol summary shell: once the
 primary summary card states Patrol's assessment and verification basis,
 supporting metric strips under that card must stay metric-oriented and must
 not repeat assessment or verification labels as a second compact verdict row.
+That same summary shell should also keep the shared page-card base neutral:
+severity belongs in compact header accents, icon chips, and badges rather
+than turning the entire full-width summary into a tinted warning banner that
+breaks the surrounding Pulse surface language.
 That same summary-shell rule also applies to timing metadata: if the header,
 verification card, or findings footer already presents the governed Patrol
 activity timestamp, the summary chip row must not add another recency badge

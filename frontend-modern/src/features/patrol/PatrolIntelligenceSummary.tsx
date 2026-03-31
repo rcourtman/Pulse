@@ -6,6 +6,7 @@ import AlertCircleIcon from 'lucide-solid/icons/alert-circle';
 import AlertTriangleIcon from 'lucide-solid/icons/alert-triangle';
 import {
   getPatrolAssessmentAction,
+  getPatrolAssessmentShellPresentation,
   getPatrolAssessmentPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
@@ -14,7 +15,6 @@ import {
   getPatrolSummaryPresentation,
 } from '@/utils/patrolSummaryPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
-import { getSemanticTonePresentation } from '@/utils/semanticTonePresentation';
 import { formatRelativeTime } from '@/utils/format';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 
@@ -36,8 +36,8 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   const runtimePresentation = createMemo(() =>
     getPatrolRuntimePresentation(state.runtimeState(), state.blockedReason()),
   );
-  const runtimeTonePresentation = createMemo(() =>
-    getSemanticTonePresentation(runtimePresentation().tone),
+  const runtimeShellPresentation = createMemo(() =>
+    getPatrolAssessmentShellPresentation(runtimePresentation().tone),
   );
   const showRuntimeSummary = createMemo(() => {
     const runtimeState = state.runtimeState();
@@ -55,8 +55,8 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       activeFindings: state.activePatrolFindings(),
     }),
   );
-  const assessmentTonePresentation = createMemo(() =>
-    getSemanticTonePresentation(assessment().tone),
+  const assessmentShellPresentation = createMemo(() =>
+    getPatrolAssessmentShellPresentation(assessment().tone),
   );
   const activeFindingsSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation(metricState().primarySeverity, metricState().primaryValue > 0),
@@ -90,32 +90,58 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
     }),
   );
 
+  const renderAssessmentIcon = () => {
+    const iconClass = `w-5 h-5 ${assessmentShellPresentation().iconClass}`;
+    switch (assessment().tone) {
+      case 'success':
+        return <CheckCircleIcon class={iconClass} />;
+      case 'error':
+        return <ShieldAlertIcon class={iconClass} />;
+      case 'warning':
+        return <AlertTriangleIcon class={iconClass} />;
+      default:
+        return <AlertCircleIcon class={iconClass} />;
+    }
+  };
+
   return (
     <>
       <Show when={showRuntimeSummary()}>
-        <section class={`rounded-md border p-4 ${runtimeTonePresentation().panelClass}`}>
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0 rounded-md bg-base/70 p-2">
-              <AlertCircleIcon class={`w-5 h-5 ${runtimeTonePresentation().iconClass}`} />
-            </div>
-            <div>
-              <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                {runtimePresentation().title}
+        <section class="overflow-hidden rounded-md border border-border bg-surface shadow-sm">
+          <div
+            class={`flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 ${runtimeShellPresentation().headerClass}`}
+          >
+            <span
+              class={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${runtimeShellPresentation().badgeClass}`}
+            >
+              Patrol runtime
+            </span>
+            <Show when={recency().timestamp}>
+              <p class="text-xs font-medium text-muted">
+                {recency().label}{' '}
+                {formatRelativeTime(recency().timestamp!, {
+                  compact: true,
+                  emptyText: 'never',
+                })}
               </p>
-              <h2 class="mt-1 text-lg font-semibold text-base-content">
-                {runtimePresentation().label}
-              </h2>
-              <p class="mt-1 text-sm text-base-content">{runtimePresentation().description}</p>
-              <Show when={recency().timestamp}>
-                <p class="mt-2 text-xs text-muted">
-                  {recency().label}{' '}
-                  {formatRelativeTime(recency().timestamp!, {
-                    compact: true,
-                    emptyText: 'never',
-                  })}
-                  .
+            </Show>
+          </div>
+
+          <div class="px-4 py-4 sm:px-5 sm:py-5">
+            <div class="flex items-start gap-3">
+              <div
+                class={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border ${runtimeShellPresentation().iconContainerClass}`}
+              >
+                <AlertCircleIcon class={`w-5 h-5 ${runtimeShellPresentation().iconClass}`} />
+              </div>
+              <div class="min-w-0">
+                <h2 class="text-lg font-semibold tracking-tight text-base-content">
+                  {runtimePresentation().label}
+                </h2>
+                <p class="mt-1.5 max-w-3xl text-sm leading-6 text-muted">
+                  {runtimePresentation().description}
                 </p>
-              </Show>
+              </div>
             </div>
           </div>
         </section>
@@ -124,94 +150,74 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       <Show when={!showRuntimeSummary()}>
         <Show when={state.intelligenceSummary()}>
           {(summary) => (
-            <section class={`rounded-md border p-4 ${assessmentTonePresentation().panelClass}`}>
-              <div class="flex flex-wrap items-start justify-between gap-4">
+            <section class="overflow-hidden rounded-md border border-border bg-surface shadow-sm">
+              <div
+                class={`flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle px-4 py-3 ${assessmentShellPresentation().headerClass}`}
+              >
+                <span
+                  class={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] ${assessmentShellPresentation().badgeClass}`}
+                >
+                  {assessment().eyebrow}
+                </span>
+                <span class="inline-flex items-center rounded-full border border-border bg-surface px-3 py-1 text-xs font-semibold text-base-content shadow-sm">
+                  {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
+                  {Math.round(summary().overall_health.score)}/100
+                </span>
+              </div>
+
+              <div class="px-4 py-4 sm:px-5 sm:py-5">
                 <div class="flex items-start gap-3">
-                  <div class="flex-shrink-0 rounded-md bg-base/70 p-2">
-                    <Show
-                      when={assessment().tone === 'success'}
-                      fallback={
-                        <Show
-                          when={assessment().tone === 'error'}
-                          fallback={
-                            <Show
-                              when={assessment().tone === 'warning'}
-                              fallback={
-                                <AlertCircleIcon
-                                  class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
-                                />
-                              }
-                            >
-                              <AlertTriangleIcon
-                                class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
-                              />
-                            </Show>
-                          }
-                        >
-                          <ShieldAlertIcon
-                            class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
-                          />
-                        </Show>
-                      }
-                    >
-                      <CheckCircleIcon
-                        class={`w-5 h-5 ${assessmentTonePresentation().iconClass}`}
-                      />
-                    </Show>
+                  <div
+                    class={`flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-md border ${assessmentShellPresentation().iconContainerClass}`}
+                  >
+                    {renderAssessmentIcon()}
                   </div>
 
-                  <div>
-                    <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                      {assessment().eyebrow}
-                    </p>
-                    <h2 class="mt-1 text-lg font-semibold text-base-content">
+                  <div class="min-w-0 flex-1">
+                    <h2 class="text-lg font-semibold tracking-tight text-base-content">
                       {assessment().title}
                     </h2>
-                    <p class="mt-1 text-sm text-base-content">{assessment().description}</p>
+                    <p class="mt-1.5 max-w-3xl text-sm leading-6 text-muted">
+                      {assessment().description}
+                    </p>
                     <Show when={assessmentAction()}>
                       {(action) => (
-                        <div class="mt-3">
+                        <div class="mt-4">
                           <a
                             href={action().href}
-                            class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content transition-colors hover:bg-surface-hover"
+                            class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-base-content shadow-sm transition-colors hover:bg-surface-hover"
                           >
                             {action().label}
                           </a>
                         </div>
                       )}
                     </Show>
-                    <div class="mt-3 flex flex-wrap items-center gap-2">
-                      <span class="rounded-full border border-border-subtle bg-base px-2.5 py-1 text-xs font-medium text-base-content">
-                        {scoreChipLabel()} {summary().overall_health.grade} ·{' '}
-                        {Math.round(summary().overall_health.score)}/100
-                      </span>
-                    </div>
-
-                    <div class="mt-4 rounded-md border border-border-subtle bg-base/90 p-3">
-                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                        Verification
-                      </p>
-                      <p class="mt-1 text-sm font-medium text-base-content">
-                        {verification().title}
-                        <Show when={verification().lastFullRunAt}>
-                          <span class="text-muted">
-                            {' '}
-                            ·{' '}
-                            {formatRelativeTime(verification().lastFullRunAt!, {
-                              compact: true,
-                              emptyText: 'never',
-                            })}
-                          </span>
-                        </Show>
-                      </p>
-                      <p class="mt-1 text-sm text-muted">{verification().description}</p>
-                      <Show when={verification().activityMixLabel}>
-                        <p class="mt-2 text-xs font-medium text-base-content">
-                          Recent activity mix: {verification().activityMixLabel}
-                        </p>
-                      </Show>
-                    </div>
                   </div>
+                </div>
+
+                <div class="mt-5 rounded-md border border-border-subtle bg-surface-alt/60 p-3">
+                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                    Verification
+                  </p>
+                  <p class="mt-1 text-sm font-medium text-base-content">
+                    {verification().title}
+                    <Show when={verification().lastFullRunAt}>
+                      <span class="text-muted">
+                        {' '}
+                        ·{' '}
+                        {formatRelativeTime(verification().lastFullRunAt!, {
+                          compact: true,
+                          emptyText: 'never',
+                        })}
+                      </span>
+                    </Show>
+                  </p>
+                  <p class="mt-1 text-sm text-muted">{verification().description}</p>
+                  <Show when={verification().activityMixLabel}>
+                    <p class="mt-2 text-xs font-medium text-base-content">
+                      Recent activity mix: {verification().activityMixLabel}
+                    </p>
+                  </Show>
                 </div>
               </div>
             </section>

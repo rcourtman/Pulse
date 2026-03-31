@@ -1020,6 +1020,10 @@ describe('AIIntelligence entitlement gating', () => {
       'href',
       '/settings/system-ai',
     );
+    const assessmentShell = screen.getByText('Patrol assessment').closest('section');
+    expect(assessmentShell).not.toBeNull();
+    expect(assessmentShell!.className).toContain('bg-surface');
+    expect(assessmentShell!.className).not.toContain('bg-amber-50');
     expect(screen.queryByText('Warnings')).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');

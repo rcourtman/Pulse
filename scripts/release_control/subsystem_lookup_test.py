@@ -4666,13 +4666,13 @@ class SubsystemLookupTest(unittest.TestCase):
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/ai_handler.go",
-                    "line": 173,
+                    "line": 174,
                     "heading_line": 131,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/api/ai_handler.go",
-                    "line": 174,
+                    "line": 175,
                     "heading_line": 131,
                 },
             ],
@@ -4695,7 +4695,7 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertIn("paid-feature-entitlement-gating", api_match["lane_context"]["release_gate_ids"])
         self.assertEqual(
             [reference["line"] for reference in api_match["matched_contract_references"]],
-            [111, 173, 174],
+            [111, 174, 175],
         )
 
     def test_render_pretty_shows_contract_focus_for_lean_lookup(self) -> None:

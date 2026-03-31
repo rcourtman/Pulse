@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getPatrolAssessmentPresentation,
   getPatrolAssessmentAction,
+  getPatrolAssessmentShellPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
   getPatrolSummaryMetricState,
@@ -195,6 +196,28 @@ describe('getPatrolSummaryPresentation', () => {
     ).toEqual({
       label: 'Open AI Settings',
       href: '/settings/system-ai',
+    });
+  });
+
+  it('uses the shared neutral shell with a warning accent for degraded patrol summaries', () => {
+    expect(getPatrolAssessmentShellPresentation('warning')).toEqual({
+      headerClass: 'bg-amber-50/70 dark:bg-amber-950/30',
+      badgeClass:
+        'border-amber-200 bg-amber-100/80 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+      iconClass: 'text-amber-600 dark:text-amber-300',
+      iconContainerClass:
+        'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
+    });
+  });
+
+  it('defaults patrol shell styling to the informational accent', () => {
+    expect(getPatrolAssessmentShellPresentation()).toEqual({
+      headerClass: 'bg-blue-50/70 dark:bg-blue-950/30',
+      badgeClass:
+        'border-blue-200 bg-blue-100/80 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+      iconClass: 'text-blue-600 dark:text-blue-300',
+      iconContainerClass:
+        'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
     });
   });
 

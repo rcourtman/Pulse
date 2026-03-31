@@ -140,6 +140,7 @@ Own canonical runtime payload shapes between backend and frontend.
    while keeping the learning counters backend-only coverage, so the summary page keeps Patrol health and findings primary and renders timeline, correlation, and policy-posture data as secondary investigation context rather than as a separate headline product metric
    and the Patrol findings empty-state behavior, so `0 active findings` only renders as a healthy frontend conclusion when the same governed AI summary contract still reports healthy overall health; degraded or not-fully-verified health predictions must flow through to the Patrol findings surface instead of being replaced by page-local "looks healthy" copy
    and the Patrol assessment headline plus compact summary-strip behavior, so the same governed AI summary contract decides whether the page leads with verified health, issues detected, coverage incomplete, or another attention state instead of letting count-only page fragments emit a stale `No issues found` conclusion
+   and the Patrol summary shell treatment itself, so the same governed summary contract still lands inside the shared neutral page-card base while severity travels through compact header accents and icon badges instead of a page-local full-width semantic background
    and the Patrol verification summary derived from run history, so the page also states whether recent Patrol evidence came from a successful full patrol or only from scoped/erroring runs instead of leaving verification scope implicit
    and the same-day activity-mix explanation derived from that governed run history, so when a recent full patrol is followed by alert-triggered or anomaly-triggered scoped work the verification surface can explain the mix directly instead of reconstructing it from page-local timing heuristics
    and the Patrol status recency split, so `last_patrol_at` remains reserved for completed full Patrol sweeps while scoped runs and verification checks advance `last_activity_at` without claiming a fresh full-estate verification pass
@@ -172,19 +173,6 @@ Own canonical runtime payload shapes between backend and frontend.
 20. Keep hosted billing-state quickstart payload fields on the shared API contract: `internal/api/hosted_entitlement_refresh.go`, `internal/api/subscription_state_handlers.go`, and `internal/api/contract_test.go` must preserve `quickstart_credits_granted`, `quickstart_credits_used`, and `quickstart_credits_granted_at` through hosted signup, hosted lease refresh, and billing-state reads instead of letting lease rewrites silently erase seeded quickstart inventory.
 21. Keep hosted AI settings bootstrap on the shared API contract: `internal/api/ai_hosted_runtime.go`, `internal/api/ai_handlers.go`, `internal/api/ai_handler.go`, and `internal/api/contract_test.go` must treat a missing `ai.enc` in hosted mode as a canonical bootstrap condition, persist one machine-owned quickstart-backed AI config when hosted entitlements grant AI capability, and preserve that configured settings payload as the same public contract that Chat, Patrol, and AI Settings consume.
 22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface: `internal/api/ai_handler.go`, `internal/api/ai_handlers.go`, `internal/api/router_routes_ai_relay.go`, and `internal/api/contract_test.go` must turn the governed approvals-list API into the canonical empty-list payload as soon as settings-driven AI enablement succeeds, rather than leaving that surface on `503 Approval store not initialized` until some separate startup-only side effect happens.
-23. Keep legacy top-level TrueNAS compatibility on the shared frontend resource
-    adapters only. Frontend API consumers may accept a raw `truenas` payload
-    only through shared compatibility normalization that rewrites it to a
-    canonical `agent` resource with `platformType: 'truenas'`; API-backed
-    settings surfaces such as token management must not branch on
-    `resource.type === 'truenas'` as a second runtime contract.
-24. Keep AI transport compatibility-only TrueNAS aliases normalized at the
-    handler boundary. `internal/api/ai_handler.go` and
-    `internal/api/ai_handlers.go` may accept legacy `truenas` mention or
-    `resource_type` inputs only by collapsing them immediately to the
-    canonical `agent` host type; downstream runtime requests, tests, and
-    frontend clients must not treat raw `truenas` as a second AI transport
-    contract.
 
 ## Forbidden Paths
 
@@ -231,7 +219,6 @@ Own canonical runtime payload shapes between backend and frontend.
 14. Keep recovery platform-query vocabulary canonical across that same `/api/recovery/*` surface: operator-facing transport must emit `platform` as the canonical query field, accepted legacy `provider` aliases must remain compatibility-only input, and `internal/api/contract_test.go` must pin that fallback behavior in the same slice as any handler change
 15. Keep recovery payload platform vocabulary canonical across that same `/api/recovery/*` surface: point payloads must expose `platform`, rollup payloads must expose `platforms`, and any compatibility `provider` / `providers` aliases must remain secondary fallback fields rather than replacing the shared response model
 16. Keep recovery linked-resource vocabulary canonical across that same `/api/recovery/*` surface: points and rollups must expose `itemResourceId` as the canonical linked-resource field, accepted legacy `subjectResourceId` aliases must remain compatibility-only input or secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
-17. Keep Patrol run-history payload taxonomy canonical across `/api/ai/patrol/runs` and `/api/ai/patrol/runs/:id`: run records must expose `truenas_checked` as a first-class count when API-backed TrueNAS systems were scanned, and the frontend Patrol client may only coerce missing historical values to `0` as compatibility normalization for older persisted runs, not as a replacement for the canonical backend field.
 17. Keep recovery external item-reference vocabulary canonical across that same `/api/recovery/*` surface: point and rollup payloads must expose `itemRef` as the canonical external item-reference field, accepted legacy `subjectRef` aliases must remain compatibility-only secondary payload fields, and the shared proof surface must pin that normalization in the same slice as any handler change
 18. Keep first-host lookup completion explicit on the shared install-state API
     boundary: when
@@ -299,13 +286,6 @@ Own canonical runtime payload shapes between backend and frontend.
     `bootstrapTokenPath`, and allows browser-owned first-session proof to
     re-enter the real setup wizard instead of silently falling back to an
     authenticated dashboard state.
-25. Keep platform transport vocabulary aligned with
-    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`. Presentation
-    keys, future-label helpers, recovery provider strings, and
-    connected-infrastructure surface kinds may carry forward-compatible
-    vocabulary, but they must not be treated as admitting a new first-class
-    platform until that model, the owning contracts, and the applicable proof
-    surfaces change together.
 22. Keep shared SSO test and metadata-preview transport fail-closed: SAML
     metadata URLs and OIDC issuer URLs must reject non-HTTP or userinfo-bearing
     inputs before any outbound request is attempted, and OIDC discovery must

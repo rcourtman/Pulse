@@ -30,6 +30,13 @@ export interface PatrolAssessmentPresentation {
   tone: SemanticTone;
 }
 
+export interface PatrolAssessmentShellPresentation {
+  headerClass: string;
+  badgeClass: string;
+  iconClass: string;
+  iconContainerClass: string;
+}
+
 export interface PatrolAssessmentAction {
   label: string;
   href: string;
@@ -91,6 +98,41 @@ const ACTIVE_PRESENTATION: Record<PatrolSummaryTone, PatrolSummaryPresentation> 
   },
 };
 
+const ASSESSMENT_SHELL_PRESENTATION: Record<SemanticTone, PatrolAssessmentShellPresentation> = {
+  success: {
+    headerClass: 'bg-emerald-50/60 dark:bg-emerald-950/30',
+    badgeClass:
+      'border-emerald-200 bg-emerald-100/80 text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200',
+    iconClass: 'text-emerald-600 dark:text-emerald-300',
+    iconContainerClass:
+      'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40',
+  },
+  warning: {
+    headerClass: 'bg-amber-50/70 dark:bg-amber-950/30',
+    badgeClass:
+      'border-amber-200 bg-amber-100/80 text-amber-700 dark:border-amber-800 dark:bg-amber-900/40 dark:text-amber-200',
+    iconClass: 'text-amber-600 dark:text-amber-300',
+    iconContainerClass:
+      'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
+  },
+  error: {
+    headerClass: 'bg-red-50/70 dark:bg-red-950/30',
+    badgeClass:
+      'border-red-200 bg-red-100/80 text-red-700 dark:border-red-800 dark:bg-red-900/40 dark:text-red-200',
+    iconClass: 'text-red-600 dark:text-red-300',
+    iconContainerClass:
+      'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
+  },
+  info: {
+    headerClass: 'bg-blue-50/70 dark:bg-blue-950/30',
+    badgeClass:
+      'border-blue-200 bg-blue-100/80 text-blue-700 dark:border-blue-800 dark:bg-blue-900/40 dark:text-blue-200',
+    iconClass: 'text-blue-600 dark:text-blue-300',
+    iconContainerClass:
+      'border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
+  },
+};
+
 export function getPatrolSummaryPresentation(
   tone: PatrolSummaryTone,
   active: boolean,
@@ -103,6 +145,12 @@ export function getPatrolSummaryPresentation(
     };
   }
   return ACTIVE_PRESENTATION[tone];
+}
+
+export function getPatrolAssessmentShellPresentation(
+  tone: SemanticTone = 'info',
+): PatrolAssessmentShellPresentation {
+  return ASSESSMENT_SHELL_PRESENTATION[tone] || ASSESSMENT_SHELL_PRESENTATION.info;
 }
 
 function getHealthSummaryTone(overallHealth: IntelligenceHealthScore): SemanticTone {
