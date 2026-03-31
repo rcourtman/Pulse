@@ -27,7 +27,8 @@ exist:
 2. route through unified resources when that is the canonical shape
 3. prefer canonical shared types, APIs, and paths over lane-local variants
 4. remove or isolate legacy host-era terminology, adapters, and compatibility
-   shims from primary runtime paths
+   shims from primary runtime paths, and retire newly superseded or clearly
+   obsolete internal paths instead of leaving shadow implementations behind
 5. update subsystem ownership, path policies, and proof routing when runtime
    ownership moves
 6. record any unavoidable modernization residual explicitly instead of treating
@@ -211,12 +212,18 @@ Every substantial task must finish by checking these questions:
    addition, or lane expansion shape is clear enough to name explicitly.
 3. Did I change stable governance, scope, evergreen readiness assertions, or lock a new architectural/release decision?
    If yes: update `SOURCE_OF_TRUTH.md`.
-4. Did I replace an old path with a new canonical path?
-   If yes: add or tighten a guardrail so the old path cannot silently return.
+4. Did I replace an old path with a new canonical path, or did this slice
+   uncover clearly obsolete legacy-primary code in the governed surface?
+   If yes: retire the superseded or obsolete implementation, docs, fixtures,
+   and helpers in the same slice unless a named boundary-only exception still
+   needs them, and add or tighten a guardrail so the old path cannot silently
+   return.
 5. Did I add a new extension point?
    If yes: record exactly where future work must attach to it.
 6. Did I leave compatibility code in runtime paths?
-   If yes: either remove it now or explicitly classify it as a boundary-only exception.
+   If yes: either remove it now or explicitly classify it as a boundary-only
+   exception and verify that the remaining supported boundary still works
+   without the retired internal path.
 7. Did the user state a durable product truth or change the current priority?
    If yes: classify it as a readiness assertion, release gate, open decision,
    or active-target update and record it in the owning control file instead of
@@ -287,9 +294,13 @@ Every substantial task must finish by checking these questions:
     upgrades, imports, external contracts, or wire compatibility that still
     genuinely exist.
     If I am improving an old internal path just to keep it alive alongside the
-    canonical v6 path, that is drift. Retire it or record the exception
-    explicitly as boundary-only compatibility rather than treating it as normal
-    lane progress.
+    canonical v6 path, that is drift. Retire it in full or record the
+    exception explicitly as boundary-only compatibility, with proof that the
+    supported boundary still works without the rest of the legacy path, rather
+    than treating it as normal lane progress.
+    The same rule applies when I merely discover clearly obsolete old-way code
+    while working nearby; finding it is enough to make its retirement part of
+    the governed cleanup story.
 11. Is the remaining work still part of this lane?
     If not, stop cleanly and normalize it into the next target, another lane,
     or an explicit open decision instead of letting this task expand forever.

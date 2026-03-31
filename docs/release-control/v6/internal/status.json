@@ -3225,7 +3225,7 @@
   "lane_followups": [
     {
       "id": "architecture-post-rc-canonicalization",
-      "summary": "Track the remaining post-RC architecture cleanup that still belongs to L6 after canonicalizing Connected infrastructure and the frontend state contract by construction.",
+      "summary": "Track the remaining post-RC architecture cleanup that still belongs to L6 after canonicalizing Connected infrastructure and the frontend state contract by construction, including retirement of newly legacy or clearly obsolete old-way internal paths unless a boundary-only exception is explicitly governed.",
       "owner": "project-owner",
       "status": "planned",
       "recorded_at": "2026-03-13",

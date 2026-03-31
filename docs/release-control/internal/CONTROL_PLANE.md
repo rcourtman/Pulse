@@ -95,6 +95,16 @@ model that active and future release profiles reuse.
    compatibility shims from primary paths, using canonical v6 types and APIs,
    and updating subsystem ownership plus proof routing when runtime ownership
    changes.
+   When canonicalization makes an old internal path obsolete, the same slice
+   should retire the superseded code, docs, fixtures, and helpers rather than
+   leaving parallel legacy-primary implementations behind.
+   This is not limited to code the slice directly replaced: if work lands on
+   clearly obsolete old-way internals inside the governed surface, cleanup
+   should pull that retirement forward instead of leaving known legacy clutter
+   behind for a future pass.
+   Any retained legacy behavior must be named as a boundary-only exception,
+   and the slice should carry proof or guardrails showing that the supported
+   boundary still works after the broader old path is removed.
    These modernization rules are retrospective as well as forward-looking:
    existing lanes that were previously improved in a legacy-shaped way must be
    re-judged against the canonical v6 model when they are touched again, and

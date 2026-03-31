@@ -61,8 +61,12 @@ that already belong to the canonical system.
 11. Keep legacy support at the boundary.
    Backward compatibility is acceptable only where a real external boundary,
    migration edge, upgrade path, or explicit interoperability obligation still
-   requires it. Do not preserve or polish legacy-primary internal paths when a
-   canonical v6 path exists.
+   requires it. When a canonical replacement makes an internal path legacy,
+   or a touched governed surface reveals clearly obsolete old-way code,
+   retire that legacy code instead of leaving shadow code behind unless a
+   named boundary-only exception still owns it. Do not wait for the current
+   slice to have authored the replacement before cleaning up clearly obsolete
+   old-way internals in the surface it is already governing.
 12. Prefer the largest coherent slice.
    When a claimed lane is already moving through one clear behavior arc on one
    surface, prefer the largest same-surface slice that still has one coherent

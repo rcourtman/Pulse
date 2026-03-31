@@ -254,6 +254,13 @@ Assertion design rules:
     as migrations, upgrades, imports, external contracts, or wire
     interoperability that still genuinely exist; otherwise retire the
     legacy-primary path instead of teaching the lane to depend on it.
+    When a canonical replacement lands, remove the superseded internal path in
+    the same slice unless a boundary-only exception is explicitly governed,
+    and prove that the remaining supported boundary still works.
+    Do not wait only for the slice that authored the replacement: if a later
+    governed slice lands on clearly obsolete old-way internals in that same
+    surface, cleanup should retire them rather than normalizing their
+    continued presence.
 20. Guardrail-only work is support work, not lane advancement.
     Contract ratchets, proof-routing cleanup, registry tightening, and
     guardrail-only tests may strengthen confidence, but they must not be
@@ -271,9 +278,12 @@ Assertion design rules:
 22. Legacy compatibility must be named as a boundary exception, not assumed as
     a primary v6 design goal.
     If a touched surface still needs old-path support, make the boundary
-    obligation explicit in the owning contract or lane residual. Otherwise,
-    treat continuing investment in that old internal path as drift, not
-    prudence.
+    obligation explicit in the owning contract or lane residual and keep the
+    rest of the superseded internal path retired. Otherwise, treat continuing
+    investment in that old internal path as drift, not prudence.
+    Clearly obsolete old-way code discovered during adjacent governed work is
+    part of that same drift signal; clean it up or record the blocking reason
+    explicitly instead of leaving it behind as ambient repo clutter.
 23. Claimed lane work should prefer the largest coherent same-surface slice.
     Within an active claimed lane, prefer the largest coherent same-surface slice.
     When one behavior arc on one governed surface is already clearly in scope,
