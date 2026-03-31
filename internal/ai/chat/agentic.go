@@ -1283,34 +1283,26 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 					Msg("[AgenticLoop] Tracking pending recovery for strict resolution block")
 			}
 
-			// === AUTO-RECOVERY FOR NONINTERACTIVEONLY BLOCKS ===
-			// If tool blocked with auto_recoverable=true and has a suggested_rewrite,
-			// automatically apply the rewrite and retry once.
+			// === AUTO-RECOVERY FOR STRUCTURED BLOCKS ===
+			// If a tool returns a blocked response with auto_recoverable=true and a
+			// governed recovery plan, automatically apply that plan and retry once.
 			// Note: err == nil means executor didn't throw, isError means the tool result indicates error/block
 			if err == nil && isError && strings.Contains(resultText, `"auto_recoverable":true`) {
 				// Result is a blocked response (not a hard error)
-				if suggestedRewrite, recoveryAttempted := tryAutoRecovery(result, tc, a.executor, ctx); suggestedRewrite != "" && !recoveryAttempted {
+				if recoveryPlan, recoveryAttempted := tryAutoRecovery(result, tc, a.executor, ctx); recoveryPlan != nil && !recoveryAttempted {
 					// This is a fresh recoverable block - attempt auto-recovery
 					log.Info().
 						Str("tool", tc.Name).
-						Str("original_command", getCommandFromInput(tc.Input)).
-						Str("suggested_rewrite", suggestedRewrite).
-						Msg("[AgenticLoop] Attempting auto-recovery with suggested rewrite")
+						Str("recovery_tool", recoveryPlan.ToolName).
+						Interface("recovery_input", recoveryPlan.Input).
+						Msg("[AgenticLoop] Attempting structured auto-recovery")
 
 					// Record auto-recovery attempt
 					if metrics := GetAIMetrics(); metrics != nil {
-						metrics.RecordAutoRecoveryAttempt("READ_ONLY_VIOLATION", tc.Name)
+						metrics.RecordAutoRecoveryAttempt(recoveryPlan.ErrorCode, tc.Name)
 					}
 
-					// Apply the rewrite and retry
-					modifiedInput := make(map[string]interface{})
-					for k, v := range tc.Input {
-						modifiedInput[k] = v
-					}
-					modifiedInput["command"] = suggestedRewrite
-					modifiedInput["_auto_recovery_attempt"] = true // Prevent infinite loops
-
-					retryResult, retryErr := a.executeToolSafely(ctx, tc.Name, modifiedInput)
+					retryResult, retryErr := a.executeToolSafely(ctx, recoveryPlan.ToolName, recoveryPlan.Input)
 					if retryErr != nil {
 						log.Warn().
 							Err(retryErr).
@@ -1322,7 +1314,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Str("tool", tc.Name).
 							Msg("[AgenticLoop] Auto-recovery succeeded")
 						if metrics := GetAIMetrics(); metrics != nil {
-							metrics.RecordAutoRecoverySuccess("READ_ONLY_VIOLATION", tc.Name)
+							metrics.RecordAutoRecoverySuccess(recoveryPlan.ErrorCode, tc.Name)
 						}
 						// Use the successful result
 						result = retryResult
@@ -1334,7 +1326,7 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 							Str("retry_error", FormatToolResult(retryResult)).
 							Msg("[AgenticLoop] Auto-recovery retry still blocked")
 						// Keep original error but note the failed recovery attempt
-						resultText = resultText + "\n\n[Auto-recovery attempted but failed. Please use the suggested command manually or switch to pulse_control.]"
+						resultText = resultText + "\n\n[Auto-recovery attempted but failed. Follow the recovery hint manually.]"
 					}
 				}
 			}

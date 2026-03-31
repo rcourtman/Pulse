@@ -241,6 +241,10 @@ resource that lacks that native log path, the shared tool boundary must fail
 as a structured blocked response with a governed recovery hint toward the
 correct shared path, such as `pulse_query action=get` for API-backed read-only
 resources or `target_host` plus `container` for agent-routed app logs.
+When that recovery path is safe to execute deterministically, the blocked
+response should also carry a structured recovery tool call so the shared
+agentic loop can retry through the correct shared tool and arguments instead
+of assuming every recovery is a `command` rewrite on the original tool.
 That same VMware AI rule also now includes mention resolution. Frontend
 Assistant mention payloads for VMware-backed `agent`, `vm`, `storage`, and
 canonical `app-container` resources must preserve the shared unified resource

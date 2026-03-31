@@ -478,10 +478,10 @@ func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Contex
 
 	resolved := validation.Resource
 	if resolved.GetKind() != "app-container" {
-		return blockedNativeReadLogsResult(resolved, resourceRef, container), nil
+		return blockedNativeReadLogsResult(resolved, resourceRef, container, lines), nil
 	}
 	if !strings.EqualFold(strings.TrimSpace(resolved.GetAdapter()), "truenas") {
-		return blockedNativeReadLogsResult(resolved, resourceRef, container), nil
+		return blockedNativeReadLogsResult(resolved, resourceRef, container, lines), nil
 	}
 	if e.appContainerReadProvider == nil {
 		return NewErrorResult(fmt.Errorf("native app-container read provider is not available")), nil
@@ -525,7 +525,7 @@ func (e *PulseToolExecutor) executeNativeAppContainerReadLogs(ctx context.Contex
 	return NewTextResult(fmt.Sprintf("%s:\n%s", title, output)), nil
 }
 
-func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, container string) CallToolResult {
+func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, container string, lines int) CallToolResult {
 	resourceRef = strings.TrimSpace(resourceRef)
 	if resolved == nil {
 		return NewErrorResult(fmt.Errorf("resource '%s' does not support native logs through pulse_read", resourceRef))
@@ -557,8 +557,19 @@ func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, con
 			containerName = resourceName
 		}
 		if targetHost != "" {
+			suggestedArgs := map[string]interface{}{
+				"action":      "logs",
+				"target_host": targetHost,
+				"container":   containerName,
+			}
+			if lines > 0 {
+				suggestedArgs["lines"] = lines
+			}
 			details["target_host"] = targetHost
 			details["container"] = containerName
+			details["auto_recoverable"] = true
+			details["suggested_tool"] = "pulse_read"
+			details["suggested_arguments"] = suggestedArgs
 			details["recovery_hint"] = fmt.Sprintf(
 				"Use pulse_read action=logs target_host=%q container=%q for app logs on this platform.",
 				targetHost,
@@ -580,6 +591,14 @@ func blockedNativeReadLogsResult(resolved ResolvedResourceInfo, resourceRef, con
 	if queryResourceID == "" {
 		queryResourceID = resourceRef
 	}
+	suggestedArgs := map[string]interface{}{
+		"action":        "get",
+		"resource_type": queryType,
+		"resource_id":   queryResourceID,
+	}
+	details["auto_recoverable"] = true
+	details["suggested_tool"] = "pulse_query"
+	details["suggested_arguments"] = suggestedArgs
 	details["recovery_hint"] = fmt.Sprintf(
 		"Use pulse_query action=get resource_type=%q resource_id=%q to inspect status, alerts, activity, and metrics for this resource.",
 		queryType,

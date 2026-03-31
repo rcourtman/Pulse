@@ -277,11 +277,18 @@ func TestExecuteReadLogs_VMwareResourcesReturnStructuredQueryGuidance(t *testing
 			assert.Contains(t, payload.Error.Message, "does not expose native logs through pulse_read")
 			assert.Equal(t, tc.wantKind, payload.Error.Details["resource_type"])
 			assert.Equal(t, "vmware-vsphere", payload.Error.Details["adapter"])
+			assert.Equal(t, true, payload.Error.Details["auto_recoverable"])
+			assert.Equal(t, "pulse_query", payload.Error.Details["suggested_tool"])
 
 			hint, ok := payload.Error.Details["recovery_hint"].(string)
 			require.True(t, ok)
 			assert.Contains(t, hint, `pulse_query action=get`)
 			assert.Contains(t, hint, `resource_type="`+tc.wantKind+`"`)
+
+			suggestedArgs, ok := payload.Error.Details["suggested_arguments"].(map[string]interface{})
+			require.True(t, ok)
+			assert.Equal(t, "get", suggestedArgs["action"])
+			assert.Equal(t, tc.wantKind, suggestedArgs["resource_type"])
 		})
 	}
 }
@@ -322,11 +329,19 @@ func TestExecuteReadLogs_NonNativeAppContainersReturnStructuredTargetHostGuidanc
 	assert.Equal(t, "app-container", payload.Error.Details["resource_type"])
 	assert.Equal(t, "docker-host", payload.Error.Details["target_host"])
 	assert.Equal(t, "homepage", payload.Error.Details["container"])
+	assert.Equal(t, true, payload.Error.Details["auto_recoverable"])
+	assert.Equal(t, "pulse_read", payload.Error.Details["suggested_tool"])
 
 	hint, ok := payload.Error.Details["recovery_hint"].(string)
 	require.True(t, ok)
 	assert.Contains(t, hint, `target_host="docker-host"`)
 	assert.Contains(t, hint, `container="homepage"`)
+
+	suggestedArgs, ok := payload.Error.Details["suggested_arguments"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "logs", suggestedArgs["action"])
+	assert.Equal(t, "docker-host", suggestedArgs["target_host"])
+	assert.Equal(t, "homepage", suggestedArgs["container"])
 }
 
 func decodeToolResponse(t *testing.T, result CallToolResult) ToolResponse {

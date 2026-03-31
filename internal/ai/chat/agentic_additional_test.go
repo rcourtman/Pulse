@@ -393,25 +393,49 @@ func TestAgenticLoop_DoesNotRetryErrorEventAfterVisibleOutput(t *testing.T) {
 
 func TestTryAutoRecoveryAndCommandExtraction(t *testing.T) {
 	result := tools.CallToolResult{
-		Content: []tools.Content{{Type: "text", Text: `{"error":{"details":{"auto_recoverable":true,"suggested_rewrite":"pulse_query action=get","category":"strict"}}}`}},
+		Content: []tools.Content{{Type: "text", Text: `{"error":{"code":"READ_ONLY_VIOLATION","details":{"auto_recoverable":true,"suggested_rewrite":"uptime","category":"strict"}}}`}},
 		IsError: true,
 	}
-	rewrite, attempted := tryAutoRecovery(result, providers.ToolCall{Input: map[string]interface{}{}}, nil, context.Background())
-	if attempted || rewrite == "" {
-		t.Fatalf("expected suggested rewrite and no prior attempt")
+	plan, attempted := tryAutoRecovery(result, providers.ToolCall{
+		Name:  "pulse_read",
+		Input: map[string]interface{}{"action": "exec"},
+	}, nil, context.Background())
+	if attempted || plan == nil {
+		t.Fatalf("expected recovery plan and no prior attempt")
+	}
+	if plan.ToolName != "pulse_read" || plan.Input["command"] != "uptime" {
+		t.Fatalf("unexpected legacy recovery plan: %+v", plan)
+	}
+	if plan.ErrorCode != "READ_ONLY_VIOLATION" {
+		t.Fatalf("expected READ_ONLY_VIOLATION error code, got %+v", plan)
 	}
 
-	alt := tools.CallToolResult{
-		Content: []tools.Content{{Type: "text", Text: `{"error":5,"auto_recoverable":true,"suggested_rewrite":"pulse_query action=list"}`}},
+	structured := tools.CallToolResult{
+		Content: []tools.Content{{Type: "text", Text: `{"error":{"code":"ACTION_NOT_ALLOWED","details":{"auto_recoverable":true,"suggested_tool":"pulse_query","suggested_arguments":{"action":"get","resource_type":"vm","resource_id":"app-01"}}}}`}},
 		IsError: true,
 	}
-	rewrite, _ = tryAutoRecovery(alt, providers.ToolCall{Input: map[string]interface{}{}}, nil, context.Background())
-	if rewrite == "" {
-		t.Fatalf("expected suggested rewrite from alternate format")
+	plan, _ = tryAutoRecovery(structured, providers.ToolCall{Input: map[string]interface{}{}}, nil, context.Background())
+	if plan == nil {
+		t.Fatalf("expected structured recovery plan")
+	}
+	if plan.ToolName != "pulse_query" || plan.Input["action"] != "get" || plan.Input["resource_id"] != "app-01" {
+		t.Fatalf("unexpected structured recovery plan: %+v", plan)
+	}
+	if plan.ErrorCode != "ACTION_NOT_ALLOWED" {
+		t.Fatalf("expected ACTION_NOT_ALLOWED error code, got %+v", plan)
 	}
 
-	rewrite, attempted = tryAutoRecovery(result, providers.ToolCall{Input: map[string]interface{}{"_auto_recovery_attempt": true}}, nil, context.Background())
-	if !attempted || rewrite != "" {
+	retryTool := tools.CallToolResult{
+		Content: []tools.Content{{Type: "text", Text: `{"error":5,"auto_recoverable":true,"suggested_tool":"pulse_query","suggested_arguments":{"action":"list"}}`}},
+		IsError: true,
+	}
+	plan, _ = tryAutoRecovery(retryTool, providers.ToolCall{Input: map[string]interface{}{}}, nil, context.Background())
+	if plan == nil || plan.ToolName != "pulse_query" || plan.Input["action"] != "list" {
+		t.Fatalf("expected alternate-format structured recovery plan, got %+v", plan)
+	}
+
+	plan, attempted = tryAutoRecovery(result, providers.ToolCall{Input: map[string]interface{}{"_auto_recovery_attempt": true}}, nil, context.Background())
+	if !attempted || plan != nil {
 		t.Fatalf("expected auto recovery to be skipped when already attempted")
 	}
 
@@ -420,5 +444,113 @@ func TestTryAutoRecoveryAndCommandExtraction(t *testing.T) {
 	}
 	if cmd := getCommandFromInput(map[string]interface{}{}); cmd != "<unknown>" {
 		t.Fatalf("expected fallback command string")
+	}
+}
+
+func TestAgenticLoop_AutoRecoveryExecutesStructuredToolCall(t *testing.T) {
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	failCalls := 0
+	recoveryCalls := 0
+
+	executor.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{
+			Name: "fail_tool",
+			InputSchema: tools.InputSchema{
+				Type:       "object",
+				Properties: map[string]tools.PropertySchema{},
+			},
+		},
+		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+			failCalls++
+			return tools.NewToolResponseResult(tools.NewToolBlockedError(
+				tools.ErrCodeActionNotAllowed,
+				"blocked",
+				map[string]interface{}{
+					"auto_recoverable": true,
+					"suggested_tool":   "recovery_tool",
+					"suggested_arguments": map[string]interface{}{
+						"value": "recovered through query",
+					},
+				},
+			)), nil
+		},
+	})
+	executor.RegisterTool(tools.RegisteredTool{
+		Definition: tools.Tool{
+			Name: "recovery_tool",
+			InputSchema: tools.InputSchema{
+				Type: "object",
+				Properties: map[string]tools.PropertySchema{
+					"value": {Type: "string"},
+				},
+			},
+		},
+		Handler: func(ctx context.Context, exec *tools.PulseToolExecutor, args map[string]interface{}) (tools.CallToolResult, error) {
+			recoveryCalls++
+			value, _ := args["value"].(string)
+			return tools.NewTextResult(value), nil
+		},
+	})
+
+	provider := &stubStreamingProvider{}
+	loop := NewAgenticLoop(provider, executor, "prompt")
+	callCount := 0
+	provider.chatStream = func(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+		callCount++
+		switch callCount {
+		case 1:
+			callback(providers.StreamEvent{
+				Type: "tool_start",
+				Data: providers.ToolStartEvent{ID: "call_1", Name: "fail_tool"},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{
+					ToolCalls: []providers.ToolCall{{
+						ID:    "call_1",
+						Name:  "fail_tool",
+						Input: map[string]interface{}{},
+					}},
+				},
+			})
+		case 2:
+			if len(req.Messages) != 3 {
+				t.Fatalf("expected assistant tool call plus tool result, got %d messages", len(req.Messages))
+			}
+			if req.Messages[2].ToolResult == nil || req.Messages[2].ToolResult.IsError {
+				t.Fatalf("expected recovered tool result, got %+v", req.Messages[2].ToolResult)
+			}
+			if !strings.Contains(req.Messages[2].ToolResult.Content, "recovered through query") {
+				t.Fatalf("expected recovered output in provider follow-up, got %+v", req.Messages[2].ToolResult)
+			}
+			callback(providers.StreamEvent{
+				Type: "content",
+				Data: providers.ContentEvent{Text: "Recovered."},
+			})
+			callback(providers.StreamEvent{
+				Type: "done",
+				Data: providers.DoneEvent{},
+			})
+		default:
+			t.Fatalf("unexpected provider call %d", callCount)
+		}
+		return nil
+	}
+
+	results, err := loop.Execute(context.Background(), "structured-auto-recovery", []Message{{Role: "user", Content: "help"}}, func(event StreamEvent) {})
+	if err != nil {
+		t.Fatalf("expected successful auto-recovery, got %v", err)
+	}
+	if failCalls != 1 || recoveryCalls != 1 {
+		t.Fatalf("expected one fail call and one recovery call, got fail=%d recovery=%d", failCalls, recoveryCalls)
+	}
+	if len(results) != 3 {
+		t.Fatalf("expected assistant tool call, recovered tool result, and final response, got %+v", results)
+	}
+	if results[1].ToolResult == nil || !strings.Contains(results[1].ToolResult.Content, "recovered through query") {
+		t.Fatalf("expected recovered tool result in transcript, got %+v", results[1])
+	}
+	if results[2].Content != "Recovered." {
+		t.Fatalf("unexpected final response: %+v", results[2])
 	}
 }
