@@ -174,6 +174,7 @@ Required proof:
 Automated proof already landed for part of this slice:
 
 - `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts`
+- `tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts`
 - `internal/ai/chat/context_prefetch_additional_test.go`
 - `internal/ai/chat/service_tooling_test.go`
 - `internal/ai/tools/control_resource_test.go`

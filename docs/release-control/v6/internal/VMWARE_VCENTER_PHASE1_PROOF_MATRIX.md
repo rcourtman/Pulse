@@ -1,6 +1,6 @@
 # VMware vCenter Phase-1 Proof Matrix
 
-Last updated: 2026-03-30
+Last updated: 2026-03-31
 Status: PLANNED
 Governance surfaces:
 - `status.json.candidate_lanes.platform-admission-execution`
@@ -115,12 +115,15 @@ boundary:
 1. `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts` proves
    canonical VMware-backed Assistant mentions stay on shared resource IDs and
    shared Assistant routes.
-2. `internal/ai/chat/context_prefetch_additional_test.go` proves VMware-backed
+2. `tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts` proves a
+   failed VMware `pulse_read action=logs resource_id=...` path can recover onto
+   shared `pulse_query` behavior without VMware-local routes.
+3. `internal/ai/chat/context_prefetch_additional_test.go` proves VMware-backed
    guest mentions stay read-only in Assistant context summaries.
-3. `internal/ai/chat/service_tooling_test.go` and
+4. `internal/ai/chat/service_tooling_test.go` and
    `internal/ai/tools/control_resource_test.go` prove shared Assistant/tool
    wording stays capability-gated instead of claiming blanket VM control.
-4. `internal/api/route_inventory_test.go` and
+5. `internal/api/route_inventory_test.go` and
    `tests/integration/tests/41-vmware-phase1-exclusion-integrity.spec.ts`
    prove the shipped route and browser surface stay out of direct `ESXi`,
    recovery, and VMware admin-plane territory.
@@ -249,9 +252,10 @@ Pass when:
 Current automated coverage:
 
 1. `tests/integration/tests/38-vmware-ai-chat-mentions.spec.ts`
-2. `internal/ai/chat/context_prefetch_additional_test.go`
-3. `internal/ai/chat/service_tooling_test.go`
-4. `internal/ai/tools/control_resource_test.go`
+2. `tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts`
+3. `internal/ai/chat/context_prefetch_additional_test.go`
+4. `internal/ai/chat/service_tooling_test.go`
+5. `internal/ai/tools/control_resource_test.go`
 
 ### `VC-7` Exclusion Integrity
 
