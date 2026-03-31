@@ -219,6 +219,11 @@ Pass when:
 4. the saved-connection contract still hides any dual-client runtime detail
    behind one connection health result
 
+Automated non-live proof should continue to cover the shared settings shell for
+saved-connection auth/runtime failure classification and degraded permission
+guidance so the first real lab run does not discover those operator-facing
+states for the first time.
+
 ### `VC-3` Inventory Projection Floor
 
 1. Let the VMware poller collect from the saved connection.

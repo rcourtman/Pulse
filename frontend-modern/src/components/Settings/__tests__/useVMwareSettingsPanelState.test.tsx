@@ -297,4 +297,62 @@ describe('useVMwareSettingsPanelState', () => {
       });
     },
   );
+
+  it('surfaces structured saved-connection failures and refreshes runtime state', async () => {
+    const authError = 'VMware authentication failed while creating the VI JSON API session';
+    vi.mocked(VMwareAPI.listConnections)
+      .mockResolvedValueOnce([
+        {
+          id: 'conn-1',
+          name: 'lab-vcenter',
+          host: 'vcsa.lab.local',
+          port: 443,
+          username: 'administrator@vsphere.local',
+          password: '********',
+          insecureSkipVerify: false,
+          enabled: true,
+        },
+      ] as never)
+      .mockResolvedValueOnce([
+        {
+          id: 'conn-1',
+          name: 'lab-vcenter',
+          host: 'vcsa.lab.local',
+          port: 443,
+          username: 'administrator@vsphere.local',
+          password: '********',
+          insecureSkipVerify: false,
+          enabled: true,
+          poll: {
+            lastAttemptAt: '2026-03-31T12:00:00Z',
+            lastError: {
+              at: '2026-03-31T12:00:00Z',
+              category: 'auth',
+              message: authError,
+            },
+          },
+        },
+      ] as never);
+    vi.mocked(VMwareAPI.testSavedConnection).mockRejectedValueOnce(
+      Object.assign(new Error('Failed to connect to VMware vCenter'), {
+        status: 400,
+        code: 'vmware_connection_failed',
+        details: {
+          category: 'auth',
+          error: authError,
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+
+    await waitFor(() => expect(result.connections()).toHaveLength(1));
+
+    await result.testSavedConnection(result.connections()[0]);
+
+    expect(notificationStore.error).toHaveBeenCalledWith(authError);
+    expect(VMwareAPI.listConnections).toHaveBeenCalledTimes(2);
+    expect(result.connections()[0].poll?.lastError?.category).toBe('auth');
+    expect(result.connections()[0].poll?.lastError?.message).toBe(authError);
+  });
 });

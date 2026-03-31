@@ -8,6 +8,10 @@ import {
 import { apiErrorCode, apiErrorDetailField, apiErrorStatus } from '@/api/responseUtils';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
+import {
+  buildVMwareConnectionFailurePresentation,
+  type VMwareConnectionFailurePresentation,
+} from './vmwareConnectionFailurePresentation';
 
 export interface VMwareConnectionFormState {
   name: string;
@@ -18,15 +22,6 @@ export interface VMwareConnectionFormState {
   insecureSkipVerify: boolean;
   enabled: boolean;
   hasStoredPassword: boolean;
-}
-
-export interface VMwareConnectionFailurePresentation {
-  code?: string;
-  category?: string;
-  guidance?: string;
-  message: string;
-  title: string;
-  tone: 'danger' | 'warning';
 }
 
 const REDACTED_SECRET = '********';
@@ -83,89 +78,6 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 
 const getVMwareErrorMessage = (error: unknown, fallback: string): string =>
   apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
-
-const buildVMwareConnectionFailurePresentation = (
-  error: unknown,
-  fallback: string,
-): VMwareConnectionFailurePresentation => {
-  const code = apiErrorCode(error) ?? undefined;
-  const category = apiErrorDetailField(error, 'category') ?? undefined;
-  const message = getVMwareErrorMessage(error, fallback);
-
-  switch (category) {
-    case 'unsupported_version':
-      return {
-        code,
-        category,
-        guidance:
-          'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
-        message,
-        title: 'Unsupported vCenter version',
-        tone: 'warning',
-      };
-    case 'tls':
-      return {
-        code,
-        category,
-        guidance:
-          'Install a trusted certificate for vCenter, or enable Skip TLS verification only for controlled lab environments.',
-        message,
-        title: 'TLS validation failed',
-        tone: 'warning',
-      };
-    case 'auth':
-      return {
-        code,
-        category,
-        guidance: 'Verify the username, password, and account scope in vCenter before retrying.',
-        message,
-        title: 'Authentication failed',
-        tone: 'danger',
-      };
-    case 'permission':
-      return {
-        code,
-        category,
-        guidance:
-          'Grant the minimum VMware read privileges required for phase-1 inventory and health reads, then retry.',
-        message,
-        title: 'Permissions are insufficient',
-        tone: 'warning',
-      };
-    case 'network':
-      return {
-        code,
-        category,
-        guidance:
-          'Confirm DNS, reachability, port 443, and any firewall rules from the Pulse server to vCenter.',
-        message,
-        title: 'Pulse could not reach vCenter',
-        tone: 'danger',
-      };
-    default:
-      break;
-  }
-
-  if (code === 'vmware_invalid_config') {
-    return {
-      code,
-      category,
-      guidance: 'Review the host, port, username, and password fields before retrying.',
-      message,
-      title: 'Connection configuration is invalid',
-      tone: 'danger',
-    };
-  }
-
-  return {
-    code,
-    category,
-    guidance: 'Review the vCenter endpoint and credentials, then retry the connection test.',
-    message,
-    title: 'VMware connection test failed',
-    tone: 'danger',
-  };
-};
 
 const buildConnectionInput = (form: VMwareConnectionFormState): VMwareConnectionInput => {
   const port = parseOptionalPort(form.port);
@@ -294,7 +206,12 @@ export function useVMwareSettingsPanelState() {
       notificationStore.success('VMware connection successful');
       return true;
     } catch (error) {
-      const failure = buildVMwareConnectionFailurePresentation(error, 'VMware connection failed');
+      const failure = buildVMwareConnectionFailurePresentation({
+        code: apiErrorCode(error),
+        category: apiErrorDetailField(error, 'category'),
+        message: getVMwareErrorMessage(error, 'VMware connection failed'),
+        fallback: 'VMware connection failed',
+      });
       setConnectionFailure(failure);
       notificationStore.error(failure.message);
       logger.error('[VMware Settings] Connection test failed', error);
@@ -312,8 +229,16 @@ export function useVMwareSettingsPanelState() {
         `VMware connection successful for ${connection.name || connection.host}`,
       );
     } catch (error) {
-      const message = getErrorMessage(error, 'VMware connection failed');
-      notificationStore.error(message);
+      const failure = buildVMwareConnectionFailurePresentation({
+        code: apiErrorCode(error),
+        category: apiErrorDetailField(error, 'category'),
+        message: getVMwareErrorMessage(error, 'VMware connection failed'),
+        fallback: 'VMware connection failed',
+        defaultGuidance:
+          'Retry the saved connection test after reviewing the VMware runtime status for this vCenter.',
+        defaultTitle: 'Saved connection test failed',
+      });
+      notificationStore.error(failure.message);
       logger.error('[VMware Settings] Saved connection test failed', error);
     } finally {
       setTesting(false);

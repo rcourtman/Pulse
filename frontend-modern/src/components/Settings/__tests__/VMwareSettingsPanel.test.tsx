@@ -108,7 +108,15 @@ describe('VMwareSettingsPanel', () => {
         host: 'staging.lab.local',
         username: 'operator@vsphere.local',
         insecureSkipVerify: true,
-        enabled: false,
+        enabled: true,
+        poll: {
+          lastAttemptAt: new Date(Date.now() - 30_000).toISOString(),
+          lastError: {
+            at: new Date(Date.now() - 30_000).toISOString(),
+            category: 'auth',
+            message: 'VMware authentication failed while creating the VI JSON API session',
+          },
+        },
       },
       {
         id: 'conn-3',
@@ -146,9 +154,17 @@ describe('VMwareSettingsPanel', () => {
     expect(screen.getByText('VMware connections')).toBeInTheDocument();
     expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
     expect(screen.getByText('Healthy')).toBeInTheDocument();
+    expect(screen.getByText('staging-vcenter')).toBeInTheDocument();
+    expect(screen.getByText('Runtime failing')).toBeInTheDocument();
+    expect(screen.getByText('Authentication failed')).toBeInTheDocument();
     expect(
-      within(screen.getByTestId('vmware-connection-conn-2')).getAllByText('Disabled'),
-    ).toHaveLength(2);
+      screen.getByText('VMware authentication failed while creating the VI JSON API session'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Verify the username, password, and account scope in vCenter before retrying.',
+      ),
+    ).toBeInTheDocument();
     expect(screen.getByText('partial-vcenter')).toBeInTheDocument();
     expect(screen.getByText('Degraded')).toBeInTheDocument();
     expect(screen.getByText('3 hosts')).toBeInTheDocument();
@@ -163,6 +179,12 @@ describe('VMwareSettingsPanel', () => {
     expect(
       within(screen.getByTestId('vmware-connection-conn-3')).getByText(
         /VMware permissions are insufficient for host overall status/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Permissions are insufficient')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Grant the minimum VMware read privileges required for phase-1 inventory and health reads, then retry.',
       ),
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add VMware connection' })).toBeInTheDocument();

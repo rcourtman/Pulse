@@ -16,6 +16,7 @@ import {
 } from '@/components/shared/Form';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
 import type { VMwareSettingsPanelState } from './useVMwareSettingsPanelState';
+import { buildVMwareConnectionFailurePresentation } from './vmwareConnectionFailurePresentation';
 
 const buttonClass =
   'inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md border border-border px-3 py-2 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60';
@@ -27,15 +28,37 @@ const dangerButtonClass =
 const connectionMetaBadgeClass =
   'inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-xs font-medium text-muted';
 
-const getObservedIssueSummary = (connection: VMwareConnection): string | null => {
+const getObservedIssuePresentation = (connection: VMwareConnection) => {
   const observed = connection.observed;
   const firstIssue = observed?.issues?.find((issue) => !!issue.message);
   if (!firstIssue?.message) return null;
   const issueCount = observed?.issueCount ?? observed?.issues?.length ?? 0;
-  if (issueCount > 1) {
-    return `${firstIssue.message} (+${issueCount - 1} more degraded reads)`;
-  }
-  return firstIssue.message;
+  const message =
+    issueCount > 1
+      ? `${firstIssue.message} (+${issueCount - 1} more degraded reads)`
+      : firstIssue.message;
+  return buildVMwareConnectionFailurePresentation({
+    category: firstIssue.category,
+    message,
+    fallback: 'VMware optional inventory enrichment is degraded',
+    defaultGuidance:
+      'Review the saved connection runtime health and VMware read access, then refresh or retest this vCenter.',
+    defaultTitle: 'Partial VMware data is unavailable',
+    defaultTone: 'warning',
+  });
+};
+
+const getRuntimeFailurePresentation = (connection: VMwareConnection) => {
+  const lastError = connection.poll?.lastError;
+  if (!lastError?.message) return null;
+  return buildVMwareConnectionFailurePresentation({
+    category: lastError.category,
+    message: lastError.message,
+    fallback: 'VMware runtime validation failed',
+    defaultGuidance:
+      'Retry the saved connection test after reviewing the VMware runtime status for this vCenter.',
+    defaultTitle: 'Runtime validation failed',
+  });
 };
 
 const getConnectionHealthPresentation = (connection: VMwareConnection) => {
@@ -44,8 +67,11 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
       label: 'Disabled',
       className: 'bg-surface text-muted',
       detail: 'Manual validation paused',
-      note: null,
+      noteGuidance: null,
+      noteMessage: null,
+      noteTitle: null,
       noteClassName: '',
+      guidanceClassName: '',
     };
   }
 
@@ -57,24 +83,32 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
     (!lastSuccessAt || new Date(lastError.at).getTime() >= new Date(lastSuccessAt).getTime());
 
   if (lastError && lastErrorAfterSuccess) {
+    const failure = getRuntimeFailurePresentation(connection);
     return {
       label: 'Runtime failing',
       className: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
       detail: lastError.at
         ? `Last check ${formatRelativeTime(lastError.at, { compact: true })}`
         : 'Last check failed',
-      note: lastError.message || null,
+      noteGuidance: failure?.guidance ?? null,
+      noteMessage: failure?.message ?? lastError.message ?? null,
+      noteTitle: failure?.title ?? null,
       noteClassName: 'text-red-700 dark:text-red-300',
+      guidanceClassName: 'text-red-700/90 dark:text-red-300/90',
     };
   }
 
   if (lastSuccessAt && connection.observed?.degraded) {
+    const issue = getObservedIssuePresentation(connection);
     return {
       label: 'Degraded',
       className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
       detail: `Last check ${formatRelativeTime(lastSuccessAt, { compact: true })} with partial enrichment`,
-      note: getObservedIssueSummary(connection),
+      noteGuidance: issue?.guidance ?? null,
+      noteMessage: issue?.message ?? null,
+      noteTitle: issue?.title ?? null,
       noteClassName: 'text-amber-700 dark:text-amber-300',
+      guidanceClassName: 'text-amber-700/90 dark:text-amber-300/90',
     };
   }
 
@@ -83,8 +117,11 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
       label: 'Healthy',
       className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
       detail: `Last check ${formatRelativeTime(lastSuccessAt, { compact: true })}`,
-      note: null,
+      noteGuidance: null,
+      noteMessage: null,
+      noteTitle: null,
       noteClassName: '',
+      guidanceClassName: '',
     };
   }
 
@@ -92,8 +129,11 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
     label: 'Awaiting first poll',
     className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
     detail: 'Pulse has not completed the first vCenter poll yet',
-    note: null,
+    noteGuidance: null,
+    noteMessage: null,
+    noteTitle: null,
     noteClassName: '',
+    guidanceClassName: '',
   };
 };
 
@@ -280,10 +320,24 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
                                 </Show>
                               </div>
 
-                              <Show when={health().note}>
-                                <p class={`text-xs font-medium ${health().noteClassName}`}>
-                                  {health().note}
-                                </p>
+                              <Show when={health().noteTitle || health().noteMessage}>
+                                <div class="space-y-1">
+                                  <Show when={health().noteTitle}>
+                                    <p class={`text-xs font-semibold ${health().noteClassName}`}>
+                                      {health().noteTitle}
+                                    </p>
+                                  </Show>
+                                  <Show when={health().noteMessage}>
+                                    <p class={`text-xs font-medium ${health().noteClassName}`}>
+                                      {health().noteMessage}
+                                    </p>
+                                  </Show>
+                                  <Show when={health().noteGuidance}>
+                                    <p class={`text-xs ${health().guidanceClassName}`}>
+                                      {health().noteGuidance}
+                                    </p>
+                                  </Show>
+                                </div>
                               </Show>
                             </div>
 

@@ -191,6 +191,10 @@ test.describe("VMware platform connections settings", () => {
     await expect(failingCard).toContainText("Staging vCenter");
     await expect(failingCard).toContainText("Runtime failing");
     await expect(failingCard).toContainText("authentication failed");
+    await expect(failingCard).toContainText("Authentication failed");
+    await expect(failingCard).toContainText(
+      "Verify the username, password, and account scope in vCenter before retrying.",
+    );
     await expect(failingCard).toContainText("Skip TLS verification");
 
     const partialCard = page.getByTestId("vmware-connection-vmware-3");
@@ -202,6 +206,10 @@ test.describe("VMware platform connections settings", () => {
     await expect(partialCard).toContainText("3 degraded reads");
     await expect(partialCard).toContainText(
       "VMware permissions are insufficient for host overall status",
+    );
+    await expect(partialCard).toContainText("Permissions are insufficient");
+    await expect(partialCard).toContainText(
+      "Grant the minimum VMware read privileges required for phase-1 inventory and health reads, then retry.",
     );
 
     fs.mkdirSync(path.dirname(SCREENSHOT_PATH), { recursive: true });
@@ -375,6 +383,109 @@ test.describe("VMware platform connections settings", () => {
       await page.getByRole("button", { name: "Cancel" }).click();
       await expect(page.getByRole("dialog")).not.toBeVisible();
     }
+  });
+
+  test("surfaces saved runtime guidance when a VMware retest fails", async ({ page }) => {
+    const authError =
+      "VMware authentication failed while creating the VI JSON API session";
+    const healthyAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    const failedAt = new Date(Date.now() - 60_000).toISOString();
+    let connections: Record<string, unknown>[] = [
+      {
+        id: "conn-1",
+        name: "Primary vCenter",
+        host: "vcsa-primary.local",
+        port: 443,
+        username: "administrator@vsphere.local",
+        password: "********",
+        insecureSkipVerify: false,
+        enabled: true,
+        poll: {
+          lastSuccessAt: healthyAt,
+        },
+        observed: {
+          collectedAt: healthyAt,
+          hosts: 6,
+          vms: 120,
+          datastores: 18,
+          viRelease: "8.0.3",
+        },
+      },
+    ];
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(connections),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections/conn-1/test" && method === "POST") {
+        connections = [
+          {
+            ...connections[0],
+            poll: {
+              lastAttemptAt: failedAt,
+              lastSuccessAt: healthyAt,
+              lastError: {
+                at: failedAt,
+                category: "auth",
+                message: authError,
+              },
+            },
+            observed: {
+              collectedAt: healthyAt,
+              hosts: 6,
+              vms: 120,
+              datastores: 18,
+              viRelease: "8.0.3",
+            },
+          },
+        ];
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Failed to connect to VMware vCenter",
+            code: "vmware_connection_failed",
+            status_code: 400,
+            details: {
+              category: "auth",
+              error: authError,
+            },
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    const primaryCard = page.getByTestId("vmware-connection-conn-1");
+    await expect(primaryCard).toContainText("Healthy");
+
+    await primaryCard.getByRole("button", { name: "Test" }).click();
+
+    await expect(primaryCard).toContainText("Runtime failing");
+    await expect(primaryCard).toContainText("Authentication failed");
+    await expect(primaryCard).toContainText(authError);
+    await expect(primaryCard).toContainText(
+      "Verify the username, password, and account scope in vCenter before retrying.",
+    );
   });
 
   test("adds, edits, retests, and deletes VMware connections through the canonical settings workflow", async ({
