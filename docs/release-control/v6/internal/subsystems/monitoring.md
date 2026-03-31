@@ -376,9 +376,10 @@ That same fixture authority now also includes legacy snapshot-backed platforms.
 `internal/mock/fixture_graph.go` runtime graph as the one mock owner for
 legacy Proxmox/Docker/Kubernetes/agent/PBS/PMG snapshot state plus
 provider-backed TrueNAS and VMware fixtures. Monitoring must not rebuild mock
-provider context from standalone defaults or mix a legacy `GenerateMockData`
-snapshot with separate provider fixtures when seeding read-state or metrics
-history.
+provider context from standalone defaults, consume partial legacy helper
+exports, or mix snapshot state with separate provider fixtures when seeding
+read-state or metrics history. The graph and its methods are the canonical
+mock runtime API.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

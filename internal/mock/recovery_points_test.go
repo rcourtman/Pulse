@@ -40,7 +40,7 @@ func TestCurrentFixtureGraphReturnsDefensiveCopies(t *testing.T) {
 	}
 }
 
-func TestGetMockRecoveryPointsDerivesSubjectsFromCurrentGraph(t *testing.T) {
+func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) {
 	previous := IsMockEnabled()
 	SetEnabled(true)
 	t.Cleanup(func() { SetEnabled(previous) })
@@ -82,7 +82,7 @@ func TestGetMockRecoveryPointsDerivesSubjectsFromCurrentGraph(t *testing.T) {
 		}
 	}
 
-	points := GetMockRecoveryPoints()
+	points := CurrentFixtureGraph().RecoveryPoints()
 	if len(points) == 0 {
 		t.Fatal("expected mock recovery points")
 	}

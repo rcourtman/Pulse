@@ -7,12 +7,12 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-func TestGenerateMockDataIncludesDockerHosts(t *testing.T) {
+func TestBuildFixtureStateIncludesDockerHosts(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.DockerHostCount = 2
 	cfg.DockerContainersPerHost = 5
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	if len(data.DockerHosts) != cfg.DockerHostCount {
 		t.Fatalf("expected %d docker hosts, got %d", cfg.DockerHostCount, len(data.DockerHosts))
@@ -43,7 +43,7 @@ func TestComputeGuestCountsHandlesZeroBaselines(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataWithZeroGuestBaselinesDoesNotPanic(t *testing.T) {
+func TestBuildFixtureStateWithZeroGuestBaselinesDoesNotPanic(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 4
 	cfg.VMsPerNode = 0
@@ -56,21 +56,21 @@ func TestGenerateMockDataWithZeroGuestBaselinesDoesNotPanic(t *testing.T) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					t.Fatalf("GenerateMockData panicked on iteration %d: %v", i, r)
+					t.Fatalf("buildFixtureState panicked on iteration %d: %v", i, r)
 				}
 			}()
-			_ = GenerateMockData(cfg)
+			_ = buildFixtureState(cfg)
 		}()
 	}
 }
 
-func TestGenerateMockDataIncludesSwarmServices(t *testing.T) {
+func TestBuildFixtureStateIncludesSwarmServices(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.DockerHostCount = 4
 	cfg.DockerContainersPerHost = 6
 	cfg.RandomMetrics = false
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	found := false
 	for _, host := range data.DockerHosts {
@@ -92,12 +92,12 @@ func TestGenerateMockDataIncludesSwarmServices(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataIncludesHostAgents(t *testing.T) {
+func TestBuildFixtureStateIncludesHostAgents(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.GenericHostCount = 5
 	cfg.RandomMetrics = false
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	expectedMin := cfg.GenericHostCount
 	if cfg.NodeCount > expectedMin {
@@ -120,13 +120,13 @@ func TestGenerateMockDataIncludesHostAgents(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataLinksAllNodesToHostAgents(t *testing.T) {
+func TestBuildFixtureStateLinksAllNodesToHostAgents(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 7
 	cfg.GenericHostCount = 2
 	cfg.RandomMetrics = false
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	if len(data.Hosts) < cfg.NodeCount {
 		t.Fatalf("expected enough hosts to link all nodes, got hosts=%d nodes=%d", len(data.Hosts), cfg.NodeCount)
@@ -151,13 +151,13 @@ func TestGenerateMockDataLinksAllNodesToHostAgents(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataPopulatesHostIORates(t *testing.T) {
+func TestBuildFixtureStatePopulatesHostIORates(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 6
 	cfg.GenericHostCount = 1
 	cfg.RandomMetrics = true
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	for _, host := range data.Hosts {
 		if host.Status == "offline" {
@@ -175,12 +175,12 @@ func TestGenerateMockDataPopulatesHostIORates(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataPopulatesDockerHostIORates(t *testing.T) {
+func TestBuildFixtureStatePopulatesDockerHostIORates(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.DockerHostCount = 3
 	cfg.RandomMetrics = true
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	if len(data.DockerHosts) == 0 {
 		t.Fatal("expected docker hosts in mock data")
@@ -208,14 +208,14 @@ func TestGenerateMockDataPopulatesDockerHostIORates(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataPopulatesKubernetesUsageMetrics(t *testing.T) {
+func TestBuildFixtureStatePopulatesKubernetesUsageMetrics(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.K8sClusterCount = 1
 	cfg.K8sNodesPerCluster = 4
 	cfg.K8sPodsPerCluster = 24
 	cfg.RandomMetrics = false
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 	if len(data.KubernetesClusters) != 1 {
 		t.Fatalf("expected exactly one kubernetes cluster, got %d", len(data.KubernetesClusters))
 	}
@@ -269,7 +269,7 @@ func TestGenerateMockDataPopulatesKubernetesUsageMetrics(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataCreatesHostEntriesForKubernetesNodes(t *testing.T) {
+func TestBuildFixtureStateCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.K8sClusterCount = 1
 	cfg.K8sNodesPerCluster = 3
@@ -277,7 +277,7 @@ func TestGenerateMockDataCreatesHostEntriesForKubernetesNodes(t *testing.T) {
 	cfg.NodeCount = 0
 	cfg.RandomMetrics = false
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 	if len(data.KubernetesClusters) == 0 {
 		t.Fatal("expected kubernetes clusters in mock data")
 	}
@@ -310,7 +310,7 @@ func TestMockStateIncludesHostAgents(t *testing.T) {
 		SetEnabled(false)
 	})
 
-	state := GetMockState()
+	state := CurrentFixtureGraph().State
 	if len(state.Hosts) == 0 {
 		t.Fatalf("expected hosts in mock state, got %d", len(state.Hosts))
 	}
@@ -329,8 +329,8 @@ func TestUpdateMetricsMaintainsServiceHealth(t *testing.T) {
 	cfg.DockerHostCount = 3
 	cfg.DockerContainersPerHost = 6
 
-	data := GenerateMockData(cfg)
-	UpdateMetrics(&data, cfg)
+	data := buildFixtureState(cfg)
+	updateFixtureStateMetrics(&data, cfg)
 
 	for _, host := range data.DockerHosts {
 		if len(host.Services) == 0 {
@@ -354,10 +354,10 @@ func TestUpdateMetricsMaintainsServiceHealth(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataIncludesPMGInstances(t *testing.T) {
+func TestBuildFixtureStateIncludesPMGInstances(t *testing.T) {
 	cfg := DefaultConfig
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	if len(data.PMGInstances) == 0 {
 		t.Fatalf("expected PMG instances in mock data")
@@ -432,16 +432,16 @@ func TestCloneStatePreservesIgnoredInfrastructureEntries(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataInitializesIgnoredInfrastructureSlices(t *testing.T) {
-	data := GenerateMockData(DefaultConfig)
+func TestBuildFixtureStateInitializesIgnoredInfrastructureSlices(t *testing.T) {
+	data := buildFixtureState(DefaultConfig)
 
 	if data.RemovedDockerHosts == nil {
-		t.Fatal("expected GenerateMockData to initialize RemovedDockerHosts")
+		t.Fatal("expected buildFixtureState to initialize RemovedDockerHosts")
 	}
 	if data.RemovedHostAgents == nil {
-		t.Fatal("expected GenerateMockData to initialize RemovedHostAgents")
+		t.Fatal("expected buildFixtureState to initialize RemovedHostAgents")
 	}
 	if data.RemovedKubernetesClusters == nil {
-		t.Fatal("expected GenerateMockData to initialize RemovedKubernetesClusters")
+		t.Fatal("expected buildFixtureState to initialize RemovedKubernetesClusters")
 	}
 }

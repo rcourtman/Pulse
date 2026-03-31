@@ -479,10 +479,11 @@ func buildTieredTimestamps(now time.Time, totalDuration time.Duration) []time.Ti
 	return timestamps
 }
 
-func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, now time.Time, seedDuration, interval time.Duration) {
+func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.FixtureGraph, now time.Time, seedDuration, interval time.Duration) {
 	if mh == nil {
 		return
 	}
+	state := graph.State
 	if seedDuration <= 0 || interval <= 0 {
 		return
 	}
@@ -875,7 +876,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	platformFixtures := mock.GetPlatformFixtures()
+	platformFixtures := graph.PlatformFixtures
 	trueNASFixtures := platformFixtures.TrueNAS
 	log.Debug().Int("pools", len(trueNASFixtures.Pools)).Int("datasets", len(trueNASFixtures.Datasets)).Msg("mock seeding: processing TrueNAS fixtures")
 
@@ -1006,24 +1007,24 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 }
 
 // recordTrueNASFixturesMetrics records disk usage metrics for TrueNAS pools and datasets.
-func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
-	fixtures := mock.GetPlatformFixtures().TrueNAS
+func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures mock.PlatformFixtures, ts time.Time) {
+	snapshot := fixtures.TrueNAS
 
 	totalCap, totalUsed := int64(0), int64(0)
-	for _, pool := range fixtures.Pools {
+	for _, pool := range snapshot.Pools {
 		totalCap += pool.TotalBytes
 		totalUsed += pool.UsedBytes
 	}
 	if totalCap > 0 {
-		systemKey := "system:" + fixtures.System.Hostname
+		systemKey := "system:" + snapshot.System.Hostname
 		systemDisk := float64(totalUsed) / float64(totalCap) * 100
 		mh.AddGuestMetric(systemKey, "disk", systemDisk, ts)
 		if ms != nil {
-			ms.Write("truenas", fixtures.System.Hostname, "disk", systemDisk, ts)
+			ms.Write("truenas", snapshot.System.Hostname, "disk", systemDisk, ts)
 		}
 	}
 
-	for _, pool := range fixtures.Pools {
+	for _, pool := range snapshot.Pools {
 		if pool.TotalBytes > 0 {
 			poolKey := "pool:" + pool.Name
 			diskPct := float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
@@ -1034,7 +1035,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time
 		}
 	}
 
-	for _, dataset := range fixtures.Datasets {
+	for _, dataset := range snapshot.Datasets {
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		if totalBytes > 0 {
 			dsKey := "dataset:" + dataset.Name
@@ -1047,8 +1048,8 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time
 	}
 }
 
-func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
-	snapshot := mock.GetPlatformFixtures().VMware
+func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixtures mock.PlatformFixtures, ts time.Time) {
+	snapshot := fixtures.VMware
 	datastoreUsage := vmwareDatastoreUsageByID(snapshot.Datastores)
 
 	for _, host := range snapshot.Hosts {
@@ -1251,10 +1252,11 @@ func adaptContainers(cts []models.Container) []containerAdapter {
 	return result
 }
 
-func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.StateSnapshot, ts time.Time) {
+func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.FixtureGraph, ts time.Time) {
 	if mh == nil {
 		return
 	}
+	state := graph.State
 
 	for _, node := range state.Nodes {
 		if node.ID == "" || node.Status != "online" {
@@ -1453,8 +1455,8 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, stat
 	}
 
 	// Record TrueNAS pool/dataset disk-usage live ticks
-	recordTrueNASFixturesMetrics(mh, ms, ts)
-	recordVMwareFixturesMetrics(mh, ms, ts)
+	recordTrueNASFixturesMetrics(mh, ms, graph.PlatformFixtures, ts)
+	recordVMwareFixturesMetrics(mh, ms, graph.PlatformFixtures, ts)
 }
 
 func diskMetricsResourceID(disk models.PhysicalDisk) string {
@@ -1515,8 +1517,8 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 		Msg("Mock metrics sampler: seeding historical data")
 	// Keep mock trend generation in-memory only so production history in the
 	// persistent metrics store remains untouched while mock mode is active.
-	seedMockMetricsHistory(m.metricsHistory, nil, state, time.Now(), seedDuration, cfg.SampleInterval)
-	recordMockStateToMetricsHistory(m.metricsHistory, nil, state, time.Now())
+	seedMockMetricsHistory(m.metricsHistory, nil, graph, time.Now(), seedDuration, cfg.SampleInterval)
+	recordMockStateToMetricsHistory(m.metricsHistory, nil, graph, time.Now())
 
 	m.mockMetricsWg.Add(1)
 	go func() {
@@ -1533,7 +1535,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 				if !mock.IsMockEnabled() {
 					continue
 				}
-				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.CurrentFixtureGraph().State, time.Now())
+				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.CurrentFixtureGraph(), time.Now())
 			}
 		}
 	}()

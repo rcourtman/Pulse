@@ -154,7 +154,7 @@ querying, and the operator-facing storage health presentation layer.
     come from the canonical `internal/mock/fixture_graph.go` owner so legacy
     snapshot-backed platforms, provider-backed fixtures, unified inventory,
     and recovery/storage context stay aligned instead of drifting through
-    recovery-local fixture assembly.
+    recovery-local fixture assembly or partial mock helper APIs.
 
 ## Current State
 

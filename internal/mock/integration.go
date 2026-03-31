@@ -428,18 +428,6 @@ func SetMockConfig(cfg MockConfig) {
 		Msg("Mock configuration updated")
 }
 
-// GetMockState returns the current mock state snapshot.
-func GetMockState() models.StateSnapshot {
-	if !IsMockEnabled() {
-		return models.EmptyStateSnapshot()
-	}
-
-	dataMu.RLock()
-	defer dataMu.RUnlock()
-
-	return cloneState(mockGraph.State)
-}
-
 // UpdateAlertSnapshots replaces the active and recently resolved alert lists used for mock mode.
 // This lets other components read alert data without querying the live alert manager, which can
 // be locked while alerts are being generated. Keeping a snapshot here prevents any blocking when

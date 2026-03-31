@@ -3146,6 +3146,56 @@ func TestContract_RecoveryPointPayloadUsesCanonicalPlatformField(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_RecoveryPointsMockPathReturnsCanonicalProviderBackedFixtures(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	t.Setenv("PULSE_MOCK_NODES", "1")
+	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "0")
+	t.Setenv("PULSE_MOCK_LXCS_PER_NODE", "0")
+	t.Setenv("PULSE_MOCK_DOCKER_HOSTS", "0")
+	t.Setenv("PULSE_MOCK_DOCKER_CONTAINERS", "0")
+	t.Setenv("PULSE_MOCK_GENERIC_HOSTS", "0")
+	t.Setenv("PULSE_MOCK_K8S_CLUSTERS", "0")
+	t.Setenv("PULSE_MOCK_K8S_NODES", "0")
+	t.Setenv("PULSE_MOCK_K8S_PODS", "0")
+	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "0")
+
+	mock.SetEnabled(false)
+	mock.SetEnabled(true)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/recovery/points?platform=truenas&limit=10", nil)
+	rec := httptest.NewRecorder()
+
+	NewRecoveryHandlers(nil).HandleListPoints(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp recoveryPointsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal recovery points response: %v", err)
+	}
+	if len(resp.Data) == 0 {
+		t.Fatal("expected provider-backed mock recovery points in response")
+	}
+	if resp.Data[0].Platform != recovery.Provider("truenas") {
+		t.Fatalf("platform = %q, want %q", resp.Data[0].Platform, "truenas")
+	}
+	if resp.Data[0].Display == nil {
+		t.Fatal("expected normalized recovery display payload on mock points response")
+	}
+}
+
 func TestContract_RecoveryRollupPayloadUsesCanonicalPlatformsField(t *testing.T) {
 	payload := buildRecoveryRollupPayload(recovery.ProtectionRollup{
 		RollupID:    "rollup-1",

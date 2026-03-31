@@ -11,14 +11,6 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
-func GetMockRecoveryPoints() []recovery.RecoveryPoint {
-	if !IsMockEnabled() {
-		return nil
-	}
-
-	return CurrentFixtureGraph().RecoveryPoints()
-}
-
 func (g FixtureGraph) RecoveryPoints() []recovery.RecoveryPoint {
 	return generateMockRecoveryPoints(g.State, g.PlatformFixtures)
 }

@@ -270,6 +270,9 @@ one graph instead of combining a legacy snapshot read with standalone provider
 defaults. The shared resource graph must therefore see one coherent mock
 platform set regardless of whether a platform is snapshot-backed or
 supplemental-provider-backed.
+Callers should therefore consume `CurrentFixtureGraph()` and graph-owned
+projections rather than reintroducing platform-only or state-only mock helper
+exports.
 TrueNAS-managed applications now follow the same canonical workload rule. One
 TrueNAS app instance from `app.query` must project as one canonical
 `app-container` resource under `SourceTrueNAS`, reusing the shared workload and

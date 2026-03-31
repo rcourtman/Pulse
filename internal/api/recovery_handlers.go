@@ -225,7 +225,7 @@ func (h *RecoveryHandlers) HandleListPoints(w http.ResponseWriter, r *http.Reque
 	)
 
 	if mock.IsMockEnabled() {
-		all := mock.GetMockRecoveryPoints()
+		all := mock.CurrentFixtureGraph().RecoveryPoints()
 		filtered := filterRecoveryPoints(all, opts)
 		total = len(filtered)
 		points = paginateRecoveryPoints(filtered, opts.Page, opts.Limit)
@@ -336,7 +336,7 @@ func (h *RecoveryHandlers) HandleListSeries(w http.ResponseWriter, r *http.Reque
 
 	var series []recovery.PointsSeriesBucket
 	if mock.IsMockEnabled() {
-		all := mock.GetMockRecoveryPoints()
+		all := mock.CurrentFixtureGraph().RecoveryPoints()
 		filtered := filterRecoveryPoints(all, opts)
 		// Count only completed points.
 		series = buildSeriesFromPoints(filtered, opts, tzOffsetMin)
@@ -402,7 +402,7 @@ func (h *RecoveryHandlers) HandleListFacets(w http.ResponseWriter, r *http.Reque
 
 	var facets recovery.PointsFacets
 	if mock.IsMockEnabled() {
-		all := mock.GetMockRecoveryPoints()
+		all := mock.CurrentFixtureGraph().RecoveryPoints()
 		filtered := filterRecoveryPoints(all, opts)
 		facets = buildFacetsFromPoints(filtered)
 	} else {
@@ -670,7 +670,7 @@ func (h *RecoveryHandlers) HandleListRollups(w http.ResponseWriter, r *http.Requ
 	)
 
 	if mock.IsMockEnabled() {
-		all := mock.GetMockRecoveryPoints()
+		all := mock.CurrentFixtureGraph().RecoveryPoints()
 		filtered := filterRecoveryPointsForRollups(all, opts)
 		rollups = recovery.BuildRollupsFromPoints(filtered)
 		total = len(rollups)

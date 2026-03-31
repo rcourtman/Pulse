@@ -51,7 +51,7 @@ type VMwareConnectionFixture struct {
 	VIRelease           string
 }
 
-func DefaultPlatformFixtures() PlatformFixtures {
+func defaultPlatformFixtures() PlatformFixtures {
 	return PlatformFixtures{
 		TrueNAS: truenas.DefaultFixtures(),
 		VMware:  vmware.DefaultFixtures(),
@@ -59,11 +59,11 @@ func DefaultPlatformFixtures() PlatformFixtures {
 }
 
 func DefaultTrueNASConnectionFixture() TrueNASConnectionFixture {
-	return defaultTrueNASConnectionFixture(GetPlatformFixtures())
+	return defaultTrueNASConnectionFixture(currentOrDefaultPlatformFixtures())
 }
 
 func DefaultVMwareConnectionFixture() VMwareConnectionFixture {
-	fixtures := GetPlatformFixtures().VMware
+	fixtures := currentOrDefaultPlatformFixtures().VMware
 
 	return VMwareConnectionFixture{
 		ID:                  strings.TrimSpace(fixtures.ConnectionID),
@@ -108,7 +108,7 @@ func defaultTrueNASConnectionFixture(fixtures PlatformFixtures) TrueNASConnectio
 }
 
 func SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
-	fixtures := GetPlatformFixtures()
+	fixtures := currentOrDefaultPlatformFixtures()
 	switch normalizePlatformSource(source) {
 	case unifiedresources.SourceTrueNAS:
 		return truenas.FixtureRecords(fixtures.TrueNAS)

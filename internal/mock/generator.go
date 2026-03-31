@@ -328,8 +328,9 @@ func generateVirtualDisks() ([]models.Disk, models.Disk) {
 	return disks, aggregated
 }
 
-// GenerateMockData creates a simulated state snapshot for demo/test environments.
-func GenerateMockData(config MockConfig) models.StateSnapshot {
+// buildFixtureState synthesizes the snapshot-backed portion of the canonical
+// fixture graph for demo and test environments.
+func buildFixtureState(config MockConfig) models.StateSnapshot {
 	// rand is automatically seeded in Go 1.20+
 	config = normalizeMockConfig(config)
 
@@ -4799,7 +4800,7 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 }
 
 // UpdateMetrics simulates changing metrics over time
-func UpdateMetrics(data *models.StateSnapshot, config MockConfig) {
+func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 	updateDockerHosts(data, config)
 	updateKubernetesClusters(data, config)
 	updateHosts(data, config)

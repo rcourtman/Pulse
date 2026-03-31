@@ -65,13 +65,13 @@ func TestSetMockConfigNormalizesInvalidValues(t *testing.T) {
 	}
 }
 
-func TestGenerateMockDataAllowsZeroGuestConfig(t *testing.T) {
+func TestBuildFixtureStateAllowsZeroGuestConfig(t *testing.T) {
 	cfg := DefaultConfig
 	cfg.NodeCount = 3
 	cfg.VMsPerNode = 0
 	cfg.LXCsPerNode = 0
 
-	data := GenerateMockData(cfg)
+	data := buildFixtureState(cfg)
 
 	if len(data.Nodes) != cfg.NodeCount {
 		t.Fatalf("expected %d nodes, got %d", cfg.NodeCount, len(data.Nodes))

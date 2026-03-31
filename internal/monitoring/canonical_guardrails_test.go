@@ -72,6 +72,22 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
+	forbiddenSnippets := []string{
+		"mock.GetMockState(",
+		"mock.GetPlatformFixtures(",
+		"mock.GetMockRecoveryPoints(",
+	}
+
+	for name, content := range readMonitoringRuntimeFiles(t) {
+		for _, snippet := range forbiddenSnippets {
+			if strings.Contains(content, snippet) {
+				t.Fatalf("%s must not depend on legacy mock partial helper %q", name, snippet)
+			}
+		}
+	}
+}
+
 func TestConnectedInfrastructureUsesSharedTopLevelSystemResolver(t *testing.T) {
 	data, err := os.ReadFile("connected_infrastructure.go")
 	if err != nil {

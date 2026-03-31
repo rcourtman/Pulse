@@ -25,13 +25,13 @@ func emptyFixtureGraph() FixtureGraph {
 }
 
 func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
-	state := GenerateMockData(cfg)
+	state := buildFixtureState(cfg)
 	state.LastUpdate = now
 
 	return FixtureGraph{
 		State:            state,
-		AlertHistory:     GenerateAlertHistory(state.Nodes, state.VMs, state.Containers),
-		PlatformFixtures: DefaultPlatformFixtures(),
+		AlertHistory:     buildAlertHistory(state.Nodes, state.VMs, state.Containers),
+		PlatformFixtures: defaultPlatformFixtures(),
 	}
 }
 
@@ -47,7 +47,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	if g == nil {
 		return
 	}
-	UpdateMetrics(&g.State, cfg)
+	updateFixtureStateMetrics(&g.State, cfg)
 	g.State.LastUpdate = now
 }
 
@@ -89,15 +89,12 @@ func CurrentFixtureGraph() FixtureGraph {
 	return cloneFixtureGraph(mockGraph)
 }
 
-func GetPlatformFixtures() PlatformFixtures {
+func currentOrDefaultPlatformFixtures() PlatformFixtures {
 	if !IsMockEnabled() {
-		return DefaultPlatformFixtures()
+		return defaultPlatformFixtures()
 	}
 
-	dataMu.RLock()
-	defer dataMu.RUnlock()
-
-	return clonePlatformFixtures(mockGraph.PlatformFixtures)
+	return CurrentFixtureGraph().PlatformFixtures
 }
 
 func clonePlatformFixtures(in PlatformFixtures) PlatformFixtures {

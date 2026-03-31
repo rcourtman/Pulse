@@ -8,8 +8,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
-// GenerateAlertHistory generates historical alert data for testing
-func GenerateAlertHistory(nodes []models.Node, vms []models.VM, containers []models.Container) []models.Alert {
+// buildAlertHistory derives historical alert data from the canonical fixture graph.
+func buildAlertHistory(nodes []models.Node, vms []models.VM, containers []models.Container) []models.Alert {
 	var history []models.Alert
 
 	// Alert types and messages

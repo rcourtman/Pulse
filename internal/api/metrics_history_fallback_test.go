@@ -91,7 +91,7 @@ func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 	mock.SetEnabled(true)
 	t.Cleanup(func() { mock.SetEnabled(false) })
 
-	state := mock.GetMockState()
+	state := mock.CurrentFixtureGraph().State
 	var disk models.PhysicalDisk
 	found := false
 	for _, candidate := range state.PhysicalDisks {

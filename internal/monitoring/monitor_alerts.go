@@ -223,7 +223,7 @@ func (m *Monitor) checkMockAlerts() {
 	}
 
 	// Get mock state
-	state := mock.GetMockState()
+	state := mock.CurrentFixtureGraph().State
 
 	log.Info().
 		Int("vms", len(state.VMs)).

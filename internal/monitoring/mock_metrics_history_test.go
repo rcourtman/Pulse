@@ -9,8 +9,14 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
+
+func fixtureGraphWithState(state models.StateSnapshot) mock.FixtureGraph {
+	return mock.FixtureGraph{State: state}
+}
 
 func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	now := time.Now()
@@ -77,7 +83,7 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, state, now, time.Hour, 30*time.Second)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, 30*time.Second)
 
 	nodeCPU := mh.GetNodeMetrics("node-1", "cpu", time.Hour)
 	if len(nodeCPU) < 10 {
@@ -129,7 +135,7 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesPodSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, state, now, time.Hour, 30*time.Second)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, 30*time.Second)
 
 	metricID := kubernetesPodMetricID(state.KubernetesClusters[0], state.KubernetesClusters[0].Pods[0])
 	if metricID == "" {
@@ -203,7 +209,7 @@ func TestSeedMockMetricsHistory_SeedsMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, 7*24*time.Hour, time.Minute)
 
 	points, err := store.Query("vm", "vm-100", "cpu", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
@@ -255,7 +261,7 @@ func TestSeedMockMetricsHistory_SeedsDiskTemperatureMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+	seedMockMetricsHistory(mh, store, fixtureGraphWithState(state), now, 7*24*time.Hour, time.Minute)
 
 	points, err := store.Query("disk", "SERIAL-001", "smart_temp", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
@@ -284,7 +290,12 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+	seedMockMetricsHistory(mh, store, mock.FixtureGraph{
+		State: state,
+		PlatformFixtures: mock.PlatformFixtures{
+			VMware: vmware.DefaultFixtures(),
+		},
+	}, now, 7*24*time.Hour, time.Minute)
 
 	hostPoints, err := store.Query("agent", "vc-mock-1:host:host-101", "cpu", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
@@ -314,7 +325,7 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	now := time.Now()
 	state := models.StateSnapshot{}
-	fixtures := mock.DefaultPlatformFixtures().TrueNAS
+	fixtures := truenas.DefaultFixtures()
 
 	if strings.TrimSpace(fixtures.System.Hostname) == "" {
 		t.Fatal("expected canonical truenas system hostname fixture")
@@ -337,7 +348,12 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+	seedMockMetricsHistory(mh, store, mock.FixtureGraph{
+		State: state,
+		PlatformFixtures: mock.PlatformFixtures{
+			TrueNAS: fixtures,
+		},
+	}, now, 7*24*time.Hour, time.Minute)
 
 	systemPoints, err := store.Query("truenas", fixtures.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
@@ -408,7 +424,7 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 	defer store.Close()
 
 	mh := NewMetricsHistory(1000, 7*24*time.Hour)
-	seedMockMetricsHistory(mh, store, graph.State, now, 7*24*time.Hour, time.Minute)
+	seedMockMetricsHistory(mh, store, graph, now, 7*24*time.Hour, time.Minute)
 
 	nodePoints, err := store.Query("node", graph.State.Nodes[0].ID, "cpu", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {

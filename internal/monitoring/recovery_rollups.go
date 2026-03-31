@@ -20,7 +20,7 @@ func (m *Monitor) listRecoveryRollupsForAlerts(ctx context.Context, kind recover
 	}
 
 	if mock.IsMockEnabled() {
-		points := mock.GetMockRecoveryPoints()
+		points := mock.CurrentFixtureGraph().RecoveryPoints()
 		filtered := make([]recovery.RecoveryPoint, 0, len(points))
 		for _, p := range points {
 			if kind != "" && p.Kind != kind {

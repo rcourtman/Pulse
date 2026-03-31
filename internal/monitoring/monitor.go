@@ -1194,7 +1194,7 @@ func (m *Monitor) GetConnectionStatuses() map[string]bool {
 
 	if mock.IsMockEnabled() {
 		statuses := make(map[string]bool)
-		state := mock.GetMockState()
+		state := mock.CurrentFixtureGraph().State
 		for _, node := range state.Nodes {
 			key := "pve-" + node.Name
 			statuses[key] = strings.ToLower(node.Status) == "online"
@@ -2667,11 +2667,11 @@ func (m *Monitor) GetState() models.StateSnapshot {
 
 	// Check if mock mode is enabled
 	if mock.IsMockEnabled() {
-		state := mock.GetMockState()
+		state := mock.CurrentFixtureGraph().State
 		if state.ActiveAlerts == nil && m.alertManager != nil {
 			// Populate snapshot lazily if the cache hasn't been filled yet.
 			mock.UpdateAlertSnapshots(m.alertManager.GetActiveAlerts(), m.alertManager.GetRecentlyResolved())
-			state = mock.GetMockState()
+			state = mock.CurrentFixtureGraph().State
 		}
 		return state
 	}
