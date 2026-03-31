@@ -343,6 +343,50 @@ func TestVMwareHandlers_HandleTestConnection_SuccessAndFailure(t *testing.T) {
 	}
 }
 
+func TestVMwareHandlers_HandleTestConnection_PreservesUnsupportedVersionCategory(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	handler, _ := newVMwareHandlersForTest(t)
+	handler.newClient = func(cfg vmware.ClientConfig) (vmwareClient, error) {
+		return &fakeVMwareClient{
+			testConnection: func(context.Context) (*vmware.InventorySummary, error) {
+				return nil, &vmware.ConnectionError{
+					Category: "unsupported_version",
+					Message:  "VMware vCenter version is outside the implemented VI JSON probe floor; Pulse currently probes 9.0.0.0, 8.0.3, 8.0.2.0, 8.0.1.0",
+				}
+			},
+		}, nil
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"host":     "vcsa.lab.local",
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/test", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleTestConnection(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var payload struct {
+		Code    string            `json:"code"`
+		Message string            `json:"message"`
+		Details map[string]string `json:"details"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode error response: %v", err)
+	}
+	if payload.Code != "vmware_connection_failed" {
+		t.Fatalf("unexpected code: %+v", payload)
+	}
+	if payload.Details["category"] != "unsupported_version" {
+		t.Fatalf("expected unsupported_version category, got %+v", payload.Details)
+	}
+}
+
 func TestVMwareHandlers_HandleTestSavedConnection_UsesStoredSecretsAndUpdatesRuntimeSummary(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 

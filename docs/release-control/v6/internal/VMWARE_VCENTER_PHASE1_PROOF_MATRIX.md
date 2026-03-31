@@ -191,7 +191,9 @@ Pass when:
 Pass when:
 
 1. the draft validates through the shared VMware setup path
-2. failures classify clearly instead of collapsing into generic unknown error
+2. failures classify clearly instead of collapsing into generic unknown error,
+   including `tls`, `network`, `auth`, `permission`, and
+   `unsupported_version` where applicable
 3. the path does not require a unified agent or direct `ESXi` routing
 4. a green result reflects the declared phase-1 floor rather than one partial
    VMware API-family success

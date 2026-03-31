@@ -27,6 +27,8 @@ const (
 	inventoryResponseLimitByte = 8 << 20
 )
 
+var supportedVIJSONReleases = []string{"9.0.0.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
+
 var featureVMwareEnabled atomic.Bool
 
 func init() {
@@ -335,25 +337,8 @@ func (c *Client) getAutomationJSON(
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
-	case http.StatusUnauthorized:
-		return &ConnectionError{Category: "auth", Message: fmt.Sprintf("VMware authentication failed while reading %s", label)}
-	case http.StatusForbidden:
-		return &ConnectionError{Category: "permission", Message: fmt.Sprintf("VMware permissions are insufficient for %s", label)}
-	case http.StatusNotFound:
-		return &ConnectionError{
-			Category: "not_found",
-			Message:  fmt.Sprintf("VMware %s endpoint is unavailable", label),
-		}
-	case http.StatusServiceUnavailable:
-		return &ConnectionError{
-			Category: "unavailable",
-			Message:  fmt.Sprintf("VMware %s is temporarily unavailable", label),
-		}
 	default:
-		return &ConnectionError{
-			Category: "endpoint",
-			Message:  fmt.Sprintf("VMware %s request failed with HTTP %d", label, resp.StatusCode),
-		}
+		return classifyReadStatusCode(label, resp.StatusCode)
 	}
 	if err := json.Unmarshal(body, target); err != nil {
 		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}
@@ -362,23 +347,36 @@ func (c *Client) getAutomationJSON(
 }
 
 func (c *Client) resolveVIJSONRelease(ctx context.Context) (string, viJSONServiceContentRefs, error) {
-	releases := []string{"9.0.0.0", "8.0.3", "8.0.2.0", "8.0.1.0"}
 	var lastErr error
-	for _, release := range releases {
+	for _, release := range supportedVIJSONReleases {
 		refs, err := c.fetchVIJSONServiceContentRefs(ctx, release)
 		if err == nil {
 			return release, refs, nil
 		}
 		lastErr = err
-		connectionErr, ok := err.(*ConnectionError)
-		if !ok || connectionErr.Category != "endpoint" {
+		if !isVIJSONNotFound(err) {
 			return "", viJSONServiceContentRefs{}, err
+		}
+	}
+	if lastErr != nil && isVIJSONNotFound(lastErr) {
+		return "", viJSONServiceContentRefs{}, &ConnectionError{
+			Category: "unsupported_version",
+			Message: fmt.Sprintf(
+				"VMware vCenter version is outside the implemented VI JSON probe floor; Pulse currently probes %s",
+				strings.Join(supportedVIJSONReleases, ", "),
+			),
 		}
 	}
 	if lastErr != nil {
 		return "", viJSONServiceContentRefs{}, lastErr
 	}
-	return "", viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: "VMware VI JSON API release negotiation failed"}
+	return "", viJSONServiceContentRefs{}, &ConnectionError{
+		Category: "unsupported_version",
+		Message: fmt.Sprintf(
+			"VMware vCenter version is outside the implemented VI JSON probe floor; Pulse currently probes %s",
+			strings.Join(supportedVIJSONReleases, ", "),
+		),
+	}
 }
 
 func (c *Client) fetchVIJSONServiceContentRefs(ctx context.Context, release string) (viJSONServiceContentRefs, error) {
@@ -397,11 +395,8 @@ func (c *Client) fetchVIJSONServiceContentRefs(ctx context.Context, release stri
 	if readErr != nil {
 		return viJSONServiceContentRefs{}, fmt.Errorf("read vi-json service content response: %w", readErr)
 	}
-	if resp.StatusCode == http.StatusNotFound {
-		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API release %s is unavailable", release)}
-	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return viJSONServiceContentRefs{}, &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API service-instance request failed with HTTP %d", resp.StatusCode)}
+		return viJSONServiceContentRefs{}, classifyReadStatusCode("vi-json service content", resp.StatusCode)
 	}
 	var payload struct {
 		SessionManager viJSONReference `json:"sessionManager"`
@@ -458,8 +453,25 @@ func (c *Client) loginVIJSON(ctx context.Context, release string, sessionManager
 		return sessionID, nil
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return "", &ConnectionError{Category: "auth", Message: "VMware authentication failed while creating the VI JSON API session"}
+	case http.StatusServiceUnavailable:
+		return "", &ConnectionError{Category: "unavailable", Message: "VMware VI JSON API login is temporarily unavailable"}
 	default:
 		return "", &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware VI JSON API login failed with HTTP %d", resp.StatusCode)}
+	}
+}
+
+func classifyReadStatusCode(label string, statusCode int) error {
+	switch statusCode {
+	case http.StatusUnauthorized:
+		return &ConnectionError{Category: "auth", Message: fmt.Sprintf("VMware authentication failed while reading %s", label)}
+	case http.StatusForbidden:
+		return &ConnectionError{Category: "permission", Message: fmt.Sprintf("VMware permissions are insufficient for %s", label)}
+	case http.StatusNotFound:
+		return &ConnectionError{Category: "not_found", Message: fmt.Sprintf("VMware %s endpoint is unavailable", label)}
+	case http.StatusServiceUnavailable:
+		return &ConnectionError{Category: "unavailable", Message: fmt.Sprintf("VMware %s is temporarily unavailable", label)}
+	default:
+		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s request failed with HTTP %d", label, statusCode)}
 	}
 }
 

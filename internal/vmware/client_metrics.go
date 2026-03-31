@@ -307,14 +307,8 @@ func (c *Client) postVIJSONJSON(ctx context.Context, sessionID, path, label stri
 	}
 	switch resp.StatusCode {
 	case http.StatusOK:
-	case http.StatusUnauthorized:
-		return &ConnectionError{Category: "auth", Message: fmt.Sprintf("VMware authentication failed while reading %s", label)}
-	case http.StatusForbidden:
-		return &ConnectionError{Category: "permission", Message: fmt.Sprintf("VMware permissions are insufficient for %s", label)}
-	case http.StatusNotFound:
-		return &ConnectionError{Category: "not_found", Message: fmt.Sprintf("VMware %s endpoint is unavailable", label)}
 	default:
-		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s request failed with HTTP %d", label, resp.StatusCode)}
+		return classifyReadStatusCode(label, resp.StatusCode)
 	}
 	if err := json.Unmarshal(responseBody, target); err != nil {
 		return &ConnectionError{Category: "endpoint", Message: fmt.Sprintf("VMware %s response was not valid JSON", label)}

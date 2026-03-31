@@ -136,6 +136,75 @@ func TestClientTestConnectionRequiresSignalFloor(t *testing.T) {
 	}
 }
 
+func TestClientResolveVIJSONReleaseFallsBackToSupportedProbeFloor(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/sdk/vim25/8.0.3/ServiceInstance/ServiceInstance/content", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"sessionManager": map[string]any{"value": "SessionManager"},
+			"perfManager":    map[string]any{"value": "PerformanceManager"},
+			"eventManager":   map[string]any{"value": "EventManager"},
+		}); err != nil {
+			t.Fatalf("encode service content: %v", err)
+		}
+	})
+	server := httptest.NewTLSServer(mux)
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	release, refs, err := client.resolveVIJSONRelease(context.Background())
+	if err != nil {
+		t.Fatalf("resolveVIJSONRelease: %v", err)
+	}
+	if release != "8.0.3" {
+		t.Fatalf("release = %q, want 8.0.3", release)
+	}
+	if refs.SessionManagerMoID != "SessionManager" || refs.PerfManagerMoID != "PerformanceManager" || refs.EventManagerMoID != "EventManager" {
+		t.Fatalf("unexpected refs: %+v", refs)
+	}
+}
+
+func TestClientResolveVIJSONReleaseClassifiesUnsupportedVersionFloor(t *testing.T) {
+	server := httptest.NewTLSServer(http.NewServeMux())
+	defer server.Close()
+
+	client, err := NewClient(ClientConfig{
+		Host:               server.URL,
+		Username:           "admin",
+		Password:           "secret",
+		InsecureSkipVerify: true,
+		Timeout:            5 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	_, _, err = client.resolveVIJSONRelease(context.Background())
+	if err == nil {
+		t.Fatal("expected unsupported version error")
+	}
+	connectionErr, ok := err.(*ConnectionError)
+	if !ok {
+		t.Fatalf("expected ConnectionError, got %T", err)
+	}
+	if connectionErr.Category != "unsupported_version" {
+		t.Fatalf("connection error category = %q, want unsupported_version", connectionErr.Category)
+	}
+	if !strings.Contains(connectionErr.Message, "9.0.0.0") || !strings.Contains(connectionErr.Message, "8.0.1.0") {
+		t.Fatalf("expected message to mention implemented probe floor, got %q", connectionErr.Message)
+	}
+}
+
 type vmwareTestServerConfig struct {
 	omitHostOverallStatus bool
 }

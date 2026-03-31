@@ -115,6 +115,8 @@ Phase-1 rule:
    setup result
 3. saved-connection tests must reuse stored secrets server-side and may accept
    an edit overlay payload without requiring masked-secret re-entry
+4. exhausting the implemented VI JSON release probe floor should classify as
+   `unsupported_version`, not as a generic endpoint error
 
 ## Runtime Health And Poll Summary Contract
 
