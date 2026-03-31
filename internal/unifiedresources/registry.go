@@ -423,7 +423,11 @@ func BuildMetricsTargetForRegistry(rr *ResourceRegistry, resourceID string) *Met
 		}
 	}
 
-	return BuildMetricsTarget(*resource, sourceTargets)
+	if target := BuildMetricsTarget(*resource, sourceTargets); target != nil {
+		return target
+	}
+
+	return cloneMetricsTarget(resource.MetricsTarget)
 }
 
 // GetChildren returns child resources for a parent.

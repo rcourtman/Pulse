@@ -58,6 +58,14 @@ func defaultPlatformFixtures() PlatformFixtures {
 	}
 }
 
+func rebasePlatformFixtures(fixtures PlatformFixtures, now time.Time) PlatformFixtures {
+	target := now.UTC().Truncate(time.Minute)
+	return PlatformFixtures{
+		TrueNAS: rebaseTrueNASPlatformFixture(fixtures.TrueNAS, target),
+		VMware:  rebaseVMwarePlatformFixture(fixtures.VMware, target),
+	}
+}
+
 func DefaultTrueNASConnectionFixture() TrueNASConnectionFixture {
 	return defaultTrueNASConnectionFixture(currentOrDefaultPlatformFixtures())
 }
@@ -159,7 +167,14 @@ func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, ti
 		}
 	}
 
-	return registry.List(), freshness
+	resources := registry.List()
+	for i := range resources {
+		if target := registry.MetricsTarget(resources[i].ID); target != nil {
+			resources[i].MetricsTarget = target
+		}
+	}
+
+	return resources, freshness
 }
 
 func (g FixtureGraph) SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
@@ -178,6 +193,95 @@ func trueNASCollectedAt(fixtures truenas.FixtureSnapshot) time.Time {
 		return fixtures.CollectedAt
 	}
 	return fixtures.System.CollectedAt
+}
+
+func rebaseTrueNASPlatformFixture(snapshot truenas.FixtureSnapshot, target time.Time) truenas.FixtureSnapshot {
+	out := cloneTrueNASFixtureSnapshot(snapshot)
+	anchor := trueNASCollectedAt(snapshot)
+	if anchor.IsZero() {
+		anchor = target
+	}
+	shift := target.Sub(anchor)
+
+	out.CollectedAt = target
+	out.System.CollectedAt = shiftTime(snapshot.System.CollectedAt, shift, target)
+
+	for i := range out.Alerts {
+		out.Alerts[i].Datetime = shiftTime(snapshot.Alerts[i].Datetime, shift, target)
+	}
+	for i := range out.Apps {
+		if out.Apps[i].Stats != nil {
+			out.Apps[i].Stats.CollectedAt = shiftTime(snapshot.Apps[i].Stats.CollectedAt, shift, target)
+		}
+	}
+	for i := range out.ZFSSnapshots {
+		if snapshot.ZFSSnapshots[i].CreatedAt != nil {
+			rebased := shiftTime(*snapshot.ZFSSnapshots[i].CreatedAt, shift, target)
+			out.ZFSSnapshots[i].CreatedAt = &rebased
+		}
+	}
+	for i := range out.ReplicationTasks {
+		if snapshot.ReplicationTasks[i].LastRun != nil {
+			rebased := shiftTime(*snapshot.ReplicationTasks[i].LastRun, shift, target)
+			out.ReplicationTasks[i].LastRun = &rebased
+		}
+	}
+
+	return out
+}
+
+func rebaseVMwarePlatformFixture(snapshot vmware.InventorySnapshot, target time.Time) vmware.InventorySnapshot {
+	out := cloneVMwareInventorySnapshot(snapshot)
+	anchor := snapshot.CollectedAt
+	if anchor.IsZero() {
+		anchor = target
+	}
+	shift := target.Sub(anchor)
+
+	out.CollectedAt = target
+	for i := range out.Hosts {
+		rebaseVMwareAlarms(out.Hosts[i].TriggeredAlarms, snapshot.Hosts[i].TriggeredAlarms, shift, target)
+		rebaseVMwareTasks(out.Hosts[i].RecentTasks, snapshot.Hosts[i].RecentTasks, shift, target)
+		rebaseVMwareEvents(out.Hosts[i].RecentEvents, snapshot.Hosts[i].RecentEvents, shift, target)
+	}
+	for i := range out.VMs {
+		rebaseVMwareAlarms(out.VMs[i].TriggeredAlarms, snapshot.VMs[i].TriggeredAlarms, shift, target)
+		rebaseVMwareTasks(out.VMs[i].RecentTasks, snapshot.VMs[i].RecentTasks, shift, target)
+		rebaseVMwareEvents(out.VMs[i].RecentEvents, snapshot.VMs[i].RecentEvents, shift, target)
+	}
+	for i := range out.Datastores {
+		rebaseVMwareAlarms(out.Datastores[i].TriggeredAlarms, snapshot.Datastores[i].TriggeredAlarms, shift, target)
+		rebaseVMwareTasks(out.Datastores[i].RecentTasks, snapshot.Datastores[i].RecentTasks, shift, target)
+		rebaseVMwareEvents(out.Datastores[i].RecentEvents, snapshot.Datastores[i].RecentEvents, shift, target)
+	}
+
+	return out
+}
+
+func rebaseVMwareAlarms(out []vmware.InventoryAlarm, in []vmware.InventoryAlarm, shift time.Duration, target time.Time) {
+	for i := range out {
+		out[i].TriggeredAt = shiftTime(in[i].TriggeredAt, shift, target)
+	}
+}
+
+func rebaseVMwareTasks(out []vmware.InventoryTask, in []vmware.InventoryTask, shift time.Duration, target time.Time) {
+	for i := range out {
+		out[i].StartedAt = shiftTime(in[i].StartedAt, shift, target)
+		out[i].CompletedAt = shiftTime(in[i].CompletedAt, shift, target)
+	}
+}
+
+func rebaseVMwareEvents(out []vmware.InventoryEvent, in []vmware.InventoryEvent, shift time.Duration, target time.Time) {
+	for i := range out {
+		out[i].CreatedAt = shiftTime(in[i].CreatedAt, shift, target)
+	}
+}
+
+func shiftTime(value time.Time, shift time.Duration, fallback time.Time) time.Time {
+	if value.IsZero() {
+		return fallback
+	}
+	return value.Add(shift)
 }
 
 func normalizePlatformSource(source unifiedresources.DataSource) unifiedresources.DataSource {

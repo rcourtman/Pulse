@@ -579,7 +579,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	}
 
 	for _, app := range snapshot.Apps {
-		metrics := metricsFromTrueNASApp(app)
+		metrics := metricsFromTrueNASApp(app, snapshot.System.MemoryTotalBytes)
 		dockerMeta := &unifiedresources.DockerData{
 			ContainerID:    appCanonicalID(app),
 			Hostname:       strings.TrimSpace(snapshot.System.Hostname),
@@ -672,7 +672,7 @@ func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time)
 	return records
 }
 
-func metricsFromTrueNASApp(app App) *unifiedresources.ResourceMetrics {
+func metricsFromTrueNASApp(app App, hostMemoryTotalBytes int64) *unifiedresources.ResourceMetrics {
 	if app.Stats == nil {
 		return nil
 	}
@@ -712,6 +712,12 @@ func metricsFromTrueNASApp(app App) *unifiedresources.ResourceMetrics {
 		Used:   &memoryUsed,
 		Unit:   "bytes",
 		Source: unifiedresources.SourceTrueNAS,
+	}
+	if hostMemoryTotalBytes > 0 {
+		total := hostMemoryTotalBytes
+		metrics.Memory.Total = &total
+		metrics.Memory.Percent = (float64(memoryUsed) / float64(hostMemoryTotalBytes)) * 100
+		metrics.Memory.Value = metrics.Memory.Percent
 	}
 	return metrics
 }
@@ -777,6 +783,7 @@ func metricsFromTrueNASSystem(system SystemInfo, totalCapacity, totalUsed int64)
 
 func agentDataFromTrueNASSystem(system SystemInfo, storageRisk *unifiedresources.StorageRisk, protectionReduced bool, protectionSummary string, rebuildInProgress bool, rebuildSummary string) *unifiedresources.AgentData {
 	agent := &unifiedresources.AgentData{
+		AgentID:               trueNASSystemMetricResourceID(system),
 		Hostname:              strings.TrimSpace(system.Hostname),
 		MachineID:             strings.TrimSpace(system.MachineID),
 		Platform:              "truenas",
@@ -1074,7 +1081,7 @@ func assessPool(pool Pool) storagehealth.Assessment {
 func assessDisk(disk Disk) storagehealth.Assessment {
 	sampleAssessment := storagehealth.AssessSample(storagehealth.Sample{
 		Model:       strings.TrimSpace(disk.Model),
-		Health:      healthFromDisk(disk),
+		Health:      healthForAssessment(disk),
 		Temperature: disk.Temperature,
 		Wearout:     -1,
 	})
@@ -1470,9 +1477,18 @@ func healthFromDisk(disk Disk) string {
 	case "ONLINE":
 		return "PASSED"
 	case "DEGRADED":
-		return "UNKNOWN"
+		return "DEGRADED"
 	default:
 		return "FAILED"
+	}
+}
+
+func healthForAssessment(disk Disk) string {
+	switch strings.ToUpper(strings.TrimSpace(disk.Status)) {
+	case "DEGRADED":
+		return ""
+	default:
+		return healthFromDisk(disk)
 	}
 }
 

@@ -140,10 +140,43 @@ test_managed_hot_dev_stop_uses_control_plane() {
   assert_contains "stop_hot_dev_runtime uses managed stop command" "${calls}" "stop "
 }
 
+test_ensure_mock_env_file_seeds_canonical_demo_defaults() {
+  local state output env_contents
+  state="$(mktemp -d)"
+  temp_dirs+=("${state}")
+
+  output="$(
+    TOGGLE_MOCK_PATH="${TOGGLE_MOCK}" \
+    MOCK_ENV_OVERRIDE="${state}/mock.env" \
+    bash -lc '
+      source "${TOGGLE_MOCK_PATH}"
+      MOCK_ENV_FILE="${MOCK_ENV_OVERRIDE}"
+      ensure_mock_env_file
+      cat "${MOCK_ENV_FILE}"
+    '
+  )"
+  env_contents="${output}"
+
+  assert_contains "ensure_mock_env_file seeds mock mode default" "${env_contents}" "PULSE_MOCK_MODE=false"
+  assert_contains "ensure_mock_env_file seeds canonical node count" "${env_contents}" "PULSE_MOCK_NODES=3"
+  assert_contains "ensure_mock_env_file seeds canonical vm count" "${env_contents}" "PULSE_MOCK_VMS_PER_NODE=3"
+  assert_contains "ensure_mock_env_file seeds canonical lxc count" "${env_contents}" "PULSE_MOCK_LXCS_PER_NODE=3"
+  assert_contains "ensure_mock_env_file seeds canonical docker host count" "${env_contents}" "PULSE_MOCK_DOCKER_HOSTS=2"
+  assert_contains "ensure_mock_env_file seeds canonical docker container count" "${env_contents}" "PULSE_MOCK_DOCKER_CONTAINERS=5"
+  assert_contains "ensure_mock_env_file seeds canonical generic host count" "${env_contents}" "PULSE_MOCK_GENERIC_HOSTS=2"
+  assert_contains "ensure_mock_env_file seeds canonical k8s cluster count" "${env_contents}" "PULSE_MOCK_K8S_CLUSTERS=1"
+  assert_contains "ensure_mock_env_file seeds canonical k8s node count" "${env_contents}" "PULSE_MOCK_K8S_NODES=3"
+  assert_contains "ensure_mock_env_file seeds canonical k8s pod count" "${env_contents}" "PULSE_MOCK_K8S_PODS=10"
+  assert_contains "ensure_mock_env_file seeds canonical k8s deployment count" "${env_contents}" "PULSE_MOCK_K8S_DEPLOYMENTS=4"
+  assert_contains "ensure_mock_env_file seeds canonical random metrics flag" "${env_contents}" "PULSE_MOCK_RANDOM_METRICS=true"
+  assert_contains "ensure_mock_env_file seeds canonical stopped percent" "${env_contents}" "PULSE_MOCK_STOPPED_PERCENT=6"
+}
+
 main() {
   test_detects_managed_hot_dev_runtime
   test_managed_hot_dev_start_uses_takeover
   test_managed_hot_dev_stop_uses_control_plane
+  test_ensure_mock_env_file_seeds_canonical_demo_defaults
 
   if (( failures > 0 )); then
     echo "Total failures: ${failures}" >&2

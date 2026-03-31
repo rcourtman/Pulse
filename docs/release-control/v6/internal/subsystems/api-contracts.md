@@ -719,6 +719,7 @@ connection payloads returned from `/api/truenas/connections` and
 platform fixture owner rather than handler-local fixture assembly, so settings
 payloads stay aligned with the unified runtime mock graph, storage/recovery
 context, and seeded monitoring history.
+That same runtime mock contract now also owns demo-grade dataset balance. When mock mode is enabled, `/api/truenas/connections`, `/api/vmware/connections`, and the shared `/api/resources` surface must project TrueNAS app-container counts, VMware datastore counts, and related settings/runtime metadata from the canonical `internal/mock/fixture_graph.go` owner so settings, infrastructure, workloads, storage, and recovery all present the same user-facing demo dataset.
 That same VMware test contract now also owns structured setup-failure
 classification. When `POST /api/vmware/connections/test` or
 `POST /api/vmware/connections/{id}/test` fails, the backend payload must

@@ -2,6 +2,7 @@ package mock
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
@@ -121,5 +122,33 @@ func TestFixtureGraphRecoveryPointsDeriveSubjectsFromCurrentGraph(t *testing.T) 
 	}
 	if !foundTrueNAS {
 		t.Fatal("expected recovery points to derive TrueNAS subjects from canonical mock graph")
+	}
+}
+
+func TestFixtureGraphRecoveryPointsKeepTrueNASArtifactsFreshForDemoMode(t *testing.T) {
+	previous := IsMockEnabled()
+	SetEnabled(true)
+	t.Cleanup(func() { SetEnabled(previous) })
+
+	points := CurrentFixtureGraph().RecoveryPoints()
+	if len(points) == 0 {
+		t.Fatal("expected mock recovery points")
+	}
+
+	var newest time.Time
+	for _, point := range points {
+		if point.Provider != recovery.ProviderTrueNAS || point.CompletedAt == nil {
+			continue
+		}
+		if point.CompletedAt.After(newest) {
+			newest = *point.CompletedAt
+		}
+	}
+
+	if newest.IsZero() {
+		t.Fatal("expected completed TrueNAS recovery points")
+	}
+	if newest.Before(time.Now().UTC().Add(-24 * time.Hour)) {
+		t.Fatalf("expected demo TrueNAS recovery artifacts within the last 24h, got newest %s", newest.UTC().Format(time.RFC3339))
 	}
 }

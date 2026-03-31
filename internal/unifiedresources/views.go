@@ -969,6 +969,13 @@ func (v HostView) AgentID() string {
 	return v.r.Agent.AgentID
 }
 
+func (v HostView) MetricsTarget() *MetricsTarget {
+	if v.r == nil {
+		return nil
+	}
+	return cloneMetricsTarget(v.r.MetricsTarget)
+}
+
 func (v HostView) UptimeSeconds() int64 {
 	if v.r == nil || v.r.Agent == nil {
 		return 0
@@ -3537,6 +3544,13 @@ func (v DockerContainerView) ContainerID() string {
 		return ""
 	}
 	return v.r.Docker.ContainerID
+}
+
+func (v DockerContainerView) MetricsTarget() *MetricsTarget {
+	if v.r == nil {
+		return nil
+	}
+	return cloneMetricsTarget(v.r.MetricsTarget)
 }
 
 func (v DockerContainerView) HostSourceID() string {

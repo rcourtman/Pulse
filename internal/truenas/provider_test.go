@@ -563,8 +563,9 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 			diskRecords = append(diskRecords, record)
 		}
 	}
-	if len(diskRecords) != 4 {
-		t.Fatalf("expected 4 disk records, got %d", len(diskRecords))
+	fixtures := DefaultFixtures()
+	if len(diskRecords) != len(fixtures.Disks) {
+		t.Fatalf("expected %d disk records, got %d", len(fixtures.Disks), len(diskRecords))
 	}
 
 	var sda, nvme0n1, sdc *unifiedresources.IngestRecord
@@ -630,8 +631,8 @@ func TestRecordsIncludeDiskResourcesWithCorrectParentChain(t *testing.T) {
 	if sdc.Resource.PhysicalDisk == nil {
 		t.Fatal("expected sdc PhysicalDiskMeta")
 	}
-	if sdc.Resource.PhysicalDisk.Health != "UNKNOWN" {
-		t.Fatalf("expected sdc health UNKNOWN, got %q", sdc.Resource.PhysicalDisk.Health)
+	if sdc.Resource.PhysicalDisk.Health != "DEGRADED" {
+		t.Fatalf("expected sdc health DEGRADED, got %q", sdc.Resource.PhysicalDisk.Health)
 	}
 	if sdc.Resource.PhysicalDisk.Temperature != 63 {
 		t.Fatalf("expected sdc temperature 63, got %d", sdc.Resource.PhysicalDisk.Temperature)

@@ -115,6 +115,11 @@ running server, the live TrueNAS and VMware provider bindings must swap to the
 mock-backed supplemental records and refresh canonical read-state immediately
 instead of waiting for a process restart before shared resource consumers can
 see the platform inventory.
+That same mock-runtime boundary also owns freshness while demos are running.
+The mock update loop must keep provider-backed TrueNAS and VMware records plus
+legacy PBS and PMG summaries on current `LastSeen` and health state each tick,
+so long-lived infrastructure, workloads, storage, and recovery demos do not
+decay into synthetic stale-state warnings while mock mode remains enabled.
 That same summary owner also owns VMware partial-success classification.
 Optional VI JSON or Automation enrichment reads that fail after base
 host/VM/datastore inventory succeeds must not collapse the whole poll into a

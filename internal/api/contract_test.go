@@ -346,6 +346,28 @@ func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *tes
 
 	assertResourceSource("/api/resources?source=truenas", unifiedresources.SourceTrueNAS)
 	assertResourceSource("/api/resources?source=vmware-vsphere", unifiedresources.SourceVMware)
+
+	assertResourceCount := func(path string, want int) {
+		t.Helper()
+
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		router.resourceHandlers.HandleListResources(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, body=%s", path, rec.Code, rec.Body.String())
+		}
+
+		var resp ResourcesResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+			t.Fatalf("decode %s response: %v", path, err)
+		}
+		if len(resp.Data) != want {
+			t.Fatalf("%s returned %d resources, want %d", path, len(resp.Data), want)
+		}
+	}
+
+	assertResourceCount("/api/resources?source=truenas&type=app-container", len(truenas.DefaultFixtures().Apps))
+	assertResourceCount("/api/resources?source=vmware-vsphere&type=storage", len(vmware.DefaultFixtures().Datastores))
 }
 
 func TestContract_PlatformMockConnectionListsUseSharedFixtureMetadata(t *testing.T) {

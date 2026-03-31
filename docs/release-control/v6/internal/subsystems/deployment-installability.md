@@ -175,6 +175,11 @@ writing a separate `mock.env` sidecar when supported runtime installs already
 carry mock-mode ownership through `.env`. Mock enable/disable/status must use
 the canonical runtime `.env` path, with any install-dir `.env` probe treated as
 compatibility only.
+That same dev-runtime boundary also owns the default mock density used for
+local demos. `scripts/toggle-mock.sh` must seed the same `PULSE_MOCK_*`
+defaults as `internal/mock.DefaultConfig`, so managed runtime toggles, local
+demo restarts, and CLI mock status all converge on one canonical dataset
+instead of drifting across shell helpers.
 That same rule applies to live runtime behavior too: config loading and reload
 watching may not treat `mock.env` as a parallel primary-path control surface.
 Supported mock-mode runtime state must come from the canonical `.env` contract,

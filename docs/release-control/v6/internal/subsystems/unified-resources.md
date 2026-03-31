@@ -215,6 +215,13 @@ must still ingest that provider-owned source instead of letting the seed
 silence the platform entirely. Operator-facing source filters may accept the
 `vmware-vsphere` alias for the VMware platform, but the emitted shared source
 family remains canonical `vmware`.
+That same unified-resource boundary now also owns stored metrics-target
+continuity for provider-backed resources. When registry rebuild cannot derive a
+fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`
+must preserve the canonical `MetricsTarget` already attached to provider-backed
+agents or app-containers, and typed views must expose that stored target
+unchanged so shared chart routes keep using canonical IDs across live and demo
+projections.
 That same VMware contract now also includes the identity rule. VMware managed
 object identifiers are phase-1 provider identities, but they must be scoped by
 the owning `vCenter` connection or discovered vCenter identity so bare object

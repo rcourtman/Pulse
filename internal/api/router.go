@@ -5183,54 +5183,55 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			guestTypes[sid] = "system-container"
 		}
 	}
+	for _, dc := range readState.DockerContainers() {
+		if dc == nil {
+			continue
+		}
+		if key := strings.TrimSpace(dc.ID()); key != "" {
+			guestTypes[key] = "app-container"
+		}
+	}
 
 	// Process Docker containers - batch-load historical data (1-2 SQL calls instead of N).
 	dockerData := make(map[string]VMChartData)
 	dcList := readState.DockerContainers()
 	dcRequests := make([]monitoring.GuestChartRequest, 0, len(dcList))
 	for _, dc := range dcList {
-		if dc == nil {
+		_, request, ok := appContainerChartRequest(dc)
+		if !ok {
 			continue
 		}
-		if dcID := dc.ContainerID(); dcID != "" {
-			dcRequests = append(dcRequests, monitoring.GuestChartRequest{
-				InMemoryKey:   fmt.Sprintf("docker:%s", dcID),
-				SQLResourceID: dcID,
-			})
-		}
+		dcRequests = append(dcRequests, request)
 	}
 	dcBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dcRequests, duration)
 	for _, dc := range dcList {
-		if dc == nil {
+		responseKey, request, ok := appContainerChartRequest(dc)
+		if !ok {
 			continue
 		}
-		dcContainerID := dc.ContainerID()
-		if dcContainerID == "" {
-			continue
-		}
-		dockerData[dcContainerID] = make(VMChartData)
-		if batchMetrics, ok := dcBatchMetrics[dcContainerID]; ok {
+		dockerData[responseKey] = make(VMChartData)
+		if batchMetrics, ok := dcBatchMetrics[request.SQLResourceID]; ok {
 			for metricType, points := range batchMetrics {
 				if !sparklineMetrics[metricType] {
 					continue
 				}
-				dockerData[dcContainerID][metricType] = make([]MetricPoint, len(points))
+				dockerData[responseKey][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
 					ts := point.Timestamp.Unix() * 1000
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
-					dockerData[dcContainerID][metricType][i] = MetricPoint{
+					dockerData[responseKey][metricType][i] = MetricPoint{
 						Timestamp: ts,
 						Value:     point.Value,
 					}
 				}
 			}
 		}
-		if len(dockerData[dcContainerID]["cpu"]) == 0 {
-			dockerData[dcContainerID]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dc.CPUPercent()}}
-			dockerData[dcContainerID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: dc.MemoryPercent()}}
-			dockerData[dcContainerID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: dc.DiskPercent()}}
+		if len(dockerData[responseKey]["cpu"]) == 0 {
+			dockerData[responseKey]["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: dc.CPUPercent()}}
+			dockerData[responseKey]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: dc.MemoryPercent()}}
+			dockerData[responseKey]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: dc.DiskPercent()}}
 		}
 	}
 
@@ -5293,27 +5294,20 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	hostList := readState.Hosts()
 	agentRequests := make([]monitoring.GuestChartRequest, 0, len(hostList))
 	for _, h := range hostList {
-		if h == nil {
+		_, request, ok := hostAgentChartRequest(h)
+		if !ok {
 			continue
 		}
-		if hID := h.AgentID(); hID != "" {
-			agentRequests = append(agentRequests, monitoring.GuestChartRequest{
-				InMemoryKey:   fmt.Sprintf("agent:%s", hID),
-				SQLResourceID: hID,
-			})
-		}
+		agentRequests = append(agentRequests, request)
 	}
 	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration)
 	for _, h := range hostList {
-		if h == nil {
-			continue
-		}
-		hID := h.AgentID()
-		if hID == "" {
+		hID, request, ok := hostAgentChartRequest(h)
+		if !ok {
 			continue
 		}
 		agentData[hID] = make(VMChartData)
-		if batchMetrics, ok := agentBatchMetrics[hID]; ok {
+		if batchMetrics, ok := agentBatchMetrics[request.SQLResourceID]; ok {
 			for metricType, points := range batchMetrics {
 				if !sparklineMetrics[metricType] {
 					continue
@@ -5443,6 +5437,68 @@ func parseWorkloadMaxPoints(raw string) int {
 		return maxMaxPoints
 	}
 	return value
+}
+
+func hostAgentChartRequest(host *unifiedresources.HostView) (string, monitoring.GuestChartRequest, bool) {
+	if host == nil {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	if agentID := strings.TrimSpace(host.AgentID()); agentID != "" {
+		return agentID, monitoring.GuestChartRequest{
+			InMemoryKey:   fmt.Sprintf("agent:%s", agentID),
+			SQLResourceID: agentID,
+		}, true
+	}
+
+	target := host.MetricsTarget()
+	if target == nil {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	metricID := strings.TrimSpace(target.ResourceID)
+	if metricID == "" {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	return metricID, monitoring.GuestChartRequest{
+		InMemoryKey:   fmt.Sprintf("agent:%s", metricID),
+		SQLResourceID: metricID,
+	}, true
+}
+
+func appContainerChartMetricID(container *unifiedresources.DockerContainerView) string {
+	if container == nil {
+		return ""
+	}
+
+	if target := container.MetricsTarget(); target != nil {
+		if metricID := strings.TrimSpace(target.ResourceID); metricID != "" {
+			return metricID
+		}
+	}
+
+	return strings.TrimSpace(container.ContainerID())
+}
+
+func appContainerChartRequest(container *unifiedresources.DockerContainerView) (string, monitoring.GuestChartRequest, bool) {
+	if container == nil {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	responseKey := strings.TrimSpace(container.ID())
+	if responseKey == "" {
+		responseKey = strings.TrimSpace(container.ContainerID())
+	}
+	metricID := appContainerChartMetricID(container)
+	if responseKey == "" || metricID == "" {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	return responseKey, monitoring.GuestChartRequest{
+		InMemoryKey:   fmt.Sprintf("docker:%s", metricID),
+		SQLResourceID: metricID,
+	}, true
 }
 
 func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
@@ -5783,6 +5839,26 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			strings.EqualFold(strings.TrimSpace(host.Name()), nodeName)
 	}
 
+	matchesSelectedAgentHostView := func(host *unifiedresources.HostView) bool {
+		if selectedNodeID == "" {
+			return true
+		}
+		if selectedNode == nil {
+			return true
+		}
+		if host == nil {
+			return false
+		}
+		nodeName := strings.TrimSpace(selectedNode.Name)
+		if nodeName == "" {
+			return false
+		}
+		return strings.EqualFold(strings.TrimSpace(host.Hostname()), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.Name()), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.AgentID()), nodeName) ||
+			strings.EqualFold(strings.TrimSpace(host.ID()), nodeName)
+	}
+
 	matchesSelectedKubernetesPodView := func(pod *unifiedresources.PodView) bool {
 		if selectedNodeID == "" {
 			return true
@@ -5917,9 +5993,17 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		}
 		dockerHostsByID[host.ID()] = host
 	}
+	agentHostsByID := make(map[string]*unifiedresources.HostView, len(readState.Hosts()))
+	for _, host := range readState.Hosts() {
+		if host == nil {
+			continue
+		}
+		agentHostsByID[host.ID()] = host
+	}
 
 	dockerContainerList := make([]*unifiedresources.DockerContainerView, 0)
 	dockerContainerRequests := make([]monitoring.GuestChartRequest, 0)
+	dockerContainerKeys := make([]string, 0)
 	for _, container := range readState.DockerContainers() {
 		if container == nil {
 			continue
@@ -5927,25 +6011,32 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 
 		if selectedNodeID != "" && selectedNode != nil {
 			host := dockerHostsByID[container.ParentID()]
-			if host == nil || !matchesSelectedDockerHostView(host) {
-				continue
+			if host != nil {
+				if !matchesSelectedDockerHostView(host) {
+					continue
+				}
+			} else {
+				agentHost := agentHostsByID[container.ParentID()]
+				if agentHost == nil || !matchesSelectedAgentHostView(agentHost) {
+					continue
+				}
 			}
 		}
 
-		containerID := strings.TrimSpace(container.ContainerID())
-		if containerID == "" {
+		responseKey, request, ok := appContainerChartRequest(container)
+		if !ok {
 			continue
 		}
 		dockerContainerList = append(dockerContainerList, container)
-		dockerContainerRequests = append(dockerContainerRequests, monitoring.GuestChartRequest{
-			InMemoryKey:   fmt.Sprintf("docker:%s", containerID),
-			SQLResourceID: containerID,
-		})
+		dockerContainerKeys = append(dockerContainerKeys, responseKey)
+		dockerContainerRequests = append(dockerContainerRequests, request)
+		guestTypes[responseKey] = "app-container"
 	}
 	dockerContainerBatchMetrics := monitor.GetGuestMetricsForChartBatch("dockerContainer", dockerContainerRequests, duration)
-	for _, container := range dockerContainerList {
-		containerID := strings.TrimSpace(container.ContainerID())
-		series := convertMetricsForChart(dockerContainerBatchMetrics[containerID], &oldestTimestamp, maxPoints)
+	for idx, container := range dockerContainerList {
+		responseKey := dockerContainerKeys[idx]
+		metricID := dockerContainerRequests[idx].SQLResourceID
+		series := convertMetricsForChart(dockerContainerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
 
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: container.CPUPercent()}}
@@ -5955,7 +6046,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: container.NetOutRate()}}
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		dockerData[containerID] = series
+		dockerData[responseKey] = series
 	}
 
 	countChartPoints := func(metricsMap map[string]VMChartData) int {
@@ -6192,27 +6283,20 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 	hostList := readState.Hosts()
 	agentRequests := make([]monitoring.GuestChartRequest, 0, len(hostList))
 	for _, h := range hostList {
-		if h == nil {
+		_, request, ok := hostAgentChartRequest(h)
+		if !ok {
 			continue
 		}
-		if hID := h.AgentID(); hID != "" {
-			agentRequests = append(agentRequests, monitoring.GuestChartRequest{
-				InMemoryKey:   fmt.Sprintf("agent:%s", hID),
-				SQLResourceID: hID,
-			})
-		}
+		agentRequests = append(agentRequests, request)
 	}
 	agentBatchMetrics := monitor.GetGuestMetricsForChartBatch("agent", agentRequests, duration)
 	for _, h := range hostList {
-		if h == nil {
-			continue
-		}
-		hID := h.AgentID()
-		if hID == "" {
+		hID, request, ok := hostAgentChartRequest(h)
+		if !ok {
 			continue
 		}
 		agentData[hID] = make(VMChartData)
-		if batchMetrics, ok := agentBatchMetrics[hID]; ok {
+		if batchMetrics, ok := agentBatchMetrics[request.SQLResourceID]; ok {
 			for metricType, points := range batchMetrics {
 				if !sparklineMetrics[metricType] {
 					continue

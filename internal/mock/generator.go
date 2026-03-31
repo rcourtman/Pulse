@@ -58,18 +58,18 @@ const (
 )
 
 var DefaultConfig = MockConfig{
-	NodeCount:                7, // Test the 5-9 node range by default
-	VMsPerNode:               5,
-	LXCsPerNode:              8,
-	DockerHostCount:          3,
-	DockerContainersPerHost:  12,
-	GenericHostCount:         4,
-	K8sClusterCount:          2,
-	K8sNodesPerCluster:       4,
-	K8sPodsPerCluster:        30,
-	K8sDeploymentsPerCluster: 12,
+	NodeCount:                3,
+	VMsPerNode:               3,
+	LXCsPerNode:              3,
+	DockerHostCount:          2,
+	DockerContainersPerHost:  5,
+	GenericHostCount:         2,
+	K8sClusterCount:          1,
+	K8sNodesPerCluster:       3,
+	K8sPodsPerCluster:        10,
+	K8sDeploymentsPerCluster: 4,
 	RandomMetrics:            true,
-	StoppedPercent:           0.2,
+	StoppedPercent:           0.06,
 }
 
 var appNames = []string{
@@ -711,26 +711,7 @@ func generateNodes(config MockConfig) []models.Node {
 		// ID format matches real system: instance-nodename
 		node.ID = fmt.Sprintf("%s-%s", node.Instance, nodeName)
 
-		// Make pve3 offline to test offline node handling
-		if nodeName == "pve3" {
-			node.Status = "offline"
-			node.CPU = 0
-			node.Memory.Used = 0
-			node.Memory.Usage = 0
-			node.Memory.Free = node.Memory.Total
-			node.Uptime = 0
-			node.LoadAverage = []float64{0, 0, 0}
-			node.Disk.Used = 0
-			node.Disk.Usage = 0
-			node.Disk.Free = node.Disk.Total
-			if node.Temperature != nil {
-				node.Temperature = &models.Temperature{Available: false}
-			}
-			node.ConnectionHealth = "offline"
-		} else {
-			// For cluster nodes, since one is offline, the cluster is degraded
-			node.ConnectionHealth = "degraded"
-		}
+		node.ConnectionHealth = "healthy"
 
 		nodes = append(nodes, node)
 	}
@@ -1238,14 +1219,7 @@ func generateKubernetesClusters(config MockConfig) []models.KubernetesCluster {
 		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
 		status := "online"
 
-		// Make the last cluster offline occasionally for UI coverage.
-		if clusterCount > 1 && i == clusterCount-1 && rand.Float64() < 0.55 {
-			status = "offline"
-			lastSeen = now.Add(-time.Duration(5+rand.Intn(20)) * time.Minute)
-			for nodeIdx := range nodes {
-				nodes[nodeIdx].Ready = false
-			}
-		} else if clusterHasIssues(nodes, pods, deployments) {
+		if clusterHasIssues(nodes, pods, deployments) {
 			status = "degraded"
 		}
 
@@ -2044,67 +2018,31 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 
 		containers := generateDockerContainers(hostname, i, config, isPodman)
 
-		// Optionally ensure the second host looks degraded for UI coverage
+		// Keep one host mildly degraded so the demo still shows issue handling.
 		if i == 1 && len(containers) > 0 && hostCount > 1 {
 			idx := rand.Intn(len(containers))
 			containers[idx].Health = "unhealthy"
-			containers[idx].CPUPercent = clampFloat(containers[idx].CPUPercent+35, 5, 190)
+			containers[idx].CPUPercent = clampFloat(containers[idx].CPUPercent+18, 5, 190)
 		}
 
-		// Determine initial status - only mark last host as offline for testing
 		status := "online"
-		explicitlyOffline := false
-		if hostCount > 2 && i == hostCount-1 {
-			status = "offline"
-			explicitlyOffline = true
+		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
+		running := 0
+		unhealthy := 0
+		for _, ct := range containers {
+			if strings.ToLower(ct.State) == "running" {
+				running++
+				healthState := strings.ToLower(ct.Health)
+				if healthState == "unhealthy" || healthState == "starting" {
+					unhealthy++
+				}
+			}
 		}
 
-		lastSeen := now.Add(-time.Duration(rand.Intn(20)) * time.Second)
-		if explicitlyOffline {
-			// If host is explicitly offline, stop all containers and update metrics
-			lastSeen = now.Add(-time.Duration(5+rand.Intn(20)) * time.Minute)
-			for idx := range containers {
-				exitCode := containers[idx].ExitCode
-				if exitCode == 0 {
-					exitCode = []int{0, 1, 137}[rand.Intn(3)]
-				}
-				containers[idx].State = "exited"
-				containers[idx].Health = ""
-				containers[idx].CPUPercent = 0
-				containers[idx].MemoryUsage = 0
-				containers[idx].MemoryPercent = 0
-				containers[idx].UptimeSeconds = 0
-				finished := now.Add(-time.Duration(rand.Intn(72)+1) * time.Hour)
-				containers[idx].StartedAt = nil
-				containers[idx].FinishedAt = &finished
-				containers[idx].Status = fmt.Sprintf("Exited (%d) %s ago", exitCode, formatDurationForStatus(now.Sub(finished)))
-			}
-		} else {
-			// For hosts not explicitly offline, calculate status based on container health
-			running := 0
-			unhealthy := 0
-			for _, ct := range containers {
-				if strings.ToLower(ct.State) == "running" {
-					running++
-					healthState := strings.ToLower(ct.Health)
-					if healthState == "unhealthy" || healthState == "starting" {
-						unhealthy++
-					}
-				}
-			}
-
-			// Only mark as offline if there are containers but none are running
-			// (Swarm-only hosts with no standalone containers should stay online)
-			if len(containers) > 0 && running == 0 {
-				status = "offline"
-				lastSeen = now.Add(-time.Duration(3+rand.Intn(5)) * time.Minute)
-			} else if unhealthy > 0 || (len(containers) > 0 && float64(len(containers)-running)/float64(len(containers)) > 0.35) {
-				status = "degraded"
-				if lastSeen.After(now.Add(-30 * time.Second)) {
-					lastSeen = now.Add(-35 * time.Second)
-				}
-			} else {
-				status = "online"
+		if unhealthy > 0 || (len(containers) > 0 && float64(len(containers)-running)/float64(len(containers)) > 0.45) {
+			status = "degraded"
+			if lastSeen.After(now.Add(-30 * time.Second)) {
+				lastSeen = now.Add(-35 * time.Second)
 			}
 		}
 
@@ -2400,9 +2338,7 @@ func generateHosts(config MockConfig) []models.Host {
 		}
 
 		status := "online"
-		if rand.Float64() < 0.1 {
-			status = "offline"
-		} else if rand.Float64() < 0.12 {
+		if rand.Float64() < 0.04 {
 			status = "degraded"
 		}
 
@@ -3811,8 +3747,6 @@ func generateZFSPoolWithIssues(poolName string) *models.ZFSPool {
 // generateStorage generates mock storage data for nodes
 func generateStorage(nodes []models.Node) []models.Storage {
 	var storage []models.Storage
-	storageTypes := []string{"dir", "zfspool", "lvm", "nfs", "cephfs"}
-	contentTypes := []string{"images", "vztmpl,iso", "rootdir", "backup", "snippets"}
 
 	for _, node := range nodes {
 		isOffline := node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0
@@ -3918,47 +3852,9 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			ZFSPool:  zfsPool,
 		})
 
-		// Add one more random storage per node
-		if rand.Float64() > 0.3 {
-			storageType := storageTypes[rand.Intn(len(storageTypes))]
-			storageName := fmt.Sprintf("storage-%s-%d", node.Name, rand.Intn(100))
-			total := int64((1 + rand.Intn(10)) * 1024 * 1024 * 1024 * 1024) // 1-10TB
-			used := int64(float64(total) * rand.Float64())
-			if isOffline {
-				used = 0
-			}
-			free := total - used
-			usage := 0.0
-			if total > 0 {
-				usage = float64(used) / float64(total) * 100
-			}
-
-			status := "available"
-			enabled := true
-			active := true
-			if isOffline {
-				status = "offline"
-				enabled = false
-				active = false
-			}
-
-			storage = append(storage, models.Storage{
-				ID:       fmt.Sprintf("%s-%s-%s", node.Instance, node.Name, storageName),
-				Name:     storageName,
-				Node:     node.Name,
-				Instance: node.Instance,
-				Type:     storageType,
-				Status:   status,
-				Total:    total,
-				Used:     used,
-				Free:     free,
-				Usage:    usage,
-				Content:  contentTypes[rand.Intn(len(contentTypes))],
-				Shared:   storageType == "nfs" || storageType == "cephfs",
-				Enabled:  enabled,
-				Active:   active,
-			})
-		}
+		// Keep per-node storage intentionally compact in demo mode. A broad
+		// random storage fan-out makes the Storage page read like synthetic lab
+		// noise rather than a curated estate.
 	}
 
 	// Add PBS storage for each node (simulating node-specific PBS namespaces)
@@ -3994,59 +3890,6 @@ func generateStorage(nodes []models.Node) []models.Storage {
 				Active:   true,
 			})
 		}
-	}
-
-	if len(clusterNodes) > 0 {
-		nodeNames := make([]string, 0, len(clusterNodes))
-		nodeIDs := make([]string, 0, len(clusterNodes))
-		for _, clusterNode := range clusterNodes {
-			nodeNames = append(nodeNames, clusterNode.Name)
-			nodeIDs = append(nodeIDs, fmt.Sprintf("%s-%s", clusterNode.Instance, clusterNode.Name))
-		}
-
-		cephTotal := int64(120 * 1024 * 1024 * 1024 * 1024) // 120 TiB shared CephFS
-		cephUsed := int64(float64(cephTotal) * (0.52 + rand.Float64()*0.18))
-		storage = append(storage, models.Storage{
-			ID:        fmt.Sprintf("%s-shared-cephfs", clusterNodes[0].Instance),
-			Name:      "cephfs-shared",
-			Node:      "shared",
-			Instance:  clusterNodes[0].Instance,
-			Type:      "cephfs",
-			Status:    "available",
-			Total:     cephTotal,
-			Used:      cephUsed,
-			Free:      cephTotal - cephUsed,
-			Usage:     float64(cephUsed) / float64(cephTotal) * 100,
-			Content:   "images,rootdir,backup",
-			Shared:    true,
-			Enabled:   true,
-			Active:    true,
-			Nodes:     nodeNames,
-			NodeIDs:   nodeIDs,
-			NodeCount: len(nodeNames),
-		})
-
-		rbdTotal := int64(80 * 1024 * 1024 * 1024 * 1024) // 80 TiB shared RBD pool
-		rbdUsed := int64(float64(rbdTotal) * (0.48 + rand.Float64()*0.22))
-		storage = append(storage, models.Storage{
-			ID:        fmt.Sprintf("%s-shared-rbd", clusterNodes[0].Instance),
-			Name:      "ceph-rbd-pool",
-			Node:      "shared",
-			Instance:  clusterNodes[0].Instance,
-			Type:      "rbd",
-			Status:    "available",
-			Total:     rbdTotal,
-			Used:      rbdUsed,
-			Free:      rbdTotal - rbdUsed,
-			Usage:     float64(rbdUsed) / float64(rbdTotal) * 100,
-			Content:   "images,rootdir",
-			Shared:    true,
-			Enabled:   true,
-			Active:    true,
-			Nodes:     nodeNames,
-			NodeIDs:   nodeIDs,
-			NodeCount: len(nodeNames),
-		})
 	}
 
 	// Add a shared storage (NFS or CephFS)
@@ -4806,7 +4649,63 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 	updateHosts(data, config)
 	syncMockKubernetesNodeHosts(data)
 
+	refreshNow := time.Now()
+	step := int64(updateInterval.Seconds())
+	if step <= 0 {
+		step = 2
+	}
+
+	for i := range data.PBSInstances {
+		inst := &data.PBSInstances[i]
+		inst.Status = "online"
+		inst.ConnectionHealth = "healthy"
+		inst.LastSeen = refreshNow.Add(-time.Duration(randIntnSafe(12)) * time.Second)
+		inst.Uptime += step
+
+		if data.ConnectionHealth != nil {
+			data.ConnectionHealth[fmt.Sprintf("pbs-%s", inst.Name)] = true
+		}
+
+		if !config.RandomMetrics {
+			continue
+		}
+
+		inst.CPU = naturalMetricUpdate(inst.CPU, 6, 62, inst.ID, "cpu", 0.4)
+		inst.Memory = naturalMetricUpdate(inst.Memory, 24, 78, inst.ID, "memory", 0.25)
+		if inst.MemoryTotal > 0 {
+			inst.MemoryUsed = int64(float64(inst.MemoryTotal) * (inst.Memory / 100.0))
+			if inst.MemoryUsed < 0 {
+				inst.MemoryUsed = 0
+			}
+		}
+
+		for j := range inst.Datastores {
+			datastore := &inst.Datastores[j]
+			if datastore.Total <= 0 {
+				continue
+			}
+
+			datastore.Usage = naturalMetricUpdate(datastore.Usage, 12, 78, inst.ID+":"+datastore.Name, "usage", 0.08)
+			datastore.Used = int64(float64(datastore.Total) * (datastore.Usage / 100.0))
+			if datastore.Used < 0 {
+				datastore.Used = 0
+			}
+			if datastore.Used > datastore.Total {
+				datastore.Used = datastore.Total
+			}
+			datastore.Free = datastore.Total - datastore.Used
+			datastore.Status = "available"
+		}
+	}
+
+	for i := range data.PMGInstances {
+		inst := &data.PMGInstances[i]
+		inst.LastSeen = refreshNow
+		inst.LastUpdated = refreshNow
+	}
+
 	if !config.RandomMetrics {
+		data.LastUpdate = refreshNow
 		return
 	}
 

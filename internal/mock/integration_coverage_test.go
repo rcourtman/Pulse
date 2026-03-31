@@ -260,6 +260,35 @@ func TestSetMockConfigOnlyRegeneratesWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestSetEnabledUsesCurrentConfigInsteadOfReloadingEnv(t *testing.T) {
+	resetMockConfigEnv(t)
+
+	prevEnabled := IsMockEnabled()
+	prevCfg := GetConfig()
+	t.Cleanup(func() {
+		SetMockConfig(prevCfg)
+		SetEnabled(prevEnabled)
+	})
+
+	t.Setenv("PULSE_MOCK_NODES", "9")
+	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "7")
+	t.Setenv("PULSE_MOCK_LXCS_PER_NODE", "6")
+
+	SetEnabled(false)
+
+	custom := DefaultConfig
+	custom.NodeCount = 2
+	custom.VMsPerNode = 1
+	custom.LXCsPerNode = 1
+	SetMockConfig(custom)
+	SetEnabled(true)
+
+	got := GetConfig()
+	if got.NodeCount != custom.NodeCount || got.VMsPerNode != custom.VMsPerNode || got.LXCsPerNode != custom.LXCsPerNode {
+		t.Fatalf("mock config after enable = %+v, want node/vm/lxc counts from current config %+v", got, custom)
+	}
+}
+
 func TestUpdateMetricsGuardAndTimestamp(t *testing.T) {
 	resetMockIntegrationState(t)
 
@@ -295,6 +324,50 @@ func TestUpdateMetricsGuardAndTimestamp(t *testing.T) {
 	dataMu.RUnlock()
 	if lastWhenEnabled.IsZero() {
 		t.Fatalf("expected update timestamp while enabled")
+	}
+}
+
+func TestUpdateMetricsRefreshesRuntimeFreshnessForPBSAndPlatformFixtures(t *testing.T) {
+	resetMockIntegrationState(t)
+
+	cfg := DefaultConfig
+	cfg.NodeCount = 1
+	cfg.VMsPerNode = 0
+	cfg.LXCsPerNode = 0
+	cfg.DockerHostCount = 0
+	cfg.GenericHostCount = 0
+	cfg.K8sClusterCount = 0
+	cfg.RandomMetrics = false
+
+	dataMu.Lock()
+	mockGraph = buildFixtureGraph(cfg, time.Time{})
+	for i := range mockGraph.State.PBSInstances {
+		mockGraph.State.PBSInstances[i].LastSeen = time.Time{}
+	}
+	mockGraph.PlatformFixtures.TrueNAS.CollectedAt = time.Time{}
+	mockGraph.PlatformFixtures.TrueNAS.System.CollectedAt = time.Time{}
+	mockGraph.PlatformFixtures.VMware.CollectedAt = time.Time{}
+	dataMu.Unlock()
+
+	enabled.Store(true)
+	updateMetrics(cfg)
+
+	dataMu.RLock()
+	defer dataMu.RUnlock()
+
+	if len(mockGraph.State.PBSInstances) == 0 {
+		t.Fatal("expected PBS fixtures in canonical mock state")
+	}
+	for _, inst := range mockGraph.State.PBSInstances {
+		if inst.LastSeen.IsZero() {
+			t.Fatalf("expected PBS instance %s to refresh lastSeen", inst.Name)
+		}
+	}
+	if got := trueNASCollectedAt(mockGraph.PlatformFixtures.TrueNAS); got.IsZero() {
+		t.Fatal("expected TrueNAS fixture freshness to refresh")
+	}
+	if got := mockGraph.PlatformFixtures.VMware.CollectedAt; got.IsZero() {
+		t.Fatal("expected VMware fixture freshness to refresh")
 	}
 }
 

@@ -202,6 +202,40 @@ func TestResourceRegistry_IngestsVMwareSourceAsCanonicalResources(t *testing.T) 
 	}
 }
 
+func TestBuildMetricsTargetForRegistryFallsBackToStoredMetricsTarget(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 3, 31, 10, 0, 0, 0, time.UTC)
+	resourceID := CanonicalResourceID("app-demo")
+	rr.resources[resourceID] = &Resource{
+		ID:       resourceID,
+		Type:     ResourceTypeAppContainer,
+		Name:     "Nextcloud",
+		Status:   StatusOnline,
+		LastSeen: now,
+		MetricsTarget: &MetricsTarget{
+			ResourceType: "dockerContainer",
+			ResourceID:   "nextcloud-web-1",
+		},
+	}
+
+	target := BuildMetricsTargetForRegistry(rr, resourceID)
+	if target == nil {
+		t.Fatal("expected stored metrics target fallback")
+	}
+	if target.ResourceType != "dockerContainer" || target.ResourceID != "nextcloud-web-1" {
+		t.Fatalf("unexpected fallback metrics target %+v", target)
+	}
+
+	target.ResourceID = "mutated"
+	stored, ok := rr.Get(resourceID)
+	if !ok || stored == nil || stored.MetricsTarget == nil {
+		t.Fatalf("expected stored app resource with metrics target, got %+v", stored)
+	}
+	if stored.MetricsTarget.ResourceID != "nextcloud-web-1" {
+		t.Fatalf("expected fallback target clone isolation, got %+v", stored.MetricsTarget)
+	}
+}
+
 func TestMergeVMwareDataMergesSignalFieldsWithoutDroppingExistingIdentity(t *testing.T) {
 	existing := &VMwareData{
 		ConnectionID:       "vc-1",

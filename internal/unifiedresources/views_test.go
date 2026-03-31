@@ -724,6 +724,32 @@ func TestView_HostViewAccessors(t *testing.T) {
 	}
 }
 
+func TestView_HostViewMetricsTargetAccessor(t *testing.T) {
+	r := &Resource{
+		ID:   "host-metrics",
+		Type: ResourceTypeAgent,
+		Name: "demo-host",
+		MetricsTarget: &MetricsTarget{
+			ResourceType: "agent",
+			ResourceID:   "agent-demo-host",
+		},
+	}
+
+	v := NewHostView(r)
+	target := v.MetricsTarget()
+	if target == nil {
+		t.Fatal("expected host metrics target")
+	}
+	if target.ResourceType != "agent" || target.ResourceID != "agent-demo-host" {
+		t.Fatalf("unexpected host metrics target %+v", target)
+	}
+
+	target.ResourceID = "mutated"
+	if got := v.MetricsTarget(); got == nil || got.ResourceID != "agent-demo-host" {
+		t.Fatalf("expected cloned host metrics target, got %+v", got)
+	}
+}
+
 func TestView_PhysicalDiskViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 5, 0, 0, time.UTC)
 	parentID := "node-parent-1"
@@ -1024,6 +1050,46 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	}
 	if v.ParentID() != parentID || v.ParentName() != "" {
 		t.Fatalf("expected parent id=%q name=%q, got id=%q name=%q", parentID, "", v.ParentID(), v.ParentName())
+	}
+}
+
+func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
+	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
+	parentID := "host-1"
+	r := &Resource{
+		ID:       "app-1",
+		Type:     ResourceTypeAppContainer,
+		Name:     "Nextcloud",
+		Status:   StatusOnline,
+		LastSeen: now,
+		ParentID: &parentID,
+		MetricsTarget: &MetricsTarget{
+			ResourceType: "dockerContainer",
+			ResourceID:   "nextcloud-web-1",
+		},
+		Docker: &DockerData{
+			ContainerID:    "nextcloud",
+			Image:          "docker.io/library/nextcloud:29.0.7",
+			ContainerState: "running",
+		},
+	}
+
+	v := NewDockerContainerView(r)
+	if v.ID() != "app-1" || v.ContainerID() != "nextcloud" || v.ParentID() != parentID {
+		t.Fatalf("unexpected docker container identity id=%q containerID=%q parentID=%q", v.ID(), v.ContainerID(), v.ParentID())
+	}
+
+	target := v.MetricsTarget()
+	if target == nil {
+		t.Fatal("expected docker container metrics target")
+	}
+	if target.ResourceType != "dockerContainer" || target.ResourceID != "nextcloud-web-1" {
+		t.Fatalf("unexpected docker container metrics target %+v", target)
+	}
+
+	target.ResourceID = "mutated"
+	if got := v.MetricsTarget(); got == nil || got.ResourceID != "nextcloud-web-1" {
+		t.Fatalf("expected cloned docker container metrics target, got %+v", got)
 	}
 }
 

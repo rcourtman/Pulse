@@ -9,6 +9,8 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
+	truenasmapper "github.com/rcourtman/pulse-go-rewrite/internal/recovery/mapper/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 )
 
 func (g FixtureGraph) RecoveryPoints() []recovery.RecoveryPoint {
@@ -339,177 +341,11 @@ func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures Platform
 		}
 	}
 
-	// TrueNAS: 3 dataset subjects with multiple points over time.
+	// TrueNAS: reuse the provider-native recovery artifact model so demo-mode
+	// recovery mirrors the same contract as live TrueNAS reads.
 	truenasConnection := defaultTrueNASConnectionFixture(fixtures)
-	truenasConnID := truenasConnection.ID
-	truenasHost := truenasConnection.Host
-	truenasDatasets := make([]string, 0, 3)
-	for _, dataset := range fixtures.TrueNAS.Datasets {
-		name := strings.TrimSpace(dataset.Name)
-		if name == "" {
-			continue
-		}
-		truenasDatasets = append(truenasDatasets, name)
-		if len(truenasDatasets) == 3 {
-			break
-		}
-	}
-	if len(truenasDatasets) == 0 {
-		truenasDatasets = []string{"tank/apps", "tank/media", "archive/backups"}
-	}
-
-	// ZFS snapshots (snapshot / snapshot): success points with meaningful details.
-	for di, ds := range truenasDatasets {
-		for i := 0; i < 4; i++ {
-			ageDays := 3 + (di*6+i*5)%25
-			completed := anchor.AddDate(0, 0, -ageDays).Add(time.Duration((3+di*4+i*2)%23) * time.Hour).Add(time.Duration((i%7)*7) * time.Minute)
-
-			snapName := "auto-" + completed.Format("20060102") + "-" + rpTwoDigits(i+1)
-			full := ds + "@" + snapName
-
-			var sizeBytes *int64
-			if i%2 == 1 {
-				sizeBytes = int64Ptr(750_000_000 + int64(di)*250_000_000 + int64(i)*125_000_000)
-			}
-
-			points = append(points, recovery.RecoveryPoint{
-				ID:          rpStableID("mock", "recoverypoint", "truenas", "zfs-snapshot", truenasConnID, full, completed.UTC().Format(time.RFC3339Nano)),
-				Provider:    recovery.ProviderTrueNAS,
-				Kind:        recovery.KindSnapshot,
-				Mode:        recovery.ModeSnapshot,
-				Outcome:     recovery.OutcomeSuccess,
-				StartedAt:   rpPtrTime(completed),
-				CompletedAt: rpPtrTime(completed),
-				SizeBytes:   sizeBytes,
-				Immutable: func() *bool {
-					if i%4 == 0 {
-						return boolPtr(true)
-					}
-					if i%4 == 1 {
-						return boolPtr(false)
-					}
-					return nil
-				}(),
-				Encrypted: func() *bool {
-					if i%3 == 0 {
-						return boolPtr(true)
-					}
-					if i%3 == 1 {
-						return boolPtr(false)
-					}
-					return nil
-				}(),
-				SubjectRef: &recovery.ExternalRef{
-					Type: "truenas-dataset",
-					Name: ds,
-					ID:   ds,
-				},
-				Details: map[string]any{
-					"connectionId": truenasConnID,
-					"hostname":     truenasHost,
-					"dataset":      ds,
-					"snapshot":     snapName,
-					"fullName":     full,
-					"policyName":   "hourly-7d",
-				},
-			})
-		}
-	}
-
-	// Replication tasks (backup / remote): ensure each dataset has a success plus a warning/failed.
-	for di, ds := range truenasDatasets {
-		taskID := "rep-task-" + rpTwoDigits(di+1)
-		taskName := "replicate-" + strings.ReplaceAll(ds, "/", "-")
-		target := "backup-tank/replicated/" + strings.ReplaceAll(ds, "/", "_")
-
-		for i := 0; i < 4; i++ {
-			ageDays := 1 + (di*5+i*6)%27
-			started := anchor.AddDate(0, 0, -ageDays).Add(time.Duration((8+di*3+i*4)%23) * time.Hour).Add(time.Duration((i%7)*11) * time.Minute)
-
-			state := "SUCCESS"
-			errText := ""
-			outcome := recovery.OutcomeSuccess
-			switch i % 4 {
-			case 0:
-				state = "SUCCESS"
-				outcome = recovery.OutcomeSuccess
-			case 1:
-				state = "WARNING"
-				outcome = recovery.OutcomeWarning
-			case 2:
-				state = "FAILED"
-				errText = "network timeout"
-				outcome = recovery.OutcomeFailed
-			default:
-				state = "RUNNING"
-				outcome = recovery.OutcomeRunning
-			}
-
-			var completedAt *time.Time
-			if outcome == recovery.OutcomeRunning {
-				completedAt = nil
-			} else {
-				t := started.Add(time.Duration(14+(i%8)) * time.Minute)
-				completedAt = &t
-			}
-
-			lastSnapshot := ds + "@auto-" + anchor.AddDate(0, 0, -((i+2)%14)).Format("20060102") + "-01"
-
-			points = append(points, recovery.RecoveryPoint{
-				ID:          rpStableID("mock", "recoverypoint", "truenas", "replication-task", truenasConnID, taskID, rpTimeKey(completedAt, &started)),
-				Provider:    recovery.ProviderTrueNAS,
-				Kind:        recovery.KindBackup,
-				Mode:        recovery.ModeRemote,
-				Outcome:     outcome,
-				StartedAt:   rpPtrTime(started),
-				CompletedAt: completedAt,
-				Verified: func() *bool {
-					if completedAt == nil {
-						return nil
-					}
-					if i%3 == 0 {
-						return boolPtr(true)
-					}
-					if i%3 == 1 {
-						return boolPtr(false)
-					}
-					return nil
-				}(),
-				Encrypted: func() *bool {
-					if i%4 == 0 {
-						return boolPtr(true)
-					}
-					if i%4 == 1 {
-						return boolPtr(false)
-					}
-					return nil
-				}(),
-				Immutable: func() *bool {
-					if i%5 == 0 {
-						return boolPtr(true)
-					}
-					if i%5 == 1 {
-						return boolPtr(false)
-					}
-					return nil
-				}(),
-				SubjectRef:    &recovery.ExternalRef{Type: "truenas-dataset", Name: ds, ID: ds},
-				RepositoryRef: &recovery.ExternalRef{Type: "truenas-dataset", Name: target, ID: target},
-				Details: map[string]any{
-					"connectionId":   truenasConnID,
-					"hostname":       truenasHost,
-					"taskId":         taskID,
-					"taskName":       taskName,
-					"sourceDatasets": []string{ds},
-					"targetDataset":  target,
-					"lastState":      state,
-					"lastError":      errText,
-					"lastSnapshot":   lastSnapshot,
-					"policyName":     "daily-replication",
-				},
-			})
-		}
-	}
+	rebasedTrueNAS := rebaseTrueNASRecoverySnapshot(fixtures.TrueNAS, time.Now().UTC().Add(-90*time.Minute).Truncate(time.Minute))
+	points = append(points, truenasmapper.FromTrueNASSnapshot(truenasConnection.ID, &rebasedTrueNAS)...)
 
 	// Ensure newest-first ordering like the store (completedAt desc with NULLS last),
 	// with stable ID tie-breakers for deterministic pagination.
@@ -548,6 +384,64 @@ func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures Platform
 	}
 
 	return points
+}
+
+func rebaseTrueNASRecoverySnapshot(snapshot truenas.FixtureSnapshot, targetLatest time.Time) truenas.FixtureSnapshot {
+	latest := latestTrueNASRecoveryTime(snapshot)
+	if latest.IsZero() {
+		latest = targetLatest
+	}
+	if targetLatest.IsZero() {
+		targetLatest = latest
+	}
+
+	shift := targetLatest.Sub(latest)
+	rebased := snapshot
+	if !rebased.CollectedAt.IsZero() {
+		rebased.CollectedAt = rebased.CollectedAt.Add(shift)
+	}
+
+	if len(snapshot.ZFSSnapshots) > 0 {
+		rebased.ZFSSnapshots = make([]truenas.ZFSSnapshot, len(snapshot.ZFSSnapshots))
+		for i, snap := range snapshot.ZFSSnapshots {
+			rebased.ZFSSnapshots[i] = snap
+			if snap.CreatedAt != nil {
+				shifted := snap.CreatedAt.Add(shift)
+				rebased.ZFSSnapshots[i].CreatedAt = &shifted
+			}
+		}
+	}
+
+	if len(snapshot.ReplicationTasks) > 0 {
+		rebased.ReplicationTasks = make([]truenas.ReplicationTask, len(snapshot.ReplicationTasks))
+		for i, task := range snapshot.ReplicationTasks {
+			rebased.ReplicationTasks[i] = task
+			if task.LastRun != nil {
+				shifted := task.LastRun.Add(shift)
+				rebased.ReplicationTasks[i].LastRun = &shifted
+			}
+		}
+	}
+
+	return rebased
+}
+
+func latestTrueNASRecoveryTime(snapshot truenas.FixtureSnapshot) time.Time {
+	latest := snapshot.CollectedAt
+
+	for _, snap := range snapshot.ZFSSnapshots {
+		if snap.CreatedAt != nil && snap.CreatedAt.After(latest) {
+			latest = *snap.CreatedAt
+		}
+	}
+
+	for _, task := range snapshot.ReplicationTasks {
+		if task.LastRun != nil && task.LastRun.After(latest) {
+			latest = *task.LastRun
+		}
+	}
+
+	return latest
 }
 
 type mockRecoveryCluster struct {

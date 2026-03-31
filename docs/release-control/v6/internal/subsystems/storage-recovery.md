@@ -208,6 +208,11 @@ subjects must derive from the shared `internal/mock/fixture_graph.go` owner
 instead of a separate hardcoded recovery cache, so recovery filters, rollups,
 and shared route handoffs see the same platform set as settings and
 infrastructure.
+That same graph-owned mock boundary also owns demo-readiness for storage and
+recovery surfaces. Mock summary cards, seeded history, and provider-backed
+storage/recovery counts must come from the same canonical fixture graph so
+storage and recovery demos show realistic healthy-versus-attention balance
+instead of blank history, stale provider context, or page-local fixture drift.
 That same shared `internal/api/` dependency also assumes auth-persistence
 teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or

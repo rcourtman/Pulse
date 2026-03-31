@@ -31,7 +31,7 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 	return FixtureGraph{
 		State:            state,
 		AlertHistory:     buildAlertHistory(state.Nodes, state.VMs, state.Containers),
-		PlatformFixtures: defaultPlatformFixtures(),
+		PlatformFixtures: rebasePlatformFixtures(defaultPlatformFixtures(), now),
 	}
 }
 
@@ -49,6 +49,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	}
 	updateFixtureStateMetrics(&g.State, cfg)
 	g.State.LastUpdate = now
+	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 }
 
 func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []models.ResolvedAlert) {

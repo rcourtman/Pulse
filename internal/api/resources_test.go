@@ -2966,11 +2966,12 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 		truenas.SetFeatureEnabled(previous)
 	})
 
+	fixtures := truenas.DefaultFixtures()
 	cfg := &config.Config{DataPath: t.TempDir()}
 	h := NewResourceHandlers(cfg)
 	h.SetStateProvider(resourceStateProvider{snapshot: models.StateSnapshot{LastUpdate: time.Now().UTC()}})
 	h.SetSupplementalRecordsProvider(unified.SourceTrueNAS, mockSupplementalRecordsProvider{
-		records:      truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+		records:      truenas.NewProvider(fixtures).Records(),
 		ownedSources: []unified.DataSource{unified.SourceTrueNAS},
 	})
 
@@ -2986,8 +2987,8 @@ func TestResourceListIncludesTrueNASAppsAsAppContainers(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(resp.Data) != 2 {
-		t.Fatalf("expected 2 TrueNAS app-container resources, got %d", len(resp.Data))
+	if len(resp.Data) != len(fixtures.Apps) {
+		t.Fatalf("expected %d TrueNAS app-container resources, got %d", len(fixtures.Apps), len(resp.Data))
 	}
 
 	var nextcloud *unified.Resource

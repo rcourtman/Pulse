@@ -262,8 +262,8 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 			diskRecords = append(diskRecords, record)
 		}
 	}
-	if len(diskRecords) != 4 {
-		t.Fatalf("expected 4 disk records, got %d", len(diskRecords))
+	if len(diskRecords) != len(fixtures.Disks) {
+		t.Fatalf("expected %d disk records, got %d", len(fixtures.Disks), len(diskRecords))
 	}
 
 	for _, record := range diskRecords {
@@ -317,8 +317,8 @@ func TestTrueNASDiskRecordsPopulatePhysicalDiskMeta(t *testing.T) {
 			if record.Resource.Status != unifiedresources.StatusWarning {
 				t.Fatalf("expected status warning for %q, got %s", fixture.Name, record.Resource.Status)
 			}
-			if meta.Health != "UNKNOWN" {
-				t.Fatalf("expected health UNKNOWN for %q, got %q", fixture.Name, meta.Health)
+			if meta.Health != "DEGRADED" {
+				t.Fatalf("expected health DEGRADED for %q, got %q", fixture.Name, meta.Health)
 			}
 			if meta.Risk == nil {
 				t.Fatalf("expected risk payload for degraded disk %q", fixture.Name)

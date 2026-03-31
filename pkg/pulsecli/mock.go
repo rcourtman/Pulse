@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	mockruntime "github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/spf13/cobra"
 )
 
@@ -148,20 +150,21 @@ func getMockStatus(mock *MockDeps) (bool, []string) {
 }
 
 func getDefaultMockConfig() map[string]string {
+	cfg := mockruntime.DefaultConfig
 	return map[string]string{
 		"PULSE_MOCK_MODE":              "false",
-		"PULSE_MOCK_NODES":             "7",
-		"PULSE_MOCK_VMS_PER_NODE":      "5",
-		"PULSE_MOCK_LXCS_PER_NODE":     "8",
-		"PULSE_MOCK_DOCKER_HOSTS":      "3",
-		"PULSE_MOCK_DOCKER_CONTAINERS": "12",
-		"PULSE_MOCK_GENERIC_HOSTS":     "4",
-		"PULSE_MOCK_K8S_CLUSTERS":      "2",
-		"PULSE_MOCK_K8S_NODES":         "4",
-		"PULSE_MOCK_K8S_PODS":          "30",
-		"PULSE_MOCK_K8S_DEPLOYMENTS":   "12",
-		"PULSE_MOCK_RANDOM_METRICS":    "true",
-		"PULSE_MOCK_STOPPED_PERCENT":   "20",
+		"PULSE_MOCK_NODES":             strconv.Itoa(cfg.NodeCount),
+		"PULSE_MOCK_VMS_PER_NODE":      strconv.Itoa(cfg.VMsPerNode),
+		"PULSE_MOCK_LXCS_PER_NODE":     strconv.Itoa(cfg.LXCsPerNode),
+		"PULSE_MOCK_DOCKER_HOSTS":      strconv.Itoa(cfg.DockerHostCount),
+		"PULSE_MOCK_DOCKER_CONTAINERS": strconv.Itoa(cfg.DockerContainersPerHost),
+		"PULSE_MOCK_GENERIC_HOSTS":     strconv.Itoa(cfg.GenericHostCount),
+		"PULSE_MOCK_K8S_CLUSTERS":      strconv.Itoa(cfg.K8sClusterCount),
+		"PULSE_MOCK_K8S_NODES":         strconv.Itoa(cfg.K8sNodesPerCluster),
+		"PULSE_MOCK_K8S_PODS":          strconv.Itoa(cfg.K8sPodsPerCluster),
+		"PULSE_MOCK_K8S_DEPLOYMENTS":   strconv.Itoa(cfg.K8sDeploymentsPerCluster),
+		"PULSE_MOCK_RANDOM_METRICS":    strconv.FormatBool(cfg.RandomMetrics),
+		"PULSE_MOCK_STOPPED_PERCENT":   strconv.FormatFloat(cfg.StoppedPercent*100, 'f', -1, 64),
 	}
 }
 

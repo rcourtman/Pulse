@@ -543,6 +543,13 @@ API-backed workspace, preserve the saved-connection test and health model, and
 keep direct `ESXi` out of the phase-1 route and install model. Lifecycle-
 adjacent flows must not invent a VMware-only setup shell or reframe unified-
 agent host install as the bootstrap requirement for VMware support.
+That same platform-connections boundary also owns demo/mock continuity for
+those settings surfaces. When `/api/system/mock-mode` is enabled,
+provider-backed settings panels and their downstream infrastructure,
+workloads, storage, and recovery handoffs must read the canonical connection
+fixtures from `internal/mock/fixture_graph.go` instead of handler-local demo
+lists, so operator-facing demos stay coherent across those adjacent product
+surfaces without a restart.
 That same lifecycle-owned VMware workspace must also keep the backend-runtime
 shape hidden behind one operator-facing connection model. The settings surface
 may show one VMware connection's poll health, last error classification, and

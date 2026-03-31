@@ -367,6 +367,7 @@ func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time
 			UpdatedAt:  collectedAt,
 			Incidents:  incidents,
 			Metrics:    inventoryMetricsResourceMetrics(host.Metrics),
+			Agent:      vmwareHostAgentData(snapshot, host),
 			VMware: &unifiedresources.VMwareData{
 				ConnectionID:        strings.TrimSpace(snapshot.ConnectionID),
 				ConnectionName:      connectionName,
@@ -1057,6 +1058,55 @@ func inventoryMetricsResourceMetrics(in *InventoryMetrics) *unifiedresources.Res
 		return nil
 	}
 	return metrics
+}
+
+func vmwareHostAgentData(snapshot *InventorySnapshot, host InventoryHost) *unifiedresources.AgentData {
+	if snapshot == nil {
+		return nil
+	}
+
+	agent := &unifiedresources.AgentData{
+		AgentID:       vmwareSourceID(snapshot.ConnectionID, "host", host.Host),
+		Hostname:      firstNonEmptyTrimmed(host.Name, host.Host),
+		MachineID:     strings.TrimSpace(host.HostUUID),
+		Platform:      "vmware-vsphere",
+		OSName:        "VMware ESXi",
+		OSVersion:     strings.TrimSpace(snapshot.VIRelease),
+		NetInRate:     inventoryMetricFloat64(host.Metrics, func(m *InventoryMetrics) *float64 { return m.NetInBytesPerSecond }),
+		NetOutRate:    inventoryMetricFloat64(host.Metrics, func(m *InventoryMetrics) *float64 { return m.NetOutBytesPerSecond }),
+		DiskReadRate:  inventoryMetricFloat64(host.Metrics, func(m *InventoryMetrics) *float64 { return m.DiskReadBytesPerSecond }),
+		DiskWriteRate: inventoryMetricFloat64(host.Metrics, func(m *InventoryMetrics) *float64 { return m.DiskWriteBytesPerSecond }),
+	}
+
+	if host.Metrics != nil && host.Metrics.MemoryTotalBytes != nil {
+		total := *host.Metrics.MemoryTotalBytes
+		used := int64(0)
+		if host.Metrics.MemoryUsedBytes != nil {
+			used = *host.Metrics.MemoryUsedBytes
+		}
+		free := total - used
+		if free < 0 {
+			free = 0
+		}
+		agent.Memory = &unifiedresources.AgentMemoryMeta{
+			Total: total,
+			Used:  used,
+			Free:  free,
+		}
+	}
+
+	return agent
+}
+
+func inventoryMetricFloat64(metrics *InventoryMetrics, pick func(*InventoryMetrics) *float64) float64 {
+	if metrics == nil || pick == nil {
+		return 0
+	}
+	value := pick(metrics)
+	if value == nil {
+		return 0
+	}
+	return *value
 }
 
 func cloneFloat64Pointer(in *float64) *float64 {

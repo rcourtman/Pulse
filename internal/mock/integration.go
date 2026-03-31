@@ -29,6 +29,11 @@ var (
 const updateInterval = 2 * time.Second
 
 func init() {
+	loadedConfig := normalizeMockConfig(LoadMockConfig())
+	dataMu.Lock()
+	mockConfig = loadedConfig
+	dataMu.Unlock()
+
 	initialEnabled := mockModeFromEnv()
 	if initialEnabled {
 		log.Info().Msg("mock mode enabled at startup")
@@ -59,8 +64,12 @@ func setEnabled(enable bool, fromInit bool) {
 		return
 	}
 
+	dataMu.RLock()
+	config := mockConfig
+	dataMu.RUnlock()
+
 	if enable {
-		enableMockMode(fromInit)
+		enableMockMode(config, fromInit)
 	} else {
 		disableMockMode()
 	}
@@ -102,8 +111,8 @@ func readMockEnv(name string) (string, bool) {
 	return value, true
 }
 
-func enableMockMode(fromInit bool) {
-	config := LoadMockConfig()
+func enableMockMode(config MockConfig, fromInit bool) {
+	config = normalizeMockConfig(config)
 	now := time.Now()
 
 	dataMu.Lock()

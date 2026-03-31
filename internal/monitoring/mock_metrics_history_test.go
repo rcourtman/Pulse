@@ -320,6 +320,14 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	if len(storagePoints) == 0 {
 		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
 	}
+
+	storageUsedPoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "used", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query VMware datastore used metrics: %v", err)
+	}
+	if len(storageUsedPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded VMware datastore used points")
+	}
 }
 
 func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
@@ -355,12 +363,20 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		},
 	}, now, 7*24*time.Hour, time.Minute)
 
-	systemPoints, err := store.Query("truenas", fixtures.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	systemPoints, err := store.Query("agent", fixtures.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
-		t.Fatalf("failed to query TrueNAS system disk metrics: %v", err)
+		t.Fatalf("failed to query TrueNAS system disk metrics via canonical agent target: %v", err)
 	}
 	if len(systemPoints) == 0 {
-		t.Fatal("expected metrics store to have seeded TrueNAS system disk points")
+		t.Fatal("expected metrics store to have seeded canonical TrueNAS system disk points")
+	}
+
+	agentPoints, err := store.Query("agent", fixtures.System.Hostname, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query TrueNAS agent cpu metrics: %v", err)
+	}
+	if len(agentPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded canonical TrueNAS agent cpu points")
 	}
 
 	datasetPoints, err := store.Query("dataset", fixtures.Datasets[0].Name, "disk", now.Add(-7*24*time.Hour), now, 3600)
@@ -369,6 +385,22 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	}
 	if len(datasetPoints) == 0 {
 		t.Fatal("expected metrics store to have seeded TrueNAS dataset disk points")
+	}
+
+	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query TrueNAS pool used metrics: %v", err)
+	}
+	if len(poolUsedPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded TrueNAS pool used points")
+	}
+
+	appPoints, err := store.Query("dockerContainer", "nextcloud", "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query TrueNAS app cpu metrics: %v", err)
+	}
+	if len(appPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded TrueNAS app cpu points")
 	}
 }
 
@@ -434,12 +466,12 @@ func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProvide
 		t.Fatal("expected seeded legacy mock node cpu metrics from canonical graph state")
 	}
 
-	truenasPoints, err := store.Query("truenas", graph.PlatformFixtures.TrueNAS.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	truenasPoints, err := store.Query("agent", graph.PlatformFixtures.TrueNAS.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
-		t.Fatalf("failed to query TrueNAS mock disk metrics: %v", err)
+		t.Fatalf("failed to query canonical TrueNAS agent disk metrics: %v", err)
 	}
 	if len(truenasPoints) == 0 {
-		t.Fatal("expected seeded TrueNAS metrics from canonical graph fixtures")
+		t.Fatal("expected seeded canonical TrueNAS agent metrics from canonical graph fixtures")
 	}
 
 	vmwareHostID := "vc-mock-1:host:host-101"

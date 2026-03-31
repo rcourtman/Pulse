@@ -2,6 +2,7 @@ package mock
 
 import (
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -54,5 +55,51 @@ func TestSupplementalRecordsNormalizesVMwareAlias(t *testing.T) {
 	records := SupplementalRecords(unifiedresources.DataSource("vmware-vsphere"))
 	if len(records) == 0 {
 		t.Fatal("expected records for vmware-vsphere alias")
+	}
+}
+
+func TestBuildFixtureGraphRebasesPlatformFixtureTimestampsForDemoRuntime(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 17, 30, 0, 0, time.UTC)
+
+	graph := buildFixtureGraph(DefaultConfig, now)
+
+	if got := trueNASCollectedAt(graph.PlatformFixtures.TrueNAS); !got.Equal(now) {
+		t.Fatalf("expected TrueNAS collectedAt %s, got %s", now, got)
+	}
+	if got := graph.PlatformFixtures.VMware.CollectedAt; !got.Equal(now) {
+		t.Fatalf("expected VMware collectedAt %s, got %s", now, got)
+	}
+	if got := graph.PlatformFixtures.TrueNAS.System.CollectedAt; got.IsZero() || got.Before(now.Add(-2*time.Minute)) || got.After(now) {
+		t.Fatalf("expected rebased TrueNAS system collectedAt near %s, got %s", now, got)
+	}
+	if len(graph.PlatformFixtures.VMware.Hosts) == 0 || len(graph.PlatformFixtures.VMware.Hosts[0].RecentEvents) == 0 {
+		t.Fatal("expected canonical VMware fixtures with recent events")
+	}
+	if got := graph.PlatformFixtures.VMware.Hosts[0].RecentEvents[0].CreatedAt; got.IsZero() || got.Before(now.Add(-2*time.Hour)) || got.After(now) {
+		t.Fatalf("expected rebased VMware event timestamp near %s, got %s", now, got)
+	}
+}
+
+func TestFixtureGraphUpdateMetricsKeepsPlatformFixtureFreshnessCurrent(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.RandomMetrics = false
+
+	start := time.Date(2026, time.March, 31, 17, 30, 0, 0, time.UTC)
+	later := start.Add(12 * time.Minute)
+
+	graph := buildFixtureGraph(cfg, start)
+	graph.UpdateMetrics(cfg, later)
+
+	if got := trueNASCollectedAt(graph.PlatformFixtures.TrueNAS); !got.Equal(later) {
+		t.Fatalf("expected rebased TrueNAS collectedAt %s, got %s", later, got)
+	}
+	if got := graph.PlatformFixtures.VMware.CollectedAt; !got.Equal(later) {
+		t.Fatalf("expected rebased VMware collectedAt %s, got %s", later, got)
+	}
+	if len(graph.PlatformFixtures.VMware.Hosts) == 0 || len(graph.PlatformFixtures.VMware.Hosts[0].RecentEvents) == 0 {
+		t.Fatal("expected canonical VMware fixtures with host events")
+	}
+	if got := graph.PlatformFixtures.VMware.Hosts[0].RecentEvents[0].CreatedAt; got.Before(later.Add(-2*time.Hour)) || got.After(later) {
+		t.Fatalf("expected VMware event timestamp to remain fresh near %s, got %s", later, got)
 	}
 }
