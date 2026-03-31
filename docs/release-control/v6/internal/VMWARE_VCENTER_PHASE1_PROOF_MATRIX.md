@@ -198,6 +198,11 @@ Pass when:
 4. a green result reflects the declared phase-1 floor rather than one partial
    VMware API-family success
 
+Automated non-live proof should continue to cover the shared browser path for
+`unsupported_version`, `auth`, `tls`, and `network` classifications so the
+first real lab run is not the first operator-visible exercise of those failure
+shapes.
+
 ### `VC-2` Saved Connection Retest
 
 1. Save a working VMware connection.

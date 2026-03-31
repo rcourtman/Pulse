@@ -286,6 +286,97 @@ test.describe("VMware platform connections settings", () => {
     expect(createCalls).toBe(0);
   });
 
+  test("surfaces shared draft onboarding guidance for auth, TLS, and network failures", async ({
+    page,
+  }) => {
+    const scenarios = [
+      {
+        category: "auth",
+        error:
+          "VMware authentication failed while creating the VI JSON API session",
+        expectedTitle: "Authentication failed",
+        expectedGuidance:
+          "Verify the username, password, and account scope in vCenter before retrying.",
+      },
+      {
+        category: "tls",
+        error:
+          "VMware TLS validation failed during Automation API session bootstrap",
+        expectedTitle: "TLS validation failed",
+        expectedGuidance:
+          "Install a trusted certificate for vCenter, or enable Skip TLS verification only for controlled lab environments.",
+      },
+      {
+        category: "network",
+        error: "VMware network error during VI JSON login",
+        expectedTitle: "Pulse could not reach vCenter",
+        expectedGuidance:
+          "Confirm DNS, reachability, port 443, and any firewall rules from the Pulse server to vCenter.",
+      },
+    ];
+    let draftFailureIndex = 0;
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections/test" && method === "POST") {
+        const scenario = scenarios[Math.min(draftFailureIndex, scenarios.length - 1)];
+        draftFailureIndex += 1;
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Failed to connect to VMware vCenter",
+            code: "vmware_connection_failed",
+            status_code: 400,
+            details: {
+              category: scenario.category,
+              error: scenario.error,
+            },
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    for (const scenario of scenarios) {
+      await page.getByRole("button", { name: "Add VMware connection" }).click();
+      await page.getByLabel("Host").fill(`${scenario.category}.lab.local`);
+      await page.getByLabel("Username").fill("administrator@vsphere.local");
+      await page.getByLabel("Password").fill("super-secret");
+      await page.getByRole("button", { name: "Test connection" }).click();
+
+      const feedback = page.getByTestId("vmware-connection-test-feedback");
+      await expect(feedback).toBeVisible();
+      await expect(feedback).toContainText(scenario.expectedTitle);
+      await expect(feedback).toContainText(scenario.error);
+      await expect(feedback).toContainText(scenario.expectedGuidance);
+
+      await page.getByRole("button", { name: "Cancel" }).click();
+      await expect(page.getByRole("dialog")).not.toBeVisible();
+    }
+  });
+
   test("adds, edits, retests, and deletes VMware connections through the canonical settings workflow", async ({
     page,
   }) => {

@@ -227,4 +227,74 @@ describe('useVMwareSettingsPanelState', () => {
       tone: 'warning',
     });
   });
+
+  it.each([
+    {
+      category: 'auth',
+      error: 'VMware authentication failed while creating the VI JSON API session',
+      expected: {
+        guidance: 'Verify the username, password, and account scope in vCenter before retrying.',
+        title: 'Authentication failed',
+        tone: 'danger',
+      },
+    },
+    {
+      category: 'tls',
+      error: 'VMware TLS validation failed during Automation API session bootstrap',
+      expected: {
+        guidance:
+          'Install a trusted certificate for vCenter, or enable Skip TLS verification only for controlled lab environments.',
+        title: 'TLS validation failed',
+        tone: 'warning',
+      },
+    },
+    {
+      category: 'network',
+      error: 'VMware network error during VI JSON login',
+      expected: {
+        guidance:
+          'Confirm DNS, reachability, port 443, and any firewall rules from the Pulse server to vCenter.',
+        title: 'Pulse could not reach vCenter',
+        tone: 'danger',
+      },
+    },
+  ])(
+    'maps $category failures onto shared draft onboarding guidance',
+    async ({ category, error, expected }) => {
+      vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+      vi.mocked(VMwareAPI.testConnection).mockRejectedValueOnce(
+        Object.assign(new Error('Failed to connect to VMware vCenter'), {
+          status: 400,
+          code: 'vmware_connection_failed',
+          details: {
+            category,
+            error,
+          },
+        }),
+      );
+
+      const { result } = renderHook(() => useVMwareSettingsPanelState());
+
+      await waitFor(() => expect(result.loading()).toBe(false));
+
+      result.openCreateDialog();
+      result.updateForm({
+        host: `${category}.lab.local`,
+        username: 'administrator@vsphere.local',
+        password: 'secret',
+      });
+      const succeeded = await result.testCurrentForm();
+
+      expect(succeeded).toBe(false);
+      expect(notificationStore.error).toHaveBeenCalledWith(error);
+      expect(result.connectionFailure()).toEqual({
+        category,
+        code: 'vmware_connection_failed',
+        guidance: expected.guidance,
+        message: error,
+        title: expected.title,
+        tone: expected.tone,
+      });
+    },
+  );
 });
