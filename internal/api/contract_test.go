@@ -348,6 +348,121 @@ func TestContract_PlatformMockToggleRebindsRuntimeConnectionsAndResources(t *tes
 	assertResourceSource("/api/resources?source=vmware-vsphere", unifiedresources.SourceVMware)
 }
 
+func TestContract_PlatformMockConnectionListsUseSharedFixtureMetadata(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setVMwareFeatureForTest(t, true)
+
+	prevMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() {
+		mock.SetEnabled(prevMock)
+	})
+
+	t.Run("truenas", func(t *testing.T) {
+		fixture := mock.DefaultTrueNASConnectionFixture()
+		if fixture.CollectedAt.IsZero() {
+			t.Fatal("expected canonical truenas mock fixture timestamp")
+		}
+
+		handler, _, _ := newTrueNASHandlersForTest(t, nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/truenas/connections", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleList(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var responses []trueNASConnectionResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &responses); err != nil {
+			t.Fatalf("decode truenas mock list response: %v", err)
+		}
+		if len(responses) != 1 {
+			t.Fatalf("expected 1 mock truenas connection, got %d", len(responses))
+		}
+
+		response := responses[0]
+		if response.ID != fixture.ID || response.Name != fixture.Name || response.Host != fixture.Host || response.Port != fixture.Port {
+			t.Fatalf("unexpected truenas mock connection metadata: got %+v want fixture %+v", response.TrueNASInstance, fixture)
+		}
+		if response.APIKey != "********" {
+			t.Fatalf("expected redacted truenas api key, got %q", response.APIKey)
+		}
+		if response.Poll == nil || response.Poll.IntervalSeconds != fixture.PollIntervalSeconds {
+			t.Fatalf("expected truenas poll interval %d, got %+v", fixture.PollIntervalSeconds, response.Poll)
+		}
+		if response.Poll.LastSuccessAt == nil || !response.Poll.LastSuccessAt.Equal(fixture.CollectedAt) {
+			t.Fatalf("expected truenas last success at %s, got %+v", fixture.CollectedAt.Format(time.RFC3339), response.Poll)
+		}
+		if response.Observed == nil {
+			t.Fatal("expected truenas observed summary")
+		}
+		if response.Observed.Host != fixture.Host ||
+			response.Observed.ResourceID != fixture.ResourceID ||
+			response.Observed.Systems != fixture.Systems ||
+			response.Observed.StoragePools != fixture.StoragePools ||
+			response.Observed.Datasets != fixture.Datasets ||
+			response.Observed.Apps != fixture.Apps ||
+			response.Observed.Disks != fixture.Disks ||
+			response.Observed.RecoveryArtifacts != fixture.RecoveryArtifacts {
+			t.Fatalf("unexpected truenas observed summary: got %+v want fixture %+v", response.Observed, fixture)
+		}
+		if response.Observed.CollectedAt == nil || !response.Observed.CollectedAt.Equal(fixture.CollectedAt) {
+			t.Fatalf("expected truenas observed collectedAt %s, got %+v", fixture.CollectedAt.Format(time.RFC3339), response.Observed)
+		}
+	})
+
+	t.Run("vmware", func(t *testing.T) {
+		fixture := mock.DefaultVMwareConnectionFixture()
+		if fixture.CollectedAt.IsZero() {
+			t.Fatal("expected canonical vmware mock fixture timestamp")
+		}
+
+		handler, _ := newVMwareHandlersForTest(t)
+		req := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+		rec := httptest.NewRecorder()
+		handler.HandleList(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+		}
+
+		var responses []vmwareConnectionResponse
+		if err := json.Unmarshal(rec.Body.Bytes(), &responses); err != nil {
+			t.Fatalf("decode vmware mock list response: %v", err)
+		}
+		if len(responses) != 1 {
+			t.Fatalf("expected 1 mock vmware connection, got %d", len(responses))
+		}
+
+		response := responses[0]
+		if response.ID != fixture.ID || response.Name != fixture.Name || response.Host != fixture.Host || response.Port != fixture.Port || response.Username != fixture.Username {
+			t.Fatalf("unexpected vmware mock connection metadata: got %+v want fixture %+v", response.VMwareVCenterInstance, fixture)
+		}
+		if response.Password != "********" {
+			t.Fatalf("expected redacted vmware password, got %q", response.Password)
+		}
+		if response.Poll == nil || response.Poll.IntervalSeconds != fixture.PollIntervalSeconds {
+			t.Fatalf("expected vmware poll interval %d, got %+v", fixture.PollIntervalSeconds, response.Poll)
+		}
+		if response.Poll.LastSuccessAt == nil || !response.Poll.LastSuccessAt.Equal(fixture.CollectedAt) {
+			t.Fatalf("expected vmware last success at %s, got %+v", fixture.CollectedAt.Format(time.RFC3339), response.Poll)
+		}
+		if response.Observed == nil {
+			t.Fatal("expected vmware observed summary")
+		}
+		if response.Observed.Hosts != fixture.Hosts ||
+			response.Observed.VMs != fixture.VMs ||
+			response.Observed.Datastores != fixture.Datastores ||
+			response.Observed.VIRelease != fixture.VIRelease {
+			t.Fatalf("unexpected vmware observed summary: got %+v want fixture %+v", response.Observed, fixture)
+		}
+		if response.Observed.CollectedAt == nil || !response.Observed.CollectedAt.Equal(fixture.CollectedAt) {
+			t.Fatalf("expected vmware observed collectedAt %s, got %+v", fixture.CollectedAt.Format(time.RFC3339), response.Observed)
+		}
+	})
+}
+
 func TestContract_VMwareConnectionListCarriesDegradedObservedSummary(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 

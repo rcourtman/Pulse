@@ -4004,6 +4004,10 @@ func (m *Monitor) currentUnifiedStateView() monitorUnifiedStateView {
 	}
 
 	if mock.IsMockEnabled() {
+		resources, freshness := mock.UnifiedResourceSnapshot()
+		if len(resources) > 0 || !freshness.IsZero() {
+			return monitorUnifiedStateViewFromResources(resources, freshness)
+		}
 		return monitorUnifiedStateViewFromSnapshot(m.GetState())
 	}
 
@@ -4058,8 +4062,8 @@ func unifiedResourceFreshness(store ResourceStoreInterface, state *models.State)
 }
 
 // UnifiedResourceSnapshot returns a canonical unified-resource seed plus the
-// associated freshness marker. It respects mock mode by falling back to the
-// current mock-aware state snapshot instead of the live resource store.
+// associated freshness marker. In mock mode it returns the shared mock
+// unified-resource fixture graph rather than the live resource store.
 func (m *Monitor) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	view := m.currentUnifiedStateView()
 	return view.resources, view.freshness

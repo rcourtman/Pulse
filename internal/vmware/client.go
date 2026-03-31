@@ -45,6 +45,12 @@ func SetFeatureEnabled(enabled bool) {
 	featureVMwareEnabled.Store(enabled)
 }
 
+// ResetFeatureEnabledFromEnv restores the feature flag from the current
+// environment configuration.
+func ResetFeatureEnabledFromEnv() {
+	featureVMwareEnabled.Store(parseFeatureEnabled(os.Getenv(FeatureVMware)))
+}
+
 func parseFeatureEnabled(raw string) bool {
 	switch strings.TrimSpace(strings.ToLower(raw)) {
 	case "", "1", "true", "yes", "on":

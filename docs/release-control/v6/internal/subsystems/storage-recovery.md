@@ -148,6 +148,12 @@ querying, and the operator-facing storage health presentation layer.
     data remains inventory-only context and must not be treated as proof of
     restore capability, recovery artifacts, or widened platform recovery
     support.
+11. Keep runtime mock platform context derived from one shared fixture owner.
+    When shared `internal/api/` and monitoring wiring surface mock TrueNAS or
+    VMware storage/recovery-adjacent inventory, that data must come from the
+    canonical `internal/mock/` platform fixture layer so settings payloads,
+    unified inventory, and recovery/storage context stay aligned instead of
+    drifting through recovery-local fixture assembly.
 
 ## Current State
 
@@ -1671,6 +1677,12 @@ runtime mock data. Mock TrueNAS pools/datasets and mock VMware datastores may
 surface through the shared storage and recovery-adjacent pages as canonical
 inventory context, but that visibility still does not widen Pulse's recovery
 support claim or imply restore capability for either platform.
+That same bounded mock contract now also requires one shared fixture authority.
+When storage or recovery surfaces render mock TrueNAS pools, datasets,
+snapshots, replication context, or mock VMware datastores, that inventory must
+come from the same `internal/mock/` platform fixture owner that drives settings
+payloads and unified runtime inventory, rather than recovery-local fixture
+assembly or page-local compatibility fallbacks.
 Storage and recovery must not infer VMware restore support, recovery rollups,
 or VMware-local protection semantics from the presence of those datastores or
 VM snapshot-read context on the shared pages.

@@ -260,6 +260,23 @@ func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
 	}
 }
 
+func TestMockUnifiedStateViewUsesCanonicalMockFixtureGraph(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"resources, freshness := mock.UnifiedResourceSnapshot()",
+		"return monitorUnifiedStateViewFromResources(resources, freshness)",
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestUnifiedAgentMetricsUseCanonicalHostHistoryPath(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

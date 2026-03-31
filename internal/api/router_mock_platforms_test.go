@@ -8,7 +8,9 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	unified "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
 func TestRouterMockMode_SeedsTrueNASAndVMwareSupplementalResources(t *testing.T) {
@@ -65,5 +67,41 @@ func TestRouterMockMode_SeedsTrueNASAndVMwareSupplementalResources(t *testing.T)
 				t.Fatalf("expected at least one resource with source %q, got %#v", tc.want, resp.Data)
 			}
 		})
+	}
+}
+
+func TestRouterMockMode_RestoresPlatformFeatureFlagsAfterDisable(t *testing.T) {
+	t.Setenv(truenas.FeatureTrueNAS, "false")
+	t.Setenv(vmware.FeatureVMware, "false")
+
+	previousTrueNAS := truenas.IsFeatureEnabled()
+	previousVMware := vmware.IsFeatureEnabled()
+	truenas.ResetFeatureEnabledFromEnv()
+	vmware.ResetFeatureEnabledFromEnv()
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previousTrueNAS)
+		vmware.SetFeatureEnabled(previousVMware)
+	})
+
+	cfg := &config.Config{DataPath: t.TempDir()}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+	t.Cleanup(func() {
+		router.shutdownBackgroundWorkers()
+	})
+
+	router.syncPlatformSupplementalProviders(true)
+	if !truenas.IsFeatureEnabled() {
+		t.Fatal("expected mock mode to force-enable TrueNAS feature flag")
+	}
+	if !vmware.IsFeatureEnabled() {
+		t.Fatal("expected mock mode to force-enable VMware feature flag")
+	}
+
+	router.syncPlatformSupplementalProviders(false)
+	if truenas.IsFeatureEnabled() {
+		t.Fatal("expected disabling mock mode to restore TrueNAS feature flag from env")
+	}
+	if vmware.IsFeatureEnabled() {
+		t.Fatal("expected disabling mock mode to restore VMware feature flag from env")
 	}
 }

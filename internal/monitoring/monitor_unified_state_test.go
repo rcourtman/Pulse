@@ -177,7 +177,7 @@ func TestMonitorUnifiedResourceSnapshotPrefersStoreFreshness(t *testing.T) {
 	}
 }
 
-func TestMonitorGetUnifiedReadStateOrSnapshotUsesMockSnapshotInsteadOfStore(t *testing.T) {
+func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t *testing.T) {
 	mock.SetEnabled(true)
 	t.Cleanup(func() { mock.SetEnabled(false) })
 
@@ -207,7 +207,14 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesMockSnapshotInsteadOfStore(t *t
 		t.Fatalf("expected read-state adapter with GetAll, got %T", readState)
 	}
 
-	if hasUnifiedResource(getter.GetAll(), "store-only-resource") {
+	resources := getter.GetAll()
+	if hasUnifiedResource(resources, "store-only-resource") {
 		t.Fatal("expected mock-mode read-state to ignore live resource store data")
+	}
+	if !hasUnifiedResourceName(resources, "truenas-main") {
+		t.Fatalf("expected mock-mode read-state to include TrueNAS mock resources, got %#v", resources)
+	}
+	if !hasUnifiedResourceName(resources, "esxi-01.lab.local") {
+		t.Fatalf("expected mock-mode read-state to include VMware mock resources, got %#v", resources)
 	}
 }

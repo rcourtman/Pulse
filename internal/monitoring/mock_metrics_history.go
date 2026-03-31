@@ -11,7 +11,6 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
-	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
@@ -876,13 +875,13 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	// Seed TrueNAS pool/dataset disk-usage metrics
-	fixtures := truenas.DefaultFixtures()
-	log.Debug().Int("pools", len(fixtures.Pools)).Int("datasets", len(fixtures.Datasets)).Msg("mock seeding: processing TrueNAS fixtures")
+	platformFixtures := mock.DefaultPlatformFixtures()
+	trueNASFixtures := platformFixtures.TrueNAS
+	log.Debug().Int("pools", len(trueNASFixtures.Pools)).Int("datasets", len(trueNASFixtures.Datasets)).Msg("mock seeding: processing TrueNAS fixtures")
 
 	// System host: aggregated disk usage across all pools
 	totalCap, totalUsed := int64(0), int64(0)
-	for _, pool := range fixtures.Pools {
+	for _, pool := range trueNASFixtures.Pools {
 		totalCap += pool.TotalBytes
 		totalUsed += pool.UsedBytes
 	}
@@ -890,10 +889,10 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 	if totalCap > 0 {
 		systemDisk = float64(totalUsed) / float64(totalCap) * 100
 	}
-	systemKey := "system:" + fixtures.System.Hostname
-	recordGuest(systemKey, "truenas", fixtures.System.Hostname, 0, 0, systemDisk, 0, 0, 0, 0, true, false, false)
+	systemKey := "system:" + trueNASFixtures.System.Hostname
+	recordGuest(systemKey, "truenas", trueNASFixtures.System.Hostname, 0, 0, systemDisk, 0, 0, 0, 0, true, false, false)
 
-	for _, pool := range fixtures.Pools {
+	for _, pool := range trueNASFixtures.Pools {
 		poolKey := "pool:" + pool.Name
 		diskPercent := float64(0)
 		if pool.TotalBytes > 0 {
@@ -910,7 +909,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("pool", pool.Name, "disk", diskPercent, now)
 	}
 
-	for _, dataset := range fixtures.Datasets {
+	for _, dataset := range trueNASFixtures.Datasets {
 		dsKey := "dataset:" + dataset.Name
 		totalBytes := dataset.UsedBytes + dataset.AvailBytes
 		diskPercent := float64(0)
@@ -928,7 +927,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		queueMetric("dataset", dataset.Name, "disk", diskPercent, now)
 	}
 
-	vmwareFixtures := vmware.DefaultFixtures()
+	vmwareFixtures := platformFixtures.VMware
 	vmwareDatastoreUsage := vmwareDatastoreUsageByID(vmwareFixtures.Datastores)
 	log.Debug().
 		Int("hosts", len(vmwareFixtures.Hosts)).
@@ -1008,7 +1007,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 
 // recordTrueNASFixturesMetrics records disk usage metrics for TrueNAS pools and datasets.
 func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
-	fixtures := truenas.DefaultFixtures()
+	fixtures := mock.DefaultPlatformFixtures().TrueNAS
 
 	totalCap, totalUsed := int64(0), int64(0)
 	for _, pool := range fixtures.Pools {
@@ -1049,7 +1048,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time
 }
 
 func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
-	snapshot := vmware.DefaultFixtures()
+	snapshot := mock.DefaultPlatformFixtures().VMware
 	datastoreUsage := vmwareDatastoreUsageByID(snapshot.Datastores)
 
 	for _, host := range snapshot.Hosts {

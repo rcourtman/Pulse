@@ -266,6 +266,11 @@ running server between real and mock data, the canonical TrueNAS and VMware
 settings routes must keep surfacing through the same Platform connections
 workspace and handoff URLs instead of depending on process-start-only wiring
 or a mock-only alternate shell.
+That same lifecycle-owned mock path now also requires one shared fixture owner
+for API-backed platform onboarding. TrueNAS and VMware connection-list payloads
+shown in Platform connections must be assembled from the canonical
+`internal/mock/` platform fixture layer, so settings handoff metadata cannot
+drift from the runtime mock inventory and shared storage/recovery context.
 That same hosted continuity contract also applies to the older direct tenant
 magic-link path. Lifecycle-adjacent control-plane redirects through
 `/auth/cloud-handoff` must preserve canonical account/user/role identity in the

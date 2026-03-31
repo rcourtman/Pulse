@@ -1262,8 +1262,8 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 		truenas.SetFeatureEnabled(true)
 		vmware.SetFeatureEnabled(true)
 
-		trueNASAdapter := trueNASRecordsAdapter{provider: truenas.NewDefaultProvider()}
-		vmwareAdapter := vmwareRecordsAdapter{provider: vmware.NewDefaultProvider()}
+		trueNASAdapter := mockSupplementalRecordsAdapter{source: unifiedresources.SourceTrueNAS}
+		vmwareAdapter := mockSupplementalRecordsAdapter{source: unifiedresources.SourceVMware}
 
 		if r.resourceHandlers != nil {
 			r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, trueNASAdapter)
@@ -1273,6 +1273,9 @@ func (r *Router) syncPlatformSupplementalProviders(mockEnabled bool) {
 		r.setMonitorSupplementalRecordsProvider(unifiedresources.SourceVMware, vmwareAdapter)
 		return
 	}
+
+	truenas.ResetFeatureEnabledFromEnv()
+	vmware.ResetFeatureEnabledFromEnv()
 
 	if r.resourceHandlers != nil {
 		r.resourceHandlers.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, r.trueNASPoller)
@@ -9063,66 +9066,35 @@ func (w *knowledgeStoreProviderWrapper) GetKnowledge(resourceID string, category
 	return result
 }
 
-// trueNASRecordsAdapter wraps a truenas.Provider to satisfy SupplementalRecordsProvider.
-type trueNASRecordsAdapter struct {
-	provider *truenas.Provider
+type mockSupplementalRecordsAdapter struct {
+	source unifiedresources.DataSource
 }
 
-func (a trueNASRecordsAdapter) GetCurrentRecords() []unifiedresources.IngestRecord {
-	// Legacy behavior: treat this mock adapter as default-org scoped.
+func (a mockSupplementalRecordsAdapter) GetCurrentRecords() []unifiedresources.IngestRecord {
 	return a.GetCurrentRecordsForOrg("default")
 }
 
-func (a trueNASRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
+func (a mockSupplementalRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
 	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != "default" {
 		return nil
 	}
-	if a.provider == nil {
-		return nil
-	}
-	return a.provider.Records()
+	return mock.SupplementalRecords(a.source)
 }
 
-func (a trueNASRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
+func (a mockSupplementalRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
 	return a.GetCurrentRecordsForOrg(orgID)
 }
 
-func (a trueNASRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSource {
-	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
-}
-
-func (a trueNASRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
-	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
-}
-
-type vmwareRecordsAdapter struct {
-	provider *vmware.Provider
-}
-
-func (a vmwareRecordsAdapter) GetCurrentRecords() []unifiedresources.IngestRecord {
-	return a.GetCurrentRecordsForOrg("default")
-}
-
-func (a vmwareRecordsAdapter) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
-	if strings.TrimSpace(orgID) != "" && strings.TrimSpace(orgID) != "default" {
+func (a mockSupplementalRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSource {
+	normalized := normalizeDataSourceAlias(a.source)
+	if normalized == "" {
 		return nil
 	}
-	if a.provider == nil {
-		return nil
-	}
-	return a.provider.Records()
+	return []unifiedresources.DataSource{normalized}
 }
 
-func (a vmwareRecordsAdapter) SupplementalRecords(_ *monitoring.Monitor, orgID string) []unifiedresources.IngestRecord {
-	return a.GetCurrentRecordsForOrg(orgID)
-}
-
-func (a vmwareRecordsAdapter) SnapshotOwnedSources() []unifiedresources.DataSource {
-	return []unifiedresources.DataSource{unifiedresources.SourceVMware}
-}
-
-func (a vmwareRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
-	return []unifiedresources.DataSource{unifiedresources.SourceVMware}
+func (a mockSupplementalRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []unifiedresources.DataSource {
+	return a.SnapshotOwnedSources()
 }
 
 // trigger rebuild Fri Jan 16 10:52:41 UTC 2026

@@ -3546,7 +3546,7 @@ func TestResourceListWithoutSupplementalProvider(t *testing.T) {
 
 func TestSupplementalSnapshotOwnedSources_TrueNASProviders(t *testing.T) {
 	sources := supplementalSnapshotOwnedSources(map[unified.DataSource]SupplementalRecordsProvider{
-		unified.SourceTrueNAS: trueNASRecordsAdapter{},
+		unified.SourceTrueNAS: mockSupplementalRecordsAdapter{source: unified.SourceTrueNAS},
 	}, "default")
 
 	if len(sources) != 1 || sources[0] != unified.SourceTrueNAS {

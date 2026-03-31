@@ -40,6 +40,12 @@ func SetFeatureEnabled(enabled bool) {
 	featureTrueNASEnabled.Store(enabled)
 }
 
+// ResetFeatureEnabledFromEnv restores the feature flag from the current
+// environment configuration.
+func ResetFeatureEnabledFromEnv() {
+	featureTrueNASEnabled.Store(parseFeatureEnabled(os.Getenv(FeatureTrueNAS)))
+}
+
 // Fetcher loads a TrueNAS snapshot from a concrete source.
 type Fetcher interface {
 	Fetch(ctx context.Context) (*FixtureSnapshot, error)
@@ -415,20 +421,36 @@ func (p *Provider) Snapshot() *FixtureSnapshot {
 	return snapshot
 }
 
+// FixtureRecords projects a TrueNAS fixture snapshot into canonical unified
+// resource ingest records without consulting the runtime feature flag.
+func FixtureRecords(snapshot FixtureSnapshot) []unifiedresources.IngestRecord {
+	return truenasRecordsFromSnapshot(&snapshot, nil)
+}
+
 // Records returns unified records if the feature flag is enabled.
 func (p *Provider) Records() []unifiedresources.IngestRecord {
 	if p == nil || !IsFeatureEnabled() {
 		return nil
 	}
 
-	snapshot := p.Snapshot()
+	return truenasRecordsFromSnapshot(p.Snapshot(), p.now)
+}
+
+func truenasRecordsFromSnapshot(snapshot *FixtureSnapshot, now func() time.Time) []unifiedresources.IngestRecord {
 	if snapshot == nil {
 		return nil
 	}
 
 	collectedAt := snapshot.CollectedAt
 	if collectedAt.IsZero() {
-		collectedAt = p.now()
+		collectedAt = snapshot.System.CollectedAt
+	}
+	if collectedAt.IsZero() {
+		if now != nil {
+			collectedAt = now().UTC()
+		} else {
+			collectedAt = time.Now().UTC()
+		}
 	}
 	systemSourceID := systemSourceID(snapshot.System.Hostname)
 	systemAssessment := assessSystemStorage(snapshot)

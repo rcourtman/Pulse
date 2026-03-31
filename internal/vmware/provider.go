@@ -311,20 +311,33 @@ func (p *Provider) Snapshot() *InventorySnapshot {
 	return snapshot
 }
 
+// FixtureRecords projects a VMware fixture snapshot into canonical unified
+// resource ingest records without consulting the runtime feature flag.
+func FixtureRecords(snapshot InventorySnapshot) []unifiedresources.IngestRecord {
+	return vmwareRecordsFromSnapshot(&snapshot, nil)
+}
+
 // Records returns canonical VMware unified resources if the integration is enabled.
 func (p *Provider) Records() []unifiedresources.IngestRecord {
 	if p == nil || !IsFeatureEnabled() {
 		return nil
 	}
 
-	snapshot := p.Snapshot()
+	return vmwareRecordsFromSnapshot(p.Snapshot(), p.now)
+}
+
+func vmwareRecordsFromSnapshot(snapshot *InventorySnapshot, now func() time.Time) []unifiedresources.IngestRecord {
 	if snapshot == nil {
 		return nil
 	}
 
 	collectedAt := snapshot.CollectedAt
 	if collectedAt.IsZero() {
-		collectedAt = p.now()
+		if now != nil {
+			collectedAt = now().UTC()
+		} else {
+			collectedAt = time.Now().UTC()
+		}
 	}
 
 	connectionName := firstNonEmptyTrimmed(snapshot.ConnectionName, snapshot.VCenterHost, snapshot.ConnectionID)

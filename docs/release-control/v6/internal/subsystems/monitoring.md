@@ -365,6 +365,11 @@ When `/api/system/mock-mode` changes on a live server, the TrueNAS supplemental
 provider must rebind immediately and repopulate the canonical read state so
 settings, infrastructure, storage, and other shared consumers see the same
 mock-backed inventory without restart.
+That same runtime mock ownership now also includes fixture authority. Mock
+TrueNAS and VMware inventory plus mock metrics-history seeding must derive from
+one shared platform fixture owner in `internal/mock/` so settings payloads,
+supplemental ingest, unified read-state, and seeded charts cannot drift from
+each other when the v6 runtime runs in mock mode.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

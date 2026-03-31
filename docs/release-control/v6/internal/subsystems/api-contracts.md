@@ -712,6 +712,12 @@ inventory through `source=truenas` and `source=vmware-vsphere`. Shared query
 parsing may accept `vmware-vsphere` as the operator-facing VMware alias, but
 the emitted canonical resource source remains the shared `vmware` source
 family rather than a second backend source key.
+That same runtime mock contract now also owns fixture authority. Mock
+connection payloads returned from `/api/truenas/connections` and
+`/api/vmware/connections` must derive from the shared `internal/mock/`
+platform fixture owner rather than handler-local fixture assembly, so settings
+payloads stay aligned with the unified runtime mock graph, storage/recovery
+context, and seeded monitoring history.
 That same VMware test contract now also owns structured setup-failure
 classification. When `POST /api/vmware/connections/test` or
 `POST /api/vmware/connections/{id}/test` fails, the backend payload must

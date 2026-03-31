@@ -3,6 +3,7 @@ package monitoring
 import (
 	"context"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -307,6 +308,51 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	}
 	if len(storagePoints) == 0 {
 		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
+	}
+}
+
+func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
+	now := time.Now()
+	state := models.StateSnapshot{}
+	fixtures := mock.DefaultPlatformFixtures().TrueNAS
+
+	if strings.TrimSpace(fixtures.System.Hostname) == "" {
+		t.Fatal("expected canonical truenas system hostname fixture")
+	}
+	if len(fixtures.Datasets) == 0 {
+		t.Fatal("expected canonical truenas dataset fixtures")
+	}
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.RetentionRaw = 90 * 24 * time.Hour
+	cfg.RetentionMinute = 90 * 24 * time.Hour
+	cfg.RetentionHourly = 90 * 24 * time.Hour
+	cfg.RetentionDaily = 90 * 24 * time.Hour
+	cfg.WriteBufferSize = 500
+
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	mh := NewMetricsHistory(1000, 7*24*time.Hour)
+	seedMockMetricsHistory(mh, store, state, now, 7*24*time.Hour, time.Minute)
+
+	systemPoints, err := store.Query("truenas", fixtures.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query TrueNAS system disk metrics: %v", err)
+	}
+	if len(systemPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded TrueNAS system disk points")
+	}
+
+	datasetPoints, err := store.Query("dataset", fixtures.Datasets[0].Name, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query TrueNAS dataset disk metrics: %v", err)
+	}
+	if len(datasetPoints) == 0 {
+		t.Fatal("expected metrics store to have seeded TrueNAS dataset disk points")
 	}
 }
 

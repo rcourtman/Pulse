@@ -376,12 +376,22 @@ func generateMockRecoveryPoints() []recovery.RecoveryPoint {
 	}
 
 	// TrueNAS: 3 dataset subjects with multiple points over time.
-	truenasConnID := "truenas-mock-1"
-	truenasHost := "truenas.local"
-	truenasDatasets := []string{
-		"tank/apps/postgres",
-		"tank/apps/minio",
-		"tank/media/photos",
+	truenasConnection := DefaultTrueNASConnectionFixture()
+	truenasConnID := truenasConnection.ID
+	truenasHost := truenasConnection.Host
+	truenasDatasets := make([]string, 0, 3)
+	for _, dataset := range DefaultPlatformFixtures().TrueNAS.Datasets {
+		name := strings.TrimSpace(dataset.Name)
+		if name == "" {
+			continue
+		}
+		truenasDatasets = append(truenasDatasets, name)
+		if len(truenasDatasets) == 3 {
+			break
+		}
+	}
+	if len(truenasDatasets) == 0 {
+		truenasDatasets = []string{"tank/apps", "tank/media", "archive/backups"}
 	}
 
 	// ZFS snapshots (snapshot / snapshot): success points with meaningful details.
