@@ -224,6 +224,15 @@ func (c *CPConfig) validate() error {
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {
 		return fmt.Errorf("CP_TRIAL_ACTIVATION_PRIVATE_KEY is required when STRIPE_API_KEY is configured")
 	}
+	if err := validateCloudStripePriceID("CP_TRIAL_SIGNUP_PRICE_ID", c.TrialSignupPriceID, "cloud_starter"); err != nil {
+		return err
+	}
+	if err := validateCloudStripePriceID("CP_CLOUD_POWER_PRICE_ID", c.CloudPowerPriceID, "cloud_power"); err != nil {
+		return err
+	}
+	if err := validateCloudStripePriceID("CP_CLOUD_MAX_PRICE_ID", c.CloudMaxPriceID, "cloud_max"); err != nil {
+		return err
+	}
 	if strings.TrimSpace(c.LicenseServerURL) == "" && strings.TrimSpace(c.LicenseAdminToken) != "" {
 		return fmt.Errorf("PULSE_LICENSE_SERVER_URL is required when PULSE_LICENSE_ADMIN_TOKEN is configured")
 	}
@@ -250,6 +259,22 @@ func (c *CPConfig) validate() error {
 	}
 	if parsedBaseURL.Host == "" {
 		return fmt.Errorf("CP_BASE_URL must include a host")
+	}
+	return nil
+}
+
+func validateCloudStripePriceID(envName, priceID, wantPlanVersion string) error {
+	trimmed := strings.TrimSpace(priceID)
+	if trimmed == "" {
+		return nil
+	}
+
+	planVersion, ok := pkglicensing.PlanVersionForPriceID(trimmed)
+	if !ok {
+		return fmt.Errorf("%s must map to the canonical %s Stripe price, got unknown price id %q", envName, wantPlanVersion, trimmed)
+	}
+	if planVersion != wantPlanVersion {
+		return fmt.Errorf("%s must map to the canonical %s Stripe price, got %q (%s)", envName, wantPlanVersion, trimmed, planVersion)
 	}
 	return nil
 }

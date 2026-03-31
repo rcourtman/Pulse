@@ -1642,7 +1642,9 @@
         "frontend-modern/src/utils/upgradePresentation.ts",
         "internal/api/public_signup_handlers.go",
         "internal/cloudcp/account/tenant_handlers.go",
+        "internal/cloudcp/config.go",
         "internal/cloudcp/entitlements/service.go",
+        "internal/cloudcp/public_cloud_signup_handlers.go",
         "internal/cloudcp/registry/registry.go",
         "internal/cloudcp/routes.go",
         "internal/cloudcp/stripe/provisioner.go",
@@ -1791,6 +1793,21 @@
             "exact_files": [
               "internal/cloudcp/account/tenant_handlers_test.go",
               "internal/cloudcp/stripe/msp_lifecycle_integration_test.go"
+            ]
+          },
+          {
+            "id": "public-cloud-signup-price-selection",
+            "label": "public cloud signup price proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/cloudcp/config.go",
+              "internal/cloudcp/public_cloud_signup_handlers.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/config_test.go",
+              "internal/cloudcp/public_cloud_signup_handlers_test.go"
             ]
           },
           {

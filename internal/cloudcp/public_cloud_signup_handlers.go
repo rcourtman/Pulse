@@ -224,6 +224,30 @@ func (h *PublicCloudSignupHandlers) priceIDForTier(tier cloudTier) (string, bool
 	}
 }
 
+func expectedPlanVersionForPublicCloudTier(tier cloudTier) string {
+	switch tier {
+	case cloudTierStarter:
+		return "cloud_starter"
+	case cloudTierPower:
+		return "cloud_power"
+	case cloudTierMax:
+		return "cloud_max"
+	default:
+		return ""
+	}
+}
+
+func validatePublicCloudSignupPriceID(tier cloudTier, priceID string) error {
+	wantPlanVersion := expectedPlanVersionForPublicCloudTier(tier)
+	if wantPlanVersion == "" {
+		return fmt.Errorf("unsupported cloud tier %q", tier)
+	}
+	if err := validateCloudStripePriceID("public cloud signup price", priceID, wantPlanVersion); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (h *PublicCloudSignupHandlers) HandleSignupPage(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
@@ -459,6 +483,9 @@ func (h *PublicCloudSignupHandlers) createCheckout(email, orgName string, tier c
 	priceID, ok := h.priceIDForTier(tier)
 	if !ok || priceID == "" {
 		return "", fmt.Errorf("price id not configured for tier %q", tier)
+	}
+	if err := validatePublicCloudSignupPriceID(tier, priceID); err != nil {
+		return "", err
 	}
 
 	stripe.Key = strings.TrimSpace(h.cfg.StripeAPIKey)

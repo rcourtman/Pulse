@@ -14,6 +14,12 @@ import (
 	stripe "github.com/stripe/stripe-go/v82"
 )
 
+const (
+	testCloudStarterPriceID = "price_1T5kflBrHBocJIGHUqPv1dzV"
+	testCloudPowerPriceID   = "price_1T5kg2BrHBocJIGHmkoF0zXY"
+	testCloudMaxPriceID     = "price_1T5kg4BrHBocJIGHHa8Ecqho"
+)
+
 type captureMagicLinkGenerator struct {
 	calls        int
 	email        string
@@ -78,7 +84,7 @@ func TestPublicCloudSignupHandleSignupPagePostValidRedirectsToStripe(t *testing.
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_test_123",
+		TrialSignupPriceID: testCloudStarterPriceID,
 	}, nil, nil, nil)
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		if params == nil {
@@ -154,7 +160,7 @@ func TestPublicCloudSignupHandlePublicSignupCreatesCheckout(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_test_123",
+		TrialSignupPriceID: testCloudStarterPriceID,
 	}, nil, nil, nil)
 	h.createCheckoutSession = func(_ *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_live"}, nil
@@ -375,17 +381,16 @@ func TestPublicCloudSignupCheckoutMetadataIncludesPlanVersion(t *testing.T) {
 	}
 }
 
-func TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup(t *testing.T) {
-	// MSP price IDs should NOT set plan_version on public individual signup.
+func TestPublicCloudSignupRejectsMSPPlanForPublicSignup(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
 		TrialSignupPriceID: "price_1T5kgTBrHBocJIGHjOs15LI2", // msp_starter
 	}, nil, nil, nil)
 
-	var capturedMeta map[string]string
+	stripeCalled := false
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
-		capturedMeta = params.Metadata
+		stripeCalled = true
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
 	}
 
@@ -396,24 +401,24 @@ func TestPublicCloudSignupCheckoutMetadataRejectsMSPPlanForPublicSignup(t *testi
 
 	h.HandleSignupPage(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status=%d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusBadGateway)
 	}
-	if _, exists := capturedMeta["plan_version"]; exists {
-		t.Fatalf("MSP price should NOT set plan_version on public signup, got %q", capturedMeta["plan_version"])
+	if stripeCalled {
+		t.Fatal("expected MSP price misconfiguration to fail closed before calling Stripe")
 	}
 }
 
-func TestPublicCloudSignupCheckoutMetadataOmitsPlanVersionForUnknownPrice(t *testing.T) {
+func TestPublicCloudSignupRejectsUnknownPriceForPublicSignup(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
 		TrialSignupPriceID: "price_unknown_test",
 	}, nil, nil, nil)
 
-	var capturedMeta map[string]string
+	stripeCalled := false
 	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
-		capturedMeta = params.Metadata
+		stripeCalled = true
 		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
 	}
 
@@ -427,11 +432,42 @@ func TestPublicCloudSignupCheckoutMetadataOmitsPlanVersionForUnknownPrice(t *tes
 
 	h.HandleSignupPage(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status=%d, want %d", rec.Code, http.StatusSeeOther)
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusBadGateway)
 	}
-	if _, exists := capturedMeta["plan_version"]; exists {
-		t.Fatalf("metadata should NOT contain plan_version for unknown price, got %q", capturedMeta["plan_version"])
+	if stripeCalled {
+		t.Fatal("expected unknown price misconfiguration to fail closed before calling Stripe")
+	}
+}
+
+func TestPublicCloudSignupHandleSignupPagePostRejectsNonCloudPriceConfig(t *testing.T) {
+	h := NewPublicCloudSignupHandlers(&CPConfig{
+		BaseURL:            "https://cloud.example.com",
+		StripeAPIKey:       "sk_test_123",
+		TrialSignupPriceID: "price_1T47OVBrHBocJIGHg4sMHMV7", // self-hosted v6 Pro monthly
+	}, nil, nil, nil)
+
+	stripeCalled := false
+	h.createCheckoutSession = func(params *stripe.CheckoutSessionParams) (*stripe.CheckoutSession, error) {
+		stripeCalled = true
+		return &stripe.CheckoutSession{URL: "https://checkout.stripe.com/c/pay/cs_test"}, nil
+	}
+
+	form := url.Values{
+		"email":    {"owner@example.com"},
+		"org_name": {"Pulse Labs"},
+	}
+	req := httptest.NewRequest(http.MethodPost, "/signup", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	h.HandleSignupPage(rec, req)
+
+	if rec.Code != http.StatusBadGateway {
+		t.Fatalf("status=%d, want %d", rec.Code, http.StatusBadGateway)
+	}
+	if stripeCalled {
+		t.Fatal("expected public cloud signup to fail closed before calling Stripe with a non-cloud price id")
 	}
 }
 
@@ -468,9 +504,9 @@ func TestParseCloudTier(t *testing.T) {
 
 func TestPriceIDForTier(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
-		TrialSignupPriceID: "price_starter",
-		CloudPowerPriceID:  "price_power",
-		CloudMaxPriceID:    "price_max",
+		TrialSignupPriceID: testCloudStarterPriceID,
+		CloudPowerPriceID:  testCloudPowerPriceID,
+		CloudMaxPriceID:    testCloudMaxPriceID,
 	}, nil, nil, nil)
 
 	tests := []struct {
@@ -478,9 +514,9 @@ func TestPriceIDForTier(t *testing.T) {
 		want   string
 		wantOK bool
 	}{
-		{cloudTierStarter, "price_starter", true},
-		{cloudTierPower, "price_power", true},
-		{cloudTierMax, "price_max", true},
+		{cloudTierStarter, testCloudStarterPriceID, true},
+		{cloudTierPower, testCloudPowerPriceID, true},
+		{cloudTierMax, testCloudMaxPriceID, true},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.tier), func(t *testing.T) {
@@ -497,7 +533,7 @@ func TestPriceIDForTier(t *testing.T) {
 
 func TestPriceIDForTierUnconfiguredReturnsNotOK(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
-		TrialSignupPriceID: "price_starter",
+		TrialSignupPriceID: testCloudStarterPriceID,
 		// Power and Max not configured
 	}, nil, nil, nil)
 
@@ -513,19 +549,19 @@ func TestPublicCloudSignupTierSelectionFormPost(t *testing.T) {
 	cfg := &CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_starter",
-		CloudPowerPriceID:  "price_power",
-		CloudMaxPriceID:    "price_max",
+		TrialSignupPriceID: testCloudStarterPriceID,
+		CloudPowerPriceID:  testCloudPowerPriceID,
+		CloudMaxPriceID:    testCloudMaxPriceID,
 	}
 
 	tests := []struct {
 		tier        string
 		wantPriceID string
 	}{
-		{"", "price_starter"}, // default
-		{"starter", "price_starter"},
-		{"power", "price_power"},
-		{"max", "price_max"},
+		{"", testCloudStarterPriceID}, // default
+		{"starter", testCloudStarterPriceID},
+		{"power", testCloudPowerPriceID},
+		{"max", testCloudMaxPriceID},
 	}
 
 	for _, tt := range tests {
@@ -561,7 +597,7 @@ func TestPublicCloudSignupTierSelectionFormPost(t *testing.T) {
 
 func TestPublicCloudSignupInvalidTierFormPost(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
-		TrialSignupPriceID: "price_starter",
+		TrialSignupPriceID: testCloudStarterPriceID,
 	}, nil, nil, nil)
 
 	form := url.Values{
@@ -587,7 +623,7 @@ func TestPublicCloudSignupUnconfiguredTierFormPost(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_starter",
+		TrialSignupPriceID: testCloudStarterPriceID,
 		// CloudPowerPriceID intentionally empty
 	}, nil, nil, nil)
 
@@ -613,7 +649,7 @@ func TestPublicCloudSignupAPIUnconfiguredTierReturns400(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_starter",
+		TrialSignupPriceID: testCloudStarterPriceID,
 		// CloudPowerPriceID intentionally empty
 	}, nil, nil, nil)
 
@@ -638,9 +674,9 @@ func TestPublicCloudSignupAPITierSelection(t *testing.T) {
 	cfg := &CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_starter",
-		CloudPowerPriceID:  "price_power",
-		CloudMaxPriceID:    "price_max",
+		TrialSignupPriceID: testCloudStarterPriceID,
+		CloudPowerPriceID:  testCloudPowerPriceID,
+		CloudMaxPriceID:    testCloudMaxPriceID,
 	}
 
 	tests := []struct {
@@ -649,13 +685,13 @@ func TestPublicCloudSignupAPITierSelection(t *testing.T) {
 		wantPriceID string
 	}{
 		// Default tier (starter)
-		{`{"email":"o@example.com","org_name":"Pulse Labs"}`, http.StatusCreated, "price_starter"},
+		{`{"email":"o@example.com","org_name":"Pulse Labs"}`, http.StatusCreated, testCloudStarterPriceID},
 		// Explicit starter
-		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"starter"}`, http.StatusCreated, "price_starter"},
+		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"starter"}`, http.StatusCreated, testCloudStarterPriceID},
 		// Power tier
-		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"power"}`, http.StatusCreated, "price_power"},
+		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"power"}`, http.StatusCreated, testCloudPowerPriceID},
 		// Max tier
-		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"max"}`, http.StatusCreated, "price_max"},
+		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"max"}`, http.StatusCreated, testCloudMaxPriceID},
 		// Invalid tier
 		{`{"email":"o@example.com","org_name":"Pulse Labs","tier":"enterprise"}`, http.StatusBadRequest, ""},
 	}
@@ -690,8 +726,8 @@ func TestPublicCloudSignupTierPreservedInCancelURL(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
 		BaseURL:            "https://cloud.example.com",
 		StripeAPIKey:       "sk_test_123",
-		TrialSignupPriceID: "price_starter",
-		CloudPowerPriceID:  "price_power",
+		TrialSignupPriceID: testCloudStarterPriceID,
+		CloudPowerPriceID:  testCloudPowerPriceID,
 	}, nil, nil, nil)
 
 	var capturedCancelURL string
@@ -762,8 +798,8 @@ func TestPublicCloudSignupPowerTierMetadataIncludesPlanVersion(t *testing.T) {
 func TestPublicCloudSignupGETUnconfiguredTierFallsBackToStarter(t *testing.T) {
 	// Power configured, Max not — ?tier=max should fall back to starter.
 	h := NewPublicCloudSignupHandlers(&CPConfig{
-		TrialSignupPriceID: "price_starter",
-		CloudPowerPriceID:  "price_power",
+		TrialSignupPriceID: testCloudStarterPriceID,
+		CloudPowerPriceID:  testCloudPowerPriceID,
 		// CloudMaxPriceID intentionally empty
 	}, nil, nil, nil)
 
@@ -783,8 +819,8 @@ func TestPublicCloudSignupGETUnconfiguredTierFallsBackToStarter(t *testing.T) {
 
 func TestPublicCloudSignupFormShowsTierRadiosWhenConfigured(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
-		CloudPowerPriceID: "price_power",
-		CloudMaxPriceID:   "price_max",
+		CloudPowerPriceID: testCloudPowerPriceID,
+		CloudMaxPriceID:   testCloudMaxPriceID,
 	}, nil, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/signup?tier=power", nil)
@@ -808,7 +844,7 @@ func TestPublicCloudSignupFormShowsTierRadiosWhenConfigured(t *testing.T) {
 
 func TestPublicCloudSignupFormHidesTierRadiosWhenSingleTier(t *testing.T) {
 	h := NewPublicCloudSignupHandlers(&CPConfig{
-		TrialSignupPriceID: "price_starter",
+		TrialSignupPriceID: testCloudStarterPriceID,
 		// No Power or Max configured
 	}, nil, nil, nil)
 
