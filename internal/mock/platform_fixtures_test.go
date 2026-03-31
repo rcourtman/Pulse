@@ -11,6 +11,20 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	SetEnabled(true)
 	t.Cleanup(func() { SetEnabled(previous) })
 
+	graph := CurrentFixtureGraph()
+	legacyName := ""
+	if len(graph.State.VMs) > 0 {
+		legacyName = graph.State.VMs[0].Name
+	} else if len(graph.State.Containers) > 0 {
+		legacyName = graph.State.Containers[0].Name
+	}
+	if legacyName == "" {
+		t.Fatal("expected canonical mock graph to include at least one legacy resource name")
+	}
+	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
+		t.Fatal("expected canonical mock graph to include VMware host fixtures")
+	}
+
 	resources, freshness := UnifiedResourceSnapshot()
 	if len(resources) == 0 {
 		t.Fatal("expected unified resources in mock mode")
@@ -20,9 +34,9 @@ func TestUnifiedResourceSnapshotIncludesPlatformFixtures(t *testing.T) {
 	}
 
 	wantNames := map[string]bool{
-		"truenas-main":      false,
-		"esxi-01.lab.local": false,
-		"orders-api-01":     false,
+		graph.PlatformFixtures.TrueNAS.System.Hostname: false,
+		graph.PlatformFixtures.VMware.Hosts[0].Name:    false,
+		legacyName: false,
 	}
 	for _, resource := range resources {
 		if _, ok := wantNames[resource.Name]; ok {

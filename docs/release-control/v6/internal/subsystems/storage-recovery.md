@@ -148,12 +148,13 @@ querying, and the operator-facing storage health presentation layer.
     data remains inventory-only context and must not be treated as proof of
     restore capability, recovery artifacts, or widened platform recovery
     support.
-11. Keep runtime mock platform context derived from one shared fixture owner.
-    When shared `internal/api/` and monitoring wiring surface mock TrueNAS or
-    VMware storage/recovery-adjacent inventory, that data must come from the
-    canonical `internal/mock/` platform fixture layer so settings payloads,
-    unified inventory, and recovery/storage context stay aligned instead of
-    drifting through recovery-local fixture assembly.
+11. Keep runtime mock platform context derived from one shared fixture graph.
+    When shared `internal/api/` and monitoring wiring surface mock
+    storage/recovery-adjacent inventory or recovery artifacts, that data must
+    come from the canonical `internal/mock/fixture_graph.go` owner so legacy
+    snapshot-backed platforms, provider-backed fixtures, unified inventory,
+    and recovery/storage context stay aligned instead of drifting through
+    recovery-local fixture assembly.
 
 ## Current State
 
@@ -200,6 +201,13 @@ The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
 query filtering, and recovery-point indexing for the `/api/recovery/*`
 surfaces.
+That same recovery boundary now also assumes mock recovery context is projected
+from one canonical mock graph. `internal/mock/recovery_points.go` may synthesize
+inventory-only recovery artifacts for supported mock platforms, but those
+subjects must derive from the shared `internal/mock/fixture_graph.go` owner
+instead of a separate hardcoded recovery cache, so recovery filters, rollups,
+and shared route handoffs see the same platform set as settings and
+infrastructure.
 That same shared `internal/api/` dependency also assumes auth-persistence
 teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or

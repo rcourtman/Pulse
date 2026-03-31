@@ -181,6 +181,17 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 	mock.SetEnabled(true)
 	t.Cleanup(func() { mock.SetEnabled(false) })
 
+	graph := mock.CurrentFixtureGraph()
+	legacyName := ""
+	if len(graph.State.VMs) > 0 {
+		legacyName = graph.State.VMs[0].Name
+	} else if len(graph.State.Containers) > 0 {
+		legacyName = graph.State.Containers[0].Name
+	}
+	if legacyName == "" {
+		t.Fatal("expected canonical mock graph to include at least one legacy resource")
+	}
+
 	store := &resourceOnlyStore{
 		resources: []unifiedresources.Resource{
 			{
@@ -216,5 +227,8 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 	}
 	if !hasUnifiedResourceName(resources, "esxi-01.lab.local") {
 		t.Fatalf("expected mock-mode read-state to include VMware mock resources, got %#v", resources)
+	}
+	if !hasUnifiedResourceName(resources, legacyName) {
+		t.Fatalf("expected mock-mode read-state to include legacy mock resource %q, got %#v", legacyName, resources)
 	}
 }

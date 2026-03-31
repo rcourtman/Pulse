@@ -18,8 +18,7 @@ var (
 	dataMu        sync.RWMutex
 	setEnabledMu  sync.Mutex
 	updateLoopMu  sync.Mutex
-	mockData      = models.EmptyStateSnapshot()
-	mockAlerts    []models.Alert
+	mockGraph     = emptyFixtureGraph()
 	mockConfig    = DefaultConfig
 	enabled       atomic.Bool
 	updateTicker  *time.Ticker
@@ -105,12 +104,11 @@ func readMockEnv(name string) (string, bool) {
 
 func enableMockMode(fromInit bool) {
 	config := LoadMockConfig()
+	now := time.Now()
 
 	dataMu.Lock()
 	mockConfig = config
-	mockData = GenerateMockData(config)
-	mockAlerts = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
-	mockData.LastUpdate = time.Now()
+	mockGraph = buildFixtureGraph(config, now)
 	enabled.Store(true)
 	dataMu.Unlock()
 	startUpdateLoop()
@@ -143,8 +141,7 @@ func disableMockMode() {
 	stopUpdateLoop()
 
 	dataMu.Lock()
-	mockData = models.EmptyStateSnapshot()
-	mockAlerts = nil
+	mockGraph = emptyFixtureGraph()
 	dataMu.Unlock()
 
 	log.Info().Msg("mock mode disabled")
@@ -209,8 +206,7 @@ func updateMetrics(cfg MockConfig) {
 	dataMu.Lock()
 	defer dataMu.Unlock()
 
-	UpdateMetrics(&mockData, cfg)
-	mockData.LastUpdate = time.Now()
+	mockGraph.UpdateMetrics(cfg, time.Now())
 }
 
 // GetConfig returns the current mock configuration.
@@ -412,9 +408,7 @@ func SetMockConfig(cfg MockConfig) {
 	dataMu.Lock()
 	mockConfig = normalized
 	if enabled.Load() {
-		mockData = GenerateMockData(normalized)
-		mockAlerts = GenerateAlertHistory(mockData.Nodes, mockData.VMs, mockData.Containers)
-		mockData.LastUpdate = time.Now()
+		mockGraph = buildFixtureGraph(normalized, time.Now())
 	}
 	dataMu.Unlock()
 
@@ -443,7 +437,7 @@ func GetMockState() models.StateSnapshot {
 	dataMu.RLock()
 	defer dataMu.RUnlock()
 
-	return cloneState(mockData)
+	return cloneState(mockGraph.State)
 }
 
 // UpdateAlertSnapshots replaces the active and recently resolved alert lists used for mock mode.
@@ -454,25 +448,7 @@ func UpdateAlertSnapshots(active []alerts.Alert, resolved []models.ResolvedAlert
 	dataMu.Lock()
 	defer dataMu.Unlock()
 
-	converted := make([]models.Alert, 0, len(active))
-	for _, alert := range active {
-		converted = append(converted, models.Alert{
-			ID:           alert.ID,
-			Type:         alert.Type,
-			Level:        string(alert.Level),
-			ResourceID:   alert.ResourceID,
-			ResourceName: alert.ResourceName,
-			Node:         alert.Node,
-			Instance:     alert.Instance,
-			Message:      alert.Message,
-			Value:        alert.Value,
-			Threshold:    alert.Threshold,
-			StartTime:    alert.StartTime,
-			Acknowledged: alert.Acknowledged,
-		})
-	}
-	mockData.ActiveAlerts = converted
-	mockData.RecentlyResolved = append([]models.ResolvedAlert(nil), resolved...)
+	mockGraph.UpdateAlertSnapshots(active, resolved)
 }
 
 // GetMockAlertHistory returns mock alert history.
@@ -484,10 +460,10 @@ func GetMockAlertHistory(limit int) []models.Alert {
 	dataMu.RLock()
 	defer dataMu.RUnlock()
 
-	if limit > 0 && limit < len(mockAlerts) {
-		return append([]models.Alert(nil), mockAlerts[:limit]...)
+	if limit > 0 && limit < len(mockGraph.AlertHistory) {
+		return append([]models.Alert(nil), mockGraph.AlertHistory[:limit]...)
 	}
-	return append([]models.Alert(nil), mockAlerts...)
+	return append([]models.Alert(nil), mockGraph.AlertHistory...)
 }
 
 func cloneState(state models.StateSnapshot) models.StateSnapshot {

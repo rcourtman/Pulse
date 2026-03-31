@@ -3,12 +3,18 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test as base } from '@playwright/test';
 
-import { createAuthenticatedStorageState, getMockMode, setMockMode } from './helpers';
+import { apiRequest, createAuthenticatedStorageState, getMockMode, setMockMode } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type WorkerFixtures = {
   authStorageStatePath: string;
+};
+
+type ResourceSummary = {
+  name?: string;
+  type?: string;
+  sources?: string[];
 };
 
 const TRUENAS_SCREENSHOT_PATH = path.resolve(
@@ -61,6 +67,56 @@ async function ensureMockModeEnabled(page: import('@playwright/test').Page): Pro
   }
 }
 
+async function fetchMockResourceName(
+  page: import('@playwright/test').Page,
+  source: string,
+  queryTypes: string[] = [],
+): Promise<string> {
+  const searchParams = new URLSearchParams({
+    source,
+    limit: '200',
+  });
+  if (queryTypes.length > 0) {
+    searchParams.set('type', queryTypes.join(','));
+  }
+  const response = await apiRequest(
+    page,
+    `/api/resources?${searchParams.toString()}`,
+  );
+  expect(response.ok()).toBeTruthy();
+
+  const payload = (await response.json()) as { data?: ResourceSummary[] };
+  const resources = Array.isArray(payload.data) ? payload.data : [];
+  const chosen = resources.find((resource) => resource.name?.trim());
+  if (!chosen?.name?.trim()) {
+    throw new Error(`Expected at least one mock resource for source ${source}`);
+  }
+  return chosen.name.trim();
+}
+
+async function fetchMockResourceNames(page: import('@playwright/test').Page): Promise<Record<string, string>> {
+  return {
+    'proxmox-pve': await fetchMockResourceName(page, 'proxmox', ['agent']),
+    docker: await fetchMockResourceName(page, 'docker', ['docker-host']),
+    kubernetes: await fetchMockResourceName(page, 'kubernetes', ['k8s-cluster']),
+    'proxmox-pbs': await fetchMockResourceName(page, 'pbs', ['pbs']),
+    'proxmox-pmg': await fetchMockResourceName(page, 'pmg', ['pmg']),
+  };
+}
+
+async function expectInfrastructureSource(
+  page: import('@playwright/test').Page,
+  source: string,
+  resourceName: string,
+): Promise<void> {
+  await page.goto(`/infrastructure?source=${encodeURIComponent(source)}`, {
+    waitUntil: 'domcontentloaded',
+  });
+  await expect(page.getByTestId('infrastructure-page')).toBeVisible();
+  await expect(page.locator('#infra-source-filter')).toHaveValue(source);
+  await expect(page.getByText(resourceName).first()).toBeVisible();
+}
+
 test.describe.serial('Platform mock runtime', () => {
   test.setTimeout(180_000);
 
@@ -81,10 +137,11 @@ test.describe.serial('Platform mock runtime', () => {
     }
   });
 
-  test('renders TrueNAS and VMware mock data from the live runtime', async ({ page }, testInfo) => {
+  test('renders canonical legacy and provider-backed mock data from the live runtime', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
 
     await ensureMockModeEnabled(page);
+    const resourceNames = await fetchMockResourceNames(page);
 
     await page.goto('/settings/infrastructure/platforms/truenas', {
       waitUntil: 'domcontentloaded',
@@ -97,13 +154,7 @@ test.describe.serial('Platform mock runtime', () => {
     await expect(page.getByText('5 datasets')).toBeVisible();
     fs.mkdirSync(path.dirname(TRUENAS_SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: TRUENAS_SCREENSHOT_PATH, fullPage: true });
-
-    await page.goto('/infrastructure?source=truenas', {
-      waitUntil: 'domcontentloaded',
-    });
-    await expect(page.getByTestId('infrastructure-page')).toBeVisible();
-    await expect(page.locator('#infra-source-filter')).toHaveValue('truenas');
-    await expect(page.getByText('truenas-main').first()).toBeVisible();
+    await expectInfrastructureSource(page, 'truenas', 'truenas-main');
 
     await page.goto('/settings/infrastructure/platforms/vmware', {
       waitUntil: 'domcontentloaded',
@@ -117,12 +168,10 @@ test.describe.serial('Platform mock runtime', () => {
     await expect(page.getByText('2 datastores')).toBeVisible();
     fs.mkdirSync(path.dirname(VMWARE_SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: VMWARE_SCREENSHOT_PATH, fullPage: true });
+    await expectInfrastructureSource(page, 'vmware-vsphere', 'esxi-01.lab.local');
 
-    await page.goto('/infrastructure?source=vmware-vsphere', {
-      waitUntil: 'domcontentloaded',
-    });
-    await expect(page.getByTestId('infrastructure-page')).toBeVisible();
-    await expect(page.locator('#infra-source-filter')).toHaveValue('vmware-vsphere');
-    await expect(page.getByText('esxi-01.lab.local').first()).toBeVisible();
+    for (const [source, resourceName] of Object.entries(resourceNames)) {
+      await expectInfrastructureSource(page, source, resourceName);
+    }
   });
 });

@@ -875,7 +875,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	platformFixtures := mock.DefaultPlatformFixtures()
+	platformFixtures := mock.GetPlatformFixtures()
 	trueNASFixtures := platformFixtures.TrueNAS
 	log.Debug().Int("pools", len(trueNASFixtures.Pools)).Int("datasets", len(trueNASFixtures.Datasets)).Msg("mock seeding: processing TrueNAS fixtures")
 
@@ -1007,7 +1007,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, state models.
 
 // recordTrueNASFixturesMetrics records disk usage metrics for TrueNAS pools and datasets.
 func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
-	fixtures := mock.DefaultPlatformFixtures().TrueNAS
+	fixtures := mock.GetPlatformFixtures().TrueNAS
 
 	totalCap, totalUsed := int64(0), int64(0)
 	for _, pool := range fixtures.Pools {
@@ -1048,7 +1048,7 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time
 }
 
 func recordVMwareFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, ts time.Time) {
-	snapshot := mock.DefaultPlatformFixtures().VMware
+	snapshot := mock.GetPlatformFixtures().VMware
 	datastoreUsage := vmwareDatastoreUsageByID(snapshot.Datastores)
 
 	for _, host := range snapshot.Hosts {
@@ -1504,7 +1504,8 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	m.metricsHistory = NewMetricsHistory(maxPoints, seedDuration)
 	m.mu.Unlock()
 
-	state := mock.GetMockState()
+	graph := mock.CurrentFixtureGraph()
+	state := graph.State
 	log.Info().
 		Int("nodes", len(state.Nodes)).
 		Int("vms", len(state.VMs)).
@@ -1532,7 +1533,7 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 				if !mock.IsMockEnabled() {
 					continue
 				}
-				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.GetMockState(), time.Now())
+				recordMockStateToMetricsHistory(m.metricsHistory, nil, mock.CurrentFixtureGraph().State, time.Now())
 			}
 		}
 	}()

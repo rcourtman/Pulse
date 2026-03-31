@@ -5,36 +5,30 @@ import (
 	"encoding/hex"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/recovery"
 )
 
-var (
-	mockRecoveryPointsOnce sync.Once
-	mockRecoveryPoints     []recovery.RecoveryPoint
-)
-
 func GetMockRecoveryPoints() []recovery.RecoveryPoint {
-	mockRecoveryPointsOnce.Do(func() {
-		mockRecoveryPoints = generateMockRecoveryPoints()
-	})
-	return cloneRecoveryPoints(mockRecoveryPoints)
+	if !IsMockEnabled() {
+		return nil
+	}
+
+	return CurrentFixtureGraph().RecoveryPoints()
 }
 
-func generateMockRecoveryPoints() []recovery.RecoveryPoint {
+func (g FixtureGraph) RecoveryPoints() []recovery.RecoveryPoint {
+	return generateMockRecoveryPoints(g.State, g.PlatformFixtures)
+}
+
+func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures PlatformFixtures) []recovery.RecoveryPoint {
 	// Anchor timestamps to midnight UTC so results are stable across requests
 	// (pagination, sorting) while still staying within the "last 30 days" window.
 	anchor := time.Now().UTC().Truncate(24 * time.Hour)
 
-	clusters := []struct {
-		id   string
-		name string
-	}{
-		{id: "k8s-mock-cluster-1", name: "dev-cluster"},
-		{id: "k8s-mock-cluster-2", name: "prod-cluster"},
-	}
+	clusters := recoveryKubernetesClusters(snapshot)
 
 	points := make([]recovery.RecoveryPoint, 0, 64)
 
@@ -42,17 +36,7 @@ func generateMockRecoveryPoints() []recovery.RecoveryPoint {
 	int64Ptr := func(v int64) *int64 { return &v }
 
 	// Kubernetes PVC snapshot subjects: 3 PVCs with multiple points each (success/running/failed).
-	k8sPVCSubjects := []struct {
-		clusterID   string
-		clusterName string
-		namespace   string
-		pvc         string
-		class       string
-	}{
-		{clusterID: clusters[0].id, clusterName: clusters[0].name, namespace: "default", pvc: "postgres-pvc", class: "csi-ceph-rbd"},
-		{clusterID: clusters[0].id, clusterName: clusters[0].name, namespace: "monitoring", pvc: "prometheus-pvc", class: "csi-local-path"},
-		{clusterID: clusters[1].id, clusterName: clusters[1].name, namespace: "media", pvc: "nextcloud-pvc", class: "csi-ebs-gp3"},
-	}
+	k8sPVCSubjects := recoveryKubernetesPVCSubjects(clusters)
 	for si, s := range k8sPVCSubjects {
 		for i := 0; i < 6; i++ {
 			ageDays := 2 + (si*7+i*4)%28
@@ -249,19 +233,7 @@ func generateMockRecoveryPoints() []recovery.RecoveryPoint {
 
 	// Proxmox: a few guest subjects with multiple backup points each.
 	// This keeps the Backups page platform-agnostic while still showing familiar PVE/PBS-like artifacts.
-	proxmoxSubjects := []struct {
-		instance string
-		node     string
-		vmid     int
-		typ      string // "vm" or "lxc"
-		name     string
-		storage  string
-		isPBS    bool
-	}{
-		{instance: "pve-1", node: "pve-a", vmid: 101, typ: "vm", name: "web-01", storage: "pbs-1", isPBS: true},
-		{instance: "pve-1", node: "pve-a", vmid: 102, typ: "vm", name: "db-01", storage: "local-zfs", isPBS: false},
-		{instance: "pve-2", node: "pve-b", vmid: 201, typ: "lxc", name: "cache-01", storage: "pbs-1", isPBS: true},
-	}
+	proxmoxSubjects := recoveryProxmoxSubjects(snapshot)
 	for si, s := range proxmoxSubjects {
 		for i := 0; i < 5; i++ {
 			ageDays := 2 + (si*8+i*6)%27
@@ -376,11 +348,11 @@ func generateMockRecoveryPoints() []recovery.RecoveryPoint {
 	}
 
 	// TrueNAS: 3 dataset subjects with multiple points over time.
-	truenasConnection := DefaultTrueNASConnectionFixture()
+	truenasConnection := defaultTrueNASConnectionFixture(fixtures)
 	truenasConnID := truenasConnection.ID
 	truenasHost := truenasConnection.Host
 	truenasDatasets := make([]string, 0, 3)
-	for _, dataset := range DefaultPlatformFixtures().TrueNAS.Datasets {
+	for _, dataset := range fixtures.TrueNAS.Datasets {
 		name := strings.TrimSpace(dataset.Name)
 		if name == "" {
 			continue
@@ -584,6 +556,175 @@ func generateMockRecoveryPoints() []recovery.RecoveryPoint {
 	}
 
 	return points
+}
+
+type mockRecoveryCluster struct {
+	id   string
+	name string
+}
+
+type mockRecoveryPVCSubject struct {
+	clusterID   string
+	clusterName string
+	namespace   string
+	pvc         string
+	class       string
+}
+
+type mockProxmoxRecoverySubject struct {
+	instance string
+	node     string
+	vmid     int
+	typ      string
+	name     string
+	storage  string
+	isPBS    bool
+}
+
+func recoveryKubernetesClusters(snapshot models.StateSnapshot) []mockRecoveryCluster {
+	clusters := make([]mockRecoveryCluster, 0, len(snapshot.KubernetesClusters))
+	seen := make(map[string]struct{}, len(snapshot.KubernetesClusters))
+
+	for _, cluster := range snapshot.KubernetesClusters {
+		id := strings.TrimSpace(cluster.ID)
+		if id == "" {
+			id = strings.TrimSpace(cluster.AgentID)
+		}
+		name := strings.TrimSpace(cluster.DisplayName)
+		if name == "" {
+			name = strings.TrimSpace(cluster.CustomDisplayName)
+		}
+		if name == "" {
+			name = strings.TrimSpace(cluster.Name)
+		}
+		if name == "" {
+			name = strings.TrimSpace(cluster.Context)
+		}
+		if name == "" {
+			name = strings.TrimSpace(cluster.Server)
+		}
+		if id == "" && name == "" {
+			continue
+		}
+		if id == "" {
+			id = rpStableID("k8s", "cluster", name)
+		}
+		if name == "" {
+			name = id
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		clusters = append(clusters, mockRecoveryCluster{id: id, name: name})
+	}
+
+	if len(clusters) > 0 {
+		return clusters
+	}
+
+	return []mockRecoveryCluster{
+		{id: "k8s-mock-cluster-1", name: "dev-cluster"},
+		{id: "k8s-mock-cluster-2", name: "prod-cluster"},
+	}
+}
+
+func recoveryKubernetesPVCSubjects(clusters []mockRecoveryCluster) []mockRecoveryPVCSubject {
+	if len(clusters) == 0 {
+		return nil
+	}
+
+	templates := []struct {
+		namespace string
+		pvc       string
+		class     string
+	}{
+		{namespace: "default", pvc: "postgres-pvc", class: "csi-ceph-rbd"},
+		{namespace: "monitoring", pvc: "prometheus-pvc", class: "csi-local-path"},
+		{namespace: "media", pvc: "nextcloud-pvc", class: "csi-ebs-gp3"},
+	}
+
+	subjects := make([]mockRecoveryPVCSubject, 0, len(templates))
+	for i := 0; i < len(templates); i++ {
+		cluster := clusters[i%len(clusters)]
+		template := templates[i]
+		subjects = append(subjects, mockRecoveryPVCSubject{
+			clusterID:   cluster.id,
+			clusterName: cluster.name,
+			namespace:   template.namespace,
+			pvc:         template.pvc,
+			class:       template.class,
+		})
+	}
+
+	return subjects
+}
+
+func recoveryProxmoxSubjects(snapshot models.StateSnapshot) []mockProxmoxRecoverySubject {
+	subjects := make([]mockProxmoxRecoverySubject, 0, 3)
+	seen := map[string]struct{}{}
+
+	remoteStorage := "pbs-1"
+	if len(snapshot.PBSInstances) > 0 {
+		if candidate := strings.TrimSpace(snapshot.PBSInstances[0].Name); candidate != "" {
+			remoteStorage = candidate
+		}
+	}
+	localStorage := "local-zfs"
+
+	appendSubject := func(instance, node string, vmid int, typ, name string, preferPBS bool) {
+		if len(subjects) >= 3 {
+			return
+		}
+		key := strings.TrimSpace(typ) + ":" + strings.TrimSpace(instance) + ":" + strings.TrimSpace(node) + ":" + rpItoa(vmid)
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+
+		storage := localStorage
+		isPBS := false
+		if preferPBS {
+			storage = remoteStorage
+			isPBS = true
+		}
+
+		subjects = append(subjects, mockProxmoxRecoverySubject{
+			instance: strings.TrimSpace(instance),
+			node:     strings.TrimSpace(node),
+			vmid:     vmid,
+			typ:      strings.TrimSpace(typ),
+			name:     strings.TrimSpace(name),
+			storage:  storage,
+			isPBS:    isPBS,
+		})
+	}
+
+	for index, vm := range snapshot.VMs {
+		appendSubject(vm.Instance, vm.Node, vm.VMID, "vm", firstNonEmptyTrimmed(vm.Name, vm.ID), index%2 == 0)
+	}
+	for index, container := range snapshot.Containers {
+		appendSubject(container.Instance, container.Node, container.VMID, "lxc", firstNonEmptyTrimmed(container.Name, container.ID), index%2 == 0)
+	}
+
+	if len(subjects) > 0 {
+		return subjects
+	}
+
+	return []mockProxmoxRecoverySubject{
+		{instance: "pve-1", node: "pve-a", vmid: 101, typ: "vm", name: "web-01", storage: "pbs-1", isPBS: true},
+		{instance: "pve-1", node: "pve-a", vmid: 102, typ: "vm", name: "db-01", storage: "local-zfs", isPBS: false},
+		{instance: "pve-2", node: "pve-b", vmid: 201, typ: "lxc", name: "cache-01", storage: "pbs-1", isPBS: true},
+	}
+}
+
+func firstNonEmptyTrimmed(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 func cloneRecoveryPoints(src []recovery.RecoveryPoint) []recovery.RecoveryPoint {

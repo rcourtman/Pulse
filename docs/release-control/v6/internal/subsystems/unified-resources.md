@@ -262,6 +262,14 @@ mode. When mock-backed TrueNAS or VMware supplemental records are present, they
 must enter the shared resource graph through the same canonical source/type
 rules as live providers instead of introducing a mock-only source family or
 resource kind.
+That same mock seed contract now also includes legacy snapshot-backed sources.
+`internal/mock/fixture_graph.go` must own the runtime mock snapshot and the
+provider-backed TrueNAS/VMware fixtures together, and
+`internal/mock/platform_fixtures.go` must project unified resources from that
+one graph instead of combining a legacy snapshot read with standalone provider
+defaults. The shared resource graph must therefore see one coherent mock
+platform set regardless of whether a platform is snapshot-backed or
+supplemental-provider-backed.
 TrueNAS-managed applications now follow the same canonical workload rule. One
 TrueNAS app instance from `app.query` must project as one canonical
 `app-container` resource under `SourceTrueNAS`, reusing the shared workload and

@@ -356,6 +356,86 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	}
 }
 
+func TestSeedMockMetricsHistory_UsesCanonicalMockFixtureGraphForLegacyAndProviderFixtures(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previous {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	t.Setenv("PULSE_MOCK_NODES", "1")
+	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "0")
+	t.Setenv("PULSE_MOCK_LXCS_PER_NODE", "0")
+	t.Setenv("PULSE_MOCK_DOCKER_HOSTS", "0")
+	t.Setenv("PULSE_MOCK_DOCKER_CONTAINERS", "0")
+	t.Setenv("PULSE_MOCK_GENERIC_HOSTS", "0")
+	t.Setenv("PULSE_MOCK_K8S_CLUSTERS", "0")
+	t.Setenv("PULSE_MOCK_K8S_NODES", "0")
+	t.Setenv("PULSE_MOCK_K8S_PODS", "0")
+	t.Setenv("PULSE_MOCK_K8S_DEPLOYMENTS", "0")
+
+	mock.SetEnabled(false)
+	mock.SetEnabled(true)
+
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.Nodes) == 0 {
+		t.Fatal("expected canonical mock graph to include legacy nodes")
+	}
+	if strings.TrimSpace(graph.PlatformFixtures.TrueNAS.System.Hostname) == "" {
+		t.Fatal("expected canonical mock graph to include TrueNAS fixtures")
+	}
+	if len(graph.PlatformFixtures.VMware.Hosts) == 0 {
+		t.Fatal("expected canonical mock graph to include VMware fixtures")
+	}
+
+	now := time.Now()
+	cfg := metrics.DefaultConfig(t.TempDir())
+	cfg.RetentionRaw = 90 * 24 * time.Hour
+	cfg.RetentionMinute = 90 * 24 * time.Hour
+	cfg.RetentionHourly = 90 * 24 * time.Hour
+	cfg.RetentionDaily = 90 * 24 * time.Hour
+	cfg.WriteBufferSize = 500
+
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("failed to create metrics store: %v", err)
+	}
+	defer store.Close()
+
+	mh := NewMetricsHistory(1000, 7*24*time.Hour)
+	seedMockMetricsHistory(mh, store, graph.State, now, 7*24*time.Hour, time.Minute)
+
+	nodePoints, err := store.Query("node", graph.State.Nodes[0].ID, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query legacy mock node cpu metrics: %v", err)
+	}
+	if len(nodePoints) == 0 {
+		t.Fatal("expected seeded legacy mock node cpu metrics from canonical graph state")
+	}
+
+	truenasPoints, err := store.Query("truenas", graph.PlatformFixtures.TrueNAS.System.Hostname, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query TrueNAS mock disk metrics: %v", err)
+	}
+	if len(truenasPoints) == 0 {
+		t.Fatal("expected seeded TrueNAS metrics from canonical graph fixtures")
+	}
+
+	vmwareHostID := "vc-mock-1:host:host-101"
+	vmwarePoints, err := store.Query("agent", vmwareHostID, "cpu", now.Add(-7*24*time.Hour), now, 3600)
+	if err != nil {
+		t.Fatalf("failed to query VMware mock host cpu metrics: %v", err)
+	}
+	if len(vmwarePoints) == 0 {
+		t.Fatal("expected seeded VMware metrics from canonical graph fixtures")
+	}
+}
+
 func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing.T) {
 	t.Setenv("PULSE_MOCK_NODES", "1")
 	t.Setenv("PULSE_MOCK_VMS_PER_NODE", "0")

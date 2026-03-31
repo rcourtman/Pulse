@@ -370,6 +370,15 @@ TrueNAS and VMware inventory plus mock metrics-history seeding must derive from
 one shared platform fixture owner in `internal/mock/` so settings payloads,
 supplemental ingest, unified read-state, and seeded charts cannot drift from
 each other when the v6 runtime runs in mock mode.
+That same fixture authority now also includes legacy snapshot-backed platforms.
+`internal/monitoring/monitor.go` and
+`internal/monitoring/mock_metrics_history.go` must treat the canonical
+`internal/mock/fixture_graph.go` runtime graph as the one mock owner for
+legacy Proxmox/Docker/Kubernetes/agent/PBS/PMG snapshot state plus
+provider-backed TrueNAS and VMware fixtures. Monitoring must not rebuild mock
+provider context from standalone defaults or mix a legacy `GenerateMockData`
+snapshot with separate provider fixtures when seeding read-state or metrics
+history.
 That same boundary now also owns native disk-history fallback when Pulse's own
 history is shallow. `internal/truenas/client.go`,
 `internal/truenas/provider.go`, `internal/monitoring/truenas_poller.go`, and

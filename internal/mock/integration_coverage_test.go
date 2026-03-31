@@ -30,8 +30,7 @@ func resetMockIntegrationState(t *testing.T) {
 
 	stopUpdateLoopLocked()
 	dataMu.Lock()
-	mockData = models.EmptyStateSnapshot()
-	mockAlerts = nil
+	mockGraph = emptyFixtureGraph()
 	mockConfig = DefaultConfig
 	dataMu.Unlock()
 	enabled.Store(false)
@@ -43,8 +42,7 @@ func resetMockIntegrationState(t *testing.T) {
 	t.Cleanup(func() {
 		stopUpdateLoopLocked()
 		dataMu.Lock()
-		mockData = models.EmptyStateSnapshot()
-		mockAlerts = nil
+		mockGraph = emptyFixtureGraph()
 		mockConfig = DefaultConfig
 		dataMu.Unlock()
 		enabled.Store(false)
@@ -185,10 +183,12 @@ func TestDisableMockModeResetsToNormalizedEmptySnapshot(t *testing.T) {
 
 	enabled.Store(true)
 	dataMu.Lock()
-	mockData = models.StateSnapshot{
-		Nodes: []models.Node{{ID: "node-1", Name: "node-1"}},
+	mockGraph = FixtureGraph{
+		State: models.StateSnapshot{
+			Nodes: []models.Node{{ID: "node-1", Name: "node-1"}},
+		},
+		AlertHistory: []models.Alert{{ID: "alert-1"}},
 	}
-	mockAlerts = []models.Alert{{ID: "alert-1"}}
 	dataMu.Unlock()
 
 	disableMockMode()
@@ -200,17 +200,17 @@ func TestDisableMockModeResetsToNormalizedEmptySnapshot(t *testing.T) {
 	dataMu.RLock()
 	defer dataMu.RUnlock()
 
-	if mockAlerts != nil {
-		t.Fatalf("expected alert cache to be cleared, got %+v", mockAlerts)
+	if mockGraph.AlertHistory != nil {
+		t.Fatalf("expected alert cache to be cleared, got %+v", mockGraph.AlertHistory)
 	}
-	if mockData.Nodes == nil {
+	if mockGraph.State.Nodes == nil {
 		t.Fatal("expected nodes slice to be normalized")
 	}
-	if mockData.ConnectionHealth == nil {
+	if mockGraph.State.ConnectionHealth == nil {
 		t.Fatal("expected connection health map to be normalized")
 	}
-	if len(mockData.Nodes) != 0 {
-		t.Fatalf("expected mock data to reset to empty snapshot, got %d nodes", len(mockData.Nodes))
+	if len(mockGraph.State.Nodes) != 0 {
+		t.Fatalf("expected mock data to reset to empty snapshot, got %d nodes", len(mockGraph.State.Nodes))
 	}
 }
 
@@ -218,7 +218,9 @@ func TestSetMockConfigOnlyRegeneratesWhenEnabled(t *testing.T) {
 	resetMockIntegrationState(t)
 
 	dataMu.Lock()
-	mockData = models.StateSnapshot{Nodes: []models.Node{{ID: "node-existing", Name: "existing"}}}
+	mockGraph = FixtureGraph{
+		State: models.StateSnapshot{Nodes: []models.Node{{ID: "node-existing", Name: "existing"}}},
+	}
 	dataMu.Unlock()
 
 	cfg := DefaultConfig
@@ -234,7 +236,7 @@ func TestSetMockConfigOnlyRegeneratesWhenEnabled(t *testing.T) {
 	}
 
 	dataMu.RLock()
-	nodesWhenDisabled := len(mockData.Nodes)
+	nodesWhenDisabled := len(mockGraph.State.Nodes)
 	dataMu.RUnlock()
 	if nodesWhenDisabled != 1 {
 		t.Fatalf("expected data unchanged while disabled, got %d nodes", nodesWhenDisabled)
@@ -247,13 +249,13 @@ func TestSetMockConfigOnlyRegeneratesWhenEnabled(t *testing.T) {
 	dataMu.RLock()
 	defer dataMu.RUnlock()
 
-	if len(mockData.Nodes) != 3 {
-		t.Fatalf("expected regenerated node count, got %d", len(mockData.Nodes))
+	if len(mockGraph.State.Nodes) != 3 {
+		t.Fatalf("expected regenerated node count, got %d", len(mockGraph.State.Nodes))
 	}
-	if mockData.LastUpdate.IsZero() {
+	if mockGraph.State.LastUpdate.IsZero() {
 		t.Fatalf("expected regenerated state to update last-update timestamp")
 	}
-	if len(mockAlerts) == 0 {
+	if len(mockGraph.AlertHistory) == 0 {
 		t.Fatalf("expected regenerated alert history when enabled")
 	}
 }
@@ -271,15 +273,15 @@ func TestUpdateMetricsGuardAndTimestamp(t *testing.T) {
 	cfg.RandomMetrics = false
 
 	dataMu.Lock()
-	mockData = GenerateMockData(cfg)
-	mockData.LastUpdate = time.Time{}
+	mockGraph = buildFixtureGraph(cfg, time.Time{})
+	mockGraph.State.LastUpdate = time.Time{}
 	dataMu.Unlock()
 
 	enabled.Store(false)
 	updateMetrics(cfg)
 
 	dataMu.RLock()
-	lastWhenDisabled := mockData.LastUpdate
+	lastWhenDisabled := mockGraph.State.LastUpdate
 	dataMu.RUnlock()
 	if !lastWhenDisabled.IsZero() {
 		t.Fatalf("expected no update while disabled")
@@ -289,7 +291,7 @@ func TestUpdateMetricsGuardAndTimestamp(t *testing.T) {
 	updateMetrics(cfg)
 
 	dataMu.RLock()
-	lastWhenEnabled := mockData.LastUpdate
+	lastWhenEnabled := mockGraph.State.LastUpdate
 	dataMu.RUnlock()
 	if lastWhenEnabled.IsZero() {
 		t.Fatalf("expected update timestamp while enabled")
@@ -352,11 +354,11 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 	UpdateAlertSnapshots(active, resolved)
 
 	dataMu.RLock()
-	if len(mockData.ActiveAlerts) != 1 {
+	if len(mockGraph.State.ActiveAlerts) != 1 {
 		dataMu.RUnlock()
-		t.Fatalf("expected one active alert snapshot, got %d", len(mockData.ActiveAlerts))
+		t.Fatalf("expected one active alert snapshot, got %d", len(mockGraph.State.ActiveAlerts))
 	}
-	snapshot := mockData.ActiveAlerts[0]
+	snapshot := mockGraph.State.ActiveAlerts[0]
 	if snapshot.Level != "critical" {
 		dataMu.RUnlock()
 		t.Fatalf("expected level conversion to string, got %q", snapshot.Level)
@@ -365,9 +367,9 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 		dataMu.RUnlock()
 		t.Fatalf("unexpected converted active alert snapshot: %+v", snapshot)
 	}
-	if len(mockData.RecentlyResolved) != 1 || mockData.RecentlyResolved[0].ID != "r-1" {
+	if len(mockGraph.State.RecentlyResolved) != 1 || mockGraph.State.RecentlyResolved[0].ID != "r-1" {
 		dataMu.RUnlock()
-		t.Fatalf("unexpected resolved snapshot data: %+v", mockData.RecentlyResolved)
+		t.Fatalf("unexpected resolved snapshot data: %+v", mockGraph.State.RecentlyResolved)
 	}
 	dataMu.RUnlock()
 
@@ -375,18 +377,18 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 	resolved[0].ID = "mutated"
 
 	dataMu.RLock()
-	if mockData.ActiveAlerts[0].Message != "CPU critical" {
+	if mockGraph.State.ActiveAlerts[0].Message != "CPU critical" {
 		dataMu.RUnlock()
 		t.Fatalf("expected active alert snapshot to be independent from source slice")
 	}
-	if mockData.RecentlyResolved[0].ID != "r-1" {
+	if mockGraph.State.RecentlyResolved[0].ID != "r-1" {
 		dataMu.RUnlock()
 		t.Fatalf("expected resolved alert snapshot to be copied")
 	}
 	dataMu.RUnlock()
 
 	dataMu.Lock()
-	mockAlerts = []models.Alert{{ID: "h-1"}, {ID: "h-2"}, {ID: "h-3"}}
+	mockGraph.AlertHistory = []models.Alert{{ID: "h-1"}, {ID: "h-2"}, {ID: "h-3"}}
 	dataMu.Unlock()
 
 	enabled.Store(false)
@@ -406,7 +408,7 @@ func TestUpdateAlertSnapshotsAndHistoryAccessors(t *testing.T) {
 
 	dataMu.RLock()
 	defer dataMu.RUnlock()
-	if mockAlerts[0].ID != "h-1" {
+	if mockGraph.AlertHistory[0].ID != "h-1" {
 		t.Fatalf("expected history accessor to return defensive copies")
 	}
 }

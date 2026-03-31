@@ -59,32 +59,11 @@ func DefaultPlatformFixtures() PlatformFixtures {
 }
 
 func DefaultTrueNASConnectionFixture() TrueNASConnectionFixture {
-	fixtures := DefaultPlatformFixtures().TrueNAS
-	collectedAt := trueNASCollectedAt(fixtures)
-	host := strings.TrimSpace(fixtures.System.Hostname)
-
-	return TrueNASConnectionFixture{
-		ID:                  "truenas-mock-1",
-		Name:                "Archive NAS",
-		Host:                host,
-		Port:                443,
-		APIKey:              "mock-truenas-api-key",
-		UseHTTPS:            true,
-		Enabled:             true,
-		PollIntervalSeconds: DefaultPlatformPollIntervalSeconds,
-		CollectedAt:         collectedAt,
-		ResourceID:          host,
-		Systems:             1,
-		StoragePools:        len(fixtures.Pools),
-		Datasets:            len(fixtures.Datasets),
-		Apps:                len(fixtures.Apps),
-		Disks:               len(fixtures.Disks),
-		RecoveryArtifacts:   len(fixtures.ZFSSnapshots) + len(fixtures.ReplicationTasks),
-	}
+	return defaultTrueNASConnectionFixture(GetPlatformFixtures())
 }
 
 func DefaultVMwareConnectionFixture() VMwareConnectionFixture {
-	fixtures := DefaultPlatformFixtures().VMware
+	fixtures := GetPlatformFixtures().VMware
 
 	return VMwareConnectionFixture{
 		ID:                  strings.TrimSpace(fixtures.ConnectionID),
@@ -103,12 +82,38 @@ func DefaultVMwareConnectionFixture() VMwareConnectionFixture {
 	}
 }
 
+func defaultTrueNASConnectionFixture(fixtures PlatformFixtures) TrueNASConnectionFixture {
+	snapshot := fixtures.TrueNAS
+	collectedAt := trueNASCollectedAt(snapshot)
+	host := strings.TrimSpace(snapshot.System.Hostname)
+
+	return TrueNASConnectionFixture{
+		ID:                  "truenas-mock-1",
+		Name:                "Archive NAS",
+		Host:                host,
+		Port:                443,
+		APIKey:              "mock-truenas-api-key",
+		UseHTTPS:            true,
+		Enabled:             true,
+		PollIntervalSeconds: DefaultPlatformPollIntervalSeconds,
+		CollectedAt:         collectedAt,
+		ResourceID:          host,
+		Systems:             1,
+		StoragePools:        len(snapshot.Pools),
+		Datasets:            len(snapshot.Datasets),
+		Apps:                len(snapshot.Apps),
+		Disks:               len(snapshot.Disks),
+		RecoveryArtifacts:   len(snapshot.ZFSSnapshots) + len(snapshot.ReplicationTasks),
+	}
+}
+
 func SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
+	fixtures := GetPlatformFixtures()
 	switch normalizePlatformSource(source) {
 	case unifiedresources.SourceTrueNAS:
-		return truenas.FixtureRecords(DefaultPlatformFixtures().TrueNAS)
+		return truenas.FixtureRecords(fixtures.TrueNAS)
 	case unifiedresources.SourceVMware:
-		return vmware.FixtureRecords(DefaultPlatformFixtures().VMware)
+		return vmware.FixtureRecords(fixtures.VMware)
 	default:
 		return nil
 	}
@@ -126,23 +131,25 @@ func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 		return nil, time.Time{}
 	}
 
-	fixtures := DefaultPlatformFixtures()
-	snapshot := GetMockState()
+	return CurrentFixtureGraph().UnifiedResourceSnapshot()
+}
 
+func (g FixtureGraph) UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	registry := unifiedresources.NewRegistry(nil)
-	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(snapshot, PlatformOwnedSources()))
+	registry.IngestSnapshot(unifiedresources.SnapshotWithoutSources(g.State, PlatformOwnedSources()))
+
 	for _, source := range PlatformOwnedSources() {
-		records := SupplementalRecords(source)
+		records := g.SupplementalRecords(source)
 		if len(records) == 0 {
 			continue
 		}
 		registry.IngestRecords(source, records)
 	}
 
-	freshness := snapshot.LastUpdate
+	freshness := g.State.LastUpdate
 	for _, candidate := range []time.Time{
-		trueNASCollectedAt(fixtures.TrueNAS),
-		fixtures.VMware.CollectedAt,
+		trueNASCollectedAt(g.PlatformFixtures.TrueNAS),
+		g.PlatformFixtures.VMware.CollectedAt,
 	} {
 		if candidate.IsZero() {
 			continue
@@ -153,6 +160,17 @@ func UnifiedResourceSnapshot() ([]unifiedresources.Resource, time.Time) {
 	}
 
 	return registry.List(), freshness
+}
+
+func (g FixtureGraph) SupplementalRecords(source unifiedresources.DataSource) []unifiedresources.IngestRecord {
+	switch normalizePlatformSource(source) {
+	case unifiedresources.SourceTrueNAS:
+		return truenas.FixtureRecords(g.PlatformFixtures.TrueNAS)
+	case unifiedresources.SourceVMware:
+		return vmware.FixtureRecords(g.PlatformFixtures.VMware)
+	default:
+		return nil
+	}
 }
 
 func trueNASCollectedAt(fixtures truenas.FixtureSnapshot) time.Time {
