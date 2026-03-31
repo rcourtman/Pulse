@@ -183,4 +183,40 @@ describe('apiClient org context', () => {
     const headers = options.headers as Record<string, string>;
     expect(headers['X-Pulse-Org-ID']).toBe('tenant-reporting');
   });
+
+  it('preserves canonical error code and details while retaining org context', async () => {
+    mockFetch.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: 'Failed to connect to VMware vCenter',
+          code: 'vmware_connection_failed',
+          details: {
+            category: 'unsupported_version',
+            error: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+          },
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+    );
+
+    setOrgID('tenant-vmware');
+    await expect(
+      apiFetchJSON('/api/vmware/connections/test', { method: 'POST', body: '{}' }),
+    ).rejects.toMatchObject({
+      message: 'Failed to connect to VMware vCenter',
+      status: 400,
+      code: 'vmware_connection_failed',
+      details: {
+        category: 'unsupported_version',
+        error: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+      },
+    });
+
+    const [, options] = mockFetch.mock.calls[0] as [string, RequestInit];
+    const headers = options.headers as Record<string, string>;
+    expect(headers['X-Pulse-Org-ID']).toBe('tenant-vmware');
+  });
 });

@@ -12,6 +12,9 @@ const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F]/; // eslint-disable-line no-
 const MAX_ORG_ID_LENGTH = 128;
 const MAX_API_TOKEN_LENGTH = 8 * 1024;
 const MAX_AUTH_STORAGE_CHARS = 16 * 1024;
+const MAX_API_ERROR_CODE_LENGTH = 128;
+const MAX_API_ERROR_DETAIL_KEY_LENGTH = 128;
+const MAX_API_ERROR_DETAIL_VALUE_LENGTH = 2048;
 const IDEMPOTENT_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'PUT', 'DELETE']);
 
 const sanitizeBoundedText = (value: unknown, maxLength: number): string | null => {
@@ -73,12 +76,34 @@ interface FetchOptions extends Omit<RequestInit, 'headers'> {
   skipOrgContext?: boolean;
 }
 
+type APIErrorDetails = Record<string, string>;
+
 type APIErrorShape = Error & {
+  code?: string;
   detail?: string;
+  details?: APIErrorDetails;
   feature?: string;
   requiredScope?: string;
   upgrade_url?: string;
   status?: number;
+};
+
+const sanitizeAPIErrorDetails = (value: unknown): APIErrorDetails | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  const details: APIErrorDetails = {};
+  for (const [rawKey, rawValue] of Object.entries(value as Record<string, unknown>)) {
+    const key = sanitizeBoundedText(rawKey, MAX_API_ERROR_DETAIL_KEY_LENGTH);
+    const resolvedValue = sanitizeBoundedText(rawValue, MAX_API_ERROR_DETAIL_VALUE_LENGTH);
+    if (!key || !resolvedValue) {
+      continue;
+    }
+    details[key] = resolvedValue;
+  }
+
+  return Object.keys(details).length > 0 ? details : undefined;
 };
 
 async function createAPIErrorFromResponse(
@@ -88,7 +113,9 @@ async function createAPIErrorFromResponse(
   const text = await response.text();
   let errorMessage = fallbackMessage || text;
 
+  let errorCode: string | undefined;
   let errorDetail: string | undefined;
+  let errorDetails: APIErrorDetails | undefined;
   let errorFeature: string | undefined;
   let errorRequiredScope: string | undefined;
   let errorUpgradeUrl: string | undefined;
@@ -102,6 +129,8 @@ async function createAPIErrorFromResponse(
     if (typeof jsonError.detail === 'string') {
       errorDetail = jsonError.detail;
     }
+    errorCode = sanitizeBoundedText(jsonError.code, MAX_API_ERROR_CODE_LENGTH) ?? undefined;
+    errorDetails = sanitizeAPIErrorDetails(jsonError.details);
     errorRequiredScope = sanitizeBoundedText(jsonError.requiredScope, 128) ?? undefined;
     errorFeature = sanitizeBoundedText(jsonError.feature, 128) ?? undefined;
     errorUpgradeUrl = sanitizeBoundedText(jsonError.upgrade_url, 2048) ?? undefined;
@@ -120,8 +149,14 @@ async function createAPIErrorFromResponse(
 
   const err = new Error(errorMessage || `Request failed with status ${response.status}`) as APIErrorShape;
   err.status = response.status;
+  if (errorCode) {
+    err.code = errorCode;
+  }
   if (errorDetail) {
     err.detail = errorDetail;
+  }
+  if (errorDetails) {
+    err.details = errorDetails;
   }
   if (errorRequiredScope) {
     err.requiredScope = errorRequiredScope;

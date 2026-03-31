@@ -723,6 +723,14 @@ remains the saved connection retest surface. The explicit disabled path also
 stays on this boundary: `404 vmware_disabled` means the operator or runtime has
 opted out of the default-on VMware candidate, not that the platform requires a
 different onboarding contract.
+That same VMware test contract now also owns structured setup-failure
+classification. When `POST /api/vmware/connections/test` or
+`POST /api/vmware/connections/{id}/test` fails, the backend payload must
+preserve the canonical top-level `code` plus string-valued `details.error` and
+`details.category`, and shared browser normalization in
+`frontend-modern/src/utils/apiClient.ts` plus
+`frontend-modern/src/api/responseUtils.ts` must carry that metadata through the
+shared error object without inventing a VMware-only fetch or parsing path.
 That same VMware API boundary now also owns the phase-1 runtime negative
 space around inventory projection. `internal/api/router.go` may wire VMware's
 supplemental ingest into the shared `/api/resources` surface so canonical

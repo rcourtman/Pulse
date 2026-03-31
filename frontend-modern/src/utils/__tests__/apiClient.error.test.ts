@@ -21,4 +21,34 @@ describe('apiClient structured error extraction', () => {
     expect(error.message).toBe('temporary failure');
     expect(error.status).toBe(500);
   });
+
+  it('preserves structured code and details from canonical API errors', async () => {
+    const error = await apiErrorFromResponse(
+      new Response(
+        JSON.stringify({
+          error: 'Failed to connect to VMware vCenter',
+          code: 'vmware_connection_failed',
+          details: {
+            category: 'unsupported_version',
+            error: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+          },
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+      'Fallback message',
+    );
+
+    expect(error).toMatchObject({
+      message: 'Failed to connect to VMware vCenter',
+      status: 400,
+      code: 'vmware_connection_failed',
+      details: {
+        category: 'unsupported_version',
+        error: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+      },
+    });
+  });
 });

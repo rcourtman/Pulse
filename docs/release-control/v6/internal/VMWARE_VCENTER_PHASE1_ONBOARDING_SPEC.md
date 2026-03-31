@@ -79,6 +79,9 @@ Those routes should follow the same shared semantics already used by TrueNAS:
 4. optional edited-form overlay payload on saved-connection test
 5. list responses reloading refreshed last-success or last-error state after
    a saved-connection test
+6. draft-test failures keeping canonical backend `code` plus string-valued
+   `details.category` / `details.error` through the shared browser client so
+   onboarding can show phase-1 failure guidance without a VMware-only transport
 
 ## Expected List Response Shape
 

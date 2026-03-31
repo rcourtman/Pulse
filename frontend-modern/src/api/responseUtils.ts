@@ -5,6 +5,9 @@ type APIErrorPayload = {
 
 type APIErrorLike = {
   status?: unknown;
+  code?: unknown;
+  detail?: unknown;
+  details?: unknown;
 };
 
 type APIResponseLike = {
@@ -12,6 +15,15 @@ type APIResponseLike = {
 };
 
 type APIRecordLike = Record<string, unknown>;
+
+function trimmedOptionalString(value: unknown): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
 
 function extractErrorMessage(payload: APIErrorPayload): string | null {
   if (typeof payload.error === 'string' && payload.error.trim()) {
@@ -179,6 +191,56 @@ export function apiErrorStatus(error: unknown): number | null {
   }
 
   return status;
+}
+
+export function apiErrorCode(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  return trimmedOptionalString((error as APIErrorLike).code);
+}
+
+export function apiErrorDetail(error: unknown): string | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  return trimmedOptionalString((error as APIErrorLike).detail);
+}
+
+export function apiErrorDetails(error: unknown): Record<string, string> | null {
+  if (!error || typeof error !== 'object') {
+    return null;
+  }
+
+  const rawDetails = (error as APIErrorLike).details;
+  if (!rawDetails || typeof rawDetails !== 'object') {
+    return null;
+  }
+
+  const normalizedEntries = Object.entries(rawDetails as APIRecordLike)
+    .map(([key, value]) => {
+      const normalizedKey = trimmedOptionalString(key);
+      const normalizedValue = trimmedOptionalString(value);
+      return normalizedKey && normalizedValue ? [normalizedKey, normalizedValue] : null;
+    })
+    .filter((entry): entry is [string, string] => entry !== null);
+
+  if (normalizedEntries.length === 0) {
+    return null;
+  }
+
+  return Object.fromEntries(normalizedEntries);
+}
+
+export function apiErrorDetailField(error: unknown, field: string): string | null {
+  const details = apiErrorDetails(error);
+  if (!details) {
+    return null;
+  }
+
+  return details[field] ?? null;
 }
 
 export function isAPIErrorStatus(error: unknown, expectedStatus: number): boolean {

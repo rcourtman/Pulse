@@ -7,6 +7,7 @@ import type { VMwareSettingsPanelState } from '../useVMwareSettingsPanelState';
 const mockState = vi.hoisted(() => ({
   closeDeleteDialog: vi.fn(),
   closeDialog: vi.fn(),
+  connectionFailure: vi.fn(() => null),
   connections: vi.fn((): VMwareConnection[] => []),
   deleteDialogOpen: vi.fn(() => false),
   deletePendingConnection: vi.fn(),
@@ -48,6 +49,7 @@ describe('VMwareSettingsPanel', () => {
       }
     });
     mockState.connections.mockReturnValue([]);
+    mockState.connectionFailure.mockReturnValue(null);
     mockState.deleteDialogOpen.mockReturnValue(false);
     mockState.deleting.mockReturnValue(false);
     mockState.dialogOpen.mockReturnValue(false);
@@ -188,5 +190,31 @@ describe('VMwareSettingsPanel', () => {
     expect(screen.getByText('VMware integration has been explicitly disabled')).toBeInTheDocument();
     expect(screen.getByText(/PULSE_ENABLE_VMWARE=false/)).toBeInTheDocument();
     expect(screen.queryByText('VMware connections')).not.toBeInTheDocument();
+  });
+
+  it('renders categorized draft test guidance inside the connection dialog', () => {
+    mockState.dialogOpen.mockReturnValue(true);
+    mockState.connectionFailure.mockReturnValue({
+      title: 'Unsupported vCenter version',
+      message: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+      guidance:
+        'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+      tone: 'warning',
+      category: 'unsupported_version',
+      code: 'vmware_connection_failed',
+    });
+
+    renderPanel();
+
+    expect(screen.getByTestId('vmware-connection-test-feedback')).toBeInTheDocument();
+    expect(screen.getByText('Unsupported vCenter version')).toBeInTheDocument();
+    expect(
+      screen.getByText('VMware vCenter 6.7 is below the supported VI JSON release floor'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+      ),
+    ).toBeInTheDocument();
   });
 });

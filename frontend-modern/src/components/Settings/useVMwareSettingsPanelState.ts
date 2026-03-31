@@ -5,7 +5,7 @@ import {
   type VMwareConnection,
   type VMwareConnectionInput,
 } from '@/api/vmware';
-import { apiErrorStatus } from '@/api/responseUtils';
+import { apiErrorCode, apiErrorDetailField, apiErrorStatus } from '@/api/responseUtils';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 
@@ -18,6 +18,15 @@ export interface VMwareConnectionFormState {
   insecureSkipVerify: boolean;
   enabled: boolean;
   hasStoredPassword: boolean;
+}
+
+export interface VMwareConnectionFailurePresentation {
+  code?: string;
+  category?: string;
+  guidance?: string;
+  message: string;
+  title: string;
+  tone: 'danger' | 'warning';
 }
 
 const REDACTED_SECRET = '********';
@@ -72,6 +81,92 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const getVMwareErrorMessage = (error: unknown, fallback: string): string =>
+  apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
+
+const buildVMwareConnectionFailurePresentation = (
+  error: unknown,
+  fallback: string,
+): VMwareConnectionFailurePresentation => {
+  const code = apiErrorCode(error) ?? undefined;
+  const category = apiErrorDetailField(error, 'category') ?? undefined;
+  const message = getVMwareErrorMessage(error, fallback);
+
+  switch (category) {
+    case 'unsupported_version':
+      return {
+        code,
+        category,
+        guidance:
+          'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+        message,
+        title: 'Unsupported vCenter version',
+        tone: 'warning',
+      };
+    case 'tls':
+      return {
+        code,
+        category,
+        guidance:
+          'Install a trusted certificate for vCenter, or enable Skip TLS verification only for controlled lab environments.',
+        message,
+        title: 'TLS validation failed',
+        tone: 'warning',
+      };
+    case 'auth':
+      return {
+        code,
+        category,
+        guidance: 'Verify the username, password, and account scope in vCenter before retrying.',
+        message,
+        title: 'Authentication failed',
+        tone: 'danger',
+      };
+    case 'permission':
+      return {
+        code,
+        category,
+        guidance:
+          'Grant the minimum VMware read privileges required for phase-1 inventory and health reads, then retry.',
+        message,
+        title: 'Permissions are insufficient',
+        tone: 'warning',
+      };
+    case 'network':
+      return {
+        code,
+        category,
+        guidance:
+          'Confirm DNS, reachability, port 443, and any firewall rules from the Pulse server to vCenter.',
+        message,
+        title: 'Pulse could not reach vCenter',
+        tone: 'danger',
+      };
+    default:
+      break;
+  }
+
+  if (code === 'vmware_invalid_config') {
+    return {
+      code,
+      category,
+      guidance: 'Review the host, port, username, and password fields before retrying.',
+      message,
+      title: 'Connection configuration is invalid',
+      tone: 'danger',
+    };
+  }
+
+  return {
+    code,
+    category,
+    guidance: 'Review the vCenter endpoint and credentials, then retry the connection test.',
+    message,
+    title: 'VMware connection test failed',
+    tone: 'danger',
+  };
+};
+
 const buildConnectionInput = (form: VMwareConnectionFormState): VMwareConnectionInput => {
   const port = parseOptionalPort(form.port);
   const name = form.name.trim();
@@ -104,6 +199,8 @@ export function useVMwareSettingsPanelState() {
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
+  const [connectionFailure, setConnectionFailure] =
+    createSignal<VMwareConnectionFailurePresentation | null>(null);
 
   const editingConnection = createMemo(
     () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
@@ -141,12 +238,14 @@ export function useVMwareSettingsPanelState() {
   const openCreateDialog = () => {
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
+    setConnectionFailure(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (connection: VMwareConnection) => {
     setEditingConnectionId(connection.id);
     setForm(buildFormStateFromConnection(connection));
+    setConnectionFailure(null);
     setDialogOpen(true);
   };
 
@@ -154,6 +253,7 @@ export function useVMwareSettingsPanelState() {
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
+    setConnectionFailure(null);
   };
 
   const closeDialog = () => {
@@ -176,11 +276,14 @@ export function useVMwareSettingsPanelState() {
     resetDeleteDialogState();
   };
 
-  const updateForm = (patch: Partial<VMwareConnectionFormState>) =>
+  const updateForm = (patch: Partial<VMwareConnectionFormState>) => {
+    setConnectionFailure(null);
     setForm((current) => ({ ...current, ...patch }));
+  };
 
   const testCurrentForm = async () => {
     setTesting(true);
+    setConnectionFailure(null);
     try {
       const payload = buildConnectionInput(form());
       if (editingConnectionId()) {
@@ -191,8 +294,9 @@ export function useVMwareSettingsPanelState() {
       notificationStore.success('VMware connection successful');
       return true;
     } catch (error) {
-      const message = getErrorMessage(error, 'VMware connection failed');
-      notificationStore.error(message);
+      const failure = buildVMwareConnectionFailurePresentation(error, 'VMware connection failed');
+      setConnectionFailure(failure);
+      notificationStore.error(failure.message);
       logger.error('[VMware Settings] Connection test failed', error);
       return false;
     } finally {
@@ -269,6 +373,7 @@ export function useVMwareSettingsPanelState() {
     featureDisabled,
     featureDisabledMessage,
     form,
+    connectionFailure,
     loadConnections,
     loading,
     loadingError,

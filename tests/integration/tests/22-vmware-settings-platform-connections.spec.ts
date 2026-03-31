@@ -208,6 +208,84 @@ test.describe("VMware platform connections settings", () => {
     await page.screenshot({ path: SCREENSHOT_PATH, fullPage: true });
   });
 
+  test("surfaces structured draft test guidance for unsupported vCenter versions", async ({
+    page,
+  }) => {
+    let createCalls = 0;
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections/test" && method === "POST") {
+        await route.fulfill({
+          status: 400,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Failed to connect to VMware vCenter",
+            code: "vmware_connection_failed",
+            status_code: 400,
+            details: {
+              category: "unsupported_version",
+              error:
+                "VMware vCenter 6.7 is below the supported VI JSON release floor",
+            },
+          }),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections" && method === "POST") {
+        createCalls += 1;
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({}),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: "Add VMware connection" }).click();
+    await page.getByLabel("Host").fill("legacy.lab.local");
+    await page.getByLabel("Username").fill("administrator@vsphere.local");
+    await page.getByLabel("Password").fill("super-secret");
+    await page.getByRole("button", { name: "Test connection" }).click();
+
+    const feedback = page.getByTestId("vmware-connection-test-feedback");
+    await expect(feedback).toBeVisible();
+    await expect(feedback).toContainText("Unsupported vCenter version");
+    await expect(feedback).toContainText(
+      "VMware vCenter 6.7 is below the supported VI JSON release floor",
+    );
+    await expect(feedback).toContainText(
+      "Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.",
+    );
+    await expect(page.getByRole("dialog")).toContainText(
+      "Configure the vCenter endpoint Pulse should validate for the VMware platform.",
+    );
+    expect(createCalls).toBe(0);
+  });
+
   test("adds, edits, retests, and deletes VMware connections through the canonical settings workflow", async ({
     page,
   }) => {

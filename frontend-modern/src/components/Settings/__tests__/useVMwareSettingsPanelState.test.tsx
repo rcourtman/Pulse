@@ -187,4 +187,44 @@ describe('useVMwareSettingsPanelState', () => {
     expect(VMwareAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
   });
+
+  it('surfaces categorized draft test guidance from structured backend failures', async () => {
+    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.testConnection).mockRejectedValueOnce(
+      Object.assign(new Error('Failed to connect to VMware vCenter'), {
+        status: 400,
+        code: 'vmware_connection_failed',
+        details: {
+          category: 'unsupported_version',
+          error: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'legacy.lab.local',
+      username: 'administrator@vsphere.local',
+      password: 'secret',
+    });
+    const succeeded = await result.testCurrentForm();
+
+    expect(succeeded).toBe(false);
+    expect(notificationStore.error).toHaveBeenCalledWith(
+      'VMware vCenter 6.7 is below the supported VI JSON release floor',
+    );
+    expect(result.connectionFailure()).toEqual({
+      category: 'unsupported_version',
+      code: 'vmware_connection_failed',
+      guidance:
+        'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
+      message: 'VMware vCenter 6.7 is below the supported VI JSON release floor',
+      title: 'Unsupported vCenter version',
+      tone: 'warning',
+    });
+  });
 });

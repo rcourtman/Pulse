@@ -117,6 +117,11 @@ Phase-1 rule:
    an edit overlay payload without requiring masked-secret re-entry
 4. exhausting the implemented VI JSON release probe floor should classify as
    `unsupported_version`, not as a generic endpoint error
+5. connection-test failures must preserve canonical backend `code` plus
+   string-valued `details` such as `details.category` and `details.error`
+   through the shared browser client so the settings workflow can distinguish
+   version-floor, auth, TLS, permission, and network failures without a
+   VMware-only fetch path
 
 ## Runtime Health And Poll Summary Contract
 

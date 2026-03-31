@@ -763,6 +763,14 @@ for hosted tenant requests. Cloud and MSP surfaces may show failures from
 `frontend-modern/src/utils/apiClient.ts`, but they must resolve canonical JSON
 `error` / `message` fields before showing UI feedback instead of leaking raw
 response payloads while tenant-scoped org headers are still in flight.
+That same boundary now also owns stable structured error metadata on the shared
+browser client. When backend routes return canonical JSON `code` plus
+string-valued `details`, `frontend-modern/src/utils/apiClient.ts` must preserve
+that metadata on the thrown error object instead of collapsing everything to one
+display string. Hosted and platform-onboarding surfaces may then classify
+supported failure modes from the shared error object, but they must not invent
+route-local parsing rules or provider-local transport shims to recover metadata
+the shared client dropped.
 Hosted tenant runtime env is part of the same contract too: provisioned
 containers must carry hosted-safe tenant context such as
 `PULSE_TENANT_ID=<tenant-id>`, `PULSE_MULTI_TENANT_ENABLED=true`, and an explicit

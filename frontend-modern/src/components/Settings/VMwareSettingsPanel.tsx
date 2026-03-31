@@ -373,6 +373,25 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
             </p>
           </div>
 
+          <Show when={state.connectionFailure()}>
+            {(failure) => (
+              <CalloutCard
+                data-testid="vmware-connection-test-feedback"
+                tone={failure().tone}
+                title={failure().title}
+                description={
+                  <>
+                    <p>{failure().message}</p>
+                    <Show when={failure().guidance}>
+                      <p class="mt-2">{failure().guidance}</p>
+                    </Show>
+                  </>
+                }
+                icon={<ShieldAlert class="h-5 w-5" />}
+              />
+            )}
+          </Show>
+
           <div class="grid gap-4 sm:grid-cols-2">
             <label class={formField}>
               <span class={formLabel}>Name</span>
