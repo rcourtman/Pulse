@@ -128,6 +128,14 @@ func TestVMwarePollerUsesCanonicalSupplementalIngestOwnership(t *testing.T) {
 		"summary.Degraded = true",
 		"summary.IssueCount = len(snapshot.EnrichmentIssues)",
 		"summary.Issues = summarizeVMwareObservedIssues(snapshot.EnrichmentIssues)",
+		"observedIssueKey    string",
+		"transition := p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)",
+		"classifyVMwareObservedTransition(status.observed, status.observedIssueKey, nextObserved, nextIssueKey)",
+		"status.observedIssueKey = nextIssueKey",
+		`strings.HasPrefix(transition.action, "refresh_partial")`,
+		`action:     "refresh_partial_changed",`,
+		`action:  "refresh_recovered",`,
+		"func summarizeVMwareObservedIssueKey(issues []vmware.InventoryEnrichmentIssue) string {",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {

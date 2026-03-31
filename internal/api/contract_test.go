@@ -264,6 +264,90 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 	}
 }
 
+func TestContract_VMwareConnectionListCarriesDegradedObservedSummary(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	connection := config.VMwareVCenterInstance{
+		ID:       "conn-1",
+		Name:     "lab-vcenter",
+		Host:     "vcsa.lab.local",
+		Port:     443,
+		Username: "administrator@vsphere.local",
+		Password: "super-secret",
+		Enabled:  true,
+	}
+	handler, persistence := newVMwareHandlersForTest(t)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	collectedAt := time.Date(2026, 3, 31, 18, 15, 0, 0, time.UTC)
+	handler.statusMu.Lock()
+	handler.statuses = map[string]vmwareConnectionRuntimeStatus{
+		connection.ID: {
+			Poll: &monitoring.VMwareConnectionPollStatus{
+				IntervalSeconds: 60,
+				LastSuccessAt:   &collectedAt,
+			},
+			Observed: &monitoring.VMwareConnectionObservedSummary{
+				CollectedAt: &collectedAt,
+				Hosts:       4,
+				VMs:         24,
+				Datastores:  6,
+				VIRelease:   "8.0.3",
+				Degraded:    true,
+				IssueCount:  3,
+				Issues: []monitoring.VMwareConnectionObservedIssue{
+					{
+						Stage:       "signals",
+						Category:    "permission",
+						Message:     "VMware permissions are insufficient for HostSystem overall status",
+						Occurrences: 2,
+					},
+					{
+						Stage:       "topology",
+						Category:    "unavailable",
+						Message:     "VMware vm guest identity is temporarily unavailable",
+						Occurrences: 1,
+					},
+				},
+			},
+		},
+	}
+	handler.statusMu.Unlock()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/vmware/connections", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleList(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var responses []vmwareConnectionResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &responses); err != nil {
+		t.Fatalf("unmarshal vmware degraded list response: %v", err)
+	}
+	if len(responses) != 1 || responses[0].Observed == nil {
+		t.Fatalf("expected 1 vmware connection with degraded observed summary, got %+v", responses)
+	}
+	if !responses[0].Observed.Degraded {
+		t.Fatalf("expected degraded observed summary, got %+v", responses[0].Observed)
+	}
+	if responses[0].Observed.IssueCount != 3 {
+		t.Fatalf("observed issueCount = %d, want 3", responses[0].Observed.IssueCount)
+	}
+	if len(responses[0].Observed.Issues) != 2 {
+		t.Fatalf("observed issues len = %d, want 2", len(responses[0].Observed.Issues))
+	}
+	if responses[0].Observed.Issues[0].Stage != "signals" || responses[0].Observed.Issues[0].Occurrences != 2 {
+		t.Fatalf("unexpected first observed issue: %+v", responses[0].Observed.Issues[0])
+	}
+	if responses[0].Observed.Issues[1].Stage != "topology" || responses[0].Observed.Issues[1].Occurrences != 1 {
+		t.Fatalf("unexpected second observed issue: %+v", responses[0].Observed.Issues[1])
+	}
+}
+
 func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {
 	called := make(chan struct{}, 1)
 	metadataServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

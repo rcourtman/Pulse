@@ -1,14 +1,18 @@
 package monitoring
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
@@ -305,4 +309,117 @@ func TestVMwarePollerPublishesDegradedObservedSummaryOnPartialSuccess(t *testing
 	if summary.Observed.Issues[0].Occurrences != 2 || summary.Observed.Issues[0].Category != "permission" {
 		t.Fatalf("expected aggregated permission issue first, got %+v", summary.Observed.Issues[0])
 	}
+}
+
+type sequencedVMwarePollerProvider struct {
+	snapshots []*vmware.InventorySnapshot
+	index     int
+	current   *vmware.InventorySnapshot
+}
+
+func (p *sequencedVMwarePollerProvider) Refresh(context.Context) error {
+	if len(p.snapshots) == 0 {
+		p.current = nil
+		return nil
+	}
+	if p.index >= len(p.snapshots) {
+		p.current = p.snapshots[len(p.snapshots)-1]
+		return nil
+	}
+	p.current = p.snapshots[p.index]
+	p.index++
+	return nil
+}
+
+func (p *sequencedVMwarePollerProvider) Records() []unifiedresources.IngestRecord { return nil }
+func (p *sequencedVMwarePollerProvider) ActivityChanges() []unifiedresources.ResourceChange {
+	return nil
+}
+func (p *sequencedVMwarePollerProvider) Snapshot() *vmware.InventorySnapshot { return p.current }
+func (p *sequencedVMwarePollerProvider) Close()                              {}
+
+func TestVMwarePollerLogsDegradedTransitionsOnlyWhenStateChanges(t *testing.T) {
+	logs := captureVMwarePollerLogs(t)
+	poller := NewVMwarePoller(nil, time.Minute)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-log"
+	connection.Host = "vc.log.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+
+	issueA := vmware.InventoryEnrichmentIssue{
+		Stage:    "signals",
+		Category: "permission",
+		Message:  "VMware permissions are insufficient for HostSystem overall status",
+	}
+	issueB := vmware.InventoryEnrichmentIssue{
+		Stage:    "topology",
+		Category: "unavailable",
+		Message:  "VMware vm guest identity is temporarily unavailable",
+	}
+	provider := &sequencedVMwarePollerProvider{
+		snapshots: []*vmware.InventorySnapshot{
+			{
+				ConnectionID:     connection.ID,
+				CollectedAt:      time.Date(2026, 3, 31, 11, 0, 0, 0, time.UTC),
+				Hosts:            []vmware.InventoryHost{{Host: "host-101", Name: "esxi-01"}},
+				EnrichmentIssues: []vmware.InventoryEnrichmentIssue{issueA, issueA},
+			},
+			{
+				ConnectionID:     connection.ID,
+				CollectedAt:      time.Date(2026, 3, 31, 11, 1, 0, 0, time.UTC),
+				Hosts:            []vmware.InventoryHost{{Host: "host-101", Name: "esxi-01"}},
+				EnrichmentIssues: []vmware.InventoryEnrichmentIssue{issueA, issueA},
+			},
+			{
+				ConnectionID:     connection.ID,
+				CollectedAt:      time.Date(2026, 3, 31, 11, 2, 0, 0, time.UTC),
+				Hosts:            []vmware.InventoryHost{{Host: "host-101", Name: "esxi-01"}},
+				EnrichmentIssues: []vmware.InventoryEnrichmentIssue{issueB},
+			},
+			{
+				ConnectionID: connection.ID,
+				CollectedAt:  time.Date(2026, 3, 31, 11, 3, 0, 0, time.UTC),
+				Hosts:        []vmware.InventoryHost{{Host: "host-101", Name: "esxi-01"}},
+			},
+		},
+	}
+
+	entry := vmwarePollerProviderEntry{
+		orgID:        "default",
+		connectionID: connection.ID,
+		provider:     provider,
+	}
+	for i := 0; i < 4; i++ {
+		poller.pollConnection(context.Background(), entry)
+	}
+
+	output := logs.String()
+	if got := strings.Count(output, `"action":"refresh_partial"`); got != 1 {
+		t.Fatalf("expected one refresh_partial warning, got %d logs: %s", got, output)
+	}
+	if got := strings.Count(output, `"action":"refresh_partial_changed"`); got != 1 {
+		t.Fatalf("expected one refresh_partial_changed warning, got %d logs: %s", got, output)
+	}
+	if got := strings.Count(output, `"action":"refresh_recovered"`); got != 1 {
+		t.Fatalf("expected one refresh_recovered info log, got %d logs: %s", got, output)
+	}
+
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Observed == nil || summary.Observed.Degraded {
+		t.Fatalf("expected recovered observed summary after final healthy poll, got %+v", summary.Observed)
+	}
+}
+
+func captureVMwarePollerLogs(t *testing.T) *bytes.Buffer {
+	t.Helper()
+
+	var buf bytes.Buffer
+	origLogger := log.Logger
+	log.Logger = zerolog.New(&buf).Level(zerolog.DebugLevel).With().Timestamp().Logger()
+	t.Cleanup(func() {
+		log.Logger = origLogger
+	})
+
+	return &buf
 }

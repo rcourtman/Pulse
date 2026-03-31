@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -69,6 +70,13 @@ type vmwareConnectionRuntimeStatus struct {
 	lastError           *VMwareConnectionPollError
 	consecutiveFailures int
 	observed            *VMwareConnectionObservedSummary
+	observedIssueKey    string
+}
+
+type vmwareObservedTransition struct {
+	action     string
+	message    string
+	issueCount int
 }
 
 type vmwarePollerProvider interface {
@@ -402,18 +410,9 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 	records := cloneIngestRecords(entry.provider.Records())
 	changes := cloneResourceChanges(entry.provider.ActivityChanges())
 	snapshot := entry.provider.Snapshot()
-	if snapshot != nil && len(snapshot.EnrichmentIssues) > 0 {
-		log.Warn().
-			Str("component", "vmware_poller").
-			Str("action", "refresh_partial").
-			Str("org_id", entry.orgID).
-			Str("connection_id", entry.connectionID).
-			Int("issue_count", len(snapshot.EnrichmentIssues)).
-			Msg("VMware poller refreshed base inventory with degraded optional enrichment")
-	}
 
 	p.mu.Lock()
-	p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)
+	transition := p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)
 	if p.cachedRecordsByOrg[entry.orgID] == nil {
 		p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
 	}
@@ -423,6 +422,20 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 	p.cachedRecordsByOrg[entry.orgID][entry.connectionID] = records
 	p.cachedChangesByOrg[entry.orgID][entry.connectionID] = changes
 	p.mu.Unlock()
+
+	if transition != nil {
+		event := log.Info()
+		if strings.HasPrefix(transition.action, "refresh_partial") {
+			event = log.Warn()
+		}
+		event.
+			Str("component", "vmware_poller").
+			Str("action", transition.action).
+			Str("org_id", entry.orgID).
+			Str("connection_id", entry.connectionID).
+			Int("issue_count", transition.issueCount).
+			Msg(transition.message)
+	}
 }
 
 func (p *VMwarePoller) providerEntries() []vmwarePollerProviderEntry {
@@ -711,15 +724,21 @@ func (p *VMwarePoller) ensureConnectionRuntimeStatusLocked(orgID, connID string)
 	return p.statusByOrg[orgID][connID]
 }
 
-func (p *VMwarePoller) recordConnectionSuccessLocked(orgID, connID string, at time.Time, snapshot *vmware.InventorySnapshot) {
+func (p *VMwarePoller) recordConnectionSuccessLocked(orgID, connID string, at time.Time, snapshot *vmware.InventorySnapshot) *vmwareObservedTransition {
 	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
 	status.lastAttemptAt = at
 	status.lastSuccessAt = at
 	status.lastError = nil
 	status.consecutiveFailures = 0
 	if snapshot != nil {
-		status.observed = buildVMwareObservedSummary(snapshot)
+		nextObserved := buildVMwareObservedSummary(snapshot)
+		nextIssueKey := summarizeVMwareObservedIssueKey(snapshot.EnrichmentIssues)
+		transition := classifyVMwareObservedTransition(status.observed, status.observedIssueKey, nextObserved, nextIssueKey)
+		status.observed = nextObserved
+		status.observedIssueKey = nextIssueKey
+		return transition
 	}
+	return nil
 }
 
 func (p *VMwarePoller) recordConnectionFailureLocked(orgID, connID string, err error, at time.Time) {
@@ -764,6 +783,7 @@ func (p *VMwarePoller) RecordConnectionTestSuccess(orgID, connID string, summary
 			Datastores:  summary.Datastores,
 			VIRelease:   strings.TrimSpace(summary.VIRelease),
 		}
+		status.observedIssueKey = ""
 	}
 }
 
@@ -803,6 +823,33 @@ func buildVMwareObservedSummary(snapshot *vmware.InventorySnapshot) *VMwareConne
 		summary.Issues = summarizeVMwareObservedIssues(snapshot.EnrichmentIssues)
 	}
 	return summary
+}
+
+func classifyVMwareObservedTransition(previous *VMwareConnectionObservedSummary, previousIssueKey string, next *VMwareConnectionObservedSummary, nextIssueKey string) *vmwareObservedTransition {
+	prevDegraded := previous != nil && previous.Degraded
+	nextDegraded := next != nil && next.Degraded
+
+	switch {
+	case !prevDegraded && nextDegraded:
+		return &vmwareObservedTransition{
+			action:     "refresh_partial",
+			message:    "VMware poller refreshed base inventory with degraded optional enrichment",
+			issueCount: next.IssueCount,
+		}
+	case prevDegraded && nextDegraded && previousIssueKey != nextIssueKey:
+		return &vmwareObservedTransition{
+			action:     "refresh_partial_changed",
+			message:    "VMware poller degraded optional enrichment changed",
+			issueCount: next.IssueCount,
+		}
+	case prevDegraded && !nextDegraded:
+		return &vmwareObservedTransition{
+			action:  "refresh_recovered",
+			message: "VMware poller optional enrichment recovered",
+		}
+	default:
+		return nil
+	}
 }
 
 func classifyVMwarePollError(err error) string {
@@ -899,6 +946,27 @@ func summarizeVMwareObservedIssues(issues []vmware.InventoryEnrichmentIssue) []V
 		summary = summary[:3]
 	}
 	return summary
+}
+
+func summarizeVMwareObservedIssueKey(issues []vmware.InventoryEnrichmentIssue) string {
+	if len(issues) == 0 {
+		return ""
+	}
+
+	counts := make(map[string]int, len(issues))
+	for _, issue := range issues {
+		key := strings.ToLower(strings.TrimSpace(issue.Stage)) + "\x00" +
+			strings.ToLower(strings.TrimSpace(issue.Category)) + "\x00" +
+			strings.ToLower(strings.TrimSpace(issue.Message))
+		counts[key]++
+	}
+
+	parts := make([]string, 0, len(counts))
+	for key, count := range counts {
+		parts = append(parts, key+"\x00"+strconv.Itoa(count))
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "\n")
 }
 
 func cloneVMwareObservedIssues(in []VMwareConnectionObservedIssue) []VMwareConnectionObservedIssue {
