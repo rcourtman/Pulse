@@ -11,7 +11,7 @@ import { eventBus } from '@/stores/events';
 
 export const INFRA_SUMMARY_CACHE_PREFIX = 'pulse.infrastructureSummaryCharts.';
 export const INFRA_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
-const INFRA_SUMMARY_CACHE_VERSION = 1;
+const INFRA_SUMMARY_CACHE_VERSION = 2;
 const INFRA_SUMMARY_CACHE_MAX_CHARS = 900_000;
 const INFRA_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
 

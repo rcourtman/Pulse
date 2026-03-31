@@ -573,6 +573,10 @@ count. Lifecycle-adjacent install or discovery surfaces must not fork that
 into a VMware-only install wizard, direct-ESXi setup branch, or agent-first
 bootstrap story just because the runtime now has a live VMware connection
 panel and poller.
+That same shared router boundary must treat infrastructure summary chart
+normalization as summary-only presentation transport: long-range chart bucket
+shaping may improve operator-facing summary readability, but it must not be
+reused as lifecycle freshness, heartbeat, or enrollment-state authority.
 That same lifecycle-owned settings slice now also owns the shared VMware
 summary and handoff framing. `InfrastructurePlatformConnectionsSummaryCard.tsx`,
 `InfrastructureReportingPanel.tsx`, `useInfrastructureSettingsState.ts`, and

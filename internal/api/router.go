@@ -5531,6 +5531,164 @@ func capMetricPointSeries(points []MetricPoint, maxPoints int) []MetricPoint {
 	return result
 }
 
+const (
+	infrastructureSummaryMinSeriesPoints = 24
+	infrastructureSummaryMaxSeriesPoints = 96
+)
+
+type infrastructureSummaryBucket struct {
+	count          int
+	sum            float64
+	max            float64
+	firstTimestamp int64
+	lastTimestamp  int64
+	lastValue      float64
+}
+
+func targetInfrastructureSummarySeriesPoints(duration time.Duration) int {
+	if duration <= 0 {
+		return infrastructureSummaryMinSeriesPoints
+	}
+
+	target := int(duration / time.Minute)
+	if target < infrastructureSummaryMinSeriesPoints {
+		target = infrastructureSummaryMinSeriesPoints
+	}
+	if target > infrastructureSummaryMaxSeriesPoints {
+		target = infrastructureSummaryMaxSeriesPoints
+	}
+	if target < 2 {
+		target = 2
+	}
+	return target
+}
+
+func aggregateInfrastructureSummaryBucketValue(
+	metricType string,
+	bucket infrastructureSummaryBucket,
+	isLastBucket bool,
+) float64 {
+	if bucket.count == 0 {
+		return 0
+	}
+	if isLastBucket {
+		return bucket.lastValue
+	}
+
+	switch metricType {
+	case "memory", "disk":
+		return bucket.sum / float64(bucket.count)
+	default:
+		return bucket.max
+	}
+}
+
+// normalizeInfrastructureSummaryMetricPointSeries folds mixed-cadence history
+// into equal-time buckets for the infrastructure summary endpoint so long-range
+// sparklines do not bunch recent higher-resolution samples at the right edge.
+func normalizeInfrastructureSummaryMetricPointSeries(
+	points []MetricPoint,
+	metricType string,
+	duration time.Duration,
+	windowEndMillis int64,
+) []MetricPoint {
+	targetPoints := targetInfrastructureSummarySeriesPoints(duration)
+	if len(points) <= targetPoints || targetPoints < 2 || duration <= 0 {
+		return points
+	}
+
+	durationMillis := int64(duration / time.Millisecond)
+	if durationMillis <= 0 {
+		return points
+	}
+
+	windowStartMillis := windowEndMillis - durationMillis
+	bucketCount := targetPoints
+	buckets := make([]infrastructureSummaryBucket, bucketCount)
+	firstNonEmpty := -1
+	lastNonEmpty := -1
+
+	for _, point := range points {
+		if point.Timestamp < windowStartMillis || point.Timestamp > windowEndMillis {
+			continue
+		}
+		bucketIndex := int(((point.Timestamp - windowStartMillis) * int64(bucketCount)) / durationMillis)
+		if bucketIndex < 0 {
+			bucketIndex = 0
+		}
+		if bucketIndex >= bucketCount {
+			bucketIndex = bucketCount - 1
+		}
+
+		bucket := &buckets[bucketIndex]
+		if bucket.count == 0 {
+			bucket.max = point.Value
+			bucket.firstTimestamp = point.Timestamp
+			if firstNonEmpty == -1 {
+				firstNonEmpty = bucketIndex
+			}
+		} else if point.Value > bucket.max {
+			bucket.max = point.Value
+		}
+		bucket.count++
+		bucket.sum += point.Value
+		bucket.lastTimestamp = point.Timestamp
+		bucket.lastValue = point.Value
+		lastNonEmpty = bucketIndex
+	}
+
+	if firstNonEmpty == -1 || lastNonEmpty == -1 {
+		return points
+	}
+
+	result := make([]MetricPoint, 0, targetPoints)
+	for bucketIndex := 0; bucketIndex < bucketCount; bucketIndex++ {
+		bucket := buckets[bucketIndex]
+		if bucket.count == 0 {
+			continue
+		}
+
+		bucketStartMillis := windowStartMillis + (int64(bucketIndex)*durationMillis)/int64(bucketCount)
+		bucketEndMillis := windowStartMillis + (int64(bucketIndex+1)*durationMillis)/int64(bucketCount)
+		timestamp := bucketStartMillis + (bucketEndMillis-bucketStartMillis)/2
+		switch bucketIndex {
+		case firstNonEmpty:
+			timestamp = bucket.firstTimestamp
+		case lastNonEmpty:
+			timestamp = bucket.lastTimestamp
+		}
+
+		result = append(result, MetricPoint{
+			Timestamp: timestamp,
+			Value: aggregateInfrastructureSummaryBucketValue(
+				metricType,
+				bucket,
+				bucketIndex == lastNonEmpty,
+			),
+		})
+	}
+
+	if len(result) == 0 {
+		return points
+	}
+	return result
+}
+
+func normalizeInfrastructureSummaryChartSeries(
+	metrics map[string][]MetricPoint,
+	duration time.Duration,
+	windowEndMillis int64,
+) {
+	for metricType, points := range metrics {
+		metrics[metricType] = normalizeInfrastructureSummaryMetricPointSeries(
+			points,
+			metricType,
+			duration,
+			windowEndMillis,
+		)
+	}
+}
+
 // sparklineMetrics lists the metric types consumed by summary sparklines
 // and density maps. Metrics not in this set are omitted to keep payloads small.
 var sparklineMetrics = map[string]bool{
@@ -6222,6 +6380,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 			}
 		}
+		normalizeInfrastructureSummaryChartSeries(nodeData[nid], duration, currentTime)
 	}
 
 	// Process Docker hosts - batch-load historical data (1-2 SQL calls instead of N).
@@ -6276,6 +6435,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			}
 			dockerHostData[dhID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: diskPercent}}
 		}
+		normalizeInfrastructureSummaryChartSeries(dockerHostData[dhID], duration, currentTime)
 	}
 
 	// Process unified agents - batch-load historical data (1-2 SQL calls instead of N).
@@ -6319,6 +6479,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 			agentData[hID]["memory"] = []MetricPoint{{Timestamp: currentTime, Value: h.MemoryPercent()}}
 			agentData[hID]["disk"] = []MetricPoint{{Timestamp: currentTime, Value: h.DiskPercent()}}
 		}
+		normalizeInfrastructureSummaryChartSeries(agentData[hID], duration, currentTime)
 	}
 
 	countNodePoints := func(metricsMap map[string]NodeChartData) int {

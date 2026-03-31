@@ -37,6 +37,7 @@ import (
 	authpkg "github.com/rcourtman/pulse-go-rewrite/pkg/auth"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/cloudauth"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
 
@@ -262,6 +263,89 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 	}
 	if responses[0].Observed.CollectedAt == nil || !responses[0].Observed.CollectedAt.Equal(collectedAt) {
 		t.Fatalf("observed collectedAt = %+v, want %s", responses[0].Observed.CollectedAt, collectedAt.Format(time.RFC3339))
+	}
+}
+
+func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.T) {
+	store := newTestMetricsStore(t)
+	monitor, state, _ := newTestMonitor(t)
+	setTestUnexportedField(t, monitor, "metricsStore", store)
+
+	state.Nodes = []models.Node{{
+		ID:       "node-contract-1",
+		Name:     "node-contract-1",
+		Instance: "pve1",
+		Status:   "online",
+		CPU:      0.75,
+		Memory:   models.Memory{Usage: 42.0},
+		Disk:     models.Disk{Usage: 55.0},
+	}}
+	syncTestResourceStore(t, monitor, state)
+
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	windowStart := now.Add(-7 * 24 * time.Hour)
+	seed := make([]metrics.WriteMetric, 0, 1200)
+	appendMetric := func(ts time.Time, value float64) {
+		for _, metricType := range []string{"cpu", "memory", "disk"} {
+			seed = append(seed, metrics.WriteMetric{
+				ResourceType: "node",
+				ResourceID:   "node-contract-1",
+				MetricType:   metricType,
+				Value:        value,
+				Timestamp:    ts,
+				Tier:         metrics.TierMinute,
+			})
+		}
+	}
+	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
+		appendMetric(ts, 20)
+	}
+	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
+		appendMetric(ts, 40)
+	}
+	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
+		appendMetric(ts, 60)
+	}
+	appendMetric(now, 75)
+	store.WriteBatchSync(seed)
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/infrastructure?range=7d", nil)
+	rec := httptest.NewRecorder()
+	router.handleInfrastructureCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded InfrastructureChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal infrastructure charts response: %v", err)
+	}
+
+	cpuSeries := decoded.NodeData["node-contract-1"]["cpu"]
+	if len(cpuSeries) == 0 {
+		t.Fatal("expected normalized cpu series")
+	}
+	if len(cpuSeries) > infrastructureSummaryMaxSeriesPoints {
+		t.Fatalf("expected cpu series <= %d points, got %d", infrastructureSummaryMaxSeriesPoints, len(cpuSeries))
+	}
+	if cpuSeries[len(cpuSeries)-1].Timestamp != now.UnixMilli() {
+		t.Fatalf("expected latest cpu timestamp %d, got %d", now.UnixMilli(), cpuSeries[len(cpuSeries)-1].Timestamp)
+	}
+	if cpuSeries[len(cpuSeries)-1].Value != 75 {
+		t.Fatalf("expected latest cpu value 75, got %.2f", cpuSeries[len(cpuSeries)-1].Value)
+	}
+
+	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
+	recentCount := 0
+	for _, point := range cpuSeries {
+		if point.Timestamp >= recentWindowStart {
+			recentCount++
+		}
+	}
+	if recentCount > 20 {
+		t.Fatalf("expected day-proportional recent summary buckets, got %d recent cpu points", recentCount)
 	}
 }
 

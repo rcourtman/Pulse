@@ -230,6 +230,115 @@ func TestTimeRangeConversion(t *testing.T) {
 	}
 }
 
+func TestTargetInfrastructureSummarySeriesPoints(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		duration time.Duration
+		want     int
+	}{
+		{name: "zero_defaults_to_minimum", duration: 0, want: infrastructureSummaryMinSeriesPoints},
+		{name: "one_hour_keeps_minute_resolution", duration: time.Hour, want: 60},
+		{name: "four_hours_caps_at_maximum", duration: 4 * time.Hour, want: infrastructureSummaryMaxSeriesPoints},
+		{name: "seven_days_caps_at_maximum", duration: 7 * 24 * time.Hour, want: infrastructureSummaryMaxSeriesPoints},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			if got := targetInfrastructureSummarySeriesPoints(tt.duration); got != tt.want {
+				t.Fatalf("targetInfrastructureSummarySeriesPoints(%v) = %d, want %d", tt.duration, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeInfrastructureSummaryMetricPointSeriesSmoothsMixedCadenceTail(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	duration := 7 * 24 * time.Hour
+	windowStart := now.Add(-duration)
+
+	var points []MetricPoint
+	for ts := windowStart; ts.Before(now.Add(-24 * time.Hour)); ts = ts.Add(65 * time.Minute) {
+		points = append(points, MetricPoint{
+			Timestamp: ts.UnixMilli(),
+			Value:     20,
+		})
+	}
+	for ts := now.Add(-24 * time.Hour); ts.Before(now.Add(-2 * time.Hour)); ts = ts.Add(2 * time.Minute) {
+		points = append(points, MetricPoint{
+			Timestamp: ts.UnixMilli(),
+			Value:     40,
+		})
+	}
+	for ts := now.Add(-2 * time.Hour); ts.Before(now); ts = ts.Add(time.Minute) {
+		points = append(points, MetricPoint{
+			Timestamp: ts.UnixMilli(),
+			Value:     60,
+		})
+	}
+	points = append(points, MetricPoint{Timestamp: now.UnixMilli(), Value: 75})
+
+	normalized := normalizeInfrastructureSummaryMetricPointSeries(points, "cpu", duration, now.UnixMilli())
+	if len(normalized) > infrastructureSummaryMaxSeriesPoints {
+		t.Fatalf("expected normalized point count <= %d, got %d", infrastructureSummaryMaxSeriesPoints, len(normalized))
+	}
+	if len(normalized) < 60 {
+		t.Fatalf("expected a range-wide summary series, got only %d points", len(normalized))
+	}
+	if normalized[len(normalized)-1].Timestamp != points[len(points)-1].Timestamp {
+		t.Fatalf("expected latest timestamp %d, got %d", points[len(points)-1].Timestamp, normalized[len(normalized)-1].Timestamp)
+	}
+	if normalized[len(normalized)-1].Value != points[len(points)-1].Value {
+		t.Fatalf("expected latest value %.1f, got %.1f", points[len(points)-1].Value, normalized[len(normalized)-1].Value)
+	}
+
+	recentWindowStart := now.Add(-24 * time.Hour).UnixMilli()
+	recentCount := 0
+	for _, point := range normalized {
+		if point.Timestamp >= recentWindowStart {
+			recentCount++
+		}
+	}
+	if recentCount > 20 {
+		t.Fatalf("expected roughly day-proportional recent buckets after normalization, got %d recent points", recentCount)
+	}
+}
+
+func TestNormalizeInfrastructureSummaryMetricPointSeriesAveragesPlateauMetrics(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	duration := 4 * time.Hour
+	bucketCount := targetInfrastructureSummarySeriesPoints(duration)
+	windowStart := now.Add(-duration)
+	durationMillis := duration.Milliseconds()
+	firstBucketEnd := windowStart.UnixMilli() + durationMillis/int64(bucketCount)
+
+	points := []MetricPoint{
+		{Timestamp: windowStart.UnixMilli() + 1_000, Value: 20},
+		{Timestamp: windowStart.UnixMilli() + 30_000, Value: 40},
+		{Timestamp: firstBucketEnd - 1_000, Value: 80},
+		{Timestamp: now.UnixMilli(), Value: 55},
+	}
+
+	normalized := normalizeInfrastructureSummaryMetricPointSeries(points, "memory", duration, now.UnixMilli())
+	if len(normalized) < 2 {
+		t.Fatalf("expected at least two normalized points, got %d", len(normalized))
+	}
+
+	firstValue := normalized[0].Value
+	if firstValue != (20+40+80)/3.0 {
+		t.Fatalf("expected first bucket average %.2f, got %.2f", (20+40+80)/3.0, firstValue)
+	}
+	if normalized[len(normalized)-1].Value != 55 {
+		t.Fatalf("expected latest point to preserve final value 55, got %.2f", normalized[len(normalized)-1].Value)
+	}
+}
+
 func TestDockerMetricKeyFormat(t *testing.T) {
 	t.Parallel()
 

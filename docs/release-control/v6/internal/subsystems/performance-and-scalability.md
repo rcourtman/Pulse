@@ -415,6 +415,10 @@ The infrastructure summary hot path is now explicit shared ownership too:
 selection, empty-state wording, and summary-series/metric derivation. Future
 summary-chart work must not put polling, cache hydration, and series math
 back into the shell.
+The summary API feeding that hot path must also normalize mixed-resolution
+history into equal-time summary buckets before it reaches the shell/runtime
+owners, so long-range cards do not bunch recent higher-resolution samples at
+the right edge.
 It now also includes the compact resource-facet summary chips rendered next
 to policy metadata, and those chips must stay within the same bounded
 windowing and mounted-row budget proved by

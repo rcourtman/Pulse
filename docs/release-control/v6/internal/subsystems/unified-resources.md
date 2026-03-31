@@ -680,6 +680,10 @@ while chart matching and summary-series derivation route through
 and `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
 stays the render shell, so summary charts are no longer an unowned mixed
 resource consumer surface.
+The shared summary chart contract now also requires the backend feed to
+normalize tiered infrastructure history into equal-time summary buckets, so
+long-range unified-resource cards do not expose storage-tier density changes as
+right-edge chart compression.
 The shared `ResourceFacetSummary` consumer now omits capability and
 relationship badges from the default table/detail surface entirely, while the
 backend contract keeps capability and relationship data on the owned resource
