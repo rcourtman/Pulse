@@ -185,7 +185,13 @@ Public cloud self-serve signup follows the same rule: `internal/cloudcp/config.g
 and `internal/cloudcp/public_cloud_signup_handlers.go` must accept only
 canonical `cloud_*` Stripe prices for public hosted signup tiers and fail
 closed when misconfigured so self-hosted or prelaunch-only prices cannot leak
-into live public checkout flows.
+into live public checkout flows. Until the governed v6 cutover explicitly
+opens that path, `internal/cloudcp/routes.go` and the hosted portal bootstrap
+must also keep public cloud signup links and route registration disabled even
+if canonical Cloud price IDs are already present for release-day readiness.
+That prelaunch gate must not disable `/api/public/magic-link/request`, because
+existing hosted commercial accounts still depend on the public portal sign-in
+flow before v6 public Cloud checkout is opened.
 Signed hosted entitlement leases are part of the same boundary: lease signing
 and verification must canonicalize recognized Cloud plan aliases and reconcile
 lease `limits.max_monitored_systems` to the authoritative per-plan contract instead of

@@ -69,6 +69,10 @@ var errPortalAuthRequired = errors.New("portal auth required")
 //   - No session or invalid session -> shows a magic-link login form
 //   - Valid session -> shows workspace list with management actions
 func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, faviconHref string) http.HandlerFunc {
+	return HandlePortalPageWithSignupPath(sessionSvc, reg, commercialLookup, faviconHref, PortalSignupPath)
+}
+
+func HandlePortalPageWithSignupPath(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, faviconHref string, signupPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -86,9 +90,9 @@ func HandlePortalPage(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, 
 				http.Error(w, "internal error", http.StatusInternalServerError)
 				return
 			}
-			renderPortalPage(w, nonce, faviconHref, BuildBootstrapData(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts)))
+			renderPortalPage(w, nonce, faviconHref, BuildBootstrapDataWithSignupPath(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts), signupPath))
 		case errors.Is(err, errPortalAuthRequired):
-			renderPortalPage(w, nonce, faviconHref, BuildAnonymousBootstrapData())
+			renderPortalPage(w, nonce, faviconHref, BuildAnonymousBootstrapDataWithSignupPath(signupPath))
 		default:
 			log.Error().Err(err).Msg("cloudcp.portal.page: validate session")
 			http.Error(w, "internal error", http.StatusInternalServerError)

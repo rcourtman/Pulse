@@ -25,10 +25,11 @@ func TestRegisterRoutes_AccountAndTenantMethodDispatch(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
 		Config: &CPConfig{
-			DataDir:             dir,
-			AdminKey:            "test-admin-key",
-			BaseURL:             "https://cloud.example.com",
-			StripeWebhookSecret: "whsec_test",
+			DataDir:                  dir,
+			AdminKey:                 "test-admin-key",
+			BaseURL:                  "https://cloud.example.com",
+			StripeWebhookSecret:      "whsec_test",
+			PublicCloudSignupEnabled: true,
 		},
 		Registry:         reg,
 		TrialSignupStore: trialStore,
@@ -108,10 +109,11 @@ func TestRegisterRoutes_FaviconRouteParity(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
 		Config: &CPConfig{
-			DataDir:             dir,
-			AdminKey:            "test-admin-key",
-			BaseURL:             "https://cloud.example.com",
-			StripeWebhookSecret: "whsec_test",
+			DataDir:                  dir,
+			AdminKey:                 "test-admin-key",
+			BaseURL:                  "https://cloud.example.com",
+			StripeWebhookSecret:      "whsec_test",
+			PublicCloudSignupEnabled: true,
 		},
 		Registry:         reg,
 		TrialSignupStore: trialStore,
@@ -162,10 +164,11 @@ func TestRegisterRoutes_TrialSignupRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
 		Config: &CPConfig{
-			DataDir:             dir,
-			AdminKey:            "test-admin-key",
-			BaseURL:             "https://cloud.example.com",
-			StripeWebhookSecret: "whsec_test",
+			DataDir:                  dir,
+			AdminKey:                 "test-admin-key",
+			BaseURL:                  "https://cloud.example.com",
+			StripeWebhookSecret:      "whsec_test",
+			PublicCloudSignupEnabled: true,
 		},
 		Registry:         reg,
 		TrialSignupStore: trialStore,
@@ -286,10 +289,11 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 	mux := http.NewServeMux()
 	RegisterRoutes(mux, &Deps{
 		Config: &CPConfig{
-			DataDir:             dir,
-			AdminKey:            "test-admin-key",
-			BaseURL:             "https://cloud.example.com",
-			StripeWebhookSecret: "whsec_test",
+			DataDir:                  dir,
+			AdminKey:                 "test-admin-key",
+			BaseURL:                  "https://cloud.example.com",
+			StripeWebhookSecret:      "whsec_test",
+			PublicCloudSignupEnabled: true,
 		},
 		Registry:         reg,
 		TrialSignupStore: trialStore,
@@ -318,6 +322,58 @@ func TestRegisterRoutes_PublicCloudSignupRoutes(t *testing.T) {
 	mux.ServeHTTP(publicSignupGetRec, publicSignupGetReq)
 	if publicSignupGetRec.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("GET /api/public/signup status=%d, want %d", publicSignupGetRec.Code, http.StatusMethodNotAllowed)
+	}
+
+	publicMagicLinkReq := httptest.NewRequest(http.MethodPost, "/api/public/magic-link/request", strings.NewReader(`{"email":"owner@example.com"}`))
+	publicMagicLinkReq.Header.Set("Content-Type", "application/json")
+	publicMagicLinkRec := httptest.NewRecorder()
+	mux.ServeHTTP(publicMagicLinkRec, publicMagicLinkReq)
+	if publicMagicLinkRec.Code != http.StatusOK {
+		t.Fatalf("POST /api/public/magic-link/request status=%d, want %d", publicMagicLinkRec.Code, http.StatusOK)
+	}
+}
+
+func TestRegisterRoutes_PublicCloudSignupRoutesDisabledByDefault(t *testing.T) {
+	dir := t.TempDir()
+	reg, err := registry.NewTenantRegistry(dir)
+	if err != nil {
+		t.Fatalf("NewTenantRegistry: %v", err)
+	}
+	t.Cleanup(func() { _ = reg.Close() })
+	trialStore, err := NewTrialSignupStore(dir)
+	if err != nil {
+		t.Fatalf("NewTrialSignupStore: %v", err)
+	}
+	t.Cleanup(func() { trialStore.Close() })
+
+	mux := http.NewServeMux()
+	RegisterRoutes(mux, &Deps{
+		Config: &CPConfig{
+			DataDir:             dir,
+			AdminKey:            "test-admin-key",
+			BaseURL:             "https://cloud.example.com",
+			StripeWebhookSecret: "whsec_test",
+		},
+		Registry:         reg,
+		TrialSignupStore: trialStore,
+		Version:          "test",
+	})
+
+	for _, tc := range []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/signup"},
+		{method: http.MethodGet, path: "/cloud/signup"},
+		{method: http.MethodGet, path: "/signup/complete"},
+		{method: http.MethodPost, path: "/api/public/signup"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, nil)
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("%s %s status=%d, want %d", tc.method, tc.path, rec.Code, http.StatusNotFound)
+		}
 	}
 
 	publicMagicLinkReq := httptest.NewRequest(http.MethodPost, "/api/public/magic-link/request", strings.NewReader(`{"email":"owner@example.com"}`))

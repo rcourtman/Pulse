@@ -40,6 +40,14 @@ describe('portal runtime', function() {
     expect(defaults.portal_api_base_path).toBe('/api/portal');
   });
 
+  it('preserves an explicitly empty signup path', function() {
+    var defaults = createBootstrapDefaults({
+      signup_path: '',
+    });
+
+    expect(defaults.signup_path).toBe('');
+  });
+
   it('creates a store from runtime bootstrap input', function() {
     var runtime = createPortalRuntime({
       authenticated: true,

@@ -1972,6 +1972,9 @@
   function escapeAttr(value) {
     return escapeHTML(value);
   }
+  function hasSignupPath(signupPath) {
+    return String(signupPath || "").trim() !== "";
+  }
   function titleCase(value) {
     if (!value) return "";
     return value.charAt(0).toUpperCase() + value.slice(1);
@@ -1988,49 +1991,11 @@
     if (account.kind === "individual") return "Hosted account";
     return account.kind_label ? account.kind_label + " account" : "Account";
   }
-  function workspaceCountLabel(count) {
-    return count === 1 ? "1 workspace" : String(count) + " workspaces";
-  }
-  function workspaceTotalChipLabel(count) {
-    return count === 1 ? "1 workspace total" : String(count) + " workspaces total";
-  }
   function reviewWorkspaceHeadline(count) {
     return count === 1 ? "1 workspace needs review" : String(count) + " workspaces need review";
   }
   function readyWorkspaceHeadline(count) {
     return count === 1 ? "1 workspace is ready to use" : String(count) + " workspaces are ready to use";
-  }
-  function readyWorkspaceSectionChipLabel(count) {
-    return count === 1 ? "1 workspace ready to use" : String(count) + " workspaces ready to use";
-  }
-  function reviewWorkspaceChipLabel(count) {
-    return count === 1 ? "1 workspace to review" : String(count) + " workspaces to review";
-  }
-  function readyWorkspaceChipLabel(count) {
-    return count === 1 ? "1 ready workspace" : String(count) + " ready workspaces";
-  }
-  function suspendedWorkspaceChipLabel(count) {
-    return count === 1 ? "1 suspended workspace" : String(count) + " suspended workspaces";
-  }
-  function suspendedWorkspaceSectionChipLabel(count) {
-    return count === 1 ? "1 workspace suspended" : String(count) + " workspaces suspended";
-  }
-  function supportSectionChipLabels(hasHostedAccounts2, hostedViewOnly, supportEmail) {
-    if (hasHostedAccounts2) {
-      return [
-        "Escalation only",
-        hostedViewOnly ? "Review Workspaces or Access, or contact owner/admin first" : "Open Workspaces, Access, or Billing first",
-        supportEmail ? "Email support" : "Support route"
-      ];
-    }
-    return ["Escalation only", "Open Billing first", supportEmail ? "Email support" : "Support route"];
-  }
-  function supportLeadCopy(hasHostedAccounts2, hostedViewOnly, showSelfHostedCommercial) {
-    if (!hasHostedAccounts2) return "Use Support only after Billing fails.";
-    if (hostedViewOnly) {
-      return showSelfHostedCommercial ? "Use Support only after Workspaces review, Access review, owner/admin handoff, or Billing fails." : "Use Support only after Workspaces review, Access review, owner/admin handoff, or hosted Billing fails.";
-    }
-    return showSelfHostedCommercial ? "Use Support only after Workspaces, Access, or Billing fails." : "Use Support only after Workspaces, Access, or hosted Billing fails.";
   }
   function supportRunbookPathCopy(hasHostedAccounts2, hostedViewOnly, showSelfHostedCommercial) {
     if (!hasHostedAccounts2) return "Billing, licenses, refunds, or privacy.";
@@ -2038,10 +2003,6 @@
       return showSelfHostedCommercial ? "Workspaces review, Access review, owner/admin handoff, hosted billing, licenses, refunds, or privacy." : "Workspaces review, Access review, owner/admin handoff, or hosted billing.";
     }
     return showSelfHostedCommercial ? "Workspaces, Access, hosted billing, licenses, refunds, or privacy." : "Workspaces, Access, or hosted billing.";
-  }
-  function supportRunbookAccountCopy(hasHostedAccounts2, showSelfHostedCommercial) {
-    if (!hasHostedAccounts2) return "Commercial billing email used for the self-hosted purchase.";
-    return showSelfHostedCommercial ? "Hosted account and workspace when relevant, or billing email for self-hosted work." : "Hosted account and workspace, or hosted billing account.";
   }
   function hasHostedAccounts(accounts) {
     return accounts.length > 0;
@@ -2056,16 +2017,6 @@
       total += Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces.length : 0;
     }
     return total;
-  }
-  function collectWorkspaces(accounts) {
-    var results = [];
-    for (var i = 0; i < accounts.length; i += 1) {
-      var workspaces = Array.isArray(accounts[i].workspaces) ? accounts[i].workspaces : [];
-      for (var j = 0; j < workspaces.length; j += 1) {
-        results.push(workspaces[j]);
-      }
-    }
-    return results;
   }
   function collectOverviewWorkspaceEntries(accounts) {
     var results = [];
@@ -2116,18 +2067,6 @@
       return '<span class="section-context-chip">' + escapeHTML(chip) + "</span>";
     }).join("") + "</div>";
   }
-  function renderFactLine(className, facts) {
-    if (!facts.length) return "";
-    return '<div class="' + className + '">' + facts.map(function(fact) {
-      return "<span>" + escapeHTML(fact) + "</span>";
-    }).join('<span class="portal-fact-separator">\u2022</span>') + "</div>";
-  }
-  function renderSummaryStrip(items) {
-    if (!items.length) return "";
-    return '<div class="portal-summary-strip">' + items.map(function(item) {
-      return '<div class="portal-summary-item"><span>' + escapeHTML(item.label) + "</span><strong>" + escapeHTML(item.value) + "</strong></div>";
-    }).join("") + "</div>";
-  }
   function attentionWorkspaces(workspaces) {
     var results = [];
     for (var i = 0; i < workspaces.length; i += 1) {
@@ -2138,20 +2077,15 @@
     }
     return results;
   }
-  function accountContextRoleMeta(account) {
-    return portalRoleLabel(account.role) + " role";
-  }
-  function renderAccountContextStrip(account) {
-    return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">Pulse Account</span><span class="portal-account-context-separator">\u2022</span><span class="portal-account-context-access">' + escapeHTML(accountKindLabel(account)) + '</span></div><div class="portal-account-context-row portal-account-context-row-title"><h2>' + escapeHTML(account.name) + "</h2></div><p>" + escapeHTML(accountContextRoleMeta(account)) + "</p></div></section>";
-  }
-  function renderPortalContextStrip(accounts, showSelfHostedCommercial) {
+  function renderIdentityBar(accounts, showSelfHostedCommercial) {
     if (accounts.length === 1) {
-      return renderAccountContextStrip(accounts[0]);
+      var account = accounts[0];
+      return '<div class="portal-identity-bar"><h2>' + escapeHTML(account.name) + '</h2><span class="portal-identity-sep">\xB7</span><span>' + escapeHTML(portalRoleLabel(account.role)) + '</span><span class="portal-identity-sep">\xB7</span><span>' + escapeHTML(accountKindLabel(account)) + "</span></div>";
     }
     if (accounts.length > 1) {
-      return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">Pulse Account</span><span class="portal-account-context-separator">\u2022</span><span class="portal-account-context-access">' + escapeHTML(accounts.length === 1 ? "1 hosted account" : String(accounts.length) + " hosted accounts") + '</span></div><div class="portal-account-context-row portal-account-context-row-title"><h2>Hosted accounts</h2></div><p>Workspaces, access, and billing by account.</p></div></section>';
+      return '<div class="portal-identity-bar"><h2>Pulse Account</h2><span class="portal-identity-sep">\xB7</span><span>' + String(accounts.length) + " accounts</span></div>";
     }
-    return '<section class="portal-account-context"><div class="portal-account-context-copy"><div class="portal-account-context-meta"><span class="account-eyebrow">Billing account</span><span class="portal-account-context-separator">\u2022</span><span class="portal-account-context-access">' + escapeHTML(showSelfHostedCommercial ? "Self-hosted commercial" : "Commercial account") + '</span></div><div class="portal-account-context-row portal-account-context-row-title"><h2>Billing</h2></div><p>Use Billing for self-hosted subscriptions, licenses, refunds, and privacy requests.</p></div></section>';
+    return '<div class="portal-identity-bar"><h2>Pulse Account</h2><span class="portal-identity-sep">\xB7</span><span>' + escapeHTML(showSelfHostedCommercial ? "Self-hosted billing" : "Billing") + "</span></div>";
   }
   function primaryShellSections(bootstrap) {
     var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
@@ -2179,14 +2113,13 @@
   function visibleShellSections(bootstrap) {
     return primaryShellSections(bootstrap).concat(utilityShellSections(bootstrap));
   }
-  function shellSectionButton(section, activeSection, title, variant) {
-    return '<button class="portal-shell-nav-link portal-shell-nav-link-' + variant + (activeSection === section ? " active" : "") + '" type="button" data-shell-action="activate-section" data-shell-section="' + section + '"><span class="portal-shell-nav-row"><span class="portal-shell-nav-label">' + title + "</span></span></button>";
-  }
-  function renderShellNavigation(bootstrap, activeSection) {
+  function renderTabBar(bootstrap, activeSection) {
     var sections = visibleShellSections(bootstrap);
-    return '<nav class="portal-shell-nav" aria-label="Pulse Account sections"><div class="portal-shell-nav-group portal-shell-nav-group-primary">' + sections.map(function(entry) {
-      return shellSectionButton(entry.section, activeSection, entry.title, entry.section === "support" ? "utility" : "primary");
-    }).join("") + "</div></nav>";
+    return '<nav class="portal-tab-bar" aria-label="Pulse Account sections">' + sections.map(function(entry) {
+      var isActive = activeSection === entry.section;
+      var cls = "portal-tab" + (isActive ? " active" : "") + (entry.section === "support" ? " portal-tab-utility" : "");
+      return '<button class="' + cls + '" type="button" data-shell-action="activate-section" data-shell-section="' + entry.section + '">' + entry.title + "</button>";
+    }).join("") + "</nav>";
   }
   function renderWorkspaceCard(account, workspace, accountAPIBasePath) {
     var status = workspaceHealthState(workspace);
@@ -2350,30 +2283,13 @@
     var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
     var entries = collectOverviewWorkspaceEntries(accounts);
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-    var totalCount = entries.length;
-    var readyCount = readyOverviewEntries(entries).length;
-    var attentionCount = attentionOverviewEntries(entries).length;
-    var suspendedCount = countWorkspacesByState(collectWorkspaces(accounts), "suspended");
-    var chips = accounts.length ? [
-      accounts.length === 1 ? "1 account" : String(accounts.length) + " accounts",
-      workspaceCountLabel(totalCount),
-      readyWorkspaceChipLabel(readyCount),
-      reviewWorkspaceChipLabel(attentionCount),
-      suspendedWorkspaceChipLabel(suspendedCount)
-    ] : ["No hosted account", "0 hosted workspaces", "Billing available", "Support only on escalation"];
-    return '<section class="account-content-panel account-content-panel-overview"><div class="account-stage-header account-stage-header-overview overview-stage-header"><div><div class="account-panel-kicker">Summary</div><h3>Current state</h3><p>Use this summary only when you need a quick account readout.</p>' + renderSectionContextChips(chips) + '</div></div><div class="overview-task-grid overview-task-grid-compact">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + "</div></section>";
-  }
-  function renderPageHeader(kicker, title, copy, summaryHTML = "") {
-    return '<div class="portal-page-header"><div><div class="account-panel-kicker">' + escapeHTML(kicker) + "</div><h2>" + escapeHTML(title) + "</h2><p>" + escapeHTML(copy) + "</p></div>" + summaryHTML + "</div>";
-  }
-  function renderAccountBlockHeader(account, facts, actionsHTML = "", copy = "") {
-    return '<div class="portal-account-block-header"><div class="portal-account-block-copy"><div class="account-panel-kicker">' + escapeHTML(accountKindLabel(account)) + "</div><h3>" + escapeHTML(account.name) + "</h3>" + renderFactLine("portal-account-block-facts", [accountContextRoleMeta(account)].concat(facts)) + (copy ? "<p>" + escapeHTML(copy) + "</p>" : "") + "</div>" + (actionsHTML ? '<div class="portal-account-block-actions">' + actionsHTML + "</div>" : "") + "</div>";
+    return '<section class="account-content-panel account-content-panel-overview"><div class="overview-task-grid overview-task-grid-compact">' + renderOverviewAttentionCard(accounts, entries, showSelfHostedCommercial) + renderOverviewReadyCard(accounts, entries, context.accountAPIBasePath) + renderOverviewNextActionCard(accounts, entries, context.accountAPIBasePath, showSelfHostedCommercial) + "</div></section>";
   }
   function renderNoHostedWorkspacesSection() {
-    return '<section class="account-content-panel account-content-panel-workspaces"><div class="account-stage-header"><div><div class="account-panel-kicker">Workspaces</div><h3>Workspaces</h3><p>No hosted workspace is attached to this account.</p>' + renderSectionContextChips(["None attached", "Billing instead"]) + '</div></div><div class="empty-state empty-state-spaced"><p>There is nothing to open or manage here yet.</p><p class="support-copy">Use Billing for self-hosted subscriptions, licenses, refunds, or privacy requests.</p></div></section>';
+    return '<section class="account-content-panel account-content-panel-workspaces"><div class="empty-state"><p>No hosted workspaces are attached to this account. Use Billing for self-hosted subscriptions and licenses.</p></div></section>';
   }
   function renderNoHostedAccessSection() {
-    return '<section class="account-content-panel account-content-panel-access"><div class="account-stage-header"><div><div class="account-panel-kicker">Access</div><h3>Access</h3><p>No hosted account roster is attached here.</p>' + renderSectionContextChips(["No hosted roster", "Billing instead"]) + '</div></div><div class="empty-state empty-state-spaced"><p>There are no hosted roles or invites to manage for this account right now.</p><p class="support-copy">If the task is commercial access to licenses, refunds, or privacy, stay in Billing.</p></div></section>';
+    return '<section class="account-content-panel account-content-panel-access"><div class="empty-state"><p>No hosted account roster is attached. Use Billing for commercial access to licenses, refunds, or privacy.</p></div></section>';
   }
   function renderAccountWorkspaceSection(account, accountAPIBasePath) {
     var workspaces = Array.isArray(account.workspaces) ? account.workspaces : [];
@@ -2391,21 +2307,12 @@
       if (account.kind === "msp") {
         addWorkspaceForm = '<div class="add-workspace-form" id="add-ws-form-' + escapeAttr(account.id) + '"><label for="ws-name-' + escapeAttr(account.id) + '">Workspace name (for example, a client name)</label><input type="text" id="ws-name-' + escapeAttr(account.id) + '" placeholder="Acme Corp" maxlength="80" autocomplete="off"><div class="form-actions"><button type="button" class="btn-primary" data-action="create-workspace" data-account-id="' + escapeAttr(account.id) + '">Create workspace</button><button type="button" class="btn-secondary" data-action="toggle-add-workspace" data-account-id="' + escapeAttr(account.id) + '">Cancel</button><div class="spinner" id="ws-spinner-' + escapeAttr(account.id) + '" hidden></div></div></div>';
       }
-      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><div class="account-panel-kicker">Workspace task</div><h3>Work on one workspace</h3><p>Open lifecycle for one workspace, or create a new one. Keep access and billing separate.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><div class="account-panel-kicker">Create workspace</div><h4>Open a new hosted workspace</h4><p>Create one workspace here when you need a new customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
+      workspaceManagement = '<section class="workspace-management-panel workspace-management-panel-idle" id="workspace-management-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-header"><div><h3>Workspace lifecycle</h3><p>Manage this workspace or create a new one.</p></div><button type="button" class="btn-secondary btn-compact" id="workspace-management-close-' + escapeAttr(account.id) + '" data-action="clear-workspace-selection" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="workspace-management-empty" id="workspace-management-empty-' + escapeAttr(account.id) + '"><div class="workspace-management-empty-shell"><div class="workspace-management-empty-actions-card"><div class="workspace-management-empty-actions-copy"><h4>Create a workspace</h4><p>Add a new hosted workspace for a customer or operating boundary.</p></div>' + addWorkspaceForm + '</div><div class="workspace-management-empty-note">Access changes stay in Access. Billing changes stay in Billing.</div></div></div><div class="workspace-management-content" id="workspace-management-content-' + escapeAttr(account.id) + '" hidden><div class="workspace-management-meta" id="workspace-management-meta-' + escapeAttr(account.id) + '"></div><h4 id="workspace-management-title-' + escapeAttr(account.id) + '"></h4><p class="workspace-management-summary" id="workspace-management-summary-' + escapeAttr(account.id) + '"></p><div class="workspace-management-facts"><div class="workspace-management-fact"><span>Health</span><strong id="workspace-management-health-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Lifecycle</span><strong id="workspace-management-lifecycle-' + escapeAttr(account.id) + '"></strong></div><div class="workspace-management-fact"><span>Created</span><strong id="workspace-management-created-' + escapeAttr(account.id) + '"></strong></div></div><div class="workspace-management-guidance" id="workspace-management-guidance-' + escapeAttr(account.id) + '"></div><div class="workspace-management-actions"><button type="button" class="btn-danger" id="workspace-management-action-' + escapeAttr(account.id) + '" data-action="workspace-action" data-account-id="' + escapeAttr(account.id) + '">Manage workspace</button></div></div></section>';
     }
-    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap"><div class="workspace-list-toolbar"><div class="workspace-list-summary">' + escapeHTML(workspaceListSummary) + '</div></div><div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
+    var workspaceHTML = workspaces.length ? '<div class="workspace-list-wrap">' + (workspaceHeaderActions ? '<div class="workspace-list-toolbar">' + workspaceHeaderActions + "</div>" : "") + '<div class="workspace-list-head"><span>Workspace</span><span>Health</span><span>Lifecycle</span><span>Actions</span></div><div class="workspace-list">' + workspaces.map(function(workspace) {
       return renderWorkspaceCard(account, workspace, accountAPIBasePath);
-    }).join("") + "</div></div>" : '<div class="empty-state"><p>' + escapeHTML(account.can_manage ? "No hosted workspaces yet. Create one to get started." : "No hosted workspaces are attached yet. An owner or admin must create the first one.") + "</p></div>";
-    return '<section class="account-content-panel account-content-panel-workspaces">' + renderAccountBlockHeader(
-      account,
-      [
-        workspaceTotalChipLabel(workspaces.length),
-        readyWorkspaceSectionChipLabel(readyCount),
-        reviewWorkspaceChipLabel(attentionCount),
-        suspendedWorkspaceSectionChipLabel(suspendedCount)
-      ],
-      workspaceHeaderActions
-    ) + '<div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
+    }).join("") + "</div></div>" : '<div class="empty-state"><p>' + escapeHTML(account.can_manage ? "No hosted workspaces yet. Create one to get started." : "No hosted workspaces are attached yet. An owner or admin must create the first one.") + "</p>" + (workspaceHeaderActions ? '<div style="margin-top: 8px">' + workspaceHeaderActions + "</div>" : "") + "</div>";
+    return '<section class="account-content-panel account-content-panel-workspaces"><div class="workspace-operations-shell workspace-operations-shell-idle" id="workspace-operations-shell-' + escapeAttr(account.id) + '"><div class="workspace-operations-detail" id="workspace-operations-detail-' + escapeAttr(account.id) + '" hidden>' + workspaceManagement + '</div><div class="workspace-operations-main">' + workspaceHTML + "</div></div></section>";
   }
   function renderAccountAccessSection(account) {
     var accessTaskStrip = account.can_manage ? '<div class="access-task-strip"><button type="button" class="access-task-button" id="access-task-invite-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="invite">Invite people</button><button type="button" class="access-task-button" id="access-task-change_role-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="change_role">Change roles</button><button type="button" class="access-task-button" id="access-task-remove-' + escapeAttr(account.id) + '" data-action="set-access-job" data-account-id="' + escapeAttr(account.id) + '" data-access-job="remove">Remove access</button></div>' : renderSectionContextChips(["View roster", "Owner or admin required"]);
@@ -2413,33 +2320,28 @@
     var accessInvitePanel = account.can_manage ? '<div class="access-invite-panel"><div class="access-panel-heading"><h4>Invite people</h4><p>Add one person with the minimum role they need on this account.</p></div><div class="access-invite"><div><label for="invite-email-' + escapeAttr(account.id) + '">Email</label><input type="email" id="invite-email-' + escapeAttr(account.id) + '" placeholder="user@example.com" autocomplete="off"></div><div><label for="invite-role-' + escapeAttr(account.id) + '">Role</label><select id="invite-role-' + escapeAttr(account.id) + '"><option value="admin">Admin</option><option value="tech">Tech</option><option value="read_only">Read-only</option></select></div><button type="button" class="btn-primary btn-compact" data-action="invite-member" data-account-id="' + escapeAttr(account.id) + '">Invite</button></div></div>' : "";
     var accessChangeRolePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Change roles on the roster</h4><p>Use the role column in the roster to change one person at a time. Keep each person on the smallest role they need.</p></div></div>' + accessRoleGuide;
     var accessRemovePanel = '<div class="access-job-note-panel"><div class="access-panel-heading"><h4>Remove stale access</h4><p>Use removal only when this person should no longer be on this hosted account. Owners may still be protected when they are the last owner.</p></div><div class="access-remove-points"><div class="access-remove-point"><strong>Pick the exact person</strong><span>Use the roster to remove one account member at a time.</span></div><div class="access-remove-point"><strong>Keep current owners safe</strong><span>The last owner cannot be removed until another owner exists.</span></div></div></div>';
-    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '">' + renderAccountBlockHeader(
-      account,
-      [account.can_manage ? "Manage access" : "Review roster"],
-      accessTaskStrip,
-      account.can_manage ? "Open one access task at a time, then use the roster below." : "Review who can act on this account. An owner or admin must make changes."
-    ) + '<div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '">' + (account.can_manage ? '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden><div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden><div class="access-task-header"><div><div class="account-panel-kicker">Access task</div><h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4><p id="access-task-copy-' + escapeAttr(account.id) + '"></p></div><button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' + accessInvitePanel + accessRoleGuide + '</div><div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' + accessChangeRolePanel + '</div><div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' + accessRemovePanel + "</div></div></div>" : "") + '<div class="access-shell-main"><div class="access-roster-column"><div class="access-roster"><div class="access-panel-heading"><h4>People on this account</h4><p>' + (account.can_manage ? "Review the hosted roster here, then open the exact access job you need." : "Review the hosted roster here. An owner or admin must make changes.") + '</p></div><div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div></div></div></section></section>';
+    return '<section class="account-content-panel account-content-panel-access"><section class="access-management-panel access-section access-section-shell" id="access-section-' + escapeAttr(account.id) + '" data-actor-role="' + escapeAttr(account.role) + '" data-can-manage="' + escapeAttr(account.can_manage ? "true" : "false") + '">' + (!account.can_manage ? '<p class="portal-section-copy">' + escapeHTML("Review who has access. An owner or admin must make changes.") + "</p>" : "") + '<div class="access-management-stats" id="access-stats-' + escapeAttr(account.id) + '"></div><div class="access-shell access-shell-idle" id="access-shell-' + escapeAttr(account.id) + '">' + (account.can_manage ? '<div class="access-shell-detail" id="access-detail-' + escapeAttr(account.id) + '" hidden><div class="access-task-panel" id="access-task-panel-' + escapeAttr(account.id) + '" hidden><div class="access-task-header"><div><h4 id="access-task-title-' + escapeAttr(account.id) + '">Invite people</h4><p id="access-task-copy-' + escapeAttr(account.id) + '"></p></div><button type="button" class="btn-secondary btn-compact" data-action="clear-access-job" data-account-id="' + escapeAttr(account.id) + '">Close panel</button></div><div class="access-task-body" id="access-task-body-invite-' + escapeAttr(account.id) + '" hidden>' + accessInvitePanel + accessRoleGuide + '</div><div class="access-task-body" id="access-task-body-change_role-' + escapeAttr(account.id) + '" hidden>' + accessChangeRolePanel + '</div><div class="access-task-body" id="access-task-body-remove-' + escapeAttr(account.id) + '" hidden>' + accessRemovePanel + "</div></div></div>" : "") + '<div class="access-shell-main"><div class="access-roster-column"><div class="access-roster">' + (account.can_manage ? '<div class="access-roster-toolbar">' + accessTaskStrip + "</div>" : "") + '<div class="access-roster-list" id="access-list-' + escapeAttr(account.id) + '"><div class="access-list-message">Loading\u2026</div></div></div></div></div></div></section></section>';
   }
   function renderHostedBillingCards(accounts, showSelfHostedCommercial) {
     var hostedBillingAccounts = accounts.filter(function(account) {
       return account.has_billing;
     });
     if (!hostedBillingAccounts.length) {
-      return '<section class="billing-surface-block billing-surface-block-empty"><div class="billing-surface-header"><div class="account-panel-kicker">Hosted billing</div><h3>No hosted billing attached</h3></div><p>' + escapeHTML(
-        showSelfHostedCommercial ? "Use the self-hosted billing tools below only when the request belongs to a self-hosted purchase." : "Hosted invoices, payment methods, and subscription changes are not attached to this account."
+      return '<section class="billing-surface-block billing-surface-block-empty"><div class="billing-surface-header"><h3>No hosted billing attached</h3></div><p>' + escapeHTML(
+        showSelfHostedCommercial ? "Use self-hosted billing tools below for self-hosted purchases." : "Hosted invoices and payment methods are not attached to this account."
       ) + "</p></section>";
     }
-    return '<section class="billing-surface-block"><div class="billing-surface-header"><div class="account-panel-kicker">Hosted billing</div><h3>Hosted billing</h3></div><div class="billing-action-list billing-action-list-surface">' + hostedBillingAccounts.map(function(account) {
+    return '<section class="billing-surface-block"><div class="billing-surface-header"><h3>Hosted billing</h3></div><div class="billing-action-list billing-action-list-surface">' + hostedBillingAccounts.map(function(account) {
       var actionHTML = account.can_manage ? '<button type="button" class="btn-primary btn-compact" data-action="open-billing" data-account-id="' + escapeAttr(account.id) + '">Open hosted billing</button>' : '<div class="billing-task-note">An owner or admin on this account needs to open hosted billing.</div>';
       return '<article class="billing-action-row billing-action-row-surface"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + escapeHTML(account.name) + '</h3><p>Invoices, payment methods, and hosted subscription changes for this account.</p></div><div class="billing-action-meta">Keep workspace changes in Workspaces and roster changes in Access.</div></div><div class="billing-action-cta">' + actionHTML + "</div></article>";
     }).join("") + "</div></section>";
   }
   function renderBillingTaskPanel(title, copy, panelID, bodyHTML) {
-    return '<section class="billing-panel" id="' + escapeAttr(panelID) + '" hidden><div class="billing-task-header"><div><div class="account-panel-kicker">Billing task</div><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + '</p></div><button type="button" class="btn-secondary btn-compact" data-account-billing-action="clear-billing-panel">Close panel</button></div><div class="billing-task-body">' + bodyHTML + "</div></section>";
+    return '<section class="billing-panel" id="' + escapeAttr(panelID) + '" hidden><div class="billing-task-header"><div><h3>' + escapeHTML(title) + "</h3><p>" + escapeHTML(copy) + '</p></div><button type="button" class="btn-secondary btn-compact" data-account-billing-action="clear-billing-panel">Close panel</button></div><div class="billing-task-body">' + bodyHTML + "</div></section>";
   }
   function renderSupportSection(context) {
     var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
-    var hasHostedAccounts2 = accounts.length > 0;
+    var isHosted = accounts.length > 0;
     var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
     var supportEmail = context.bootstrap.support_email || "";
     var canManageHostedTasks = false;
@@ -2449,21 +2351,17 @@
         break;
       }
     }
-    var hostedViewOnly = hasHostedAccounts2 && !canManageHostedTasks;
-    var supportLead = supportLeadCopy(hasHostedAccounts2, hostedViewOnly, showSelfHostedCommercial);
-    var supportChips = supportSectionChipLabels(hasHostedAccounts2, hostedViewOnly, supportEmail);
-    var retryCopy = hasHostedAccounts2 ? hostedViewOnly ? "Review Workspaces or Access first. If billing is involved, hand it to an owner or admin before you escalate." : "Retry the same Workspaces, Access, or Billing step before you escalate." : "Retry the same Billing step before you escalate.";
-    var supportActions = hasHostedAccounts2 ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Workspaces</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
-    return '<section class="portal-support-panel">' + renderPageHeader(
-      "Support",
-      "Support",
-      supportLead,
-      renderFactLine("portal-page-facts", supportChips)
-    ) + '<div class="portal-support-simple"><div class="portal-support-simple-card"><div class="portal-support-simple-list"><div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div><div class="portal-support-simple-row"><strong>Path</strong><span>' + escapeHTML(supportRunbookPathCopy(hasHostedAccounts2, hostedViewOnly, showSelfHostedCommercial)) + '</span></div><div class="portal-support-simple-row"><strong>Account or email</strong><span>' + escapeHTML(supportRunbookAccountCopy(hasHostedAccounts2, showSelfHostedCommercial)) + '</span></div><div class="portal-support-simple-row"><strong>Failed action</strong><span>Name the exact button, form, or billing step that failed and what happened next.</span></div></div><div class="portal-support-simple-actions">' + supportActions + '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div></div></section>";
+    var hostedViewOnly = isHosted && !canManageHostedTasks;
+    var retryCopy = isHosted ? hostedViewOnly ? "Review Workspaces or Access first. If billing is involved, hand it to an owner or admin before you escalate." : "Retry the same Workspaces, Access, or Billing step before you escalate." : "Retry the same Billing step before you escalate.";
+    var supportActions = isHosted ? '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="workspaces">Workspaces</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="access">Access</button><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>' : '<button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="billing">Billing</button>';
+    return '<section class="portal-support-panel"><p>Use Support only after the self-service path fails. Retry the same step before you escalate.</p><div class="portal-support-simple"><div class="portal-support-simple-card"><div class="portal-support-simple-list"><div class="portal-support-simple-row"><strong>Try first</strong><span>' + escapeHTML(retryCopy) + '</span></div><div class="portal-support-simple-row"><strong>Scope</strong><span>' + escapeHTML(supportRunbookPathCopy(isHosted, hostedViewOnly, showSelfHostedCommercial)) + '</span></div><div class="portal-support-simple-row"><strong>Include</strong><span>Account, email, and the exact action that failed.</span></div></div><div class="portal-support-simple-actions">' + supportActions + '<a class="portal-support-link" href="mailto:' + escapeAttr(supportEmail) + '">' + escapeHTML(supportEmail) + "</a></div></div></div></section>";
   }
   function renderHeaderHTML(context) {
     if (context.bootstrap.authenticated) {
       return '<div class="header-account-chip"><span class="header-account-email">' + escapeHTML(context.bootstrap.email || "") + '</span><button class="logout-btn" id="logout-btn" type="button">Sign out</button></div>';
+    }
+    if (!hasSignupPath(context.signupPath)) {
+      return "";
     }
     return '<a class="logout-btn link-button" href="' + escapeAttr(context.signupPath) + '">Create account</a>';
   }
@@ -2476,10 +2374,6 @@
     var activeSection = shellSections.some(function(entry) {
       return entry.section === preferredSection;
     }) ? preferredSection : shellSections[0] ? shellSections[0].section : "billing";
-    var allWorkspaces = collectWorkspaces(accounts);
-    var hostedBillingCount = accounts.filter(function(account) {
-      return account.has_billing;
-    }).length;
     var billingNote = hosted ? showSelfHostedCommercial ? "Hosted billing by account. Self-hosted purchases stay separate below." : "Hosted billing by account." : "Self-hosted subscriptions, licenses, refunds, and privacy requests.";
     var selfHostedBillingEscalationCopy = hosted ? "Escalate with the same hosted billing action or self-hosted path and the exact failed step." : "Escalate with the same self-hosted billing path and the exact failed step.";
     var workspacesContent = accounts.length ? accounts.map(function(account) {
@@ -2488,30 +2382,7 @@
     var accessContent = accounts.length ? accounts.map(function(account) {
       return '<section class="account-surface">' + renderAccountAccessSection(account) + "</section>";
     }).join("") : renderNoHostedAccessSection();
-    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-main">' + renderPortalContextStrip(accounts, showSelfHostedCommercial) + renderShellNavigation(context.bootstrap, activeSection) + (hosted ? '<section class="portal-content-panel portal-content-panel-workspaces">' + renderPageHeader(
-      "Workspaces",
-      "Workspaces",
-      "Open a workspace or manage lifecycle by account.",
-      renderSummaryStrip([
-        { label: "Accounts", value: String(accounts.length) },
-        { label: "Workspaces", value: String(allWorkspaces.length) },
-        { label: "Ready", value: String(countReadyWorkspaces(allWorkspaces)) },
-        { label: "Needs review", value: String(attentionWorkspaces(allWorkspaces).length) },
-        { label: "Suspended", value: String(countWorkspacesByState(allWorkspaces, "suspended")) }
-      ])
-    ) + workspacesContent + '</section><section class="portal-content-panel portal-content-panel-access">' + renderPageHeader(
-      "Access",
-      "Access",
-      "Review the roster or open one access task by account."
-    ) + accessContent + '</section><section class="portal-content-panel portal-content-panel-overview">' + renderShellOverviewSection(context) + "</section>" : "") + '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' + renderPageHeader(
-      "Billing",
-      "Billing",
-      billingNote,
-      renderSummaryStrip([
-        { label: "Hosted billing", value: String(hostedBillingCount) },
-        { label: "Self-hosted tasks", value: showSelfHostedCommercial ? "Available" : "Not attached" }
-      ])
-    ) + (hosted ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : "") + (showSelfHostedCommercial ? '<div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><div class="account-panel-kicker">Self-hosted billing</div><h3>Pick the self-hosted job</h3><p>Use self-hosted billing only for self-hosted purchases. Open one path at a time when hosted billing does not apply.</p></div><div class="billing-action-list">' + renderBillingActionRow("open-manage-billing", "Manage subscriptions", "Billing", "Open Stripe for self-hosted plan, invoice, and payment changes.", "manage-billing-panel", "manage-inline-email", ["Plan changes", "Invoices"]) + renderBillingActionRow("open-retrieve-billing", "Retrieve licenses", "Licenses", "Recover the latest active self-hosted license and invoice link.", "retrieve-billing-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderBillingActionRow("open-refund-billing", "Refund requests", "Refunds", "Request a self-serve refund when the purchase is still eligible.", "refund-billing-panel", "refund-inline-email", ["Eligibility check", "Revocation"]) + renderBillingActionRow("open-data-billing", "Data and privacy", "Privacy", "Request export or deletion for commercial account data.", "data-billing-panel", "data-export-email", ["Export", "Deletion"]) + '</div><div class="billing-inline-support"><div class="account-panel-kicker">Escalation only</div><h4>Use Support only after Billing fails</h4><p>' + selfHostedBillingEscalationCopy + '</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + renderBillingTaskPanel(
+    return '<div class="portal-shell" data-shell-section="' + activeSection + '"><div class="portal-shell-main">' + renderIdentityBar(accounts, showSelfHostedCommercial) + renderTabBar(context.bootstrap, activeSection) + (hosted ? '<section class="portal-content-panel portal-content-panel-workspaces">' + workspacesContent + '</section><section class="portal-content-panel portal-content-panel-access">' + accessContent + '</section><section class="portal-content-panel portal-content-panel-overview">' + renderShellOverviewSection(context) + "</section>" : "") + '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' + (hosted ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : "") + (showSelfHostedCommercial ? '<div class="billing-shell billing-shell-idle"><div class="billing-shell-main"><div class="billing-shell-main-head"><h3>Self-hosted billing</h3><p>Use self-hosted billing only for self-hosted purchases.</p></div><div class="billing-action-list">' + renderBillingActionRow("open-manage-billing", "Manage subscriptions", "Open", "Open Stripe for self-hosted plan, invoice, and payment changes.", "manage-billing-panel", "manage-inline-email", ["Plan changes", "Invoices"]) + renderBillingActionRow("open-retrieve-billing", "Retrieve licenses", "Open", "Recover the latest active self-hosted license and invoice link.", "retrieve-billing-panel", "retrieve-inline-email", ["Latest active license", "Invoice lookup"]) + renderBillingActionRow("open-refund-billing", "Refund requests", "Open", "Request a self-serve refund when the purchase is still eligible.", "refund-billing-panel", "refund-inline-email", ["Eligibility check", "Revocation"]) + renderBillingActionRow("open-data-billing", "Data and privacy", "Open", "Request export or deletion for commercial account data.", "data-billing-panel", "data-export-email", ["Export", "Deletion"]) + '</div><div class="billing-inline-support"><h4>Support</h4><p>' + selfHostedBillingEscalationCopy + '</p><div class="billing-inline-support-actions"><button type="button" class="btn-secondary btn-compact" data-shell-action="activate-section" data-shell-section="support">Open support</button><a class="portal-support-link" href="mailto:' + escapeAttr(context.bootstrap.support_email || "") + '">' + escapeHTML(context.bootstrap.support_email || "") + '</a></div></div></div><div class="billing-shell-detail" id="billing-detail-shell" hidden>' + renderBillingTaskPanel(
       "Manage subscriptions",
       "Open Stripe for self-hosted plan, invoice, and payment changes.",
       "manage-billing-panel",
@@ -2544,14 +2415,15 @@
       var successMessage = context.loginState.successMessage || "If that email is registered, a sign-in link is on the way.";
       statusHTML = '<div class="billing-status visible success">' + escapeHTML(successMessage) + '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.</div>';
     }
-    return '<section class="portal-auth-shell"><div class="portal-auth-intro"><div class="account-panel-kicker">Pulse Account</div><h1>Sign in to Pulse Account</h1><p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Workspaces", "Open hosted workspaces and review lifecycle state.") + renderAuthScopeRow("Access", "Review account access and manage roles when permitted.") + renderAuthScopeRow("Billing", "Open hosted billing or self-hosted commercial tools when they apply.") + '</div></div><section class="portal-auth-panel" aria-labelledby="portal-auth-title"><div class="portal-auth-card"><div class="account-panel-kicker">Sign in</div><h2 id="portal-auth-title">Email sign-in link</h2><p>Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.</p><div class="form-group portal-auth-form-group"><label for="portal-login-email">Commercial email</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions portal-auth-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send sign-in link") + '</button></div><p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>' + statusHTML + "</div></section></section>";
+    var signupHTML = hasSignupPath(context.signupPath) ? '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>' : "";
+    return '<section class="portal-auth-shell"><div class="portal-auth-intro"><h1>Sign in to Pulse Account</h1><p>Use one commercial email address for hosted workspaces, account access, billing, licenses, refunds, and privacy requests.</p><div class="portal-auth-scope-list" aria-label="Pulse Account scope">' + renderAuthScopeRow("Workspaces", "Open hosted workspaces and review lifecycle state.") + renderAuthScopeRow("Access", "Review account access and manage roles when permitted.") + renderAuthScopeRow("Billing", "Open hosted billing or self-hosted commercial tools when they apply.") + '</div></div><section class="portal-auth-panel" aria-labelledby="portal-auth-title"><div class="portal-auth-card"><h2 id="portal-auth-title">Email sign-in link</h2><p>Enter the commercial email address for your Pulse account. A sign-in link will be sent to that address.</p><div class="form-group portal-auth-form-group"><label for="portal-login-email">Commercial email</label><input id="portal-login-email" type="email" autocomplete="email" placeholder="you@example.com" value="' + escapeAttr(context.loginState.emailValue || "") + '" data-portal-input="login-email"></div><div class="form-actions portal-auth-actions"><button class="btn-primary" id="portal-login-send" type="button" data-portal-action="send-magic-link">' + (context.loginState.request.pending ? "Sending\u2026" : "Send sign-in link") + "</button></div>" + signupHTML + statusHTML + "</div></section></section>";
   }
 
   // src/shell.ts
   function installShell(deps) {
     function revealActiveNavLink(activeLink) {
       if (!activeLink) return;
-      var group = activeLink.closest(".portal-shell-nav-group");
+      var group = activeLink.closest(".portal-tab-bar");
       if (!group || group.scrollWidth <= group.clientWidth) return;
       if (typeof activeLink.scrollIntoView === "function") {
         activeLink.scrollIntoView({ block: "nearest", inline: "center" });
@@ -2569,7 +2441,7 @@
         var button = node;
         var isActive = button.getAttribute("data-shell-section") === activeSection;
         button.classList.toggle("active", isActive);
-        if (isActive && button.classList.contains("portal-shell-nav-link")) {
+        if (isActive && button.classList.contains("portal-tab")) {
           activeLink = button;
         }
       });
@@ -2808,6 +2680,7 @@
     }
   }
   function createBootstrapDefaults(embeddedBootstrap) {
+    var signupPath = typeof embeddedBootstrap.signup_path === "string" ? embeddedBootstrap.signup_path : "/signup";
     return {
       has_self_hosted_commercial: embeddedBootstrap.has_self_hosted_commercial === true,
       public_site_url: embeddedBootstrap.public_site_url || "https://pulserelay.pro",
@@ -2816,7 +2689,7 @@
       portal_path: embeddedBootstrap.portal_path || "/portal",
       bootstrap_path: embeddedBootstrap.bootstrap_path || "/api/portal/bootstrap",
       magic_link_request_path: embeddedBootstrap.magic_link_request_path || "/api/public/magic-link/request",
-      signup_path: embeddedBootstrap.signup_path || "/signup",
+      signup_path: signupPath,
       logout_path: embeddedBootstrap.logout_path || "/auth/logout",
       account_api_base_path: embeddedBootstrap.account_api_base_path || "/api/accounts",
       portal_api_base_path: embeddedBootstrap.portal_api_base_path || "/api/portal"

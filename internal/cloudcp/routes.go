@@ -32,6 +32,13 @@ type Deps struct {
 	EmailSender        email.Sender
 }
 
+func publicCloudSignupPath(cfg *CPConfig) string {
+	if cfg != nil && cfg.PublicCloudSignupEnabled {
+		return portal.PortalSignupPath
+	}
+	return ""
+}
+
 // RegisterRoutes wires all HTTP handlers onto the given ServeMux.
 func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	webhookLimiter := NewCPRateLimiter(deps.Config.WebhookRateLimitPerMinute, time.Minute)
@@ -49,6 +56,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	hostedEntitlementRefreshLimiter := NewCPRateLimiter(60, time.Hour)
 	publicSignupLimiter := NewCPRateLimiter(30, time.Minute)
 	publicMagicLinkLimiter := NewCPRateLimiter(20, time.Minute)
+	publicCloudSignupPath := publicCloudSignupPath(deps.Config)
 
 	adminAuth := func(next http.Handler) http.Handler {
 		return admin.AdminKeyMiddleware(deps.Config.AdminKey, next)
@@ -146,14 +154,19 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/entitlements/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
 	mux.Handle("/api/trial-signup/refresh", hostedEntitlementRefreshLimiter.Middleware(http.HandlerFunc(hostedEntitlementHandlers.HandleRefresh)))
 
-	// Pulse Cloud self-serve signup: public page + API checkout + magic-link request.
+	// Public commercial magic-link requests stay available for existing hosted
+	// accounts even while public v6 Cloud signup remains prelaunch-disabled.
 	publicCloudSignupHandlers := NewPublicCloudSignupHandlers(deps.Config, deps.Registry, deps.MagicLinks, deps.EmailSender)
-	mux.Handle("/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
-	mux.Handle("/cloud/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
-	mux.Handle("/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
-	mux.Handle("/cloud/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
-	mux.Handle("/api/public/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicSignup)))
 	mux.Handle("/api/public/magic-link/request", publicMagicLinkLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicMagicLinkRequest)))
+
+	// Pulse Cloud self-serve signup: public page + API checkout.
+	if publicCloudSignupPath != "" {
+		mux.Handle("/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
+		mux.Handle("/cloud/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupPage)))
+		mux.Handle("/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
+		mux.Handle("/cloud/signup/complete", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandleSignupComplete)))
+		mux.Handle("/api/public/signup", publicSignupLimiter.Middleware(http.HandlerFunc(publicCloudSignupHandlers.HandlePublicSignup)))
+	}
 
 	// Admin API (key-authenticated)
 	tenantsHandler := admin.HandleListTenants(deps.Registry)
@@ -241,7 +254,7 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 	mux.Handle("/api/accounts/{account_id}/tenants/{tenant_id}/handoff", accountAPILimiter.Middleware(accountSessionAuth(accountIDFromPath, handoffHandler)))
 
 	// MSP portal API (session + account-membership authenticated)
-	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrap(deps.MagicLinks, deps.Registry, portalCommercialLookup))))
+	mux.Handle(portal.PortalBootstrapPath, portalAPILimiter.Middleware(sessionAuth(portal.HandlePortalBootstrapWithSignupPath(deps.MagicLinks, deps.Registry, portalCommercialLookup, publicCloudSignupPath))))
 	mux.Handle(portal.PortalDashboardPath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalDashboard(deps.Registry))))
 	mux.Handle(portal.PortalWorkspacePath, portalAPILimiter.Middleware(accountSessionAuth(accountIDFromPortalRequest, portal.HandlePortalWorkspaceDetail(deps.Registry))))
 
@@ -257,5 +270,5 @@ func RegisterRoutes(mux *http.ServeMux, deps *Deps) {
 
 	// MSP/Cloud portal HTML page — self-authenticating (shows login form if no session)
 	portalPageLimiter := NewCPRateLimiter(60, time.Minute)
-	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPage(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref()))))
+	mux.Handle(portal.PortalPagePath, portalPageLimiter.Middleware(http.HandlerFunc(portal.HandlePortalPageWithSignupPath(deps.MagicLinks, deps.Registry, portalCommercialLookup, controlPlaneFaviconHref(), publicCloudSignupPath))))
 }

@@ -73,6 +73,17 @@ describe('shell view', function() {
     expect(html).not.toContain('logout-btn" id="logout-btn"');
   });
 
+  it('hides create-account actions when signup is unavailable', function() {
+    var context = createContext({
+      bootstrap: createBootstrap({ authenticated: false, email: '', signup_path: '' }),
+      signupPath: '',
+    });
+
+    expect(renderHeaderHTML(context)).toBe('');
+    expect(renderSignedOutPortalHTML(context)).not.toContain('Create an account');
+    expect(renderSignedOutPortalHTML(context)).not.toContain('Create account');
+  });
+
   it('renders empty accounts state with support contact', function() {
     var html = renderAccountsHTML(createContext());
 

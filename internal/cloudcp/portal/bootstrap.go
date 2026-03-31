@@ -61,7 +61,7 @@ func MarshalBootstrapJSON(data BootstrapData) (template.JS, error) {
 	return template.JS(payload), nil
 }
 
-func BuildBootstrapData(authenticated bool, email string, accounts []portalPageAccount, hasSelfHostedCommercial bool) BootstrapData {
+func BuildBootstrapDataWithSignupPath(authenticated bool, email string, accounts []portalPageAccount, hasSelfHostedCommercial bool, signupPath string) BootstrapData {
 	bootstrapAccounts := make([]BootstrapAccount, 0, len(accounts))
 	for _, account := range accounts {
 		workspaces := make([]BootstrapWorkspace, 0, len(account.Workspaces))
@@ -117,7 +117,7 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 		PortalPath:              defaultPortalPath,
 		BootstrapPath:           PortalBootstrapPath,
 		MagicLinkRequestPath:    PortalMagicLinkRequestPath,
-		SignupPath:              PortalSignupPath,
+		SignupPath:              signupPath,
 		LogoutPath:              defaultLogoutPath,
 		AccountAPIBasePath:      defaultAccountAPIBasePath,
 		PortalAPIBasePath:       defaultPortalAPIBasePath,
@@ -125,6 +125,14 @@ func BuildBootstrapData(authenticated bool, email string, accounts []portalPageA
 	}
 }
 
+func BuildBootstrapData(authenticated bool, email string, accounts []portalPageAccount, hasSelfHostedCommercial bool) BootstrapData {
+	return BuildBootstrapDataWithSignupPath(authenticated, email, accounts, hasSelfHostedCommercial, PortalSignupPath)
+}
+
+func BuildAnonymousBootstrapDataWithSignupPath(signupPath string) BootstrapData {
+	return BuildBootstrapDataWithSignupPath(false, "", nil, false, signupPath)
+}
+
 func BuildAnonymousBootstrapData() BootstrapData {
-	return BuildBootstrapData(false, "", nil, false)
+	return BuildAnonymousBootstrapDataWithSignupPath(PortalSignupPath)
 }

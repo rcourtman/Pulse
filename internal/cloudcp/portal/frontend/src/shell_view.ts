@@ -35,6 +35,10 @@ function escapeAttr(value: unknown): string {
   return escapeHTML(value);
 }
 
+function hasSignupPath(signupPath: string): boolean {
+  return String(signupPath || '').trim() !== '';
+}
+
 function titleCase(value: string): string {
   if (!value) return '';
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -1167,6 +1171,9 @@ export function renderHeaderHTML(context: ShellViewContext): string {
       '</div>'
     );
   }
+  if (!hasSignupPath(context.signupPath)) {
+    return '';
+  }
   return '<a class="logout-btn link-button" href="' + escapeAttr(context.signupPath) + '">Create account</a>';
 }
 
@@ -1322,6 +1329,9 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
       '<br><br><strong>Need another link?</strong> <a href="#" data-portal-action="resend-magic-link">Send it again</a>.' +
       '</div>';
   }
+  var signupHTML = hasSignupPath(context.signupPath)
+    ? '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>'
+    : '';
   return (
     '<section class="portal-auth-shell">' +
       '<div class="portal-auth-intro">' +
@@ -1348,7 +1358,7 @@ export function renderSignedOutPortalHTML(context: ShellViewContext): string {
             (context.loginState.request.pending ? 'Sending…' : 'Send sign-in link') +
             '</button>' +
           '</div>' +
-          '<p class="portal-auth-secondary-action">Need a new Pulse Account? <a href="' + escapeAttr(context.signupPath) + '">Create an account</a>.</p>' +
+          signupHTML +
           statusHTML +
         '</div>' +
       '</section>' +

@@ -211,6 +211,10 @@ func HandlePortalWorkspaceDetail(reg *registry.TenantRegistry) http.HandlerFunc 
 //
 // Auth: control-plane session.
 func HandlePortalBootstrap(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup) http.HandlerFunc {
+	return HandlePortalBootstrapWithSignupPath(sessionSvc, reg, commercialLookup, PortalSignupPath)
+}
+
+func HandlePortalBootstrapWithSignupPath(sessionSvc *cpauth.Service, reg *registry.TenantRegistry, commercialLookup CommercialIdentityLookup, signupPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -241,7 +245,7 @@ func HandlePortalBootstrap(sessionSvc *cpauth.Service, reg *registry.TenantRegis
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		encodeJSON(w, BuildBootstrapData(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts)))
+		encodeJSON(w, BuildBootstrapDataWithSignupPath(true, claims.Email, accounts, resolveSelfHostedCommercial(r.Context(), commercialLookup, claims.Email, accounts), signupPath))
 	}
 }
 

@@ -38,6 +38,7 @@ type CPConfig struct {
 	AllowDockerlessProvisioning       bool
 	StripeWebhookSecret               string
 	StripeAPIKey                      string
+	PublicCloudSignupEnabled          bool
 	TrialSignupPriceID                string // Cloud Starter (default tier) price ID
 	CloudPowerPriceID                 string // Cloud Power tier price ID (optional)
 	CloudMaxPriceID                   string // Cloud Max tier price ID (optional)
@@ -126,6 +127,7 @@ func LoadConfig() (*CPConfig, error) {
 		AllowDockerlessProvisioning:       envOrDefaultBool("CP_ALLOW_DOCKERLESS_PROVISIONING", false),
 		StripeWebhookSecret:               strings.TrimSpace(os.Getenv("STRIPE_WEBHOOK_SECRET")),
 		StripeAPIKey:                      strings.TrimSpace(os.Getenv("STRIPE_API_KEY")),
+		PublicCloudSignupEnabled:          envOrDefaultBool("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", false),
 		TrialSignupPriceID:                strings.TrimSpace(os.Getenv("CP_TRIAL_SIGNUP_PRICE_ID")),
 		CloudPowerPriceID:                 strings.TrimSpace(os.Getenv("CP_CLOUD_POWER_PRICE_ID")),
 		CloudMaxPriceID:                   strings.TrimSpace(os.Getenv("CP_CLOUD_MAX_PRICE_ID")),
@@ -218,7 +220,7 @@ func (c *CPConfig) validate() error {
 			return fmt.Errorf("PULSE_EMAIL_FROM is required when CP_REQUIRE_EMAIL_PROVIDER=true")
 		}
 	}
-	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialSignupPriceID) == "" {
+	if strings.TrimSpace(c.StripeAPIKey) != "" && c.PublicCloudSignupEnabled && strings.TrimSpace(c.TrialSignupPriceID) == "" {
 		return fmt.Errorf("CP_TRIAL_SIGNUP_PRICE_ID is required when STRIPE_API_KEY is configured")
 	}
 	if strings.TrimSpace(c.StripeAPIKey) != "" && strings.TrimSpace(c.TrialActivationPrivateKey) == "" {

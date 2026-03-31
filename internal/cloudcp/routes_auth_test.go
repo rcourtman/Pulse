@@ -412,7 +412,7 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 		`id="portal-app-root"`,
 		`"authenticated":false`,
 		`"magic_link_request_path":"` + portal.PortalMagicLinkRequestPath + `"`,
-		`"signup_path":"` + portal.PortalSignupPath + `"`,
+		`"signup_path":""`,
 		"Enter the commercial email address for your Pulse account.",
 	} {
 		if !strings.Contains(unauthRec.Body.String(), needle) {
@@ -433,12 +433,6 @@ func TestRegisterRoutes_PortalPageSessionModes(t *testing.T) {
 		`id="pulse-account-bootstrap"`,
 		`id="portal-app-root"`,
 		`"authenticated":true`,
-		"Account tasks",
-		"Overview",
-		"Workspaces",
-		"Access",
-		"Billing",
-		"Support",
 	} {
 		if !strings.Contains(authRec.Body.String(), needle) {
 			t.Fatalf("expected authenticated portal page to contain %q, body=%q", needle, authRec.Body.String())

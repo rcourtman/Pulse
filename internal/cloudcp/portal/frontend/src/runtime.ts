@@ -63,6 +63,9 @@ export function readPortalRuntimeHandoff(locationHref: string | undefined = wind
 export function createBootstrapDefaults(
   embeddedBootstrap: Partial<PortalBootstrapData>
 ): Omit<PortalBootstrapData, 'authenticated' | 'email' | 'accounts'> {
+  var signupPath = typeof embeddedBootstrap.signup_path === 'string'
+    ? embeddedBootstrap.signup_path
+    : '/signup';
   return {
     has_self_hosted_commercial: embeddedBootstrap.has_self_hosted_commercial === true,
     public_site_url: embeddedBootstrap.public_site_url || 'https://pulserelay.pro',
@@ -71,7 +74,7 @@ export function createBootstrapDefaults(
     portal_path: embeddedBootstrap.portal_path || '/portal',
     bootstrap_path: embeddedBootstrap.bootstrap_path || '/api/portal/bootstrap',
     magic_link_request_path: embeddedBootstrap.magic_link_request_path || '/api/public/magic-link/request',
-    signup_path: embeddedBootstrap.signup_path || '/signup',
+    signup_path: signupPath,
     logout_path: embeddedBootstrap.logout_path || '/auth/logout',
     account_api_base_path: embeddedBootstrap.account_api_base_path || '/api/accounts',
     portal_api_base_path: embeddedBootstrap.portal_api_base_path || '/api/portal',

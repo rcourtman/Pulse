@@ -241,6 +241,7 @@ func TestLoadConfig_AcceptsCanonicalCloudSignupPriceIDs(t *testing.T) {
 	setRequiredCPEnv(t)
 	setTrialSigningEnv(t)
 	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "true")
 	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "price_1T5kflBrHBocJIGHUqPv1dzV")
 	t.Setenv("CP_CLOUD_POWER_PRICE_ID", "price_1T5kg2BrHBocJIGHmkoF0zXY")
 	t.Setenv("CP_CLOUD_MAX_PRICE_ID", "price_1T5kg4BrHBocJIGHHa8Ecqho")
@@ -254,15 +255,31 @@ func TestLoadConfig_AcceptsCanonicalCloudSignupPriceIDs(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_RequiresTrialSignupPriceWhenStripeEnabled(t *testing.T) {
+func TestLoadConfig_AllowsMissingTrialSignupPriceWhenPublicCloudSignupDisabled(t *testing.T) {
 	setRequiredCPEnv(t)
-	t.Setenv("CP_REQUIRE_EMAIL_PROVIDER", "false")
+	setTrialSigningEnv(t)
 	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "")
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.PublicCloudSignupEnabled {
+		t.Fatal("PublicCloudSignupEnabled = true, want false by default")
+	}
+}
+
+func TestLoadConfig_RequiresTrialSignupPriceWhenPublicCloudSignupEnabled(t *testing.T) {
+	setRequiredCPEnv(t)
+	setTrialSigningEnv(t)
+	t.Setenv("STRIPE_API_KEY", "sk_test_123")
+	t.Setenv("CP_PUBLIC_CLOUD_SIGNUP_ENABLED", "true")
 	t.Setenv("CP_TRIAL_SIGNUP_PRICE_ID", "")
 
 	_, err := LoadConfig()
 	if err == nil {
-		t.Fatal("expected error when STRIPE_API_KEY is set but CP_TRIAL_SIGNUP_PRICE_ID is missing")
+		t.Fatal("expected error when public cloud signup is enabled but CP_TRIAL_SIGNUP_PRICE_ID is missing")
 	}
 	if !strings.Contains(err.Error(), "CP_TRIAL_SIGNUP_PRICE_ID is required") {
 		t.Fatalf("unexpected error: %v", err)
