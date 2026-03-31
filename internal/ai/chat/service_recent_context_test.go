@@ -165,3 +165,42 @@ func TestInjectRecentContextIfNeeded_UsesResourceIDHintForTrueNASAppLogs(t *test
 		t.Fatalf("expected resource-targeted log instruction, got: %s", content)
 	}
 }
+
+func TestInjectRecentContextIfNeeded_UsesQueryResourceIDHintForVMwareLogs(t *testing.T) {
+	store, err := NewSessionStore(t.TempDir())
+	if err != nil {
+		t.Fatalf("failed to create session store: %v", err)
+	}
+	session, err := store.Create()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	resolved := store.GetResolvedContext(session.ID)
+	resource := &ResolvedResource{
+		ResourceID: "agent:vc-1:host:host-101",
+		Name:       "esxi-01.lab.local",
+		Kind:       "agent",
+		Node:       "Lab VC",
+		Adapter:    "vmware-vsphere",
+	}
+	resolved.AddResourceWithExplicitAccess(resource.Name, resource)
+
+	messages := []Message{{Role: "user", Content: "show its logs"}}
+	service := &Service{}
+	service.injectRecentContextIfNeeded("show its logs", session.ID, messages, store)
+
+	content := messages[0].Content
+	if !strings.Contains(content, "Use resource_id=\"esxi-01.lab.local\".") {
+		t.Fatalf("expected resource_id hint, got: %s", content)
+	}
+	if strings.Contains(content, "target_host=\"esxi-01.lab.local\"") {
+		t.Fatalf("expected VMware recent context to avoid target_host log routing, got: %s", content)
+	}
+	if !strings.Contains(content, "does not support shared log reads") {
+		t.Fatalf("expected VMware log limitation guidance, got: %s", content)
+	}
+	if !strings.Contains(content, "Use pulse_query action=get resource_id=\"esxi-01.lab.local\"") {
+		t.Fatalf("expected VMware recent context to redirect to pulse_query, got: %s", content)
+	}
+}

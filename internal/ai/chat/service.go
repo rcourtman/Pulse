@@ -1529,18 +1529,8 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 	if primaryName == "" {
 		primaryName = primary
 	}
-	targetHint := ""
-	if primaryKind == "app-container" && strings.EqualFold(strings.TrimSpace(primaryAdapter), "truenas") {
-		target := primaryName
-		if target == "" {
-			target = primaryResourceID
-		}
-		if target != "" {
-			targetHint = fmt.Sprintf(" Use resource_id=\"%s\".", target)
-		}
-	} else if primaryTarget != "" {
-		targetHint = fmt.Sprintf(" Use target_host=\"%s\".", primaryTarget)
-	}
+	readHint := readRoutingHintForResolvedResource(primaryKind, primaryAdapter, primaryTarget, primaryName, primaryResourceID)
+	targetHint := readHint.targetHintSuffix()
 	summary := fmt.Sprintf("Context: The most recently referenced resource is %s. If the user says \"it/its/that\", assume they mean this resource unless they specify otherwise. Do not ask for clarification unless the user names a different resource.%s", primary, targetHint)
 	if len(lines) > 1 {
 		others := strings.Join(lines[1:], "\n")
@@ -1549,17 +1539,12 @@ func (s *Service) injectRecentContextIfNeeded(prompt, sessionID string, messages
 
 	lowerPrompt := strings.ToLower(prompt)
 	if strings.Contains(lowerPrompt, "log") || strings.Contains(lowerPrompt, "journal") {
-		rewrite := fmt.Sprintf("Show logs for %s (last 50 lines).", primaryName)
-		if primaryKind == "app-container" && strings.EqualFold(strings.TrimSpace(primaryAdapter), "truenas") {
-			target := primaryName
-			if target == "" {
-				target = primaryResourceID
-			}
-			summary += fmt.Sprintf("\nInstruction: %s Use pulse_read action=logs resource_id=\"%s\" lines=50.", rewrite, target)
-		} else if primaryTarget != "" {
-			summary += fmt.Sprintf("\nInstruction: %s Use pulse_read action=logs target_host=\"%s\" lines=50.", rewrite, primaryTarget)
-		} else {
-			summary += fmt.Sprintf("\nInstruction: %s Use pulse_read action=logs target_host=\"%s\" lines=50.", rewrite, primaryName)
+		instructionTarget := primaryName
+		if instructionTarget == "" {
+			instructionTarget = primary
+		}
+		if instruction := readHint.recentLogsInstruction(instructionTarget); instruction != "" {
+			summary += "\n" + instruction
 		}
 	}
 

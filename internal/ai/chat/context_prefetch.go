@@ -17,6 +17,7 @@ type ResourceMention struct {
 	ResourceType      string // "vm", "system-container", "app-container", "agent", "node"
 	ResourceID        string
 	TargetID          string
+	Adapter           string
 	MatchedText       string // The actual text that matched
 	Policy            *unifiedresources.ResourcePolicy
 	AISafeSummary     string
@@ -231,6 +232,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						ResourceType:      "vm",
 						ResourceID:        resourceID,
 						TargetID:          targetID,
+						Adapter:           mentionAdapterFromResolved(resolved.Resource),
 						MatchedText:       name,
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
@@ -267,6 +269,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						ResourceType:      "system-container",
 						ResourceID:        resourceID,
 						TargetID:          targetID,
+						Adapter:           mentionAdapterFromResolved(resolved.Resource),
 						MatchedText:       name,
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
@@ -328,6 +331,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						ResourceType:      "app-container",
 						ResourceID:        container.ContainerID(),
 						TargetID:          hostID,
+						Adapter:           mentionAdapterFromResolved(resolved.Resource),
 						MatchedText:       name,
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
@@ -362,6 +366,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						ResourceType:      "storage",
 						ResourceID:        firstNonEmptyTrimmed(strings.TrimSpace(storage.SourceID()), mentionResourceIDFromResolved("storage", resolved.Resource)),
 						TargetID:          firstNonEmptyTrimmed(strings.TrimSpace(storage.Node()), strings.TrimSpace(storage.Instance()), mentionTargetIDFromResolved("storage", resolved.Resource)),
+						Adapter:           mentionAdapterFromResolved(resolved.Resource),
 						MatchedText:       name,
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
@@ -424,6 +429,7 @@ func (p *ContextPrefetcher) extractResourceMentions(message string) []ResourceMe
 						ResourceType:      "agent",
 						ResourceID:        hostID,
 						TargetID:          hostID,
+						Adapter:           mentionAdapterFromResolved(resolved.Resource),
 						MatchedText:       hostname,
 						Policy:            policy,
 						AISafeSummary:     aiSafeSummary,
@@ -580,6 +586,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				ResourceType:      "vm",
 				ResourceID:        vmID,
 				TargetID:          node,
+				Adapter:           mentionAdapterFromResolved(resolved.Resource),
 				MatchedText:       sm.Name,
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
@@ -602,6 +609,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				ResourceType:      "system-container",
 				ResourceID:        vmID,
 				TargetID:          node,
+				Adapter:           mentionAdapterFromResolved(resolved.Resource),
 				MatchedText:       sm.Name,
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
@@ -644,6 +652,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				ResourceType:      "app-container",
 				ResourceID:        containerID,
 				TargetID:          hostID,
+				Adapter:           mentionAdapterFromResolved(resolved.Resource),
 				MatchedText:       sm.Name,
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
@@ -664,6 +673,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				ResourceType:      "storage",
 				ResourceID:        resourceID,
 				TargetID:          targetID,
+				Adapter:           mentionAdapterFromResolved(resolved.Resource),
 				MatchedText:       sm.Name,
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
@@ -695,6 +705,7 @@ func (p *ContextPrefetcher) resolveStructuredMentions(structured []StructuredMen
 				ResourceType:      "agent",
 				ResourceID:        hostID,
 				TargetID:          hostID,
+				Adapter:           mentionAdapterFromResolved(resolved.Resource),
 				MatchedText:       sm.Name,
 				Policy:            policy,
 				AISafeSummary:     aiSafeSummary,
@@ -1032,8 +1043,10 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 		key := fmt.Sprintf("%s:%s:%s", tools.CanonicalDiscoveryResourceType(mention.ResourceType), mention.TargetID, mention.ResourceID)
 		discovery, hasDiscovery := discoveryMap[key]
 
+		hint := readRoutingHintForMention(mention)
+
 		// Docker containers get special treatment - show the full routing chain
-		if tools.CanonicalDiscoveryResourceType(mention.ResourceType) == "app-container" {
+		if mentionUsesDockerRouting(mention) {
 			sb.WriteString(fmt.Sprintf("## %s (Docker container)\n", mention.Name))
 
 			// Show the full routing chain unambiguously
@@ -1097,7 +1110,7 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 			}
 		}
 
-		if hasDiscovery {
+		if hasDiscovery && hint.mode == readRoutingTargetHost {
 			// Command routing
 			if discovery.Hostname != "" {
 				sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", discovery.Hostname))
@@ -1170,11 +1183,24 @@ func (p *ContextPrefetcher) formatContextSummary(mentions []ResourceMention, dis
 			}
 		} else {
 			// No discovery - provide basic routing without suggesting discovery calls
-			sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", mention.Name))
-			if resourceRequiresReadOnlyGuidance(mention.ResourceType, mention.SupportsControl) {
-				sb.WriteString("Use pulse_query or pulse_read only — do NOT call pulse_control or pulse_discovery.\n")
-			} else {
-				sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
+			switch hint.mode {
+			case readRoutingNativeResource, readRoutingQueryOnly:
+				if hint.ref != "" {
+					sb.WriteString(fmt.Sprintf("resource_id: \"%s\"\n", hint.ref))
+				}
+				if instruction := hint.prefetchInstruction(); instruction != "" {
+					sb.WriteString(instruction + "\n")
+				}
+			default:
+				targetHost := firstNonEmptyTrimmed(hint.ref, mention.Name)
+				if targetHost != "" {
+					sb.WriteString(fmt.Sprintf("target_host: \"%s\"\n", targetHost))
+				}
+				if resourceRequiresReadOnlyGuidance(mention.ResourceType, mention.SupportsControl) {
+					sb.WriteString("Use pulse_query or pulse_read only — do NOT call pulse_control or pulse_discovery.\n")
+				} else {
+					sb.WriteString("Proceed directly with pulse_control — do NOT call pulse_discovery.\n")
+				}
 			}
 		}
 

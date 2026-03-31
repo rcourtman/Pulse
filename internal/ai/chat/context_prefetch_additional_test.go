@@ -545,6 +545,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 		ResourceID:        "vm-201",
 		TargetID:          "esxi-01.lab.local",
 		TargetHost:        "esxi-01.lab.local",
+		Adapter:           "vmware-vsphere",
 		UnifiedResourceID: "vmware-vm-1",
 		SupportsControl:   false,
 	}}, nil)
@@ -555,8 +556,14 @@ func TestContextPrefetcher_FormatContextSummary_VMwareGuestStaysReadOnly(t *test
 	if strings.Contains(summary, "To control this guest, use: pulse_control") {
 		t.Fatalf("expected VMware summary to avoid guest-control instructions, got %q", summary)
 	}
-	if !strings.Contains(summary, "Use pulse_query or pulse_read only") {
-		t.Fatalf("expected VMware summary to direct the assistant to read-only tools, got %q", summary)
+	if strings.Contains(summary, "target_host:") {
+		t.Fatalf("expected VMware guest summary to avoid target_host routing, got %q", summary)
+	}
+	if !strings.Contains(summary, "resource_id: \"app-01\"") {
+		t.Fatalf("expected VMware guest summary to expose canonical resource_id routing, got %q", summary)
+	}
+	if !strings.Contains(summary, "Use pulse_query action=get resource_id=\"app-01\"") {
+		t.Fatalf("expected VMware summary to direct the assistant to pulse_query, got %q", summary)
 	}
 }
 
@@ -569,6 +576,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly
 			ResourceType:      "agent",
 			ResourceID:        "vc-1:host:host-101",
 			TargetID:          "vc-1:host:host-101",
+			Adapter:           "vmware-vsphere",
 			UnifiedResourceID: "vmware-host-1",
 			SupportsControl:   false,
 		},
@@ -577,6 +585,7 @@ func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly
 			ResourceType:      "storage",
 			ResourceID:        "vmware-datastore-1",
 			TargetID:          "Lab VC",
+			Adapter:           "vmware-vsphere",
 			UnifiedResourceID: "vmware-datastore-1",
 			SupportsControl:   false,
 		},
@@ -585,8 +594,42 @@ func TestContextPrefetcher_FormatContextSummary_VMwareHostAndStorageStayReadOnly
 	if strings.Contains(summary, "Proceed directly with pulse_control") {
 		t.Fatalf("expected VMware host and datastore summary to avoid control instructions, got %q", summary)
 	}
-	if got := strings.Count(summary, "Use pulse_query or pulse_read only"); got != 2 {
-		t.Fatalf("expected read-only guidance for VMware host and datastore, got count=%d summary=%q", got, summary)
+	if strings.Contains(summary, "target_host:") {
+		t.Fatalf("expected VMware host and datastore summary to avoid target_host routing, got %q", summary)
+	}
+	if got := strings.Count(summary, "Use pulse_query action=get resource_id="); got != 2 {
+		t.Fatalf("expected resource_id-based read guidance for VMware host and datastore, got count=%d summary=%q", got, summary)
+	}
+}
+
+func TestContextPrefetcher_FormatContextSummary_TrueNASAppUsesNativeResourceReadPath(t *testing.T) {
+	prefetcher := NewContextPrefetcher(newTestReadState(models.StateSnapshot{}), nil)
+
+	summary := prefetcher.formatContextSummary([]ResourceMention{{
+		Name:              "Nextcloud",
+		ResourceType:      "app-container",
+		ResourceID:        "app-container:truenas-main:nextcloud",
+		TargetID:          "truenas-main",
+		TargetHost:        "truenas-main",
+		Adapter:           "truenas",
+		UnifiedResourceID: "app-container:truenas-main:nextcloud",
+		SupportsControl:   true,
+	}}, nil)
+
+	if strings.Contains(summary, "Docker container") {
+		t.Fatalf("expected native TrueNAS app summary to avoid Docker wording, got %q", summary)
+	}
+	if strings.Contains(summary, "pulse_docker") {
+		t.Fatalf("expected native TrueNAS app summary to avoid pulse_docker guidance, got %q", summary)
+	}
+	if strings.Contains(summary, "target_host:") {
+		t.Fatalf("expected native TrueNAS app summary to avoid target_host routing, got %q", summary)
+	}
+	if !strings.Contains(summary, "resource_id: \"Nextcloud\"") {
+		t.Fatalf("expected native TrueNAS app summary to expose resource_id routing, got %q", summary)
+	}
+	if !strings.Contains(summary, "pulse_read action=logs resource_id=\"Nextcloud\"") {
+		t.Fatalf("expected native TrueNAS app summary to expose native log routing, got %q", summary)
 	}
 }
 

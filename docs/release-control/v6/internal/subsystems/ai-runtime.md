@@ -227,6 +227,15 @@ event, task, metrics-history, and snapshot-tree context for VMware-backed
 resources must stay reachable through those same shared read/query surfaces
 and canonical resource links rather than through a VMware-only AI tool or
 provider-local incident adapter.
+That same shared read/query rule also governs AI prompt hints and prefetch
+summaries in `internal/ai/chat/service.go` and
+`internal/ai/chat/context_prefetch.go`: API-backed read-only resources such as
+VMware-backed `agent` / `vm` / `storage` and TrueNAS-backed host/storage
+resources must not inherit synthetic `target_host` log-routing hints from
+agent-routed platforms. Shared AI context should carry canonical
+`resource_id` guidance for those resources, and `pulse_read action=logs` may
+only be suggested when the runtime has an explicit native resource read path
+such as supported TrueNAS `app-container` logs.
 That same VMware AI rule also now includes mention resolution. Frontend
 Assistant mention payloads for VMware-backed `agent`, `vm`, `storage`, and
 canonical `app-container` resources must preserve the shared unified resource
