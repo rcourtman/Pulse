@@ -533,6 +533,12 @@ may show one VMware connection's poll health, last error classification, and
 observed contribution summary, but it must not force the operator to manage
 separate Automation API versus VI JSON sessions or understand multi-client
 runtime wiring just to use the shared platform-connections path.
+That same shared connection model now also includes one runtime-health owner:
+manual saved-connection retests with no edit overlay must refresh the same
+poller-owned `poll` summary that ordinary list reads surface, while draft tests
+and edit-form overlay tests stay non-persistent until a save succeeds.
+Lifecycle-owned settings flows must not bring back a second `test` status model
+or a VMware-only health fetch just to describe row health.
 That lifecycle-owned VMware slice now also includes the first live runtime
 handoff rule. `frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx`,
 `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`,

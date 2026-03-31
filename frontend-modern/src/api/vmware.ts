@@ -12,20 +12,22 @@ const VMWARE_CONNECTIONS_PATH = '/api/vmware/connections';
 const REDACTED_SECRET = '********';
 
 type RawVMwareConnection = Partial<VMwareConnection>;
-type RawVMwareConnectionTestError = Partial<VMwareConnectionTestError>;
-type RawVMwareConnectionTest = Partial<VMwareConnectionTestStatus>;
+type RawVMwareConnectionPollError = Partial<VMwareConnectionPollError>;
+type RawVMwareConnectionPoll = Partial<VMwareConnectionPollStatus>;
 type RawVMwareConnectionObservedSummary = Partial<VMwareConnectionObservedSummary>;
 
-export interface VMwareConnectionTestError {
+export interface VMwareConnectionPollError {
   at?: string;
   message?: string;
   category?: string;
 }
 
-export interface VMwareConnectionTestStatus {
+export interface VMwareConnectionPollStatus {
+  intervalSeconds?: number;
   lastAttemptAt?: string;
   lastSuccessAt?: string;
-  lastError?: VMwareConnectionTestError;
+  consecutiveFailures?: number;
+  lastError?: VMwareConnectionPollError;
 }
 
 export interface VMwareConnectionObservedSummary {
@@ -45,7 +47,7 @@ export interface VMwareConnection {
   password?: string;
   insecureSkipVerify: boolean;
   enabled: boolean;
-  test?: VMwareConnectionTestStatus;
+  poll?: VMwareConnectionPollStatus;
   observed?: VMwareConnectionObservedSummary;
 }
 
@@ -63,9 +65,9 @@ export interface VMwareConnectionTestResult {
   success: boolean;
 }
 
-const normalizeVMwareConnectionTestError = (
-  error: RawVMwareConnectionTestError | undefined,
-): VMwareConnectionTestError | undefined => {
+const normalizeVMwareConnectionPollError = (
+  error: RawVMwareConnectionPollError | undefined,
+): VMwareConnectionPollError | undefined => {
   if (!error || typeof error !== 'object') return undefined;
   return {
     at: optionalTrimmedString(error.at),
@@ -74,14 +76,16 @@ const normalizeVMwareConnectionTestError = (
   };
 };
 
-const normalizeVMwareConnectionTest = (
-  test: RawVMwareConnectionTest | undefined,
-): VMwareConnectionTestStatus | undefined => {
-  if (!test || typeof test !== 'object') return undefined;
+const normalizeVMwareConnectionPoll = (
+  poll: RawVMwareConnectionPoll | undefined,
+): VMwareConnectionPollStatus | undefined => {
+  if (!poll || typeof poll !== 'object') return undefined;
   return {
-    lastAttemptAt: optionalTrimmedString(test.lastAttemptAt),
-    lastSuccessAt: optionalTrimmedString(test.lastSuccessAt),
-    lastError: normalizeVMwareConnectionTestError(test.lastError),
+    intervalSeconds: finiteNumberOrUndefined(poll.intervalSeconds),
+    lastAttemptAt: optionalTrimmedString(poll.lastAttemptAt),
+    lastSuccessAt: optionalTrimmedString(poll.lastSuccessAt),
+    consecutiveFailures: finiteNumberOrUndefined(poll.consecutiveFailures),
+    lastError: normalizeVMwareConnectionPollError(poll.lastError),
   };
 };
 
@@ -98,7 +102,9 @@ const normalizeVMwareConnectionObservedSummary = (
   };
 };
 
-const normalizeVMwareConnection = (connection: RawVMwareConnection): VMwareConnection => ({
+const normalizeVMwareConnection = (
+  connection: RawVMwareConnection & { test?: RawVMwareConnectionPoll },
+): VMwareConnection => ({
   id: trimmedString(connection.id),
   name: optionalTrimmedString(connection.name) ?? '',
   host: trimmedString(connection.host),
@@ -107,7 +113,7 @@ const normalizeVMwareConnection = (connection: RawVMwareConnection): VMwareConne
   password: optionalTrimmedString(connection.password),
   insecureSkipVerify: strictBoolean(connection.insecureSkipVerify),
   enabled: strictBoolean(connection.enabled),
-  test: normalizeVMwareConnectionTest(connection.test),
+  poll: normalizeVMwareConnectionPoll(connection.poll ?? connection.test),
   observed: normalizeVMwareConnectionObservedSummary(connection.observed),
 });
 

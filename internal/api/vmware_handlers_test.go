@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
@@ -121,6 +122,8 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 	setVMwareFeatureForTest(t, true)
 
 	handler, persistence := newVMwareHandlersForTest(t)
+	poller := monitoring.NewVMwarePoller(nil, time.Minute)
+	handler.getPoller = func(context.Context) *monitoring.VMwarePoller { return poller }
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
 		{
 			ID:                 "vc-1",
@@ -137,7 +140,7 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 	}
 
 	recordedAt := time.Date(2026, 3, 30, 10, 11, 12, 0, time.UTC)
-	handler.recordTestSuccess("vc-1", &vmware.InventorySummary{
+	poller.RecordConnectionTestSuccess("default", "vc-1", &vmware.InventorySummary{
 		Hosts:      3,
 		VMs:        42,
 		Datastores: 6,
@@ -162,8 +165,8 @@ func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSumma
 	if listed[0].Password != "********" {
 		t.Fatalf("expected password to be redacted, got %q", listed[0].Password)
 	}
-	if listed[0].Test == nil || listed[0].Test.LastSuccessAt == nil {
-		t.Fatalf("expected saved test runtime summary, got %+v", listed[0].Test)
+	if listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
+		t.Fatalf("expected saved test runtime summary, got %+v", listed[0].Poll)
 	}
 	if listed[0].Observed == nil {
 		t.Fatalf("expected observed summary, got nil")
@@ -204,7 +207,7 @@ func TestVMwareHandlers_HandleDelete_RemovesAndClearsRuntimeSummary(t *testing.T
 	if len(stored) != 1 || stored[0].ID != "beta" {
 		t.Fatalf("expected only beta to remain, got %+v", stored)
 	}
-	if status := handler.runtimeStatus("alpha"); status.Test != nil || status.Observed != nil {
+	if status := handler.runtimeStatus("alpha"); status.Poll != nil || status.Observed != nil {
 		t.Fatalf("expected runtime summary to be cleared, got %+v", status)
 	}
 }
@@ -401,6 +404,8 @@ func TestVMwareHandlers_HandleTestSavedConnection_UsesStoredSecretsAndUpdatesRun
 		Enabled:            true,
 	}
 	handler, persistence := newVMwareHandlersForTest(t)
+	poller := monitoring.NewVMwarePoller(nil, time.Minute)
+	handler.getPoller = func(context.Context) *monitoring.VMwarePoller { return poller }
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
 		t.Fatalf("seed vmware config: %v", err)
 	}
@@ -437,7 +442,7 @@ func TestVMwareHandlers_HandleTestSavedConnection_UsesStoredSecretsAndUpdatesRun
 	if err := json.NewDecoder(listRec.Body).Decode(&listed); err != nil {
 		t.Fatalf("decode list response: %v", err)
 	}
-	if len(listed) != 1 || listed[0].Test == nil || listed[0].Test.LastSuccessAt == nil {
+	if len(listed) != 1 || listed[0].Poll == nil || listed[0].Poll.LastSuccessAt == nil {
 		t.Fatalf("expected saved retest to update runtime status, got %+v", listed)
 	}
 	if listed[0].Observed == nil || listed[0].Observed.VMs != 25 {
@@ -456,6 +461,8 @@ func TestVMwareHandlers_HandleTestSavedConnection_UpdatesRuntimeSummaryFailure(t
 		Enabled:  true,
 	}
 	handler, persistence := newVMwareHandlersForTest(t)
+	poller := monitoring.NewVMwarePoller(nil, time.Minute)
+	handler.getPoller = func(context.Context) *monitoring.VMwarePoller { return poller }
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
 		t.Fatalf("seed vmware config: %v", err)
 	}
@@ -475,12 +482,12 @@ func TestVMwareHandlers_HandleTestSavedConnection_UpdatesRuntimeSummaryFailure(t
 		t.Fatalf("expected 400, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	status := handler.runtimeStatus(connection.ID)
-	if status.Test == nil || status.Test.LastError == nil {
-		t.Fatalf("expected saved retest failure to update runtime summary, got %+v", status.Test)
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastError == nil {
+		t.Fatalf("expected saved retest failure to update runtime summary, got %+v", summary.Poll)
 	}
-	if status.Test.LastError.Message != "authentication failed" || status.Test.LastError.Category != "auth" {
-		t.Fatalf("unexpected failure summary: %+v", status.Test.LastError)
+	if summary.Poll.LastError.Message != "authentication failed" || summary.Poll.LastError.Category != "auth" {
+		t.Fatalf("unexpected failure summary: %+v", summary.Poll.LastError)
 	}
 }
 
@@ -488,6 +495,8 @@ func TestVMwareHandlers_HandleTestSavedConnection_MergesEditedPayloadWithoutOver
 	setVMwareFeatureForTest(t, true)
 
 	handler, persistence := newVMwareHandlersForTest(t)
+	poller := monitoring.NewVMwarePoller(nil, time.Minute)
+	handler.getPoller = func(context.Context) *monitoring.VMwarePoller { return poller }
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
 		{
 			ID:                 "conn-1",
@@ -504,7 +513,7 @@ func TestVMwareHandlers_HandleTestSavedConnection_MergesEditedPayloadWithoutOver
 	}
 
 	previousAt := time.Date(2026, 3, 30, 9, 0, 0, 0, time.UTC)
-	handler.recordTestSuccess("conn-1", &vmware.InventorySummary{Hosts: 1, VMs: 2, Datastores: 3, VIRelease: "8.0.2.0"}, previousAt)
+	poller.RecordConnectionTestSuccess("default", "conn-1", &vmware.InventorySummary{Hosts: 1, VMs: 2, Datastores: 3, VIRelease: "8.0.2.0"}, previousAt)
 
 	var gotConfig vmware.ClientConfig
 	handler.newClient = func(cfg vmware.ClientConfig) (vmwareClient, error) {
@@ -543,12 +552,21 @@ func TestVMwareHandlers_HandleTestSavedConnection_MergesEditedPayloadWithoutOver
 		t.Fatalf("expected stored password to be reused, got %+v", gotConfig)
 	}
 
-	status := handler.runtimeStatus("conn-1")
-	if status.Observed == nil || status.Observed.VMs != 2 || status.Observed.VIRelease != "8.0.2.0" {
-		t.Fatalf("expected existing runtime summary to remain unchanged, got %+v", status.Observed)
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{{
+		ID:                 "conn-1",
+		Name:               "lab-vcenter",
+		Host:               "vcsa.lab.local",
+		Port:               443,
+		Username:           "administrator@vsphere.local",
+		Password:           "super-secret",
+		InsecureSkipVerify: false,
+		Enabled:            true,
+	}})["conn-1"]
+	if summary.Observed == nil || summary.Observed.VMs != 2 || summary.Observed.VIRelease != "8.0.2.0" {
+		t.Fatalf("expected existing runtime summary to remain unchanged, got %+v", summary.Observed)
 	}
-	if status.Test == nil || status.Test.LastSuccessAt == nil || !status.Test.LastSuccessAt.Equal(previousAt) {
-		t.Fatalf("expected existing last success timestamp to remain unchanged, got %+v", status.Test)
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil || !summary.Poll.LastSuccessAt.Equal(previousAt) {
+		t.Fatalf("expected existing last success timestamp to remain unchanged, got %+v", summary.Poll)
 	}
 }
 

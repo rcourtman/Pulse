@@ -76,7 +76,7 @@ test.describe('VMware platform connections settings', () => {
             password: '********',
             insecureSkipVerify: false,
             enabled: true,
-            test: {
+            poll: {
               lastSuccessAt: healthyAt,
             },
             observed: {
@@ -96,7 +96,7 @@ test.describe('VMware platform connections settings', () => {
             password: '********',
             insecureSkipVerify: true,
             enabled: true,
-            test: {
+            poll: {
               lastAttemptAt: failingAt,
               lastError: {
                 at: failingAt,
@@ -141,7 +141,7 @@ test.describe('VMware platform connections settings', () => {
 
     const primaryCard = page.getByTestId('vmware-connection-vmware-1');
     await expect(primaryCard).toContainText('Primary vCenter');
-    await expect(primaryCard).toContainText('Validated');
+    await expect(primaryCard).toContainText('Healthy');
     await expect(primaryCard).toContainText('6 hosts');
     await expect(primaryCard).toContainText('120 vms');
     await expect(primaryCard).toContainText('18 datastores');
@@ -149,7 +149,7 @@ test.describe('VMware platform connections settings', () => {
 
     const failingCard = page.getByTestId('vmware-connection-vmware-2');
     await expect(failingCard).toContainText('Staging vCenter');
-    await expect(failingCard).toContainText('Validation failing');
+    await expect(failingCard).toContainText('Runtime failing');
     await expect(failingCard).toContainText('authentication failed');
     await expect(failingCard).toContainText('Skip TLS verification');
 
@@ -206,7 +206,7 @@ test.describe('VMware platform connections settings', () => {
             password: '********',
             insecureSkipVerify: createPayload.insecureSkipVerify,
             enabled: createPayload.enabled,
-            test: {
+            poll: {
               lastSuccessAt: validatedAt,
             },
             observed: {
@@ -251,7 +251,7 @@ test.describe('VMware platform connections settings', () => {
             password: '********',
             insecureSkipVerify: updatePayload.insecureSkipVerify,
             enabled: updatePayload.enabled,
-            test: {
+            poll: {
               lastSuccessAt: validatedAt,
             },
             observed: {
@@ -322,7 +322,7 @@ test.describe('VMware platform connections settings', () => {
     const connectionCard = page.getByTestId('vmware-connection-conn-1');
     await expect(connectionCard).toBeVisible();
     await expect(connectionCard).toContainText('Lab vCenter');
-    await expect(connectionCard).toContainText('Validated');
+    await expect(connectionCard).toContainText('Healthy');
     await expect.poll(() => createPayload).toMatchObject({
       name: 'Lab vCenter',
       host: 'vcsa.lab.local',

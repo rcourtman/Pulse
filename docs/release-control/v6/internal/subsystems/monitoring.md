@@ -101,6 +101,14 @@ health record, even if that provider keeps separate authenticated Automation
 API and VI JSON clients internally. Connection edits that change host, auth,
 TLS, or poll cadence must replace that live provider state instead of leaving
 stale VMware sessions resident until restart.
+That same provider-owned summary must also serve the shared settings runtime
+surface. `internal/monitoring/vmware_poller.go` owns the per-connection poll
+summary (`poll` plus `observed`), `POST /api/vmware/connections/{id}/test`
+with no edit overlay must refresh that same summary owner, and
+`/api/vmware/connections` list reads must consume the poller summary instead of
+recomputing or shadowing it inside handler-local runtime state. Internal
+sub-second test harness intervals must not leak `intervalSeconds: 0` onto that
+operator-facing contract.
 That provider ownership now has a concrete phase-1 runtime seam:
 `internal/monitoring/vmware_poller.go` must keep VMware inventory on the
 shared supplemental-ingest path, declare `SourceVMware` as its owned source,

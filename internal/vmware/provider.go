@@ -143,6 +143,7 @@ type InventorySnapshot struct {
 	ConnectionID   string
 	ConnectionName string
 	VCenterHost    string
+	VIRelease      string
 	CollectedAt    time.Time
 	Hosts          []InventoryHost
 	VMs            []InventoryVM

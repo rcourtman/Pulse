@@ -89,7 +89,7 @@ describe('VMwareSettingsPanel', () => {
         password: '********',
         insecureSkipVerify: false,
         enabled: true,
-        test: {
+        poll: {
           lastSuccessAt: new Date(Date.now() - 60_000).toISOString(),
         },
         observed: {
@@ -115,7 +115,7 @@ describe('VMwareSettingsPanel', () => {
     expect(screen.getByText('VMware vSphere platform integration')).toBeInTheDocument();
     expect(screen.getByText('VMware connections')).toBeInTheDocument();
     expect(screen.getByText('lab-vcenter')).toBeInTheDocument();
-    expect(screen.getByText('Validated')).toBeInTheDocument();
+    expect(screen.getByText('Healthy')).toBeInTheDocument();
     expect(
       within(screen.getByTestId('vmware-connection-conn-2')).getAllByText('Disabled'),
     ).toHaveLength(2);

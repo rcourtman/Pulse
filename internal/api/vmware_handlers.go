@@ -13,6 +13,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
@@ -21,6 +22,7 @@ const vmwareConnectionsPathPrefix = "/api/vmware/connections/"
 // VMwareHandlers manages VMware vCenter connection CRUD and connectivity checks.
 type VMwareHandlers struct {
 	getPersistence func(ctx context.Context) *config.ConfigPersistence
+	getPoller      func(ctx context.Context) *monitoring.VMwarePoller
 	newClient      func(vmware.ClientConfig) (vmwareClient, error)
 
 	statusMu sync.RWMutex
@@ -34,33 +36,13 @@ type vmwareClient interface {
 
 type vmwareConnectionResponse struct {
 	config.VMwareVCenterInstance
-	Test     *vmwareConnectionTestStatus     `json:"test,omitempty"`
-	Observed *vmwareConnectionObservedStatus `json:"observed,omitempty"`
-}
-
-type vmwareConnectionTestStatus struct {
-	LastAttemptAt *time.Time                 `json:"lastAttemptAt,omitempty"`
-	LastSuccessAt *time.Time                 `json:"lastSuccessAt,omitempty"`
-	LastError     *vmwareConnectionTestError `json:"lastError,omitempty"`
-}
-
-type vmwareConnectionTestError struct {
-	At       *time.Time `json:"at,omitempty"`
-	Message  string     `json:"message,omitempty"`
-	Category string     `json:"category,omitempty"`
-}
-
-type vmwareConnectionObservedStatus struct {
-	CollectedAt *time.Time `json:"collectedAt,omitempty"`
-	Hosts       int        `json:"hosts"`
-	VMs         int        `json:"vms"`
-	Datastores  int        `json:"datastores"`
-	VIRelease   string     `json:"viRelease,omitempty"`
+	Poll     *monitoring.VMwareConnectionPollStatus      `json:"poll,omitempty"`
+	Observed *monitoring.VMwareConnectionObservedSummary `json:"observed,omitempty"`
 }
 
 type vmwareConnectionRuntimeStatus struct {
-	Test     *vmwareConnectionTestStatus
-	Observed *vmwareConnectionObservedStatus
+	Poll     *monitoring.VMwareConnectionPollStatus
+	Observed *monitoring.VMwareConnectionObservedSummary
 }
 
 // HandleAdd stores a new VMware vCenter connection.
@@ -130,16 +112,31 @@ func (h *VMwareHandlers) HandleList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgID := resolveTenantOrgID(r)
+	var summaries map[string]monitoring.VMwareConnectionSummary
+	if h != nil && h.getPoller != nil {
+		if poller := h.getPoller(r.Context()); poller != nil {
+			summaries = poller.ConnectionSummaries(orgID, instances)
+		}
+	}
+
 	responses := make([]vmwareConnectionResponse, 0, len(instances))
 	for i := range instances {
 		item := instances[i]
 		item.ApplyDefaults()
-		status := h.runtimeStatus(strings.TrimSpace(item.ID))
-		responses = append(responses, vmwareConnectionResponse{
+		response := vmwareConnectionResponse{
 			VMwareVCenterInstance: item.Redacted(),
-			Test:                  status.Test,
-			Observed:              status.Observed,
-		})
+		}
+		connID := strings.TrimSpace(item.ID)
+		if summary, ok := summaries[connID]; ok {
+			response.Poll = summary.Poll
+			response.Observed = summary.Observed
+		} else {
+			status := h.runtimeStatus(connID)
+			response.Poll = status.Poll
+			response.Observed = status.Observed
+		}
+		responses = append(responses, response)
 	}
 
 	writeJSON(w, http.StatusOK, responses)
@@ -338,13 +335,23 @@ func (h *VMwareHandlers) HandleTestSavedConnection(w http.ResponseWriter, r *htt
 		summary, invalidConfig, err := h.testConnectionInstance(r, instance)
 		if err != nil {
 			if !hasPayload {
-				h.recordTestFailure(connectionID, err, time.Now().UTC())
+				at := time.Now().UTC()
+				if poller := h.pollerForRequest(r.Context()); poller != nil {
+					poller.RecordConnectionTestFailure(resolveTenantOrgID(r), connectionID, err, at)
+				} else {
+					h.recordTestFailure(connectionID, err, at)
+				}
 			}
 			h.writeConnectionFailure(w, invalidConfig, err)
 			return
 		}
 		if !hasPayload {
-			h.recordTestSuccess(connectionID, summary, time.Now().UTC())
+			at := time.Now().UTC()
+			if poller := h.pollerForRequest(r.Context()); poller != nil {
+				poller.RecordConnectionTestSuccess(resolveTenantOrgID(r), connectionID, summary, at)
+			} else {
+				h.recordTestSuccess(connectionID, summary, at)
+			}
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"success": true})
 		return
@@ -484,6 +491,13 @@ func (h *VMwareHandlers) persistenceForRequest(w http.ResponseWriter, ctx contex
 	return persistence
 }
 
+func (h *VMwareHandlers) pollerForRequest(ctx context.Context) *monitoring.VMwarePoller {
+	if h == nil || h.getPoller == nil {
+		return nil
+	}
+	return h.getPoller(ctx)
+}
+
 func (h *VMwareHandlers) runtimeStatus(connectionID string) vmwareConnectionRuntimeStatus {
 	if h == nil {
 		return vmwareConnectionRuntimeStatus{}
@@ -510,12 +524,13 @@ func (h *VMwareHandlers) recordTestSuccess(connectionID string, summary *vmware.
 		h.statuses = make(map[string]vmwareConnectionRuntimeStatus)
 	}
 	current := h.statuses[connectionID]
-	current.Test = &vmwareConnectionTestStatus{
-		LastAttemptAt: timePointer(at),
-		LastSuccessAt: timePointer(at),
+	current.Poll = &monitoring.VMwareConnectionPollStatus{
+		IntervalSeconds: defaultVMwarePollIntervalSeconds(),
+		LastAttemptAt:   timePointer(at),
+		LastSuccessAt:   timePointer(at),
 	}
 	if summary != nil {
-		current.Observed = &vmwareConnectionObservedStatus{
+		current.Observed = &monitoring.VMwareConnectionObservedSummary{
 			CollectedAt: timePointer(at),
 			Hosts:       summary.Hosts,
 			VMs:         summary.VMs,
@@ -536,17 +551,19 @@ func (h *VMwareHandlers) recordTestFailure(connectionID string, err error, at ti
 		h.statuses = make(map[string]vmwareConnectionRuntimeStatus)
 	}
 	current := h.statuses[connectionID]
-	test := current.Test
-	if test == nil {
-		test = &vmwareConnectionTestStatus{}
+	poll := current.Poll
+	if poll == nil {
+		poll = &monitoring.VMwareConnectionPollStatus{
+			IntervalSeconds: defaultVMwarePollIntervalSeconds(),
+		}
 	}
-	test.LastAttemptAt = timePointer(at)
-	test.LastError = &vmwareConnectionTestError{
+	poll.LastAttemptAt = timePointer(at)
+	poll.LastError = &monitoring.VMwareConnectionPollError{
 		At:       timePointer(at),
 		Message:  err.Error(),
 		Category: connectionErrorCategory(err),
 	}
-	current.Test = test
+	current.Poll = poll
 	h.statuses[connectionID] = current
 }
 
@@ -564,22 +581,22 @@ func (h *VMwareHandlers) clearRuntimeStatus(connectionID string) {
 
 func cloneVMwareRuntimeStatus(status vmwareConnectionRuntimeStatus) vmwareConnectionRuntimeStatus {
 	cloned := vmwareConnectionRuntimeStatus{}
-	if status.Test != nil {
-		test := *status.Test
-		if test.LastAttemptAt != nil {
-			test.LastAttemptAt = timePointer(*test.LastAttemptAt)
+	if status.Poll != nil {
+		poll := *status.Poll
+		if poll.LastAttemptAt != nil {
+			poll.LastAttemptAt = timePointer(*poll.LastAttemptAt)
 		}
-		if test.LastSuccessAt != nil {
-			test.LastSuccessAt = timePointer(*test.LastSuccessAt)
+		if poll.LastSuccessAt != nil {
+			poll.LastSuccessAt = timePointer(*poll.LastSuccessAt)
 		}
-		if test.LastError != nil {
-			errCopy := *test.LastError
+		if poll.LastError != nil {
+			errCopy := *poll.LastError
 			if errCopy.At != nil {
 				errCopy.At = timePointer(*errCopy.At)
 			}
-			test.LastError = &errCopy
+			poll.LastError = &errCopy
 		}
-		cloned.Test = &test
+		cloned.Poll = &poll
 	}
 	if status.Observed != nil {
 		observed := *status.Observed
@@ -589,6 +606,10 @@ func cloneVMwareRuntimeStatus(status vmwareConnectionRuntimeStatus) vmwareConnec
 		cloned.Observed = &observed
 	}
 	return cloned
+}
+
+func defaultVMwarePollIntervalSeconds() int {
+	return int((60 * time.Second) / time.Second)
 }
 
 func timePointer(value time.Time) *time.Time {

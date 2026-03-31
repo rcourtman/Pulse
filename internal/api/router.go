@@ -355,6 +355,7 @@ func (r *Router) setupRoutes() {
 	}
 	r.vmwareHandlers = &VMwareHandlers{
 		getPersistence: r.configHandlers.getPersistence,
+		getPoller:      func(context.Context) *monitoring.VMwarePoller { return r.vmwarePoller },
 	}
 	recoveryManager := recoverymanager.New(r.multiTenant)
 	r.recoveryHandlers = NewRecoveryHandlers(recoveryManager)

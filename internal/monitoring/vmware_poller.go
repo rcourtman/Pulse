@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 	"sync"
@@ -15,10 +16,54 @@ import (
 
 const defaultVMwarePollInterval = 60 * time.Second
 
+// VMwareConnectionPollError captures the last runtime poll error for one
+// configured VMware connection.
+type VMwareConnectionPollError struct {
+	At       *time.Time `json:"at,omitempty"`
+	Message  string     `json:"message,omitempty"`
+	Category string     `json:"category,omitempty"`
+}
+
+// VMwareConnectionPollStatus summarizes the runtime polling state for one
+// configured VMware connection.
+type VMwareConnectionPollStatus struct {
+	IntervalSeconds     int                        `json:"intervalSeconds"`
+	LastAttemptAt       *time.Time                 `json:"lastAttemptAt,omitempty"`
+	LastSuccessAt       *time.Time                 `json:"lastSuccessAt,omitempty"`
+	ConsecutiveFailures int                        `json:"consecutiveFailures,omitempty"`
+	LastError           *VMwareConnectionPollError `json:"lastError,omitempty"`
+}
+
+// VMwareConnectionObservedSummary summarizes the canonical resources the most
+// recent successful poll contributed for one configured VMware connection.
+type VMwareConnectionObservedSummary struct {
+	CollectedAt *time.Time `json:"collectedAt,omitempty"`
+	Hosts       int        `json:"hosts"`
+	VMs         int        `json:"vms"`
+	Datastores  int        `json:"datastores"`
+	VIRelease   string     `json:"viRelease,omitempty"`
+}
+
+// VMwareConnectionSummary merges poll health with the most recent discovered
+// platform contribution for one configured VMware connection.
+type VMwareConnectionSummary struct {
+	Poll     *VMwareConnectionPollStatus      `json:"poll,omitempty"`
+	Observed *VMwareConnectionObservedSummary `json:"observed,omitempty"`
+}
+
+type vmwareConnectionRuntimeStatus struct {
+	lastAttemptAt       time.Time
+	lastSuccessAt       time.Time
+	lastError           *VMwareConnectionPollError
+	consecutiveFailures int
+	observed            *VMwareConnectionObservedSummary
+}
+
 type vmwarePollerProvider interface {
 	Refresh(ctx context.Context) error
 	Records() []unifiedresources.IngestRecord
 	ActivityChanges() []unifiedresources.ResourceChange
+	Snapshot() *vmware.InventorySnapshot
 	Close()
 }
 
@@ -31,6 +76,8 @@ type VMwarePoller struct {
 	providersByOrg map[string]map[string]vmwarePollerProvider
 	// configsByOrg is keyed by orgID, then connection ID.
 	configsByOrg map[string]map[string]config.VMwareVCenterInstance
+	// statusByOrg is keyed by orgID, then connection ID.
+	statusByOrg map[string]map[string]*vmwareConnectionRuntimeStatus
 	// cachedRecordsByOrg is keyed by orgID, then connection ID.
 	cachedRecordsByOrg map[string]map[string][]unifiedresources.IngestRecord
 	// cachedChangesByOrg is keyed by orgID, then connection ID.
@@ -62,6 +109,7 @@ func NewVMwarePoller(multiTenant *config.MultiTenantPersistence, interval time.D
 		multiTenant:        multiTenant,
 		providersByOrg:     make(map[string]map[string]vmwarePollerProvider),
 		configsByOrg:       make(map[string]map[string]config.VMwareVCenterInstance),
+		statusByOrg:        make(map[string]map[string]*vmwareConnectionRuntimeStatus),
 		cachedRecordsByOrg: make(map[string]map[string][]unifiedresources.IngestRecord),
 		cachedChangesByOrg: make(map[string]map[string][]unifiedresources.ResourceChange),
 		stopped:            stopped,
@@ -241,6 +289,9 @@ func (p *VMwarePoller) syncConnections() {
 		if p.cachedChangesByOrg[orgID] == nil {
 			p.cachedChangesByOrg[orgID] = make(map[string][]unifiedresources.ResourceChange)
 		}
+		if p.statusByOrg[orgID] == nil {
+			p.statusByOrg[orgID] = make(map[string]*vmwareConnectionRuntimeStatus)
+		}
 
 		for connectionID, instance := range connectionMap {
 			existingConfig, exists := p.configsByOrg[orgID][connectionID]
@@ -292,11 +343,15 @@ func (p *VMwarePoller) syncConnections() {
 			if p.configsByOrg[orgID] != nil {
 				delete(p.configsByOrg[orgID], connectionID)
 			}
+			if p.statusByOrg[orgID] != nil {
+				delete(p.statusByOrg[orgID], connectionID)
+			}
 		}
 
 		if len(providers) == 0 {
 			delete(p.providersByOrg, orgID)
 			delete(p.configsByOrg, orgID)
+			delete(p.statusByOrg, orgID)
 			delete(p.cachedRecordsByOrg, orgID)
 			delete(p.cachedChangesByOrg, orgID)
 		}
@@ -317,7 +372,11 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 	pollCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
+	at := time.Now().UTC()
 	if err := entry.provider.Refresh(pollCtx); err != nil {
+		p.mu.Lock()
+		p.recordConnectionFailureLocked(entry.orgID, entry.connectionID, err, at)
+		p.mu.Unlock()
 		log.Warn().
 			Str("component", "vmware_poller").
 			Str("action", "refresh").
@@ -330,8 +389,10 @@ func (p *VMwarePoller) pollConnection(ctx context.Context, entry vmwarePollerPro
 
 	records := cloneIngestRecords(entry.provider.Records())
 	changes := cloneResourceChanges(entry.provider.ActivityChanges())
+	snapshot := entry.provider.Snapshot()
 
 	p.mu.Lock()
+	p.recordConnectionSuccessLocked(entry.orgID, entry.connectionID, at, snapshot)
 	if p.cachedRecordsByOrg[entry.orgID] == nil {
 		p.cachedRecordsByOrg[entry.orgID] = make(map[string][]unifiedresources.IngestRecord)
 	}
@@ -397,6 +458,67 @@ func (p *VMwarePoller) nextWaitDuration(now time.Time) time.Duration {
 		return defaultVMwarePollInterval
 	}
 	return p.interval
+}
+
+// ConnectionSummaries returns per-connection runtime poll health and discovered
+// contribution summaries for the supplied VMware settings records.
+func (p *VMwarePoller) ConnectionSummaries(orgID string, instances []config.VMwareVCenterInstance) map[string]VMwareConnectionSummary {
+	if len(instances) == 0 {
+		return nil
+	}
+
+	orgID = normalizeVMwareOrgID(orgID)
+	summaries := make(map[string]VMwareConnectionSummary, len(instances))
+	intervalSeconds := defaultVMwareConnectionPollIntervalSeconds()
+	if p != nil {
+		intervalSeconds = p.connectionPollIntervalSeconds()
+	}
+
+	for i := range instances {
+		instance := instances[i]
+		instance.ApplyDefaults()
+		connID := strings.TrimSpace(instance.ID)
+		if connID == "" {
+			continue
+		}
+
+		summary := VMwareConnectionSummary{
+			Poll: &VMwareConnectionPollStatus{
+				IntervalSeconds: int(intervalSeconds),
+			},
+		}
+
+		if p != nil {
+			p.mu.Lock()
+			status := p.cloneRuntimeStatusLocked(orgID, connID)
+			p.mu.Unlock()
+			if status != nil {
+				summary.Poll.LastAttemptAt = cloneTimePointer(status.LastAttemptAt)
+				summary.Poll.LastSuccessAt = cloneTimePointer(status.LastSuccessAt)
+				summary.Poll.ConsecutiveFailures = status.ConsecutiveFailures
+				summary.Poll.LastError = cloneVMwareConnectionPollError(status.LastError)
+				summary.Observed = cloneVMwareObservedSummary(status.Observed)
+			}
+		}
+
+		summaries[connID] = summary
+	}
+
+	return summaries
+}
+
+func (p *VMwarePoller) connectionPollIntervalSeconds() int {
+	if p == nil {
+		return defaultVMwareConnectionPollIntervalSeconds()
+	}
+	if p.interval < time.Second {
+		return defaultVMwareConnectionPollIntervalSeconds()
+	}
+	return int(p.interval / time.Second)
+}
+
+func defaultVMwareConnectionPollIntervalSeconds() int {
+	return int(defaultVMwarePollInterval / time.Second)
 }
 
 // GetCurrentRecords returns the latest known VMware records for the default org.
@@ -527,4 +649,174 @@ func cloneResourceChanges(in []unifiedresources.ResourceChange) []unifiedresourc
 		}
 	}
 	return out
+}
+
+func (p *VMwarePoller) cloneRuntimeStatusLocked(orgID string, connID string) *vmwareConnectionRuntimeSnapshot {
+	if p == nil {
+		return nil
+	}
+	byConn := p.statusByOrg[orgID]
+	if byConn == nil {
+		return nil
+	}
+	status := byConn[connID]
+	if status == nil {
+		return nil
+	}
+	return &vmwareConnectionRuntimeSnapshot{
+		LastAttemptAt:       timePointerIfSet(status.lastAttemptAt),
+		LastSuccessAt:       timePointerIfSet(status.lastSuccessAt),
+		ConsecutiveFailures: status.consecutiveFailures,
+		LastError:           cloneVMwareConnectionPollError(status.lastError),
+		Observed:            cloneVMwareObservedSummary(status.observed),
+	}
+}
+
+type vmwareConnectionRuntimeSnapshot struct {
+	LastAttemptAt       *time.Time
+	LastSuccessAt       *time.Time
+	ConsecutiveFailures int
+	LastError           *VMwareConnectionPollError
+	Observed            *VMwareConnectionObservedSummary
+}
+
+func (p *VMwarePoller) ensureConnectionRuntimeStatusLocked(orgID, connID string) *vmwareConnectionRuntimeStatus {
+	if p.statusByOrg[orgID] == nil {
+		p.statusByOrg[orgID] = make(map[string]*vmwareConnectionRuntimeStatus)
+	}
+	if p.statusByOrg[orgID][connID] == nil {
+		p.statusByOrg[orgID][connID] = &vmwareConnectionRuntimeStatus{}
+	}
+	return p.statusByOrg[orgID][connID]
+}
+
+func (p *VMwarePoller) recordConnectionSuccessLocked(orgID, connID string, at time.Time, snapshot *vmware.InventorySnapshot) {
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	status.lastAttemptAt = at
+	status.lastSuccessAt = at
+	status.lastError = nil
+	status.consecutiveFailures = 0
+	if snapshot != nil {
+		status.observed = buildVMwareObservedSummary(snapshot)
+	}
+}
+
+func (p *VMwarePoller) recordConnectionFailureLocked(orgID, connID string, err error, at time.Time) {
+	if err == nil {
+		return
+	}
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	status.lastAttemptAt = at
+	status.consecutiveFailures++
+	status.lastError = &VMwareConnectionPollError{
+		At:       timePointerIfSet(at),
+		Message:  strings.TrimSpace(err.Error()),
+		Category: classifyVMwarePollError(err),
+	}
+}
+
+// RecordConnectionTestSuccess updates one saved VMware connection summary after
+// a manual row-level test using the same canonical runtime health owner as the
+// live poller.
+func (p *VMwarePoller) RecordConnectionTestSuccess(orgID, connID string, summary *vmware.InventorySummary, at time.Time) {
+	if p == nil {
+		return
+	}
+	connID = strings.TrimSpace(connID)
+	if connID == "" {
+		return
+	}
+	orgID = normalizeVMwareOrgID(orgID)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	status := p.ensureConnectionRuntimeStatusLocked(orgID, connID)
+	status.lastAttemptAt = at
+	status.lastSuccessAt = at
+	status.lastError = nil
+	status.consecutiveFailures = 0
+	if summary != nil {
+		status.observed = &VMwareConnectionObservedSummary{
+			CollectedAt: timePointerIfSet(at),
+			Hosts:       summary.Hosts,
+			VMs:         summary.VMs,
+			Datastores:  summary.Datastores,
+			VIRelease:   strings.TrimSpace(summary.VIRelease),
+		}
+	}
+}
+
+// RecordConnectionTestFailure updates one saved VMware connection summary after
+// a manual row-level test failure while preserving previously observed
+// contribution summary.
+func (p *VMwarePoller) RecordConnectionTestFailure(orgID, connID string, err error, at time.Time) {
+	if p == nil || err == nil {
+		return
+	}
+	connID = strings.TrimSpace(connID)
+	if connID == "" {
+		return
+	}
+	orgID = normalizeVMwareOrgID(orgID)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.recordConnectionFailureLocked(orgID, connID, err, at)
+}
+
+func buildVMwareObservedSummary(snapshot *vmware.InventorySnapshot) *VMwareConnectionObservedSummary {
+	if snapshot == nil {
+		return nil
+	}
+	collectedAt := snapshot.CollectedAt
+	return &VMwareConnectionObservedSummary{
+		CollectedAt: timePointerIfSet(collectedAt),
+		Hosts:       len(snapshot.Hosts),
+		VMs:         len(snapshot.VMs),
+		Datastores:  len(snapshot.Datastores),
+		VIRelease:   strings.TrimSpace(snapshot.VIRelease),
+	}
+}
+
+func classifyVMwarePollError(err error) string {
+	if err == nil {
+		return ""
+	}
+	var connectionErr *vmware.ConnectionError
+	if errors.As(err, &connectionErr) && connectionErr != nil {
+		return strings.TrimSpace(connectionErr.Category)
+	}
+	return ""
+}
+
+func normalizeVMwareOrgID(orgID string) string {
+	orgID = strings.TrimSpace(orgID)
+	if orgID == "" {
+		return "default"
+	}
+	return orgID
+}
+
+func cloneVMwareConnectionPollError(value *VMwareConnectionPollError) *VMwareConnectionPollError {
+	if value == nil {
+		return nil
+	}
+	return &VMwareConnectionPollError{
+		At:       cloneTimePointer(value.At),
+		Message:  strings.TrimSpace(value.Message),
+		Category: strings.TrimSpace(value.Category),
+	}
+}
+
+func cloneVMwareObservedSummary(value *VMwareConnectionObservedSummary) *VMwareConnectionObservedSummary {
+	if value == nil {
+		return nil
+	}
+	return &VMwareConnectionObservedSummary{
+		CollectedAt: cloneTimePointer(value.CollectedAt),
+		Hosts:       value.Hosts,
+		VMs:         value.VMs,
+		Datastores:  value.Datastores,
+		VIRelease:   strings.TrimSpace(value.VIRelease),
+	}
 }

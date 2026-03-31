@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -114,6 +115,19 @@ func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
 	if supplemental := poller.SupplementalChanges(nil, "default"); len(supplemental) != 2 {
 		t.Fatalf("expected SupplementalChanges to mirror cached VMware changes, got %d", len(supplemental))
 	}
+
+	waitForCondition(t, 2*time.Second, func() bool {
+		summary, ok := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+		return ok && summary.Poll != nil && summary.Poll.LastSuccessAt != nil && summary.Observed != nil
+	}, "expected VMware poller to publish connection summary")
+
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.IntervalSeconds != 60 {
+		t.Fatalf("expected VMware poll interval 60, got %+v", summary.Poll)
+	}
+	if summary.Observed == nil || summary.Observed.Hosts != 1 || summary.Observed.VMs != 1 || summary.Observed.Datastores != 1 {
+		t.Fatalf("unexpected observed summary: %+v", summary.Observed)
+	}
 }
 
 func TestVMwarePollerFeatureFlagGate(t *testing.T) {
@@ -144,5 +158,104 @@ func TestVMwarePollerFeatureFlagGate(t *testing.T) {
 	}
 	if records := poller.GetCurrentRecordsForOrg("default"); len(records) != 0 {
 		t.Fatalf("expected no VMware records when feature flag is disabled, got %d", len(records))
+	}
+}
+
+func TestVMwarePollerConnectionSummariesCaptureFailuresWithoutClearingObservedSummary(t *testing.T) {
+	poller := NewVMwarePoller(nil, time.Minute)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-1"
+	connection.Host = "vc.lab.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+
+	successAt := time.Date(2026, 3, 31, 9, 0, 0, 0, time.UTC)
+	failureAt := successAt.Add(5 * time.Minute)
+	poller.RecordConnectionTestSuccess("default", connection.ID, &vmware.InventorySummary{
+		Hosts:      2,
+		VMs:        14,
+		Datastores: 3,
+		VIRelease:  "8.0.3",
+	}, successAt)
+	poller.RecordConnectionTestFailure("default", connection.ID, &vmware.ConnectionError{
+		Category: "permission",
+		Message:  "VMware permissions are insufficient for vmware performance metrics",
+	}, failureAt)
+
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastError == nil {
+		t.Fatalf("expected poll failure summary, got %+v", summary.Poll)
+	}
+	if summary.Poll.ConsecutiveFailures != 1 || summary.Poll.LastError.Category != "permission" {
+		t.Fatalf("unexpected poll failure details: %+v", summary.Poll)
+	}
+	if summary.Observed == nil || summary.Observed.VMs != 14 || summary.Observed.VIRelease != "8.0.3" {
+		t.Fatalf("expected observed summary to be preserved after failure, got %+v", summary.Observed)
+	}
+}
+
+type failingVMwarePollerProvider struct {
+	err error
+}
+
+func (p *failingVMwarePollerProvider) Refresh(context.Context) error            { return p.err }
+func (p *failingVMwarePollerProvider) Records() []unifiedresources.IngestRecord { return nil }
+func (p *failingVMwarePollerProvider) ActivityChanges() []unifiedresources.ResourceChange {
+	return nil
+}
+func (p *failingVMwarePollerProvider) Snapshot() *vmware.InventorySnapshot { return nil }
+func (p *failingVMwarePollerProvider) Close()                              {}
+
+func TestVMwarePollerLiveFailureKeepsCachedRecords(t *testing.T) {
+	previous := vmware.IsFeatureEnabled()
+	vmware.SetFeatureEnabled(true)
+	t.Cleanup(func() { vmware.SetFeatureEnabled(previous) })
+
+	mtp, persistence := newTestTenantPersistence(t)
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-live-fail"
+	connection.Host = "vc.fail.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("SaveVMwareConfig() error = %v", err)
+	}
+
+	providerCalls := 0
+	poller := NewVMwarePoller(mtp, 20*time.Millisecond)
+	poller.newProvider = func(instance config.VMwareVCenterInstance) (vmwarePollerProvider, error) {
+		providerCalls++
+		if providerCalls == 1 {
+			return vmware.NewProvider(vmware.InventorySnapshot{
+				ConnectionID: instance.ID,
+				CollectedAt:  time.Now().UTC(),
+				VIRelease:    "8.0.3",
+				Hosts:        []vmware.InventoryHost{{Host: "host-1", Name: "esxi-01"}},
+			}), nil
+		}
+		return &failingVMwarePollerProvider{
+			err: errors.New("refresh vmware inventory: VMware permissions are insufficient for vmware performance metrics"),
+		}, nil
+	}
+	poller.syncConnections()
+	poller.pollAll(context.Background())
+
+	initialRecords := poller.GetCurrentRecordsForOrg("default")
+	if len(initialRecords) != 1 {
+		t.Fatalf("expected initial cached VMware records, got %d", len(initialRecords))
+	}
+
+	poller.providersByOrg["default"][connection.ID] = &failingVMwarePollerProvider{
+		err: &vmware.ConnectionError{Category: "permission", Message: "VMware permissions are insufficient for vmware performance metrics"},
+	}
+	poller.pollAll(context.Background())
+
+	recordsAfterFailure := poller.GetCurrentRecordsForOrg("default")
+	if len(recordsAfterFailure) != 1 {
+		t.Fatalf("expected cached VMware records to survive live failure, got %d", len(recordsAfterFailure))
+	}
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastError == nil || summary.Poll.LastError.Category != "permission" {
+		t.Fatalf("expected permission poll error after live failure, got %+v", summary.Poll)
 	}
 }

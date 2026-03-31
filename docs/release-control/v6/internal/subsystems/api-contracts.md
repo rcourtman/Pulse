@@ -704,14 +704,18 @@ That same `/api/vmware/connections` family now also owns the current phase-1
 implementation contract under `internal/api/vmware_handlers.go`,
 `internal/api/router.go`, `internal/api/router_routes_registration.go`, and
 `frontend-modern/src/api/vmware.ts`. The list response must carry one redacted
-stored connection shape plus canonical last-test status and observed
+stored connection shape plus canonical `poll` health and `observed`
 contribution summary (`hosts`, `vms`, `datastores`, `viRelease`) so the shared
 settings workspace can render VMware status without another provider-local
-inventory route. `POST /api/vmware/connections/test` must stay the draft test
-surface, while `POST /api/vmware/connections/{id}/test` remains the saved
-connection retest surface: a row-level saved retest with no payload should
-refresh the stored runtime summary, but an edit-form test overlay must preserve
-the stored summary until a real save succeeds. The explicit disabled path also
+inventory route. That `poll` payload is the canonical runtime contract:
+backend handlers must source it from the poller-owned per-connection summary,
+saved row-level retests with no payload must refresh that same summary owner,
+and edit-form overlay tests must preserve the stored summary until a real save
+succeeds. Compatibility acceptance of a historical `test` field may exist only
+inside shared frontend normalization; the backend route family itself must stay
+on `poll` for the operator-facing response model. `POST /api/vmware/connections/test`
+must stay the draft test surface, while `POST /api/vmware/connections/{id}/test`
+remains the saved connection retest surface. The explicit disabled path also
 stays on this boundary: `404 vmware_disabled` means the operator or runtime has
 opted out of the default-on VMware candidate, not that the platform requires a
 different onboarding contract.

@@ -198,6 +198,7 @@ func (c *Client) CollectInventory(ctx context.Context) (*InventorySnapshot, erro
 	if err := c.enrichInventoryTopology(ctx, automationSessionID, release, sessionID, inventory); err != nil {
 		return nil, err
 	}
+	inventory.VIRelease = strings.TrimSpace(release)
 	inventory.CollectedAt = time.Now().UTC()
 	return inventory, nil
 }

@@ -22,9 +22,11 @@ describe('VMwareAPI', () => {
         password: ' ******** ',
         insecureSkipVerify: true,
         enabled: true,
-        test: {
+        poll: {
+          intervalSeconds: 60,
           lastAttemptAt: ' 2026-03-30T12:00:00Z ',
           lastSuccessAt: ' 2026-03-30T12:00:01Z ',
+          consecutiveFailures: 0,
         },
         observed: {
           collectedAt: ' 2026-03-30T12:00:02Z ',
@@ -46,9 +48,11 @@ describe('VMwareAPI', () => {
         password: '********',
         insecureSkipVerify: true,
         enabled: true,
-        test: {
+        poll: {
+          intervalSeconds: 60,
           lastAttemptAt: '2026-03-30T12:00:00Z',
           lastSuccessAt: '2026-03-30T12:00:01Z',
+          consecutiveFailures: 0,
           lastError: undefined,
         },
         observed: {

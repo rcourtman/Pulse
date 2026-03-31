@@ -167,6 +167,8 @@ func TestContract_VMwareSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
 		Enabled:  true,
 	}
 	handler, persistence := newVMwareHandlersForTest(t)
+	poller := monitoring.NewVMwarePoller(nil, time.Minute)
+	handler.getPoller = func(context.Context) *monitoring.VMwarePoller { return poller }
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
 		t.Fatalf("seed vmware config: %v", err)
 	}
@@ -185,12 +187,12 @@ func TestContract_VMwareSavedConnectionTestsUpdateRuntimeSummary(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
-	status := handler.runtimeStatus(connection.ID)
-	if status.Test == nil || status.Test.LastSuccessAt == nil {
-		t.Fatalf("expected saved manual test to refresh runtime summary, got %+v", status.Test)
+	summary := poller.ConnectionSummaries("default", []config.VMwareVCenterInstance{connection})[connection.ID]
+	if summary.Poll == nil || summary.Poll.LastSuccessAt == nil {
+		t.Fatalf("expected saved manual test to refresh runtime summary, got %+v", summary.Poll)
 	}
-	if status.Observed == nil || status.Observed.VMs != 20 {
-		t.Fatalf("expected saved manual test to refresh observed summary, got %+v", status.Observed)
+	if summary.Observed == nil || summary.Observed.VMs != 20 {
+		t.Fatalf("expected saved manual test to refresh observed summary, got %+v", summary.Observed)
 	}
 }
 
@@ -207,12 +209,14 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 		Enabled:  true,
 	}
 	handler, persistence := newVMwareHandlersForTest(t)
+	poller := monitoring.NewVMwarePoller(nil, time.Minute)
+	handler.getPoller = func(context.Context) *monitoring.VMwarePoller { return poller }
 	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
 		t.Fatalf("seed vmware config: %v", err)
 	}
 
 	collectedAt := time.Date(2026, 3, 30, 18, 0, 0, 0, time.UTC)
-	handler.recordTestSuccess(connection.ID, &vmware.InventorySummary{
+	poller.RecordConnectionTestSuccess("default", connection.ID, &vmware.InventorySummary{
 		Hosts:      4,
 		VMs:        24,
 		Datastores: 6,
@@ -236,6 +240,9 @@ func TestContract_VMwareConnectionListCarriesObservedSummary(t *testing.T) {
 	}
 	if responses[0].Password != "********" {
 		t.Fatalf("expected redacted password in vmware list response, got %q", responses[0].Password)
+	}
+	if responses[0].Poll == nil || responses[0].Poll.LastSuccessAt == nil {
+		t.Fatalf("expected poll summary in vmware list response, got %+v", responses[0])
 	}
 	if responses[0].Observed == nil {
 		t.Fatalf("expected observed summary in vmware list response, got %+v", responses[0])

@@ -37,37 +37,37 @@ const getConnectionHealthPresentation = (connection: VMwareConnection) => {
     };
   }
 
-  const test = connection.test;
-  const lastSuccessAt = test?.lastSuccessAt;
-  const lastError = test?.lastError;
+  const poll = connection.poll;
+  const lastSuccessAt = poll?.lastSuccessAt;
+  const lastError = poll?.lastError;
   const lastErrorAfterSuccess =
     !!lastError?.at &&
     (!lastSuccessAt || new Date(lastError.at).getTime() >= new Date(lastSuccessAt).getTime());
 
   if (lastError && lastErrorAfterSuccess) {
     return {
-      label: 'Validation failing',
+      label: 'Runtime failing',
       className: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300',
       detail: lastError.at
-        ? `Last validation ${formatRelativeTime(lastError.at, { compact: true })}`
-        : 'Last validation failed',
+        ? `Last check ${formatRelativeTime(lastError.at, { compact: true })}`
+        : 'Last check failed',
       error: lastError.message || null,
     };
   }
 
   if (lastSuccessAt) {
     return {
-      label: 'Validated',
+      label: 'Healthy',
       className: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
-      detail: `Last validation ${formatRelativeTime(lastSuccessAt, { compact: true })}`,
+      detail: `Last check ${formatRelativeTime(lastSuccessAt, { compact: true })}`,
       error: null,
     };
   }
 
   return {
-    label: 'Awaiting first validation',
+    label: 'Awaiting first poll',
     className: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
-    detail: 'Pulse has not completed the first vCenter validation yet',
+    detail: 'Pulse has not completed the first vCenter poll yet',
     error: null,
   };
 };
@@ -247,7 +247,7 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
                                     <span>Skip TLS verification</span>
                                   </>
                                 </Show>
-                                <Show when={connection.test?.lastAttemptAt || health().detail}>
+                                <Show when={connection.poll?.lastAttemptAt || health().detail}>
                                   <>
                                     <span aria-hidden="true">•</span>
                                     <span>{health().detail}</span>
@@ -267,7 +267,7 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
                                 <div class="flex flex-wrap gap-2">
                                   <Show when={connection.observed?.collectedAt}>
                                     <span class={connectionMetaBadgeClass}>
-                                      Validated{' '}
+                                      Observed{' '}
                                       {formatRelativeTime(connection.observed?.collectedAt, {
                                         compact: true,
                                       })}

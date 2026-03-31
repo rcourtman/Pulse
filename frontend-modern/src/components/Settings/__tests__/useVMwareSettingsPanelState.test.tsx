@@ -129,7 +129,7 @@ describe('useVMwareSettingsPanelState', () => {
         password: '********',
         insecureSkipVerify: false,
         enabled: true,
-        test: {
+        poll: {
           lastSuccessAt: '2026-03-30T10:00:00Z',
         },
       },
@@ -148,7 +148,7 @@ describe('useVMwareSettingsPanelState', () => {
       'VMware connection successful for lab-vcenter',
     );
     expect(VMwareAPI.listConnections).toHaveBeenCalledTimes(2);
-    expect(result.connections()[0].test?.lastSuccessAt).toBe('2026-03-30T10:00:00Z');
+    expect(result.connections()[0].poll?.lastSuccessAt).toBe('2026-03-30T10:00:00Z');
   });
 
   it('tests edited saved connections through the canonical saved-connection API path', async () => {
