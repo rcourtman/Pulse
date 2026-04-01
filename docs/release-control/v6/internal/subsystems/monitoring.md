@@ -291,6 +291,11 @@ canonical physical-disk model and the Proxmox polling runtime in
 `internal/monitoring/monitor_pve.go` must evaluate disk alerts only after that
 merged disk view exists, so controller-backed disks do not lose health and
 endurance coverage between collection and alerting.
+That same Proxmox monitoring boundary also owns checked response parsing for
+polymorphic numeric fields. Shared client parsers such as
+`pkg/proxmox/replication.go` must use the package's checked integer conversion
+helpers instead of direct casts, so malformed or oversized Proxmox values do
+not overflow into monitoring state.
 
 Backup polling and recovery guest identity assembly now derive workload node,
 name, and type context from canonical `ReadState` instead of from

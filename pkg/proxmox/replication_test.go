@@ -94,6 +94,7 @@ func TestIntFromAny(t *testing.T) {
 		{"uint16", uint16(65535), 65535, true},
 		{"uint32", uint32(42), 42, true},
 		{"uint64", uint64(42), 42, true},
+		{"uint64 overflow", ^uint64(0), 0, false},
 
 		// float types (rounded)
 		{"float32 integer", float32(42.0), 42, true},
@@ -107,16 +108,21 @@ func TestIntFromAny(t *testing.T) {
 		{"float64 NaN", math.NaN(), 0, false},
 		{"float64 +Inf", math.Inf(1), 0, false},
 		{"float64 -Inf", math.Inf(-1), 0, false},
+		{"float64 overflow", math.MaxFloat64, 0, false},
 
 		// json.Number
 		{"json.Number int", json.Number("42"), 42, true},
 		{"json.Number float", json.Number("42.6"), 43, true},
+		{"json.Number scientific float", json.Number("4.2e1"), 42, true},
+		{"json.Number oversized int", json.Number("9223372036854775808"), 0, false},
 		{"json.Number invalid", json.Number("abc"), 0, false},
 
 		// string
 		{"string int", "42", 42, true},
 		{"string negative", "-42", -42, true},
 		{"string float", "42.6", 43, true},
+		{"string scientific float", "4.2e1", 42, true},
+		{"string oversized int", "9223372036854775808", 0, false},
 		{"string empty", "", 0, false},
 		{"string whitespace", "  42  ", 42, true},
 		{"string invalid", "abc", 0, false},

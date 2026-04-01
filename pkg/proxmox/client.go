@@ -126,6 +126,13 @@ func floatToIntTrunc(v float64) (int, error) {
 	return int(v), nil
 }
 
+func floatToIntRounded(v float64) (int, error) {
+	if math.IsNaN(v) || math.IsInf(v, 0) {
+		return 0, fmt.Errorf("non-finite float %v cannot be converted to int", v)
+	}
+	return floatToIntTrunc(math.Round(v))
+}
+
 func looksLikeNumericLiteral(raw string) bool {
 	hasDigit := false
 	var prev rune
