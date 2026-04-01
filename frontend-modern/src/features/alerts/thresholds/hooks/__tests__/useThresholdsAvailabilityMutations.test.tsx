@@ -40,13 +40,13 @@ describe('useThresholdsAvailabilityMutations', () => {
     const { props, rawOverridesConfig, setHasUnsavedChanges, removeAlerts } =
       buildTableProps(overrideSignal);
     const guestResource: TableResource = {
-      id: 'vm-100',
+      id: 'cluster-a:node-2:100',
       name: 'db-01',
       type: 'guest',
       resourceType: 'VM',
       vmid: 100,
-      node: 'pve-1',
-      instance: 'qemu/100',
+      node: 'node-2',
+      instance: 'cluster-a',
       thresholds: {},
     };
 
@@ -67,17 +67,17 @@ describe('useThresholdsAvailabilityMutations', () => {
       }),
     );
 
-    result.setOfflineState('vm-100', 'critical');
+    result.setOfflineState('cluster-a:node-2:100', 'critical');
 
     expect(overrideSignal[0]()).toEqual([
       expect.objectContaining({
-        id: 'vm-100',
+        id: 'guest:cluster-a:100',
         disableConnectivity: false,
         poweredOffSeverity: 'critical',
       }),
     ]);
     expect(rawOverridesConfig()).toEqual({
-      'vm-100': {
+      'guest:cluster-a:100': {
         poweredOffSeverity: 'critical',
       },
     });

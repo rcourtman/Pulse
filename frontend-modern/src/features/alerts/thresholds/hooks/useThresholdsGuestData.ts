@@ -1,5 +1,9 @@
 import { createMemo } from 'solid-js';
 
+import {
+  getGuestOverrideIdentity,
+  guestOverrideIdCandidates,
+} from '@/features/alerts/guestOverrideIdentity';
 import { getAlertResourceDisplayLabel } from '@/features/alerts/helpers';
 
 import type { GroupHeaderMeta, Resource as TableResource } from '../tableTypes';
@@ -7,8 +11,8 @@ import { ThresholdsDataInputs } from '../thresholdsResourceModel';
 import {
   buildNodeHeaderMeta,
   createOverridesMap,
+  findOverrideByCandidates,
   hasThresholdDiff,
-  platformData,
 } from '../thresholdsResourceModel';
 
 export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
@@ -23,11 +27,11 @@ export function useThresholdsGuestData(inputs: ThresholdsDataInputs) {
     const overridesMap = createOverridesMap(props.overrides());
 
     const guests = (props.allGuests() ?? []).map((guest) => {
-      const data = platformData(guest);
-      const vmid = (data?.vmid as number | undefined) ?? undefined;
-      const node = (data?.node as string | undefined) ?? '';
-      const instance = (data?.instance as string | undefined) ?? guest.platformId ?? '';
-      const override = overridesMap.get(guest.id);
+      const guestIdentity = getGuestOverrideIdentity(guest);
+      const vmid = guestIdentity?.vmid;
+      const node = guestIdentity?.node ?? '';
+      const instance = guestIdentity?.instance ?? guest.platformId ?? '';
+      const override = findOverrideByCandidates(overridesMap, guestOverrideIdCandidates(guest));
       const overrideSeverity = override?.poweredOffSeverity;
       const hasCustomThresholds = hasThresholdDiff(
         override,

@@ -156,6 +156,64 @@ func TestReevaluateActiveAlertsWithOverride(t *testing.T) {
 	}
 }
 
+func TestReevaluateActiveAlertsUsesStableClusterGuestOverrideAcrossNodeMove(t *testing.T) {
+	manager := NewManager()
+
+	manager.mu.Lock()
+	manager.activeAlerts = make(map[string]*Alert)
+	manager.mu.Unlock()
+
+	initialConfig := AlertConfig{
+		Enabled: true,
+		GuestDefaults: ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+		},
+		NodeDefaults: ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+		},
+		StorageDefault: HysteresisThreshold{Trigger: 85, Clear: 80},
+		Overrides:      make(map[string]ThresholdConfig),
+	}
+	manager.UpdateConfig(initialConfig)
+
+	resourceID := BuildGuestKey("pve1", "node2", 202)
+	alertID := canonicalMetricStateID(resourceID, "cpu")
+	alert := &Alert{
+		ID:           alertID,
+		Type:         "cpu",
+		Level:        AlertLevelWarning,
+		ResourceID:   resourceID,
+		ResourceName: "moved-vm",
+		Node:         "node2",
+		Instance:     "pve1",
+		Message:      "CPU usage is 91%",
+		Value:        91.0,
+		Threshold:    80.0,
+		StartTime:    time.Now().Add(-5 * time.Minute),
+		LastSeen:     time.Now(),
+	}
+
+	manager.mu.Lock()
+	manager.activeAlerts[alertID] = alert
+	manager.mu.Unlock()
+
+	updatedConfig := initialConfig
+	updatedConfig.Overrides[stableGuestOverrideKey("pve1", 202)] = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 95, Clear: 90},
+	}
+	manager.UpdateConfig(updatedConfig)
+
+	time.Sleep(100 * time.Millisecond)
+
+	manager.mu.RLock()
+	_, alertStillActive := testLookupActiveAlert(t, manager, alertID)
+	manager.mu.RUnlock()
+
+	if alertStillActive {
+		t.Fatalf("expected alert to resolve after stable clustered override threshold increase")
+	}
+}
+
 // TestReevaluateActiveAlertsStillAboveThreshold tests that alerts stay active if still above threshold
 func TestReevaluateActiveAlertsStillAboveThreshold(t *testing.T) {
 	manager := NewManager()

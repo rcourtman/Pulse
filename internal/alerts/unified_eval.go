@@ -103,10 +103,20 @@ func (m *Manager) defaultThresholdsForResourceType(typeKey string) ThresholdConf
 	}
 }
 
-// resolveThresholdOverride applies an override for a resource ID onto an existing base config.
+// resolveThresholdOverride applies an exact resource-ID override onto an existing base config.
 // Callers must hold m.mu when reading config through this helper.
 func (m *Manager) resolveThresholdOverride(base ThresholdConfig, resourceID string) ThresholdConfig {
 	if override, exists := m.config.Overrides[resourceID]; exists {
+		return m.applyThresholdOverride(base, override)
+	}
+
+	return base
+}
+
+// resolveGuestThresholdOverride applies the shared guest override lookup onto an existing base config.
+// Callers must hold m.mu when reading config through this helper.
+func (m *Manager) resolveGuestThresholdOverride(base ThresholdConfig, guest any, guestID string) ThresholdConfig {
+	if override, exists := lookupGuestOverride(m.config.Overrides, guest, guestID); exists {
 		return m.applyThresholdOverride(base, override)
 	}
 	return base
@@ -115,6 +125,9 @@ func (m *Manager) resolveThresholdOverride(base ThresholdConfig, resourceID stri
 // resolveResourceThresholds builds the effective thresholds for a resource type and ID.
 // Callers must hold m.mu when reading config through this helper.
 func (m *Manager) resolveResourceThresholds(typeKey, resourceID string) ThresholdConfig {
+	if isGuestThresholdResourceType(typeKey) {
+		return m.resolveGuestThresholdOverride(m.defaultThresholdsForResourceType(typeKey), nil, resourceID)
+	}
 	return m.resolveThresholdOverride(m.defaultThresholdsForResourceType(typeKey), resourceID)
 }
 

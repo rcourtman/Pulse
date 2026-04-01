@@ -67,14 +67,21 @@ describe('useAlertOverridesState', () => {
     const [overviewOverrides, setOverviewOverrides] = createSignal([]);
     const resources = [
       makeResource({
-        id: 'vm-100',
+        id: 'cluster-a:node-2:100',
         name: 'db-01',
         type: 'vm',
         platformId: 'qemu/100',
-        platformData: {
+        proxmox: {
           vmid: 100,
-          node: 'pve-1',
-          instance: 'qemu/100',
+          node: 'node-2',
+          instance: 'cluster-a',
+        },
+        platformData: {
+          proxmox: {
+            vmid: 100,
+            node: 'node-2',
+            instance: 'cluster-a',
+          },
         },
       }),
     ];
@@ -90,17 +97,20 @@ describe('useAlertOverridesState', () => {
     );
 
     result.replaceRawOverridesConfig({
-      'vm-100': {
+      'cluster-a:node-1:100': {
         cpu: { trigger: 95, clear: 90 },
         disabled: true,
       } as any,
     });
 
     await waitFor(() => expect(result.overrides()).toHaveLength(1));
+    expect(Object.keys(result.rawOverridesConfig())).toEqual(['guest:cluster-a:100']);
     expect(result.overrides()[0]).toMatchObject({
-      id: 'vm-100',
+      id: 'guest:cluster-a:100',
       type: 'guest',
       resourceType: 'VM',
+      instance: 'cluster-a',
+      node: 'node-2',
       disabled: true,
       thresholds: {
         cpu: 95,

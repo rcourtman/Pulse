@@ -201,6 +201,53 @@ func TestOverrideKeyStabilityAcrossUnifiedPath(t *testing.T) {
 	}
 }
 
+func TestNormalizeOverridesMigratesClusteredGuestKeyToStableIdentity(t *testing.T) {
+	mgr := newTestManager(t)
+
+	cfg := AlertConfig{
+		Enabled:         true,
+		ActivationState: ActivationActive,
+		GuestDefaults: ThresholdConfig{
+			CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+		},
+		Overrides: map[string]ThresholdConfig{
+			BuildGuestKey("pve1", "node1", 100): {
+				CPU: &HysteresisThreshold{Trigger: 55, Clear: 50},
+			},
+			stableGuestOverrideKey("pve1", 101): {
+				CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
+			},
+			BuildGuestKey("pve1", "node2", 101): {
+				CPU: &HysteresisThreshold{Trigger: 95, Clear: 90},
+			},
+		},
+	}
+	configureOverrideNormalizationTestManager(t, mgr, cfg)
+
+	mgr.mu.RLock()
+	defer mgr.mu.RUnlock()
+
+	if _, exists := mgr.config.Overrides[BuildGuestKey("pve1", "node1", 100)]; exists {
+		t.Fatalf("expected clustered canonical guest override key to be normalized")
+	}
+
+	normalized, exists := mgr.config.Overrides[stableGuestOverrideKey("pve1", 100)]
+	if !exists {
+		t.Fatalf("expected normalized clustered guest override key %q", stableGuestOverrideKey("pve1", 100))
+	}
+	if normalized.CPU == nil || normalized.CPU.Trigger != 55 {
+		t.Fatalf("expected normalized clustered guest override to preserve trigger 55, got %+v", normalized.CPU)
+	}
+
+	stableOverride, exists := mgr.config.Overrides[stableGuestOverrideKey("pve1", 101)]
+	if !exists {
+		t.Fatalf("expected explicit stable clustered guest override key to remain")
+	}
+	if stableOverride.CPU == nil || stableOverride.CPU.Trigger != 60 {
+		t.Fatalf("expected stable clustered guest override to win over migrated canonical duplicate, got %+v", stableOverride.CPU)
+	}
+}
+
 // TestBackupSnapshotOverridesUntouched verifies that backup and snapshot
 // override configurations are not affected by override normalization.
 func TestBackupSnapshotOverridesUntouched(t *testing.T) {

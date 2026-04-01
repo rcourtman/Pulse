@@ -1,10 +1,6 @@
 import type { Accessor } from 'solid-js';
 
-import type {
-  RawOverrideConfig,
-  BackupAlertConfig,
-  SnapshotAlertConfig,
-} from '@/types/alerts';
+import type { RawOverrideConfig, BackupAlertConfig, SnapshotAlertConfig } from '@/types/alerts';
 import {
   DEFAULT_SNAPSHOT_WARNING,
   DEFAULT_SNAPSHOT_CRITICAL,
@@ -20,7 +16,13 @@ import type {
 } from '@/features/alerts/thresholds/types';
 import type { Resource as TableResource } from '@/features/alerts/thresholds/tableTypes';
 import {
-  removeOverrideState,
+  findOverrideForResource,
+  findRawOverrideConfigForResource,
+  getOverridePersistenceIdentity,
+  stripOverrideCandidates,
+  stripRawOverrideCandidates,
+} from '@/features/alerts/thresholds/guestThresholdOverrideMutationModel';
+import {
   upsertOverride,
   withThresholdEntries,
 } from '@/features/alerts/thresholds/thresholdsOverrideMutationModel';
@@ -72,26 +74,21 @@ export function useThresholdsOverrideMutations({
     ...resources.storageWithOverrides(),
   ];
 
-  const guestLikeResources = () => [
-    ...resources.guestsFlat(),
-    ...resources.dockerContainersFlat(),
-  ];
+  const guestLikeResources = () => [...resources.guestsFlat(), ...resources.dockerContainersFlat()];
 
   const allThresholdResources = () => [...proxmoxResources(), ...guestLikeResources()];
+  const findThresholdResource = (resourceId: string) =>
+    allThresholdResources().find((entry) => entry.id === resourceId);
 
   const removeOverride = (resourceId: string) => {
-    const { nextOverrides, nextRawConfig } = removeOverrideState(
-      props.overrides(),
-      props.rawOverridesConfig(),
-      resourceId,
-    );
-    props.setOverrides(nextOverrides);
-    props.setRawOverridesConfig(nextRawConfig);
+    const resource = findThresholdResource(resourceId);
+    props.setOverrides(stripOverrideCandidates(props.overrides(), resource));
+    props.setRawOverridesConfig(stripRawOverrideCandidates(props.rawOverridesConfig(), resource));
     props.setHasUnsavedChanges(true);
   };
 
   const saveEdit = (resourceId: string) => {
-    const resource = allThresholdResources().find((entry) => entry.id === resourceId);
+    const resource = findThresholdResource(resourceId);
     if (!resource) return;
 
     const editedThresholdMap = editingThresholds();
@@ -151,14 +148,15 @@ export function useThresholdsOverrideMutations({
       }
     });
 
-    const existingOverride = props.overrides().find((override) => override.id === resourceId);
+    const { storageId } = getOverridePersistenceIdentity(resource);
+    const existingOverride = findOverrideForResource(props.overrides(), resource);
     const hasStateOnlyOverride = Boolean(
       resource.disabled ||
-        resource.disableConnectivity ||
-        resource.poweredOffSeverity !== undefined ||
-        noteForOverride !== undefined ||
-        existingOverride?.backup ||
-        existingOverride?.snapshot,
+      resource.disableConnectivity ||
+      resource.poweredOffSeverity !== undefined ||
+      noteForOverride !== undefined ||
+      existingOverride?.backup ||
+      existingOverride?.snapshot,
     );
 
     if (Object.keys(overrideThresholds).length === 0 && !hasStateOnlyOverride) {
@@ -170,7 +168,7 @@ export function useThresholdsOverrideMutations({
     }
 
     const override: Override = {
-      id: resourceId,
+      id: storageId,
       name: resource.name,
       type: resource.type as OverrideType,
       resourceType: resource.resourceType,
@@ -186,9 +184,11 @@ export function useThresholdsOverrideMutations({
       thresholds: overrideThresholds,
     };
 
-    props.setOverrides(upsertOverride(props.overrides(), override));
+    props.setOverrides(
+      upsertOverride(stripOverrideCandidates(props.overrides(), resource), override),
+    );
 
-    const previousRaw = props.rawOverridesConfig()[resourceId];
+    const previousRaw = findRawOverrideConfigForResource(props.rawOverridesConfig(), resource);
     let hysteresisThresholds: RawOverrideConfig = {};
 
     if (previousRaw) {
@@ -236,10 +236,10 @@ export function useThresholdsOverrideMutations({
       delete hysteresisThresholds.note;
     }
 
-    props.setRawOverridesConfig({
-      ...props.rawOverridesConfig(),
-      [resourceId]: hysteresisThresholds,
-    });
+    const nextRawConfig = stripRawOverrideCandidates(props.rawOverridesConfig(), resource);
+    nextRawConfig[storageId] = hysteresisThresholds;
+
+    props.setRawOverridesConfig(nextRawConfig);
     props.setHasUnsavedChanges(true);
     cancelEdit();
   };
@@ -272,11 +272,11 @@ export function useThresholdsOverrideMutations({
 
       const hasStateOnlyOverride = Boolean(
         resource.disabled ||
-          resource.disableConnectivity ||
-          resource.poweredOffSeverity !== undefined ||
-          existingOverride?.note !== undefined ||
-          existingOverride?.backup ||
-          existingOverride?.snapshot,
+        resource.disableConnectivity ||
+        resource.poweredOffSeverity !== undefined ||
+        existingOverride?.note !== undefined ||
+        existingOverride?.backup ||
+        existingOverride?.snapshot,
       );
 
       if (Object.keys(newThresholds).length === 0 && !hasStateOnlyOverride) {
@@ -312,7 +312,8 @@ export function useThresholdsOverrideMutations({
 
       let hysteresisThresholds: RawOverrideConfig = {};
       if (previousRaw) {
-        if (previousRaw.disabled !== undefined) hysteresisThresholds.disabled = previousRaw.disabled;
+        if (previousRaw.disabled !== undefined)
+          hysteresisThresholds.disabled = previousRaw.disabled;
         if (previousRaw.disableConnectivity !== undefined) {
           hysteresisThresholds.disableConnectivity = previousRaw.disableConnectivity;
         }
@@ -338,7 +339,9 @@ export function useThresholdsOverrideMutations({
     const resource = guestLikeResources().find((entry) => entry.id === resourceId);
     if (!resource || (resource.type !== 'guest' && resource.type !== 'dockerContainer')) return;
 
-    const existingOverride = props.overrides().find((override) => override.id === resourceId);
+    const { storageId } = getOverridePersistenceIdentity(resource);
+    const existingOverride = findOverrideForResource(props.overrides(), resource);
+    const previousRaw = findRawOverrideConfigForResource(props.rawOverridesConfig(), resource);
     const baseConfig = existingOverride?.backup || props.backupDefaults();
     const newBackup = {
       ...baseConfig,
@@ -347,7 +350,7 @@ export function useThresholdsOverrideMutations({
 
     const override: Override = {
       ...(existingOverride || {
-        id: resourceId,
+        id: storageId,
         instance: 'instance' in resource ? resource.instance : undefined,
         name: resource.name,
         node: 'node' in resource ? resource.node : undefined,
@@ -355,17 +358,19 @@ export function useThresholdsOverrideMutations({
         type: resource.type as OverrideType,
         vmid: 'vmid' in resource ? resource.vmid : undefined,
       }),
+      id: storageId,
       backup: newBackup,
     };
 
-    props.setOverrides(upsertOverride(props.overrides(), override));
-    props.setRawOverridesConfig({
-      ...props.rawOverridesConfig(),
-      [resourceId]: {
-        ...(props.rawOverridesConfig()[resourceId] || {}),
-        backup: newBackup,
-      },
-    });
+    props.setOverrides(
+      upsertOverride(stripOverrideCandidates(props.overrides(), resource), override),
+    );
+    const nextRawConfig = stripRawOverrideCandidates(props.rawOverridesConfig(), resource);
+    nextRawConfig[storageId] = {
+      ...(previousRaw || {}),
+      backup: newBackup,
+    };
+    props.setRawOverridesConfig(nextRawConfig);
     props.setHasUnsavedChanges(true);
   };
 
@@ -373,7 +378,9 @@ export function useThresholdsOverrideMutations({
     const resource = guestLikeResources().find((entry) => entry.id === resourceId);
     if (!resource || (resource.type !== 'guest' && resource.type !== 'dockerContainer')) return;
 
-    const existingOverride = props.overrides().find((override) => override.id === resourceId);
+    const { storageId } = getOverridePersistenceIdentity(resource);
+    const existingOverride = findOverrideForResource(props.overrides(), resource);
+    const previousRaw = findRawOverrideConfigForResource(props.rawOverridesConfig(), resource);
     const baseConfig = existingOverride?.snapshot || props.snapshotDefaults();
     const newSnapshot = {
       ...baseConfig,
@@ -382,7 +389,7 @@ export function useThresholdsOverrideMutations({
 
     const override: Override = {
       ...(existingOverride || {
-        id: resourceId,
+        id: storageId,
         instance: 'instance' in resource ? resource.instance : undefined,
         name: resource.name,
         node: 'node' in resource ? resource.node : undefined,
@@ -390,17 +397,19 @@ export function useThresholdsOverrideMutations({
         type: resource.type as OverrideType,
         vmid: 'vmid' in resource ? resource.vmid : undefined,
       }),
+      id: storageId,
       snapshot: newSnapshot,
     };
 
-    props.setOverrides(upsertOverride(props.overrides(), override));
-    props.setRawOverridesConfig({
-      ...props.rawOverridesConfig(),
-      [resourceId]: {
-        ...(props.rawOverridesConfig()[resourceId] || {}),
-        snapshot: newSnapshot,
-      },
-    });
+    props.setOverrides(
+      upsertOverride(stripOverrideCandidates(props.overrides(), resource), override),
+    );
+    const nextRawConfig = stripRawOverrideCandidates(props.rawOverridesConfig(), resource);
+    nextRawConfig[storageId] = {
+      ...(previousRaw || {}),
+      snapshot: newSnapshot,
+    };
+    props.setRawOverridesConfig(nextRawConfig);
     props.setHasUnsavedChanges(true);
   };
 

@@ -33,25 +33,32 @@ describe('alertOverridesModel', () => {
 
   it('projects guest overrides without requiring agent-backed resources', () => {
     const guest = makeResource({
-      id: 'vm-100',
+      id: 'cluster-a:node-2:100',
       name: 'db-01',
       type: 'vm',
       platformId: 'qemu/100',
-      platformData: {
+      proxmox: {
         vmid: 100,
-        node: 'pve-1',
-        instance: 'qemu/100',
+        node: 'node-2',
+        instance: 'cluster-a',
+      },
+      platformData: {
+        proxmox: {
+          vmid: 100,
+          node: 'node-2',
+          instance: 'cluster-a',
+        },
       },
     });
 
     expect(
       buildProjectedOverrides({
-        rawConfig: {
-          'vm-100': {
+        rawConfig: normalizeRawOverridesConfig({
+          'cluster-a:node-1:100': {
             cpu: { trigger: 95, clear: 90 },
             disabled: true,
           } as any,
-        },
+        }),
         nodeResources: [],
         vmResources: [guest],
         containerResources: [],
@@ -63,15 +70,34 @@ describe('alertOverridesModel', () => {
       }),
     ).toEqual([
       expect.objectContaining({
-        id: 'vm-100',
+        id: 'guest:cluster-a:100',
         type: 'guest',
         resourceType: 'VM',
+        instance: 'cluster-a',
+        node: 'node-2',
         disabled: true,
         thresholds: {
           cpu: 95,
         },
       }),
     ]);
+  });
+
+  it('prefers explicit stable guest override ids during normalization', () => {
+    expect(
+      normalizeRawOverridesConfig({
+        'guest:cluster-a:100': {
+          cpu: { trigger: 70, clear: 65 },
+        } as any,
+        'cluster-a:node-1:100': {
+          cpu: { trigger: 95, clear: 90 },
+        } as any,
+      }),
+    ).toEqual({
+      'guest:cluster-a:100': {
+        cpu: { trigger: 70, clear: 65 },
+      },
+    });
   });
 
   it('derives canonical container runtimes from explicit docker hosts and TrueNAS app parents', () => {

@@ -10,6 +10,12 @@ import {
   guessNumericId,
   platformData,
 } from './helpers';
+import {
+  getGuestOverrideIdentity,
+  guestOverrideIdCandidates,
+  guestOverrideStorageId,
+  normalizeGuestOverrideKey,
+} from './guestOverrideIdentity';
 import type { Override } from './types';
 
 const asRecord = (value: unknown): Record<string, unknown> | undefined =>
@@ -36,9 +42,12 @@ export const normalizeRawOverridesConfig = (
   rawOverrides: Record<string, RawOverrideConfig>,
 ): Record<string, RawOverrideConfig> => {
   const cleanedOverrides: Record<string, RawOverrideConfig> = {};
+  const priorityByKey = new Map<string, number>();
 
   for (const [key, value] of Object.entries(rawOverrides)) {
-    const diskMatch = key.match(/^(agent:.+\/disk:)(.+)$/);
+    const normalizedGuestKey = normalizeGuestOverrideKey(key);
+    const diskMatch = normalizedGuestKey.match(/^(agent:.+\/disk:)(.+)$/);
+    let normalizedKey = normalizedGuestKey;
     if (diskMatch) {
       const normalized =
         diskMatch[2]
@@ -46,11 +55,17 @@ export const normalizeRawOverridesConfig = (
           .replace(/[^a-z0-9]/g, '-')
           .replace(/-{2,}/g, '-')
           .replace(/^-|-$/g, '') || 'unknown';
-      cleanedOverrides[diskMatch[1] + normalized] = value;
+      normalizedKey = diskMatch[1] + normalized;
+    }
+
+    const priority = normalizedKey === key ? 1 : 0;
+    const existingPriority = priorityByKey.get(normalizedKey);
+    if (existingPriority !== undefined && existingPriority > priority) {
       continue;
     }
 
-    cleanedOverrides[key] = value;
+    priorityByKey.set(normalizedKey, priority);
+    cleanedOverrides[normalizedKey] = value;
   }
 
   return cleanedOverrides;
@@ -84,13 +99,8 @@ export const dockerHostOverrideIdCandidates = (resource: Resource): string[] => 
   );
 };
 
-export const dockerContainerOverrideIdCandidates = (
-  host: Resource,
-  shortId: string,
-): string[] =>
-  uniqueIds(
-    ...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`),
-  );
+export const dockerContainerOverrideIdCandidates = (host: Resource, shortId: string): string[] =>
+  uniqueIds(...dockerHostOverrideIdCandidates(host).map((hostId) => `docker:${hostId}/${shortId}`));
 
 export const buildContainerRuntimeResources = ({
   allResources,
@@ -147,12 +157,24 @@ export const buildProjectedOverrides = ({
   pbsInstanceById,
 }: BuildProjectedOverridesArgs): Override[] => {
   const overridesList: Override[] = [];
+  const overrideIndexByID = new Map<string, number>();
   const dockerHostMap = new Map<string, Resource>();
   const dockerContainerMap = new Map<
     string,
     { host: Resource; container: Resource; containerShortId: string }
   >();
   const agentMap = new Map<string, Resource>();
+  const guestMap = new Map<string, Resource>();
+
+  const upsertProjectedOverride = (override: Override) => {
+    const existingIndex = overrideIndexByID.get(override.id);
+    if (existingIndex !== undefined) {
+      overridesList[existingIndex] = override;
+      return;
+    }
+    overrideIndexByID.set(override.id, overridesList.length);
+    overridesList.push(override);
+  };
 
   const storageCoords = (resource: Resource): { node: string; instance: string } => {
     const data = platformData(resource);
@@ -193,10 +215,16 @@ export const buildProjectedOverrides = ({
     });
   });
 
+  [...vmResources, ...containerResources].forEach((guest) => {
+    guestOverrideIdCandidates(guest).forEach((candidate) => {
+      guestMap.set(candidate, guest);
+    });
+  });
+
   Object.entries(rawConfig).forEach(([key, thresholds]) => {
     const dockerHost = dockerHostMap.get(key);
     if (dockerHost) {
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: getAlertResourceDisplayLabel(dockerHost),
         type: 'dockerHost',
@@ -211,7 +239,7 @@ export const buildProjectedOverrides = ({
     if (dockerContainer) {
       const { host, container, containerShortId } = dockerContainer;
       const containerName = getAlertResourceDisplayLabel(container, containerShortId);
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: containerName,
         type: 'dockerContainer',
@@ -235,7 +263,7 @@ export const buildProjectedOverrides = ({
       const [, rest] = key.split(':', 2);
       const [hostId, containerId] = (rest || '').split('/', 2);
       if (containerId) {
-        overridesList.push({
+        upsertProjectedOverride({
           id: key,
           name: containerId,
           type: 'dockerContainer',
@@ -254,7 +282,7 @@ export const buildProjectedOverrides = ({
         return;
       }
 
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: hostId || key,
         type: 'dockerHost',
@@ -269,7 +297,7 @@ export const buildProjectedOverrides = ({
     if (diskMatch) {
       const [, agentId, diskLabel] = diskMatch;
       const agent = agentMap.get(agentId);
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: diskLabel.replace(/-/g, '/'),
         type: 'agentDisk',
@@ -286,7 +314,7 @@ export const buildProjectedOverrides = ({
       const displayName = getAlertResourceDisplayLabel(agentResource);
       const data = platformData(agentResource);
       const agent = asRecord(data?.agent);
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: displayName,
         type: 'agent',
@@ -308,7 +336,7 @@ export const buildProjectedOverrides = ({
     if (key.startsWith('pbs-')) {
       const pbs = pbsInstanceById.get(key);
       if (pbs) {
-        overridesList.push({
+        upsertProjectedOverride({
           id: key,
           name: pbs.name,
           type: 'pbs',
@@ -322,7 +350,7 @@ export const buildProjectedOverrides = ({
 
     const node = nodeResources.find((resource) => resource.id === key);
     if (node) {
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: getAlertResourceDisplayLabel(node),
         type: 'agent',
@@ -336,7 +364,7 @@ export const buildProjectedOverrides = ({
     const storage = storageResources.find((resource) => resource.id === key);
     if (storage) {
       const coords = storageCoords(storage);
-      overridesList.push({
+      upsertProjectedOverride({
         id: key,
         name: getAlertResourceDisplayLabel(storage),
         type: 'storage',
@@ -350,21 +378,22 @@ export const buildProjectedOverrides = ({
     }
 
     const guest =
+      guestMap.get(key) ||
       vmResources.find((resource) => resource.id === key) ||
       containerResources.find((resource) => resource.id === key);
     if (!guest) {
       return;
     }
 
-    const data = platformData(guest);
-    overridesList.push({
-      id: key,
+    const guestIdentity = getGuestOverrideIdentity(guest);
+    upsertProjectedOverride({
+      id: guestOverrideStorageId(guest) || key,
       name: getAlertResourceDisplayLabel(guest),
       type: 'guest',
       resourceType: guest.type === 'vm' ? 'VM' : 'Container',
-      vmid: (data?.vmid as number | undefined) ?? guessNumericId(guest.id),
-      node: (data?.node as string | undefined) ?? '',
-      instance: (data?.instance as string | undefined) ?? guest.platformId,
+      vmid: guestIdentity?.vmid ?? guessNumericId(guest.id),
+      node: guestIdentity?.node ?? '',
+      instance: guestIdentity?.instance ?? guest.platformId,
       disabled: thresholds.disabled || false,
       disableConnectivity: thresholds.disableConnectivity || false,
       poweredOffSeverity:

@@ -1793,12 +1793,34 @@ func validateQuietHoursTimezone(config *AlertConfig) {
 
 // normalizeOverrides normalizes all threshold overrides
 func normalizeOverrides(overrides map[string]ThresholdConfig) {
+	normalized := make(map[string]ThresholdConfig, len(overrides))
+	priorityByKey := make(map[string]int, len(overrides))
 	for id, override := range overrides {
 		override.PoweredOffSeverity = normalizePoweredOffSeverity(override.PoweredOffSeverity)
 		if override.Usage != nil {
 			override.Usage = ensureHysteresisThreshold(override.Usage)
 		}
-		overrides[id] = override
+		normalizedKey := id
+		if ident, ok := parseCanonicalGuestKey(id); ok {
+			if stableKey := clusteredGuestOverrideKey(ident); stableKey != "" {
+				normalizedKey = stableKey
+			}
+		}
+		priority := 0
+		if normalizedKey == id {
+			priority = 1
+		}
+		if existingPriority, exists := priorityByKey[normalizedKey]; exists && existingPriority > priority {
+			continue
+		}
+		priorityByKey[normalizedKey] = priority
+		normalized[normalizedKey] = override
+	}
+	for key := range overrides {
+		delete(overrides, key)
+	}
+	for key, override := range normalized {
+		overrides[key] = override
 	}
 }
 
@@ -2139,7 +2161,7 @@ func (m *Manager) reevaluateActiveAlertsLocked() {
 			// For now, we'll mark these alerts for re-evaluation by the monitor.
 			// The next poll cycle will properly evaluate them with custom rules.
 
-			thresholds := m.resolveThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), resourceID)
+			thresholds := m.resolveGuestThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), nil, resourceID)
 			if thresholds.Disabled {
 				alertsToResolve = append(alertsToResolve, alertID)
 				continue
@@ -8902,7 +8924,7 @@ func (m *Manager) clearStorageOfflineAlert(storage models.Storage) {
 // checkGuestPoweredOff creates an alert for powered-off guests
 func (m *Manager) checkGuestPoweredOff(guestID, name, node, instanceName, guestType string, monitorOnly bool) {
 	m.mu.RLock()
-	thresholds := m.resolveThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), guestID)
+	thresholds := m.resolveGuestThresholdOverride(cloneThresholdConfig(m.config.GuestDefaults), nil, guestID)
 	m.mu.RUnlock()
 	m.checkGuestPoweredOffWithThresholds(guestID, name, node, instanceName, guestType, thresholds, monitorOnly)
 }

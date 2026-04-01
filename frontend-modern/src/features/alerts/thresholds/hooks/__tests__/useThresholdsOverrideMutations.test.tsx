@@ -57,13 +57,13 @@ describe('useThresholdsOverrideMutations', () => {
     const [bulkEditIds] = createSignal<string[]>([]);
     const cancelEdit = vi.fn();
     const guestResource: TableResource = {
-      id: 'vm-100',
+      id: 'cluster-a:node-2:100',
       name: 'db-01',
       type: 'guest',
       resourceType: 'VM',
       vmid: 100,
-      node: 'pve-1',
-      instance: 'qemu/100',
+      node: 'node-2',
+      instance: 'cluster-a',
       defaults: { cpu: 80 },
       thresholds: { cpu: 80 },
     };
@@ -91,18 +91,18 @@ describe('useThresholdsOverrideMutations', () => {
       }),
     );
 
-    result.saveEdit('vm-100');
+    result.saveEdit('cluster-a:node-2:100');
 
     expect(overrideSignal[0]()).toEqual([
       expect.objectContaining({
-        id: 'vm-100',
+        id: 'guest:cluster-a:100',
         type: 'guest',
         note: 'Investigate host pressure',
         thresholds: { cpu: 95 },
       }),
     ]);
     expect(rawOverridesConfig()).toEqual({
-      'vm-100': {
+      'guest:cluster-a:100': {
         cpu: {
           clear: 90,
           trigger: 95,

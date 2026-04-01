@@ -1491,13 +1491,12 @@ func TestGetGuestThresholds(t *testing.T) {
 		}
 	})
 
-	t.Run("legacy ID override is ignored for clustered VM", func(t *testing.T) {
+	t.Run("stable clustered override survives node moves", func(t *testing.T) {
 		m := &Manager{
 			config: AlertConfig{
 				GuestDefaults: ThresholdConfig{},
 				Overrides: map[string]ThresholdConfig{
-					// Legacy format: instance-node-vmid
-					"pve1-node1-100": {
+					stableGuestOverrideKey("pve1", 100): {
 						CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
 					},
 				},
@@ -1512,15 +1511,13 @@ func TestGetGuestThresholds(t *testing.T) {
 			VMID:     100,
 		}
 
-		result := m.getGuestThresholds(vm, "pve1-100")
+		result := m.getGuestThresholds(vm, BuildGuestKey("pve1", "node2", 100))
 
-		if result.CPU != nil {
-			t.Fatalf("expected legacy ID override to be ignored, got %+v", result.CPU)
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
 		}
-
-		// Verify no migration side-effect occurs.
-		if _, exists := m.config.Overrides["pve1-100"]; exists {
-			t.Error("override should not be migrated into new ID format")
+		if result.CPU.Trigger != 60 {
+			t.Fatalf("expected stable clustered override trigger 60, got %+v", result.CPU)
 		}
 	})
 
@@ -1553,6 +1550,36 @@ func TestGetGuestThresholds(t *testing.T) {
 		}
 		if result.CPU.Trigger != 55 {
 			t.Errorf("expected CPU trigger 55, got %v", result.CPU.Trigger)
+		}
+	})
+
+	t.Run("canonical clustered override remains portable after node move", func(t *testing.T) {
+		m := &Manager{
+			config: AlertConfig{
+				GuestDefaults: ThresholdConfig{},
+				Overrides: map[string]ThresholdConfig{
+					BuildGuestKey("pve1", "node1", 100): {
+						CPU: &HysteresisThreshold{Trigger: 65, Clear: 60},
+					},
+				},
+				CustomRules: []CustomAlertRule{},
+			},
+		}
+
+		vm := models.VM{
+			Name:     "test-vm",
+			Node:     "node2",
+			Instance: "pve1",
+			VMID:     100,
+		}
+
+		result := m.getGuestThresholds(vm, BuildGuestKey("pve1", "node2", 100))
+
+		if result.CPU == nil {
+			t.Fatal("CPU threshold should not be nil")
+		}
+		if result.CPU.Trigger != 65 {
+			t.Fatalf("expected canonical clustered override trigger 65 after move, got %+v", result.CPU)
 		}
 	})
 

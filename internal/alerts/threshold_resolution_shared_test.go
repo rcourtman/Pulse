@@ -150,6 +150,38 @@ func TestCheckUnifiedResourceUsesCanonicalGuestOverrideKey(t *testing.T) {
 	}
 }
 
+func TestCheckUnifiedResourceUsesStableClusteredGuestOverrideKey(t *testing.T) {
+	m := newTestManager(t)
+	resourceID := BuildGuestKey("pve1", "node2", 101)
+
+	m.mu.Lock()
+	m.config.Enabled = true
+	m.config.TimeThresholds = map[string]int{}
+	m.config.GuestDefaults = ThresholdConfig{
+		CPU: &HysteresisThreshold{Trigger: 80, Clear: 75},
+	}
+	m.config.Overrides = map[string]ThresholdConfig{
+		stableGuestOverrideKey("pve1", 101): {
+			CPU: &HysteresisThreshold{Trigger: 60, Clear: 55},
+		},
+	}
+	m.mu.Unlock()
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:       resourceID,
+		Type:     "vm",
+		Name:     "app02",
+		Node:     "node2",
+		Instance: "pve1",
+		CPU:      &UnifiedResourceMetric{Percent: 65},
+	})
+
+	exists := testHasActiveAlert(t, m, canonicalMetricStateID(resourceID, "cpu"))
+	if !exists {
+		t.Fatalf("expected stable clustered guest override to resolve for canonical resource ID %q", resourceID)
+	}
+}
+
 func TestCheckNodeDisabledOverrideClearsExistingAlerts(t *testing.T) {
 	m := newTestManager(t)
 	node := models.Node{

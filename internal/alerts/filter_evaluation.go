@@ -224,5 +224,5 @@ func (m *Manager) getGuestThresholds(guest any, guestID string) ThresholdConfig 
 			Msg("Applied custom alert rule")
 	}
 
-	return m.resolveThresholdOverride(thresholds, guestID)
+	return m.resolveGuestThresholdOverride(thresholds, guest, guestID)
 }
