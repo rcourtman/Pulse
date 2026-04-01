@@ -23,7 +23,7 @@ func TestStoreWriteBatchAndQuery(t *testing.T) {
 	}
 	defer store.Close()
 
-	ts := time.Unix(1000, 0)
+	ts := time.Now().UTC().Truncate(time.Second)
 	store.writeBatch([]bufferedMetric{
 		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 1.5, timestamp: ts, tier: TierRaw},
 		{resourceType: "vm", resourceID: "vm-101", metricType: "cpu", value: 2.5, timestamp: ts.Add(1 * time.Second), tier: TierRaw},
@@ -79,7 +79,7 @@ func TestStoreSelectTierAndStats(t *testing.T) {
 	}
 
 	// Insert one point for each tier to verify stats aggregation.
-	ts := int64(1000)
+	ts := time.Now().UTC().Unix()
 	_, err = store.db.Exec(
 		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
 		('vm','vm-101','cpu',1.0,?, 'raw'),
@@ -411,7 +411,7 @@ func TestStoreQueryDownsampling(t *testing.T) {
 	}
 	defer store.Close()
 
-	start := time.Unix(1000, 0)
+	start := recentBucketOffsetTime(300, 100)
 	for i := 0; i < 10; i++ {
 		store.writeBatch([]bufferedMetric{
 			{resourceType: "vm", resourceID: "v1", metricType: "cpu", value: float64(i * 10), timestamp: start.Add(time.Duration(i) * time.Minute), tier: TierRaw},
@@ -446,7 +446,7 @@ func TestQueryAllBatch(t *testing.T) {
 	}
 	defer store.Close()
 
-	ts := time.Unix(1000, 0)
+	ts := time.Now().UTC().Truncate(time.Second)
 	store.writeBatch([]bufferedMetric{
 		// disk-1: smart_temp with 2 points
 		{resourceType: "disk", resourceID: "disk-1", metricType: "smart_temp", value: 35, timestamp: ts, tier: TierRaw},
@@ -577,7 +577,7 @@ func TestQueryAllBatch(t *testing.T) {
 		}
 		defer downsampledStore.Close()
 
-		base := time.Unix(10_000, 0)
+		base := time.Now().UTC().Truncate(time.Minute)
 		downsampledStore.writeBatch([]bufferedMetric{
 			{resourceType: "disk", resourceID: "disk-ordered", metricType: "smart_temp", value: 33, timestamp: base.Add(130 * time.Second), tier: TierRaw},
 			{resourceType: "disk", resourceID: "disk-ordered", metricType: "smart_temp", value: 31, timestamp: base.Add(10 * time.Second), tier: TierRaw},
@@ -610,7 +610,7 @@ func TestQueryAllBatch(t *testing.T) {
 		}
 		defer downsampledStore.Close()
 
-		base := time.Unix(20_000, 0)
+		base := time.Now().UTC().Truncate(time.Minute)
 		downsampledStore.writeBatch([]bufferedMetric{
 			{resourceType: "disk", resourceID: "disk-agg", metricType: "smart_temp", value: 10, timestamp: base.Add(5 * time.Second), tier: TierRaw},
 			{resourceType: "disk", resourceID: "disk-agg", metricType: "smart_temp", value: 16, timestamp: base.Add(25 * time.Second), tier: TierRaw},

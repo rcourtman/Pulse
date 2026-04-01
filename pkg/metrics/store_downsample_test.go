@@ -6,6 +6,26 @@ import (
 	"time"
 )
 
+func recentBucketOffsetTime(stepSecs, offsetSecs int64) time.Time {
+	if stepSecs <= 0 {
+		return time.Now().UTC().Truncate(time.Second)
+	}
+	if offsetSecs < 0 {
+		offsetSecs = 0
+	}
+	if offsetSecs >= stepSecs {
+		offsetSecs = stepSecs - 1
+	}
+
+	now := time.Now().UTC()
+	bucketStart := (now.Unix() / stepSecs) * stepSecs
+	ts := time.Unix(bucketStart+offsetSecs, 0).UTC()
+	if ts.After(now) {
+		ts = ts.Add(-time.Duration(stepSecs) * time.Second)
+	}
+	return ts
+}
+
 func TestStoreQueryAllDownsampling(t *testing.T) {
 	dir := t.TempDir()
 	store, err := NewStore(DefaultConfig(dir))
@@ -14,7 +34,7 @@ func TestStoreQueryAllDownsampling(t *testing.T) {
 	}
 	defer store.Close()
 
-	start := time.Unix(1000, 0)
+	start := recentBucketOffsetTime(300, 100)
 	batch := make([]bufferedMetric, 0, 20)
 	for i := 0; i < 10; i++ {
 		ts := start.Add(time.Duration(i) * time.Minute)
@@ -52,13 +72,17 @@ func TestStoreQueryAllDownsampling(t *testing.T) {
 		}
 	}
 
-	assertPoint(cpu[0], 1050, 1.5, 0, 3)
-	assertPoint(cpu[1], 1350, 6, 4, 8)
-	assertPoint(cpu[2], 1650, 9, 9, 9)
+	bucketCenter := func(ts time.Time, step int64) int64 {
+		return ((ts.Unix() / step) * step) + (step / 2)
+	}
 
-	assertPoint(mem[0], 1050, 101.5, 100, 103)
-	assertPoint(mem[1], 1350, 106, 104, 108)
-	assertPoint(mem[2], 1650, 109, 109, 109)
+	assertPoint(cpu[0], bucketCenter(start, 300), 1.5, 0, 3)
+	assertPoint(cpu[1], bucketCenter(start.Add(5*time.Minute), 300), 6, 4, 8)
+	assertPoint(cpu[2], bucketCenter(start.Add(9*time.Minute), 300), 9, 9, 9)
+
+	assertPoint(mem[0], bucketCenter(start, 300), 101.5, 100, 103)
+	assertPoint(mem[1], bucketCenter(start.Add(5*time.Minute), 300), 106, 104, 108)
+	assertPoint(mem[2], bucketCenter(start.Add(9*time.Minute), 300), 109, 109, 109)
 }
 
 func TestStoreTierFallbacks(t *testing.T) {
@@ -134,7 +158,7 @@ func TestStoreQueryDownsamplingStats(t *testing.T) {
 	}
 	defer store.Close()
 
-	start := time.Unix(1000, 0)
+	start := time.Now().UTC().Truncate(time.Minute)
 	store.writeBatch([]bufferedMetric{
 		{resourceType: "vm", resourceID: "v2", metricType: "cpu", value: 10, timestamp: start, tier: TierRaw},
 		{resourceType: "vm", resourceID: "v2", metricType: "cpu", value: 30, timestamp: start.Add(20 * time.Second), tier: TierRaw},
@@ -150,8 +174,9 @@ func TestStoreQueryDownsamplingStats(t *testing.T) {
 	}
 
 	point := points[0]
-	if point.Timestamp.Unix() != 1020 {
-		t.Fatalf("expected bucket timestamp 1020, got %d", point.Timestamp.Unix())
+	expectedBucket := time.Unix(((start.Unix()/120)*120)+(120/2), 0)
+	if point.Timestamp.Unix() != expectedBucket.Unix() {
+		t.Fatalf("expected bucket timestamp %d, got %d", expectedBucket.Unix(), point.Timestamp.Unix())
 	}
 	if point.Value != 20 || point.Min != 10 || point.Max != 30 {
 		t.Fatalf("unexpected stats: value=%v min=%v max=%v", point.Value, point.Min, point.Max)

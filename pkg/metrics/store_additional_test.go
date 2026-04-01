@@ -20,7 +20,7 @@ func TestStoreWriteBatchSync(t *testing.T) {
 	}
 	defer store.Close()
 
-	ts := time.Unix(1000, 0)
+	ts := time.Now().UTC().Truncate(time.Second)
 	metrics := []WriteMetric{
 		{ResourceType: "vm", ResourceID: "v1", MetricType: "cpu", Value: 10.0, Timestamp: ts, Tier: TierRaw},
 		{ResourceType: "vm", ResourceID: "v1", MetricType: "mem", Value: 50.0, Timestamp: ts, Tier: TierRaw},
@@ -212,6 +212,53 @@ func TestStoreFlushLockedLogsStructuredContextWhenWriteChannelFull(t *testing.T)
 	}
 }
 
+func TestNewStoreDefersStartupMaintenance(t *testing.T) {
+	previousHook := startupMaintenanceHook
+	defer func() {
+		startupMaintenanceHook = previousHook
+	}()
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	startupMaintenanceHook = func() {
+		close(started)
+		<-release
+	}
+
+	dir := t.TempDir()
+	cfg := DefaultConfig(dir)
+	cfg.FlushInterval = time.Hour
+
+	done := make(chan struct{})
+	var (
+		store *Store
+		err   error
+	)
+	go func() {
+		store, err = NewStore(cfg)
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("NewStore blocked on startup maintenance")
+	}
+
+	if err != nil {
+		t.Fatalf("NewStore returned error: %v", err)
+	}
+
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("startup maintenance was not scheduled")
+	}
+
+	close(release)
+	defer store.Close()
+}
+
 func TestStoreMigratesLegacyHostResourceTypeToAgent(t *testing.T) {
 	dir := t.TempDir()
 	cfg := DefaultConfig(dir)
@@ -373,7 +420,7 @@ func TestStoreQueryCanonicalizesIdentifiers(t *testing.T) {
 		t.Fatalf("NewStore returned error: %v", err)
 	}
 	defer store.Close()
-	ts := time.Unix(1710000000, 0)
+	ts := time.Now().UTC().Truncate(time.Second)
 
 	store.WriteBatchSync([]WriteMetric{{
 		ResourceType: "agent",
@@ -409,7 +456,7 @@ func TestStoreCanonicalizesMetricTypeCaseOnWriteAndQuery(t *testing.T) {
 	}
 	defer store.Close()
 
-	ts := time.Unix(1710000200, 0)
+	ts := time.Now().UTC().Truncate(time.Second)
 	store.WriteBatchSync([]WriteMetric{{
 		ResourceType: "agent",
 		ResourceID:   "agent-1",
@@ -451,7 +498,7 @@ func TestStoreQueryAllBatchCanonicalizesAndDeduplicatesIdentifiers(t *testing.T)
 		t.Fatalf("NewStore returned error: %v", err)
 	}
 	defer store.Close()
-	ts := time.Unix(1710000100, 0)
+	ts := time.Now().UTC().Truncate(time.Second)
 
 	store.WriteBatchSync([]WriteMetric{
 		{ResourceType: "agent", ResourceID: "agent-1", MetricType: "cpu", Value: 11.0, Timestamp: ts, Tier: TierRaw},
