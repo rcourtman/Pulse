@@ -481,6 +481,7 @@ export function usePatrolIntelligenceState() {
   });
 
   const intelligenceSummary = createMemo(() => aiIntelligenceStore.intelligenceSummary);
+  const circuitBreakerStatus = createMemo(() => aiIntelligenceStore.circuitBreakerStatus);
   const policyPosture = createMemo(() => intelligenceSummary()?.policy_posture);
   const investigationContext = createMemo(() =>
     buildPatrolInvestigationContextSummary({
@@ -715,6 +716,7 @@ export function usePatrolIntelligenceState() {
     blockedReason,
     canStartTrial,
     canTriggerPatrol,
+    circuitBreakerStatus,
     correlationTotal,
     correlations,
     clearScrollToFindingTimer,

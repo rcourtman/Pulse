@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
 import { FindingsPanel } from '@/components/AI/FindingsPanel';
-import { ApprovalBanner, PatrolStatusBar, RunHistoryPanel } from '@/components/patrol';
+import { ApprovalBanner, RunHistoryPanel } from '@/components/patrol';
 import { getPatrolFindingsBadgePresentation } from '@/utils/aiFindingPresentation';
 import { formatRelativeTime } from '@/utils/format';
 import { formatTriggerReason } from '@/utils/patrolFormat';
@@ -30,14 +30,6 @@ export function PatrolIntelligenceWorkspace(props: { state: PatrolIntelligenceSt
             }, 100),
           );
         }}
-      />
-
-      <PatrolStatusBar
-        enabled={state.patrolEnabledLocal()}
-        refreshTrigger={state.activityRefreshTrigger()}
-        runtimeState={state.runtimeState()}
-        blockedReason={state.blockedReason()}
-        triggerStatus={state.patrolStatus()?.trigger_status}
       />
 
       <div class="flex items-center gap-1 border-b border-border">

@@ -251,22 +251,32 @@ The same hierarchy applies to investigation context. Correlations, recent
 changes, and policy posture are secondary evidence for deeper investigation, so
 the `Investigation context` section belongs beneath the primary findings/history
 workspace rather than inside the assessment card itself.
-The Patrol status bar should stay factual and operational within that same
-hierarchy. `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` is a
-recent-activity strip, not a second health verdict: when Patrol is active it
-should report recent run activity, run kind, latest run result, and run-count
-context instead of emitting another green/amber all-clear headline that can
-drift from the governed assessment summary above it.
-That same activity strip should explain noisy Patrol behavior concretely. When
-same-day history shows a mix of full sweeps, verification checks, and scoped
-alert- or anomaly-triggered patrols, the strip should expose a compact
-breakdown of those run categories instead of leaving operators to infer why
-Patrol looked busy from an undifferentiated run count alone.
+That same operational context belongs inside the same secondary status area as
+verification, not as a separate full-width strip that competes with the
+findings workspace. `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
+plus the shared `frontend-modern/src/utils/patrolRunPresentation.ts` helpers
+should carry the latest run kind/result, recent activity mix, scoped-trigger
+state, and any circuit-breaker warning as factual support beneath the primary
+assessment instead of letting Patrol explain itself through multiple parallel
+status bands.
+That same secondary area should simplify by consolidation rather than
+deletion. Patrol should keep meaningful run and trigger facts visible, but it
+should stop repeating the same runtime story as a summary card, a metric row,
+and a separate status strip all at once.
+If `frontend-modern/src/components/patrol/PatrolStatusBar.tsx` is reused in a
+compact context elsewhere, it must stay factual and operational within that
+same hierarchy rather than introducing a second Patrol verdict label.
+That same activity explanation should handle noisy Patrol behavior concretely.
+When same-day history shows a mix of full sweeps, verification checks, and
+scoped alert- or anomaly-triggered patrols, the verification/activity surface
+should expose a compact breakdown of those run categories instead of leaving
+operators to infer why Patrol looked busy from an undifferentiated run count
+alone.
 The same operational layer should also surface scoped-trigger state directly.
 If Patrol has queued scoped work, is in busy mode, or has one scoped trigger
-source disabled, the status bar should state that as factual runtime context
-instead of forcing operators to cross-reference hidden settings or infer it
-from missing runs.
+source disabled, the governed summary should state that as factual runtime
+context instead of forcing operators to cross-reference hidden settings or
+infer it from missing runs.
 That recent-activity copy also has to remain intelligible in compact or
 plain-text renders: the latest-run segment must keep an explicit textual
 separator between run kind and result, so degraded entries read as

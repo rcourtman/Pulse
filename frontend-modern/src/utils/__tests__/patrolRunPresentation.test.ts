@@ -3,10 +3,12 @@ import type { PatrolRunRecord } from '@/api/patrol';
 import {
   formatPatrolActivityBreakdown,
   getPatrolActivityBreakdown,
+  getPatrolLatestRunPresentation,
   getPatrolRunKindLabel,
   getPatrolRunCoverageSummary,
   getPatrolRunResourcesHeading,
   getPatrolRunStatusPresentation,
+  getPatrolTriggerStatusSummary,
   isPatrolRunHealthy,
   getRunHistoryLoadingState,
   getRunHistorySelectionHint,
@@ -89,6 +91,67 @@ describe('patrolRunPresentation', () => {
     expect(getPatrolRunKindLabel('patrol')).toBe('Full patrol');
     expect(getPatrolRunKindLabel('')).toBe('Full patrol');
     expect(getPatrolRunKindLabel('unexpected')).toBe('Patrol run');
+  });
+
+  it('derives the latest run presentation from recent completed history', () => {
+    expect(
+      getPatrolLatestRunPresentation([
+        {
+          id: 'run-latest',
+          started_at: '2026-03-12T10:00:00Z',
+          completed_at: '2026-03-12T10:01:00Z',
+          duration_ms: 60000,
+          type: 'scoped',
+          trigger_reason: 'alert_fired',
+          scope_resource_ids: ['seed-resource'],
+          effective_scope_resource_ids: ['expanded-a', 'expanded-b'],
+          resources_checked: 1,
+          nodes_checked: 0,
+          guests_checked: 0,
+          docker_checked: 0,
+          storage_checked: 0,
+          hosts_checked: 0,
+          truenas_checked: 0,
+          pbs_checked: 0,
+          pmg_checked: 0,
+          kubernetes_checked: 0,
+          new_findings: 0,
+          existing_findings: 0,
+          rejected_findings: 0,
+          resolved_findings: 0,
+          auto_fix_count: 0,
+          findings_summary: 'ok',
+          error_count: 1,
+          status: 'healthy',
+          triage_flags: 0,
+          tool_call_count: 0,
+          finding_ids: undefined,
+        },
+      ] satisfies PatrolRunRecord[]),
+    ).toEqual({
+      coverageSummary: 'Checked 1 of 2 scoped resources',
+      findingsSnapshotAvailable: false,
+      kindLabel: 'Scoped run',
+      status: {
+        badgeClass: 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300',
+        label: 'error',
+      },
+      timestamp: '2026-03-12T10:01:00Z',
+    });
+  });
+
+  it('summarizes scoped trigger state for compact activity surfaces', () => {
+    expect(
+      getPatrolTriggerStatusSummary({
+        running: true,
+        pending_triggers: 4,
+        current_interval_ms: 300000,
+        recent_events: 6,
+        is_busy_mode: true,
+        alert_triggers_enabled: true,
+        anomaly_triggers_enabled: false,
+      }),
+    ).toBe('4 queued · busy mode · anomalies off');
   });
 
   it('expresses scoped run coverage against the effective scope', () => {

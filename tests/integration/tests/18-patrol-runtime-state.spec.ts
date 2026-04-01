@@ -498,7 +498,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
   });
 
-  test("surfaces scoped trigger breakdown and split trigger controls on the Patrol page", async ({
+  test("surfaces scoped trigger context inside the summary and split trigger controls on the Patrol page", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -515,14 +515,14 @@ test.describe("Patrol runtime-state browser contract", () => {
       page.getByText(
         "Breakdown: 1 full, 1 alert-triggered, 1 anomaly-triggered",
       ),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(
       page.getByText(
         "Recent activity mix: 1 full, 1 alert-triggered, 1 anomaly-triggered",
       ),
     ).toBeVisible();
     await expect(
-      page.getByText("Scoped triggers: 4 queued · busy mode · anomalies off"),
+      page.getByText("Trigger mode: 4 queued · busy mode · anomalies off"),
     ).toBeVisible();
 
     await page.getByRole("button", { name: "Configure Patrol" }).click();

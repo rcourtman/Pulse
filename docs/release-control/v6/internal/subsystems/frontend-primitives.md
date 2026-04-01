@@ -1233,6 +1233,10 @@ alongside the verification readout rather than as a second full-width band
 above the findings workspace. If `PatrolStatusBar.tsx` is reused elsewhere, it
 must stay a compact factual support surface and must not reintroduce a parallel
 page-level verdict strip once the summary shell already owns that explanation.
+That same composition rule applies to `frontend-modern/src/features/patrol/PatrolIntelligenceWorkspace.tsx`:
+once the summary shell carries the operator-facing verification and activity
+story, the workspace should move directly into findings and run history instead
+of repeating that same runtime context through a second pre-tab status strip.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

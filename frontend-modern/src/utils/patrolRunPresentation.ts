@@ -1,10 +1,18 @@
-import type { PatrolRunRecord, PatrolRunStatus } from '@/api/patrol';
+import type { PatrolRunRecord, PatrolRunStatus, PatrolTriggerStatus } from '@/api/patrol';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 
 export interface PatrolRunStatusPresentation {
   badgeClass: string;
   label: string;
+}
+
+export interface PatrolLatestRunPresentation {
+  coverageSummary: string;
+  findingsSnapshotAvailable: boolean;
+  kindLabel: string;
+  status: PatrolRunStatusPresentation;
+  timestamp?: string;
 }
 
 export interface PatrolActivityBreakdown {
@@ -124,6 +132,45 @@ export function getPatrolRunKindLabel(type: string | undefined): string {
     default:
       return isFullPatrolRunType(type) ? 'Full patrol' : 'Patrol run';
   }
+}
+
+export function getPatrolLatestRunPresentation(
+  runs: PatrolRunRecord[],
+): PatrolLatestRunPresentation | undefined {
+  const latestRun = runs.find((run) => Boolean(run.completed_at?.trim() || run.started_at?.trim()));
+  if (!latestRun) {
+    return undefined;
+  }
+
+  const findingsSnapshotAvailable = latestRun.finding_ids !== undefined;
+
+  return {
+    coverageSummary: getPatrolRunCoverageSummary(latestRun),
+    findingsSnapshotAvailable,
+    kindLabel: getPatrolRunKindLabel(latestRun.type),
+    status: getPatrolRunStatusPresentation(
+      latestRun.status ?? 'unknown',
+      latestRun.error_count ?? 0,
+      findingsSnapshotAvailable,
+    ),
+    timestamp: latestRun.completed_at || latestRun.started_at,
+  };
+}
+
+export function getPatrolTriggerStatusSummary(
+  status: PatrolTriggerStatus | undefined,
+): string | undefined {
+  if (!status) {
+    return undefined;
+  }
+
+  const notes: string[] = [];
+  if (status.pending_triggers > 0) notes.push(`${status.pending_triggers} queued`);
+  if (status.is_busy_mode) notes.push('busy mode');
+  if (!status.alert_triggers_enabled) notes.push('alerts off');
+  if (!status.anomaly_triggers_enabled) notes.push('anomalies off');
+
+  return notes.length > 0 ? notes.join(' · ') : undefined;
 }
 
 function isSameLocalDay(timestamp: string | undefined, referenceDate: Date): boolean {

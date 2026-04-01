@@ -1,4 +1,4 @@
-import { createMemo, Show } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import ActivityIcon from 'lucide-solid/icons/activity';
 import ShieldAlertIcon from 'lucide-solid/icons/shield-alert';
 import CheckCircleIcon from 'lucide-solid/icons/check-circle';
@@ -10,10 +10,14 @@ import {
   getPatrolAssessmentPresentation,
   getPatrolRecencyPresentation,
   getPatrolScoreChipLabel,
-  getPatrolSummaryMetricState,
   getPatrolVerificationPresentation,
   getPatrolSummaryPresentation,
+  getPatrolSummaryMetricState,
 } from '@/utils/patrolSummaryPresentation';
+import {
+  getPatrolLatestRunPresentation,
+  getPatrolTriggerStatusSummary,
+} from '@/utils/patrolRunPresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { formatRelativeTime } from '@/utils/format';
 import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
@@ -21,9 +25,6 @@ import type { PatrolIntelligenceState } from './usePatrolIntelligenceState';
 export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceState }) {
   const state = props.state;
   const summaryStats = createMemo(() => state.summaryStats());
-  const criticalSummaryPresentation = createMemo(() =>
-    getPatrolSummaryPresentation('critical', summaryStats().criticalFindings > 0),
-  );
   const metricState = createMemo(() =>
     getPatrolSummaryMetricState({
       activeFindings: state.activePatrolFindings(),
@@ -78,6 +79,28 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
   const fixedSummaryPresentation = createMemo(() =>
     getPatrolSummaryPresentation('success', summaryStats().fixedCount > 0),
   );
+  const latestRun = createMemo(() => getPatrolLatestRunPresentation(state.patrolRunHistory() ?? []));
+  const triggerSummary = createMemo(() =>
+    getPatrolTriggerStatusSummary(state.patrolStatus()?.trigger_status),
+  );
+  const circuitBreakerPresentation = createMemo(() => {
+    const circuitBreaker = state.circuitBreakerStatus();
+    if (!circuitBreaker || circuitBreaker.state === 'closed') {
+      return undefined;
+    }
+
+    if (circuitBreaker.state === 'open') {
+      return {
+        message: `AI circuit breaker tripped after ${circuitBreaker.consecutive_failures} consecutive failures.`,
+        toneClass: 'text-red-600 dark:text-red-400',
+      };
+    }
+
+    return {
+      message: 'AI circuit breaker recovering; the next Patrol run is a live test.',
+      toneClass: 'text-amber-600 dark:text-amber-400',
+    };
+  });
   const scoreChipLabel = createMemo(() =>
     getPatrolScoreChipLabel({
       overallHealth: state.intelligenceSummary()?.overall_health,
@@ -89,6 +112,59 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
       activeFindings: state.activePatrolFindings(),
     }),
   );
+  const hasAttentionMetrics = createMemo(
+    () => metricState().primaryValue > 0 || metricState().secondaryValue > 0,
+  );
+  const visibleMetrics = createMemo(() => {
+    const metrics: Array<{
+      icon: typeof ActivityIcon;
+      key: string;
+      label: string;
+      presentation: ReturnType<typeof getPatrolSummaryPresentation>;
+      value: number;
+    }> = [];
+
+    if (metricState().primaryValue > 0) {
+      metrics.push({
+        icon:
+          summaryStats().criticalFindings > 0
+            ? ShieldAlertIcon
+            : summaryStats().totalActive > 0
+              ? AlertTriangleIcon
+              : ActivityIcon,
+        key: 'primary',
+        label: metricState().primaryLabel,
+        presentation: activeFindingsSummaryPresentation(),
+        value: metricState().primaryValue,
+      });
+    }
+
+    if (
+      metricState().secondaryValue > 0 &&
+      (metricState().secondaryLabel === 'Runtime issues' ||
+        metricState().secondaryValue !== metricState().primaryValue)
+    ) {
+      metrics.push({
+        icon: AlertCircleIcon,
+        key: 'secondary',
+        label: metricState().secondaryLabel,
+        presentation: warningSummaryPresentation(),
+        value: metricState().secondaryValue,
+      });
+    }
+
+    if (metricState().fixedValue > 0 && hasAttentionMetrics()) {
+      metrics.push({
+        icon: CheckCircleIcon,
+        key: 'fixed',
+        label: metricState().fixedLabel,
+        presentation: fixedSummaryPresentation(),
+        value: metricState().fixedValue,
+      });
+    }
+
+    return metrics;
+  });
 
   const renderAssessmentIcon = () => {
     const iconClass = `w-5 h-5 ${assessmentShellPresentation().iconClass}`;
@@ -195,29 +271,91 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
                   </div>
                 </div>
 
-                <div class="mt-5 rounded-md border border-border-subtle bg-surface-alt/60 p-3">
-                  <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
-                    Verification
-                  </p>
-                  <p class="mt-1 text-sm font-medium text-base-content">
-                    {verification().title}
-                    <Show when={verification().lastFullRunAt}>
-                      <span class="text-muted">
-                        {' '}
-                        ·{' '}
-                        {formatRelativeTime(verification().lastFullRunAt!, {
-                          compact: true,
-                          emptyText: 'never',
-                        })}
-                      </span>
-                    </Show>
-                  </p>
-                  <p class="mt-1 text-sm text-muted">{verification().description}</p>
-                  <Show when={verification().activityMixLabel}>
-                    <p class="mt-2 text-xs font-medium text-base-content">
-                      Recent activity mix: {verification().activityMixLabel}
-                    </p>
-                  </Show>
+                <div class="mt-5 overflow-hidden rounded-md border border-border-subtle bg-surface-alt/60">
+                  <div class="grid divide-y divide-border-subtle lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] lg:divide-x lg:divide-y-0">
+                    <div class="p-3">
+                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                        Verification
+                      </p>
+                      <p class="mt-1 text-sm font-medium text-base-content">
+                        {verification().title}
+                        <Show when={verification().lastFullRunAt}>
+                          <span class="text-muted">
+                            {' '}
+                            ·{' '}
+                            {formatRelativeTime(verification().lastFullRunAt!, {
+                              compact: true,
+                              emptyText: 'never',
+                            })}
+                          </span>
+                        </Show>
+                      </p>
+                      <p class="mt-1 text-sm text-muted">{verification().description}</p>
+                      <Show when={verification().activityMixLabel}>
+                        <p class="mt-2 text-xs font-medium text-base-content">
+                          Recent activity mix: {verification().activityMixLabel}
+                        </p>
+                      </Show>
+                    </div>
+
+                    <div class="p-3">
+                      <p class="text-xs font-semibold uppercase tracking-[0.16em] text-muted">
+                        Activity
+                      </p>
+                      <Show
+                        when={latestRun()}
+                        fallback={
+                          <p class="mt-1 text-sm text-muted">
+                            Patrol has not completed recent activity yet.
+                          </p>
+                        }
+                      >
+                        {(latest) => (
+                          <>
+                            <div class="mt-1 flex flex-wrap items-center gap-2 text-sm">
+                              <span class="font-medium text-base-content">{latest().kindLabel}</span>
+                              <span
+                                class={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${latest().status.badgeClass}`}
+                              >
+                                {latest().status.label}
+                              </span>
+                              <Show when={latest().timestamp}>
+                                <span class="text-muted">
+                                  {formatRelativeTime(latest().timestamp!, {
+                                    compact: true,
+                                    emptyText: 'never',
+                                  })}
+                                </span>
+                              </Show>
+                            </div>
+                            <Show when={latest().coverageSummary}>
+                              <p class="mt-1 text-sm text-muted">{latest().coverageSummary}</p>
+                            </Show>
+                            <Show when={!latest().findingsSnapshotAvailable}>
+                              <p class="mt-1 text-xs text-muted">
+                                Findings snapshot unavailable for this run.
+                              </p>
+                            </Show>
+                          </>
+                        )}
+                      </Show>
+
+                      <Show when={triggerSummary()}>
+                        <p class="mt-3 text-sm text-muted">
+                          <span class="font-medium text-base-content">Trigger mode:</span>{' '}
+                          {triggerSummary()}
+                        </p>
+                      </Show>
+
+                      <Show when={circuitBreakerPresentation()}>
+                        {(circuitBreaker) => (
+                          <p class={`mt-3 text-sm ${circuitBreaker().toneClass}`}>
+                            {circuitBreaker().message}
+                          </p>
+                        )}
+                      </Show>
+                    </div>
+                  </div>
                 </div>
               </div>
             </section>
@@ -225,91 +363,30 @@ export function PatrolIntelligenceSummary(props: { state: PatrolIntelligenceStat
         </Show>
       </Show>
 
-      <Show when={!showRuntimeSummary() && state.intelligenceSummary()}>
-        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-          <div class="bg-surface rounded-md border border-border p-3">
-            <div class="flex items-center gap-2">
-              <div
-                class={`p-1.5 rounded-md border ${activeFindingsSummaryPresentation().iconContainerClass}`}
-              >
-                <Show
-                  when={summaryStats().criticalFindings > 0}
-                  fallback={
-                    <Show
-                      when={summaryStats().totalActive > 0}
-                      fallback={
-                        <ActivityIcon
-                          class={`w-4 h-4 ${activeFindingsSummaryPresentation().iconClass}`}
-                        />
-                      }
+      <Show when={!showRuntimeSummary() && state.intelligenceSummary() && visibleMetrics().length > 0}>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          <For each={visibleMetrics()}>
+            {(metric) => {
+              const Icon = metric.icon;
+              return (
+                <div class="rounded-md border border-border-subtle bg-surface p-3">
+                  <div class="flex items-center gap-2">
+                    <div
+                      class={`rounded-md border p-1.5 ${metric.presentation.iconContainerClass}`}
                     >
-                      <AlertTriangleIcon
-                        class={`w-4 h-4 ${activeFindingsSummaryPresentation().iconClass}`}
-                      />
-                    </Show>
-                  }
-                >
-                  <ShieldAlertIcon
-                    class={`w-4 h-4 ${activeFindingsSummaryPresentation().iconClass}`}
-                  />
-                </Show>
-              </div>
-              <div>
-                <p class="text-xs text-muted">{metricState().primaryLabel}</p>
-                <p class={`text-lg font-bold ${activeFindingsSummaryPresentation().valueClass}`}>
-                  {metricState().primaryValue}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-surface rounded-md border border-border p-3">
-            <div class="flex items-center gap-2">
-              <div
-                class={`p-1.5 rounded-md border ${warningSummaryPresentation().iconContainerClass}`}
-              >
-                <ActivityIcon class={`w-4 h-4 ${warningSummaryPresentation().iconClass}`} />
-              </div>
-              <div>
-                <p class="text-xs text-muted">{metricState().secondaryLabel}</p>
-                <p class={`text-lg font-bold ${warningSummaryPresentation().valueClass}`}>
-                  {metricState().secondaryValue}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-surface rounded-md border border-border p-3">
-            <div class="flex items-center gap-2">
-              <div
-                class={`p-1.5 rounded-md border ${criticalSummaryPresentation().iconContainerClass}`}
-              >
-                <ShieldAlertIcon class={`w-4 h-4 ${criticalSummaryPresentation().iconClass}`} />
-              </div>
-              <div>
-                <p class="text-xs text-muted">{metricState().criticalLabel}</p>
-                <p class={`text-lg font-bold ${criticalSummaryPresentation().valueClass}`}>
-                  {metricState().criticalValue}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div class="bg-surface rounded-md border border-border p-3">
-            <div class="flex items-center gap-2">
-              <div
-                class={`p-1.5 rounded-md border ${fixedSummaryPresentation().iconContainerClass}`}
-              >
-                <CheckCircleIcon class={`w-4 h-4 ${fixedSummaryPresentation().iconClass}`} />
-              </div>
-              <div>
-                <p class="text-xs text-muted">{metricState().fixedLabel}</p>
-                <p class={`text-lg font-bold ${fixedSummaryPresentation().valueClass}`}>
-                  {metricState().fixedValue}
-                </p>
-              </div>
-            </div>
-          </div>
+                      <Icon class={`h-4 w-4 ${metric.presentation.iconClass}`} />
+                    </div>
+                    <div>
+                      <p class="text-xs text-muted">{metric.label}</p>
+                      <p class={`text-lg font-bold ${metric.presentation.valueClass}`}>
+                        {metric.value}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            }}
+          </For>
         </div>
       </Show>
     </>

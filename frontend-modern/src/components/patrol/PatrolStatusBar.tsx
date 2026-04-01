@@ -18,6 +18,7 @@ import { formatTriggerReason } from '@/utils/patrolFormat';
 import {
   formatPatrolActivityBreakdown,
   getPatrolActivityBreakdown,
+  getPatrolTriggerStatusSummary,
   getPatrolRunKindLabel,
   getPatrolRunStatusPresentation,
 } from '@/utils/patrolRunPresentation';
@@ -96,18 +97,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
     );
   });
   const showRunInProgress = createMemo(() => props.runtimeState === 'running');
-  const triggerStatusSummary = createMemo(() => {
-    const status = props.triggerStatus;
-    if (!status) return '';
-
-    const notes: string[] = [];
-    if (status.pending_triggers > 0) notes.push(`${status.pending_triggers} queued`);
-    if (status.is_busy_mode) notes.push('busy mode');
-    if (!status.alert_triggers_enabled) notes.push('alerts off');
-    if (!status.anomaly_triggers_enabled) notes.push('anomalies off');
-    if (notes.length === 0) return '';
-    return `Scoped triggers: ${notes.join(' · ')}`;
-  });
+  const triggerStatusSummary = createMemo(() => getPatrolTriggerStatusSummary(props.triggerStatus));
   const resolvedStats = createMemo(() => (!runs.loading ? stats() : null));
 
   return (
@@ -227,7 +217,7 @@ export const PatrolStatusBar: Component<PatrolStatusBarProps> = (props) => {
 
           <Show when={triggerStatusSummary()}>
             <span class="hidden sm:inline text-slate-300 ">|</span>
-            <span class="text-xs text-muted">{triggerStatusSummary()}</span>
+            <span class="text-xs text-muted">Scoped triggers: {triggerStatusSummary()}</span>
           </Show>
         </div>
       </div>
