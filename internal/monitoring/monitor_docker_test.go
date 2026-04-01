@@ -267,6 +267,107 @@ func TestApplyDockerReportIncludesContainerDiskDetails(t *testing.T) {
 	}
 }
 
+func TestApplyDockerReportMigratesMetadataWhenContainerRuntimeIDChanges(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseTimestamp := time.Now().UTC()
+	firstReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-host-1",
+			MachineID: "machine-1",
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-old", Name: "app"},
+		},
+		Timestamp: baseTimestamp,
+	}
+
+	host, err := monitor.ApplyDockerReport(firstReport, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+	if host.ID == "" {
+		t.Fatal("expected docker host ID")
+	}
+	if err := monitor.dockerMetadataStore.Set(host.ID+":container:container-old", &config.DockerMetadata{
+		CustomURL: "https://app.internal",
+	}); err != nil {
+		t.Fatalf("seed docker metadata: %v", err)
+	}
+
+	secondReport := firstReport
+	secondReport.Timestamp = baseTimestamp.Add(30 * time.Second)
+	secondReport.Containers = []agentsdocker.Container{
+		{ID: "container-new", Name: "app"},
+	}
+
+	host, err = monitor.ApplyDockerReport(secondReport, nil)
+	if err != nil {
+		t.Fatalf("second ApplyDockerReport failed: %v", err)
+	}
+
+	meta := monitor.dockerMetadataStore.Get(host.ID + ":container:container-new")
+	if meta == nil {
+		t.Fatalf("expected migrated metadata for recreated container")
+	}
+	if meta.CustomURL != "https://app.internal" {
+		t.Fatalf("expected migrated custom URL, got %#v", meta)
+	}
+}
+
+func TestApplyDockerReportSkipsMetadataMigrationForAmbiguousContainerNames(t *testing.T) {
+	monitor := newTestMonitor(t)
+
+	baseTimestamp := time.Now().UTC()
+	firstReport := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "agent-ambiguous",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:  "docker-host-ambiguous",
+			MachineID: "machine-ambiguous",
+		},
+		Containers: []agentsdocker.Container{
+			{ID: "container-old-a", Name: "/app"},
+			{ID: "container-old-b", Name: "app"},
+		},
+		Timestamp: baseTimestamp,
+	}
+
+	host, err := monitor.ApplyDockerReport(firstReport, nil)
+	if err != nil {
+		t.Fatalf("first ApplyDockerReport failed: %v", err)
+	}
+	if err := monitor.dockerMetadataStore.Set(host.ID+":container:container-old-a", &config.DockerMetadata{
+		CustomURL: "https://ambiguous.internal",
+	}); err != nil {
+		t.Fatalf("seed docker metadata: %v", err)
+	}
+
+	secondReport := firstReport
+	secondReport.Timestamp = baseTimestamp.Add(30 * time.Second)
+	secondReport.Containers = []agentsdocker.Container{
+		{ID: "container-new", Name: "app"},
+	}
+
+	host, err = monitor.ApplyDockerReport(secondReport, nil)
+	if err != nil {
+		t.Fatalf("second ApplyDockerReport failed: %v", err)
+	}
+
+	meta := monitor.dockerMetadataStore.Get(host.ID + ":container:container-new")
+	if meta != nil {
+		t.Fatalf("expected ambiguous metadata migration to be skipped, got %#v", meta)
+	}
+}
+
 func TestApplyDockerReportComputesContainerNetworkAndDiskRates(t *testing.T) {
 	monitor := newTestMonitor(t)
 	baseTime := time.Now().UTC()

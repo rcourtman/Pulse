@@ -1219,6 +1219,10 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		IsLegacy:          isLegacyAgent(report.Agent.Type),
 	}
 
+	if hasPrevious {
+		m.migrateDockerContainerMetadataForRecreatedContainers(identifier, previous.Containers(), host.Containers)
+	}
+
 	if tokenRecord != nil {
 		host.TokenID = tokenRecord.ID
 		host.TokenName = tokenRecord.Name

@@ -259,6 +259,35 @@ func TestProxmoxNodeDiskUsesCanonicalResolver(t *testing.T) {
 	}
 }
 
+func TestDockerReportPreservesMetadataAcrossObservedContainerRecreation(t *testing.T) {
+	migrationData, err := os.ReadFile("docker_metadata_migration.go")
+	if err != nil {
+		t.Fatalf("failed to read docker_metadata_migration.go: %v", err)
+	}
+	migrationSource := string(migrationData)
+	requiredMigrationSnippets := []string{
+		"func (m *Monitor) migrateDockerContainerMetadataForRecreatedContainers(",
+		"normalizeDockerContainerMetadataIdentity(container.Name)",
+		`strings.TrimSpace(strings.TrimPrefix(name, "/"))`,
+		"m.CopyDockerContainerMetadata(hostID, previousContainer.ID, container.ID)",
+	}
+	for _, snippet := range requiredMigrationSnippets {
+		if !strings.Contains(migrationSource, snippet) {
+			t.Fatalf("docker_metadata_migration.go must contain %q", snippet)
+		}
+	}
+
+	agentsData, err := os.ReadFile("monitor_agents.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_agents.go: %v", err)
+	}
+	agentsSource := string(agentsData)
+	requiredAgentsSnippet := "m.migrateDockerContainerMetadataForRecreatedContainers(identifier, previous.Containers(), host.Containers)"
+	if !strings.Contains(agentsSource, requiredAgentsSnippet) {
+		t.Fatalf("monitor_agents.go must contain %q", requiredAgentsSnippet)
+	}
+}
+
 func TestProxmoxNodeDiskFallbackPrefersCanonicalSystemStorage(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"node_disk_sources.go": {

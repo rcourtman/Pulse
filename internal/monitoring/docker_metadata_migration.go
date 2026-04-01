@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rs/zerolog/log"
 )
 
 // CopyDockerContainerMetadata copies persisted container metadata from an old container runtime ID to a new one.
@@ -69,4 +71,67 @@ func (m *Monitor) CopyDockerContainerMetadata(hostID, oldContainerID, newContain
 	}
 
 	return m.dockerMetadataStore.Set(newKey, &merged)
+}
+
+func (m *Monitor) migrateDockerContainerMetadataForRecreatedContainers(
+	hostID string,
+	previousContainers []models.DockerContainer,
+	currentContainers []models.DockerContainer,
+) {
+	if m == nil || m.dockerMetadataStore == nil {
+		return
+	}
+
+	hostID = strings.TrimSpace(hostID)
+	if hostID == "" || len(previousContainers) == 0 || len(currentContainers) == 0 {
+		return
+	}
+
+	previousByName := make(map[string]models.DockerContainer)
+	ambiguous := make(map[string]struct{})
+	for _, container := range previousContainers {
+		name := normalizeDockerContainerMetadataIdentity(container.Name)
+		if name == "" || strings.TrimSpace(container.ID) == "" {
+			continue
+		}
+		if _, exists := previousByName[name]; exists {
+			ambiguous[name] = struct{}{}
+			delete(previousByName, name)
+			continue
+		}
+		if _, dup := ambiguous[name]; dup {
+			continue
+		}
+		previousByName[name] = container
+	}
+
+	for _, container := range currentContainers {
+		name := normalizeDockerContainerMetadataIdentity(container.Name)
+		if name == "" || strings.TrimSpace(container.ID) == "" {
+			continue
+		}
+		if _, dup := ambiguous[name]; dup {
+			continue
+		}
+		previousContainer, ok := previousByName[name]
+		if !ok {
+			continue
+		}
+		if strings.TrimSpace(previousContainer.ID) == strings.TrimSpace(container.ID) {
+			continue
+		}
+		if err := m.CopyDockerContainerMetadata(hostID, previousContainer.ID, container.ID); err != nil {
+			log.Warn().
+				Err(err).
+				Str("dockerHostID", hostID).
+				Str("containerName", container.Name).
+				Str("oldContainerID", previousContainer.ID).
+				Str("newContainerID", container.ID).
+				Msg("Failed to migrate docker container metadata after observed recreation")
+		}
+	}
+}
+
+func normalizeDockerContainerMetadataIdentity(name string) string {
+	return strings.TrimSpace(strings.TrimPrefix(name, "/"))
 }

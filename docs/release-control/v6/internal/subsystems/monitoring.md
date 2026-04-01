@@ -296,6 +296,10 @@ copy custom URL, description, tags, and notes metadata onto the new container
 ID instead of dropping that operator state on ordinary container replacement.
 If multiple prior containers normalize to the same name, the migration must
 fail closed and skip the copy rather than guessing between ambiguous sources.
+Name normalization for that contract must treat Docker's leading `/` prefix as
+presentation noise rather than identity, so routine recreate flows keep
+metadata continuity when one report spells the same container as `/app` and a
+later report spells it as `app`.
 The same applies to proxmox topology coordinates exposed through typed views:
 node, cluster, and instance accessors must return canonical trimmed values so
 monitoring consumers do not fork topology grouping or labeling on `" pve-a "`
