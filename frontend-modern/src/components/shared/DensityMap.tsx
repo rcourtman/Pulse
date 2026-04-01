@@ -106,11 +106,13 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                     </Show>
                   )}
                 </Show>
-                <Show when={hoveredFocusDetail()?.sparklinePath}>
-                  {(path) => (
+              </div>
+              <Show when={hoveredFocusDetail()?.sparklinePath}>
+                {(path) => (
+                  <div class="mt-1 flex justify-end">
                     <svg
                       viewBox="0 0 64 22"
-                      class="ml-0.5 h-4 w-[56px] shrink-0 overflow-visible"
+                      class="h-4 w-[72px] overflow-visible"
                       aria-hidden="true"
                       data-density-map-tooltip-sparkline="true"
                     >
@@ -123,9 +125,9 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                         stroke-width="1.75"
                       />
                     </svg>
-                  )}
-                </Show>
-              </div>
+                  </div>
+                )}
+              </Show>
             </div>
           </TooltipPortal>
         )}
