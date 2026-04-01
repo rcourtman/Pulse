@@ -497,13 +497,15 @@ func (m *Monitor) pollPVENodesParallel(
 	prevNodeMemory map[string]models.Memory,
 	prevInstanceNodes []models.Node,
 	debugEnabled bool,
-) ([]models.Node, map[string]string) {
+) ([]models.Node, map[string]string, map[string]string) {
 	var modelNodes []models.Node
 	nodeEffectiveStatus := make(map[string]string)
+	nodeDiskSources := make(map[string]string)
 
 	type nodePollResult struct {
 		node            models.Node
 		effectiveStatus string
+		diskSource      string
 	}
 
 	resultChan := make(chan nodePollResult, len(nodes))
@@ -521,11 +523,12 @@ func (m *Monitor) pollPVENodesParallel(
 		go func(node proxmox.Node) {
 			defer wg.Done()
 
-			modelNode, effectiveStatus, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevNodeMemory, prevInstanceNodes)
+			modelNode, effectiveStatus, diskSource, _ := m.pollPVENode(ctx, instanceName, instanceCfg, client, node, connectionHealthStr, prevNodeMemory, prevInstanceNodes)
 
 			resultChan <- nodePollResult{
 				node:            modelNode,
 				effectiveStatus: effectiveStatus,
+				diskSource:      diskSource,
 			}
 		}(node)
 	}
@@ -536,9 +539,10 @@ func (m *Monitor) pollPVENodesParallel(
 	for res := range resultChan {
 		modelNodes = append(modelNodes, res.node)
 		nodeEffectiveStatus[res.node.Name] = res.effectiveStatus
+		nodeDiskSources[res.node.Name] = res.diskSource
 	}
 
-	return modelNodes, nodeEffectiveStatus
+	return modelNodes, nodeEffectiveStatus, nodeDiskSources
 }
 
 func (m *Monitor) preserveNodesWhenEmpty(instanceName string, modelNodes []models.Node, prevInstanceNodes []models.Node) []models.Node {
@@ -978,7 +982,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	prevNodeMemory, prevInstanceNodes := m.snapshotPrevNodes(instanceName)
 
 	// Convert to models
-	modelNodes, nodeEffectiveStatus := m.pollPVENodesParallel(
+	modelNodes, nodeEffectiveStatus, nodeDiskSources := m.pollPVENodesParallel(
 		ctx,
 		instanceName,
 		instanceCfg,
@@ -995,7 +999,8 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// Update state first so we have nodes available
 	m.state.UpdateNodesForInstance(instanceName, modelNodes)
 
-	// Storage fallback is used to provide disk metrics when rootfs is not available.
+	// Storage fallback is used to provide disk metrics when the node summary only
+	// has the low-confidence /nodes figure or no disk truth at all.
 	// We run this asynchronously with a short timeout so it doesn't block VM/container polling.
 	// This addresses the issue where slow storage APIs (e.g., NFS mounts) can cause the entire
 	// polling task to timeout before reaching VM/container polling.
@@ -1024,7 +1029,7 @@ func (m *Monitor) pollPVEInstance(ctx context.Context, instanceName string, clie
 	// We give the storage fallback goroutine up to 2 additional seconds to finish if it's still running.
 	localStorageByNode := m.awaitStorageFallback(instanceName, storageFallback, 2*time.Second)
 
-	modelNodes = m.applyStorageFallbackAndRecordNodeMetrics(instanceName, client, modelNodes, localStorageByNode)
+	modelNodes = m.applyStorageFallbackAndRecordNodeMetrics(instanceName, client, modelNodes, nodeDiskSources, localStorageByNode)
 
 	// Periodically re-check cluster status for nodes marked as standalone
 	// This addresses issue #437 where clusters aren't detected on first attempt

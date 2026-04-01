@@ -247,12 +247,48 @@ func TestProxmoxNodeDiskUsesCanonicalResolver(t *testing.T) {
 	}
 	source := string(data)
 	requiredSnippets := []string{
-		"modelNode.Disk, _ = m.resolveNodeDisk(",
+		"var nodeDiskSource string",
+		"modelNode.Disk, nodeDiskSource = m.resolveNodeDisk(",
 		"if resolvedDisk, diskSource := m.resolveNodeDisk(",
+		"return modelNode, effectiveStatus, nodeDiskSource, nil",
 	}
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("monitor_polling_node.go must contain %q", snippet)
+		}
+	}
+}
+
+func TestProxmoxNodeDiskFallbackPrefersCanonicalSystemStorage(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"node_disk_sources.go": {
+			"func preferredNodeDiskFallbackRank(storage proxmox.Storage) (int, bool) {",
+			`case "local-zfs":`,
+			`case "local-lvm":`,
+			`case "local":`,
+			`supportsGuestRoots := storageContentIncludes(storage.Content, "images") || storageContentIncludes(storage.Content, "rootdir")`,
+			"if storage.Shared != 0 {",
+		},
+		"monitor_pve.go": {
+			"modelNodes, nodeEffectiveStatus, nodeDiskSources := m.pollPVENodesParallel(",
+			"modelNodes = m.applyStorageFallbackAndRecordNodeMetrics(instanceName, client, modelNodes, nodeDiskSources, localStorageByNode)",
+		},
+		"monitor_pve_storage.go": {
+			"rank, ok := preferredNodeDiskFallbackRank(storage)",
+			`(modelNodes[i].Disk.Total == 0 || currentDiskSource == "" || currentDiskSource == "nodes-endpoint")`,
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
 		}
 	}
 }

@@ -25,16 +25,20 @@ truth for live infrastructure data.
 1. `internal/monitoring/monitor.go`
 2. `internal/monitoring/poll_providers.go`
 3. `internal/monitoring/monitor_discovery_helpers.go`
-4. `internal/monitoring/metrics.go`
-5. `internal/monitoring/metrics_history.go`
-6. `internal/unifiedresources/read_state.go`
-7. `internal/unifiedresources/monitor_adapter.go`
-8. `internal/unifiedresources/views.go`
-9. `internal/monitoring/connected_infrastructure.go`
-10. `internal/monitoring/reload.go`
-11. `docker-entrypoint.sh`
-12. `internal/monitoring/truenas_poller.go`
-13. `internal/monitoring/vmware_poller.go`
+4. `internal/monitoring/monitor_polling_node.go`
+5. `internal/monitoring/monitor_pve.go`
+6. `internal/monitoring/monitor_pve_storage.go`
+7. `internal/monitoring/node_disk_sources.go`
+8. `internal/monitoring/metrics.go`
+9. `internal/monitoring/metrics_history.go`
+10. `internal/unifiedresources/read_state.go`
+11. `internal/unifiedresources/monitor_adapter.go`
+12. `internal/unifiedresources/views.go`
+13. `internal/monitoring/connected_infrastructure.go`
+14. `internal/monitoring/reload.go`
+15. `docker-entrypoint.sh`
+16. `internal/monitoring/truenas_poller.go`
+17. `internal/monitoring/vmware_poller.go`
 
 ## Shared Boundaries
 
@@ -333,7 +337,14 @@ agent, the node summary must prefer the linked host's canonical disk view over
 Proxmox `rootfs` bytes because dataset-level `rootfs` can materially
 under-report ZFS-backed node capacity and usage. Proxmox `rootfs` and `/nodes`
 disk values remain fallback sources only when no linked host disk truth is
-available.
+available. When the runtime must fall back beyond the linked host and `rootfs`
+paths, it must treat the raw `/nodes` disk figure as low-confidence and prefer
+the canonical local system storage owner instead of whichever mounted storage
+is merely present or largest. On multi-storage Proxmox hosts, fallback
+selection must rank `local-zfs`, `local-lvm`, `local`, and other non-shared
+guest-root storages ahead of backup-only mounts, and storage-derived disk
+metrics may override the `/nodes` figure only when that figure is the active
+source or node disk truth is otherwise absent.
 TrueNAS monitoring ownership now also includes provider rebind semantics in
 `internal/monitoring/truenas_poller.go`. When a stored TrueNAS connection's
 host, auth, TLS, or fingerprint settings change, the poller must replace the

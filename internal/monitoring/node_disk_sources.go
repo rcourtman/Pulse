@@ -72,6 +72,56 @@ func (m *Monitor) resolveNodeDisk(
 	return models.Disk{}, ""
 }
 
+func preferredNodeDiskFallbackRank(storage proxmox.Storage) (int, bool) {
+	name := strings.ToLower(strings.TrimSpace(storage.Storage))
+	storageType := strings.ToLower(strings.TrimSpace(storage.Type))
+	path := strings.TrimSpace(storage.Path)
+	supportsGuestRoots := storageContentIncludes(storage.Content, "images") || storageContentIncludes(storage.Content, "rootdir")
+
+	switch name {
+	case "local-zfs":
+		return 0, true
+	case "local-lvm":
+		return 1, true
+	case "local":
+		return 2, true
+	}
+
+	if storage.Shared != 0 {
+		return 0, false
+	}
+
+	if supportsGuestRoots {
+		switch storageType {
+		case "zfspool", "zfs", "local-zfs":
+			return 3, true
+		case "lvmthin", "lvm", "local-lvm":
+			return 4, true
+		}
+
+		if storageType == "dir" && path == "/var/lib/vz" {
+			return 5, true
+		}
+
+		if strings.HasPrefix(name, "local") {
+			return 6, true
+		}
+
+		return 7, true
+	}
+
+	return 0, false
+}
+
+func storageContentIncludes(content, want string) bool {
+	for _, part := range strings.Split(content, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), want) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Monitor) linkedHostForNode(instanceName, nodeID, nodeName string) *models.Host {
 	readState := m.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {

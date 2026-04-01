@@ -94,7 +94,9 @@ func (m *Monitor) startStorageFallback(
 				continue
 			}
 
-			// Look for local or local-lvm storage as most stable disk metric
+			bestRank := 0
+			bestFound := false
+			var bestStorage proxmox.Storage
 			for _, storage := range nodeStorages {
 				if reason, skip := readOnlyFilesystemReason(storage.Type, storage.Total, storage.Used); skip {
 					log.Debug().
@@ -107,25 +109,35 @@ func (m *Monitor) startStorageFallback(
 						Msg("Skipping read-only storage while building disk fallback")
 					continue
 				}
-				if storage.Storage == "local" || storage.Storage == "local-lvm" {
-					disk := models.Disk{
-						Total: int64(storage.Total),
-						Used:  int64(storage.Used),
-						Free:  int64(storage.Available),
-						Usage: safePercentage(float64(storage.Used), float64(storage.Total)),
-					}
-					// Prefer "local" over "local-lvm"
-					sf.mu.Lock()
-					if _, exists := sf.byNode[node.Node]; !exists || storage.Storage == "local" {
-						sf.byNode[node.Node] = disk
-						log.Debug().
-							Str("node", node.Node).
-							Str("storage", storage.Storage).
-							Float64("usage", disk.Usage).
-							Msg("Using storage for disk metrics fallback")
-					}
-					sf.mu.Unlock()
+
+				rank, ok := preferredNodeDiskFallbackRank(storage)
+				if !ok {
+					continue
 				}
+				if !bestFound || rank < bestRank || (rank == bestRank && storage.Total > bestStorage.Total) {
+					bestRank = rank
+					bestStorage = storage
+					bestFound = true
+				}
+			}
+
+			if bestFound {
+				disk := models.Disk{
+					Total: int64(bestStorage.Total),
+					Used:  int64(bestStorage.Used),
+					Free:  int64(bestStorage.Available),
+					Usage: safePercentage(float64(bestStorage.Used), float64(bestStorage.Total)),
+				}
+				sf.mu.Lock()
+				sf.byNode[node.Node] = disk
+				sf.mu.Unlock()
+				log.Debug().
+					Str("node", node.Node).
+					Str("storage", bestStorage.Storage).
+					Str("type", bestStorage.Type).
+					Int("rank", bestRank).
+					Float64("usage", disk.Usage).
+					Msg("Using preferred storage for disk metrics fallback")
 			}
 		}
 	}()
@@ -164,17 +176,19 @@ func (m *Monitor) applyStorageFallbackAndRecordNodeMetrics(
 	instanceName string,
 	client PVEClientInterface,
 	modelNodes []models.Node,
+	nodeDiskSources map[string]string,
 	storageFallback map[string]models.Disk,
 ) []models.Node {
 	for i := range modelNodes {
-		if modelNodes[i].Disk.Total == 0 {
-			if disk, exists := storageFallback[modelNodes[i].Name]; exists {
-				modelNodes[i].Disk = disk
-				log.Debug().
-					Str("node", modelNodes[i].Name).
-					Float64("usage", disk.Usage).
-					Msg("Applied storage fallback for disk metrics")
-			}
+		currentDiskSource := nodeDiskSources[modelNodes[i].Name]
+		if disk, exists := storageFallback[modelNodes[i].Name]; exists &&
+			(modelNodes[i].Disk.Total == 0 || currentDiskSource == "" || currentDiskSource == "nodes-endpoint") {
+			modelNodes[i].Disk = disk
+			log.Debug().
+				Str("node", modelNodes[i].Name).
+				Str("previousSource", currentDiskSource).
+				Float64("usage", disk.Usage).
+				Msg("Applied storage fallback for disk metrics")
 		}
 
 		if modelNodes[i].Status == "online" {

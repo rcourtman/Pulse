@@ -14,9 +14,11 @@ import (
 )
 
 type stubPVEClient struct {
-	nodes      []proxmox.Node
-	nodeStatus *proxmox.NodeStatus
-	rrdPoints  []proxmox.NodeRRDPoint
+	nodes         []proxmox.Node
+	nodeStatus    *proxmox.NodeStatus
+	storageByNode map[string][]proxmox.Storage
+	allStorage    []proxmox.Storage
+	rrdPoints     []proxmox.NodeRRDPoint
 }
 
 var _ PVEClientInterface = (*stubPVEClient)(nil)
@@ -50,11 +52,14 @@ func (s *stubPVEClient) GetContainers(ctx context.Context, node string) ([]proxm
 }
 
 func (s *stubPVEClient) GetStorage(ctx context.Context, node string) ([]proxmox.Storage, error) {
-	return nil, nil
+	if s.storageByNode == nil {
+		return nil, nil
+	}
+	return s.storageByNode[node], nil
 }
 
 func (s *stubPVEClient) GetAllStorage(ctx context.Context) ([]proxmox.Storage, error) {
-	return nil, nil
+	return s.allStorage, nil
 }
 
 func (s *stubPVEClient) GetBackupTasks(ctx context.Context) ([]proxmox.Task, error) {

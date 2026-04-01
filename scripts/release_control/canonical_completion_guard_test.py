@@ -2826,14 +2826,14 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 {
                     "heading": "## Canonical Files",
                     "path": "internal/unifiedresources/views.go",
-                    "line": 32,
+                    "line": 36,
                     "heading_line": 23,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/unifiedresources/views.go",
-                    "line": 47,
-                    "heading_line": 43,
+                    "line": 51,
+                    "heading_line": 47,
                 },
             ],
         )

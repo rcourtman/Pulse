@@ -98,7 +98,7 @@ func TestPollPVENodeMemoryTrustCharacterization(t *testing.T) {
 				MaxCPU: 8,
 			}
 
-			modelNode, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil, nil)
+			modelNode, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil, nil)
 			if err != nil {
 				t.Fatalf("pollPVENode() error = %v", err)
 			}
@@ -147,7 +147,7 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 		MaxCPU: 8,
 	}
 
-	first, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil, nil)
+	first, _, _, err := mon.pollPVENode(context.Background(), "test", &mon.config.PVEInstances[0], client, node, "healthy", nil, nil)
 	if err != nil {
 		t.Fatalf("first pollPVENode() error = %v", err)
 	}
@@ -156,7 +156,7 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 	}
 
 	client.nodeStatus = nil
-	second, _, err := mon.pollPVENode(
+	second, _, _, err := mon.pollPVENode(
 		context.Background(),
 		"test",
 		&mon.config.PVEInstances[0],

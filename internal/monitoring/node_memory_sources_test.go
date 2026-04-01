@@ -133,7 +133,7 @@ func TestPollPVENodePrefersLinkedHostDiskOverRootFS(t *testing.T) {
 		},
 	}
 
-	modelNode, _, err := mon.pollPVENode(
+	modelNode, _, _, err := mon.pollPVENode(
 		context.Background(),
 		"test",
 		&mon.config.PVEInstances[0],
@@ -184,5 +184,80 @@ func TestResolveNodeDiskFallsBackToRootFSWithoutLinkedHost(t *testing.T) {
 	}
 	if disk.Total != 200 || disk.Used != 50 || disk.Free != 150 {
 		t.Fatalf("disk = %+v, want rootfs values", disk)
+	}
+}
+
+func TestPollPVEInstancePrefersCanonicalLocalStorageOverNodesEndpoint(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	client := &stubPVEClient{
+		nodes: []proxmox.Node{
+			{
+				Node:    "nuc",
+				Status:  "online",
+				CPU:     0.12,
+				MaxCPU:  8,
+				Mem:     4 * 1024 * 1024 * 1024,
+				MaxMem:  8 * 1024 * 1024 * 1024,
+				Disk:    92 * 1024 * 1024 * 1024,
+				MaxDisk: 916 * 1024 * 1024 * 1024,
+				Uptime:  3600,
+			},
+		},
+		allStorage: []proxmox.Storage{{Storage: "local-zfs"}},
+		storageByNode: map[string][]proxmox.Storage{
+			"nuc": {
+				{
+					Storage:   "local-zfs",
+					Type:      "zfspool",
+					Content:   "images,rootdir",
+					Shared:    0,
+					Total:     944 * 1024 * 1024 * 1024,
+					Used:      313 * 1024 * 1024 * 1024,
+					Available: 631 * 1024 * 1024 * 1024,
+				},
+				{
+					Storage:   "t7shield",
+					Type:      "dir",
+					Content:   "backup,iso,vztmpl",
+					Shared:    0,
+					Total:     916 * 1024 * 1024 * 1024,
+					Used:      92 * 1024 * 1024 * 1024,
+					Available: 824 * 1024 * 1024 * 1024,
+				},
+				{
+					Storage:   "hetzner",
+					Type:      "dir",
+					Content:   "backup",
+					Shared:    0,
+					Total:     711 * 1024 * 1024 * 1024,
+					Used:      109 * 1024 * 1024 * 1024,
+					Available: 602 * 1024 * 1024 * 1024,
+				},
+			},
+		},
+	}
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+	mon.config.PVEInstances[0].MonitorStorage = true
+
+	mon.pollPVEInstance(context.Background(), "test", client)
+
+	snapshot := mon.state.GetSnapshot()
+	if len(snapshot.Nodes) != 1 {
+		t.Fatalf("expected one node in state, got %d", len(snapshot.Nodes))
+	}
+
+	node := snapshot.Nodes[0]
+	wantTotal := int64(944 * 1024 * 1024 * 1024)
+	wantUsed := int64(313 * 1024 * 1024 * 1024)
+	wantFree := int64(631 * 1024 * 1024 * 1024)
+	if node.Disk.Total != wantTotal || node.Disk.Used != wantUsed || node.Disk.Free != wantFree {
+		t.Fatalf("node disk = %+v, want local-zfs fallback totals", node.Disk)
+	}
+	if node.Disk.Usage < 33.1 || node.Disk.Usage > 33.2 {
+		t.Fatalf("node disk usage = %.2f, want local-zfs usage around 33.16", node.Disk.Usage)
 	}
 }
