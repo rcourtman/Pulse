@@ -163,6 +163,12 @@ querying, and the operator-facing storage health presentation layer.
     storage detail charts must all address history through the canonical
     unified-resource metrics-target IDs, and the storage page must reuse the
     shared sticky summary primitive instead of a storage-local scroll wrapper.
+13. Keep storage summary interaction scoped through the same canonical IDs.
+    When operators hover or focus pools versus physical disks, the storage
+    summary must reuse one resolved active-series ID across card state and
+    chart highlighting so pool-only cards demote cleanly during disk focus and
+    disk-temperature cards demote cleanly during pool focus, instead of
+    leaving stale row-local IDs or storage-local hover branches on the page.
 
 ## Current State
 

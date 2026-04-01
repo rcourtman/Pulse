@@ -7,12 +7,16 @@ export type { DensityMapProps } from './densityMapModel';
 
 export const DensityMap: Component<DensityMapProps> = (props) => {
   const densityMap = useDensityMapState(props);
+  const interactionState = () => props.interactionState ?? 'default';
 
   return (
     <div
-      class="relative w-full h-full flex flex-col group"
+      class={`relative w-full h-full flex flex-col group transition-opacity duration-150 ease-out ${
+        interactionState() === 'inactive' ? 'opacity-35' : 'opacity-100'
+      }`.trim()}
       data-highlight-series-id={props.highlightSeriesId ?? ''}
       data-highlight-series-active={densityMap.externalSeriesIndex() !== null ? 'true' : 'false'}
+      data-summary-chart-state={interactionState()}
     >
       <div class="flex-1 relative min-h-0 bg-transparent flex">
         {/* Y-axis: typically in a density map we might just show "Top Nodes" */}

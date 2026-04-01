@@ -5,6 +5,10 @@ import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
+import {
+  resolveSummaryActiveSeriesId,
+  resolveSummaryCardInteractionState,
+} from '@/components/shared/summaryCardInteraction';
 import { formatThroughputRate } from '@/utils/throughputPresentation';
 import type { InfrastructureSummaryProps } from './infrastructureSummaryModel';
 import { useInfrastructureSummaryState } from './useInfrastructureSummaryState';
@@ -19,6 +23,19 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
+  const activeSeriesId = () =>
+    resolveSummaryActiveSeriesId({
+      hoveredSeriesId: props.hoveredResourceId,
+      focusedSeriesId: props.focusedResourceId,
+    });
+  const interactionStateFor = (
+    series: Array<{ id: string }>,
+  ) =>
+    resolveSummaryCardInteractionState({
+      series,
+      hoveredSeriesId: props.hoveredResourceId,
+      focusedSeriesId: props.focusedResourceId,
+    });
 
   return (
     <Show when={props.resources.length > 0}>
@@ -50,6 +67,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             loaded={state.isCurrentRangeLoaded()}
             hasData={state.hasData('cpu')}
             emptyMessage={state.emptyMessage()}
+            interactionState={interactionStateFor(state.seriesFor('cpu'))}
           >
             <InteractiveSparkline
               series={state.seriesFor('cpu')}
@@ -57,7 +75,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               timeRange={props.timeRange}
               yMode="percent"
               highlightNearestSeriesOnHover
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(state.seriesFor('cpu'))}
             />
           </SummaryMetricCard>
 
@@ -67,6 +86,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             loaded={state.isCurrentRangeLoaded()}
             hasData={state.hasData('memory')}
             emptyMessage={state.emptyMessage()}
+            interactionState={interactionStateFor(state.seriesFor('memory'))}
           >
             <InteractiveSparkline
               series={state.seriesFor('memory')}
@@ -74,7 +94,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               timeRange={props.timeRange}
               yMode="percent"
               highlightNearestSeriesOnHover
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(state.seriesFor('memory'))}
             />
           </SummaryMetricCard>
 
@@ -93,13 +114,15 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             loaded={state.isCurrentRangeLoaded()}
             hasData={state.hasDiskIOData()}
             emptyMessage={state.emptyMessage()}
+            interactionState={interactionStateFor(state.diskioSeries())}
           >
             <DensityMap
               series={state.diskioSeries()}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange}
               formatValue={formatThroughputRate}
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(state.diskioSeries())}
             />
           </SummaryMetricCard>
 
@@ -163,13 +186,15 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               loaded={state.isCurrentRangeLoaded()}
               hasData={state.hasNetData()}
               emptyMessage={state.emptyHistoryLabel()}
+              interactionState={interactionStateFor(state.networkSeries())}
             >
               <DensityMap
                 series={state.networkSeries()}
                 rangeLabel={rangeLabel()}
                 timeRange={props.timeRange}
                 formatValue={formatThroughputRate}
-                highlightSeriesId={props.hoveredResourceId}
+                highlightSeriesId={activeSeriesId()}
+                interactionState={interactionStateFor(state.networkSeries())}
               />
             </SummaryMetricCard>
           </Show>

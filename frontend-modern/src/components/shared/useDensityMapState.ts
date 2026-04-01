@@ -54,7 +54,12 @@ export function useDensityMapState(props: DensityMapProps) {
     const rows = data.series.length;
     const cellWidth = width / DENSITY_MAP_COLUMNS;
     const cellHeight = height / rows;
+    const interactionOpacity = props.interactionState === 'inactive' ? 0.35 : 1;
     const activeSeriesIndex = hoveredState()?.seriesIndex ?? externalSeriesIndex();
+    const activeSeries =
+      activeSeriesIndex !== null && activeSeriesIndex >= 0 && activeSeriesIndex < data.series.length
+        ? data.series[activeSeriesIndex]
+        : null;
 
     for (let row = 0; row < rows; row += 1) {
       const cellY = row * cellHeight;
@@ -64,7 +69,7 @@ export function useDensityMapState(props: DensityMapProps) {
         const value = data.grid[row][column];
 
         if (value <= 0) {
-          context.globalAlpha = isDimmed ? 0.45 : 1;
+          context.globalAlpha = (isDimmed ? 0.08 : 1) * interactionOpacity;
           context.fillStyle = 'rgba(128, 128, 128, 0.05)';
           context.fillRect(
             cellX + DENSITY_MAP_PADDING_X / 2,
@@ -76,7 +81,9 @@ export function useDensityMapState(props: DensityMapProps) {
         }
 
         context.globalAlpha =
-          getDensityMapCellOpacity(value, data.globalMax) * (isDimmed ? 0.18 : 1);
+          getDensityMapCellOpacity(value, data.globalMax) *
+          (isDimmed ? 0.05 : 1) *
+          interactionOpacity;
         context.fillStyle = data.series[row].color;
         if (context.roundRect) {
           context.beginPath();
@@ -97,6 +104,25 @@ export function useDensityMapState(props: DensityMapProps) {
           );
         }
       }
+    }
+
+    if (activeSeries !== null && activeSeriesIndex !== null) {
+      const highlightY = activeSeriesIndex * cellHeight;
+      context.save();
+      context.globalAlpha = 0.12 * interactionOpacity;
+      context.fillStyle = activeSeries.color;
+      context.fillRect(0, highlightY, width, cellHeight);
+      context.globalAlpha = 0.7 * interactionOpacity;
+      context.strokeStyle = activeSeries.color;
+      context.lineWidth = 1.25;
+      if (context.roundRect) {
+        context.beginPath();
+        context.roundRect(0.5, highlightY+0.5, width-1, Math.max(cellHeight-1, 1), 4);
+        context.stroke();
+      } else {
+        context.strokeRect(0.5, highlightY+0.5, width-1, Math.max(cellHeight-1, 1));
+      }
+      context.restore();
     }
 
     context.globalAlpha = 1;

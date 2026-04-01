@@ -15,6 +15,11 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
   let chartSurfaceRef: Element | undefined;
   let canvasRef: HTMLCanvasElement | undefined;
   let canvasHostRef: HTMLDivElement | undefined;
+  const interactionState = () => props.interactionState ?? 'default';
+  const inactiveSeriesColor = () =>
+    typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+      ? 'rgb(148, 163, 184)'
+      : 'rgb(100, 116, 139)';
 
   const sparkline = useInteractiveSparklineState(props, {
     getCanvas: () => canvasRef,
@@ -24,9 +29,12 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
 
   return (
     <div
-      class="w-full h-full min-h-[88px] flex flex-col"
+      class={`w-full h-full min-h-[88px] flex flex-col transition-opacity duration-150 ease-out ${
+        interactionState() === 'inactive' ? 'opacity-35' : 'opacity-100'
+      }`.trim()}
       data-highlight-series-id={props.highlightSeriesId ?? ''}
       data-highlight-series-active={sparkline.externalSeriesIndex() !== null ? 'true' : 'false'}
+      data-summary-chart-state={interactionState()}
     >
       <div class="relative flex-1 min-h-0">
         <div class="absolute inset-y-0 left-0 w-7 pointer-events-none">
@@ -133,22 +141,30 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                       <path
                         d={pathData.path}
                         fill="none"
-                        stroke={pathData.color}
+                        stroke={(() => {
+                          const active = sparkline.activeEmphasisSeriesIndex();
+                          if (active !== null && active !== pathData.seriesIndex) {
+                            return inactiveSeriesColor();
+                          }
+                          return pathData.color;
+                        })()}
                         stroke-width={(() => {
                           const active = sparkline.activeEmphasisSeriesIndex();
                           if (active === null) {
                             return '1.5';
                           }
-                          return active === pathData.seriesIndex ? '2.8' : '0.9';
+                          return active === pathData.seriesIndex ? '3.2' : '0.7';
                         })()}
                         stroke-linecap="round"
                         stroke-linejoin="round"
                         opacity={(() => {
                           const active = sparkline.activeEmphasisSeriesIndex();
+                          const interactionOpacity =
+                            interactionState() === 'inactive' ? 0.35 : 1;
                           if (active === null) {
-                            return '0.75';
+                            return `${0.75 * interactionOpacity}`;
                           }
-                          return active === pathData.seriesIndex ? '1' : '0.1';
+                          return `${(active === pathData.seriesIndex ? 1 : 0.05) * interactionOpacity}`;
                         })()}
                         style={{ transition: 'opacity 90ms linear, stroke-width 90ms linear' }}
                         vector-effect="non-scaling-stroke"

@@ -23,6 +23,8 @@ vi.mock('@/api/charts', async () => {
 vi.mock('@/components/shared/InteractiveSparkline', () => ({
   InteractiveSparkline: (props: {
     series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
+    highlightSeriesId?: string | null;
+    interactionState?: string;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
@@ -33,6 +35,8 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
         data-series-ids={series.map((current) => current.id || '').join('|')}
         data-series-names={series.map((current) => current.name || '').join('|')}
         data-max-points={maxPoints}
+        data-highlight-series-id={props.highlightSeriesId || ''}
+        data-interaction-state={props.interactionState || 'default'}
       />
     );
   },
@@ -41,6 +45,8 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
 vi.mock('@/components/shared/DensityMap', () => ({
   DensityMap: (props: {
     series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
+    highlightSeriesId?: string | null;
+    interactionState?: string;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
@@ -51,6 +57,8 @@ vi.mock('@/components/shared/DensityMap', () => ({
         data-series-ids={series.map((current) => current.id || '').join('|')}
         data-series-names={series.map((current) => current.name || '').join('|')}
         data-max-points={maxPoints}
+        data-highlight-series-id={props.highlightSeriesId || ''}
+        data-interaction-state={props.interactionState || 'default'}
       />
     );
   },
@@ -276,6 +284,29 @@ describe('WorkloadsSummary performance behavior', () => {
       expect(sparklines).toHaveLength(4);
       for (const sparkline of sparklines) {
         expect(sparkline.getAttribute('data-series-count')).toBe('2');
+      }
+    });
+  });
+
+  it('falls back to the focused workload id for summary chart emphasis', async () => {
+    const workloadId = 'cluster-a:pve1:101';
+    mockGetWorkloadCharts.mockResolvedValueOnce(makeChartsResponse([workloadId]));
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: 1, running: 1, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots([workloadId])}
+        focusedWorkloadId={workloadId}
+      />
+    ));
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(4);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadId);
+        expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
     });
   });

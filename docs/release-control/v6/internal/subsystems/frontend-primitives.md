@@ -145,6 +145,7 @@ work extends shared components instead of creating new local variants.
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
 6. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
 7. Keep top-of-page summary interaction on shared primitives. Infrastructure, workloads, and storage summary cards must route sticky-shell behavior through `frontend-modern/src/components/shared/StickySummarySection.tsx` and route row-hover or focused-series rendering through shared chart primitives such as `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/DensityMap.tsx`, rather than page-local sticky wrappers or metric-card-specific hover logic.
+8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose hover- or focus-driven chart emphasis must derive the active series ID through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass the same resolved ID into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source.
 
 ## Forbidden Paths
 
@@ -218,6 +219,7 @@ work extends shared components instead of creating new local variants.
    TrueNAS, and expose the same first-host next step instead of falling back
    to passive “nothing here yet” wording.
 13. Keep cross-surface investigation handoffs on shared route ownership.
+14. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
     Feature shells such as Alerts and Patrol may decide which governed
     destination chips to render, but canonical href, label, dedupe, and
     infrastructure-fallback truth must stay in

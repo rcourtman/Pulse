@@ -39,6 +39,7 @@ export function useInteractiveSparklineState(
   );
   const formatValue = (value: number) =>
     props.formatValue ? props.formatValue(value) : `${value.toFixed(1)}%`;
+  const interactionOpacityMultiplier = () => (props.interactionState === 'inactive' ? 0.35 : 1);
 
   const [hoveredState, setHoveredState] = createSignal<InteractiveSparklineHoverState | null>(null);
   const [lockedSeriesIndex, setLockedSeriesIndex] = createSignal<number | null>(null);
@@ -180,6 +181,7 @@ export function useInteractiveSparklineState(
     const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(17, 24, 39, 0.06)';
     const gridColorStrong = isDark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(17, 24, 39, 0.10)';
     const hoverLineColor = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(17, 24, 39, 0.45)';
+    const inactiveSeriesColor = isDark ? 'rgb(148, 163, 184)' : 'rgb(100, 116, 139)';
 
     const yLines = yMode() === 'percent' ? [0.2, 0.4, 0.6, 0.8] : [0.25, 0.5, 0.75];
     ctx.save();
@@ -217,16 +219,19 @@ export function useInteractiveSparklineState(
             : 1.5
           : active === seriesIndex
             ? isLg
-              ? 3.5
-              : 2.8
+              ? 4
+              : 3.2
             : isLg
-              ? 1
-              : 0.9;
-      const opacity = active === null ? 0.75 : active === seriesIndex ? 1 : 0.1;
+              ? 0.7
+              : 0.6;
+      const opacity =
+        (active === null ? 0.75 : active === seriesIndex ? 1 : 0.05) *
+        interactionOpacityMultiplier();
 
       ctx.save();
       ctx.globalAlpha = opacity;
-      ctx.strokeStyle = series.color;
+      ctx.strokeStyle =
+        active !== null && active !== seriesIndex ? inactiveSeriesColor : series.color;
       ctx.lineWidth = lineWidth;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';

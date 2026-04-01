@@ -1,6 +1,7 @@
 import type { TimeRange } from '@/api/charts';
 import { timeRangeToMs } from '@/utils/timeRange';
 import type { InteractiveSparklineSeries } from './InteractiveSparkline';
+import type { SummaryCardInteractionState } from './summaryCardInteraction';
 
 export interface DensityMapProps {
   series: InteractiveSparklineSeries[];
@@ -8,6 +9,7 @@ export interface DensityMapProps {
   timeRange?: TimeRange;
   formatValue?: (value: number) => string;
   highlightSeriesId?: string | null;
+  interactionState?: SummaryCardInteractionState;
 }
 
 export interface DensityMapHoveredState {

@@ -25,14 +25,13 @@ func emptyFixtureGraph() FixtureGraph {
 }
 
 func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
-	state := buildFixtureState(cfg)
-	state.LastUpdate = now
-
-	return FixtureGraph{
-		State:            state,
-		AlertHistory:     buildAlertHistory(state.Nodes, state.VMs, state.Containers),
-		PlatformFixtures: rebasePlatformFixtures(defaultPlatformFixtures(), now),
+	graph := FixtureGraph{
+		State:            buildFixtureState(cfg),
+		PlatformFixtures: defaultPlatformFixtures(),
 	}
+	graph.UpdateMetrics(cfg, now)
+	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
+	return graph
 }
 
 func cloneFixtureGraph(in FixtureGraph) FixtureGraph {
@@ -47,8 +46,7 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	if g == nil {
 		return
 	}
-	updateFixtureStateMetrics(&g.State, cfg)
-	g.State.LastUpdate = now
+	updateFixtureStateMetricsAt(&g.State, cfg, now)
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
 }
 

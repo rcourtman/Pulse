@@ -15,8 +15,12 @@ HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
   scale: vi.fn(),
   beginPath: vi.fn(),
   roundRect: vi.fn(),
+  stroke: vi.fn(),
+  strokeRect: vi.fn(),
   fill: vi.fn(),
   fillRect: vi.fn(),
+  lineWidth: 1,
+  strokeStyle: '',
   globalAlpha: 1,
   fillStyle: '',
 })) as unknown as typeof HTMLCanvasElement.prototype.getContext;

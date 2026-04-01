@@ -167,6 +167,7 @@ regression protection.
 25. Extend dashboard workload table shell ownership through `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Dashboard/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`
 26. Keep long-range workload chart capping time-proportional across `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`, `frontend-modern/src/api/charts.ts`, and `internal/api/router.go`: when the workload hot path caps mixed-cadence history for top cards, it must bucket by time window rather than raw point index so 7-day and 30-day workload cards stay visually even without relaxing the protected payload budget.
 27. Keep summary hover/focus and sticky-card behavior on shared hot paths: infrastructure, workloads, and storage summary shells must reuse one focused-series model plus `frontend-modern/src/components/shared/StickySummarySection.tsx` inside the app scroll shell instead of per-page scroll listeners or per-card hover derivations, so row scrubbing highlights all cards without multiplying render or scroll work.
+28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards.
 
 ## Forbidden Paths
 
@@ -194,6 +195,11 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
+That same hot-path ownership now covers top-of-page summary emphasis: infrastructure
+and workloads summary cards must treat hover and focus as one shared active-series
+contract so time-range switches and row scrubbing reuse one existing chart path
+instead of repainting page-local “selected row” overlays on top of already
+downsampled summary history.
 That same hot-path rule now applies to infrastructure summary resource
 filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 must include API-backed systems such as top-level TrueNAS appliances through

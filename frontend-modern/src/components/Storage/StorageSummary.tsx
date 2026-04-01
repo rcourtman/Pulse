@@ -4,6 +4,10 @@ import type { InteractiveSparklineSeries } from '@/components/shared/Interactive
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import {
+  resolveSummaryActiveSeriesId,
+  resolveSummaryCardInteractionState,
+} from '@/components/shared/summaryCardInteraction';
+import {
   ChartsAPI,
   type MetricPoint,
   type TimeRange,
@@ -259,6 +263,17 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
+  const activeSeriesId = () =>
+    resolveSummaryActiveSeriesId({
+      hoveredSeriesId: props.hoveredResourceId,
+      focusedSeriesId: props.focusedResourceId,
+    });
+  const interactionStateFor = (series: InteractiveSparklineSeries[]) =>
+    resolveSummaryCardInteractionState({
+      series,
+      hoveredSeriesId: props.hoveredResourceId,
+      focusedSeriesId: props.focusedResourceId,
+    });
 
   return (
     <Show when={showComponent()}>
@@ -286,6 +301,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasPoolUsage()}
             emptyMessage={emptyLabel()}
+            interactionState={interactionStateFor(displayedPoolUsageSeries())}
           >
             <InteractiveSparkline
               series={displayedPoolUsageSeries()}
@@ -293,7 +309,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               timeRange={props.timeRange as TimeRange}
               yMode="percent"
               highlightNearestSeriesOnHover
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(displayedPoolUsageSeries())}
             />
           </SummaryMetricCard>
 
@@ -303,6 +320,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasDiskTemp()}
             emptyMessage={emptyLabel()}
+            interactionState={interactionStateFor(displayedDiskTempSeries())}
           >
             <InteractiveSparkline
               series={displayedDiskTempSeries()}
@@ -312,7 +330,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={formatTemp}
               formatTopLabel={(max) => `${max.toFixed(0)}°C`}
               highlightNearestSeriesOnHover
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(displayedDiskTempSeries())}
             />
           </SummaryMetricCard>
 
@@ -322,6 +341,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasPoolUsed()}
             emptyMessage={emptyLabel()}
+            interactionState={interactionStateFor(displayedPoolUsedSeries())}
           >
             <InteractiveSparkline
               series={displayedPoolUsedSeries()}
@@ -331,7 +351,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(displayedPoolUsedSeries())}
             />
           </SummaryMetricCard>
 
@@ -341,6 +362,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasPoolAvail()}
             emptyMessage={emptyLabel()}
+            interactionState={interactionStateFor(displayedPoolAvailSeries())}
           >
             <InteractiveSparkline
               series={displayedPoolAvailSeries()}
@@ -350,7 +372,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
-              highlightSeriesId={props.hoveredResourceId}
+              highlightSeriesId={activeSeriesId()}
+              interactionState={interactionStateFor(displayedPoolAvailSeries())}
             />
           </SummaryMetricCard>
         </SummaryPanel>

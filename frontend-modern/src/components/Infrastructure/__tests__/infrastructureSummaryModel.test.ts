@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Resource } from '@/types/resource';
 import type { InfrastructureSummarySeries } from '@/components/Infrastructure/infrastructureSummaryModel';
+import { resolveSummaryActiveSeriesId } from '@/components/shared/summaryCardInteraction';
 import {
   buildInfrastructureDisplaySeries,
   buildInfrastructureEmptyHistoryLabel,
@@ -138,6 +139,21 @@ describe('infrastructureSummaryModel', () => {
     expect(buildInfrastructureMetricSeries(displayedSeries, 'diskio')).toEqual([
       { id: 'host-2', data: [{ timestamp: 2, value: 90 }], color: '#00aaff', name: 'Host 2' },
     ]);
+  });
+
+  it('uses one canonical active series id across hover and focused summary selection', () => {
+    expect(
+      resolveSummaryActiveSeriesId({
+        hoveredSeriesId: 'agent-1',
+        focusedSeriesId: 'agent-2',
+      }),
+    ).toBe('agent-1');
+    expect(
+      resolveSummaryActiveSeriesId({
+        hoveredSeriesId: null,
+        focusedSeriesId: 'agent-2',
+      }),
+    ).toBe('agent-2');
   });
 
   it('shows the network card when either data or network capability exists', () => {

@@ -413,6 +413,9 @@ describe('Storage', () => {
         },
       },
       disks: {},
+      stats: {
+        oldestDataTimestamp: Date.now() - 60_000,
+      },
     });
 
     hookResources = [
@@ -449,12 +452,14 @@ describe('Storage', () => {
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
         ).length,
       ).toBe(3);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(1);
     });
 
     fireEvent.mouseLeave(alphaRow);
 
     await waitFor(() => {
       expect(summary.querySelectorAll('[data-highlight-series-active="true"]').length).toBe(0);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
     });
 
     storageSummarySpy.mockRestore();

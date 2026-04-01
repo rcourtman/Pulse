@@ -4713,12 +4713,19 @@ func generateSnapshots(vms []models.VM, containers []models.Container) []models.
 
 // UpdateMetrics simulates changing metrics over time
 func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
-	updateDockerHosts(data, config)
-	updateKubernetesClusters(data, config)
-	updateHosts(data, config)
+	updateFixtureStateMetricsAt(data, config, time.Now())
+}
+
+func updateFixtureStateMetricsAt(data *models.StateSnapshot, config MockConfig, refreshNow time.Time) {
+	if refreshNow.IsZero() {
+		refreshNow = time.Now()
+	}
+
+	updateDockerHosts(data, config, refreshNow)
+	updateKubernetesClusters(data, config, refreshNow)
+	updateHosts(data, config, refreshNow)
 	syncMockKubernetesNodeHosts(data)
 
-	refreshNow := time.Now()
 	step := int64(updateInterval.Seconds())
 	if step <= 0 {
 		step = 2
@@ -4858,9 +4865,8 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 	// Update PMG metrics with gentle fluctuations
 	for i := range data.PMGInstances {
 		inst := &data.PMGInstances[i]
-		now := time.Now()
-		inst.LastSeen = now
-		inst.LastUpdated = now
+		inst.LastSeen = refreshNow
+		inst.LastUpdated = refreshNow
 
 		if inst.MailStats != nil {
 			inst.MailStats.CountTotal = fluctuateFloat(inst.MailStats.CountTotal, 0.05, 0, math.MaxFloat64)
@@ -4874,7 +4880,7 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 			inst.MailStats.PregreetRejects = fluctuateFloat(inst.MailStats.PregreetRejects, 0.07, 0, math.MaxFloat64)
 			inst.MailStats.GreylistCount = fluctuateFloat(inst.MailStats.GreylistCount, 0.05, 0, math.MaxFloat64)
 			inst.MailStats.AverageProcessTimeMs = fluctuateFloat(inst.MailStats.AverageProcessTimeMs, 0.05, 200, 2000)
-			inst.MailStats.UpdatedAt = now
+			inst.MailStats.UpdatedAt = refreshNow
 		}
 
 		if len(inst.MailCount) > 0 {
@@ -4885,7 +4891,7 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 
 			base := 60 + rand.Float64()*30
 			newPoint := models.PMGMailCountPoint{
-				Timestamp:  now,
+				Timestamp:  refreshNow,
 				Count:      base + rand.Float64()*15,
 				CountIn:    base*0.6 + rand.Float64()*10,
 				CountOut:   base*0.4 + rand.Float64()*8,
@@ -4926,15 +4932,13 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 		}
 	}
 
-	data.LastUpdate = time.Now()
+	data.LastUpdate = refreshNow
 }
 
-func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig) {
+func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig, now time.Time) {
 	if len(data.KubernetesClusters) == 0 {
 		return
 	}
-
-	now := time.Now()
 
 	for i := range data.KubernetesClusters {
 		cluster := &data.KubernetesClusters[i]
@@ -5002,12 +5006,10 @@ func updateKubernetesClusters(data *models.StateSnapshot, config MockConfig) {
 	}
 }
 
-func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
+func updateDockerHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 	if len(data.DockerHosts) == 0 {
 		return
 	}
-
-	now := time.Now()
 	step := int64(updateInterval.Seconds())
 	if step <= 0 {
 		step = 2
@@ -5341,12 +5343,10 @@ func ensureDockerSwarmInfo(host *models.DockerHost) {
 	}
 }
 
-func updateHosts(data *models.StateSnapshot, config MockConfig) {
+func updateHosts(data *models.StateSnapshot, config MockConfig, now time.Time) {
 	if len(data.Hosts) == 0 {
 		return
 	}
-
-	now := time.Now()
 	step := int64(updateInterval.Seconds())
 	if step <= 0 {
 		step = 2

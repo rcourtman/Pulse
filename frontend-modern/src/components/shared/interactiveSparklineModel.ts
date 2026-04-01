@@ -1,6 +1,7 @@
 import type { MetricPoint, TimeRange } from '@/api/charts';
 import { downsampleLTTB, calculateOptimalPoints } from '@/utils/downsample';
 import { timeRangeToMs } from '@/utils/timeRange';
+import type { SummaryCardInteractionState } from './summaryCardInteraction';
 
 export interface InteractiveSparklineSeries {
   id?: string;
@@ -23,6 +24,7 @@ export interface InteractiveSparklineProps {
   maxTooltipRows?: number;
   highlightNearestSeriesOnHover?: boolean;
   highlightSeriesId?: string | null;
+  interactionState?: SummaryCardInteractionState;
 }
 
 export interface InteractiveSparklineChartSeries extends InteractiveSparklineSeries {

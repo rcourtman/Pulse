@@ -173,6 +173,11 @@ assembly branch.
    `vmware` metadata plus shared `resource-incident` timeline entries on
    canonical `agent`, `vm`, and `storage` resources instead of creating
    provider-only resource kinds, identities, or history schemas.
+9. Keep summary-surface emphasis on canonical resource IDs. Infrastructure
+   summary hover/focus behavior must keep using the same unified-resource IDs
+   that power the table rows, chart series, and detail-route handoffs instead
+   of introducing page-local summary IDs or provider-local hover aliases when
+   the selected series is highlighted.
 
 ## Current State
 
@@ -215,6 +220,12 @@ must still ingest that provider-owned source instead of letting the seed
 silence the platform entirely. Operator-facing source filters may accept the
 `vmware-vsphere` alias for the VMware platform, but the emitted shared source
 family remains canonical `vmware`.
+That same canonical identity boundary now also applies to infrastructure
+summary emphasis. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+may vary card presentation, but the active sparkline or density-map series must
+still resolve through the shared resource ID already emitted by unified
+resources so table hover, focused detail state, and summary highlight all point
+to the same resource identity.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
 fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`

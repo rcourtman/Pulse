@@ -7,6 +7,10 @@ import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import {
+  resolveSummaryActiveSeriesId,
+  resolveSummaryCardInteractionState,
+} from '@/components/shared/summaryCardInteraction';
+import {
   ChartsAPI,
   type ChartData,
   type MetricPoint,
@@ -714,6 +718,17 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
+  const activeSeriesId = () =>
+    resolveSummaryActiveSeriesId({
+      hoveredSeriesId: props.hoveredWorkloadId,
+      focusedSeriesId: props.focusedWorkloadId,
+    });
+  const interactionStateFor = (series: InteractiveSparklineSeries[]) =>
+    resolveSummaryCardInteractionState({
+      series,
+      hoveredSeriesId: props.hoveredWorkloadId,
+      focusedSeriesId: props.focusedWorkloadId,
+    });
 
   return (
     <SummaryPanel
@@ -741,6 +756,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasCpuData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
+        interactionState={interactionStateFor(cpuSeries())}
       >
         <InteractiveSparkline
           series={cpuSeries()}
@@ -750,7 +766,8 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           sortTooltipByValue
           maxTooltipRows={8}
           highlightNearestSeriesOnHover
-          highlightSeriesId={props.hoveredWorkloadId}
+          highlightSeriesId={activeSeriesId()}
+          interactionState={interactionStateFor(cpuSeries())}
         />
       </SummaryMetricCard>
 
@@ -760,6 +777,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasMemoryData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
+        interactionState={interactionStateFor(memorySeries())}
       >
         <InteractiveSparkline
           series={memorySeries()}
@@ -769,7 +787,8 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           sortTooltipByValue
           maxTooltipRows={8}
           highlightNearestSeriesOnHover
-          highlightSeriesId={props.hoveredWorkloadId}
+          highlightSeriesId={activeSeriesId()}
+          interactionState={interactionStateFor(memorySeries())}
         />
       </SummaryMetricCard>
 
@@ -779,13 +798,15 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasDiskIOData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
+        interactionState={interactionStateFor(diskioSeries())}
       >
         <DensityMap
           series={diskioSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
-          highlightSeriesId={props.hoveredWorkloadId}
+          highlightSeriesId={activeSeriesId()}
+          interactionState={interactionStateFor(diskioSeries())}
         />
       </SummaryMetricCard>
 
@@ -795,13 +816,15 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasNetworkData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
+        interactionState={interactionStateFor(networkSeries())}
       >
         <DensityMap
           series={networkSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
-          highlightSeriesId={props.hoveredWorkloadId}
+          highlightSeriesId={activeSeriesId()}
+          interactionState={interactionStateFor(networkSeries())}
         />
       </SummaryMetricCard>
     </SummaryPanel>
