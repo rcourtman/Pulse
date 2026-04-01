@@ -87,6 +87,12 @@ governed floor is ready.
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and
 provider selection, remediation flow, and cost persistence.
+That Patrol runtime ownership includes seed-context admission control.
+`internal/ai/patrol_ai.go` must build Patrol and triage prompts from
+canonical seed sections, size them against the runtime budget model, and when
+a provider reports a smaller real context window than the static model map,
+reassemble the same canonical sections under tighter provider-derived budgets
+instead of hard-failing or truncating ad hoc prompt strings.
 That same backend runtime ownership also includes bounded Patrol and
 investigation read models. `internal/ai/patrol_history_persistence.go` and
 `internal/ai/proxmox/events.go` must cap persisted-history loads and

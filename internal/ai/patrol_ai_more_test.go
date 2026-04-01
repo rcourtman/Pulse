@@ -3,12 +3,15 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/cost"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
@@ -260,6 +263,89 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 			t.Fatalf("expected executor nil error, got %v", err)
 		}
 	})
+}
+
+func TestPatrolSeedRetryBudgets_UsesProviderContextWindow(t *testing.T) {
+	err := fmt.Errorf("API error (400): {\"error\":{\"message\":\"request exceeds the available context size (8192 tokens)\",\"type\":\"exceed_context_size_error\",\"n_ctx\":8192}}")
+
+	got := patrolSeedRetryBudgets(err)
+	want := []int{4096, 2048, 1024}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("patrolSeedRetryBudgets() = %v, want %v", got, want)
+	}
+}
+
+func TestRunAIAnalysis_RetriesWithProviderDerivedSeedBudget(t *testing.T) {
+	persistence := config.NewConfigPersistence(t.TempDir())
+	svc := NewService(persistence, nil)
+	svc.cfg = &config.AIConfig{Enabled: true, PatrolModel: "mock:model"}
+	svc.provider = &mockProvider{}
+
+	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
+	promptTokens := make([]int, 0, 2)
+	mockCS := &mockChatService{
+		executor: executor,
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			promptTokens = append(promptTokens, chat.EstimateTokens(req.Prompt))
+			if len(promptTokens) == 1 {
+				return nil, fmt.Errorf("API error (400): {\"error\":{\"message\":\"request exceeds the available context size (4096 tokens)\",\"type\":\"exceed_context_size_error\",\"n_ctx\":4096}}")
+			}
+			return &PatrolStreamResponse{
+				Content:      "analysis complete",
+				InputTokens:  8,
+				OutputTokens: 4,
+			}, nil
+		},
+	}
+	svc.SetChatService(mockCS)
+
+	ps := NewPatrolService(svc, nil)
+	ps.SetConfig(PatrolConfig{
+		Enabled:       true,
+		AnalyzeNodes:  true,
+		AnalyzeGuests: true,
+	})
+
+	state := models.StateSnapshot{
+		Nodes: []models.Node{
+			{ID: "node-1", Name: "pve-1", Status: "online", CPU: 0.20, Memory: models.Memory{Usage: 30.0}},
+		},
+	}
+	for i := 0; i < 600; i++ {
+		state.VMs = append(state.VMs, models.VM{
+			ID:     fmt.Sprintf("vm-%d", i),
+			VMID:   100 + i,
+			Name:   fmt.Sprintf("flagged-guest-%03d-%s", i, strings.Repeat("x", 96)),
+			Node:   "pve-1",
+			Status: "running",
+			CPU:    0.95,
+			Memory: models.Memory{Usage: 91.0},
+			Disk:   models.Disk{Usage: 15.0},
+		})
+	}
+
+	triage := ps.runDeterministicTriageState(context.Background(), patrolRuntimeStateForTest(ps, state), nil, nil)
+	seed, _ := ps.buildTriageSeedContextState(triage, patrolRuntimeStateForTest(ps, state), nil, nil)
+	if got := chat.EstimateTokens(seed); got <= 2048 {
+		t.Fatalf("expected initial triage seed to exceed retry budget, got %d tokens", got)
+	}
+
+	result, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, state), &PatrolScope{NoStream: true})
+	if err != nil {
+		t.Fatalf("runAIAnalysisState returned error: %v", err)
+	}
+	if result == nil || result.Response != "analysis complete" {
+		t.Fatalf("unexpected analysis result: %#v", result)
+	}
+	if len(promptTokens) != 2 {
+		t.Fatalf("expected 2 patrol attempts, got %d", len(promptTokens))
+	}
+	if promptTokens[1] >= promptTokens[0] {
+		t.Fatalf("expected retry prompt to shrink, got %d then %d tokens", promptTokens[0], promptTokens[1])
+	}
+	if promptTokens[1] > 2048 {
+		t.Fatalf("expected retry prompt to honor provider-derived budget, got %d tokens", promptTokens[1])
+	}
 }
 
 func TestSeedResourceInventory_QuietSummary(t *testing.T) {

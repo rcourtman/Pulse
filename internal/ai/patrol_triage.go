@@ -453,12 +453,23 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString("# Deterministic Triage Results\n")
+	sb.WriteString(formatTriageOverviewSection(triage))
+	sb.WriteString(formatTriageFlagsSection(triage))
+	sb.WriteString(formatTriageHealthySummarySection(triage))
+
+	return sb.String()
+}
+
+func formatTriageOverviewSection(triage *TriageResult) string {
+	if triage == nil {
+		return "# Deterministic Triage Results\nNo triage data available.\n"
+	}
 
 	scanned := triage.Summary.TotalNodes + triage.Summary.TotalGuests + triage.Summary.TotalStorage +
 		triage.Summary.TotalDocker + triage.Summary.TotalTrueNAS + triage.Summary.TotalPBS + triage.Summary.TotalPMG
-	sb.WriteString(fmt.Sprintf(
-		"Scanned %d resources: %d nodes, %d guests, %d storage resources (%d pools, %d physical disks), %d docker hosts, %d TrueNAS systems, %d PBS, %d PMG.\n\n",
+
+	return fmt.Sprintf(
+		"# Deterministic Triage Results\nScanned %d resources: %d nodes, %d guests, %d storage resources (%d pools, %d physical disks), %d docker hosts, %d TrueNAS systems, %d PBS, %d PMG.\n\n",
 		scanned,
 		triage.Summary.TotalNodes,
 		triage.Summary.TotalGuests,
@@ -469,36 +480,73 @@ func FormatTriageBriefing(triage *TriageResult) string {
 		triage.Summary.TotalTrueNAS,
 		triage.Summary.TotalPBS,
 		triage.Summary.TotalPMG,
-	))
+	)
+}
 
-	if len(triage.Flags) > 0 {
-		flags := append([]TriageFlag(nil), triage.Flags...)
-		sort.Slice(flags, func(i, j int) bool {
-			ri := triageSeverityRank(flags[i].Severity)
-			rj := triageSeverityRank(flags[j].Severity)
-			if ri != rj {
-				return ri > rj
-			}
-			if flags[i].ResourceType != flags[j].ResourceType {
-				return flags[i].ResourceType < flags[j].ResourceType
-			}
-			return flags[i].ResourceName < flags[j].ResourceName
-		})
+func formatTriageFlagsSection(triage *TriageResult) string {
+	flags := sortedTriageFlags(triage)
+	if len(flags) == 0 {
+		return ""
+	}
 
-		sb.WriteString(fmt.Sprintf("## Flagged Resources (%d)\n", len(flags)))
-		sb.WriteString("| Resource | Type | Flag | Severity | Detail |\n")
-		sb.WriteString("|----------|------|------|----------|--------|\n")
-		for _, flag := range flags {
-			resource := triageResourceName(flag.ResourceName, flag.ResourceID)
-			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
-				triageTableEscape(resource),
-				triageTableEscape(flag.ResourceType),
-				triageTableEscape(triageFlagLabel(flag)),
-				triageTableEscape(flag.Severity),
-				triageTableEscape(flag.Reason),
-			))
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("## Flagged Resources (%d)\n", len(flags)))
+	sb.WriteString("| Resource | Type | Flag | Severity | Detail |\n")
+	sb.WriteString("|----------|------|------|----------|--------|\n")
+	for _, flag := range flags {
+		resource := triageResourceName(flag.ResourceName, flag.ResourceID)
+		sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+			triageTableEscape(resource),
+			triageTableEscape(flag.ResourceType),
+			triageTableEscape(triageFlagLabel(flag)),
+			triageTableEscape(flag.Severity),
+			triageTableEscape(flag.Reason),
+		))
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func formatTriageFlagsSummary(triage *TriageResult) string {
+	flags := sortedTriageFlags(triage)
+	if len(flags) == 0 {
+		return ""
+	}
+
+	critical := 0
+	warning := 0
+	watch := 0
+	entries := make([]string, 0, triageMinInt(len(flags), 8))
+	for i, flag := range flags {
+		switch strings.ToLower(flag.Severity) {
+		case "critical":
+			critical++
+		case "warning":
+			warning++
+		case "watch":
+			watch++
 		}
-		sb.WriteString("\n")
+		if i < 8 {
+			resource := triageResourceName(flag.ResourceName, flag.ResourceID)
+			entries = append(entries, fmt.Sprintf("%s (%s, %s)", resource, triageFlagLabel(flag), flag.Severity))
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("## Flagged Resources (%d)\n", len(flags)))
+	sb.WriteString(fmt.Sprintf("Severity mix: critical=%d, warning=%d, watch=%d.\n", critical, warning, watch))
+	sb.WriteString("Prioritize: ")
+	sb.WriteString(strings.Join(entries, "; "))
+	if len(flags) > len(entries) {
+		sb.WriteString(fmt.Sprintf("; +%d more flagged resources", len(flags)-len(entries)))
+	}
+	sb.WriteString(".\n\n")
+	return sb.String()
+}
+
+func formatTriageHealthySummarySection(triage *TriageResult) string {
+	if triage == nil {
+		return ""
 	}
 
 	healthyGuests := triage.Summary.TotalGuests - triageUniqueFlaggedByTypes(triage.Flags, "vm", "system-container")
@@ -532,6 +580,8 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	}
 
 	totalHealthy := healthyNodes + healthyGuests + healthyStorage + healthyDocker + healthyTrueNAS + healthyPBS + healthyPMG
+
+	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("## Healthy Resources (%d)\n", totalHealthy))
 	sb.WriteString(fmt.Sprintf("Nodes: %d healthy\n", healthyNodes))
 	sb.WriteString(fmt.Sprintf("Guests: %d running, %d stopped\n", triage.Summary.RunningGuests, triage.Summary.StoppedGuests))
@@ -543,8 +593,34 @@ func FormatTriageBriefing(triage *TriageResult) string {
 	sb.WriteString(fmt.Sprintf("TrueNAS: %d systems\n", healthyTrueNAS))
 	sb.WriteString(fmt.Sprintf("PBS: %d instances\n", healthyPBS))
 	sb.WriteString(fmt.Sprintf("PMG: %d instances\n", healthyPMG))
-
 	return sb.String()
+}
+
+func triageMinInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func sortedTriageFlags(triage *TriageResult) []TriageFlag {
+	if triage == nil || len(triage.Flags) == 0 {
+		return nil
+	}
+
+	flags := append([]TriageFlag(nil), triage.Flags...)
+	sort.Slice(flags, func(i, j int) bool {
+		ri := triageSeverityRank(flags[i].Severity)
+		rj := triageSeverityRank(flags[j].Severity)
+		if ri != rj {
+			return ri > rj
+		}
+		if flags[i].ResourceType != flags[j].ResourceType {
+			return flags[i].ResourceType < flags[j].ResourceType
+		}
+		return flags[i].ResourceName < flags[j].ResourceName
+	})
+	return flags
 }
 
 func triageBuildSummaryState(snap patrolRuntimeState, flaggedIDs map[string]bool) TriageSummary {

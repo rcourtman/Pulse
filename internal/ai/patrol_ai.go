@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,7 +47,18 @@ const (
 	patrolTurnsPer50Devices = 5
 	patrolQuickMinTurns     = 10
 	patrolQuickMaxTurns     = 30
+	patrolRetrySeedBudget1  = 16_000
+	patrolRetrySeedBudget2  = 8_000
+	patrolRetrySeedBudget3  = 4_000
 )
+
+var patrolContextWindowPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)"n_ctx"\s*:\s*(\d+)`),
+	regexp.MustCompile(`(?i)available context size\s*\((\d+)\s*tokens?\)`),
+	regexp.MustCompile(`(?i)maximum context length[^0-9]*(\d+)`),
+	regexp.MustCompile(`(?i)context window[^0-9]*(\d+)`),
+	regexp.MustCompile(`(?i)context length[^0-9]*(\d+)`),
+}
 
 // CleanThinkingTokens removes model-specific thinking markers from AI responses.
 // Different AI models use different markers for their internal reasoning:
@@ -242,7 +254,9 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	}
 
 	// Phase 2: Build focused seed context from triage results
-	seedContext, seededFindingIDs := p.buildTriageSeedContextState(triageResult, snap, scope, guestIntel)
+	seedSections, seededFindingIDs := p.buildTriageSeedSectionsState(triageResult, snap, scope, guestIntel)
+	seedBudget := p.calculateSeedBudget()
+	seedContext := p.assembleSeedWithinBudget(seedSections, seedBudget)
 	if strings.TrimSpace(seedContext) == "" {
 		return nil, nil
 	}
@@ -302,159 +316,218 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	defer executor.SetPatrolFindingCreator(nil) // Clear after run
 
 	// Execute the agentic patrol loop
-	var contentBuffer strings.Builder
 	var inputTokens, outputTokens int
+	type patrolStreamAttempt struct {
+		response       *PatrolStreamResponse
+		finalContent   string
+		toolCalls      []ToolCallRecord
+		rawToolOutputs []string
+	}
 
-	// Tool call collection
-	var toolCallsMu sync.Mutex
-	pendingToolCalls := make(map[string]ToolCallRecord)
-	var pendingToolOrder []string
-	anonToolCounter := 0
-	var completedToolCalls []ToolCallRecord
-	var rawToolOutputs []string
+	executePatrol := func(prompt string) (*patrolStreamAttempt, error) {
+		var contentBuffer strings.Builder
 
-	chatResp, chatErr := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
-		Prompt:       seedContext,
-		SystemPrompt: p.getPatrolSystemPromptForTriage(),
-		SessionID:    "patrol-main",
-		UseCase:      "patrol",
-		MaxTurns:     maxTurns,
-	}, func(event ChatStreamEvent) {
-		switch event.Type {
-		case "content":
-			var contentData struct {
-				Text string `json:"text"`
-			}
-			if json.Unmarshal(event.Data, &contentData) == nil && contentData.Text != "" {
-				contentBuffer.WriteString(contentData.Text)
-				if !noStream {
-					p.appendStreamContent(contentData.Text)
+		var toolCallsMu sync.Mutex
+		pendingToolCalls := make(map[string]ToolCallRecord)
+		var pendingToolOrder []string
+		anonToolCounter := 0
+		var completedToolCalls []ToolCallRecord
+		var rawToolOutputs []string
+
+		chatResp, chatErr := cs.ExecutePatrolStream(ctx, PatrolExecuteRequest{
+			Prompt:       prompt,
+			SystemPrompt: p.getPatrolSystemPromptForTriage(),
+			SessionID:    "patrol-main",
+			UseCase:      "patrol",
+			MaxTurns:     maxTurns,
+		}, func(event ChatStreamEvent) {
+			switch event.Type {
+			case "content":
+				var contentData struct {
+					Text string `json:"text"`
 				}
-			}
-		case "thinking":
-			var thinkingData struct {
-				Text string `json:"text"`
-			}
-			if json.Unmarshal(event.Data, &thinkingData) == nil && thinkingData.Text != "" {
-				if !noStream {
-					p.broadcast(PatrolStreamEvent{
-						Type:    "thinking",
-						Content: thinkingData.Text,
-					})
+				if json.Unmarshal(event.Data, &contentData) == nil && contentData.Text != "" {
+					contentBuffer.WriteString(contentData.Text)
+					if !noStream {
+						p.appendStreamContent(contentData.Text)
+					}
 				}
-			}
-		case "tool_start":
-			var data struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				Input    string `json:"input"`
-				RawInput string `json:"raw_input"`
-			}
-			if json.Unmarshal(event.Data, &data) == nil {
-				if data.ID == "" {
-					anonToolCounter++
-					data.ID = fmt.Sprintf("patrol-anon-%d", anonToolCounter)
+			case "thinking":
+				var thinkingData struct {
+					Text string `json:"text"`
 				}
-				if !noStream {
-					p.broadcast(PatrolStreamEvent{
-						Type:         "tool_start",
-						ToolID:       data.ID,
-						ToolName:     data.Name,
-						ToolInput:    data.Input,
-						ToolRawInput: data.RawInput,
-					})
+				if json.Unmarshal(event.Data, &thinkingData) == nil && thinkingData.Text != "" {
+					if !noStream {
+						p.broadcast(PatrolStreamEvent{
+							Type:    "thinking",
+							Content: thinkingData.Text,
+						})
+					}
 				}
-				input := data.Input
-				if data.RawInput != "" {
-					input = data.RawInput
+			case "tool_start":
+				var data struct {
+					ID       string `json:"id"`
+					Name     string `json:"name"`
+					Input    string `json:"input"`
+					RawInput string `json:"raw_input"`
 				}
-				toolCallsMu.Lock()
-				pendingToolOrder = append(pendingToolOrder, data.ID)
-				pendingToolCalls[data.ID] = ToolCallRecord{
-					ID:        data.ID,
-					ToolName:  data.Name,
-					Input:     truncateString(input, MaxToolInputSize),
-					StartTime: time.Now().UnixMilli(),
-				}
-				toolCallsMu.Unlock()
-			}
-		case "tool_end":
-			var data struct {
-				ID       string `json:"id"`
-				Name     string `json:"name"`
-				Input    string `json:"input"`
-				RawInput string `json:"raw_input"`
-				Output   string `json:"output"`
-				Success  bool   `json:"success"`
-			}
-			if json.Unmarshal(event.Data, &data) == nil {
-				if data.ID == "" {
-					if len(pendingToolOrder) > 0 {
-						data.ID = pendingToolOrder[0]
-						pendingToolOrder = pendingToolOrder[1:]
-					} else {
+				if json.Unmarshal(event.Data, &data) == nil {
+					if data.ID == "" {
 						anonToolCounter++
-						data.ID = fmt.Sprintf("patrol-anon-end-%d", anonToolCounter)
+						data.ID = fmt.Sprintf("patrol-anon-%d", anonToolCounter)
 					}
-				} else if len(pendingToolOrder) > 0 {
-					for i, id := range pendingToolOrder {
-						if id == data.ID {
-							pendingToolOrder = append(pendingToolOrder[:i], pendingToolOrder[i+1:]...)
-							break
-						}
+					if !noStream {
+						p.broadcast(PatrolStreamEvent{
+							Type:         "tool_start",
+							ToolID:       data.ID,
+							ToolName:     data.Name,
+							ToolInput:    data.Input,
+							ToolRawInput: data.RawInput,
+						})
 					}
-				}
-				if !noStream {
-					success := data.Success
-					p.broadcast(PatrolStreamEvent{
-						Type:         "tool_end",
-						ToolID:       data.ID,
-						ToolName:     data.Name,
-						ToolInput:    data.Input,
-						ToolRawInput: data.RawInput,
-						ToolOutput:   data.Output,
-						ToolSuccess:  &success,
-					})
-				}
-				toolCallsMu.Lock()
-				if pending, ok := pendingToolCalls[data.ID]; ok {
-					now := time.Now().UnixMilli()
 					input := data.Input
 					if data.RawInput != "" {
 						input = data.RawInput
 					}
-					if input != "" {
-						pending.Input = truncateString(input, MaxToolInputSize)
-					}
-					pending.Output = truncateString(data.Output, MaxToolOutputSize)
-					pending.Success = data.Success
-					pending.EndTime = now
-					pending.Duration = now - pending.StartTime
-					completedToolCalls = append(completedToolCalls, pending)
-					rawToolOutputs = append(rawToolOutputs, data.Output)
-					delete(pendingToolCalls, data.ID)
-				} else {
-					now := time.Now().UnixMilli()
-					input := data.Input
-					if data.RawInput != "" {
-						input = data.RawInput
-					}
-					completedToolCalls = append(completedToolCalls, ToolCallRecord{
+					toolCallsMu.Lock()
+					pendingToolOrder = append(pendingToolOrder, data.ID)
+					pendingToolCalls[data.ID] = ToolCallRecord{
 						ID:        data.ID,
 						ToolName:  data.Name,
 						Input:     truncateString(input, MaxToolInputSize),
-						Output:    truncateString(data.Output, MaxToolOutputSize),
-						Success:   data.Success,
-						StartTime: now,
-						EndTime:   now,
-						Duration:  0,
-					})
-					rawToolOutputs = append(rawToolOutputs, data.Output)
+						StartTime: time.Now().UnixMilli(),
+					}
+					toolCallsMu.Unlock()
 				}
-				toolCallsMu.Unlock()
+			case "tool_end":
+				var data struct {
+					ID       string `json:"id"`
+					Name     string `json:"name"`
+					Input    string `json:"input"`
+					RawInput string `json:"raw_input"`
+					Output   string `json:"output"`
+					Success  bool   `json:"success"`
+				}
+				if json.Unmarshal(event.Data, &data) == nil {
+					if data.ID == "" {
+						if len(pendingToolOrder) > 0 {
+							data.ID = pendingToolOrder[0]
+							pendingToolOrder = pendingToolOrder[1:]
+						} else {
+							anonToolCounter++
+							data.ID = fmt.Sprintf("patrol-anon-end-%d", anonToolCounter)
+						}
+					} else if len(pendingToolOrder) > 0 {
+						for i, id := range pendingToolOrder {
+							if id == data.ID {
+								pendingToolOrder = append(pendingToolOrder[:i], pendingToolOrder[i+1:]...)
+								break
+							}
+						}
+					}
+					if !noStream {
+						success := data.Success
+						p.broadcast(PatrolStreamEvent{
+							Type:         "tool_end",
+							ToolID:       data.ID,
+							ToolName:     data.Name,
+							ToolInput:    data.Input,
+							ToolRawInput: data.RawInput,
+							ToolOutput:   data.Output,
+							ToolSuccess:  &success,
+						})
+					}
+					toolCallsMu.Lock()
+					if pending, ok := pendingToolCalls[data.ID]; ok {
+						now := time.Now().UnixMilli()
+						input := data.Input
+						if data.RawInput != "" {
+							input = data.RawInput
+						}
+						if input != "" {
+							pending.Input = truncateString(input, MaxToolInputSize)
+						}
+						pending.Output = truncateString(data.Output, MaxToolOutputSize)
+						pending.Success = data.Success
+						pending.EndTime = now
+						pending.Duration = now - pending.StartTime
+						completedToolCalls = append(completedToolCalls, pending)
+						rawToolOutputs = append(rawToolOutputs, data.Output)
+						delete(pendingToolCalls, data.ID)
+					} else {
+						now := time.Now().UnixMilli()
+						input := data.Input
+						if data.RawInput != "" {
+							input = data.RawInput
+						}
+						completedToolCalls = append(completedToolCalls, ToolCallRecord{
+							ID:        data.ID,
+							ToolName:  data.Name,
+							Input:     truncateString(input, MaxToolInputSize),
+							Output:    truncateString(data.Output, MaxToolOutputSize),
+							Success:   data.Success,
+							StartTime: now,
+							EndTime:   now,
+							Duration:  0,
+						})
+						rawToolOutputs = append(rawToolOutputs, data.Output)
+					}
+					toolCallsMu.Unlock()
+				}
+			}
+		})
+		if chatErr != nil {
+			return nil, chatErr
+		}
+
+		finalContent := chatResp.Content
+		if finalContent == "" {
+			finalContent = contentBuffer.String()
+		}
+
+		toolCallsMu.Lock()
+		collectedToolCalls := append([]ToolCallRecord(nil), completedToolCalls...)
+		collectedRawOutputs := append([]string(nil), rawToolOutputs...)
+		toolCallsMu.Unlock()
+
+		return &patrolStreamAttempt{
+			response:       chatResp,
+			finalContent:   finalContent,
+			toolCalls:      collectedToolCalls,
+			rawToolOutputs: collectedRawOutputs,
+		}, nil
+	}
+
+	attempt, chatErr := executePatrol(seedContext)
+	if chatErr != nil && isPatrolContextWindowError(chatErr) {
+		for _, retryBudget := range patrolSeedRetryBudgets(chatErr) {
+			if retryBudget >= seedBudget {
+				continue
+			}
+
+			retrySeedContext := p.assembleSeedWithinBudget(seedSections, retryBudget)
+			if strings.TrimSpace(retrySeedContext) == "" || retrySeedContext == seedContext {
+				continue
+			}
+
+			log.Warn().
+				Int("previous_seed_budget_tokens", seedBudget).
+				Int("retry_seed_budget_tokens", retryBudget).
+				Int("previous_seed_tokens", chat.EstimateTokens(seedContext)).
+				Int("retry_seed_tokens", chat.EstimateTokens(retrySeedContext)).
+				Msg("AI Patrol: Retrying patrol analysis with tighter provider-derived seed budget")
+
+			seedBudget = retryBudget
+			seedContext = retrySeedContext
+			attempt, chatErr = executePatrol(seedContext)
+			if chatErr == nil {
+				break
+			}
+			if !isPatrolContextWindowError(chatErr) {
+				break
 			}
 		}
-	})
+	}
 
 	if chatErr != nil {
 		if !noStream {
@@ -464,13 +537,10 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		return nil, fmt.Errorf("agentic patrol failed: %w", chatErr)
 	}
 
-	finalContent := chatResp.Content
-	if finalContent == "" {
-		finalContent = contentBuffer.String()
-	}
-	inputTokens = chatResp.InputTokens
-	outputTokens = chatResp.OutputTokens
-	p.recordPatrolUsage(chatResp.InputTokens, chatResp.OutputTokens)
+	finalContent := attempt.finalContent
+	inputTokens = attempt.response.InputTokens
+	outputTokens = attempt.response.OutputTokens
+	p.recordPatrolUsage(attempt.response.InputTokens, attempt.response.OutputTokens)
 
 	// Clean thinking tokens
 	finalContent = CleanThinkingTokens(finalContent)
@@ -482,6 +552,9 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 		Int("findings_resolved", adapter.getResolvedCount()).
 		Msg("AI Patrol: Agentic patrol analysis complete")
 
+	var toolCallsMu sync.Mutex
+	completedToolCalls := append([]ToolCallRecord(nil), attempt.toolCalls...)
+	rawToolOutputs := append([]string(nil), attempt.rawToolOutputs...)
 	p.ensureInvestigationToolCall(ctx, executor, &toolCallsMu, &completedToolCalls, &rawToolOutputs, noStream)
 
 	// Broadcast completion
@@ -1162,6 +1235,16 @@ func (p *PatrolService) buildTriageSeedContextState(
 	scope *PatrolScope,
 	guestIntel map[string]*GuestIntelligence,
 ) (string, []string) {
+	sections, seededFindingIDs := p.buildTriageSeedSectionsState(triage, snap, scope, guestIntel)
+	return p.assembleSeedWithinBudget(sections, p.calculateSeedBudget()), seededFindingIDs
+}
+
+func (p *PatrolService) buildTriageSeedSectionsState(
+	triage *TriageResult,
+	snap patrolRuntimeState,
+	scope *PatrolScope,
+	guestIntel map[string]*GuestIntelligence,
+) ([]seedSection, []string) {
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
@@ -1179,24 +1262,31 @@ func (p *PatrolService) buildTriageSeedContextState(
 
 	sections := []seedSection{
 		// P0 — always include.
-		{priority: 0, name: "triage_briefing", content: FormatTriageBriefing(triage)},
+		{priority: 0, name: "triage_overview", content: formatTriageOverviewSection(triage)},
 		{priority: 0, name: "findings", content: findingsCtx},
 		{priority: 0, name: "health_alerts", content: p.seedHealthAndAlertsState(snap, flaggedSet, cfg, now)},
 		{priority: 0, name: "scope", content: buildScopeSection(scope, sortedScopedIDs(flaggedSet))},
 
-		// P1 — flagged resource details only.
+		// P2 — triage already preserves the flagged set, so these sections can
+		// summarize under tighter provider-derived retry budgets.
 		{
-			priority: 1,
+			priority: 2,
+			name:     "triage_flags",
+			content:  formatTriageFlagsSection(triage),
+			summary:  formatTriageFlagsSummary(triage),
+		},
+		{
+			priority: 2,
 			name:     "flagged_inventory",
 			content:  p.seedResourceInventoryState(snap, flaggedSet, cfg, now, false, guestIntel),
 			summary:  p.seedResourceInventorySummaryState(snap, flaggedSet, cfg, now, guestIntel),
 		},
+
+		// P3 — healthy rollup is useful context but lowest-value on retries.
+		{priority: 3, name: "triage_healthy", content: formatTriageHealthySummarySection(triage)},
 	}
 
-	budget := p.calculateSeedBudget()
-	result := p.assembleSeedWithinBudget(sections, budget)
-
-	return result, seededFindingIDs
+	return sections, seededFindingIDs
 }
 
 // buildSeedContext produces the infrastructure state context for the agentic patrol loop.
@@ -1204,6 +1294,11 @@ func (p *PatrolService) buildTriageSeedContextState(
 // connection health, and baselines/trends so the model can analyze without tool calls.
 // Tools remain available for targeted deep-dives.
 func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) (string, []string) {
+	sections, seededFindingIDs := p.buildSeedSectionsState(snap, scope, guestIntel)
+	return p.assembleSeedWithinBudget(sections, p.calculateSeedBudget()), seededFindingIDs
+}
+
+func (p *PatrolService) buildSeedSectionsState(snap patrolRuntimeState, scope *PatrolScope, guestIntel map[string]*GuestIntelligence) ([]seedSection, []string) {
 	p.mu.RLock()
 	cfg := p.config
 	p.mu.RUnlock()
@@ -1239,19 +1334,12 @@ func (p *PatrolService) buildSeedContextState(snap patrolRuntimeState, scope *Pa
 		{priority: 4, name: "pmg_snapshot", content: p.seedPMGSnapshotStringState(snap, scopedSet, cfg, intel.isQuiet)},
 	}
 
-	budget := p.calculateSeedBudget()
-	result := p.assembleSeedWithinBudget(sections, budget)
-
-	return result, seededFindingIDs
+	return sections, seededFindingIDs
 }
 
 func (p *PatrolService) calculateSeedBudget() int {
 	const (
-		systemPromptEstimate = 4_000
-		toolEstimate         = 8_000
-		outputReserve        = 8_000
-		historyReserve       = 16_000
-		minimumSeedBudget    = 16_000
+		defaultContextWindow = 128_000
 	)
 
 	model := ""
@@ -1262,6 +1350,34 @@ func (p *PatrolService) calculateSeedBudget() int {
 	}
 
 	contextWindow := providers.ContextWindowTokens(model)
+	if contextWindow <= 0 {
+		contextWindow = defaultContextWindow
+	}
+	budget := calculateSeedBudgetForContextWindow(contextWindow)
+
+	log.Debug().
+		Str("model", model).
+		Int("context_window_tokens", contextWindow).
+		Int("seed_budget_tokens", budget).
+		Msg("AI Patrol: Calculated seed context token budget")
+
+	return budget
+}
+
+func calculateSeedBudgetForContextWindow(contextWindow int) int {
+	const (
+		systemPromptEstimate = 4_000
+		toolEstimate         = 8_000
+		outputReserve        = 8_000
+		historyReserve       = 16_000
+		minimumSeedBudget    = 16_000
+		defaultContextWindow = 128_000
+	)
+
+	if contextWindow <= 0 {
+		contextWindow = defaultContextWindow
+	}
+
 	budget := contextWindow - systemPromptEstimate - toolEstimate - outputReserve - historyReserve
 
 	// Clamp floor so small-context models aren't forced beyond practical capacity.
@@ -1273,13 +1389,89 @@ func (p *PatrolService) calculateSeedBudget() int {
 		budget = floor
 	}
 
-	log.Debug().
-		Str("model", model).
-		Int("context_window_tokens", contextWindow).
-		Int("seed_budget_tokens", budget).
-		Msg("AI Patrol: Calculated seed context token budget")
-
 	return budget
+}
+
+func isPatrolContextWindowError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "exceed_context_size_error") ||
+		strings.Contains(msg, "exceeds the available context size") ||
+		strings.Contains(msg, "maximum context length") ||
+		strings.Contains(msg, "context window") ||
+		strings.Contains(msg, "context length") ||
+		strings.Contains(msg, "n_ctx")
+}
+
+func patrolSeedRetryBudgets(err error) []int {
+	if err == nil {
+		return []int{patrolRetrySeedBudget1, patrolRetrySeedBudget2, patrolRetrySeedBudget3}
+	}
+
+	contextWindow := extractPatrolContextWindow(err)
+	if contextWindow <= 0 {
+		return []int{patrolRetrySeedBudget1, patrolRetrySeedBudget2, patrolRetrySeedBudget3}
+	}
+
+	safeBudget := calculateSeedBudgetForContextWindow(contextWindow)
+	return uniquePositiveInts(
+		safeBudget,
+		maxInt(1_000, safeBudget/2),
+		maxInt(1_000, safeBudget/4),
+	)
+}
+
+func extractPatrolContextWindow(err error) int {
+	if err == nil {
+		return 0
+	}
+
+	msg := err.Error()
+	for _, pattern := range patrolContextWindowPatterns {
+		matches := pattern.FindStringSubmatch(msg)
+		if len(matches) < 2 {
+			continue
+		}
+		nctx, convErr := strconv.Atoi(matches[1])
+		if convErr == nil && nctx > 0 {
+			return nctx
+		}
+	}
+
+	return 0
+}
+
+func uniquePositiveInts(values ...int) []int {
+	result := make([]int, 0, len(values))
+	seen := make(map[int]struct{}, len(values))
+	for _, value := range values {
+		if value <= 0 {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func (p *PatrolService) assembleSeedWithinBudget(sections []seedSection, budgetTokens int) string {
