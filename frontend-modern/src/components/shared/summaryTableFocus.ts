@@ -1,6 +1,10 @@
 import { createMemo, createSignal, type Accessor } from 'solid-js';
 import type { SummaryChartHoverSync } from './contextualFocus';
-import { resolveSummaryActiveSeriesId } from './summaryCardInteraction';
+import {
+  resolveSummaryActiveSeriesId,
+  resolveSummaryGroupScope,
+  type SummarySeriesGroupScope,
+} from './summaryCardInteraction';
 
 const normalizeSeriesId = (value: string | null | undefined): string => value?.trim() || '';
 
@@ -109,6 +113,8 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
 export interface UseSummaryPageInteractionStateOptions {
   hoveredSeriesId?: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
+  hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
+  focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
@@ -116,12 +122,22 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
   const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
   const hoveredSeriesId = options.hoveredSeriesId ?? (() => null);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
+  const hoveredGroupScope = options.hoveredGroupScope ?? (() => null);
+  const focusedGroupScope = options.focusedGroupScope ?? (() => null);
+
+  const activeGroupScope = createMemo<SummarySeriesGroupScope | null>(() =>
+    resolveSummaryGroupScope({
+      hoveredGroupScope: hoveredGroupScope(),
+      focusedGroupScope: focusedGroupScope(),
+    }),
+  );
 
   const activeSeriesId = createMemo<string | null>(() =>
     resolveSummaryActiveSeriesId({
       chartHoveredSeriesId: chartHoverSync()?.seriesId ?? null,
       hoveredSeriesId: hoveredSeriesId(),
       focusedSeriesId: focusedSeriesId(),
+      groupScope: activeGroupScope(),
     }),
   );
 
@@ -131,6 +147,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
   });
 
   return {
+    activeGroupScope,
     activeSeriesId,
     chartHoverSync,
     jumpToActiveRow: tableFocus.jumpToActiveRow,

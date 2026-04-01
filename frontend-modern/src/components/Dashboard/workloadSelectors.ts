@@ -1,10 +1,11 @@
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
-import { resolveWorkloadType } from '@/utils/workloads';
+import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
 import { getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
 
 export interface FilterWorkloadsParams {
@@ -246,6 +247,29 @@ export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   }
   const context = guest.contextLabel || guest.node || guest.instance || guest.namespace || guest.id;
   return `${type}:${context}`;
+};
+
+export const buildWorkloadSummaryGroupScope = (
+  groupId: string,
+  guests: WorkloadGuest[],
+  label: { type: string; name: string },
+): SummarySeriesGroupScope | null => {
+  const seriesIds = Array.from(
+    new Set(guests.map((guest) => getCanonicalWorkloadId(guest)).filter(Boolean)),
+  );
+  if (seriesIds.length === 0) {
+    return null;
+  }
+
+  const summaryLabelParts = [label.name.trim(), label.type.trim()].filter(Boolean);
+  const scopeLabel = summaryLabelParts.join(' · ');
+  const workloadCountLabel = `${guests.length} workload${guests.length === 1 ? '' : 's'}`;
+
+  return {
+    id: groupId.trim(),
+    label: scopeLabel ? `${scopeLabel} (${workloadCountLabel})` : workloadCountLabel,
+    seriesIds,
+  };
 };
 
 export const groupWorkloads = (

@@ -5,6 +5,7 @@ import {
   __resetInMemoryWorkloadCacheForTests,
   type WorkloadSummarySnapshot,
 } from './WorkloadsSummary';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadChartsResponse } from '@/api/charts';
 
 const mockGetWorkloadCharts = vi.fn();
@@ -491,6 +492,39 @@ describe('WorkloadsSummary performance behavior', () => {
         (sparkline) => sparkline.getAttribute('data-active-series-display') === 'isolate',
       );
       expect(isolated).toHaveLength(2);
+    });
+  });
+
+  it('filters summary charts to the hovered workload group while keeping entity focus inside that scope', async () => {
+    const workloadIds = ['cluster-a:pve1:101', 'cluster-a:pve1:102', 'cluster-b:pve2:201'];
+    const hoveredGroupScope: SummarySeriesGroupScope = {
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: workloadIds.slice(0, 2),
+    };
+    mockGetWorkloadCharts.mockResolvedValueOnce(makeChartsResponse(workloadIds));
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: workloadIds.length, running: workloadIds.length, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots(workloadIds)}
+        hoveredGroupScope={hoveredGroupScope}
+        hoveredWorkloadId={workloadIds[0]}
+      />
+    ));
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(4);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-series-count')).toBe('2');
+        expect(sparkline.getAttribute('data-series-ids')).toBe(
+          `${workloadIds[0]}|${workloadIds[1]}`,
+        );
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadIds[0]);
+        expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
+      }
     });
   });
 

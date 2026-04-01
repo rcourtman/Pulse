@@ -1,6 +1,6 @@
 import type { Resource } from '@/types/resource';
 import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resource';
-import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
+import { getPreferredInfrastructureDisplayName, getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
 
@@ -133,7 +133,7 @@ export const matchesSearch = (resource: Resource, term: string): boolean => {
   if (!term) return true;
   const normalizedTerm = term.toLowerCase();
   const candidates: string[] = [
-    getPreferredInfrastructureDisplayName(resource),
+    getPreferredResourceDisplayName(resource),
     resource.id,
     resource.identity?.hostname ?? '',
     ...(resource.identity?.ips ?? []),

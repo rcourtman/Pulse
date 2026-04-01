@@ -58,7 +58,7 @@ describe('infrastructureSelectors', () => {
       expect(matchesSearch(resource, 'NODE-123')).toBe(true);
     });
 
-    it('matches governed resources by their local infrastructure label', () => {
+    it('matches governed resources by the safe display label instead of the redacted hostname', () => {
       const governedResource = makeResource(2, {
         name: 'secret-node-2',
         displayName: 'secret-node-2',
@@ -69,8 +69,8 @@ describe('infrastructureSelectors', () => {
         aiSafeSummary: 'Production Node',
       });
 
-      expect(matchesSearch(governedResource, 'Production')).toBe(false);
-      expect(matchesSearch(governedResource, 'secret-node-2')).toBe(true);
+      expect(matchesSearch(governedResource, 'Production')).toBe(true);
+      expect(matchesSearch(governedResource, 'secret-node-2')).toBe(false);
     });
 
     it('matches by ip and tag and returns false when missing', () => {

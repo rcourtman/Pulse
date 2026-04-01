@@ -1,7 +1,10 @@
 import { createMemo, type Accessor } from 'solid-js';
 import {
+  filterSummarySeriesByGroupScope,
   resolveSummaryActiveSeriesId,
   resolveSummaryCardInteractionState,
+  resolveSummaryGroupScope,
+  type SummarySeriesGroupScope,
   type SummaryCardInteractionState,
 } from './summaryCardInteraction';
 
@@ -19,8 +22,10 @@ export interface SummaryChartHoverSync {
 export interface UseSummaryContextualFocusStateOptions<T extends ContextualFocusSeries> {
   chartHoveredSeriesId?: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
+  focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   getSeriesName?: (series: T) => string | null | undefined;
   hoveredSeriesId?: Accessor<string | null | undefined>;
+  hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   interactiveSeries: Accessor<readonly T[]>;
   isSeriesInteractive?: (series: T) => boolean;
 }
@@ -72,6 +77,8 @@ export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
   const chartHoveredSeriesId = options.chartHoveredSeriesId ?? (() => null);
   const hoveredSeriesId = options.hoveredSeriesId ?? (() => null);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
+  const hoveredGroupScope = options.hoveredGroupScope ?? (() => null);
+  const focusedGroupScope = options.focusedGroupScope ?? (() => null);
   const getSeriesName =
     options.getSeriesName ??
     ((series: T) => (typeof series.name === 'string' ? series.name : null));
@@ -111,11 +118,46 @@ export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
     return hasInteractiveSeriesId(focusedSeriesId()) ? normalizeSeriesId(focusedSeriesId()) : null;
   });
 
+  const normalizeGroupScope = (
+    scope: SummarySeriesGroupScope | null | undefined,
+  ): SummarySeriesGroupScope | null => {
+    const resolvedScope = resolveSummaryGroupScope({
+      hoveredGroupScope: scope,
+    });
+    if (!resolvedScope) {
+      return null;
+    }
+    const scopedSeriesIds = resolvedScope.seriesIds.filter((id) => interactiveSeriesIds().has(id));
+    if (scopedSeriesIds.length === 0) {
+      return null;
+    }
+    return {
+      ...resolvedScope,
+      seriesIds: scopedSeriesIds,
+    };
+  };
+
+  const effectiveHoveredGroupScope = createMemo<SummarySeriesGroupScope | null>(() =>
+    normalizeGroupScope(hoveredGroupScope()),
+  );
+
+  const effectiveFocusedGroupScope = createMemo<SummarySeriesGroupScope | null>(() =>
+    normalizeGroupScope(focusedGroupScope()),
+  );
+
+  const activeGroupScope = createMemo<SummarySeriesGroupScope | null>(() =>
+    resolveSummaryGroupScope({
+      hoveredGroupScope: effectiveHoveredGroupScope(),
+      focusedGroupScope: effectiveFocusedGroupScope(),
+    }),
+  );
+
   const activeSeriesId = createMemo<string | null>(() => {
     return resolveSummaryActiveSeriesId({
       chartHoveredSeriesId: effectiveChartHoveredSeriesId(),
       hoveredSeriesId: effectiveHoveredSeriesId(),
       focusedSeriesId: effectiveFocusedSeriesId(),
+      groupScope: activeGroupScope(),
     });
   });
 
@@ -130,11 +172,11 @@ export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
 
   const getActiveSeriesName = (series: readonly T[]): string | null => {
     const currentActiveId = activeSeriesId();
-    if (!currentActiveId) {
-      return null;
+    if (currentActiveId) {
+      const match = series.find((entry) => normalizeSeriesId(entry.id) === currentActiveId);
+      return match ? getSeriesName(match) || null : null;
     }
-    const match = series.find((entry) => normalizeSeriesId(entry.id) === currentActiveId);
-    return match ? getSeriesName(match) || null : null;
+    return activeGroupScope()?.label || null;
   };
 
   const interactionStateFor = (
@@ -145,16 +187,40 @@ export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
       chartHoveredSeriesId: effectiveChartHoveredSeriesId(),
       hoveredSeriesId: effectiveHoveredSeriesId(),
       focusedSeriesId: effectiveFocusedSeriesId(),
+      groupScope: activeGroupScope(),
     });
 
+  const filterSeriesForActiveScope = <S extends { id?: string | null }>(
+    series: readonly S[],
+  ): S[] => {
+    return filterSummarySeriesByGroupScope(series, activeGroupScope());
+  };
+
+  const isSeriesIdVisibleInActiveScope = (value: string | null | undefined): value is string => {
+    const normalized = normalizeSeriesId(value);
+    if (!normalized || !interactiveSeriesIds().has(normalized)) {
+      return false;
+    }
+    const groupScope = activeGroupScope();
+    if (!groupScope) {
+      return true;
+    }
+    return groupScope.seriesIds.includes(normalized);
+  };
+
   return {
+    activeGroupScope,
     activeSeriesId,
     effectiveChartHoveredSeriesId,
     effectiveFocusedSeriesId,
+    effectiveFocusedGroupScope,
     effectiveHoveredSeriesId,
+    effectiveHoveredGroupScope,
+    filterSeriesForActiveScope,
     getActiveSeriesName,
     getFocusedSeriesName,
     hasInteractiveSeriesId,
+    isSeriesIdVisibleInActiveScope,
     interactionStateFor,
   } as const;
 }

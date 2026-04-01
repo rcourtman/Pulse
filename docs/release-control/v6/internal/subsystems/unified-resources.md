@@ -203,6 +203,11 @@ assembly branch.
     `data-summary-row-active` and rely on the shared row presentation owned by
     `frontend-modern/src/index.css` instead of provider-specific background
     classes that drift across resource tables or hide inline metric bars.
+14. Keep infrastructure search aligned with the governed display label. Shared
+    infrastructure filtering through
+    `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+    must match the user-visible safe label for governed resources instead of
+    reintroducing redacted hostnames through search-only fallback candidates.
 
 ## Current State
 

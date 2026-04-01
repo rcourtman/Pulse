@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, Show, type JSX } from 'solid-js';
 import type { Node } from '@/types/api';
 import { getNodeDisplayName, hasAlternateDisplayName } from '@/utils/nodes';
 import { StatusDot } from '@/components/shared/StatusDot';
@@ -8,6 +8,8 @@ interface NodeGroupHeaderProps {
   node: Node;
   colspan?: number;
   renderAs?: 'tr' | 'div';
+  trClass?: string;
+  trProps?: JSX.HTMLAttributes<HTMLTableRowElement>;
 }
 
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
@@ -75,7 +77,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         </div>
       }
     >
-      <tr class="bg-surface-alt">
+      <tr class={`bg-surface-alt ${props.trClass ?? ''}`.trim()} {...props.trProps}>
         <td
           colspan={props.colspan}
           class="py-0.5 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"

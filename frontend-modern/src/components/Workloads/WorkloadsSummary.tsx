@@ -11,6 +11,7 @@ import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
   ChartsAPI,
   type ChartData,
@@ -34,6 +35,7 @@ interface WorkloadsSummaryProps {
   };
   fallbackSnapshots?: WorkloadSummarySnapshot[];
   hoveredWorkloadId?: string | null;
+  hoveredGroupScope?: SummarySeriesGroupScope | null;
   focusedWorkloadId?: string | null;
   chartHoverSync?: SummaryChartHoverSync | null;
   onTimeRangeChange?: (range: TimeRange) => void;
@@ -665,10 +667,10 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     return merged.sort((a, b) => a.name.localeCompare(b.name));
   });
 
-  const displaySeries = createMemo(() => workloadSeries());
   const summaryFocus = useSummaryContextualFocusState({
     chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: workloadSeries,
+    hoveredGroupScope: () => props.hoveredGroupScope,
     hoveredSeriesId: () => props.hoveredWorkloadId,
     focusedSeriesId: () => props.focusedWorkloadId,
     isSeriesInteractive: (series) =>
@@ -681,12 +683,15 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   createEffect(() => {
     const hovered = chartHoverSync();
     if (!hovered) return;
-    if (!summaryFocus.hasInteractiveSeriesId(hovered.seriesId)) {
+    if (!summaryFocus.isSeriesIdVisibleInActiveScope(hovered.seriesId)) {
       setChartHoverSync(null);
     }
   });
 
-  const focusedWorkloadName = createMemo(() => summaryFocus.getActiveSeriesName(workloadSeries()));
+  const displaySeries = createMemo(() =>
+    summaryFocus.filterSeriesForActiveScope(workloadSeries()),
+  );
+  const focusedWorkloadName = createMemo(() => summaryFocus.getActiveSeriesName(displaySeries()));
 
   const cpuSeries = createMemo<InteractiveSparklineSeries[]>(() =>
     displaySeries().map((series) => ({
@@ -734,6 +739,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     if (guestCounts().total === 0) return 'No workloads';
     if (!hasCurrentRangeData()) return null;
     if (fetchFailed()) return 'Trend data unavailable';
+    if (summaryFocus.activeGroupScope()) return 'No group history yet';
     return 'No history yet';
   };
 

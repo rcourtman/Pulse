@@ -24,6 +24,7 @@ export function Dashboard(props: DashboardProps) {
             fallbackSnapshots={state.workloadsSummaryFallbackSnapshots()}
             visibleWorkloadIds={state.workloadsSummaryVisibleIds()}
             chartHoverSync={state.chartHoverSync()}
+            hoveredGroupScope={state.activeSummaryWorkloadGroupScope()}
             hoveredWorkloadId={state.hoveredWorkloadId()}
             focusedWorkloadId={state.selectedGuestId()}
             onChartHoverSyncChange={state.setChartHoverSync}
@@ -112,6 +113,7 @@ export function Dashboard(props: DashboardProps) {
           handleCustomUrlUpdate={state.handleCustomUrlUpdate}
           handleSort={state.handleSort}
           handleTagClick={state.handleTagClick}
+          activeSummaryWorkloadGroupScope={state.activeSummaryWorkloadGroupScope}
           activeSummaryWorkloadId={state.activeSummaryWorkloadId}
           isMobile={state.isMobile}
           mobileVisibleColumnIds={state.mobileVisibleColumnIds}
@@ -119,6 +121,7 @@ export function Dashboard(props: DashboardProps) {
           nodeByInstance={state.nodeByInstance}
           search={state.search}
           selectedGuestId={state.selectedGuestId}
+          setHoveredWorkloadGroupScope={state.setHoveredWorkloadGroupScope}
           setHoveredWorkloadId={state.setHoveredWorkloadId}
           setSelectedGuestId={state.setSelectedGuestId}
           setTableBodyRef={state.setTableBodyRef}

@@ -3,6 +3,7 @@ import {
   WORKLOADS_PATH,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
@@ -69,3 +70,13 @@ export const dashboardHasHoveredWorkload = (
   filteredGuests: WorkloadGuest[],
   hoveredId: string,
 ): boolean => filteredGuests.some((guest) => getCanonicalWorkloadId(guest) === hoveredId);
+
+export const dashboardHasVisibleWorkloadGroupScope = (
+  filteredGuests: WorkloadGuest[],
+  groupScope: SummarySeriesGroupScope,
+): boolean => {
+  const filteredGuestIds = new Set(
+    filteredGuests.map((guest) => getCanonicalWorkloadId(guest)).filter(Boolean),
+  );
+  return groupScope.seriesIds.some((seriesId) => filteredGuestIds.has(seriesId));
+};

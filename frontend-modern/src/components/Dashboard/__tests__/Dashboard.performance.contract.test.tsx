@@ -709,6 +709,9 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
       );
+      expect(workloadPanelSource).toContain('buildWorkloadSummaryGroupScope');
+      expect(workloadPanelSource).toContain('data-summary-group-id');
+      expect(workloadPanelSource).toContain('setHoveredWorkloadGroupScope');
       expect(dashboardWorkloadTableSource).not.toContain(
         'createMemo(() => getCanonicalWorkloadId(guest()))',
       );
@@ -869,6 +872,9 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(dashboardSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
+      expect(dashboardSelectionStateSource).toContain('setHoveredWorkloadGroupScope');
+      expect(dashboardSource).toContain('hoveredGroupScope={state.activeSummaryWorkloadGroupScope()}');
       expect(workloadPanelSource).not.toContain('TableHead');
       expect(dashboardStateCardsSource).toContain('buildInfrastructureWorkspacePath');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');

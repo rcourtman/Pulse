@@ -6,8 +6,10 @@ import {
   useSummaryContextualFocusState,
 } from '@/components/shared/contextualFocus';
 import {
+  filterSummarySeriesByGroupScope,
   resolveSummaryActiveSeriesId,
   resolveSummaryCardInteractionState,
+  type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
 
 describe('summaryCardInteraction', () => {
@@ -77,10 +79,52 @@ describe('summaryCardInteraction', () => {
     ).toBe('inactive');
   });
 
+  it('keeps group scope separate from active entity focus', () => {
+    const groupScope: SummarySeriesGroupScope = {
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha', 'beta'],
+    };
+
+    expect(
+      resolveSummaryActiveSeriesId({
+        hoveredSeriesId: 'gamma',
+        focusedSeriesId: 'alpha',
+        groupScope,
+      }),
+    ).toBe('alpha');
+
+    expect(
+      resolveSummaryCardInteractionState({
+        series: [{ id: 'alpha' }, { id: 'beta' }],
+        hoveredGroupScope: groupScope,
+      }),
+    ).toBe('active');
+
+    expect(
+      resolveSummaryCardInteractionState({
+        series: [{ id: 'gamma' }],
+        hoveredGroupScope: groupScope,
+      }),
+    ).toBe('inactive');
+
+    expect(
+      filterSummarySeriesByGroupScope(
+        [{ id: 'alpha' }, { id: 'beta' }, { id: 'gamma' }],
+        groupScope,
+      ).map((series) => series.id),
+    ).toEqual(['alpha', 'beta']);
+  });
+
   it('filters contextual focus down to interactive series ids through one shared hook', () => {
     const [hoveredSeriesId] = createSignal<string | null>('gamma');
     const [focusedSeriesId] = createSignal<string | null>('alpha');
     const [chartHoveredSeriesId, setChartHoveredSeriesId] = createSignal<string | null>(null);
+    const [hoveredGroupScope, setHoveredGroupScope] = createSignal<SummarySeriesGroupScope | null>({
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha', 'beta'],
+    });
 
     const { result } = renderHook(() =>
       useSummaryContextualFocusState({
@@ -89,6 +133,7 @@ describe('summaryCardInteraction', () => {
           { id: 'alpha', name: 'Alpha', interactive: true },
           { id: 'beta', name: 'Beta', interactive: false },
         ],
+        hoveredGroupScope,
         hoveredSeriesId,
         focusedSeriesId,
         isSeriesInteractive: (series) => series.interactive,
@@ -97,6 +142,11 @@ describe('summaryCardInteraction', () => {
 
     expect(result.hasInteractiveSeriesId('alpha')).toBe(true);
     expect(result.hasInteractiveSeriesId('beta')).toBe(false);
+    expect(result.activeGroupScope()).toEqual({
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha'],
+    });
     expect(result.effectiveHoveredSeriesId()).toBeNull();
     expect(result.effectiveFocusedSeriesId()).toBe('alpha');
     expect(result.activeSeriesId()).toBe('alpha');
@@ -115,6 +165,23 @@ describe('summaryCardInteraction', () => {
     expect(result.getActiveSeriesName([{ id: 'alpha', name: 'Alpha', interactive: true }])).toBe(
       'Alpha',
     );
+
+    setChartHoveredSeriesId(null);
+    setHoveredGroupScope({
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha'],
+    });
+    expect(result.activeGroupScope()?.id).toBe('cluster-a');
+    expect(result.activeSeriesId()).toBe('alpha');
+    expect(
+      result.filterSeriesForActiveScope([
+        { id: 'alpha', name: 'Alpha', interactive: true },
+        { id: 'gamma', name: 'Gamma', interactive: true },
+      ]),
+    ).toEqual([{ id: 'alpha', name: 'Alpha', interactive: true }]);
+    expect(result.isSeriesIdVisibleInActiveScope('alpha')).toBe(true);
+    expect(result.isSeriesIdVisibleInActiveScope('gamma')).toBe(false);
   });
 
   it('preserves the nearest scrollable ancestor when contextual focus changes locally', () => {

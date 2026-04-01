@@ -2,6 +2,7 @@ import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
@@ -206,5 +207,44 @@ describe('useDashboardSelectionState', () => {
 
     expect(result.revealedGuestId()).toBe('app-container:truenas-main:nextcloud');
     expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+  });
+
+  it('tracks hovered workload groups without letting them override entity selection outside scope', () => {
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([
+      {
+        id: 'cluster-a:node-1:101',
+        name: 'guest-1',
+        status: 'running',
+        instance: 'cluster-a',
+        node: 'node-1',
+        vmid: 101,
+      } as unknown as WorkloadGuest,
+      {
+        id: 'cluster-b:node-2:202',
+        name: 'guest-2',
+        status: 'running',
+        instance: 'cluster-b',
+        node: 'node-2',
+        vmid: 202,
+      } as unknown as WorkloadGuest,
+    ]);
+    const groupScope: SummarySeriesGroupScope = {
+      id: 'cluster-b',
+      label: 'Cluster B (1 workload)',
+      seriesIds: ['cluster-b:node-2:202'],
+    };
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        setSelectedNode: vi.fn(),
+      }),
+    );
+
+    expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
+    result.setHoveredWorkloadGroupScope(groupScope);
+
+    expect(result.activeSummaryWorkloadGroupScope()?.id).toBe('cluster-b');
+    expect(result.activeSummaryWorkloadId()).toBeNull();
   });
 });

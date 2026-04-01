@@ -6,9 +6,11 @@ import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertStyles } from '@/utils/alerts';
 import { isNodeOnline } from '@/utils/status';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 
 import { GuestDrawer } from './GuestDrawer';
 import { GuestRow } from './GuestRow';
+import { buildWorkloadSummaryGroupScope } from './workloadSelectors';
 import type { DashboardState } from './useDashboardState';
 
 type WorkloadPanelProps = Pick<
@@ -24,11 +26,13 @@ type WorkloadPanelProps = Pick<
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleTagClick'
+  | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
   | 'mobileVisibleColumnIds'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
+  | 'setHoveredWorkloadGroupScope'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
   | 'setTableBodyRef'
@@ -55,6 +59,22 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           const groupGuests = () => props.windowedGroupedGuests()[groupKey()] || [];
           const fullGroupGuests = () => props.groupedGuests()[groupKey()] || [];
           const node = () => props.nodeByInstance()[groupKey()];
+          const groupSummaryScope = createMemo<SummarySeriesGroupScope | null>(() => {
+            if (props.groupingMode() !== 'grouped') {
+              return null;
+            }
+            return buildWorkloadSummaryGroupScope(
+              groupKey(),
+              fullGroupGuests(),
+              props.getGroupLabel(groupKey(), fullGroupGuests()),
+            );
+          });
+          const isSummaryGroupHighlighted = createMemo(
+            () => props.activeSummaryWorkloadGroupScope()?.id === groupKey(),
+          );
+          const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
+            props.setHoveredWorkloadGroupScope(next);
+          };
 
           return (
             <>
@@ -62,7 +82,14 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                 <Show
                   when={node()}
                   fallback={
-                    <TableRow class="bg-surface-alt">
+                    <TableRow
+                      class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                      data-summary-group-id={groupKey()}
+                      data-summary-group-series-count={String(groupSummaryScope()?.seriesIds.length ?? 0)}
+                      data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
+                      onMouseEnter={() => handleGroupHoverChange(groupSummaryScope())}
+                      onMouseLeave={() => handleGroupHoverChange(null)}
+                    >
                       <TableCell
                         colspan={props.totalColumns()}
                         class="py-0.5 pr-1.5 sm:pr-2 pl-2 sm:pl-3 text-[12px] sm:text-sm font-semibold text-base-content"
@@ -84,7 +111,21 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     </TableRow>
                   }
                 >
-                  <NodeGroupHeader node={node()!} renderAs="tr" colspan={props.totalColumns()} />
+                  <NodeGroupHeader
+                    node={node()!}
+                    renderAs="tr"
+                    colspan={props.totalColumns()}
+                    trClass="transition-colors duration-150 hover:bg-surface-hover"
+                    trProps={{
+                      'data-summary-group-id': groupKey(),
+                      'data-summary-group-series-count': String(
+                        groupSummaryScope()?.seriesIds.length ?? 0,
+                      ),
+                      'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
+                      onMouseEnter: () => handleGroupHoverChange(groupSummaryScope()),
+                      onMouseLeave: () => handleGroupHoverChange(null),
+                    }}
+                  />
                 </Show>
               </Show>
               <Index each={groupGuests()} fallback={<></>}>

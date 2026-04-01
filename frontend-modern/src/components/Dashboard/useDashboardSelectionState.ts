@@ -3,10 +3,12 @@ import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 's
 
 import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
   dashboardHasHoveredWorkload,
+  dashboardHasVisibleWorkloadGroupScope,
   resolveDashboardResourceSelection,
   resolveDashboardSelectionNavigateTarget,
 } from './dashboardSelectionModel';
@@ -26,6 +28,8 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
 
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
+  const [hoveredWorkloadGroupScope, setHoveredWorkloadGroupScope] =
+    createSignal<SummarySeriesGroupScope | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
 
@@ -33,6 +37,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
   const summaryInteraction = useSummaryPageInteractionState({
     hoveredSeriesId: hoveredWorkloadId,
+    hoveredGroupScope: hoveredWorkloadGroupScope,
     focusedSeriesId: selectedGuestId,
     revealActiveSeries: setRevealedGuestId,
   });
@@ -96,11 +101,22 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     }
   });
 
+  createEffect(() => {
+    const groupScope = hoveredWorkloadGroupScope();
+    if (!groupScope) {
+      return;
+    }
+    if (!dashboardHasVisibleWorkloadGroupScope(options.filteredGuests(), groupScope)) {
+      setHoveredWorkloadGroupScope(null);
+    }
+  });
+
   onCleanup(() => {
     routeStateNavigate.cleanup();
   });
 
   return {
+    activeSummaryWorkloadGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryWorkloadId: summaryInteraction.activeSeriesId,
     chartHoverSync: summaryInteraction.chartHoverSync,
     hoveredWorkloadId,
@@ -108,6 +124,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     revealedGuestId,
     selectedGuestId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,

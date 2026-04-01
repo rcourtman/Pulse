@@ -200,6 +200,7 @@ export function useDashboardState(props: DashboardProps) {
   });
 
   const {
+    activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     chartHoverSync,
     hoveredWorkloadId,
@@ -207,6 +208,7 @@ export function useDashboardState(props: DashboardProps) {
     revealedGuestId,
     selectedGuestId,
     setChartHoverSync,
+    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,
@@ -248,6 +250,7 @@ export function useDashboardState(props: DashboardProps) {
     activeAlerts,
     alertsEnabled,
     allGuests,
+    activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     bottomSpacerHeight,
     chartHoverSync,
@@ -301,6 +304,7 @@ export function useDashboardState(props: DashboardProps) {
     setContainerRuntime,
     setChartHoverSync,
     setGroupingMode,
+    setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSearch,
     setSelectedGuestId,

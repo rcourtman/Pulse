@@ -259,11 +259,17 @@ describe('shared primitive guardrails', () => {
     );
     expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
     expect(contextualFocusSource).toContain('chartHoveredSeriesId');
+    expect(contextualFocusSource).toContain('hoveredGroupScope');
+    expect(contextualFocusSource).toContain('filterSeriesForActiveScope');
     expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
+    expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
+    expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
     expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
     expect(densityMapModelSource).toContain('onHoverSyncChange');
 
     expect(dashboardSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
+    expect(dashboardSelectionStateSource).toContain('hoveredWorkloadGroupScope');
+    expect(dashboardSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
     expect(dashboardSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
     expect(summaryJumpToRowButtonSource).toContain('<span>Jump to row</span>');
@@ -292,6 +298,8 @@ describe('shared primitive guardrails', () => {
 
     expect(workloadsSummarySource).toContain('useSummaryContextualFocusState');
     expect(workloadsSummarySource).toContain('chartHoverSync');
+    expect(workloadsSummarySource).toContain('hoveredGroupScope');
+    expect(workloadsSummarySource).toContain('filterSeriesForActiveScope');
     expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
   });
 
