@@ -686,7 +686,8 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 }
 
 // getHostURL constructs the host URL for this Proxmox node.
-// Uses the local IP that can reach Pulse, falling back to intelligent IP selection.
+// Prefers canonical hostname continuity when it resolves to a real local address,
+// then falls back to route-aware IP detection and heuristic local IP selection.
 func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType) string {
 	port := "8006"
 	if ptype == proxmoxProductPBS {
@@ -705,14 +706,27 @@ func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType)
 		return formatHTTPSURL(p.reportIP, port)
 	}
 
-	// Priority 2: Try to determine which local IP is used to connect to Pulse
-	// This ensures we pick an IP that can actually communicate with the Pulse server
+	// Priority 2: Prefer the system hostname when it resolves to a non-loopback,
+	// non-link-local address. This preserves admin-managed DNS names and matching
+	// TLS certificates instead of silently downgrading to an inferred IP address.
+	if hostname := strings.TrimSpace(p.hostname); hostname != "" {
+		if hostnameIP := p.getIPForHostname(); hostnameIP != "" && !isLoopbackOrLinkLocalIP(hostnameIP) {
+			p.logger.Debug().
+				Str("hostname", hostname).
+				Str("ip", hostnameIP).
+				Msg("Using resolvable hostname for Proxmox registration")
+			return formatHTTPSURL(hostname, port)
+		}
+	}
+
+	// Priority 3: Try to determine which local IP is used to connect to Pulse.
+	// This remains the best fallback when the hostname is not usable.
 	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
 		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
 		return formatHTTPSURL(reachableIP, port)
 	}
 
-	// Fallback: Get all IPs and select the best one based on heuristics
+	// Priority 4: Get all IPs and select the best one based on heuristics.
 	hostnameCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
@@ -788,9 +802,9 @@ func (p *ProxmoxSetup) getIPThatReachesPulse() string {
 	}
 	ip := localAddr.IP.String()
 
-	// If we found an IP that can reach Pulse, it's the most reliable one to report.
-	// We only skip loopback/link-local which net.Dial UDP shouldn't return anyway.
-	if ip != "" && ip != "127.0.0.1" && ip != "::1" && !strings.HasPrefix(ip, "fe80:") {
+	// If we found an IP that can reach Pulse, it's the most reliable IP fallback
+	// after a canonical hostname probe. Reject loopback and link-local addresses.
+	if ip != "" && !isLoopbackOrLinkLocalIP(ip) {
 		return ip
 	}
 	return ""
@@ -830,6 +844,14 @@ func (p *ProxmoxSetup) getIPForHostname() string {
 		}
 	}
 	return ""
+}
+
+func isLoopbackOrLinkLocalIP(raw string) bool {
+	ip := net.ParseIP(strings.TrimSpace(raw))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast()
 }
 
 // selectBestIP picks the most likely externally-reachable IP from a list.

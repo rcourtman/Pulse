@@ -614,6 +614,14 @@ generic commercial presentation helpers from the hosted infrastructure route.
 That canonical /api/auto-register behavior now also includes hostname/IP continuity:
 reruns that arrive through a different canonical host form must reuse the same
 Pulse-managed node record and token instead of forking duplicate fleet entries.
+That same lifecycle contract also governs the runtime-side Proxmox setup host
+selection in `internal/hostagent/proxmox_setup.go`: when the system hostname
+resolves to a non-loopback, non-link-local address, the generated Proxmox
+registration host must stay on that canonical hostname instead of downgrading
+to a route-inferred interface IP. Route-aware IP detection remains the fallback
+only when hostname resolution is unusable, so multi-NIC and internal-CA
+deployments preserve canonical hostname continuity without losing an IP escape
+hatch for non-DNS installs.
 That same canonical behavior also includes one auth transport for Proxmox
 completion: runtime-side Unified Agent and script callers must send `/api/auto-register`
 authentication through a one-time setup token in the request-body

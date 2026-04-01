@@ -314,9 +314,27 @@ func TestGetHostURL(t *testing.T) {
 		}
 	})
 
-	t.Run("uses IP that reaches pulse", func(t *testing.T) {
+	t.Run("prefers resolvable hostname before inferred route IP", func(t *testing.T) {
 		p.reportIP = ""
 		p.pulseURL = "https://pulse:7655"
+		mc.lookupIPFn = func(h string) ([]net.IP, error) {
+			if h == "test-host" {
+				return []net.IP{net.ParseIP("10.9.0.10")}, nil
+			}
+			return nil, nil
+		}
+		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.1.1.1")}}, nil
+		}
+		if got := p.getHostURL(context.Background(), "pve"); got != "https://test-host:8006" {
+			t.Errorf("got %s", got)
+		}
+	})
+
+	t.Run("uses IP that reaches pulse when hostname is not resolvable", func(t *testing.T) {
+		p.reportIP = ""
+		p.pulseURL = "https://pulse:7655"
+		mc.lookupIPFn = func(h string) ([]net.IP, error) { return nil, nil }
 		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
 			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.1.1.1")}}, nil
 		}
@@ -336,7 +354,7 @@ func TestGetHostURL(t *testing.T) {
 			return "", nil
 		}
 		mc.hostnameFn = func() (string, error) { return "test-host", nil }
-		mc.lookupIPFn = func(h string) ([]net.IP, error) { return nil, nil }
+		mc.lookupIPFn = func(h string) ([]net.IP, error) { return []net.IP{net.ParseIP("127.0.1.1")}, nil }
 
 		if got := p.getHostURL(context.Background(), "pbs"); got != "https://10.0.0.5:8007" {
 			t.Errorf("got %s", got)
@@ -346,6 +364,7 @@ func TestGetHostURL(t *testing.T) {
 	t.Run("final fallback to hostname", func(t *testing.T) {
 		p.pulseURL = ""
 		mc.dialTimeoutFn = func(n, a string, d time.Duration) (net.Conn, error) { return nil, fmt.Errorf("fail") }
+		mc.lookupIPFn = func(h string) ([]net.IP, error) { return nil, fmt.Errorf("fail") }
 		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
 			return "", fmt.Errorf("fail")
 		}
