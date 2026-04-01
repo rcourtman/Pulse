@@ -192,8 +192,6 @@ export function useInteractiveSparklineState(
       chartData: chartData(),
       hoverSync,
       vbW,
-      vbH,
-      yMode: yMode(),
     });
   });
   const synchronizedHoverTimestamp = createMemo<number | null>(() => {
@@ -412,10 +410,9 @@ export function useInteractiveSparklineState(
 
     const cursorX = activeHoverCursorX();
     if (cursorX === null) return;
-    const hover = activeHoverState();
     ctx.save();
     const x = (cursorX / vbW) * width;
-    const lineStartY = hover ? Math.max(0, hover.minY - 4) : 0;
+    const lineStartY = 0;
     const hoverLineGradient = ctx.createLinearGradient(0, lineStartY, 0, height);
     hoverLineGradient.addColorStop(0, 'transparent');
     hoverLineGradient.addColorStop(0.1, hoverLineColor);

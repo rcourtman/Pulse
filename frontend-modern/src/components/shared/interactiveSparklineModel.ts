@@ -66,7 +66,6 @@ export interface InteractiveSparklineHoverState {
   tooltipY: number;
   timestamp: number;
   totalValues: number;
-  minY: number;
   nearestSeriesIndex: number | null;
   highlightedSeriesIndex: number | null;
   focusedTooltip: boolean;
@@ -480,14 +479,10 @@ export const buildInteractiveSparklineSynchronizedHoverState = ({
   chartData,
   hoverSync,
   vbW,
-  vbH,
-  yMode,
 }: {
   chartData: InteractiveSparklineChartData;
   hoverSync?: SummaryChartHoverSync | null;
   vbW: number;
-  vbH: number;
-  yMode: 'percent' | 'auto';
 }): InteractiveSparklineHoverState | null => {
   if (!hoverSync || chartData.validSeries.length === 0 || chartData.rangeMs <= 0) {
     return null;
@@ -509,8 +504,6 @@ export const buildInteractiveSparklineSynchronizedHoverState = ({
     return null;
   }
 
-  const valueToChartY = createInteractiveSparklineValueToY(yMode, chartData.scaleMax, vbH);
-  const pointY = valueToChartY(nearest.point.value);
   const chartX = ((clampedTimestamp - chartData.windowStart) / chartData.rangeMs) * vbW;
 
   return {
@@ -519,7 +512,6 @@ export const buildInteractiveSparklineSynchronizedHoverState = ({
     tooltipY: 0,
     timestamp: clampedTimestamp,
     totalValues: 1,
-    minY: pointY,
     nearestSeriesIndex: seriesIndex,
     highlightedSeriesIndex: seriesIndex,
     focusedTooltip: true,
@@ -576,7 +568,6 @@ export const computeInteractiveSparklineHoverState = ({
     : 0;
   const valueToChartY = createInteractiveSparklineValueToY(yMode, chartData.scaleMax, vbH);
 
-  let minY = vbH;
   let nearestSeriesIndex: number | null = null;
   let nearestDistance = Number.POSITIVE_INFINITY;
   const values: HoverSeriesValue[] = [];
@@ -587,7 +578,6 @@ export const computeInteractiveSparklineHoverState = ({
     if (!nearest) continue;
     const point = nearest.point;
     const pointY = valueToChartY(point.value);
-    if (pointY < minY) minY = pointY;
 
     if (shouldTrackNearest) {
       const distance = Math.abs(pointY - chartY);
@@ -658,7 +648,7 @@ export const computeInteractiveSparklineHoverState = ({
 
   const totalValues = focusedTooltip ? tooltipValues.length : values.length;
   let tooltipX = clientX;
-  let tooltipY = chartRect.top - 6;
+  let tooltipY = clientY - 10;
 
   if (typeof window !== 'undefined') {
     const activeTooltipWidth = focusedTooltip ? 150 : tooltipEstimatedWidth;
@@ -681,7 +671,6 @@ export const computeInteractiveSparklineHoverState = ({
     tooltipY,
     timestamp: tooltipValues[0].timestamp,
     totalValues,
-    minY,
     nearestSeriesIndex,
     highlightedSeriesIndex:
       highlightNearestSeriesOnHover && focusedTooltip ? effectiveSeriesIndex : null,

@@ -312,13 +312,53 @@ async function expectSparklineSourceCursorTracksLocalScrub(
         node.querySelector('line[stroke-dasharray="3 3"]')?.getAttribute("x1") ||
           "NaN",
       ),
+      lineY1: Number.parseFloat(
+        node.querySelector('line[stroke-dasharray="3 3"]')?.getAttribute("y1") ||
+          "NaN",
+      ),
+      lineY2: Number.parseFloat(
+        node.querySelector('line[stroke-dasharray="3 3"]')?.getAttribute("y2") ||
+          "NaN",
+      ),
     }));
     expect(sample.cursorX).toBeCloseTo(sample.lineX, 1);
+    expect(sample.lineY1).toBe(0);
+    expect(sample.lineY2).toBe(100);
     samples.push(sample);
   }
 
   expect(samples[0].lineX).toBeLessThan(samples[1].lineX);
   expect(samples[1].lineX).toBeLessThan(samples[2].lineX);
+  await page.mouse.move(1, 1);
+}
+
+async function expectSparklineTooltipTracksPointer(
+  page: import("@playwright/test").Page,
+  sparklineRoot: import("@playwright/test").Locator,
+): Promise<void> {
+  const surface = sparklineRoot.locator("svg").first();
+  await expect(surface).toBeVisible();
+  const box = await surface.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    throw new Error("Sparkline surface has no bounding box");
+  }
+
+  const tooltip = page.locator('[data-sparkline-tooltip="true"]').last();
+
+  await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.2);
+  await expect(tooltip).toBeVisible();
+  const firstTop = await tooltip.evaluate((node) =>
+    Number.parseFloat((node as HTMLElement).style.top || "NaN"),
+  );
+
+  await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.75);
+  await expect(tooltip).toBeVisible();
+  const secondTop = await tooltip.evaluate((node) =>
+    Number.parseFloat((node as HTMLElement).style.top || "NaN"),
+  );
+
+  expect(secondTop).toBeGreaterThan(firstTop + 40);
   await page.mouse.move(1, 1);
 }
 
@@ -413,7 +453,15 @@ test.describe.serial("Summary hover selection", () => {
       page,
       infrastructureSparklines.nth(0),
     );
+    await expectSparklineTooltipTracksPointer(
+      page,
+      infrastructureSparklines.nth(0),
+    );
     await expectSparklineSourceCursorTracksLocalScrub(
+      page,
+      infrastructureSparklines.nth(1),
+    );
+    await expectSparklineTooltipTracksPointer(
       page,
       infrastructureSparklines.nth(1),
     );
@@ -445,7 +493,15 @@ test.describe.serial("Summary hover selection", () => {
       page,
       workloadSparklines.nth(0),
     );
+    await expectSparklineTooltipTracksPointer(
+      page,
+      workloadSparklines.nth(0),
+    );
     await expectSparklineSourceCursorTracksLocalScrub(
+      page,
+      workloadSparklines.nth(1),
+    );
+    await expectSparklineTooltipTracksPointer(
       page,
       workloadSparklines.nth(1),
     );

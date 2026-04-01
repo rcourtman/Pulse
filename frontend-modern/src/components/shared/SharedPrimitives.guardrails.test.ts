@@ -541,7 +541,9 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).toContain('data-active-series-display');
     expect(interactiveSparklineSource).toContain('data-active-hover-cursor-x');
+    expect(interactiveSparklineSource).toContain('data-sparkline-tooltip="true"');
     expect(interactiveSparklineSource).toContain('x1={sparkline.activeHoverCursorX() ?? 0}');
+    expect(interactiveSparklineSource).toContain('y1={0}');
     expect(interactiveSparklineSource).not.toContain('{(cursorX) => (');
     expect(interactiveSparklineSource).toContain('data-rendered-series-count');
     expect(interactiveSparklineSource).not.toContain('createEffect');
@@ -566,12 +568,16 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
     expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
+    expect(interactiveSparklineModelSource).toContain('let tooltipY = clientY - 10;');
+    expect(interactiveSparklineModelSource).not.toContain('let tooltipY = chartRect.top - 6;');
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
   });
 
   it('keeps density map on shell, runtime, and model owners', () => {
     expect(densityMapSource).toContain('useDensityMapState');
+    expect(densityMapSource).not.toContain('Latest');
+    expect(densityMapSource).not.toContain('detail().currentValue');
     expect(densityMapSource).not.toContain('timeRangeToMs');
     expect(densityMapSource).not.toContain('createSignal');
     expect(densityMapSource).not.toContain('ctx.fillRect');
@@ -587,6 +593,8 @@ describe('shared primitive guardrails', () => {
     expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
     expect(densityMapModelSource).toContain('getDensityMapColumnIndexForTimestamp');
     expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
+    expect(densityMapModelSource).not.toContain('currentValue:');
+    expect(densityMapModelSource).not.toContain('hoveredValue:');
   });
 
   it('keeps dialog on shell, runtime, and model owners', () => {

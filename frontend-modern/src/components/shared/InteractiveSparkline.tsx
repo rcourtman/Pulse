@@ -123,7 +123,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                 <Show when={sparkline.activeHoverCursorX() !== null}>
                   <line
                     x1={sparkline.activeHoverCursorX() ?? 0}
-                    y1={Math.max(0, (sparkline.activeHoverState()?.minY ?? 4) - 4)}
+                    y1={0}
                     x2={sparkline.activeHoverCursorX() ?? 0}
                     y2={sparkline.vbH}
                     stroke="currentColor"
@@ -210,6 +210,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
         <Show when={sparkline.hoveredState()}>
           {(hover) => (
             <div
+              data-sparkline-tooltip="true"
               class="fixed pointer-events-none text-xs rounded px-2 py-1.5 shadow-lg border border-slate-600"
               style={{
                 left: `${hover().tooltipX}px`,

@@ -81,14 +81,6 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                 <div class="flex shrink-0 items-center gap-3 leading-none">
                   <div class="flex flex-col items-start">
                     <span class="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                      Latest
-                    </span>
-                    <span class="mt-0.5 font-semibold text-slate-900 dark:text-slate-50">
-                      {formatDetailValue(detail().currentValue)}
-                    </span>
-                  </div>
-                  <div class="flex flex-col items-start">
-                    <span class="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
                       Peak
                     </span>
                     <span class="mt-0.5 font-semibold text-slate-900 dark:text-slate-50">

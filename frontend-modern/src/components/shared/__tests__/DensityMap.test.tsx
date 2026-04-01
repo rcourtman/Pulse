@@ -207,7 +207,6 @@ describe('DensityMap', () => {
     expect(detail).toMatchObject({
       seriesId: 'alpha',
       seriesName: 'Alpha',
-      currentValue: 32,
       peakValue: 32,
     });
     expect(detail?.sparklinePath).toContain('M');
@@ -247,9 +246,8 @@ describe('DensityMap', () => {
     expect(root?.getAttribute('data-active-hover-timestamp')).toBe('');
     expect(root?.getAttribute('data-rendered-series-count')).toBe('2');
     expect(screen.getByText('Alpha')).toBeInTheDocument();
-    expect(screen.getByText('Latest')).toBeInTheDocument();
     expect(screen.getByText('Peak')).toBeInTheDocument();
-    expect(screen.getAllByText('32.0')).toHaveLength(2);
+    expect(screen.getAllByText('32.0')).toHaveLength(1);
     const overlay = container.querySelector('[data-density-map-focus-detail="true"]');
     expect(overlay).not.toBeNull();
     expect(overlay).toHaveAttribute('data-density-map-focus-series-id', 'alpha');

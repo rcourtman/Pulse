@@ -29,10 +29,6 @@ export interface DensityMapHoveredState {
 }
 
 export interface DensityMapFocusDetail {
-  currentValue: number | null;
-  currentTimestamp: number | null;
-  hoveredValue: number | null;
-  hoveredTimestamp: number | null;
   peakValue: number | null;
   seriesColor: string;
   seriesId: string;
@@ -280,7 +276,6 @@ export function buildDensityMapFocusDetail(options: {
   const points = series.data.filter(
     (point) => point.timestamp >= options.data.windowStart && point.timestamp <= windowEnd,
   );
-  const currentPoint = points.length > 0 ? points[points.length - 1] : null;
   let peakValue: number | null = null;
   for (const point of points) {
     peakValue = peakValue === null ? point.value : Math.max(peakValue, point.value);
@@ -293,10 +288,6 @@ export function buildDensityMapFocusDetail(options: {
   });
 
   return {
-    currentValue: currentPoint?.value ?? null,
-    currentTimestamp: currentPoint?.timestamp ?? null,
-    hoveredValue: activeHoveredState?.value ?? null,
-    hoveredTimestamp: activeHoveredState?.timestamp ?? null,
     peakValue,
     seriesColor: series.color,
     seriesId,
@@ -306,7 +297,7 @@ export function buildDensityMapFocusDetail(options: {
 }
 
 export function hasDensityMapFocusActivity(detail: DensityMapFocusDetail): boolean {
-  return detail.currentValue !== null || detail.peakValue !== null;
+  return detail.peakValue !== null;
 }
 
 const buildDensityMapFocusSparklinePath = (options: {

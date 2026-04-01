@@ -64,9 +64,12 @@ describe('InteractiveSparkline hover behavior', () => {
 
     fireEvent.mouseMove(svg, { clientX: 199, clientY: 110 });
 
-    expect(svg.querySelector('line[stroke-dasharray="3 3"]')).toBeInTheDocument();
-    expect(await screen.findByText('CPU')).toBeInTheDocument();
-    expect(screen.getByText('50.0%')).toBeInTheDocument();
+    const hoverLine = svg.querySelector('line[stroke-dasharray="3 3"]');
+    expect(hoverLine).toBeInTheDocument();
+    expect(hoverLine?.getAttribute('y1')).toBe('0');
+    expect(hoverLine?.getAttribute('y2')).toBe('100');
+    expect(await screen.findByText('50.0%')).toBeInTheDocument();
+    expect(container.ownerDocument.querySelector('[data-sparkline-tooltip="true"]')).not.toBeNull();
 
     fireEvent.mouseLeave(svg);
     expect(svg.querySelector('line[stroke-dasharray="3 3"]')).toBeNull();
@@ -122,6 +125,7 @@ describe('InteractiveSparkline hover behavior', () => {
       Number.parseFloat(root?.getAttribute('data-active-hover-cursor-x') ?? 'NaN'),
     ).toBeCloseTo(100, 1);
     expect(Number.parseFloat(hoverLine?.getAttribute('x1') ?? 'NaN')).toBeCloseTo(100, 1);
+    expect(hoverLine?.getAttribute('y1')).toBe('0');
   });
 
   it('publishes synchronized hover identity and clears it on leave', () => {
@@ -302,8 +306,9 @@ describe('InteractiveSparkline hover behavior', () => {
 
     fireEvent.mouseMove(svg, { clientX: 1, clientY: 11 });
 
-    const cpuLabel = await screen.findByText('CPU');
-    const tooltip = cpuLabel.closest('div[style]') as HTMLElement | null;
+    const tooltip = container.ownerDocument.querySelector(
+      '[data-sparkline-tooltip="true"]',
+    ) as HTMLElement | null;
     expect(tooltip).not.toBeNull();
     if (!tooltip) return;
 
@@ -311,6 +316,60 @@ describe('InteractiveSparkline hover behavior', () => {
     const top = Number.parseFloat(tooltip.style.top);
     expect(left).toBeGreaterThanOrEqual(100);
     expect(top).toBeGreaterThan(40);
+  });
+
+  it('anchors the tooltip to the pointer instead of the chart top edge', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30_000, value: 40 },
+              { timestamp: now - 10_000, value: 50 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+    if (!svg) return;
+
+    (svg as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 100,
+        width: 200,
+        height: 80,
+        right: 200,
+        bottom: 180,
+        x: 0,
+        y: 100,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    fireEvent.mouseMove(svg, { clientX: 120, clientY: 110 });
+
+    const tooltip = container.ownerDocument.querySelector(
+      '[data-sparkline-tooltip="true"]',
+    ) as HTMLElement | null;
+    expect(tooltip).not.toBeNull();
+    if (!tooltip) return;
+
+    const firstTop = Number.parseFloat(tooltip.style.top);
+
+    fireEvent.mouseMove(svg, { clientX: 120, clientY: 160 });
+
+    const secondTop = Number.parseFloat(tooltip.style.top);
+    expect(secondTop).toBeGreaterThan(firstTop + 30);
   });
 
   it('locks a hovered series on click and unlocks on second click', async () => {
