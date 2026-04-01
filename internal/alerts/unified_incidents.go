@@ -116,7 +116,7 @@ func (m *Manager) SyncUnifiedResourceIncidents(resources []unifiedresources.Reso
 			existing.ResourceID = alert.ResourceID
 			existing.ResourceName = alert.ResourceName
 			existing.Node = alert.Node
-			existing.NodeDisplayName = m.resolveNodeDisplayName(alert.Node)
+			existing.NodeDisplayName = m.resolveNodeDisplayName(alert.Instance, alert.Node)
 			existing.Instance = alert.Instance
 			existing.Message = alert.Message
 			existing.Metadata = alert.Metadata

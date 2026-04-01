@@ -223,6 +223,40 @@ func TestCheckMetricClearsAlertWhenThresholdDisabled(t *testing.T) {
 	}
 }
 
+func TestGetActiveAlertsKeepsInstanceScopedNodeDisplayNames(t *testing.T) {
+	m := newTestManager(t)
+	m.ClearActiveAlerts()
+	m.mu.Lock()
+	m.config.TimeThresholds = map[string]int{}
+	m.config.SuppressionWindow = 0
+	m.config.MinimumDelta = 0
+	m.mu.Unlock()
+
+	threshold := &HysteresisThreshold{Trigger: 80, Clear: 70}
+
+	m.UpdateNodeDisplayName("cluster-a", "pve", "Alpha")
+	m.UpdateNodeDisplayName("cluster-b", "pve", "Beta")
+
+	m.checkMetric("guest-a", "vm-a", "pve", "cluster-a", "guest", "cpu", 90, threshold, nil)
+	m.checkMetric("guest-b", "vm-b", "pve", "cluster-b", "guest", "cpu", 91, threshold, nil)
+
+	m.UpdateNodeDisplayName("cluster-a", "pve", "Alpha Updated")
+	m.checkMetric("guest-a", "vm-a", "pve", "cluster-a", "guest", "cpu", 92, threshold, nil)
+	m.checkMetric("guest-b", "vm-b", "pve", "cluster-b", "guest", "cpu", 93, threshold, nil)
+
+	gotByResourceID := make(map[string]Alert)
+	for _, alert := range m.GetActiveAlerts() {
+		gotByResourceID[alert.ResourceID] = alert
+	}
+
+	if gotByResourceID["guest-a"].NodeDisplayName != "Alpha Updated" {
+		t.Fatalf("guest-a node display name = %q, want %q", gotByResourceID["guest-a"].NodeDisplayName, "Alpha Updated")
+	}
+	if gotByResourceID["guest-b"].NodeDisplayName != "Beta" {
+		t.Fatalf("guest-b node display name = %q, want %q", gotByResourceID["guest-b"].NodeDisplayName, "Beta")
+	}
+}
+
 func TestQuietHoursCategoryForResourceIncidentUsesIncidentCategoryMetadata(t *testing.T) {
 	availability := &Alert{
 		Type: "resource-incident",

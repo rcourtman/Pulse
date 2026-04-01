@@ -134,7 +134,7 @@ func (m *Manager) migrateGuestMetricAlertNoLock(storageKey, specID, kind, resour
 	matchedAlert.ResourceName = resourceName
 	matchedAlert.Node = normalizedNode
 	matchedAlert.Instance = normalizedInstance
-	if dn := m.resolveNodeDisplayName(normalizedNode); dn != "" {
+	if dn := m.resolveNodeDisplayName(normalizedInstance, normalizedNode); dn != "" {
 		matchedAlert.NodeDisplayName = dn
 	} else {
 		matchedAlert.NodeDisplayName = ""

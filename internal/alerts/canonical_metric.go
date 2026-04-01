@@ -196,7 +196,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 				ResourceID:      spec.ResourceID,
 				ResourceName:    resourceName,
 				Node:            node,
-				NodeDisplayName: m.resolveNodeDisplayName(node),
+				NodeDisplayName: m.resolveNodeDisplayName(instance, node),
 				Instance:        instance,
 				Message:         message,
 				Value:           value,
@@ -249,7 +249,7 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 		existingAlert.Value = value
 		existingAlert.Threshold = spec.MetricThreshold.Trigger
 		existingAlert.Level = level
-		if dn := m.resolveNodeDisplayName(existingAlert.Node); dn != "" {
+		if dn := m.resolveNodeDisplayName(existingAlert.Instance, existingAlert.Node); dn != "" {
 			existingAlert.NodeDisplayName = dn
 		}
 		if opts != nil && opts.Message != "" {

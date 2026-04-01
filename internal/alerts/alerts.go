@@ -582,10 +582,11 @@ type Manager struct {
 	// When a host agent is running on a Proxmox node, we prefer the host agent
 	// alerts and suppress the node alerts to avoid duplicate monitoring.
 	hostAgentHostnames map[string]struct{} // Normalized hostnames (lowercase)
-	// Node display name cache: maps raw node/host name → user-configured display name.
-	// Populated by CheckNode and CheckHost so that checkMetric (and direct alert
-	// creation sites) can resolve display names without signature changes.
-	nodeDisplayNames map[string]string
+	// Node display name caches. Proxmox nodes can share the same raw node name
+	// across multiple configured instances, so keep instance-scoped entries in
+	// addition to the legacy raw-name cache used by instance-less resources.
+	nodeDisplayNames         map[string]string
+	instanceNodeDisplayNames map[string]string
 	// License checking for Pro-only alert features
 	hasProFeature func(feature string) bool
 
@@ -655,6 +656,7 @@ func NewManagerWithDataDir(dataDir string) *Manager {
 		cleanupStop:                     make(chan struct{}),
 		hostAgentHostnames:              make(map[string]struct{}),
 		nodeDisplayNames:                make(map[string]string),
+		instanceNodeDisplayNames:        make(map[string]string),
 		config: AlertConfig{
 			Enabled:                true,
 			ActivationState:        ActivationPending,
@@ -2863,7 +2865,7 @@ func (m *Manager) CheckGuest(guest any, instanceName string) {
 // CheckNode checks a node against thresholds
 func (m *Manager) CheckNode(node models.Node) {
 	// Cache display name so all alerts (including guest alerts on this node) can resolve it.
-	m.UpdateNodeDisplayName(node.Name, node.DisplayName)
+	m.UpdateNodeDisplayName(node.Instance, node.Name, node.DisplayName)
 
 	m.mu.RLock()
 	if !m.config.Enabled {
@@ -3034,24 +3036,53 @@ func (m *Manager) hasHostAgentForNode(nodeName string) bool {
 
 // UpdateNodeDisplayName caches the display name for a node/host so alerts
 // can resolve it without needing the full model object.
-func (m *Manager) UpdateNodeDisplayName(name, displayName string) {
+func nodeDisplayNameCacheKey(instance, name string) string {
+	return strings.TrimSpace(instance) + "\x00" + strings.TrimSpace(name)
+}
+
+func (m *Manager) UpdateNodeDisplayName(parts ...string) {
+	var instance, name, displayName string
+	switch len(parts) {
+	case 2:
+		name, displayName = parts[0], parts[1]
+	case 3:
+		instance, name, displayName = parts[0], parts[1], parts[2]
+	default:
+		return
+	}
+
+	instance = strings.TrimSpace(instance)
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return
 	}
 	displayName = strings.TrimSpace(displayName)
 	m.mu.Lock()
-	if displayName != "" && displayName != name {
-		m.nodeDisplayNames[name] = displayName
+	if instance != "" {
+		key := nodeDisplayNameCacheKey(instance, name)
+		if displayName != "" && displayName != name {
+			m.instanceNodeDisplayNames[key] = displayName
+		} else {
+			delete(m.instanceNodeDisplayNames, key)
+		}
 	} else {
-		delete(m.nodeDisplayNames, name)
+		if displayName != "" && displayName != name {
+			m.nodeDisplayNames[name] = displayName
+		} else {
+			delete(m.nodeDisplayNames, name)
+		}
 	}
 	m.mu.Unlock()
 }
 
 // resolveNodeDisplayName returns the cached display name for a node, or empty
 // string if none is set. Caller must hold m.mu (read or write).
-func (m *Manager) resolveNodeDisplayName(node string) string {
+func (m *Manager) resolveNodeDisplayName(instance, node string) string {
+	if instance = strings.TrimSpace(instance); instance != "" {
+		if displayName, ok := m.instanceNodeDisplayNames[nodeDisplayNameCacheKey(instance, node)]; ok {
+			return displayName
+		}
+	}
 	return m.nodeDisplayNames[node]
 }
 
@@ -3180,7 +3211,7 @@ func (m *Manager) CheckHost(host models.Host) {
 	}
 
 	// Cache display name so host alerts show the user-configured name.
-	m.UpdateNodeDisplayName(host.Hostname, host.DisplayName)
+	m.UpdateNodeDisplayName("", host.Hostname, host.DisplayName)
 
 	// Fresh telemetry marks the host as online and clears offline tracking.
 	m.HandleHostOnline(host)
@@ -6989,7 +7020,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 				ResourceID:      resourceID,
 				ResourceName:    resourceName,
 				Node:            node,
-				NodeDisplayName: m.resolveNodeDisplayName(node),
+				NodeDisplayName: m.resolveNodeDisplayName(instance, node),
 				Instance:        instance,
 				Message:         message,
 				Value:           value,
@@ -7085,7 +7116,7 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 			existingAlert.LastSeen = time.Now()
 			existingAlert.Value = value
 			// Keep display name current (handles upgrades and renames).
-			if dn := m.resolveNodeDisplayName(existingAlert.Node); dn != "" {
+			if dn := m.resolveNodeDisplayName(existingAlert.Instance, existingAlert.Node); dn != "" {
 				existingAlert.NodeDisplayName = dn
 			}
 			if existingAlert.Metadata == nil {
@@ -7395,7 +7426,7 @@ func (m *Manager) preserveAlertState(alertID string, updated *Alert) {
 
 	// Auto-resolve node display name if not already set.
 	if updated.NodeDisplayName == "" && updated.Node != "" {
-		updated.NodeDisplayName = m.resolveNodeDisplayName(updated.Node)
+		updated.NodeDisplayName = m.resolveNodeDisplayName(updated.Instance, updated.Node)
 	}
 
 	existing, exists := m.getActiveAlertNoLock(alertID)
@@ -7481,7 +7512,7 @@ func (m *Manager) GetActiveAlerts() []Alert {
 		a := *cloneAlertForOutput(alert)
 		// Ensure display name is current (handles upgrades, renames, and
 		// alerts created before the cache was populated).
-		if dn := m.resolveNodeDisplayName(a.Node); dn != "" {
+		if dn := m.resolveNodeDisplayName(a.Instance, a.Node); dn != "" {
 			a.NodeDisplayName = dn
 		}
 		alerts = append(alerts, a)

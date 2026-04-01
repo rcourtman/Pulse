@@ -128,6 +128,17 @@ func TestSyncUnifiedResourceIncidentsKeepsInstanceScopedNodeDisplayNames(t *test
 	if alertB.NodeDisplayName != "Beta" {
 		t.Fatalf("resourceB node display name = %q, want %q", alertB.NodeDisplayName, "Beta")
 	}
+
+	gotByResourceID := make(map[string]Alert)
+	for _, alert := range m.GetActiveAlerts() {
+		gotByResourceID[alert.ResourceID] = alert
+	}
+	if gotByResourceID[resourceA.ID].NodeDisplayName != "Alpha Updated" {
+		t.Fatalf("GetActiveAlerts resourceA node display name = %q, want %q", gotByResourceID[resourceA.ID].NodeDisplayName, "Alpha Updated")
+	}
+	if gotByResourceID[resourceB.ID].NodeDisplayName != "Beta" {
+		t.Fatalf("GetActiveAlerts resourceB node display name = %q, want %q", gotByResourceID[resourceB.ID].NodeDisplayName, "Beta")
+	}
 }
 
 func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {

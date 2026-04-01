@@ -313,6 +313,17 @@ func TestCheckUnifiedResourceKeepsInstanceScopedNodeDisplayNames(t *testing.T) {
 	if alertB.NodeDisplayName != "Beta" {
 		t.Fatalf("vm-b node display name = %q, want %q", alertB.NodeDisplayName, "Beta")
 	}
+
+	gotByResourceID := make(map[string]Alert)
+	for _, alert := range m.GetActiveAlerts() {
+		gotByResourceID[alert.ResourceID] = alert
+	}
+	if gotByResourceID["vm-a"].NodeDisplayName != "Alpha Updated" {
+		t.Fatalf("GetActiveAlerts vm-a node display name = %q, want %q", gotByResourceID["vm-a"].NodeDisplayName, "Alpha Updated")
+	}
+	if gotByResourceID["vm-b"].NodeDisplayName != "Beta" {
+		t.Fatalf("GetActiveAlerts vm-b node display name = %q, want %q", gotByResourceID["vm-b"].NodeDisplayName, "Beta")
+	}
 }
 
 func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {

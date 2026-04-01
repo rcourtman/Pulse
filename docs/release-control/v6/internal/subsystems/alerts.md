@@ -82,6 +82,12 @@ runtime must migrate the active alert, history entry, acknowledgment record,
 suppression/rate-limit/flapping tracking, and guest per-disk metric identity
 to the current canonical state instead of reopening a duplicate alert or
 resolving only the stale node-scoped identity.
+That same alerts runtime also owns instance-scoped node display-name
+resolution. Raw node names are not globally unique across configured
+infrastructure instances, so cached node display names must key on instance +
+node identity whenever the alert carries instance context. Alert updates,
+incident rebuilds, and guest-metric migrations may fall back to the legacy
+name-only cache only for instance-less resources like standalone host agents.
 
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that
