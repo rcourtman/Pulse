@@ -73,6 +73,7 @@ Own canonical runtime payload shapes between backend and frontend.
 49. `internal/cloudcp/portal/frontend/tsconfig.json`
 50. `internal/cloudcp/portal/frontend_sync_test.go`
 51. `internal/api/recovery_handlers.go`
+52. `internal/api/config_setup_handlers.go`
 
 ## Shared Boundaries
 
@@ -114,6 +115,7 @@ Own canonical runtime payload shapes between backend and frontend.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
     That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
     That same canonical payload contract also owns strict-TLS truth for that selected host: `/api/auto-register` may only persist `VerifySSL=true` when Pulse actually captured a certificate fingerprint for the selected candidate, and it must not pretend public-CA verification is safe after every candidate fingerprint probe failed.
+    That same contract now owns stale-marker verification as well: setup-token-authenticated `checkRegistration` requests may omit token completion fields and must answer `{registered:boolean}` from canonical candidate-host matching so runtime repair can distinguish real registrations from stale local marker files without rotating tokens first.
 37. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
 38. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 39. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.

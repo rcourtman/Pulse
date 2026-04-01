@@ -89,6 +89,12 @@ querying, and the operator-facing storage health presentation layer.
     that host's certificate fingerprint, so adjacent setup and recovery-linked
     transport flows do not inherit a false strict-TLS claim for self-signed
     nodes that never completed fingerprint capture.
+    That same shared dependency now also owns stale-marker repair truth:
+    setup-token-authenticated `checkRegistration` calls may omit token
+    completion fields and answer only `{registered:boolean}`, so adjacent
+    transport flows must not reintroduce local marker trust or token rotation
+    when the canonical auto-register helper can verify whether Pulse still has
+    a matching node.
 15. Preserve the governed root-or-sudo Unix wrapper in shared backend install-command helpers so storage- and recovery-adjacent transport surfaces do not inherit a stale raw `| bash -s --` install payload shape from the canonical agent-install-command API and hosted Proxmox install responses.
 16. Preserve optional-auth tokenless behavior in those same shared backend install-command helpers so adjacent transport surfaces do not implicitly persist API tokens and flip auth-configured state when an operator only requested a Proxmox install command on a token-optional Pulse instance.
 17. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so storage- and recovery-adjacent transport surfaces do not inherit browser-authored wildcard token bundles when they depend on the canonical security helper layer.
@@ -185,12 +191,18 @@ querying, and the operator-facing storage health presentation layer.
     chart highlighting so pool-only cards demote cleanly during disk focus and
     disk-temperature cards demote cleanly during pool focus, instead of
     leaving stale row-local IDs or storage-local hover branches on the page.
-14. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
+14. Keep storage summary remount caches versioned with the chart contract.
+    `frontend-modern/src/components/Storage/StorageSummary.tsx` may keep a
+    bounded in-memory cache for same-tab remounts, but its cache key must carry
+    an explicit summary contract version so long-lived demo sessions do not
+    rehydrate stale pool or disk sparkline shapes after the storage summary
+    chart model changes.
+15. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
     chart transport may look up provider-backed VM history through unified
     metrics targets, but infrastructure/workloads/storage/recovery navigation
     and focus handoffs must stay on canonical workload IDs instead of
     provider-native metric keys.
-15. Keep storage row emphasis on the shared frontend primitive contract. Pool
+16. Keep storage row emphasis on the shared frontend primitive contract. Pool
     rows and physical-disk rows that mirror the active summary entity must
     expose that state through `data-summary-row-active` and let the shared row
     presentation owned by `frontend-modern/src/index.css` render the emphasis,

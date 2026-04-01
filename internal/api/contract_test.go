@@ -4952,6 +4952,35 @@ func TestContract_AutoRegisterScriptRequestJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_AutoRegisterCheckRequestJSONSnapshot(t *testing.T) {
+	payload := AutoRegisterRequest{
+		Type:              "pve",
+		Host:              "https://pve.local:8006",
+		CandidateHosts:    []string{"https://pve.local:8006", "https://10.0.0.5:8006"},
+		ServerName:        "pve-node-1",
+		AuthToken:         "setup-token-123",
+		Source:            "agent",
+		CheckRegistration: true,
+	}
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal auto-register check request: %v", err)
+	}
+
+	const want = `{
+		"type":"pve",
+		"host":"https://pve.local:8006",
+		"candidateHosts":["https://pve.local:8006","https://10.0.0.5:8006"],
+		"serverName":"pve-node-1",
+		"authToken":"setup-token-123",
+		"source":"agent",
+		"checkRegistration":true
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_AutoRegisterScriptRequestRequiresExplicitSourceMarker(t *testing.T) {
 	payload := AutoRegisterRequest{
 		Type:       "pve",

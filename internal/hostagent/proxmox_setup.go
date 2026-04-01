@@ -56,14 +56,15 @@ type autoRegisterSource string
 const autoRegisterSourceAgent autoRegisterSource = "agent"
 
 type autoRegisterRequest struct {
-	Type           proxmoxProductType `json:"type"`
-	Host           string             `json:"host"`
-	CandidateHosts []string           `json:"candidateHosts,omitempty"`
-	ServerName     string             `json:"serverName"`
-	AuthToken      string             `json:"authToken,omitempty"`
-	TokenID        string             `json:"tokenId"`
-	TokenValue     string             `json:"tokenValue"`
-	Source         autoRegisterSource `json:"source"`
+	Type              proxmoxProductType `json:"type"`
+	Host              string             `json:"host"`
+	CandidateHosts    []string           `json:"candidateHosts,omitempty"`
+	ServerName        string             `json:"serverName"`
+	AuthToken         string             `json:"authToken,omitempty"`
+	TokenID           string             `json:"tokenId,omitempty"`
+	TokenValue        string             `json:"tokenValue,omitempty"`
+	Source            autoRegisterSource `json:"source"`
+	CheckRegistration bool               `json:"checkRegistration,omitempty"`
 }
 
 type autoRegisterResponse struct {
@@ -78,6 +79,12 @@ type autoRegisterResponse struct {
 	TokenID    string `json:"tokenId"`
 	TokenValue string `json:"tokenValue"`
 }
+
+type autoRegisterCheckResponse struct {
+	Registered bool `json:"registered"`
+}
+
+const maxRegistrationCheckResponseBytes = 8 * 1024
 
 type setupScriptURLRequest struct {
 	Type        string `json:"type"`
@@ -347,12 +354,6 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 	ptype := proxmoxProductType(ptypeStr)
 
-	// Check if already registered (idempotency)
-	if p.isAlreadyRegistered() {
-		p.logger.Info().Msg("Proxmox node already registered, skipping setup")
-		return nil, nil
-	}
-
 	// Detect Proxmox type
 	if ptype == proxmoxProductUnknown {
 		detected := p.detectProxmoxType()
@@ -363,6 +364,22 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 		p.logger.Info().Str("type", string(ptype)).Msg("Auto-detected Proxmox type")
 	}
 
+	hostURL := p.getHostURL(ctx, ptype)
+
+	// Check if already registered (idempotency)
+	if p.isAlreadyRegistered() {
+		registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
+		if err != nil {
+			p.logger.Warn().Err(err).Msg("Failed to verify Proxmox registration state with Pulse; keeping local marker behavior")
+			return nil, nil
+		}
+		if registered {
+			p.logger.Info().Msg("Proxmox node already registered, skipping setup")
+			return nil, nil
+		}
+		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).Msg("Local Proxmox registration marker exists but Pulse has no matching node; re-registering")
+	}
+
 	// Create monitoring user and token
 	tokenID, tokenValue, err := p.setupToken(ctx, ptype)
 	if err != nil {
@@ -370,9 +387,6 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 	}
 
 	p.logger.Info().Str("token_id", tokenID).Msg("Created Proxmox API token")
-
-	// Get the host URL for registration
-	hostURL := p.getHostURL(ctx, ptype)
 
 	// Register with Pulse
 	registered := false
@@ -460,11 +474,26 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 		return nil, fmt.Errorf("invalid proxmox type %q: must be pve or pbs", ptype)
 	}
 	ptype = proxmoxProductType(normalizedTypeStr)
+	hostURL := p.getHostURL(ctx, ptype)
 
 	// Check if this type is already registered
 	if p.isTypeRegistered(ptype) {
-		p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
-		return nil, nil
+		registered, err := p.checkRegistrationWithPulse(ctx, ptype, hostURL)
+		if err != nil {
+			p.logger.Warn().
+				Err(err).
+				Str("type", string(ptype)).
+				Msg("Failed to verify Proxmox registration state with Pulse; keeping local marker behavior")
+			return nil, nil
+		}
+		if registered {
+			p.logger.Info().Str("type", string(ptype)).Msg("Proxmox type already registered, skipping")
+			return nil, nil
+		}
+		p.logger.Info().
+			Str("type", string(ptype)).
+			Str("host", hostURL).
+			Msg("Local Proxmox registration marker exists but Pulse has no matching node; re-registering")
 	}
 
 	p.logger.Info().Str("type", string(ptype)).Msg("Setting up Proxmox type")
@@ -476,9 +505,6 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	}
 
 	p.logger.Info().Str("type", string(ptype)).Str("token_id", tokenID).Msg("Created Proxmox API token")
-
-	// Get the host URL for registration
-	hostURL := p.getHostURL(ctx, ptype)
 
 	// Register with Pulse
 	registered := false
@@ -502,6 +528,72 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 		NodeName:    registerResp.NodeName,
 		Registered:  registered,
 	}, nil
+}
+
+func (p *ProxmoxSetup) orderedCandidateHosts(ctx context.Context, ptype proxmoxProductType, hostURL string) []string {
+	candidateHosts := p.candidateHostURLs(ctx, ptype)
+	if len(candidateHosts) == 0 || strings.TrimSpace(candidateHosts[0]) != strings.TrimSpace(hostURL) {
+		seen := make(map[string]struct{}, len(candidateHosts)+1)
+		reordered := make([]string, 0, len(candidateHosts)+1)
+		reordered = appendUniqueHostCandidate(reordered, seen, hostURL)
+		for _, candidate := range candidateHosts {
+			reordered = appendUniqueHostCandidate(reordered, seen, candidate)
+		}
+		candidateHosts = reordered
+	}
+	return candidateHosts
+}
+
+func (p *ProxmoxSetup) checkRegistrationWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL string) (bool, error) {
+	setupToken, err := p.fetchSetupToken(ctx, ptype, hostURL)
+	if err != nil {
+		return false, fmt.Errorf("fetch setup token: %w", err)
+	}
+
+	payload := autoRegisterRequest{
+		Type:              ptype,
+		Host:              hostURL,
+		CandidateHosts:    p.orderedCandidateHosts(ctx, ptype, hostURL),
+		ServerName:        p.hostname,
+		AuthToken:         setupToken,
+		Source:            autoRegisterSourceAgent,
+		CheckRegistration: true,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return false, fmt.Errorf("marshal registration-check payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
+	if err != nil {
+		return false, fmt.Errorf("create registration-check request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("registration-check request failed: %w", err)
+	}
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			p.logger.Debug().Err(closeErr).Msg("Failed to close registration-check response body")
+		}
+	}()
+
+	bodyBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxRegistrationCheckResponseBytes))
+	if err != nil {
+		return false, fmt.Errorf("read registration-check response: %w", err)
+	}
+	if resp.StatusCode >= http.StatusBadRequest {
+		return false, fmt.Errorf("registration-check returned HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(bodyBytes)))
+	}
+
+	var parsed autoRegisterCheckResponse
+	if err := json.Unmarshal(bodyBytes, &parsed); err != nil {
+		return false, fmt.Errorf("decode registration-check response: %w", err)
+	}
+	return parsed.Registered, nil
 }
 
 // detectProxmoxType checks for pvesh (PVE) or proxmox-backup-manager (PBS).
@@ -1208,16 +1300,7 @@ func (p *ProxmoxSetup) fetchSetupToken(ctx context.Context, ptype proxmoxProduct
 
 // registerWithPulse calls the auto-register endpoint to add the node.
 func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL, tokenID, tokenValue string) (autoRegisterResponse, error) {
-	candidateHosts := p.candidateHostURLs(ctx, ptype)
-	if len(candidateHosts) == 0 || strings.TrimSpace(candidateHosts[0]) != strings.TrimSpace(hostURL) {
-		seen := make(map[string]struct{}, len(candidateHosts)+1)
-		reordered := make([]string, 0, len(candidateHosts)+1)
-		reordered = appendUniqueHostCandidate(reordered, seen, hostURL)
-		for _, candidate := range candidateHosts {
-			reordered = appendUniqueHostCandidate(reordered, seen, candidate)
-		}
-		candidateHosts = reordered
-	}
+	candidateHosts := p.orderedCandidateHosts(ctx, ptype, hostURL)
 
 	backoffs := p.retryBackoffs
 	if backoffs == nil {

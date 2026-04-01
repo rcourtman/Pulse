@@ -162,6 +162,122 @@ func TestHandleAutoRegisterAcceptsWithSetupToken(t *testing.T) {
 	}
 }
 
+func TestHandleAutoRegisterCheckRegistrationUsesCanonicalCandidateHosts(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+		PVEInstances: []config.PVEInstance{
+			{
+				Name:   "pve-node-1",
+				Host:   "https://10.0.0.5:8006",
+				Source: "agent",
+			},
+		},
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN-CHECK"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:              "pve",
+		Host:              "https://pve.local:8006",
+		CandidateHosts:    []string{"https://pve.local:8006", "https://10.0.0.5:8006"},
+		ServerName:        "pve-node-1",
+		AuthToken:         tokenValue,
+		Source:            "agent",
+		CheckRegistration: true,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Registered bool `json:"registered"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !response.Registered {
+		t.Fatalf("expected registered=true, got %#v", response)
+	}
+}
+
+func TestHandleAutoRegisterCheckRegistrationReturnsFalseForMissingNode(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+
+	handler := newTestConfigHandlers(t, cfg)
+
+	const tokenValue = "TEMP-TOKEN-CHECK-MISSING"
+	tokenHash := internalauth.HashAPIToken(tokenValue)
+	handler.codeMutex.Lock()
+	handler.setupTokens[tokenHash] = &SetupTokenRecord{
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+		NodeType:  "pve",
+	}
+	handler.codeMutex.Unlock()
+
+	reqBody := AutoRegisterRequest{
+		Type:              "pve",
+		Host:              "https://pve.local:8006",
+		ServerName:        "pve-node-1",
+		AuthToken:         tokenValue,
+		Source:            "agent",
+		CheckRegistration: true,
+	}
+
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleAutoRegister(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var response struct {
+		Registered bool `json:"registered"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Registered {
+		t.Fatalf("expected registered=false, got %#v", response)
+	}
+}
+
 func TestHandleAutoRegisterRejectsMissingSource(t *testing.T) {
 	stubAutoRegisterNetworkDeps(t)
 

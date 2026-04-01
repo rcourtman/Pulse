@@ -91,6 +91,7 @@ management, and fleet control surfaces.
 67. `frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts`
 68. `frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx`
 69. `frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts`
+70. `internal/hostagent/proxmox_setup.go`
 
 ## Shared Boundaries
 
@@ -124,6 +125,7 @@ management, and fleet control surfaces.
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
+   Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.
    That runtime-side ownership includes local disk telemetry collection in
    `internal/hostagent/smartctl.go`. Linux SMART discovery must prefer
    `smartctl --scan-open` typed targets before generic block-device fallback so
@@ -159,6 +161,7 @@ management, and fleet control surfaces.
 2. Keep shared API proof routing aligned whenever install, register, or profile payloads change.
 3. Update runtime and settings tests in the same slice when lifecycle behavior changes.
 4. Preserve canonical /api/auto-register node identity continuity when canonical hosts shift between hostname and IP forms for the same node.
+5. Keep Proxmox registration continuity self-healing: stale local registration markers must be verified against Pulse before the host agent skips setup, and a missing matching node on the Pulse side must drive canonical re-registration instead of asking operators to delete marker files manually.
 5. Keep first-session lifecycle handoff explicit: the live setup completion
    surface in `frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`
    must route the primary CTA into `/settings/infrastructure/install`, frame

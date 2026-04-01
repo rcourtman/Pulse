@@ -252,14 +252,15 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 
 // AutoRegisterRequest represents a request from the setup script or agent to auto-register a node
 type AutoRegisterRequest struct {
-	Type           string   `json:"type"`                     // "pve" or "pbs"
-	Host           string   `json:"host"`                     // The preferred host URL
-	CandidateHosts []string `json:"candidateHosts,omitempty"` // Alternate host URLs the server can try from its own network view
-	TokenID        string   `json:"tokenId"`                  // Full token ID like pulse-monitor@pve!pulse-token
-	TokenValue     string   `json:"tokenValue,omitempty"`     // The token value for the node
-	ServerName     string   `json:"serverName,omitempty"`     // Hostname or IP
-	AuthToken      string   `json:"authToken,omitempty"`      // One-time setup token from setup/install flows
-	Source         string   `json:"source,omitempty"`         // "agent" or "script" - indicates how the node was registered
+	Type              string   `json:"type"`                        // "pve" or "pbs"
+	Host              string   `json:"host"`                        // The preferred host URL
+	CandidateHosts    []string `json:"candidateHosts,omitempty"`    // Alternate host URLs the server can try from its own network view
+	TokenID           string   `json:"tokenId,omitempty"`           // Full token ID like pulse-monitor@pve!pulse-token
+	TokenValue        string   `json:"tokenValue,omitempty"`        // The token value for the node
+	ServerName        string   `json:"serverName,omitempty"`        // Hostname or IP
+	AuthToken         string   `json:"authToken,omitempty"`         // One-time setup token from setup/install flows
+	Source            string   `json:"source,omitempty"`            // "agent" or "script" - indicates how the node was registered
+	CheckRegistration bool     `json:"checkRegistration,omitempty"` // Check whether a matching registered node already exists without completing registration
 }
 
 // AutoRegisterResponse is the canonical success shape for /api/auto-register.
@@ -383,6 +384,23 @@ func canonicalAutoRegisterCompletionPayloadMessage() string {
 	return "Incomplete canonical auto-register token completion payload"
 }
 
+func canonicalAutoRegisterCheckMissingFieldsMessage(typeValue string, host string, serverName string) string {
+	missing := make([]string, 0, 3)
+	if strings.TrimSpace(typeValue) == "" {
+		missing = append(missing, "type")
+	}
+	if strings.TrimSpace(host) == "" {
+		missing = append(missing, "host")
+	}
+	if strings.TrimSpace(serverName) == "" {
+		missing = append(missing, "serverName")
+	}
+	if len(missing) == 0 {
+		return "Missing required canonical auto-register check fields"
+	}
+	return "Missing required canonical auto-register check fields: " + strings.Join(missing, ", ")
+}
+
 func canonicalAutoRegisterMissingFieldsMessage(typeValue string, host string, hasTokenID bool, serverName string) string {
 	missing := make([]string, 0, 4)
 	if strings.TrimSpace(typeValue) == "" {
@@ -424,6 +442,50 @@ func canonicalAutoRegisterSuccessMessage(nodeName string, host string) string {
 		return fmt.Sprintf("Node %s registered successfully", trimmedNodeName)
 	}
 	return fmt.Sprintf("Node %s registered successfully at %s", trimmedNodeName, trimmedHost)
+}
+
+type autoRegisterCheckResponse struct {
+	Registered bool `json:"registered"`
+}
+
+func autoRegisterHostMatchesCandidates(existingHost string, candidates []string) bool {
+	trimmedExisting := strings.TrimSpace(existingHost)
+	if trimmedExisting == "" {
+		return false
+	}
+	for _, candidate := range candidates {
+		trimmedCandidate := strings.TrimSpace(candidate)
+		if trimmedCandidate == "" {
+			continue
+		}
+		if trimmedExisting == trimmedCandidate || hostsShareResolvedIdentity(trimmedExisting, trimmedCandidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *ConfigHandlers) autoRegisteredNodeExists(ctx context.Context, req *AutoRegisterRequest, candidates []string) bool {
+	if req == nil {
+		return false
+	}
+
+	switch req.Type {
+	case "pve":
+		for _, node := range h.getConfig(ctx).PVEInstances {
+			if autoRegisterHostMatchesCandidates(node.Host, candidates) {
+				return true
+			}
+		}
+	case "pbs":
+		for _, node := range h.getConfig(ctx).PBSInstances {
+			if autoRegisterHostMatchesCandidates(node.Host, candidates) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func buildCanonicalAutoRegisterResponse(req *AutoRegisterRequest, host string, actualName string, tokenID string, tokenValue string) AutoRegisterResponse {
@@ -638,6 +700,53 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	hasTokenID := tokenID != ""
 	hasTokenValue := tokenValue != ""
 
+	if registrationSource == "" {
+		http.Error(w, "source is required", http.StatusBadRequest)
+		return
+	}
+	if !isCanonicalAutoRegisterSource(registrationSource) {
+		http.Error(w, "source must be 'agent' or 'script'", http.StatusBadRequest)
+		return
+	}
+	if !isCanonicalAutoRegisterType(typeValue) {
+		http.Error(w, "type must be 'pve' or 'pbs'", http.StatusBadRequest)
+		return
+	}
+
+	req.Type = typeValue
+	req.Host = hostValue
+	req.TokenID = tokenID
+	req.TokenValue = tokenValue
+	req.ServerName = serverName
+	req.Source = registrationSource
+
+	if req.CheckRegistration {
+		if typeValue == "" || hostValue == "" || serverName == "" {
+			missingMessage := canonicalAutoRegisterCheckMissingFieldsMessage(typeValue, hostValue, serverName)
+			log.Error().
+				Str("type", req.Type).
+				Str("host", req.Host).
+				Str("serverName", req.ServerName).
+				Msg(missingMessage)
+			http.Error(w, missingMessage, http.StatusBadRequest)
+			return
+		}
+
+		normalizedCandidates, err := normalizeAutoRegisterHostCandidates(req.Type, req.Host, req.CandidateHosts)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(autoRegisterCheckResponse{
+			Registered: h.autoRegisteredNodeExists(r.Context(), req, normalizedCandidates),
+		}); err != nil {
+			log.Error().Err(err).Msg("Failed to encode auto-register registration check response")
+		}
+		return
+	}
+
 	if hasTokenID != hasTokenValue {
 		log.Error().
 			Bool("hasTokenID", hasTokenID).
@@ -658,29 +767,10 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 		http.Error(w, missingMessage, http.StatusBadRequest)
 		return
 	}
-	if registrationSource == "" {
-		http.Error(w, "source is required", http.StatusBadRequest)
-		return
-	}
-	if !isCanonicalAutoRegisterSource(registrationSource) {
-		http.Error(w, "source must be 'agent' or 'script'", http.StatusBadRequest)
-		return
-	}
-	if !isCanonicalAutoRegisterType(typeValue) {
-		http.Error(w, "type must be 'pve' or 'pbs'", http.StatusBadRequest)
-		return
-	}
 	if !isCanonicalAutoRegisterTokenID(typeValue, tokenID) {
 		http.Error(w, "tokenId must be a canonical Pulse-managed token id", http.StatusBadRequest)
 		return
 	}
-
-	req.Type = typeValue
-	req.Host = hostValue
-	req.TokenID = tokenID
-	req.TokenValue = tokenValue
-	req.ServerName = serverName
-	req.Source = registrationSource
 
 	host, fingerprint, verifySSL, candidateHosts, err := selectAutoRegisterHost(req.Type, req.Host, req.CandidateHosts)
 	if err != nil {

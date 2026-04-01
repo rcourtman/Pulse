@@ -504,6 +504,15 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://10.0.0.1:8006", "setup-token-run-for-type")))
 		case "/api/auto-register":
+			var payload map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode auto-register payload: %v", err)
+			}
+			if check, _ := payload["checkRegistration"].(bool); check {
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"registered":true}`))
+				return
+			}
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(fmt.Sprintf(`{"status":"success","message":"Node node-1 registered successfully at https://10.0.0.1:8006","action":"use_token","type":"pve","source":"agent","host":"https://10.0.0.1:8006","nodeId":"node-1","nodeName":"node-1","tokenId":"%s","tokenValue":"my-token"}`, expectedTokenID)))
@@ -519,6 +528,9 @@ func TestProxmoxSetup_RunForType(t *testing.T) {
 
 	t.Run("skips if already registered", func(t *testing.T) {
 		mc.statFn = func(name string) (os.FileInfo, error) { return nil, nil } // exists
+		mc.dialTimeoutFn = func(n, a string, d time.Duration) (net.Conn, error) {
+			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
+		}
 		res, err := p.runForType(context.Background(), "pve")
 		if err != nil || res != nil {
 			t.Errorf("expected skip")
@@ -756,6 +768,172 @@ func TestProxmoxSetup_RunAll(t *testing.T) {
 		results, _ := p.RunAll(context.Background())
 		if len(results) != 1 || results[0].ProxmoxType != "pbs" {
 			t.Errorf("expected pbs result")
+		}
+	})
+
+	t.Run("re-registers when Pulse has no matching node for a stale local marker", func(t *testing.T) {
+		mc := &mockCollector{}
+		requestKinds := make([]string, 0, 2)
+		var expectedPVETokenID string
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/setup-script-url":
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode setup token payload: %v", err)
+				}
+				publicURL := "http://" + r.Host
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, payload["type"].(string), payload["host"].(string), "setup-token-check")))
+			case "/api/auto-register":
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode auto-register payload: %v", err)
+				}
+				if check, _ := payload["checkRegistration"].(bool); check {
+					requestKinds = append(requestKinds, "check")
+					if _, ok := payload["tokenId"]; ok {
+						t.Fatalf("expected registration check payload to omit tokenId, got %#v", payload["tokenId"])
+					}
+					if _, ok := payload["tokenValue"]; ok {
+						t.Fatalf("expected registration check payload to omit tokenValue, got %#v", payload["tokenValue"])
+					}
+					if payload["source"] != "agent" {
+						t.Fatalf("source = %#v, want agent", payload["source"])
+					}
+					w.Header().Set("Content-Type", "application/json")
+					_, _ = w.Write([]byte(`{"registered":false}`))
+					return
+				}
+				requestKinds = append(requestKinds, "register")
+				if payload["tokenId"] != expectedPVETokenID {
+					t.Fatalf("tokenId = %#v, want %q", payload["tokenId"], expectedPVETokenID)
+				}
+				if payload["tokenValue"] != "v1" {
+					t.Fatalf("tokenValue = %#v, want v1", payload["tokenValue"])
+				}
+				host := payload["host"].(string)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_, _ = w.Write([]byte(fmt.Sprintf(`{"status":"success","message":"Node node-1 registered successfully at %s","action":"use_token","type":"pve","source":"agent","host":"%s","nodeId":"node-1","nodeName":"node-1","tokenId":"%s","tokenValue":"v1"}`, host, host, expectedPVETokenID)))
+			default:
+				t.Fatalf("unexpected path %s", r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
+		stateDir := t.TempDir()
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", stateDir, false)
+		p.retryBackoffs = []time.Duration{}
+		expectedPVETokenID = fmt.Sprintf("%s!%s", proxmoxUserPVE, p.monitorTokenName())
+
+		pveStateFile := p.pveStateFilePath()
+		mc.lookPathFn = func(file string) (string, error) {
+			if file == "pvesh" {
+				return "/bin/pvesh", nil
+			}
+			return "", os.ErrNotExist
+		}
+		mc.statFn = func(name string) (os.FileInfo, error) {
+			if name == pveStateFile {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		}
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name == "pveum" && len(arg) > 2 && arg[1] == "token" && arg[2] == "add" {
+				return "│ value │ v1 │", nil
+			}
+			return "", nil
+		}
+		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
+		}
+		mc.mkdirAllFn = func(path string, perm os.FileMode) error { return nil }
+		mc.chmodFn = func(name string, mode os.FileMode) error { return nil }
+		mc.writeFileFn = func(filename string, data []byte, perm os.FileMode) error { return nil }
+
+		results, err := p.RunAll(context.Background())
+		if err != nil {
+			t.Fatalf("RunAll: %v", err)
+		}
+		if len(results) != 1 || !results[0].Registered || results[0].ProxmoxType != "pve" {
+			t.Fatalf("expected one re-registered pve result, got %#v", results)
+		}
+		if strings.Join(requestKinds, ",") != "check,register" {
+			t.Fatalf("unexpected request sequence: %v", requestKinds)
+		}
+	})
+
+	t.Run("skips when Pulse confirms the local marker still matches a registered node", func(t *testing.T) {
+		mc := &mockCollector{}
+		requestKinds := make([]string, 0, 1)
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/setup-script-url":
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode setup token payload: %v", err)
+				}
+				publicURL := "http://" + r.Host
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, payload["type"].(string), payload["host"].(string), "setup-token-check")))
+			case "/api/auto-register":
+				var payload map[string]any
+				if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+					t.Fatalf("decode auto-register payload: %v", err)
+				}
+				if check, _ := payload["checkRegistration"].(bool); !check {
+					t.Fatalf("expected only registration-check request, got %#v", payload)
+				}
+				requestKinds = append(requestKinds, "check")
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"registered":true}`))
+			default:
+				t.Fatalf("unexpected path %s", r.URL.Path)
+			}
+		}))
+		defer server.Close()
+
+		stateDir := t.TempDir()
+		p := NewProxmoxSetup(zerolog.Nop(), server.Client(), mc, server.URL, "token", "", "host", "", stateDir, false)
+		p.retryBackoffs = []time.Duration{}
+
+		pveStateFile := p.pveStateFilePath()
+		mc.lookPathFn = func(file string) (string, error) {
+			if file == "pvesh" {
+				return "/bin/pvesh", nil
+			}
+			return "", os.ErrNotExist
+		}
+		mc.statFn = func(name string) (os.FileInfo, error) {
+			if name == pveStateFile {
+				return nil, nil
+			}
+			return nil, os.ErrNotExist
+		}
+		mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+			if name == "hostname" && len(arg) == 1 && arg[0] == "-I" {
+				return "", nil
+			}
+			t.Fatalf("did not expect token setup command %q %v", name, arg)
+			return "", nil
+		}
+		mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+			return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.1")}}, nil
+		}
+
+		results, err := p.RunAll(context.Background())
+		if err != nil {
+			t.Fatalf("RunAll: %v", err)
+		}
+		if len(results) != 0 {
+			t.Fatalf("expected no setup results when registration already exists, got %#v", results)
+		}
+		if strings.Join(requestKinds, ",") != "check" {
+			t.Fatalf("unexpected request sequence: %v", requestKinds)
 		}
 	})
 
