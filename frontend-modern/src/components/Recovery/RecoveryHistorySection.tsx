@@ -16,7 +16,10 @@ import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import type { RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
-import { getRecoveryFilterPanelClearClass } from '@/utils/recoveryActionPresentation';
+import {
+  getRecoveryBreadcrumbLinkClass,
+  getRecoveryFilterPanelClearClass,
+} from '@/utils/recoveryActionPresentation';
 import {
   getRecoveryArtifactModePresentation,
   type RecoveryArtifactMode,
@@ -145,6 +148,25 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
       <Show when={!props.kioskMode}>
         <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
           <div class="px-4 py-3 sm:px-5">
+            <Show when={props.hasFocusedRollup() && props.selectedHistoryItemLabel()}>
+              <div class="mb-3 flex min-w-0 flex-wrap items-center gap-2 text-sm">
+                <button
+                  type="button"
+                  class={getRecoveryBreadcrumbLinkClass()}
+                  onClick={() => {
+                    props.setRollupId('');
+                    props.setCurrentPage(1);
+                  }}
+                >
+                  All protected items
+                </button>
+                <span class="text-muted">/</span>
+                <span class="min-w-0 truncate font-medium text-base-content">
+                  {props.selectedHistoryItemLabel()}
+                </span>
+              </div>
+            </Show>
+
             <PageControls
               role="group"
               aria-label="Recovery events controls"

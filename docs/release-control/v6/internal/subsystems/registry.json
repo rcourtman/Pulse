@@ -4079,6 +4079,7 @@
             ],
             "match_files": [
               "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx",
+              "frontend-modern/src/features/recovery/createNonSuspendingQuery.ts",
               "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
               "frontend-modern/src/hooks/useDashboardRecovery.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",

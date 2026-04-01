@@ -1,4 +1,4 @@
-import { Accessor, createMemo, createResource, onCleanup } from 'solid-js';
+import { Accessor, createMemo } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type {
   RecoveryPoint,
@@ -6,6 +6,7 @@ import type {
   RecoveryPointsTransportResponse,
 } from '@/types/recovery';
 import { normalizeRecoveryPointsResponse } from '@/utils/recoveryPlatformModel';
+import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
 
 const RECOVERY_POINTS_URL = '/api/recovery/points';
 const DEFAULT_LIMIT = 200;
@@ -124,28 +125,41 @@ async function fetchRecoveryPointsResponse(
 }
 
 export function useRecoveryPoints(query?: Accessor<RecoveryPointsQuery | null | undefined>) {
-  const [response, { refetch }] = createResource<RecoveryPointsResponse, string | null>(
-    () => {
-      if (!query) return '__all__';
-      const q = query();
-      if (!q) return null;
-      return serializeQuery(q);
+  const source = createMemo<string | null>(() => {
+    if (!query) return '__all__';
+    const q = query();
+    if (!q) return null;
+    return serializeQuery(q);
+  });
+
+  const state = createNonSuspendingQuery<RecoveryPointsResponse, string>({
+    source,
+    fetcher: async (key) => fetchRecoveryPointsResponse(parseSerializedQuery(key)),
+    initialValue: {
+      data: [],
+      meta: { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 },
     },
-    async (key) => fetchRecoveryPointsResponse(parseSerializedQuery(key)),
-  );
+    pollMs: REFRESH_MS,
+  });
 
-  const points = createMemo<RecoveryPoint[]>(() => response()?.data || []);
+  const points = createMemo<RecoveryPoint[]>(() => state.value().data || []);
   const meta = createMemo(
-    () => response()?.meta || { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 },
+    () => state.value().meta || { page: 1, limit: DEFAULT_LIMIT, total: 0, totalPages: 1 },
   );
 
-  const interval = setInterval(() => void refetch(), REFRESH_MS);
-  onCleanup(() => clearInterval(interval));
+  const response = {
+    get error() {
+      return state.error();
+    },
+    get loading() {
+      return state.loading();
+    },
+  };
 
   return {
     response,
     points,
     meta,
-    refetch,
+    refetch: state.refetch,
   };
 }

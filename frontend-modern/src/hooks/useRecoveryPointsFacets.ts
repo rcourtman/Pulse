@@ -1,6 +1,7 @@
-import { Accessor, createMemo, createResource, onCleanup } from 'solid-js';
+import { Accessor, createMemo } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { RecoveryPointsFacets, RecoveryPointsFacetsResponse } from '@/types/recovery';
+import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
 
 const RECOVERY_FACETS_URL = '/api/recovery/facets';
 const REFRESH_MS = 30_000;
@@ -116,24 +117,34 @@ async function fetchFacets(
 }
 
 export function useRecoveryPointsFacets(query?: Accessor<RecoveryFacetsQuery | null | undefined>) {
-  const [response, { refetch }] = createResource<RecoveryPointsFacetsResponse, string | null>(
-    () => {
-      if (!query) return '__all__';
-      const q = query();
-      if (!q) return null;
-      return serializeQuery(q);
+  const source = createMemo<string | null>(() => {
+    if (!query) return '__all__';
+    const q = query();
+    if (!q) return null;
+    return serializeQuery(q);
+  });
+
+  const state = createNonSuspendingQuery<RecoveryPointsFacetsResponse, string>({
+    source,
+    fetcher: async (key) => fetchFacets(parseSerializedQuery(key)),
+    initialValue: { data: {} },
+    pollMs: REFRESH_MS,
+  });
+
+  const facets = createMemo<RecoveryPointsFacets>(() => state.value().data || {});
+
+  const response = {
+    get error() {
+      return state.error();
     },
-    async (key) => fetchFacets(parseSerializedQuery(key)),
-  );
-
-  const facets = createMemo<RecoveryPointsFacets>(() => response()?.data || {});
-
-  const interval = setInterval(() => void refetch(), REFRESH_MS);
-  onCleanup(() => clearInterval(interval));
+    get loading() {
+      return state.loading();
+    },
+  };
 
   return {
     response,
     facets,
-    refetch,
+    refetch: state.refetch,
   };
 }

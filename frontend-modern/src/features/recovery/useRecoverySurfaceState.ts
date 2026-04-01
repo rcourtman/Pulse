@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
@@ -9,13 +9,20 @@ import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
 import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
+import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
+  getSourcePlatformLabel,
   normalizeSourcePlatformKey,
   normalizeSourcePlatformQueryValue,
 } from '@/utils/sourcePlatforms';
 import { buildSourcePlatformOptions } from '@/utils/sourcePlatformOptions';
-import { getRecoveryPointPlatform, getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
 import {
+  getRecoveryPointPlatform,
+  getRecoveryRollupPlatforms,
+} from '@/utils/recoveryPlatformModel';
+import {
+  getRecoveryRollupItemLabel,
+  getRecoveryRollupItemSecondaryLabel,
   normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 import {
@@ -24,9 +31,7 @@ import {
   getRecoveryItemTypePresentation,
   normalizeRecoveryItemTypeQueryValue,
 } from '@/utils/recoveryItemTypePresentation';
-import {
-  normalizeRecoveryOutcome as normalizeOutcome,
-} from '@/utils/recoveryOutcomePresentation';
+import { normalizeRecoveryOutcome as normalizeOutcome } from '@/utils/recoveryOutcomePresentation';
 import type { RecoveryArtifactMode } from '@/utils/recoveryArtifactModePresentation';
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
 
@@ -75,6 +80,10 @@ const normalizeRecoveryItemTypeSelection = (value: string | null | undefined): s
 export function useRecoverySurfaceState() {
   const navigate = useNavigate();
   const location = useLocation();
+  const routeStateNavigate = createRouteStateNavigateScheduler(
+    navigate,
+    () => `${untrack(() => location.pathname)}${untrack(() => location.search || '')}`,
+  );
 
   const storageRecoveryResources = useStorageRecoveryResources();
 
@@ -96,6 +105,7 @@ export function useRecoverySurfaceState() {
   const [chartRangeDays, setChartRangeDays] = createSignal<7 | 30 | 90 | 365>(30);
   const [selectedDateKey, setSelectedDateKey] = createSignal<string | null>(null);
   const [currentPage, setCurrentPage] = createSignal(1);
+  const [hydratedLocationKey, setHydratedLocationKey] = createSignal('');
 
   const tzOffsetMinutes = createMemo(() => -new Date().getTimezoneOffset());
 
@@ -143,6 +153,100 @@ export function useRecoverySurfaceState() {
   });
 
   const rollups = createMemo<ProtectionRollup[]>(() => recoveryRollups.rollups() || []);
+  const selectedRollup = createMemo<ProtectionRollup | null>(() => {
+    const selected = rollupId().trim();
+    if (!selected) return null;
+    return rollups().find((rollup) => rollup.rollupId === selected) || null;
+  });
+
+  const recoveryHistoryItemCatalog = useRecoveryRollups(() => {
+    if (!rollupId().trim()) return null;
+    const window = chartWindow();
+    const vf = verificationFilter();
+    return {
+      platform: platformFilter() === 'all' ? null : platformFilter(),
+      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
+      mode: modeFilter() === 'all' ? null : modeFilter(),
+      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
+      q: queryFilter().trim() || null,
+      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
+      node: nodeFilter() === 'all' ? null : nodeFilter(),
+      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
+      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      verification: vf === 'all' ? null : vf,
+      from: window.from,
+      to: window.to,
+    };
+  });
+
+  const selectableRollups = createMemo<ProtectionRollup[]>(() => {
+    const selected = rollupId().trim();
+    if (!selected) return rollups();
+    const catalog = recoveryHistoryItemCatalog.rollups() || [];
+    if (catalog.length > 0) return catalog;
+    const focused = selectedRollup();
+    return focused ? [focused] : [];
+  });
+
+  const selectedHistoryRollup = createMemo<ProtectionRollup | null>(() => {
+    const selected = rollupId().trim();
+    if (!selected) return null;
+    return (
+      selectableRollups().find((rollup) => rollup.rollupId === selected) || selectedRollup() || null
+    );
+  });
+
+  const resourcesById = createMemo(() => {
+    const map = new Map<string, Resource>();
+    for (const resource of storageRecoveryResources.resources() || []) {
+      if (resource?.id) map.set(resource.id, resource);
+    }
+    return map;
+  });
+
+  const selectedHistoryItemLabel = createMemo(() => {
+    const rollup = selectedHistoryRollup();
+    return rollup ? getRecoveryRollupItemLabel(rollup, resourcesById()) : null;
+  });
+
+  const historyItemOptions = createMemo(() => {
+    const resourceIndex = resourcesById();
+    const options = selectableRollups().map((rollup) => {
+      const itemTypeLabel =
+        getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup))?.label || null;
+      const platformLabels = getRecoveryRollupPlatforms(rollup)
+        .map((platform) => getSourcePlatformLabel(String(platform || '').trim()))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right));
+      return {
+        rollupId: rollup.rollupId,
+        label: getRecoveryRollupItemLabel(rollup, resourceIndex),
+        secondaryLabel: getRecoveryRollupItemSecondaryLabel(rollup),
+        contextLabel: [itemTypeLabel, platformLabels.join(', ')].filter(Boolean).join(' · '),
+      };
+    });
+
+    const selected = selectedHistoryRollup();
+    if (!selected) return options;
+    if (options.some((option) => option.rollupId === selected.rollupId)) return options;
+
+    const itemTypeLabel =
+      getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(selected))?.label || null;
+    const platformLabels = getRecoveryRollupPlatforms(selected)
+      .map((platform) => getSourcePlatformLabel(String(platform || '').trim()))
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+
+    return [
+      {
+        rollupId: selected.rollupId,
+        label: getRecoveryRollupItemLabel(selected, resourceIndex),
+        secondaryLabel: getRecoveryRollupItemSecondaryLabel(selected),
+        contextLabel: [itemTypeLabel, platformLabels.join(', ')].filter(Boolean).join(' · '),
+      },
+      ...options,
+    ];
+  });
 
   const recoveryPoints = useRecoveryPoints(() => {
     const rid = rollupId().trim();
@@ -210,15 +314,8 @@ export function useRecoverySurfaceState() {
     };
   });
 
-  const resourcesById = createMemo(() => {
-    const map = new Map<string, Resource>();
-    for (const resource of storageRecoveryResources.resources() || []) {
-      if (resource?.id) map.set(resource.id, resource);
-    }
-    return map;
-  });
-
   createEffect(() => {
+    const currentPath = `${location.pathname}${location.search || ''}`;
     const parsed = parseRecoveryLinkSearch(location.search);
 
     const nextRollup = normalizeRecoveryRouteValue(parsed.rollupId);
@@ -277,6 +374,10 @@ export function useRecoverySurfaceState() {
         setHistoryOutcomeFilter('all');
       }
     }
+
+    if (hydratedLocationKey() !== currentPath) {
+      setHydratedLocationKey(currentPath);
+    }
   });
 
   createEffect(() => {
@@ -299,10 +400,11 @@ export function useRecoverySurfaceState() {
 
   createEffect(() => {
     const rid = rollupId().trim();
-    const defaultView: RecoveryWorkspaceView =
-      rid || selectedDateKey() ? 'events' : 'inventory';
+    const defaultView: RecoveryWorkspaceView = rid || selectedDateKey() ? 'events' : 'inventory';
     const status = historyOutcomeFilter() !== 'all' ? historyOutcomeFilter() : null;
     const verification = verificationFilter() !== 'all' ? verificationFilter() : null;
+    const currentPath = `${location.pathname}${location.search || ''}`;
+    if (hydratedLocationKey() !== currentPath) return;
 
     const nextPath = buildRecoveryPath({
       rollupId: rid || null,
@@ -322,10 +424,13 @@ export function useRecoverySurfaceState() {
       namespace: namespaceFilter() !== 'all' ? namespaceFilter() : null,
     });
 
-    const currentPath = `${location.pathname}${location.search || ''}`;
     if (nextPath !== currentPath) {
-      navigate(nextPath, { replace: true });
+      routeStateNavigate.schedule(nextPath);
     }
+  });
+
+  onCleanup(() => {
+    routeStateNavigate.cleanup();
   });
 
   const facets = createMemo(() => recoveryFacets.facets() || {});
@@ -429,6 +534,7 @@ export function useRecoverySurfaceState() {
     currentPage,
     facets,
     historyOutcomeFilter,
+    historyItemOptions,
     itemTypeFilter,
     itemTypeOptions,
     modeFilter,
@@ -449,6 +555,7 @@ export function useRecoverySurfaceState() {
     rollups,
     scopeFilter,
     selectedDateKey,
+    selectedHistoryItemLabel,
     setChartRangeDays,
     setClusterFilter,
     setCurrentPage,

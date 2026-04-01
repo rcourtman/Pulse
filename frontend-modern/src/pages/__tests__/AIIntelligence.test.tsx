@@ -24,6 +24,7 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
   },
   intelligenceState: {
     findings: [] as Array<Record<string, unknown>>,
+    circuitBreakerStatus: null as { state: string; consecutive_failures: number } | null,
     summary: null as {
       timestamp: string;
       overall_health: {
@@ -171,6 +172,9 @@ vi.mock('@/stores/aiIntelligence', () => {
     },
     get intelligenceSummary() {
       return intelligenceState.summary;
+    },
+    get circuitBreakerStatus() {
+      return intelligenceState.circuitBreakerStatus;
     },
     get correlations() {
       return correlationsState();
@@ -321,6 +325,7 @@ describe('AIIntelligence entitlement gating', () => {
     findingsPanelState.latestProps = null;
     runHistoryState.selection = null;
     intelligenceState.findings = [];
+    intelligenceState.circuitBreakerStatus = null;
     intelligenceState.summary = null;
     intelligenceState.correlations = null;
     setCorrelationsState(null);
@@ -844,9 +849,6 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getAllByText('Coverage incomplete').length).toBeGreaterThan(0);
       expect(screen.getByText('No recent full patrol')).toBeInTheDocument();
       expect(screen.getAllByText(/Last activity/i)).toHaveLength(1);
-      expect(screen.getAllByText('Active findings')).toHaveLength(1);
-      expect(screen.getAllByText('Warnings')).toHaveLength(1);
-      expect(screen.getAllByText('Critical')).toHaveLength(1);
       expect(findingsPanelState.latestProps).not.toBeNull();
     });
 
@@ -854,6 +856,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.queryByText(/Last patrol/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/^Last:/i)).not.toBeInTheDocument();
     expect(screen.queryByText('Partial verification')).not.toBeInTheDocument();
+    expect(screen.queryByText('Active findings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Warnings')).not.toBeInTheDocument();
+    expect(screen.queryByText('Critical')).not.toBeInTheDocument();
     expect(
       screen.getAllByText(
         'Patrol coverage is incomplete: recent activity was limited to scoped runs and ended with errors, so overall health is not fully verified.',
@@ -1011,8 +1016,8 @@ describe('AIIntelligence entitlement gating', () => {
           'Patrol has an active runtime issue: Insufficient API credits. Recent coverage is also incomplete, so the rest of your infrastructure is not fully verified.',
         ),
       ).toBeInTheDocument();
-      expect(screen.getByText('Infrastructure findings')).toBeInTheDocument();
       expect(screen.getByText('Runtime issues')).toBeInTheDocument();
+      expect(screen.getByText('Activity')).toBeInTheDocument();
     });
 
     expect(screen.getByText(/Assessment C · 60\/100/)).toBeInTheDocument();
@@ -1024,7 +1029,9 @@ describe('AIIntelligence entitlement gating', () => {
     expect(assessmentShell).not.toBeNull();
     expect(assessmentShell!.className).toContain('bg-surface');
     expect(assessmentShell!.className).not.toContain('bg-amber-50');
+    expect(screen.queryByText('Infrastructure findings')).not.toBeInTheDocument();
     expect(screen.queryByText('Warnings')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('patrol-status-bar')).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Findings' }).textContent).toBe('Findings 1');
 

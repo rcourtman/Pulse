@@ -1,7 +1,8 @@
-import { createResource, onCleanup } from 'solid-js';
+import { createMemo, type Accessor } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { ProtectionRollup, RecoveryRollupsTransportResponse } from '@/types/recovery';
 import { normalizeRecoveryRollupsResponse } from '@/utils/recoveryPlatformModel';
+import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
 
 const RECOVERY_ROLLUPS_URL = '/api/recovery/rollups';
 const PAGE_LIMIT = 500;
@@ -105,21 +106,35 @@ async function fetchRecoveryRollups(
 }
 
 export function useRecoveryRollups(query?: () => RecoveryRollupsQuery | null | undefined) {
-  const [rollups, { refetch }] = createResource<ProtectionRollup[], string | null>(
-    () => {
-      if (!query) return '__all__';
-      const q = query();
-      if (!q) return null;
-      return serializeQuery(q);
-    },
-    async (key) => fetchRecoveryRollups(parseSerializedQuery(key)),
-  );
+  const source = createMemo<string | null>(() => {
+    if (!query) return '__all__';
+    const q = query();
+    if (!q) return null;
+    return serializeQuery(q);
+  });
 
-  const interval = setInterval(() => void refetch(), REFRESH_MS);
-  onCleanup(() => clearInterval(interval));
+  const state = createNonSuspendingQuery<ProtectionRollup[], string>({
+    source,
+    fetcher: async (key) => fetchRecoveryRollups(parseSerializedQuery(key)),
+    initialValue: [],
+    pollMs: REFRESH_MS,
+  });
+
+  const rollups = (() => state.value()) as Accessor<ProtectionRollup[]> & {
+    readonly error: unknown;
+    readonly loading: boolean;
+  };
+  Object.defineProperties(rollups, {
+    error: {
+      get: () => state.error(),
+    },
+    loading: {
+      get: () => state.loading(),
+    },
+  });
 
   return {
     rollups,
-    refetch,
+    refetch: state.refetch,
   };
 }

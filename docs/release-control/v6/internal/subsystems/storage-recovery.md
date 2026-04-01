@@ -42,16 +42,19 @@ querying, and the operator-facing storage health presentation layer.
 16. `frontend-modern/src/utils/storageSources.ts`
 17. `frontend-modern/src/hooks/useRecoveryPoints.ts`
 18. `frontend-modern/src/hooks/useRecoveryRollups.ts`
-19. `frontend-modern/src/pages/RecoveryRoute.tsx`
-20. `frontend-modern/src/routing/resourceLinks.ts`
-21. `frontend-modern/src/pages/Dashboard.tsx`
-22. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
-23. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
-24. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
-25. `frontend-modern/src/types/recovery.ts`
-26. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
-27. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-28. `frontend-modern/src/utils/textPresentation.ts`
+19. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
+20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
+21. `frontend-modern/src/features/recovery/createNonSuspendingQuery.ts`
+22. `frontend-modern/src/pages/RecoveryRoute.tsx`
+23. `frontend-modern/src/routing/resourceLinks.ts`
+24. `frontend-modern/src/pages/Dashboard.tsx`
+25. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
+26. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
+27. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
+28. `frontend-modern/src/types/recovery.ts`
+29. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
+30. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+31. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -208,6 +211,14 @@ querying, and the operator-facing storage health presentation layer.
     presentation owned by `frontend-modern/src/index.css` render the emphasis,
     rather than carrying storage-local sky fill classes that drift from the
     rest of the product or obscure inline capacity bars.
+17. Keep recovery transport refreshes inside the recovery-owned feature state.
+    `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
+    recovery data hooks may retain the last fulfilled rollups, points, facets,
+    and series while the next request is in flight through
+    `frontend-modern/src/features/recovery/createNonSuspendingQuery.ts`, but
+    that retained-value behavior must stay route-owned and filter-owned through
+    the canonical recovery state model instead of recreating page-local
+    suspense escape hatches in `Recovery.tsx` or the recovery sections.
 
 ## Current State
 

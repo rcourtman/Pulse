@@ -5138,4 +5138,5 @@ describe('frontend resource type boundaries', () => {
     expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookTestLabel');
     expect(alertWebhookPresentationSource).toContain('export function getAlertWebhookSubmitLabel');
   });
+
 });

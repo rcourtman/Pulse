@@ -1,6 +1,7 @@
-import { Accessor, createMemo, createResource, onCleanup } from 'solid-js';
+import { Accessor, createMemo } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { RecoveryPointsSeriesBucket, RecoveryPointsSeriesResponse } from '@/types/recovery';
+import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
 
 const RECOVERY_SERIES_URL = '/api/recovery/series';
 const REFRESH_MS = 30_000;
@@ -102,24 +103,34 @@ async function fetchSeries(
 }
 
 export function useRecoveryPointsSeries(query?: Accessor<RecoverySeriesQuery | null | undefined>) {
-  const [response, { refetch }] = createResource<RecoveryPointsSeriesResponse, string | null>(
-    () => {
-      if (!query) return '__all__';
-      const q = query();
-      if (!q) return null;
-      return serializeQuery(q);
+  const source = createMemo<string | null>(() => {
+    if (!query) return '__all__';
+    const q = query();
+    if (!q) return null;
+    return serializeQuery(q);
+  });
+
+  const state = createNonSuspendingQuery<RecoveryPointsSeriesResponse, string>({
+    source,
+    fetcher: async (key) => fetchSeries(parseSerializedQuery(key)),
+    initialValue: { data: [] },
+    pollMs: REFRESH_MS,
+  });
+
+  const series = createMemo<RecoveryPointsSeriesBucket[]>(() => state.value().data || []);
+
+  const response = {
+    get error() {
+      return state.error();
     },
-    async (key) => fetchSeries(parseSerializedQuery(key)),
-  );
-
-  const series = createMemo<RecoveryPointsSeriesBucket[]>(() => response()?.data || []);
-
-  const interval = setInterval(() => void refetch(), REFRESH_MS);
-  onCleanup(() => clearInterval(interval));
+    get loading() {
+      return state.loading();
+    },
+  };
 
   return {
     response,
     series,
-    refetch,
+    refetch: state.refetch,
   };
 }
