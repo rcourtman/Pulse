@@ -78,6 +78,39 @@ func TestClientVMFSInfoObjectResult(t *testing.T) {
 	}
 }
 
+func TestClientVMFSInfoObjectFilesystemResult(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/node1/qemu/100/agent/get-fsinfo":
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"result": map[string]interface{}{
+						"name":        "root",
+						"type":        "ext4",
+						"mountpoint":  "/",
+						"total-bytes": 512,
+						"used-bytes":  256,
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	ctx := context.Background()
+	filesystems, err := client.GetVMFSInfo(ctx, "node1", 100)
+	if err != nil {
+		t.Fatalf("GetVMFSInfo error: %v", err)
+	}
+	if len(filesystems) != 1 {
+		t.Fatalf("expected single filesystem, got %+v", filesystems)
+	}
+	if filesystems[0].Disk != "root-filesystem" {
+		t.Fatalf("expected synthesized root disk identifier, got %+v", filesystems[0])
+	}
+}
+
 func TestClientContainerInterfacesError(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

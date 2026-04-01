@@ -206,6 +206,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 				diskTotal := vm.MaxDisk
 				diskFree := diskTotal - diskUsed
 				diskUsage := safePercentage(float64(diskUsed), float64(diskTotal))
+				diskFromAgent := false
 				diskStatusReason := ""
 				var individualDisks []models.Disk
 
@@ -428,6 +429,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								diskUsed = usedBytes
 								diskFree = totalBytes - usedBytes
 								diskUsage = safePercentage(float64(usedBytes), float64(totalBytes))
+								diskFromAgent = true
 								diskStatusReason = "" // Clear reason on success
 
 								log.Info().
@@ -462,6 +464,24 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					// Running VM but no vmStatus - show allocated disk
 					diskUsage = -1
 					diskStatusReason = "no-status"
+				}
+
+				if vm.Status == "running" && !diskFromAgent {
+					if hostDisk, hostDisks, ok := resolveGuestDiskFromLinkedHostAgent(guestID, vmIDToHostAgent); ok && hostDisk.Total > 0 {
+						diskTotal = uint64(hostDisk.Total)
+						diskUsed = uint64(hostDisk.Used)
+						diskFree = uint64(hostDisk.Free)
+						diskUsage = hostDisk.Usage
+						individualDisks = hostDisks
+						diskStatusReason = ""
+						log.Debug().
+							Str("instance", instanceName).
+							Str("vm", vm.Name).
+							Str("node", n.Node).
+							Int("vmid", vm.VMID).
+							Float64("usage", hostDisk.Usage).
+							Msg("QEMU disk: using linked Pulse host agent disk summary")
+					}
 				}
 
 				memTotalBytes := clampToInt64(memTotal)

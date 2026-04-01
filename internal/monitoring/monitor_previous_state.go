@@ -50,7 +50,7 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 			continue
 		}
 		modelHost := previousHostFromView(host)
-		if modelHost.LinkedVMID == "" || modelHost.Status != "online" || modelHost.Memory.Total <= 0 {
+		if modelHost.LinkedVMID == "" || modelHost.Status != "online" {
 			continue
 		}
 		ctx.hostAgentsByVMID[modelHost.LinkedVMID] = modelHost
@@ -126,6 +126,7 @@ func previousHostFromView(host *unifiedresources.HostView) models.Host {
 		Status:     string(host.Status()),
 		LinkedVMID: host.LinkedVMID(),
 		LastSeen:   host.LastSeen(),
+		Disks:      guestDisksFromReadStateView(host.Disks()),
 		Memory: models.Memory{
 			Used:  host.MemoryUsed(),
 			Total: host.MemoryTotal(),

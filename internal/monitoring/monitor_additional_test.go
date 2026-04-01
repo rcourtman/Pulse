@@ -2,6 +2,7 @@ package monitoring
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -274,5 +275,50 @@ func TestClusterEndpointEffectiveURL(t *testing.T) {
 	endpoint = config.ClusterEndpoint{}
 	if got := clusterEndpointEffectiveURL(endpoint, true, false); got != "" {
 		t.Fatalf("empty endpoint = %q, want empty", got)
+	}
+}
+
+func TestBuildClusterEndpointsForInit_RespectsDiscoveryPolicy(t *testing.T) {
+	oldLookup := lookupIPFunc
+	lookupIPFunc = func(host string) ([]net.IP, error) {
+		switch host {
+		case "allowed.local":
+			return []net.IP{net.ParseIP("10.0.0.10")}, nil
+		case "blocked.local":
+			return []net.IP{net.ParseIP("192.168.1.10")}, nil
+		default:
+			return nil, nil
+		}
+	}
+	t.Cleanup(func() {
+		lookupIPFunc = oldLookup
+	})
+
+	monitor := &Monitor{
+		config: &config.Config{
+			Discovery: config.DiscoveryConfig{
+				SubnetAllowlist: []string{"10.0.0.0/8"},
+			},
+		},
+	}
+
+	endpoints, _ := monitor.buildClusterEndpointsForInit(config.PVEInstance{
+		Name:      "cluster-a",
+		Host:      "https://main.local:8006",
+		VerifySSL: true,
+		ClusterEndpoints: []config.ClusterEndpoint{
+			{NodeName: "node-a", Host: "allowed.local"},
+			{NodeName: "node-b", Host: "blocked.local"},
+		},
+	})
+
+	if len(endpoints) != 2 {
+		t.Fatalf("expected allowed endpoint plus main host fallback, got %#v", endpoints)
+	}
+	if endpoints[0] != "https://allowed.local:8006" {
+		t.Fatalf("expected discovery-allowed endpoint first, got %#v", endpoints)
+	}
+	if endpoints[1] != "https://main.local:8006" {
+		t.Fatalf("expected main host fallback retained, got %#v", endpoints)
 	}
 }

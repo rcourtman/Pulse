@@ -128,6 +128,8 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 	}
 
 	healthMsg := summarizeCephHealth(status)
+	numMons := countCephMonitorDaemons(status)
+	numMgrs := countCephManagerDaemons(status)
 
 	cluster := models.CephCluster{
 		ID:             clusterID,
@@ -140,8 +142,8 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 		UsedBytes:      usedBytes,
 		AvailableBytes: availBytes,
 		UsagePercent:   usagePercent,
-		NumMons:        countServiceDaemons(status.ServiceMap.Services, "mon"),
-		NumMgrs:        countServiceDaemons(status.ServiceMap.Services, "mgr"),
+		NumMons:        numMons,
+		NumMgrs:        numMgrs,
 		NumOSDs:        status.OSDMap.NumOSDs,
 		NumOSDsUp:      status.OSDMap.NumUpOSDs,
 		NumOSDsIn:      status.OSDMap.NumInOSDs,
@@ -152,6 +154,29 @@ func buildCephClusterModel(instanceName string, status *proxmox.CephStatus, df *
 	}
 
 	return cluster
+}
+
+func countCephMonitorDaemons(status *proxmox.CephStatus) int {
+	if status == nil {
+		return 0
+	}
+	if status.MonMap.NumMons > 0 {
+		return status.MonMap.NumMons
+	}
+	return countServiceDaemons(status.ServiceMap.Services, "mon")
+}
+
+func countCephManagerDaemons(status *proxmox.CephStatus) int {
+	if status == nil {
+		return 0
+	}
+	if status.MgrMap.NumMgrs > 0 {
+		return status.MgrMap.NumMgrs
+	}
+	if status.MgrMap.ActiveName != "" {
+		return 1 + len(status.MgrMap.Standbys)
+	}
+	return countServiceDaemons(status.ServiceMap.Services, "mgr")
 }
 
 // summarizeCephHealth extracts human-readable messages from the Ceph health payload.

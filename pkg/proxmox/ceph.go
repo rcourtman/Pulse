@@ -11,6 +11,8 @@ type CephStatus struct {
 	FSID       string         `json:"fsid"`
 	Health     CephHealth     `json:"health"`
 	ServiceMap CephServiceMap `json:"servicemap"`
+	MonMap     CephMonMap     `json:"monmap"`
+	MgrMap     CephMgrMap     `json:"mgrmap"`
 	OSDMap     CephOSDMap     `json:"osdmap"`
 	PGMap      CephPGMap      `json:"pgmap"`
 }
@@ -55,6 +57,19 @@ type CephServiceDefinition struct {
 type CephServiceDaemon struct {
 	Host   string `json:"hostname"`
 	Status string `json:"status"`
+}
+
+// CephMonMap captures monitor summary information.
+type CephMonMap struct {
+	NumMons int `json:"num_mons"`
+}
+
+// CephMgrMap captures manager summary information.
+type CephMgrMap struct {
+	Available  bool     `json:"available"`
+	NumMgrs    int      `json:"num_mgrs"`
+	ActiveName string   `json:"active_name"`
+	Standbys   []string `json:"standbys"`
 }
 
 // CephOSDMap captures summary statistics about OSDs.

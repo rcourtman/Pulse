@@ -8,6 +8,8 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
+var lookupIPFunc = net.LookupIP
+
 func lookupClusterEndpointLabel(instance *config.PVEInstance, nodeName string) string {
 	if instance == nil {
 		return ""
@@ -133,4 +135,135 @@ func clusterEndpointEffectiveURL(endpoint config.ClusterEndpoint, verifySSL bool
 		}
 	}
 	return ""
+}
+
+func discoveryPolicyCIDRs(cidrs []string) []*net.IPNet {
+	networks := make([]*net.IPNet, 0, len(cidrs))
+	for _, cidr := range cidrs {
+		cidr = strings.TrimSpace(cidr)
+		if cidr == "" {
+			continue
+		}
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+		networks = append(networks, network)
+	}
+	return networks
+}
+
+func discoveryPolicyBlockedIPs(ips []string) map[string]struct{} {
+	blocked := make(map[string]struct{}, len(ips))
+	for _, raw := range ips {
+		ip := net.ParseIP(strings.TrimSpace(raw))
+		if ip == nil {
+			continue
+		}
+		blocked[ip.String()] = struct{}{}
+	}
+	return blocked
+}
+
+func discoveryPolicyAllowsIP(ip net.IP, allowlist, blocklist []*net.IPNet, blockedIPs map[string]struct{}) bool {
+	if ip == nil {
+		return false
+	}
+
+	if _, blocked := blockedIPs[ip.String()]; blocked {
+		return false
+	}
+
+	for _, network := range blocklist {
+		if network.Contains(ip) {
+			return false
+		}
+	}
+
+	if len(allowlist) == 0 {
+		return true
+	}
+
+	for _, network := range allowlist {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func discoveryPolicyIPsForEndpointHost(candidateURL string) []net.IP {
+	if candidateURL == "" {
+		return nil
+	}
+
+	host := normalizeEndpointHost(candidateURL)
+	if host == "" {
+		return nil
+	}
+
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IP{ip}
+	}
+
+	ips, err := lookupIPFunc(host)
+	if err != nil {
+		return nil
+	}
+
+	filtered := make([]net.IP, 0, len(ips))
+	for _, ip := range ips {
+		if ip == nil {
+			continue
+		}
+		filtered = append(filtered, ip)
+	}
+	return filtered
+}
+
+func clusterEndpointAllowedByDiscoveryPolicy(endpoint config.ClusterEndpoint, candidateURL string, discoveryCfg config.DiscoveryConfig) bool {
+	if len(discoveryCfg.SubnetAllowlist) == 0 && len(discoveryCfg.SubnetBlocklist) == 0 && len(discoveryCfg.IPBlocklist) == 0 {
+		return true
+	}
+
+	allowlist := discoveryPolicyCIDRs(discoveryCfg.SubnetAllowlist)
+	blocklist := discoveryPolicyCIDRs(discoveryCfg.SubnetBlocklist)
+	blockedIPs := discoveryPolicyBlockedIPs(discoveryCfg.IPBlocklist)
+
+	resolvedIPs := discoveryPolicyIPsForEndpointHost(candidateURL)
+	if len(resolvedIPs) == 0 {
+		if ip := net.ParseIP(strings.TrimSpace(endpoint.EffectiveIP())); ip != nil {
+			resolvedIPs = []net.IP{ip}
+		}
+	}
+	if len(resolvedIPs) == 0 {
+		return true
+	}
+
+	for _, ip := range resolvedIPs {
+		if !discoveryPolicyAllowsIP(ip, allowlist, blocklist, blockedIPs) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func clusterEndpointRuntimeURL(endpoint config.ClusterEndpoint, verifySSL bool, hasFingerprint bool, discoveryCfg config.DiscoveryConfig) string {
+	candidateURL := clusterEndpointEffectiveURL(endpoint, verifySSL, hasFingerprint)
+	if candidateURL == "" {
+		return ""
+	}
+	if !clusterEndpointAllowedByDiscoveryPolicy(endpoint, candidateURL, discoveryCfg) {
+		return ""
+	}
+	return candidateURL
+}
+
+func monitorDiscoveryConfig(m *Monitor) config.DiscoveryConfig {
+	if m == nil || m.config == nil {
+		return config.DiscoveryConfig{}
+	}
+	return m.config.Discovery
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -227,5 +228,71 @@ func TestPollStorageWithNodesOptimizedRecordsMetricsAndAlerts(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected storage usage alert to be active, alerts=%+v", alerts)
+	}
+}
+
+func TestPollStorageWithNodesSynthesizesSharedClusterOnlyStorage(t *testing.T) {
+	monitor := &Monitor{
+		state: models.NewState(),
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "inst1",
+					IsCluster:   true,
+					ClusterName: "cluster-a",
+				},
+			},
+		},
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{
+			{
+				Storage:   "cephfs",
+				Type:      "cephfs",
+				Content:   "images,backup",
+				Shared:    1,
+				Total:     1000,
+				Used:      100,
+				Available: 900,
+				Nodes:     "node1,node2",
+			},
+		},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {
+				{Storage: "local", Type: "dir", Content: "images", Active: 1, Enabled: 1, Total: 100, Used: 10, Available: 90},
+			},
+			"node2": {
+				{Storage: "local", Type: "dir", Content: "images", Active: 1, Enabled: 1, Total: 100, Used: 20, Available: 80},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{
+		{Node: "node1", Status: "online"},
+		{Node: "node2", Status: "online"},
+	}
+
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	var shared *models.Storage
+	for _, storage := range monitor.state.GetSnapshot().Storage {
+		if storage.Name == "cephfs" {
+			storageCopy := storage
+			shared = &storageCopy
+			break
+		}
+	}
+	if shared == nil {
+		t.Fatalf("expected synthesized shared storage in state, got %+v", monitor.state.GetSnapshot().Storage)
+	}
+	if shared.ID != "cluster-a-cluster-cephfs" || shared.Node != "cluster" || !shared.Shared {
+		t.Fatalf("unexpected synthesized shared storage identity: %+v", *shared)
+	}
+	if shared.NodeCount != 2 || len(shared.Nodes) != 2 {
+		t.Fatalf("expected cluster storage node affinity, got %+v", *shared)
+	}
+	if shared.Total != 1000 || shared.Used != 100 || shared.Free != 900 {
+		t.Fatalf("expected cluster storage capacity from config, got %+v", *shared)
 	}
 }

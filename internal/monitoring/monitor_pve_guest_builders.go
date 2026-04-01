@@ -25,6 +25,7 @@ type vmBuildState struct {
 	diskUsed          uint64
 	diskFree          uint64
 	diskUsage         float64
+	diskFromAgent     bool
 	individualDisks   []models.Disk
 	ipAddresses       []string
 	networkInterfaces []models.GuestNetworkInterface
@@ -92,7 +93,7 @@ func (m *Monitor) applyVMStatusDetails(
 	// Prefer guest agent data over cluster/resources data for accuracy
 	if status.Agent.Value > 0 {
 		var fsDisks []models.Disk
-		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks = m.updateVMDisksFromGuestAgentFSInfo(
+		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent = m.updateVMDisksFromGuestAgentFSInfo(
 			ctx,
 			instanceName,
 			res,
@@ -115,6 +116,22 @@ func (m *Monitor) applyVMStatusDetails(
 			Int("vmid", res.VMID).
 			Int("agent", status.Agent.Value).
 			Msg("VM does not have guest agent enabled in config")
+	}
+
+	if res.Status == "running" && !state.diskFromAgent {
+		if hostDisk, hostDisks, ok := resolveGuestDiskFromLinkedHostAgent(guestID, vmIDToHostAgent); ok && hostDisk.Total > 0 {
+			state.diskTotal = uint64(hostDisk.Total)
+			state.diskUsed = uint64(hostDisk.Used)
+			state.diskFree = uint64(hostDisk.Free)
+			state.diskUsage = hostDisk.Usage
+			state.individualDisks = hostDisks
+			log.Debug().
+				Str("instance", instanceName).
+				Str("vm", res.Name).
+				Int("vmid", res.VMID).
+				Float64("usage", hostDisk.Usage).
+				Msg("QEMU disk: using linked Pulse host agent disk summary")
+		}
 	}
 }
 
@@ -515,7 +532,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 	diskTotal uint64,
 	diskUsed uint64,
 	diskUsage float64,
-) (uint64, uint64, uint64, float64, []models.Disk) {
+) (uint64, uint64, uint64, float64, []models.Disk, bool) {
 	log.Debug().
 		Str("instance", instanceName).
 		Str("vm", res.Name).
@@ -524,7 +541,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 
 	fsInfo, ok := m.fetchVMFSInfo(ctx, instanceName, res, client)
 	if !ok {
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false
 	}
 
 	log.Debug().
@@ -573,7 +590,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 			Uint64("old_disk", res.Disk).
 			Uint64("old_maxdisk", res.MaxDisk).
 			Msg("Using guest agent data for accurate disk usage (replacing cluster/resources data)")
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true
 	}
 
 	// Only special filesystems found - show allocated disk size instead
@@ -586,5 +603,5 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		Int("filesystems_found", len(fsInfo)).
 		Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 
-	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil
+	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false
 }

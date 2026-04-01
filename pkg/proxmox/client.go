@@ -1673,6 +1673,26 @@ type VMIPAddress struct {
 	Prefix  int    `json:"prefix"`
 }
 
+func (a *VMIPAddress) UnmarshalJSON(data []byte) error {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	a.Address = coerceString(raw["ip-address"])
+
+	maxInt := uint64(^uint(0) >> 1)
+	prefix, err := coerceUint64("prefix", raw["prefix"])
+	if err != nil {
+		prefix = 0
+	}
+	if prefix > maxInt {
+		prefix = maxInt
+	}
+	a.Prefix = int(prefix)
+	return nil
+}
+
 type VMNetworkInterface struct {
 	Name          string        `json:"name"`
 	HardwareAddr  string        `json:"hardware-address"`
@@ -1680,6 +1700,134 @@ type VMNetworkInterface struct {
 	Statistics    interface{}   `json:"statistics,omitempty"`
 	HasIp4Gateway bool          `json:"has-ipv4-synth-gateway,omitempty"`
 	HasIp6Gateway bool          `json:"has-ipv6-synth-gateway,omitempty"`
+}
+
+func (iface *VMNetworkInterface) UnmarshalJSON(data []byte) error {
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	iface.Name = unmarshalRawString(raw["name"])
+	iface.HardwareAddr = unmarshalRawString(raw["hardware-address"])
+	iface.HasIp4Gateway = unmarshalRawBool(raw["has-ipv4-synth-gateway"])
+	iface.HasIp6Gateway = unmarshalRawBool(raw["has-ipv6-synth-gateway"])
+
+	iface.Statistics = nil
+	if statsRaw, ok := raw["statistics"]; ok && len(statsRaw) > 0 && string(statsRaw) != "null" {
+		var stats interface{}
+		if err := json.Unmarshal(statsRaw, &stats); err == nil {
+			iface.Statistics = stats
+		}
+	}
+
+	iface.IPAddresses = nil
+	if addressesRaw, ok := raw["ip-addresses"]; ok && len(addressesRaw) > 0 && string(addressesRaw) != "null" {
+		var rawAddresses []json.RawMessage
+		if err := json.Unmarshal(addressesRaw, &rawAddresses); err == nil {
+			iface.IPAddresses = decodeVMIpAddresses(rawAddresses)
+		} else {
+			var rawAddress json.RawMessage
+			if err := json.Unmarshal(addressesRaw, &rawAddress); err == nil && len(rawAddress) > 0 {
+				iface.IPAddresses = decodeVMIpAddresses([]json.RawMessage{rawAddress})
+			}
+		}
+	}
+
+	return nil
+}
+
+func decodeVMIpAddresses(rawAddresses []json.RawMessage) []VMIPAddress {
+	if len(rawAddresses) == 0 {
+		return nil
+	}
+
+	addresses := make([]VMIPAddress, 0, len(rawAddresses))
+	for _, rawAddr := range rawAddresses {
+		var addr VMIPAddress
+		if err := json.Unmarshal(rawAddr, &addr); err != nil {
+			continue
+		}
+		if addr.Address == "" {
+			continue
+		}
+		addresses = append(addresses, addr)
+	}
+	if len(addresses) == 0 {
+		return nil
+	}
+	return addresses
+}
+
+func unmarshalRawString(data json.RawMessage) string {
+	if len(data) == 0 || string(data) == "null" {
+		return ""
+	}
+
+	var value interface{}
+	if err := json.Unmarshal(data, &value); err != nil {
+		return ""
+	}
+	return coerceString(value)
+}
+
+func unmarshalRawBool(data json.RawMessage) bool {
+	if len(data) == 0 || string(data) == "null" {
+		return false
+	}
+
+	var value bool
+	if err := json.Unmarshal(data, &value); err == nil {
+		return value
+	}
+
+	var generic interface{}
+	if err := json.Unmarshal(data, &generic); err != nil {
+		return false
+	}
+
+	switch v := generic.(type) {
+	case string:
+		lower := strings.ToLower(strings.TrimSpace(v))
+		return lower == "true" || lower == "1" || lower == "yes"
+	case float64:
+		return v != 0
+	case int:
+		return v != 0
+	case int64:
+		return v != 0
+	case uint64:
+		return v != 0
+	default:
+		return false
+	}
+}
+
+func coerceString(value interface{}) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return strings.TrimSpace(v)
+	case json.Number:
+		return strings.TrimSpace(v.String())
+	case float64:
+		return strings.TrimSpace(strconv.FormatFloat(v, 'f', -1, 64))
+	case float32:
+		return strings.TrimSpace(strconv.FormatFloat(float64(v), 'f', -1, 32))
+	case int:
+		return strconv.Itoa(v)
+	case int32:
+		return strconv.FormatInt(int64(v), 10)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(v), 10)
+	case uint64:
+		return strconv.FormatUint(v, 10)
+	default:
+		return ""
+	}
 }
 
 // GetVMFSInfo returns filesystem information from QEMU guest agent
@@ -1711,52 +1859,7 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
-		// Post-process to extract disk device names
-		for i := range arrayResult.Data.Result {
-			fs := &arrayResult.Data.Result[i]
-			// Extract disk device name from the DiskRaw field
-			if len(fs.DiskRaw) > 0 {
-				// The disk field usually contains device info as a map
-				if diskMap, ok := fs.DiskRaw[0].(map[string]interface{}); ok {
-					// Try to get the device name from various possible fields
-					if dev, ok := diskMap["dev"].(string); ok {
-						fs.Disk = dev
-					} else if serial, ok := diskMap["serial"].(string); ok {
-						fs.Disk = serial
-					} else if bus, ok := diskMap["bus-type"].(string); ok {
-						if target, ok := diskMap["target"].(float64); ok {
-							fs.Disk = fmt.Sprintf("%s-%d", bus, int(target))
-						}
-					}
-				}
-			}
-			// If we still don't have a disk identifier, use the mountpoint as a fallback
-			if fs.Disk == "" && fs.Mountpoint != "" {
-				// For root filesystem, use a special identifier
-				if fs.Mountpoint == "/" {
-					fs.Disk = "root-filesystem"
-				} else {
-					// For Windows, normalize drive letters to prevent duplicate counting
-					// Windows guest agent can return multiple directory entries (C:\, C:\Users, C:\Windows)
-					// all on the same physical drive. Without disk[] metadata, we must deduplicate by drive letter.
-					isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
-					if isWindowsDrive {
-						// Use drive letter as identifier (e.g., "C:" for C:\, C:\Users, etc.)
-						driveLetter := strings.ToUpper(fs.Mountpoint[:2])
-						fs.Disk = driveLetter
-						log.Debug().
-							Str("node", node).
-							Int("vmid", vmid).
-							Str("mountpoint", fs.Mountpoint).
-							Str("synthesized_disk", driveLetter).
-							Msg("Synthesized Windows drive identifier from mountpoint")
-					} else {
-						// Use mountpoint as unique identifier for non-Windows paths
-						fs.Disk = fs.Mountpoint
-					}
-				}
-			}
-		}
+		postProcessVMFilesystems(node, vmid, arrayResult.Data.Result)
 		return arrayResult.Data.Result, nil
 	}
 
@@ -1767,26 +1870,93 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
-		// If result is an object, it might be an error or empty response
-		// Check if it's null or an error
 		if objectResult.Data.Result == nil {
 			log.Debug().
 				Str("node", node).
 				Int("vmid", vmid).
 				Msg("GetVMFSInfo received null result - guest agent may not be providing disk info")
-		} else {
-			log.Debug().
-				Str("node", node).
-				Int("vmid", vmid).
-				Interface("result", objectResult.Data.Result).
-				Msg("GetVMFSInfo received object instead of array")
+			return []VMFileSystem{}, nil
 		}
-		// Return empty array to indicate no filesystem info available
+
+		if fsMap, ok := objectResult.Data.Result.(map[string]interface{}); ok && looksLikeVMFilesystemResult(fsMap) {
+			rawFS, marshalErr := json.Marshal(fsMap)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("failed to marshal object-style guest filesystem result: %w", marshalErr)
+			}
+			var fs VMFileSystem
+			if unmarshalErr := json.Unmarshal(rawFS, &fs); unmarshalErr != nil {
+				return nil, fmt.Errorf("failed to parse object-style guest filesystem result: %w", unmarshalErr)
+			}
+			filesystems := []VMFileSystem{fs}
+			postProcessVMFilesystems(node, vmid, filesystems)
+			return filesystems, nil
+		}
+
+		log.Debug().
+			Str("node", node).
+			Int("vmid", vmid).
+			Interface("result", objectResult.Data.Result).
+			Msg("GetVMFSInfo received object instead of array")
 		return []VMFileSystem{}, nil
 	}
 
 	// If both fail, return error
 	return nil, fmt.Errorf("unexpected response format from guest agent get-fsinfo")
+}
+
+func looksLikeVMFilesystemResult(result map[string]interface{}) bool {
+	if len(result) == 0 {
+		return false
+	}
+
+	for _, key := range []string{"mountpoint", "name", "type", "total-bytes", "total-bytes-privileged", "used-bytes", "disk"} {
+		if _, ok := result[key]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func postProcessVMFilesystems(node string, vmid int, filesystems []VMFileSystem) {
+	for i := range filesystems {
+		fs := &filesystems[i]
+		if len(fs.DiskRaw) > 0 {
+			if diskMap, ok := fs.DiskRaw[0].(map[string]interface{}); ok {
+				if dev, ok := diskMap["dev"].(string); ok {
+					fs.Disk = dev
+				} else if serial, ok := diskMap["serial"].(string); ok {
+					fs.Disk = serial
+				} else if bus, ok := diskMap["bus-type"].(string); ok {
+					if target, ok := diskMap["target"].(float64); ok {
+						fs.Disk = fmt.Sprintf("%s-%d", bus, int(target))
+					}
+				}
+			}
+		}
+		if fs.Disk != "" || fs.Mountpoint == "" {
+			continue
+		}
+		if fs.Mountpoint == "/" {
+			fs.Disk = "root-filesystem"
+			continue
+		}
+
+		isWindowsDrive := len(fs.Mountpoint) >= 2 && fs.Mountpoint[1] == ':' && strings.Contains(fs.Mountpoint, "\\")
+		if isWindowsDrive {
+			driveLetter := strings.ToUpper(fs.Mountpoint[:2])
+			fs.Disk = driveLetter
+			log.Debug().
+				Str("node", node).
+				Int("vmid", vmid).
+				Str("mountpoint", fs.Mountpoint).
+				Str("synthesized_disk", driveLetter).
+				Msg("Synthesized Windows drive identifier from mountpoint")
+			continue
+		}
+
+		fs.Disk = fs.Mountpoint
+	}
 }
 
 // GetVMNetworkInterfaces returns network interfaces reported by the guest agent
@@ -1797,17 +1967,89 @@ func (c *Client) GetVMNetworkInterfaces(ctx context.Context, node string, vmid i
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Data struct {
-			Result []VMNetworkInterface `json:"result"`
-		} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	bodyBytes, err := readResponseBodyLimited(resp.Body)
+	if err != nil {
 		return nil, err
 	}
 
-	return result.Data.Result, nil
+	var arrayResult struct {
+		Data struct {
+			Result []json.RawMessage `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
+		interfaces := make([]VMNetworkInterface, 0, len(arrayResult.Data.Result))
+		for idx, rawIface := range arrayResult.Data.Result {
+			var iface VMNetworkInterface
+			if err := json.Unmarshal(rawIface, &iface); err != nil {
+				log.Warn().
+					Err(err).
+					Str("node", node).
+					Int("vmid", vmid).
+					Int("interface_index", idx).
+					Msg("Skipping malformed guest agent network interface entry")
+				continue
+			}
+			if !vmNetworkInterfaceHasUsefulData(iface) {
+				continue
+			}
+			interfaces = append(interfaces, iface)
+		}
+		return interfaces, nil
+	}
+
+	var objectResult struct {
+		Data struct {
+			Result interface{} `json:"result"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(bodyBytes, &objectResult); err == nil {
+		if objectResult.Data.Result == nil {
+			return []VMNetworkInterface{}, nil
+		}
+
+		if ifaceMap, ok := objectResult.Data.Result.(map[string]interface{}); ok && looksLikeVMNetworkInterfaceResult(ifaceMap) {
+			rawIface, marshalErr := json.Marshal(ifaceMap)
+			if marshalErr != nil {
+				return nil, fmt.Errorf("failed to marshal object-style guest network interface result: %w", marshalErr)
+			}
+			var iface VMNetworkInterface
+			if unmarshalErr := json.Unmarshal(rawIface, &iface); unmarshalErr != nil {
+				return nil, fmt.Errorf("failed to parse object-style guest network interface result: %w", unmarshalErr)
+			}
+			if !vmNetworkInterfaceHasUsefulData(iface) {
+				return []VMNetworkInterface{}, nil
+			}
+			return []VMNetworkInterface{iface}, nil
+		}
+
+		return []VMNetworkInterface{}, nil
+	}
+
+	return nil, fmt.Errorf("unexpected response format from guest agent network-get-interfaces")
+}
+
+func looksLikeVMNetworkInterfaceResult(result map[string]interface{}) bool {
+	if len(result) == 0 {
+		return false
+	}
+
+	for _, key := range []string{"name", "hardware-address", "ip-addresses", "statistics"} {
+		if _, ok := result[key]; ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func vmNetworkInterfaceHasUsefulData(iface VMNetworkInterface) bool {
+	return iface.Name != "" ||
+		iface.HardwareAddr != "" ||
+		len(iface.IPAddresses) > 0 ||
+		iface.Statistics != nil ||
+		iface.HasIp4Gateway ||
+		iface.HasIp6Gateway
 }
 
 // GetVMStatus returns detailed VM status including balloon info

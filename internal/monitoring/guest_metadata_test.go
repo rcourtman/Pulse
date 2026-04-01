@@ -300,7 +300,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 			wantIfaces: []models.GuestNetworkInterface{},
 		},
 		{
-			name: "filter link-local fe80",
+			name: "preserve named interface when only link-local addresses are reported",
 			raw: []proxmox.VMNetworkInterface{
 				{
 					Name:         "eth0",
@@ -311,8 +311,10 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 					},
 				},
 			},
-			wantIPs:    []string{},
-			wantIfaces: []models.GuestNetworkInterface{},
+			wantIPs: []string{},
+			wantIfaces: []models.GuestNetworkInterface{
+				{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: nil},
+			},
 		},
 		{
 			name: "filter IPv6 loopback ::1",
@@ -429,7 +431,7 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 			},
 		},
 		{
-			name: "interface with no IPs and no traffic is excluded",
+			name: "named interface with no IPs and no traffic is preserved",
 			raw: []proxmox.VMNetworkInterface{
 				{
 					Name:         "eth0",
@@ -438,8 +440,10 @@ func TestProcessGuestNetworkInterfaces(t *testing.T) {
 					Statistics:   nil,
 				},
 			},
-			wantIPs:    []string{},
-			wantIfaces: []models.GuestNetworkInterface{},
+			wantIPs: []string{},
+			wantIfaces: []models.GuestNetworkInterface{
+				{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: nil},
+			},
 		},
 		{
 			name: "whitespace trimmed from name and MAC",

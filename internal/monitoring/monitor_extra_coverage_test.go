@@ -1026,8 +1026,55 @@ func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	if prev.containerOCIByVMID[112] || prev.containerOCIByVMID[211] {
 		t.Fatalf("unexpected OCI classification leakage: %#v", prev.containerOCIByVMID)
 	}
-	if len(prev.hostAgentsByVMID) != 1 || prev.hostAgentsByVMID["vm-1"].LinkedVMID != "vm-1" {
-		t.Fatalf("expected only online linked host with memory to be tracked, got %#v", prev.hostAgentsByVMID)
+	if len(prev.hostAgentsByVMID) != 2 || prev.hostAgentsByVMID["vm-1"].LinkedVMID != "vm-1" || prev.hostAgentsByVMID["vm-3"].LinkedVMID != "vm-3" {
+		t.Fatalf("expected all online linked hosts to be tracked for memory and disk fallback, got %#v", prev.hostAgentsByVMID)
+	}
+}
+
+func TestBuildVMFromClusterResource_UsesLinkedHostAgentDiskFallback(t *testing.T) {
+	monitor := &Monitor{rateTracker: NewRateTracker()}
+	client := &mockPVEClientExtra{
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			Agent:  proxmox.VMAgentField{Value: 0},
+		},
+	}
+	guestID := makeGuestID("cluster-a", "node-a", 101)
+
+	vm, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node-a",
+			Name:    "app-vm",
+			Status:  "running",
+			VMID:    101,
+			MaxCPU:  4,
+			MaxMem:  8192,
+			MaxDisk: 1024,
+		},
+		client,
+		guestID,
+		map[string]models.Host{
+			guestID: {
+				ID:         "host-1",
+				LinkedVMID: guestID,
+				Status:     "online",
+				Disks: []models.Disk{
+					{Total: 500, Used: 200, Free: 300, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda1"},
+				},
+			},
+		},
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.Disk.Total != 500 || vm.Disk.Used != 200 || vm.Disk.Usage != 40 {
+		t.Fatalf("expected linked host agent disk summary to win, got %+v", vm.Disk)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda1" {
+		t.Fatalf("expected linked host agent disks to populate VM disks, got %+v", vm.Disks)
 	}
 }
 

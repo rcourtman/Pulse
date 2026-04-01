@@ -263,6 +263,40 @@ func TestCountServiceDaemons(t *testing.T) {
 	}
 }
 
+func TestCountCephMonitorDaemons(t *testing.T) {
+	t.Parallel()
+
+	status := &proxmox.CephStatus{
+		MonMap: proxmox.CephMonMap{NumMons: 3},
+		ServiceMap: proxmox.CephServiceMap{
+			Services: map[string]proxmox.CephServiceDefinition{
+				"mon": {
+					Daemons: map[string]proxmox.CephServiceDaemon{
+						"a": {Host: "node1", Status: "running"},
+					},
+				},
+			},
+		},
+	}
+	if got := countCephMonitorDaemons(status); got != 3 {
+		t.Fatalf("countCephMonitorDaemons() = %d, want 3", got)
+	}
+}
+
+func TestCountCephManagerDaemons(t *testing.T) {
+	t.Parallel()
+
+	status := &proxmox.CephStatus{
+		MgrMap: proxmox.CephMgrMap{
+			ActiveName: "mgr-a",
+			Standbys:   []string{"mgr-b", "mgr-c"},
+		},
+	}
+	if got := countCephManagerDaemons(status); got != 3 {
+		t.Fatalf("countCephManagerDaemons() = %d, want 3", got)
+	}
+}
+
 func TestExtractCephCheckSummary(t *testing.T) {
 	t.Parallel()
 

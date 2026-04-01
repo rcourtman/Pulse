@@ -13,14 +13,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func resolveNodeConnectionInfo(instanceCfg *config.PVEInstance, nodeName string) (string, string) {
+func resolveNodeConnectionInfo(instanceCfg *config.PVEInstance, discoveryCfg config.DiscoveryConfig, nodeName string) (string, string) {
 	connectionHost := instanceCfg.Host
 	guestURL := instanceCfg.GuestURL
 	if instanceCfg.IsCluster && len(instanceCfg.ClusterEndpoints) > 0 {
 		hasFingerprint := instanceCfg.Fingerprint != ""
 		for _, ep := range instanceCfg.ClusterEndpoints {
 			if strings.EqualFold(ep.NodeName, nodeName) {
-				if effective := clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint); effective != "" {
+				if effective := clusterEndpointRuntimeURL(ep, instanceCfg.VerifySSL, hasFingerprint, discoveryCfg); effective != "" {
 					connectionHost = effective
 				}
 				if ep.GuestURL != "" {

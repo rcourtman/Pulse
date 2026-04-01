@@ -215,6 +215,68 @@ func TestClientClusterAndAgentInfo(t *testing.T) {
 	}
 }
 
+func TestClientGetVMNetworkInterfaces_ObjectAndPartialPayloads(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/node1/qemu/100/agent/network-get-interfaces":
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"result": []interface{}{
+						map[string]interface{}{
+							"name":             "eth0",
+							"hardware-address": "00:11:22:33:44:55",
+							"ip-addresses": []interface{}{
+								map[string]interface{}{"ip-address": "192.168.1.10", "prefix": 24},
+								map[string]interface{}{"ip-address": "fe80::1", "prefix": "64"},
+							},
+						},
+						map[string]interface{}{
+							"name":         123,
+							"ip-addresses": map[string]interface{}{"ip-address": "10.0.0.5", "prefix": "16"},
+						},
+						"malformed",
+					},
+				},
+			})
+		case "/api2/json/nodes/node1/qemu/101/agent/network-get-interfaces":
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"result": map[string]interface{}{
+						"name":             "eth1",
+						"hardware-address": "aa:bb:cc:dd:ee:ff",
+						"ip-addresses":     map[string]interface{}{"ip-address": "10.10.0.8", "prefix": 24},
+					},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	ctx := context.Background()
+	ifaces, err := client.GetVMNetworkInterfaces(ctx, "node1", 100)
+	if err != nil {
+		t.Fatalf("GetVMNetworkInterfaces array payload error: %v", err)
+	}
+	if len(ifaces) != 2 {
+		t.Fatalf("expected 2 useful interfaces from partial payload, got %+v", ifaces)
+	}
+	if ifaces[0].Name != "eth0" || len(ifaces[0].IPAddresses) != 2 {
+		t.Fatalf("expected eth0 addresses to be preserved, got %+v", ifaces[0])
+	}
+	if ifaces[1].Name != "123" || len(ifaces[1].IPAddresses) != 1 || ifaces[1].IPAddresses[0].Address != "10.0.0.5" {
+		t.Fatalf("expected object-style address to be coerced, got %+v", ifaces[1])
+	}
+
+	objectIfaces, err := client.GetVMNetworkInterfaces(ctx, "node1", 101)
+	if err != nil {
+		t.Fatalf("GetVMNetworkInterfaces object payload error: %v", err)
+	}
+	if len(objectIfaces) != 1 || objectIfaces[0].Name != "eth1" || objectIfaces[0].IPAddresses[0].Address != "10.10.0.8" {
+		t.Fatalf("unexpected object-style interfaces: %+v", objectIfaces)
+	}
+}
+
 func TestClientStatusAndResources(t *testing.T) {
 	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {

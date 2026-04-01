@@ -23,7 +23,7 @@ func (m *Monitor) pollPVENode(
 ) (models.Node, string, string, error) {
 	nodeStart := time.Now()
 	displayName := getNodeDisplayName(instanceCfg, node.Node)
-	connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, node.Node)
+	connectionHost, guestURL := resolveNodeConnectionInfo(instanceCfg, monitorDiscoveryConfig(m), node.Node)
 	nodeID, effectiveStatus := m.determineNodeIDAndStatus(instanceName, instanceCfg, node)
 
 	modelNode := models.Node{

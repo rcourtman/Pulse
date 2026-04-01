@@ -497,6 +497,74 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 		allStorage = append(allStorage, entry.storage)
 	}
 
+	// Some shared storages exist only in the cluster-wide storage config and do
+	// not show up in per-node storage responses. Synthesize those entries so the
+	// canonical storage surface still exposes them for alerts and filtering.
+	existingSharedStorage := make(map[string]struct{}, len(allStorage))
+	for _, storage := range allStorage {
+		if storage.Shared {
+			existingSharedStorage[storage.Instance+"/"+storage.Name] = struct{}{}
+		}
+	}
+
+	for _, clusterStorage := range clusterStorages {
+		storageName := strings.TrimSpace(clusterStorage.Storage)
+		if storageName == "" {
+			continue
+		}
+
+		shared := clusterStorage.Shared == 1 || isInherentlySharedStorageType(clusterStorage.Type)
+		if !shared {
+			continue
+		}
+
+		key := storageInstanceName + "/" + storageName
+		if _, exists := existingSharedStorage[key]; exists {
+			continue
+		}
+
+		nodesForStorage := parseClusterStorageNodes(clusterStorage.Nodes)
+		if len(nodesForStorage) == 0 {
+			nodesForStorage = make([]string, 0, len(nodes))
+			for _, node := range nodes {
+				nodeName := strings.TrimSpace(node.Node)
+				if nodeName == "" {
+					continue
+				}
+				nodesForStorage = append(nodesForStorage, nodeName)
+			}
+		}
+
+		nodeIDs := make([]string, 0, len(nodesForStorage))
+		for _, nodeName := range nodesForStorage {
+			nodeIDs = append(nodeIDs, fmt.Sprintf("%s-%s", storageInstanceName, nodeName))
+		}
+
+		synthetic := models.Storage{
+			ID:        fmt.Sprintf("%s-cluster-%s", storageInstanceName, storageName),
+			Name:      storageName,
+			Node:      "cluster",
+			Instance:  storageInstanceName,
+			Nodes:     nodesForStorage,
+			NodeIDs:   nodeIDs,
+			NodeCount: len(nodesForStorage),
+			Type:      clusterStorage.Type,
+			Status:    "available",
+			Path:      clusterStorage.Path,
+			Total:     int64(clusterStorage.Total),
+			Used:      int64(clusterStorage.Used),
+			Free:      int64(clusterStorage.Available),
+			Usage:     safePercentage(float64(clusterStorage.Used), float64(clusterStorage.Total)),
+			Content:   sortContent(clusterStorage.Content),
+			Shared:    true,
+			Enabled:   true,
+			Active:    true,
+		}
+
+		allStorage = append(allStorage, synthetic)
+		existingSharedStorage[key] = struct{}{}
+	}
+
 	// Preserve existing storage data for nodes that weren't polled (offline or error)
 	preservedCount := 0
 	for _, existingStorage := range existingStorageMap {
@@ -586,11 +654,12 @@ func (m *Monitor) fetchNodeStorageFallback(ctx context.Context, instanceCfg *con
 
 	var target string
 	hasFingerprint := strings.TrimSpace(instanceCfg.Fingerprint) != ""
+	discoveryCfg := monitorDiscoveryConfig(m)
 	for _, ep := range instanceCfg.ClusterEndpoints {
 		if !strings.EqualFold(ep.NodeName, nodeName) {
 			continue
 		}
-		target = clusterEndpointEffectiveURL(ep, instanceCfg.VerifySSL, hasFingerprint)
+		target = clusterEndpointRuntimeURL(ep, instanceCfg.VerifySSL, hasFingerprint, discoveryCfg)
 		if target != "" {
 			break
 		}

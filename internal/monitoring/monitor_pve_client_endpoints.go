@@ -1,7 +1,6 @@
 package monitoring
 
 import (
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
@@ -16,14 +15,15 @@ func (m *Monitor) buildClusterEndpointsForInit(pve config.PVEInstance) ([]string
 	hasValidEndpoints := false
 	endpoints := make([]string, 0, len(pve.ClusterEndpoints))
 	endpointFingerprints := make(map[string]string)
+	discoveryCfg := monitorDiscoveryConfig(m)
 
 	hasFingerprint := pve.Fingerprint != ""
 	for _, ep := range pve.ClusterEndpoints {
-		effectiveURL := clusterEndpointEffectiveURL(ep, pve.VerifySSL, hasFingerprint)
+		effectiveURL := clusterEndpointRuntimeURL(ep, pve.VerifySSL, hasFingerprint, discoveryCfg)
 		if effectiveURL == "" {
 			log.Warn().
 				Str("node", ep.NodeName).
-				Msg("Skipping cluster endpoint with no host/IP")
+				Msg("Skipping cluster endpoint with no allowed host/IP")
 			continue
 		}
 
@@ -88,34 +88,55 @@ func (m *Monitor) buildClusterEndpointsForReconnect(pve config.PVEInstance) ([]s
 	hasValidEndpoints := false
 	endpoints := make([]string, 0, len(pve.ClusterEndpoints))
 	endpointFingerprints := make(map[string]string)
+	discoveryCfg := monitorDiscoveryConfig(m)
+	hasFingerprint := pve.Fingerprint != ""
 
 	for _, ep := range pve.ClusterEndpoints {
-		// Use EffectiveIP() which prefers IPOverride over auto-discovered IP
-		host := ep.EffectiveIP()
-		if host == "" {
-			host = ep.Host
-		}
+		host := clusterEndpointRuntimeURL(ep, pve.VerifySSL, hasFingerprint, discoveryCfg)
 		if host == "" {
 			continue
 		}
-		if strings.Contains(host, ".") || net.ParseIP(host) != nil {
-			hasValidEndpoints = true
+
+		if parsed, err := url.Parse(host); err == nil {
+			hostname := parsed.Hostname()
+			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
+				hasValidEndpoints = true
+			}
+		} else {
+			hostname := normalizeEndpointHost(host)
+			if hostname != "" && (strings.Contains(hostname, ".") || net.ParseIP(hostname) != nil) {
+				hasValidEndpoints = true
+			}
 		}
+
 		if !strings.HasPrefix(host, "http") {
-			host = fmt.Sprintf("https://%s:8006", host)
+			host = ensureClusterEndpointURL(host)
 		}
 		endpoints = append(endpoints, host)
-		// Store per-endpoint fingerprint for TOFU
 		if ep.Fingerprint != "" {
 			endpointFingerprints[host] = ep.Fingerprint
 		}
 	}
 
 	if !hasValidEndpoints || len(endpoints) == 0 {
-		endpoints = []string{pve.Host}
-		if !strings.HasPrefix(endpoints[0], "http") {
-			endpoints[0] = fmt.Sprintf("https://%s:8006", endpoints[0])
+		fallback := ensureClusterEndpointURL(pve.Host)
+		if fallback == "" {
+			fallback = ensureClusterEndpointURL(pve.Host)
 		}
+		endpoints = []string{fallback}
+		return endpoints, endpointFingerprints
+	}
+
+	mainHostURL := ensureClusterEndpointURL(pve.Host)
+	mainHostAlreadyIncluded := false
+	for _, ep := range endpoints {
+		if ep == mainHostURL {
+			mainHostAlreadyIncluded = true
+			break
+		}
+	}
+	if !mainHostAlreadyIncluded && mainHostURL != "" {
+		endpoints = append(endpoints, mainHostURL)
 	}
 
 	return endpoints, endpointFingerprints
