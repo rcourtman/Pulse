@@ -220,6 +220,31 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 	}
 }
 
+func TestMonitoringTemperatureFallbackUsesSMARTAwareSSHSkipRule(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"host_agent_temps.go": {
+			"func shouldSkipTemperatureSSHCollection(hostAgentTemp *models.Temperature) bool {",
+			"return hostAgentTemp.HasSMART",
+		},
+		"monitor_polling_node_helpers.go": {
+			"skipSSHCollection := shouldSkipTemperatureSSHCollection(hostAgentTemp)",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	forbiddenSnippets := []string{
 		"mock.GetMockState(",

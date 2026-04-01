@@ -328,6 +328,12 @@ canonical physical-disk model and the Proxmox polling runtime in
 `internal/monitoring/monitor_pve.go` must evaluate disk alerts only after that
 merged disk view exists, so controller-backed disks do not lose health and
 endurance coverage between collection and alerting.
+That same host-agent temperature boundary must not suppress SSH SMART disk
+collection just because the agent already reported CPU package or NVMe
+temperatures. `internal/monitoring/monitor_polling_node_helpers.go` may skip
+SSH only once the host-agent temperature payload already has SMART disk data,
+so nodes keep their disk-temperature and SMART augmentation when the host agent
+is present but lacks SMART support.
 That same Proxmox monitoring boundary also owns checked response parsing for
 polymorphic numeric fields. Shared client parsers such as
 `pkg/proxmox/replication.go` must use the package's checked integer conversion

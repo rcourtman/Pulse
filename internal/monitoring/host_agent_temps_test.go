@@ -152,6 +152,37 @@ func TestConvertHostSensorsToTemperature_NoPackageUsesMaxCore(t *testing.T) {
 	}
 }
 
+func TestShouldSkipTemperatureSSHCollection(t *testing.T) {
+	t.Run("nil host agent temp does not skip", func(t *testing.T) {
+		if shouldSkipTemperatureSSHCollection(nil) {
+			t.Fatal("expected nil host agent temp not to skip SSH collection")
+		}
+	})
+
+	t.Run("cpu only host agent temp does not skip", func(t *testing.T) {
+		host := &models.Temperature{
+			Available:  true,
+			HasCPU:     true,
+			CPUPackage: 55,
+		}
+		if shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected CPU-only host agent temp not to skip SSH collection")
+		}
+	})
+
+	t.Run("host agent smart data skips", func(t *testing.T) {
+		host := &models.Temperature{
+			Available: true,
+			HasCPU:    true,
+			HasSMART:  true,
+			SMART:     []models.DiskTemp{{Device: "/dev/sda", Temperature: 35}},
+		}
+		if !shouldSkipTemperatureSSHCollection(host) {
+			t.Fatal("expected SMART-capable host agent temp to skip SSH collection")
+		}
+	})
+}
+
 func TestIsHostAgentTemperatureRecent(t *testing.T) {
 	tests := []struct {
 		name     string
