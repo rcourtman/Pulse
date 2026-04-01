@@ -268,6 +268,53 @@ func TestCheckUnifiedResourceAnnotatesMetricAlertsWithCanonicalSpecMetadata(t *t
 	}
 }
 
+func TestCheckUnifiedResourceKeepsInstanceScopedNodeDisplayNames(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.UpdateNodeDisplayName("cluster-a", "pve", "Alpha")
+	m.UpdateNodeDisplayName("cluster-b", "pve", "Beta")
+
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:       "vm-a",
+		Type:     "vm",
+		Name:     "vm-a",
+		Node:     "pve",
+		Instance: "cluster-a",
+		CPU:      &UnifiedResourceMetric{Percent: 90},
+	})
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:       "vm-b",
+		Type:     "vm",
+		Name:     "vm-b",
+		Node:     "pve",
+		Instance: "cluster-b",
+		CPU:      &UnifiedResourceMetric{Percent: 91},
+	})
+
+	m.UpdateNodeDisplayName("cluster-a", "pve", "Alpha Updated")
+	m.CheckUnifiedResource(&UnifiedResourceInput{
+		ID:       "vm-a",
+		Type:     "vm",
+		Name:     "vm-a",
+		Node:     "pve",
+		Instance: "cluster-a",
+		CPU:      &UnifiedResourceMetric{Percent: 92},
+	})
+
+	m.mu.RLock()
+	alertA := testRequireActiveAlert(t, m, canonicalMetricStateID("vm-a", "cpu"))
+	alertB := testRequireActiveAlert(t, m, canonicalMetricStateID("vm-b", "cpu"))
+	m.mu.RUnlock()
+
+	if alertA.NodeDisplayName != "Alpha Updated" {
+		t.Fatalf("vm-a node display name = %q, want %q", alertA.NodeDisplayName, "Alpha Updated")
+	}
+	if alertB.NodeDisplayName != "Beta" {
+		t.Fatalf("vm-b node display name = %q, want %q", alertB.NodeDisplayName, "Beta")
+	}
+}
+
 func TestCheckGuestPerDiskAnnotatesCanonicalSpecMetadata(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())

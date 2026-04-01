@@ -73,6 +73,63 @@ func TestSyncUnifiedResourceIncidentsCreatesAndClearsAlerts(t *testing.T) {
 	assertAlertMissing(t, m, alertID)
 }
 
+func TestSyncUnifiedResourceIncidentsKeepsInstanceScopedNodeDisplayNames(t *testing.T) {
+	m := newTestManager(t)
+	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
+
+	m.UpdateNodeDisplayName("cluster-a", "pve", "Alpha")
+	m.UpdateNodeDisplayName("cluster-b", "pve", "Beta")
+
+	resourceA := unifiedresources.Resource{
+		ID:         "vm:app-a",
+		Type:       unifiedresources.ResourceTypeVM,
+		Name:       "app-a",
+		ParentName: "pve",
+		Proxmox:    &unifiedresources.ProxmoxData{Instance: "cluster-a"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "pulse",
+			NativeID: "incident-a",
+			Code:     "guest_unreachable",
+			Severity: storagehealth.RiskWarning,
+			Summary:  "VM app-a is unreachable",
+		}},
+	}
+	resourceB := unifiedresources.Resource{
+		ID:         "vm:app-b",
+		Type:       unifiedresources.ResourceTypeVM,
+		Name:       "app-b",
+		ParentName: "pve",
+		Proxmox:    &unifiedresources.ProxmoxData{Instance: "cluster-b"},
+		Incidents: []unifiedresources.ResourceIncident{{
+			Provider: "pulse",
+			NativeID: "incident-b",
+			Code:     "guest_unreachable",
+			Severity: storagehealth.RiskWarning,
+			Summary:  "VM app-b is unreachable",
+		}},
+	}
+
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resourceA, resourceB})
+
+	m.UpdateNodeDisplayName("cluster-a", "pve", "Alpha Updated")
+	m.SyncUnifiedResourceIncidents([]unifiedresources.Resource{resourceA, resourceB})
+
+	alertIDA := unifiedIncidentAlertID(resourceA, resourceA.Incidents[0])
+	alertIDB := unifiedIncidentAlertID(resourceB, resourceB.Incidents[0])
+
+	m.mu.RLock()
+	alertA := testRequireActiveAlert(t, m, alertIDA)
+	alertB := testRequireActiveAlert(t, m, alertIDB)
+	m.mu.RUnlock()
+
+	if alertA.NodeDisplayName != "Alpha Updated" {
+		t.Fatalf("resourceA node display name = %q, want %q", alertA.NodeDisplayName, "Alpha Updated")
+	}
+	if alertB.NodeDisplayName != "Beta" {
+		t.Fatalf("resourceB node display name = %q, want %q", alertB.NodeDisplayName, "Beta")
+	}
+}
+
 func TestSyncUnifiedResourceIncidentsIncludesConsumerImpact(t *testing.T) {
 	m := newTestManager(t)
 	configureUnifiedEvalManager(t, m, unifiedEvalBaseConfig())
