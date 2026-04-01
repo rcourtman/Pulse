@@ -73,6 +73,24 @@ func TestNoGetStateResourceArrayRegression(t *testing.T) {
 	}
 }
 
+func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
+	data, err := os.ReadFile("monitor.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"state := m.state.GetSnapshot()",
+		"state.ActiveAlerts = m.activeAlertsSnapshot()",
+		"state.RecentlyResolved = m.recentlyResolvedAlertsSnapshot()",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	forbiddenSnippets := []string{
 		"mock.GetMockState(",

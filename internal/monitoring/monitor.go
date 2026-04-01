@@ -2708,7 +2708,14 @@ func (m *Monitor) GetState() models.StateSnapshot {
 	if m.state == nil {
 		return models.StateSnapshot{}
 	}
-	return m.state.GetSnapshot()
+
+	state := m.state.GetSnapshot()
+	// Keep externally served alert arrays aligned with the live alert manager
+	// even between explicit sync points, so APIs do not expose stale alert
+	// counts or recently resolved incidents from cached state.
+	state.ActiveAlerts = m.activeAlertsSnapshot()
+	state.RecentlyResolved = m.recentlyResolvedAlertsSnapshot()
+	return state
 }
 
 // ReadSnapshot returns a snapshot of the current infrastructure state,

@@ -37,6 +37,52 @@ func TestMonitor_GetConnectionStatuses_MockMode_Extra(t *testing.T) {
 	}
 }
 
+func TestMonitor_GetStateRefreshesAlertSnapshots(t *testing.T) {
+	m := &Monitor{
+		state:        models.NewState(),
+		alertManager: alerts.NewManager(),
+	}
+	defer m.alertManager.Stop()
+
+	m.state.UpdateActiveAlerts([]models.Alert{{
+		ID:         "stale-alert",
+		ResourceID: "vm-1",
+		Type:       "cpu",
+		Level:      "warning",
+		Message:    "stale",
+		StartTime:  time.Now(),
+	}})
+	m.state.UpdateRecentlyResolved([]models.ResolvedAlert{{
+		Alert: models.Alert{
+			ID:           "stale-resolved",
+			Type:         "cpu",
+			ResourceID:   "vm-1",
+			ResourceName: "vm-1",
+			Message:      "stale resolved",
+		},
+		ResolvedTime: time.Now(),
+	}})
+	m.alertManager.ClearActiveAlerts()
+
+	state := m.GetState()
+	if len(state.ActiveAlerts) != 0 {
+		t.Fatalf("expected GetState to drop stale state alerts, got %d", len(state.ActiveAlerts))
+	}
+	if len(state.RecentlyResolved) != 0 {
+		t.Fatalf("expected GetState to drop stale state recently resolved alerts, got %d", len(state.RecentlyResolved))
+	}
+
+	host := models.DockerHost{ID: "docker-host-1", DisplayName: "docker-host-1"}
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+	m.alertManager.HandleDockerHostOffline(host)
+
+	state = m.GetState()
+	if len(state.ActiveAlerts) == 0 {
+		t.Fatal("expected GetState to include current alert-manager alerts")
+	}
+}
+
 func TestMonitor_Cleanup_Extra(t *testing.T) {
 	m := &Monitor{
 		nodeSnapshots:   make(map[string]NodeMemorySnapshot),

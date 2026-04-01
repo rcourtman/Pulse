@@ -238,6 +238,12 @@ not by reading `GetMonitor()`'s default-org compatibility shim.
 Consumer packages already use `ReadState`, but the monitoring core still has
 dual truth between unified resources and `StateSnapshot`. This is the main
 remaining architecture-coherence lane.
+Alert arrays are the explicit freshness exception inside that remaining dual
+truth. Monitoring APIs that still serve `StateSnapshot` must project
+`ActiveAlerts` and `RecentlyResolved` from the live alert manager at read time
+instead of trusting the cached snapshot fields, so externally served alert
+counts and recently resolved incidents do not lag behind acknowledgement,
+resolve, or clear operations between explicit sync points.
 The container entrypoint in `docker-entrypoint.sh` now also lives under this
 boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
 when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint
