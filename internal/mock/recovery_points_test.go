@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -151,4 +152,61 @@ func TestFixtureGraphRecoveryPointsKeepTrueNASArtifactsFreshForDemoMode(t *testi
 	if newest.Before(time.Now().UTC().Add(-24 * time.Hour)) {
 		t.Fatalf("expected demo TrueNAS recovery artifacts within the last 24h, got newest %s", newest.UTC().Format(time.RFC3339))
 	}
+}
+
+func TestFixtureGraphRecoveryPointsUseReadableKubernetesPVCUIDs(t *testing.T) {
+	previous := IsMockEnabled()
+	SetEnabled(true)
+	t.Cleanup(func() { SetEnabled(previous) })
+
+	points := CurrentFixtureGraph().RecoveryPoints()
+	if len(points) == 0 {
+		t.Fatal("expected mock recovery points")
+	}
+
+	foundPVC := false
+	foundPrometheus := false
+	for _, point := range points {
+		if point.Provider != recovery.ProviderKubernetes || point.SubjectRef == nil || point.SubjectRef.Type != "k8s-pvc" {
+			continue
+		}
+		foundPVC = true
+
+		uid := strings.TrimSpace(point.SubjectRef.UID)
+		if uid == "" {
+			t.Fatalf("expected readable kubernetes pvc uid for %q", point.SubjectRef.Name)
+		}
+		if !strings.Contains(uid, "/") {
+			t.Fatalf("expected kubernetes pvc uid %q to preserve cluster/namespace context", uid)
+		}
+		if isHexToken(uid) && len(uid) >= 32 {
+			t.Fatalf("expected kubernetes pvc uid %q to avoid opaque hashed identifiers", uid)
+		}
+		if point.SubjectRef.Name == "prometheus-pvc" {
+			foundPrometheus = true
+			if uid != "production/monitoring/prometheus-pvc" {
+				t.Fatalf("expected prometheus pvc uid to stay human readable, got %q", uid)
+			}
+		}
+	}
+
+	if !foundPVC {
+		t.Fatal("expected kubernetes pvc recovery points in canonical mock graph")
+	}
+	if !foundPrometheus {
+		t.Fatal("expected prometheus pvc recovery point in canonical mock graph")
+	}
+}
+
+func isHexToken(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F') {
+			return false
+		}
+	}
+	return true
 }

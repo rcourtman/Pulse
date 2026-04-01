@@ -29,6 +29,7 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 		State:            buildFixtureState(cfg),
 		PlatformFixtures: defaultPlatformFixtures(),
 	}
+	applyDemoScenarioGraph(&graph, now)
 	graph.UpdateMetrics(cfg, now)
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
 	syncMetricRoleRegistryFromGraph(graph)
@@ -49,6 +50,8 @@ func (g *FixtureGraph) UpdateMetrics(cfg MockConfig, now time.Time) {
 	}
 	updateFixtureStateMetricsAt(&g.State, cfg, now)
 	g.PlatformFixtures = rebasePlatformFixtures(g.PlatformFixtures, now)
+	applyDemoScenarioGraph(g, now)
+	syncMetricRoleRegistryFromGraph(*g)
 }
 
 func (g *FixtureGraph) UpdateAlertSnapshots(active []alerts.Alert, resolved []models.ResolvedAlert) {

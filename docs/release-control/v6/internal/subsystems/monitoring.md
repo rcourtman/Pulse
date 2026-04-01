@@ -137,6 +137,13 @@ and curve shape from the same canonical resource-role registry, so database,
 cache, backup, web, and storage workloads keep believable long-range behavior
 instead of switching from one generic seeded pattern to a different recent
 runtime pattern.
+That same mock-runtime owner now also owns demo-scenario curation. The
+canonical `internal/mock/fixture_graph.go` path may project an authored demo
+estate over generic fixture synthesis, but that authored layer must stay
+graph-native and runtime-stable so infrastructure, workloads, storage, and
+recovery all present the same human-readable platform story instead of a lab
+of random names, legacy `mock-cluster` labels, or surface-specific mock
+overrides.
 That same chart boundary also owns storage-series identity. Monitoring and
 `ReadState` consumers must address storage pool and physical-disk history
 through the resolved unified-resource metrics target, so seeded history,
@@ -281,6 +288,14 @@ Source-owned IDs exposed through those same typed views must also trim outer
 whitespace before they reach monitoring consumers, so a docker host, VM, node,
 or storage view cannot appear to carry a different source identity just
 because the ingest payload wrapped the source ID in spaces.
+That same monitoring-owned Docker ingest path must also preserve persisted
+container metadata across routine container recreation. When
+`ApplyDockerReport` observes the same canonical docker host reporting a new
+runtime container ID under the same normalized container name, monitoring must
+copy custom URL, description, tags, and notes metadata onto the new container
+ID instead of dropping that operator state on ordinary container replacement.
+If multiple prior containers normalize to the same name, the migration must
+fail closed and skip the copy rather than guessing between ambiguous sources.
 The same applies to proxmox topology coordinates exposed through typed views:
 node, cluster, and instance accessors must return canonical trimmed values so
 monitoring consumers do not fork topology grouping or labeling on `" pve-a "`

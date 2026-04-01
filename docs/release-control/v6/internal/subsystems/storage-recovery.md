@@ -245,6 +245,11 @@ recovery surfaces. Mock summary cards, seeded history, and provider-backed
 storage/recovery counts must come from the same canonical fixture graph so
 storage and recovery demos show realistic healthy-versus-attention balance
 instead of blank history, stale provider context, or page-local fixture drift.
+That same recovery-facing demo contract also owns subject readability. When
+mock recovery points project inventory-only Kubernetes PVC protection, the
+subject identity shown to operators must stay human-readable
+`<cluster>/<namespace>/<pvc>` context from the canonical graph instead of
+opaque hash-like IDs that break demo trust and cross-surface recognition.
 That same adjacent chart boundary now also assumes seeded and live mock
 storage timelines are one continuous series. Disk-temperature, pool-usage,
 used-capacity, and available-space cards may consume shaped chart payloads for

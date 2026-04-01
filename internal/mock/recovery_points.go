@@ -3,6 +3,7 @@ package mock
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -109,7 +110,7 @@ func generateMockRecoveryPoints(snapshot models.StateSnapshot, fixtures Platform
 					Type:      "k8s-pvc",
 					Namespace: s.namespace,
 					Name:      s.pvc,
-					UID:       rpStableID("k8s", "pvc", s.clusterID, s.namespace, s.pvc),
+					UID:       mockRecoveryPVCUID(s.clusterName, s.namespace, s.pvc),
 				},
 				RepositoryRef: &recovery.ExternalRef{
 					Type:  "k8s-volume-snapshot-class",
@@ -544,6 +545,18 @@ func recoveryKubernetesPVCSubjects(clusters []mockRecoveryCluster) []mockRecover
 	}
 
 	return subjects
+}
+
+func mockRecoveryPVCUID(clusterName, namespace, pvc string) string {
+	clusterName = strings.TrimSpace(strings.ToLower(clusterName))
+	clusterName = strings.ReplaceAll(clusterName, " ", "-")
+	namespace = strings.TrimSpace(strings.ToLower(namespace))
+	pvc = strings.TrimSpace(strings.ToLower(pvc))
+	return firstNonEmptyTrimmed(
+		fmt.Sprintf("%s/%s/%s", clusterName, namespace, pvc),
+		fmt.Sprintf("%s/%s", namespace, pvc),
+		pvc,
+	)
 }
 
 func recoveryProxmoxSubjects(snapshot models.StateSnapshot) []mockProxmoxRecoverySubject {
