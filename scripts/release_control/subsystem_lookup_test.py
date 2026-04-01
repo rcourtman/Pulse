@@ -38,6 +38,30 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
 ]
 
 
+def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> dict:
+    lines = (REPO_ROOT / contract_path).read_text(encoding="utf-8").splitlines()
+    current_heading = None
+    current_heading_line = None
+
+    for line_number, line in enumerate(lines, start=1):
+        if line.startswith("## "):
+            current_heading = line
+            current_heading_line = line_number
+        if needle in line:
+            if current_heading is None or current_heading_line is None:
+                raise AssertionError(
+                    f"reference {needle!r} in {contract_path} has no enclosing heading"
+                )
+            return {
+                "heading": current_heading,
+                "path": runtime_path,
+                "line": line_number,
+                "heading_line": current_heading_line,
+            }
+
+    raise AssertionError(f"reference {needle!r} not found in {contract_path}")
+
+
 class SubsystemLookupTest(unittest.TestCase):
     def test_parse_args_accepts_lean_flag(self) -> None:
         args = parse_args(["internal/api/ai_handler.go", "--pretty", "--lean"])
@@ -4630,52 +4654,48 @@ class SubsystemLookupTest(unittest.TestCase):
         result = lookup_paths(["internal/api/ai_handler.go"])
         file_entry = result["files"][0]
         by_subsystem = {match["subsystem"]: match for match in file_entry["matches"]}
+        ai_runtime_expected = [
+            _contract_reference(
+                "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+                "2. `internal/api/ai_handler.go`",
+                "internal/api/ai_handler.go",
+            ),
+            _contract_reference(
+                "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+                "3. `internal/api/ai_handler.go` shared with `api-contracts`",
+                "internal/api/ai_handler.go",
+            ),
+            _contract_reference(
+                "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+                "2. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`",
+                "internal/api/ai_handler.go",
+            ),
+        ]
+        api_contracts_expected = [
+            _contract_reference(
+                "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                "33. `internal/api/ai_handler.go` shared with `ai-runtime`",
+                "internal/api/ai_handler.go",
+            ),
+            _contract_reference(
+                "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                "21. Keep hosted AI settings bootstrap on the shared API contract",
+                "internal/api/ai_handler.go",
+            ),
+            _contract_reference(
+                "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                "22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
+                "internal/api/ai_handler.go",
+            ),
+        ]
 
         self.assertEqual(
             by_subsystem["ai-runtime"]["matched_contract_references"],
-            [
-                {
-                    "heading": "## Canonical Files",
-                    "path": "internal/api/ai_handler.go",
-                    "line": 24,
-                    "heading_line": 21,
-                },
-                {
-                    "heading": "## Shared Boundaries",
-                    "path": "internal/api/ai_handler.go",
-                    "line": 45,
-                    "heading_line": 41,
-                },
-                {
-                    "heading": "## Extension Points",
-                    "path": "internal/api/ai_handler.go",
-                    "line": 52,
-                    "heading_line": 49,
-                },
-            ],
+            ai_runtime_expected,
         )
         self.assertEqual(
             by_subsystem["api-contracts"]["matched_contract_references"],
-            [
-                {
-                    "heading": "## Shared Boundaries",
-                    "path": "internal/api/ai_handler.go",
-                    "line": 111,
-                    "heading_line": 77,
-                },
-                {
-                    "heading": "## Extension Points",
-                    "path": "internal/api/ai_handler.go",
-                    "line": 174,
-                    "heading_line": 131,
-                },
-                {
-                    "heading": "## Extension Points",
-                    "path": "internal/api/ai_handler.go",
-                    "line": 175,
-                    "heading_line": 131,
-                },
-            ],
+            api_contracts_expected,
         )
         self.assertEqual(
             by_subsystem["api-contracts"]["ownership_basis"],
@@ -4695,13 +4715,41 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertIn("paid-feature-entitlement-gating", api_match["lane_context"]["release_gate_ids"])
         self.assertEqual(
             [reference["line"] for reference in api_match["matched_contract_references"]],
-            [111, 174, 175],
+            [
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                    "33. `internal/api/ai_handler.go` shared with `ai-runtime`",
+                    "internal/api/ai_handler.go",
+                )["line"],
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                    "21. Keep hosted AI settings bootstrap on the shared API contract",
+                    "internal/api/ai_handler.go",
+                )["line"],
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/api-contracts.md",
+                    "22. Keep post-boot AI enablement contract-backed on the shared AI/mobile approval surface",
+                    "internal/api/ai_handler.go",
+                )["line"],
+            ],
         )
 
     def test_render_pretty_shows_contract_focus_for_lean_lookup(self) -> None:
         rendered = render_pretty(lookup_paths(["internal/api/ai_handler.go"], lean=True))
-        self.assertIn("contract focus: ## Shared Boundaries @L111: internal/api/ai_handler.go", rendered)
-        self.assertIn("contract focus: ## Canonical Files @L24: internal/api/ai_handler.go", rendered)
+        self.assertIn(
+            "contract focus: "
+            f"{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '33. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['heading']} "
+            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/api-contracts.md', '33. `internal/api/ai_handler.go` shared with `ai-runtime`', 'internal/api/ai_handler.go')['line']}: "
+            "internal/api/ai_handler.go",
+            rendered,
+        )
+        self.assertIn(
+            "contract focus: "
+            f"{_contract_reference('docs/release-control/v6/internal/subsystems/ai-runtime.md', '2. `internal/api/ai_handler.go`', 'internal/api/ai_handler.go')['heading']} "
+            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/ai-runtime.md', '2. `internal/api/ai_handler.go`', 'internal/api/ai_handler.go')['line']}: "
+            "internal/api/ai_handler.go",
+            rendered,
+        )
 
     def test_lookup_paths_maps_unified_agent_runtime_to_agent_lifecycle(self) -> None:
         result = lookup_paths(["internal/hostagent/agent.go"])

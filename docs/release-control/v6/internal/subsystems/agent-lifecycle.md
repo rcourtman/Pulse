@@ -626,6 +626,13 @@ to a route-inferred interface IP. Route-aware IP detection remains the fallback
 only when hostname resolution is unusable, so multi-NIC and internal-CA
 deployments preserve canonical hostname continuity without losing an IP escape
 hatch for non-DNS installs.
+That same Proxmox registration boundary must now also let Pulse choose from the
+agent's ordered candidate host list instead of blindly persisting the agent's
+first preference. Unified Agent setup must send canonical `candidateHosts`
+alongside the preferred `host`, and `/api/auto-register` must store the first
+candidate that Pulse can actually reach for fingerprint capture from its own
+network view so mixed-DNS and split-network installs do not register a host the
+server itself cannot use afterward.
 That same canonical behavior also includes one auth transport for Proxmox
 completion: runtime-side Unified Agent and script callers must send `/api/auto-register`
 authentication through a one-time setup token in the request-body

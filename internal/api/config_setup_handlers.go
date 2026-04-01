@@ -252,13 +252,14 @@ func (h *ConfigHandlers) handleSetupScriptURL(w http.ResponseWriter, r *http.Req
 
 // AutoRegisterRequest represents a request from the setup script or agent to auto-register a node
 type AutoRegisterRequest struct {
-	Type       string `json:"type"`                 // "pve" or "pbs"
-	Host       string `json:"host"`                 // The host URL
-	TokenID    string `json:"tokenId"`              // Full token ID like pulse-monitor@pve!pulse-token
-	TokenValue string `json:"tokenValue,omitempty"` // The token value for the node
-	ServerName string `json:"serverName,omitempty"` // Hostname or IP
-	AuthToken  string `json:"authToken,omitempty"`  // One-time setup token from setup/install flows
-	Source     string `json:"source,omitempty"`     // "agent" or "script" - indicates how the node was registered
+	Type           string   `json:"type"`                     // "pve" or "pbs"
+	Host           string   `json:"host"`                     // The preferred host URL
+	CandidateHosts []string `json:"candidateHosts,omitempty"` // Alternate host URLs the server can try from its own network view
+	TokenID        string   `json:"tokenId"`                  // Full token ID like pulse-monitor@pve!pulse-token
+	TokenValue     string   `json:"tokenValue,omitempty"`     // The token value for the node
+	ServerName     string   `json:"serverName,omitempty"`     // Hostname or IP
+	AuthToken      string   `json:"authToken,omitempty"`      // One-time setup token from setup/install flows
+	Source         string   `json:"source,omitempty"`         // "agent" or "script" - indicates how the node was registered
 }
 
 // AutoRegisterResponse is the canonical success shape for /api/auto-register.
@@ -305,6 +306,73 @@ func isCanonicalAutoRegisterSource(source string) bool {
 	default:
 		return false
 	}
+}
+
+func normalizeAutoRegisterHostCandidates(nodeType, primary string, alternates []string) ([]string, error) {
+	candidates := make([]string, 0, len(alternates)+1)
+	seen := make(map[string]struct{}, len(alternates)+1)
+	addCandidate := func(raw string) error {
+		if strings.TrimSpace(raw) == "" {
+			return nil
+		}
+		normalized, err := normalizeNodeHost(raw, nodeType)
+		if err != nil {
+			return err
+		}
+		if _, exists := seen[normalized]; exists {
+			return nil
+		}
+		seen[normalized] = struct{}{}
+		candidates = append(candidates, normalized)
+		return nil
+	}
+
+	if err := addCandidate(primary); err != nil {
+		return nil, err
+	}
+	for _, candidate := range alternates {
+		if err := addCandidate(candidate); err != nil {
+			log.Debug().
+				Str("type", nodeType).
+				Str("candidate", candidate).
+				Err(err).
+				Msg("Ignoring invalid auto-register host candidate")
+		}
+	}
+
+	if len(candidates) == 0 {
+		return nil, fmt.Errorf("host is required")
+	}
+	return candidates, nil
+}
+
+func selectAutoRegisterHost(nodeType, primary string, alternates []string) (string, string, []string, error) {
+	candidates, err := normalizeAutoRegisterHostCandidates(nodeType, primary, alternates)
+	if err != nil {
+		return "", "", nil, err
+	}
+
+	for idx, candidate := range candidates {
+		fingerprint, err := fetchTLSFingerprint(candidate)
+		if err != nil || strings.TrimSpace(fingerprint) == "" {
+			log.Debug().
+				Str("type", nodeType).
+				Str("candidate", candidate).
+				Err(err).
+				Msg("Auto-register candidate not reachable for fingerprint capture")
+			continue
+		}
+		if idx > 0 {
+			log.Info().
+				Str("type", nodeType).
+				Str("selectedHost", candidate).
+				Str("requestedHost", candidates[0]).
+				Msg("Auto-register switched to fallback host candidate reachable from Pulse")
+		}
+		return candidate, fingerprint, candidates, nil
+	}
+
+	return candidates[0], "", candidates, nil
 }
 
 func canonicalAutoRegisterMatchMessage(reason string) string {
@@ -614,19 +682,19 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	req.ServerName = serverName
 	req.Source = registrationSource
 
-	host, err := normalizeNodeHost(req.Host, req.Type)
+	host, fingerprint, candidateHosts, err := selectAutoRegisterHost(req.Type, req.Host, req.CandidateHosts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	fingerprint := ""
-	if fp, err := fetchTLSFingerprint(host); err != nil {
-		log.Warn().Err(err).Str("host", host).Msg("Failed to fetch TLS fingerprint for auto-register")
-	} else {
-		fingerprint = fp
-	}
 	verifySSL := true
+	log.Info().
+		Str("requestedHost", req.Host).
+		Str("selectedHost", host).
+		Strs("candidateHosts", candidateHosts).
+		Bool("verifySSL", verifySSL).
+		Msg("Resolved canonical auto-register host candidates")
 
 	fullTokenID := req.TokenID
 	tokenValue = req.TokenValue

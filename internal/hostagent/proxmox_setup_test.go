@@ -145,6 +145,15 @@ func TestRegisterWithPulse_Payload(t *testing.T) {
 	if gotPayload.Host != "https://10.0.0.4:8006" {
 		t.Fatalf("unexpected host %q", gotPayload.Host)
 	}
+	if len(gotPayload.CandidateHosts) != 2 {
+		t.Fatalf("unexpected candidateHosts %#v", gotPayload.CandidateHosts)
+	}
+	if gotPayload.CandidateHosts[0] != "https://10.0.0.4:8006" {
+		t.Fatalf("unexpected primary candidateHost %q", gotPayload.CandidateHosts[0])
+	}
+	if gotPayload.CandidateHosts[1] != "https://node-1:8006" {
+		t.Fatalf("unexpected candidateHosts %#v", gotPayload.CandidateHosts)
+	}
 	if gotPayload.ServerName != "node-1" {
 		t.Fatalf("unexpected serverName %q", gotPayload.ServerName)
 	}
@@ -168,6 +177,73 @@ func TestRegisterWithPulse_Payload(t *testing.T) {
 	}
 	if setupTokenPayload["host"] != "https://10.0.0.4:8006" {
 		t.Fatalf("unexpected setup token host %#v", setupTokenPayload["host"])
+	}
+}
+
+func TestRegisterWithPulse_AcceptsServerSelectedFallbackHost(t *testing.T) {
+	var gotPayload autoRegisterRequest
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("unexpected method %s", r.Method)
+		}
+		switch r.URL.Path {
+		case "/api/setup-script-url":
+			publicURL := "http://" + r.Host
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(canonicalSetupScriptURLResponseJSON(publicURL, "pve", "https://node-1:8006", "setup-token-123")))
+			return
+		case "/api/auto-register":
+			if err := json.NewDecoder(r.Body).Decode(&gotPayload); err != nil {
+				t.Fatalf("decode payload: %v", err)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"status":"success","message":"Node node-1 registered successfully at https://10.0.0.4:8006","action":"use_token","type":"pve","source":"agent","host":"https://10.0.0.4:8006","nodeId":"node-1","nodeName":"node-1","tokenId":"token-id","tokenValue":"token-value"}`))
+			return
+		default:
+			t.Fatalf("unexpected path %s", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+
+	mc := &mockCollector{}
+	mc.lookupIPFn = func(host string) ([]net.IP, error) {
+		if host == "node-1" {
+			return []net.IP{net.ParseIP("10.9.0.10")}, nil
+		}
+		return nil, nil
+	}
+	mc.dialTimeoutFn = func(network, address string, timeout time.Duration) (net.Conn, error) {
+		return &mockConn{localAddr: &net.UDPAddr{IP: net.ParseIP("10.0.0.4")}}, nil
+	}
+	mc.commandCombinedOutputFn = func(ctx context.Context, name string, arg ...string) (string, error) {
+		return "", fmt.Errorf("unused hostname -I fallback")
+	}
+
+	p := &ProxmoxSetup{
+		logger:     zerolog.Nop(),
+		collector:  mc,
+		httpClient: server.Client(),
+		pulseURL:   server.URL,
+		apiToken:   "pulse-token",
+		hostname:   "node-1",
+	}
+
+	resp, err := p.registerWithPulse(context.Background(), proxmoxProductPVE, "https://node-1:8006", "token-id", "token-value")
+	if err != nil {
+		t.Fatalf("registerWithPulse failed: %v", err)
+	}
+	if resp.Host != "https://10.0.0.4:8006" {
+		t.Fatalf("response host = %q, want fallback host", resp.Host)
+	}
+	if len(gotPayload.CandidateHosts) != 2 {
+		t.Fatalf("candidateHosts len = %d, want 2", len(gotPayload.CandidateHosts))
+	}
+	if gotPayload.CandidateHosts[0] != "https://node-1:8006" {
+		t.Fatalf("candidateHosts[0] = %q, want hostname candidate first", gotPayload.CandidateHosts[0])
+	}
+	if gotPayload.CandidateHosts[1] != "https://10.0.0.4:8006" {
+		t.Fatalf("candidateHosts[1] = %q, want route-aware fallback host", gotPayload.CandidateHosts[1])
 	}
 }
 

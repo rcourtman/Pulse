@@ -112,6 +112,7 @@ Own canonical runtime payload shapes between backend and frontend.
 34. `internal/api/ai_handlers.go` shared with `ai-runtime`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 35. `internal/api/ai_intelligence_handlers.go` shared with `ai-runtime`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 36. `internal/api/config_setup_handlers.go` shared with `agent-lifecycle`: auto-register and setup handlers are both an agent lifecycle control surface and a canonical API payload contract boundary.
+    That same shared boundary also owns reachable-host selection truth for canonical Proxmox registration: runtime callers may propose ordered `candidateHosts`, but the API contract must persist and echo the first candidate Pulse can actually reach instead of freezing the caller's rejected first preference into the stored node endpoint.
 37. `internal/api/enterprise_extension_rbac_admin.go` shared with `organization-settings`: RBAC admin extension endpoints are both an organization settings control surface and a canonical API payload contract boundary.
 38. `internal/api/licensing_bridge.go` shared with `cloud-paid`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
 39. `internal/api/licensing_handlers.go` shared with `cloud-paid`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
@@ -1366,6 +1367,10 @@ preferred candidate, not an untouchable answer. The backend must normalize the
 candidate list, ignore invalid alternates, and persist the first candidate it
 can actually reach for TLS fingerprint capture from Pulse's own network view so
 registration payloads do not lock in an endpoint the server cannot later poll.
+That same response contract must echo the stored reachable candidate back in
+the canonical `host` field, not the caller's rejected first preference, so
+runtime-side Unified Agent confirmation and later setup/install surfaces stay
+aligned on the actual persisted polling endpoint.
 The unified-agent install endpoints now also carry an exact-release fallback
 contract: when `/install.sh` or `/install.ps1` cannot be served locally, the
 backend must proxy the install script asset from the exact GitHub release that

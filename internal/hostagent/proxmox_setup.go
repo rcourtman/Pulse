@@ -56,13 +56,14 @@ type autoRegisterSource string
 const autoRegisterSourceAgent autoRegisterSource = "agent"
 
 type autoRegisterRequest struct {
-	Type       proxmoxProductType `json:"type"`
-	Host       string             `json:"host"`
-	ServerName string             `json:"serverName"`
-	AuthToken  string             `json:"authToken,omitempty"`
-	TokenID    string             `json:"tokenId"`
-	TokenValue string             `json:"tokenValue"`
-	Source     autoRegisterSource `json:"source"`
+	Type           proxmoxProductType `json:"type"`
+	Host           string             `json:"host"`
+	CandidateHosts []string           `json:"candidateHosts,omitempty"`
+	ServerName     string             `json:"serverName"`
+	AuthToken      string             `json:"authToken,omitempty"`
+	TokenID        string             `json:"tokenId"`
+	TokenValue     string             `json:"tokenValue"`
+	Source         autoRegisterSource `json:"source"`
 }
 
 type autoRegisterResponse struct {
@@ -382,6 +383,9 @@ func (p *ProxmoxSetup) Run(ctx context.Context) (*ProxmoxSetupResult, error) {
 		registered = true
 		p.markAsRegistered()
 		p.markTypeAsRegistered(ptype)
+		if strings.TrimSpace(registerResp.Host) != "" {
+			hostURL = registerResp.Host
+		}
 		p.logger.Info().Str("host", hostURL).Str("node", registerResp.NodeName).Msg("Successfully registered Proxmox node with Pulse")
 	}
 
@@ -484,6 +488,9 @@ func (p *ProxmoxSetup) runForType(ctx context.Context, ptype proxmoxProductType)
 	} else {
 		registered = true
 		p.markTypeAsRegistered(ptype)
+		if strings.TrimSpace(registerResp.Host) != "" {
+			hostURL = registerResp.Host
+		}
 		p.logger.Info().Str("type", string(ptype)).Str("host", hostURL).Str("node", registerResp.NodeName).Msg("Successfully registered Proxmox node with Pulse")
 	}
 
@@ -685,10 +692,19 @@ func (p *ProxmoxSetup) parsePBSTokenValue(output string) string {
 	return ""
 }
 
-// getHostURL constructs the host URL for this Proxmox node.
-// Prefers canonical hostname continuity when it resolves to a real local address,
-// then falls back to route-aware IP detection and heuristic local IP selection.
-func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType) string {
+func appendUniqueHostCandidate(candidates []string, seen map[string]struct{}, candidate string) []string {
+	normalized := strings.TrimSpace(candidate)
+	if normalized == "" {
+		return candidates
+	}
+	if _, exists := seen[normalized]; exists {
+		return candidates
+	}
+	seen[normalized] = struct{}{}
+	return append(candidates, normalized)
+}
+
+func (p *ProxmoxSetup) candidateHostURLs(ctx context.Context, ptype proxmoxProductType) []string {
 	port := "8006"
 	if ptype == proxmoxProductPBS {
 		port = "8007"
@@ -698,12 +714,29 @@ func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType)
 		ctx = context.Background()
 	}
 
+	candidates := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+	buildURL := func(host string) string {
+		if strings.TrimSpace(host) == "" {
+			return ""
+		}
+		return formatHTTPSURL(host, port)
+	}
+
 	// Priority 1: User-specified ReportIP override from configuration.
 	// This allows users to manually specify which IP should be used for Proxmox API
 	// connections when auto-detection picks the wrong one (e.g., Issue #1061).
 	if p.reportIP != "" {
 		p.logger.Info().Str("ip", p.reportIP).Msg("Using user-specified ReportIP for Proxmox registration")
-		return formatHTTPSURL(p.reportIP, port)
+		return append(candidates, buildURL(p.reportIP))
+	}
+
+	if p.collector == nil {
+		hostname := strings.TrimSpace(p.hostname)
+		if hostname == "" {
+			hostname = "localhost"
+		}
+		return append(candidates, buildURL(hostname))
 	}
 
 	// Priority 2: Prefer the system hostname when it resolves to a non-loopback,
@@ -715,7 +748,7 @@ func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType)
 				Str("hostname", hostname).
 				Str("ip", hostnameIP).
 				Msg("Using resolvable hostname for Proxmox registration")
-			return formatHTTPSURL(hostname, port)
+			candidates = appendUniqueHostCandidate(candidates, seen, buildURL(hostname))
 		}
 	}
 
@@ -723,7 +756,7 @@ func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType)
 	// This remains the best fallback when the hostname is not usable.
 	if reachableIP := p.getIPThatReachesPulse(); reachableIP != "" {
 		p.logger.Debug().Str("ip", reachableIP).Msg("Using IP that can reach Pulse server")
-		return formatHTTPSURL(reachableIP, port)
+		candidates = appendUniqueHostCandidate(candidates, seen, buildURL(reachableIP))
 	}
 
 	// Priority 4: Get all IPs and select the best one based on heuristics.
@@ -738,9 +771,13 @@ func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType)
 
 			bestIP := selectBestIP(ips, hostnameIP)
 			if bestIP != "" {
-				return formatHTTPSURL(bestIP, port)
+				candidates = appendUniqueHostCandidate(candidates, seen, buildURL(bestIP))
 			}
 		}
+	}
+
+	if len(candidates) > 0 {
+		return candidates
 	}
 
 	// Final fallback to hostname if IP detection failed
@@ -748,13 +785,27 @@ func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType)
 	if hostname == "" {
 		hostname = "localhost"
 	}
-	return formatHTTPSURL(hostname, port)
+	return append(candidates, buildURL(hostname))
+}
+
+// getHostURL constructs the host URL for this Proxmox node.
+// Prefers canonical hostname continuity when it resolves to a real local address,
+// then falls back to route-aware IP detection and heuristic local IP selection.
+func (p *ProxmoxSetup) getHostURL(ctx context.Context, ptype proxmoxProductType) string {
+	candidates := p.candidateHostURLs(ctx, ptype)
+	if len(candidates) == 0 {
+		return ""
+	}
+	return candidates[0]
 }
 
 // getIPThatReachesPulse determines which local IP is used to connect to the Pulse server.
 // This handles cases where multiple network interfaces exist (e.g., management, Ceph, cluster ring)
 // and ensures we pick the one that can actually reach Pulse. Related to #929.
 func (p *ProxmoxSetup) getIPThatReachesPulse() string {
+	if p.collector == nil {
+		return ""
+	}
 	if p.pulseURL == "" {
 		return ""
 	}
@@ -819,6 +870,9 @@ func formatHTTPSURL(host, port string) string {
 
 // getIPForHostname resolves the system hostname to an IP address.
 func (p *ProxmoxSetup) getIPForHostname() string {
+	if p.collector == nil {
+		return ""
+	}
 	hostname := p.hostname
 	if hostname == "" {
 		var err error
@@ -978,7 +1032,20 @@ type permanentError struct {
 func (e *permanentError) Error() string { return e.err.Error() }
 func (e *permanentError) Unwrap() error { return e.err }
 
-func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, expectedType proxmoxProductType, expectedSource autoRegisterSource, expectedHost, expectedTokenID, expectedTokenValue string) (autoRegisterResponse, error) {
+func autoRegisterResponseMatchesCandidateHost(responseHost string, candidateHosts []string) bool {
+	trimmedResponseHost := strings.TrimSpace(responseHost)
+	if trimmedResponseHost == "" {
+		return false
+	}
+	for _, candidate := range candidateHosts {
+		if trimmedResponseHost == strings.TrimSpace(candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, expectedType proxmoxProductType, expectedSource autoRegisterSource, expectedHosts []string, expectedTokenID, expectedTokenValue string) (autoRegisterResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.pulseURL+"/api/auto-register", bytes.NewReader(body))
 	if err != nil {
 		return autoRegisterResponse{}, &permanentError{fmt.Errorf("create request: %w", err)}
@@ -1020,7 +1087,7 @@ func (p *ProxmoxSetup) doRegisterRequest(ctx context.Context, body []byte, expec
 	if strings.TrimSpace(parsed.Source) != strings.TrimSpace(string(expectedSource)) {
 		return autoRegisterResponse{}, fmt.Errorf("auto-register response source mismatch")
 	}
-	if strings.TrimSpace(parsed.Host) != strings.TrimSpace(expectedHost) {
+	if !autoRegisterResponseMatchesCandidateHost(parsed.Host, expectedHosts) {
 		return autoRegisterResponse{}, fmt.Errorf("auto-register response host mismatch")
 	}
 	if strings.TrimSpace(parsed.NodeID) == "" {
@@ -1141,6 +1208,17 @@ func (p *ProxmoxSetup) fetchSetupToken(ctx context.Context, ptype proxmoxProduct
 
 // registerWithPulse calls the auto-register endpoint to add the node.
 func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProductType, hostURL, tokenID, tokenValue string) (autoRegisterResponse, error) {
+	candidateHosts := p.candidateHostURLs(ctx, ptype)
+	if len(candidateHosts) == 0 || strings.TrimSpace(candidateHosts[0]) != strings.TrimSpace(hostURL) {
+		seen := make(map[string]struct{}, len(candidateHosts)+1)
+		reordered := make([]string, 0, len(candidateHosts)+1)
+		reordered = appendUniqueHostCandidate(reordered, seen, hostURL)
+		for _, candidate := range candidateHosts {
+			reordered = appendUniqueHostCandidate(reordered, seen, candidate)
+		}
+		candidateHosts = reordered
+	}
+
 	backoffs := p.retryBackoffs
 	if backoffs == nil {
 		backoffs = []time.Duration{5 * time.Second, 10 * time.Second, 20 * time.Second, 40 * time.Second, 60 * time.Second}
@@ -1178,13 +1256,14 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 		}
 
 		payload := autoRegisterRequest{
-			Type:       ptype,
-			Host:       hostURL,
-			ServerName: p.hostname,
-			AuthToken:  setupToken,
-			TokenID:    tokenID,
-			TokenValue: tokenValue,
-			Source:     autoRegisterSourceAgent,
+			Type:           ptype,
+			Host:           hostURL,
+			CandidateHosts: candidateHosts,
+			ServerName:     p.hostname,
+			AuthToken:      setupToken,
+			TokenID:        tokenID,
+			TokenValue:     tokenValue,
+			Source:         autoRegisterSourceAgent,
 		}
 
 		body, err := json.Marshal(payload)
@@ -1192,7 +1271,7 @@ func (p *ProxmoxSetup) registerWithPulse(ctx context.Context, ptype proxmoxProdu
 			return autoRegisterResponse{}, fmt.Errorf("marshal payload: %w", err)
 		}
 
-		parsed, err := p.doRegisterRequest(ctx, body, ptype, autoRegisterSourceAgent, hostURL, tokenID, tokenValue)
+		parsed, err := p.doRegisterRequest(ctx, body, ptype, autoRegisterSourceAgent, candidateHosts, tokenID, tokenValue)
 		if err == nil {
 			if attempt > 0 {
 				p.logger.Info().Int("attempt", attempt+1).Str("type", string(ptype)).Msg("Proxmox auto-registration succeeded after retry")
