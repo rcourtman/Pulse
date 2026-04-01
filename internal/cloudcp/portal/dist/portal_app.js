@@ -2062,10 +2062,7 @@
     return '<article class="billing-action-row"><div class="billing-action-main"><div class="billing-action-copy"><h3>' + title + "</h3><p>" + description + '</p></div><div class="billing-action-meta">' + meta + '</div></div><div class="billing-action-cta"><button class="btn-secondary billing-action-button" type="button" id="' + id + '" data-account-billing-action="open-billing-panel" data-account-billing-panel="' + panelID + '" data-account-billing-focus="' + focusID + '" data-shell-target="billing">' + escapeHTML(actionLabel) + "</button></div></article>";
   }
   function renderSectionContextChips(chips) {
-    if (!chips.length) return "";
-    return '<div class="section-context-strip">' + chips.map(function(chip) {
-      return '<span class="section-context-chip">' + escapeHTML(chip) + "</span>";
-    }).join("") + "</div>";
+    return "";
   }
   function attentionWorkspaces(workspaces) {
     var results = [];

@@ -110,6 +110,11 @@ agreement, and cloud-specific enforcement rules.
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 20. Add contract tests where runtime and pricing need to stay aligned
 21. Add or change hosted browser org-context bootstrap through `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, `frontend-modern/src/useAppRuntimeState.ts`, and `frontend-modern/src/utils/apiClient.ts`
+22. Keep the hosted account portal shell task-first and compact. Section
+    headers, billing action rows, and the maintained portal bundle under
+    `internal/cloudcp/portal/` may surface the facts an operator needs, but the
+    shell should not spend vertical space on duplicate context-chip strips when
+    the page header and section body already communicate that scope.
 
 ## Forbidden Paths
 

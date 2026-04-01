@@ -217,10 +217,7 @@ function renderBillingActionRow(
 }
 
 function renderSectionContextChips(chips: string[]): string {
-  if (!chips.length) return '';
-  return '<div class="section-context-strip">' + chips.map(function(chip) {
-    return '<span class="section-context-chip">' + escapeHTML(chip) + '</span>';
-  }).join('') + '</div>';
+  return '';
 }
 
 function renderFactLine(className: string, facts: string[]): string {

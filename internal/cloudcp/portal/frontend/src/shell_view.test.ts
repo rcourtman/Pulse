@@ -192,6 +192,9 @@ describe('shell view', function() {
     expect(html).not.toContain('>Licenses<');
     expect(html).not.toContain('>Refunds<');
     expect(html).not.toContain('>Privacy<');
+    expect(html).not.toContain('section-context-strip');
+    expect(html).not.toContain('View roster');
+    expect(html).not.toContain('Owner or admin required');
   });
 
   it('defaults the authenticated hosted shell to workspaces', function() {
