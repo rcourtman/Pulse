@@ -541,6 +541,8 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).toContain('data-active-series-display');
     expect(interactiveSparklineSource).toContain('data-active-hover-cursor-x');
+    expect(interactiveSparklineSource).toContain('x1={sparkline.activeHoverCursorX() ?? 0}');
+    expect(interactiveSparklineSource).not.toContain('{(cursorX) => (');
     expect(interactiveSparklineSource).toContain('data-rendered-series-count');
     expect(interactiveSparklineSource).not.toContain('createEffect');
     expect(interactiveSparklineSource).not.toContain('createSignal');

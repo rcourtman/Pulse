@@ -116,10 +116,12 @@ describe('InteractiveSparkline hover behavior', () => {
     fireEvent.mouseMove(svg, { clientX: 100, clientY: 120 });
 
     const root = container.firstElementChild;
-    expect(svg.querySelector('line[stroke-dasharray="3 3"]')).toBeInTheDocument();
+    const hoverLine = svg.querySelector('line[stroke-dasharray="3 3"]');
+    expect(hoverLine).toBeInTheDocument();
     expect(
       Number.parseFloat(root?.getAttribute('data-active-hover-cursor-x') ?? 'NaN'),
     ).toBeCloseTo(100, 1);
+    expect(Number.parseFloat(hoverLine?.getAttribute('x1') ?? 'NaN')).toBeCloseTo(100, 1);
   });
 
   it('publishes synchronized hover identity and clears it on leave', () => {

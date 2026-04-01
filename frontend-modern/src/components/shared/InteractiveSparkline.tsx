@@ -121,19 +121,17 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                 </For>
 
                 <Show when={sparkline.activeHoverCursorX() !== null}>
-                  {(cursorX) => (
-                    <line
-                      x1={cursorX()}
-                      y1={Math.max(0, (sparkline.activeHoverState()?.minY ?? 4) - 4)}
-                      x2={cursorX()}
-                      y2={sparkline.vbH}
-                      stroke="currentColor"
-                      stroke-opacity="0.45"
-                      stroke-width="1"
-                      stroke-dasharray="3 3"
-                      vector-effect="non-scaling-stroke"
-                    />
-                  )}
+                  <line
+                    x1={sparkline.activeHoverCursorX() ?? 0}
+                    y1={Math.max(0, (sparkline.activeHoverState()?.minY ?? 4) - 4)}
+                    x2={sparkline.activeHoverCursorX() ?? 0}
+                    y2={sparkline.vbH}
+                    stroke="currentColor"
+                    stroke-opacity="0.45"
+                    stroke-width="1"
+                    stroke-dasharray="3 3"
+                    vector-effect="non-scaling-stroke"
+                  />
                 </Show>
 
                 <For each={sparkline.chartData().paths}>

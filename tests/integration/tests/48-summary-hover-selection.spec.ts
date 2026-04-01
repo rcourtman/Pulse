@@ -270,6 +270,58 @@ async function expectSummaryHoverTimestampsAligned(
     });
 }
 
+async function expectSparklineSourceCursorTracksLocalScrub(
+  page: import("@playwright/test").Page,
+  sparklineRoot: import("@playwright/test").Locator,
+): Promise<void> {
+  const surface = sparklineRoot.locator("svg").first();
+  await expect(surface).toBeVisible();
+  const box = await surface.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    throw new Error("Sparkline surface has no bounding box");
+  }
+
+  const samples: Array<{ cursorX: number; lineX: number }> = [];
+  for (const ratio of [0.15, 0.45, 0.75]) {
+    await page.mouse.move(
+      box.x + box.width * ratio,
+      box.y + box.height * 0.45,
+    );
+    await expect
+      .poll(async () =>
+        sparklineRoot.evaluate((node) => {
+          const activeCursor = Number.parseFloat(
+            node.getAttribute("data-active-hover-cursor-x") || "NaN",
+          );
+          const svgCursor = Number.parseFloat(
+            node
+              .querySelector('line[stroke-dasharray="3 3"]')
+              ?.getAttribute("x1") || "NaN",
+          );
+          return Number.isFinite(activeCursor) && Number.isFinite(svgCursor);
+        }),
+      )
+      .toBe(true);
+
+    const sample = await sparklineRoot.evaluate((node) => ({
+      cursorX: Number.parseFloat(
+        node.getAttribute("data-active-hover-cursor-x") || "NaN",
+      ),
+      lineX: Number.parseFloat(
+        node.querySelector('line[stroke-dasharray="3 3"]')?.getAttribute("x1") ||
+          "NaN",
+      ),
+    }));
+    expect(sample.cursorX).toBeCloseTo(sample.lineX, 1);
+    samples.push(sample);
+  }
+
+  expect(samples[0].lineX).toBeLessThan(samples[1].lineX);
+  expect(samples[1].lineX).toBeLessThan(samples[2].lineX);
+  await page.mouse.move(1, 1);
+}
+
 async function readSummarySeriesId(
   row: import("@playwright/test").Locator,
   fallbackAttribute: string,
@@ -354,6 +406,17 @@ test.describe.serial("Summary hover selection", () => {
       infrastructureRowId,
       2,
     );
+    const infrastructureSparklines = infrastructureSummary.locator(
+      "[data-active-series-display]",
+    );
+    await expectSparklineSourceCursorTracksLocalScrub(
+      page,
+      infrastructureSparklines.nth(0),
+    );
+    await expectSparklineSourceCursorTracksLocalScrub(
+      page,
+      infrastructureSparklines.nth(1),
+    );
 
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
     const workloadsSummary = page.getByTestId("workloads-summary");
@@ -374,6 +437,17 @@ test.describe.serial("Summary hover selection", () => {
       workloadsSummary,
       workloadRowId,
       2,
+    );
+    const workloadSparklines = workloadsSummary.locator(
+      "[data-active-series-display]",
+    );
+    await expectSparklineSourceCursorTracksLocalScrub(
+      page,
+      workloadSparklines.nth(0),
+    );
+    await expectSparklineSourceCursorTracksLocalScrub(
+      page,
+      workloadSparklines.nth(1),
     );
 
     const vmwareWorkloadRow = page
