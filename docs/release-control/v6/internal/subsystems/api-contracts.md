@@ -324,6 +324,13 @@ must normalize absolute HTTP(S) inputs through shared helpers, reject
 userinfo-bearing URLs before any outbound request, and append the OIDC
 well-known path relative to the issuer base instead of resetting discovery to
 the origin root.
+That same SSO boundary also owns manual SAML endpoint validation payloads.
+`internal/api/identity_sso_handlers.go`, `internal/api/saml_service.go`, and
+`internal/api/contract_test.go` must preserve both `idpSsoUrl` and optional
+`idpSloUrl` on the shared SAML test request, and both fields must fail closed
+through the same validated absolute HTTP(S) helpers instead of letting the
+manual logout URL drift out of the request model or bypass the governed URL
+normalization path.
 Commercial self-service actions in that shell must stay same-origin as well:
 the frontend may only call the portal-owned `/api/portal/commercial/*` routes,
 and `internal/cloudcp/portal/commercial_proxy.go` plus `internal/cloudcp/routes.go`

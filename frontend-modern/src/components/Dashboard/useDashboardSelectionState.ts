@@ -1,10 +1,12 @@
-import { useLocation } from '@solidjs/router';
-import { createEffect, createSignal, type Accessor } from 'solid-js';
+import { useLocation, useNavigate } from '@solidjs/router';
+import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
 import type { WorkloadGuest } from '@/types/workloads';
+import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
   dashboardHasHoveredWorkload,
   resolveDashboardResourceSelection,
+  resolveDashboardSelectionNavigateTarget,
 } from './dashboardSelectionModel';
 
 interface UseDashboardSelectionStateOptions {
@@ -14,6 +16,11 @@ interface UseDashboardSelectionStateOptions {
 
 export function useDashboardSelectionState(options: UseDashboardSelectionStateOptions) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const routeStateNavigate = createRouteStateNavigateScheduler(
+    navigate,
+    () => `${untrack(() => location.pathname)}${untrack(() => location.search)}`,
+  );
 
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
@@ -26,7 +33,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     tableRef = element;
   };
 
-  const setSelectedGuestId = (id: string | null) => {
+  const setSelectedGuestIdState = (id: string | null) => {
     let scroller: HTMLElement | null = tableRef ?? null;
     while (scroller) {
       const { overflowY } = getComputedStyle(scroller);
@@ -48,10 +55,23 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     });
   };
 
+  const setSelectedGuestId = (id: string | null) => {
+    setSelectedGuestIdState(id);
+    const nextPath = resolveDashboardSelectionNavigateTarget({
+      pathname: location.pathname,
+      search: location.search,
+      resourceId: id,
+    });
+    if (nextPath) {
+      routeStateNavigate.schedule(nextPath);
+    }
+  };
+
   createEffect(() => {
     const selection = resolveDashboardResourceSelection(location.search);
     if (!selection) {
       if (handledResourceId() !== null) {
+        setSelectedGuestIdState(null);
         setHandledResourceId(null);
       }
       return;
@@ -60,7 +80,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     const { resourceId, selectedNode } = selection;
     if (resourceId === handledResourceId()) return;
 
-    setSelectedGuestId(resourceId);
+    setSelectedGuestIdState(resourceId);
     if (selectedNode) {
       options.setSelectedNode(selectedNode);
     }
@@ -73,6 +93,10 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     if (!dashboardHasHoveredWorkload(options.filteredGuests(), hoveredId)) {
       setHoveredWorkloadId(null);
     }
+  });
+
+  onCleanup(() => {
+    routeStateNavigate.cleanup();
   });
 
   return {

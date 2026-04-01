@@ -78,7 +78,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   let activeFetchRequest = 0;
   let activeScopeKey: string | null = null;
 
-  const awaitAbortable = <T,>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
+  const awaitAbortable = <T>(promise: Promise<T>, signal: AbortSignal): Promise<T> => {
     if (signal.aborted) {
       return Promise.reject(new DOMException('Aborted', 'AbortError'));
     }
@@ -230,11 +230,35 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   );
 
   const displaySeries = createMemo(() => {
-    return buildInfrastructureDisplaySeries(resourceSeries(), props.focusedResourceId);
+    return buildInfrastructureDisplaySeries(resourceSeries(), null);
+  });
+
+  const interactiveResourceIds = createMemo(() => {
+    const ids = new Set<string>();
+    for (const series of resourceSeries()) {
+      if (
+        series.cpu.length >= 1 ||
+        series.memory.length >= 1 ||
+        series.diskio.length >= 1 ||
+        series.network.length >= 1
+      ) {
+        ids.add(series.id);
+      }
+    }
+    return ids;
+  });
+
+  const hasInteractiveResourceId = (value: string | null | undefined): value is string => {
+    const normalized = value?.trim() || '';
+    return normalized !== '' && interactiveResourceIds().has(normalized);
+  };
+
+  const effectiveFocusedResourceId = createMemo<string | null>(() => {
+    return hasInteractiveResourceId(props.focusedResourceId) ? props.focusedResourceId : null;
   });
 
   const focusedResourceName = createMemo(() => {
-    return getFocusedInfrastructureResourceName(resourceSeries(), props.focusedResourceId);
+    return getFocusedInfrastructureResourceName(resourceSeries(), effectiveFocusedResourceId());
   });
 
   const singleDisplayedOnlineResource = createMemo(() => {
@@ -263,15 +287,13 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
 
   const hasNetData = createMemo(() => hasInfrastructureSeriesData(displaySeries(), 'network'));
 
-  const diskioSeries = createMemo(() =>
-    buildInfrastructureMetricSeries(displaySeries(), 'diskio'),
-  );
+  const diskioSeries = createMemo(() => buildInfrastructureMetricSeries(displaySeries(), 'diskio'));
 
   const hasDiskIOData = createMemo(() => hasInfrastructureSeriesData(displaySeries(), 'diskio'));
 
   const avgDiskCapacity = createMemo(() => getAverageDiskCapacity(props.resources));
-  const shouldShowNetworkCard = createMemo(
-    () => shouldShowInfrastructureNetworkCard(hasNetData(), props.resources),
+  const shouldShowNetworkCard = createMemo(() =>
+    shouldShowInfrastructureNetworkCard(hasNetData(), props.resources),
   );
   const workloadStats = createMemo(() => buildInfrastructureWorkloadStats(workloads()));
   const resourceCounts = createMemo(() => buildInfrastructureResourceCounts(props.resources));
@@ -286,7 +308,9 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
     isCurrentRangeLoaded,
     emptyHistoryLabel,
     emptyMessage,
+    effectiveFocusedResourceId,
     focusedResourceName,
+    hasInteractiveResourceId,
     resourceCounts,
     workloadStats,
     avgDiskCapacity,

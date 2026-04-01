@@ -192,4 +192,38 @@ test.describe.serial("Inline selection scroll stability", () => {
     const afterScroll = await page.evaluate(() => window.scrollY);
     expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
   });
+
+  test("keeps the workloads viewport stable when opening an inline workload drawer", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only workload interaction proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    await expect(page.locator("tr[data-guest-id]").first()).toBeVisible();
+
+    const row = page.locator("tr[data-guest-id]").first();
+    const beforeScroll = await scrollSectionIntoView(page, row);
+    expect(beforeScroll).toBeGreaterThan(10);
+
+    const workloadId = (await row.getAttribute("data-guest-id")) ?? "";
+    expect(workloadId).not.toBe("");
+
+    await row.click();
+
+    await expect(page).toHaveURL(/\/workloads\?(?:.*&)?resource=/);
+    await expect(row.locator("xpath=following-sibling::tr[1]")).toContainText(
+      "Overview",
+    );
+
+    const afterScroll = await page.evaluate(() => window.scrollY);
+    expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
+
+    await row.click();
+    await expect.poll(() => page.url()).not.toContain("resource=");
+  });
 });

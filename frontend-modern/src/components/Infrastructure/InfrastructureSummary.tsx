@@ -15,6 +15,8 @@ import { useInfrastructureSummaryState } from './useInfrastructureSummaryState';
 
 export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (props) => {
   const state = useInfrastructureSummaryState(props);
+  const effectiveHoveredResourceId = () =>
+    state.hasInteractiveResourceId(props.hoveredResourceId) ? props.hoveredResourceId : null;
 
   const rangeLabel = () => props.timeRange || '1h';
 
@@ -25,16 +27,14 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
   };
   const activeSeriesId = () =>
     resolveSummaryActiveSeriesId({
-      hoveredSeriesId: props.hoveredResourceId,
-      focusedSeriesId: props.focusedResourceId,
+      hoveredSeriesId: effectiveHoveredResourceId(),
+      focusedSeriesId: state.effectiveFocusedResourceId(),
     });
-  const interactionStateFor = (
-    series: Array<{ id: string }>,
-  ) =>
+  const interactionStateFor = (series: Array<{ id: string }>) =>
     resolveSummaryCardInteractionState({
       series,
-      hoveredSeriesId: props.hoveredResourceId,
-      focusedSeriesId: props.focusedResourceId,
+      hoveredSeriesId: effectiveHoveredResourceId(),
+      focusedSeriesId: state.effectiveFocusedResourceId(),
     });
 
   return (
@@ -73,6 +73,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               series={state.seriesFor('cpu')}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange}
+              activeSeriesDisplay="isolate"
               yMode="percent"
               highlightNearestSeriesOnHover
               highlightSeriesId={activeSeriesId()}
@@ -92,6 +93,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               series={state.seriesFor('memory')}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange}
+              activeSeriesDisplay="isolate"
               yMode="percent"
               highlightNearestSeriesOnHover
               highlightSeriesId={activeSeriesId()}

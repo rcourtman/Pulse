@@ -25,6 +25,7 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
     series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
     highlightSeriesId?: string | null;
     interactionState?: string;
+    activeSeriesDisplay?: string;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
@@ -37,6 +38,7 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
         data-max-points={maxPoints}
         data-highlight-series-id={props.highlightSeriesId || ''}
         data-interaction-state={props.interactionState || 'default'}
+        data-active-series-display={props.activeSeriesDisplay || ''}
       />
     );
   },
@@ -308,6 +310,33 @@ describe('WorkloadsSummary performance behavior', () => {
         expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadId);
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
+    });
+  });
+
+  it('keeps the page summary series page-scoped when a focused workload is selected', async () => {
+    const workloadIds = ['cluster-a:pve1:101', 'cluster-a:pve1:102'];
+    mockGetWorkloadCharts.mockResolvedValueOnce(makeChartsResponse(workloadIds));
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: workloadIds.length, running: workloadIds.length, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots(workloadIds)}
+        focusedWorkloadId={workloadIds[0]}
+      />
+    ));
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(4);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-series-count')).toBe('2');
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadIds[0]);
+      }
+      const isolated = sparklines.filter(
+        (sparkline) => sparkline.getAttribute('data-active-series-display') === 'isolate',
+      );
+      expect(isolated).toHaveLength(2);
     });
   });
 

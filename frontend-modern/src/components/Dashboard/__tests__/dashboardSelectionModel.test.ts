@@ -5,6 +5,7 @@ import type { WorkloadGuest } from '@/types/workloads';
 import {
   dashboardHasHoveredWorkload,
   resolveDashboardResourceSelection,
+  resolveDashboardSelectionNavigateTarget,
 } from '../dashboardSelectionModel';
 
 describe('dashboardSelectionModel', () => {
@@ -48,5 +49,35 @@ describe('dashboardSelectionModel', () => {
 
     expect(dashboardHasHoveredWorkload(guests, 'cluster-a:node-1:101')).toBe(true);
     expect(dashboardHasHoveredWorkload(guests, 'cluster-a:node-1:102')).toBe(false);
+  });
+
+  it('builds route-backed workload selection targets without dropping other filters', () => {
+    expect(
+      resolveDashboardSelectionNavigateTarget({
+        pathname: '/workloads',
+        search: '?type=app-container&platform=truenas&agent=truenas-main',
+        resourceId: 'app-container:truenas-main:nextcloud',
+      }),
+    ).toBe(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+    );
+
+    expect(
+      resolveDashboardSelectionNavigateTarget({
+        pathname: '/workloads',
+        search:
+          '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+        resourceId: null,
+      }),
+    ).toBe('/workloads?type=app-container&platform=truenas&agent=truenas-main');
+
+    expect(
+      resolveDashboardSelectionNavigateTarget({
+        pathname: '/workloads',
+        search:
+          '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+        resourceId: 'app-container:truenas-main:nextcloud',
+      }),
+    ).toBeNull();
   });
 });

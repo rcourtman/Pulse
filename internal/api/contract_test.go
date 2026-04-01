@@ -1093,6 +1093,43 @@ func TestContract_SSOTestRejectsMetadataURLWithUserinfo(t *testing.T) {
 	}
 }
 
+func TestContract_SSOTestRejectsManualSLOURLWithUserinfo(t *testing.T) {
+	reqBody := SSOTestRequest{
+		Type: "saml",
+		SAML: &SAMLTestConfig{
+			IDPSSOURL: "https://idp.example.com/sso",
+			IDPSLOURL: "https://user:pass@idp.example.com/slo",
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setTestIP(req)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleTestSSOProvider(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	var resp SSOTestResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Success {
+		t.Fatalf("expected failed response, got success: %+v", resp)
+	}
+	if resp.Message != "Invalid SLO URL format" {
+		t.Fatalf("expected invalid SLO URL message, got %+v", resp)
+	}
+}
+
 func TestContract_SSOTestOIDCDiscoveryKeepsIssuerBasePath(t *testing.T) {
 	var issuerURL string
 	discoveryServer := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,10 +1,21 @@
-import { parseWorkloadsLinkSearch } from '@/routing/resourceLinks';
+import {
+  parseWorkloadsLinkSearch,
+  WORKLOADS_PATH,
+  WORKLOADS_QUERY_PARAMS,
+} from '@/routing/resourceLinks';
 import type { WorkloadGuest } from '@/types/workloads';
+import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
 
 export interface DashboardResourceSelection {
   resourceId: string;
   selectedNode: string | null;
+}
+
+export interface DashboardSelectionNavigateTargetOptions {
+  pathname: string;
+  search: string;
+  resourceId: string | null;
 }
 
 export const resolveDashboardResourceSelection = (
@@ -29,6 +40,29 @@ export const resolveDashboardResourceSelection = (
     resourceId,
     selectedNode,
   };
+};
+
+export const resolveDashboardSelectionNavigateTarget = ({
+  pathname,
+  search,
+  resourceId,
+}: DashboardSelectionNavigateTargetOptions): string | null => {
+  const currentParams = new URLSearchParams(search);
+  const nextParams = new URLSearchParams(search);
+  nextParams.delete(WORKLOADS_QUERY_PARAMS.resource);
+
+  const normalizedResourceId = resourceId?.trim() || '';
+  if (normalizedResourceId) {
+    nextParams.set(WORKLOADS_QUERY_PARAMS.resource, normalizedResourceId);
+  }
+
+  if (areSearchParamsEquivalent(currentParams, nextParams)) {
+    return null;
+  }
+
+  const nextSearch = nextParams.toString();
+  const nextPathname = pathname.trim() || WORKLOADS_PATH;
+  return nextSearch ? `${nextPathname}?${nextSearch}` : nextPathname;
 };
 
 export const dashboardHasHoveredWorkload = (

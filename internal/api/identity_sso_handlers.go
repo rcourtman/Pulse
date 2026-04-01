@@ -668,6 +668,7 @@ type SAMLTestConfig struct {
 	IDPMetadataURL string `json:"idpMetadataUrl,omitempty"`
 	IDPMetadataXML string `json:"idpMetadataXml,omitempty"`
 	IDPSSOURL      string `json:"idpSsoUrl,omitempty"`
+	IDPSLOURL      string `json:"idpSloUrl,omitempty"`
 	IDPCertificate string `json:"idpCertificate,omitempty"`
 }
 

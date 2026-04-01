@@ -303,6 +303,12 @@ Lifecycle-adjacent setup and hosted bootstrap surfaces may depend on those
 shared helpers, but they must not reintroduce raw URL concatenation,
 userinfo-bearing fetch targets, or origin-root OIDC discovery drift when
 operators validate identity configuration.
+That same lifecycle-adjacent identity validation path now also assumes the
+manual SAML test payload preserves the optional `idpSloUrl` alongside
+`idpSsoUrl` on the shared API contract, so operators validating hosted
+identity before first-user or first-host handoff do not silently lose logout
+endpoint validation when they choose manual SAML entry instead of metadata
+import.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

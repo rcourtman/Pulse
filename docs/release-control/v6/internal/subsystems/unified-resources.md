@@ -178,6 +178,12 @@ assembly branch.
    that power the table rows, chart series, and detail-route handoffs instead
    of introducing page-local summary IDs or provider-local hover aliases when
    the selected series is highlighted.
+10. Keep infrastructure contextual focus route-backed and page-scoped. When an
+    infrastructure row opens its detail drawer, the selection must stay on the
+    same route through canonical resource query state, preserve scroll via the
+    shared route-state scheduler, and keep `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+    rendering the full page-level series set while only the focused label and
+    highlight state change.
 
 ## Current State
 

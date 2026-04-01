@@ -649,16 +649,38 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     return merged.sort((a, b) => a.name.localeCompare(b.name));
   });
 
-  const displaySeries = createMemo(() => {
-    const focused = props.focusedWorkloadId;
-    const all = workloadSeries();
-    if (!focused) return all;
-    const match = all.find((s) => s.id === focused);
-    return match ? [match] : all;
+  const displaySeries = createMemo(() => workloadSeries());
+
+  const interactiveWorkloadIds = createMemo(() => {
+    const ids = new Set<string>();
+    for (const series of workloadSeries()) {
+      if (
+        series.cpu.length >= 2 ||
+        series.memory.length >= 2 ||
+        series.diskio.length >= 2 ||
+        series.network.length >= 2
+      ) {
+        ids.add(series.id);
+      }
+    }
+    return ids;
   });
 
+  const isInteractiveWorkloadId = (value: string | null | undefined): value is string => {
+    const normalized = value?.trim() || '';
+    return normalized !== '' && interactiveWorkloadIds().has(normalized);
+  };
+
+  const effectiveHoveredWorkloadId = createMemo<string | null>(() =>
+    isInteractiveWorkloadId(props.hoveredWorkloadId) ? props.hoveredWorkloadId : null,
+  );
+
+  const effectiveFocusedWorkloadId = createMemo<string | null>(() =>
+    isInteractiveWorkloadId(props.focusedWorkloadId) ? props.focusedWorkloadId : null,
+  );
+
   const focusedWorkloadName = createMemo(() => {
-    const focused = props.focusedWorkloadId;
+    const focused = effectiveFocusedWorkloadId();
     if (!focused) return null;
     const match = workloadSeries().find((s) => s.id === focused);
     return match?.name || null;
@@ -720,14 +742,14 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   };
   const activeSeriesId = () =>
     resolveSummaryActiveSeriesId({
-      hoveredSeriesId: props.hoveredWorkloadId,
-      focusedSeriesId: props.focusedWorkloadId,
+      hoveredSeriesId: effectiveHoveredWorkloadId(),
+      focusedSeriesId: effectiveFocusedWorkloadId(),
     });
   const interactionStateFor = (series: InteractiveSparklineSeries[]) =>
     resolveSummaryCardInteractionState({
       series,
-      hoveredSeriesId: props.hoveredWorkloadId,
-      focusedSeriesId: props.focusedWorkloadId,
+      hoveredSeriesId: effectiveHoveredWorkloadId(),
+      focusedSeriesId: effectiveFocusedWorkloadId(),
     });
 
   return (
@@ -762,6 +784,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           series={cpuSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
+          activeSeriesDisplay="isolate"
           yMode="percent"
           sortTooltipByValue
           maxTooltipRows={8}
@@ -783,6 +806,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           series={memorySeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
+          activeSeriesDisplay="isolate"
           yMode="percent"
           sortTooltipByValue
           maxTooltipRows={8}

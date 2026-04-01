@@ -3,11 +3,13 @@ import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkloadGuest } from '@/types/workloads';
+import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
 import { resolveDashboardResourceSelection } from '../dashboardSelectionModel';
 import { useDashboardSelectionState } from '../useDashboardSelectionState';
 
 let locationSearch = '?resource=cluster-a:node-1:101';
+const navigateSpy = vi.fn();
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
@@ -16,11 +18,14 @@ vi.mock('@solidjs/router', () => ({
       return locationSearch;
     },
   }),
+  useNavigate: () => navigateSpy,
 }));
 
 describe('useDashboardSelectionState', () => {
   beforeEach(() => {
     locationSearch = '?resource=cluster-a:node-1:101';
+    navigateSpy.mockReset();
+    vi.useFakeTimers();
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
       return 1;
@@ -28,6 +33,8 @@ describe('useDashboardSelectionState', () => {
   });
 
   afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -44,7 +51,9 @@ describe('useDashboardSelectionState', () => {
 
     expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
     expect(setSelectedNode).toHaveBeenCalledWith('cluster-a-node-1');
-    expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBe('cluster-a-node-1');
+    expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBe(
+      'cluster-a-node-1',
+    );
   });
 
   it('clears stale hovered workload ids when filtered guests change', () => {
@@ -87,5 +96,25 @@ describe('useDashboardSelectionState', () => {
     expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
     expect(setSelectedNode).not.toHaveBeenCalled();
     expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBeNull();
+  });
+
+  it('writes workload row selection back into the route state without dropping filters', () => {
+    locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        setSelectedNode: vi.fn(),
+      }),
+    );
+
+    result.setSelectedGuestId('app-container:truenas-main:nextcloud');
+    vi.runAllTimers();
+
+    expect(navigateSpy).toHaveBeenCalledWith(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
   });
 });

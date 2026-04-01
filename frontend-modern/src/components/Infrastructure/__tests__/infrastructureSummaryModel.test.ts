@@ -56,6 +56,13 @@ describe('infrastructureSummaryModel', () => {
     expect(getFocusedInfrastructureResourceName(allSeries, 'missing')).toBeNull();
   });
 
+  it('allows page-scoped display series while still resolving the focused label canonically', () => {
+    const allSeries = [makeSeries('host-1', { name: 'Host 1' }), makeSeries('host-2', { name: 'Host 2' })];
+
+    expect(buildInfrastructureDisplaySeries(allSeries, null)).toEqual(allSeries);
+    expect(getFocusedInfrastructureResourceName(allSeries, 'host-2')).toBe('Host 2');
+  });
+
   it('keeps first-sample waiting logic on canonical summary inputs', () => {
     const onlineResource = makeResource({ lastSeen: 5_000 });
 

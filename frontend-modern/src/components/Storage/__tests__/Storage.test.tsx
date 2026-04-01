@@ -847,6 +847,86 @@ describe('Storage', () => {
     });
   });
 
+  it('keeps storage summary page-scoped when a focused pool is expanded', async () => {
+    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha-Store',
+          usage: [
+            { timestamp: Date.now() - 60_000, value: 45 },
+            { timestamp: Date.now(), value: 47 },
+          ],
+          used: [
+          ],
+          avail: [
+          ],
+        },
+        'pool:beta': {
+          name: 'Beta-Store',
+          usage: [
+            { timestamp: Date.now() - 60_000, value: 58 },
+            { timestamp: Date.now(), value: 60 },
+          ],
+          used: [
+            { timestamp: Date.now() - 60_000, value: 680 },
+            { timestamp: Date.now(), value: 700 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 60_000, value: 320 },
+            { timestamp: Date.now(), value: 300 },
+          ],
+        },
+      },
+      disks: {},
+      stats: {
+        oldestDataTimestamp: Date.now() - 60_000,
+      },
+    });
+
+    hookResources = [
+      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:alpha',
+        },
+      }),
+      buildStorageResource('storage-display-beta', 'Beta-Store', 'pve2', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:beta',
+        },
+      }),
+    ];
+
+    render(() => <Storage />);
+
+    const summary = await screen.findByTestId('storage-summary');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for Alpha-Store' }));
+
+    await waitFor(() => {
+      expect(
+        summary.querySelectorAll(
+          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
+        ).length,
+      ).toBe(1);
+      expect(
+        screen
+          .getByText('Used Capacity')
+          .closest('[data-summary-card-state]')
+          ?.textContent?.includes('No history yet'),
+      ).toBe(false);
+      expect(
+        screen
+          .getByText('Available Space')
+          .closest('[data-summary-card-state]')
+          ?.textContent?.includes('No history yet'),
+      ).toBe(false);
+    });
+
+    storageSummarySpy.mockRestore();
+  });
+
   it('restores canonical TrueNAS source filters from the storage route', async () => {
     nodeResources = [
       {

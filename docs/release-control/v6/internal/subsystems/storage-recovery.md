@@ -210,6 +210,12 @@ payload as its disk-health truth. When API-backed platforms such as TrueNAS
 raise SMART-backed disk incidents, those reasons must surface through
 `physicalDisk.risk.reasons` so storage rows and disk detail use the same shared
 disk-health contract instead of depending on incident-only side channels.
+That same storage page ownership now also includes contextual focus behavior
+for pools and disks. Expanding a storage row may set a focused metrics-target
+ID for shared summary emphasis, but `frontend-modern/src/components/Storage/StorageSummary.tsx`
+must keep the storage summary page-scoped instead of collapsing its sparklines
+to the single expanded row or replacing the page overview with row-local empty
+states.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
