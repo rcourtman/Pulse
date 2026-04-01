@@ -26,8 +26,7 @@ export function TooltipPortal(props: TooltipPortalProps) {
           }}
         >
           <div
-            class="text-[10px] rounded-md shadow-lg px-2 py-1.5 border border-slate-600"
-            style={{ 'background-color': 'rgb(15, 23, 42)', color: 'rgb(248, 250, 252)' }}
+            class="rounded-md border border-border bg-surface px-2 py-1.5 text-[10px] text-base-content shadow-lg"
           >
             {props.children}
           </div>

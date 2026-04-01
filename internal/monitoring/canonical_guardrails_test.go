@@ -151,6 +151,43 @@ func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *te
 	}
 }
 
+func TestProxmoxGuestMemoryCarryForwardUsesCanonicalSnapshotStability(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"guest_memory_stability.go": {
+			"func (m *Monitor) previousGuestSnapshot(instance, guestType, node string, vmid int) *GuestMemorySnapshot {",
+			"func stabilizeGuestLowTrustMemory(",
+			"switch CanonicalMemorySource(source) {",
+			`"preserved-previous-memory-after-repeated-low-trust-pattern"`,
+			`"preserved-previous-memory-for-healthy-guest-low-trust-full-usage"`,
+		},
+		"monitor_pve_guest_builders.go": {
+			`prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", res.Node, res.VMID)`,
+			"state.memUsed, state.memorySource, snapshotNotes = stabilizeGuestLowTrustMemory(",
+		},
+		"monitor_pve_guest_poll.go": {
+			"Notes:          snapshotNotes,",
+		},
+		"monitor_polling_vm.go": {
+			`prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", n.Node, vm.VMID)`,
+			"memUsed, memorySource, snapshotNotes := stabilizeGuestLowTrustMemory(",
+			"Notes:          snapshotNotes,",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	forbiddenSnippets := []string{
 		"mock.GetMockState(",

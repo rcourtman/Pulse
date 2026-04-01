@@ -143,15 +143,16 @@ func (m *Monitor) buildVMFromClusterResource(
 	guestID string,
 	vmIDToHostAgent map[string]models.Host,
 	prevVM *models.VM,
-) (models.VM, VMMemoryRaw, string, time.Time, bool) {
+) (models.VM, VMMemoryRaw, string, []string, time.Time, bool) {
 	// Skip templates if configured
 	if res.Template == 1 {
-		return models.VM{}, VMMemoryRaw{}, "", time.Time{}, false
+		return models.VM{}, VMMemoryRaw{}, "", nil, time.Time{}, false
 	}
 
 	if guestID == "" {
 		guestID = makeGuestID(instanceName, res.Node, res.VMID)
 	}
+	prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", res.Node, res.VMID)
 
 	state := vmBuildState{
 		memTotal:        res.MaxMem,
@@ -255,6 +256,24 @@ func (m *Monitor) buildVMFromClusterResource(
 	}
 
 	sampleTime := time.Now()
+	var snapshotNotes []string
+	state.memUsed, state.memorySource, snapshotNotes = stabilizeGuestLowTrustMemory(
+		prevSnapshot,
+		res.Status,
+		state.memorySource,
+		state.memTotal,
+		state.memUsed,
+		sampleTime,
+		guestAgentSignalsHealthy(
+			state.detailedStatus,
+			state.diskFromAgent,
+			state.ipAddresses,
+			state.networkInterfaces,
+			state.osName,
+			state.osVersion,
+			state.agentVersion,
+		),
+	)
 	currentMetrics := IOMetrics{
 		DiskRead:   state.diskReadBytes,
 		DiskWrite:  state.diskWriteBytes,
@@ -331,7 +350,7 @@ func (m *Monitor) buildVMFromClusterResource(
 		}
 	}
 
-	return vm, state.guestRaw, state.memorySource, sampleTime, true
+	return vm, state.guestRaw, state.memorySource, snapshotNotes, sampleTime, true
 }
 
 type vmFSInfoSummary struct {

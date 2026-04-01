@@ -1146,6 +1146,36 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 		}
 	})
 
+	t.Run("guest carry-forward notes remain visible", func(t *testing.T) {
+		m := &Monitor{
+			nodeSnapshots:  make(map[string]NodeMemorySnapshot),
+			guestSnapshots: make(map[string]GuestMemorySnapshot),
+		}
+
+		m.recordGuestSnapshot("pve1", "qemu", "node1", 100, GuestMemorySnapshot{
+			Instance:     "pve1",
+			Node:         "node1",
+			GuestType:    "qemu",
+			VMID:         100,
+			MemorySource: "previous-snapshot",
+			Notes:        []string{"preserved-previous-memory-for-healthy-guest-low-trust-full-usage"},
+		})
+
+		result := m.GetDiagnosticSnapshots()
+		if len(result.Guests) != 1 {
+			t.Fatalf("Guests length = %d, want 1", len(result.Guests))
+		}
+		if result.Guests[0].MemorySource != "previous-snapshot" {
+			t.Fatalf("MemorySource = %q, want previous-snapshot", result.Guests[0].MemorySource)
+		}
+		if result.Guests[0].FallbackReason != "preserved-previous-snapshot" {
+			t.Fatalf("FallbackReason = %q, want preserved-previous-snapshot", result.Guests[0].FallbackReason)
+		}
+		if len(result.Guests[0].Notes) != 1 || result.Guests[0].Notes[0] != "preserved-previous-memory-for-healthy-guest-low-trust-full-usage" {
+			t.Fatalf("Notes = %#v, want carry-forward note", result.Guests[0].Notes)
+		}
+	})
+
 	t.Run("empty Monitor returns empty set", func(t *testing.T) {
 		m := &Monitor{
 			nodeSnapshots:  make(map[string]NodeMemorySnapshot),

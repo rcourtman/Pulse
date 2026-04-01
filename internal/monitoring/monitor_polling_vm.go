@@ -496,6 +496,25 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					}
 				}
 
+				prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", n.Node, vm.VMID)
+				memUsed, memorySource, snapshotNotes := stabilizeGuestLowTrustMemory(
+					prevSnapshot,
+					vm.Status,
+					memorySource,
+					memTotal,
+					memUsed,
+					sampleTime,
+					guestAgentSignalsHealthy(
+						vmStatus,
+						diskFromAgent,
+						ipAddresses,
+						networkInterfaces,
+						osName,
+						osVersion,
+						guestAgentVersion,
+					),
+				)
+
 				memTotalBytes := clampToInt64(memTotal)
 				memUsedBytes := clampToInt64(memUsed)
 				if memTotalBytes > 0 && memUsedBytes > memTotalBytes {
@@ -577,6 +596,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					FallbackReason: guestMemoryFallbackReason(memorySource),
 					Memory:         modelVM.Memory,
 					Raw:            guestRaw,
+					Notes:          snapshotNotes,
 				})
 
 				// Check alerts

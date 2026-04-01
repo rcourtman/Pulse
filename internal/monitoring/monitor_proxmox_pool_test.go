@@ -10,7 +10,7 @@ import (
 func TestBuildVMFromClusterResource_PreservesProxmoxPool(t *testing.T) {
 	monitor := &Monitor{rateTracker: NewRateTracker()}
 
-	vm, _, _, _, ok := monitor.buildVMFromClusterResource(
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
 		context.Background(),
 		"cluster-a",
 		proxmox.ClusterResource{

@@ -40,6 +40,11 @@ truth for live infrastructure data.
 16. `internal/monitoring/truenas_poller.go`
 17. `internal/monitoring/vmware_poller.go`
 18. `internal/dockeragent/swarm.go`
+19. `internal/monitoring/guest_memory_sources.go`
+20. `internal/monitoring/guest_memory_stability.go`
+21. `internal/monitoring/monitor_polling_vm.go`
+22. `internal/monitoring/monitor_pve_guest_builders.go`
+23. `internal/monitoring/monitor_pve_guest_poll.go`
 
 ## Shared Boundaries
 
@@ -64,7 +69,7 @@ truth for live infrastructure data.
 
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, metrics-history, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
+3. Keep discovery-provider, guest-memory trust, metrics-history, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
@@ -418,6 +423,14 @@ and guest-agent fallback caches must key on `(instance, node, vmid)` instead
 of raw `node/vmid`, so separate Proxmox instances cannot leak stale or foreign
 memory evidence into each other just because they reuse the same node name and
 VMID.
+That same guest-memory boundary also owns stabilization when Proxmox falls
+back to low-trust VM full-usage readings. The shared VM polling paths must use
+the previous guest diagnostic snapshot, not the resource model, to decide when
+one more `previous-snapshot` carry-forward is justified. A live guest-agent
+signal is sufficient healthy evidence for that decision even before disk or
+network enrichment finishes, and the preserved result must be recorded with an
+explicit snapshot note so diagnostics can distinguish deliberate stabilization
+from ordinary fallback.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,

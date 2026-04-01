@@ -1145,7 +1145,7 @@ func TestBuildVMFromClusterResource_ContinuesGuestAgentQueriesAfterTransientStat
 		LastSeen: time.Now(),
 	}
 
-	vm, _, _, _, ok := monitor.buildVMFromClusterResource(
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
 		context.Background(),
 		"cluster-a",
 		proxmox.ClusterResource{
@@ -1473,7 +1473,7 @@ func TestBuildVMFromClusterResource_UsesLinkedHostAgentDiskFallback(t *testing.T
 	}
 	guestID := makeGuestID("cluster-a", "node-a", 101)
 
-	vm, _, _, _, ok := monitor.buildVMFromClusterResource(
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
 		context.Background(),
 		"cluster-a",
 		proxmox.ClusterResource{

@@ -52,6 +52,7 @@ import toggleModelSource from '@/components/shared/toggleModel.ts?raw';
 import searchTipsPopoverSource from '@/components/shared/SearchTipsPopover.tsx?raw';
 import searchTipsPopoverModelSource from '@/components/shared/searchTipsPopoverModel.ts?raw';
 import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
+import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
@@ -219,6 +220,19 @@ describe('shared primitive guardrails', () => {
     expect(commandPaletteModelSource).toContain('buildCommandPaletteCommands');
     expect(commandPaletteModelSource).toContain('normalizeCommandPaletteQuery');
     expect(commandPaletteModelSource).toContain('filterCommandPaletteCommands');
+  });
+
+  it('keeps shared tooltip shells on semantic theme tokens', () => {
+    expect(tooltipSource).toContain('bg-surface text-base-content border-border');
+    expect(tooltipSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
+    expect(tooltipPortalSource).toContain('bg-surface');
+    expect(tooltipPortalSource).toContain('text-base-content');
+    expect(tooltipPortalSource).toContain('border-border');
+    expect(tooltipPortalSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
+    expect(interactiveSparklineSource).toContain('bg-surface');
+    expect(interactiveSparklineSource).toContain('text-base-content');
+    expect(interactiveSparklineSource).toContain('border-border');
+    expect(interactiveSparklineSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
   });
 
   it('keeps active use trial nudge on shell, runtime, and model owners', () => {

@@ -211,17 +211,15 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
           {(hover) => (
             <div
               data-sparkline-tooltip="true"
-              class="fixed pointer-events-none text-xs rounded px-2 py-1.5 shadow-lg border border-slate-600"
+              class="fixed pointer-events-none rounded-md border border-border bg-surface px-2 py-1.5 text-xs text-base-content shadow-lg"
               style={{
                 left: `${hover().tooltipX}px`,
                 top: `${hover().tooltipY}px`,
                 transform: 'translate(-50%, -100%)',
                 'z-index': '9999',
-                'background-color': 'rgb(15, 23, 42)',
-                color: 'rgb(248, 250, 252)',
               }}
             >
-              <div class="font-medium text-center mb-1">
+              <div class="mb-1 text-center font-medium text-base-content">
                 {formatInteractiveSparklineHoverTime(hover().timestamp)}
               </div>
               <For each={hover().values}>
@@ -240,20 +238,20 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                       props.highlightNearestSeriesOnHover &&
                       hover().focusedTooltip &&
                       hover().highlightedSeriesIndex === entry.seriesIndex
-                        ? { 'background-color': 'rgba(255,255,255,0.1)' }
+                        ? { 'background-color': 'rgba(148, 163, 184, 0.14)' }
                         : {}
                     }
                   >
                     <span class="w-1.5 h-1.5 rounded-full" style={{ background: entry.color }} />
-                    <span style={{ color: 'rgb(203, 213, 225)' }}>{entry.name}</span>
-                    <span class="ml-auto font-medium" style={{ color: 'rgb(248, 250, 252)' }}>
+                    <span class="text-muted">{entry.name}</span>
+                    <span class="ml-auto font-medium text-base-content">
                       {sparkline.formatValue(entry.value)}
                     </span>
                   </div>
                 )}
               </For>
               <Show when={hover().totalValues > hover().values.length}>
-                <div class="text-[10px] mt-0.5" style={{ color: 'rgb(148, 163, 184)' }}>
+                <div class="mt-0.5 text-[10px] text-muted">
                   +{hover().totalValues - hover().values.length} more series
                 </div>
               </Show>

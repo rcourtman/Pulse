@@ -120,7 +120,7 @@ func (m *Monitor) handleClusterVMResource(
 	prevVM *models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) (models.VM, bool) {
-	vm, guestRaw, memorySource, sampleTime, ok := m.buildVMFromClusterResource(ctx, instanceName, res, client, guestID, vmIDToHostAgent, prevVM)
+	vm, guestRaw, memorySource, snapshotNotes, sampleTime, ok := m.buildVMFromClusterResource(ctx, instanceName, res, client, guestID, vmIDToHostAgent, prevVM)
 	if !ok {
 		return models.VM{}, false
 	}
@@ -138,6 +138,7 @@ func (m *Monitor) handleClusterVMResource(
 		FallbackReason: guestMemoryFallbackReason(memorySource),
 		Memory:         vm.Memory,
 		Raw:            guestRaw,
+		Notes:          snapshotNotes,
 	})
 
 	m.checkGuestAlertsForVM(instanceName, vm)
