@@ -13,6 +13,7 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import type { ProtectionRollup, RecoveryOutcome, RecoveryPoint } from '@/types/recovery';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import {
@@ -26,6 +27,7 @@ import { normalizeRecoveryOutcome as normalizeOutcome } from '@/utils/recoveryOu
 import {
   getRecoveryPointItemLabel,
   getRecoveryPointTimestampMs,
+  getRecoveryRollupItemSecondaryLabel,
   getRecoveryRollupItemLabel,
 } from '@/utils/recoveryRecordPresentation';
 import {
@@ -41,6 +43,7 @@ import {
 } from '@/utils/recoveryTablePresentation';
 import { getRecoveryTimelineLabelEvery } from '@/utils/recoveryTimelineChartPresentation';
 import { getRecoveryRollupPlatforms } from '@/utils/recoveryPlatformModel';
+import { getSourcePlatformLabel } from '@/utils/sourcePlatforms';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
 const MOBILE_RECOVERY_COLUMNS = new Set(['time', 'item', 'outcome']);
@@ -106,6 +109,16 @@ const Recovery: Component = () => {
     verificationFilter,
     workspaceView,
   } = useRecoverySurfaceState();
+
+  const rollupCatalogWindow = createMemo(() => {
+    const days = chartRangeDays();
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - (days - 1));
+    start.setHours(0, 0, 0, 0);
+    return { from: start.toISOString(), to: end.toISOString() };
+  });
 
   const baseRollups = createMemo<ProtectionRollup[]>(() => {
     const query = queryFilter().trim().toLowerCase();
@@ -206,9 +219,85 @@ const Recovery: Component = () => {
     return rollups().find((rollup) => rollup.rollupId === selected) || null;
   });
 
+  const recoveryHistoryItemCatalog = useRecoveryRollups(() => {
+    if (!rollupId().trim()) return null;
+    const window = rollupCatalogWindow();
+    const vf = verificationFilter();
+    return {
+      platform: platformFilter() === 'all' ? null : platformFilter(),
+      itemType: itemTypeFilter() === 'all' ? null : itemTypeFilter(),
+      mode: modeFilter() === 'all' ? null : modeFilter(),
+      outcome: historyOutcomeFilter() === 'all' ? null : historyOutcomeFilter(),
+      q: queryFilter().trim() || null,
+      cluster: clusterFilter() === 'all' ? null : clusterFilter(),
+      node: nodeFilter() === 'all' ? null : nodeFilter(),
+      namespace: namespaceFilter() === 'all' ? null : namespaceFilter(),
+      scope: scopeFilter() === 'workload' ? 'workload' : null,
+      verification: vf === 'all' ? null : vf,
+      from: window.from,
+      to: window.to,
+    };
+  });
+
+  const selectableRollups = createMemo<ProtectionRollup[]>(() => {
+    const selected = rollupId().trim();
+    if (!selected) return rollups();
+    const catalog = recoveryHistoryItemCatalog.rollups() || [];
+    if (catalog.length > 0) return catalog;
+    const focused = selectedRollup();
+    return focused ? [focused] : [];
+  });
+
+  const selectedHistoryRollup = createMemo<ProtectionRollup | null>(() => {
+    const selected = rollupId().trim();
+    if (!selected) return null;
+    return (
+      selectableRollups().find((rollup) => rollup.rollupId === selected) || selectedRollup() || null
+    );
+  });
+
   const selectedHistoryItemLabel = createMemo(() => {
-    const rollup = selectedRollup();
+    const rollup = selectedHistoryRollup();
     return rollup ? getRecoveryRollupItemLabel(rollup, resourcesById()) : null;
+  });
+
+  const historyItemOptions = createMemo(() => {
+    const resourceIndex = resourcesById();
+    const options = selectableRollups().map((rollup) => {
+      const itemTypeLabel =
+        getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(rollup))?.label || null;
+      const platformLabels = getRecoveryRollupPlatforms(rollup)
+        .map((platform) => getSourcePlatformLabel(String(platform || '').trim()))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right));
+      return {
+        rollupId: rollup.rollupId,
+        label: getRecoveryRollupItemLabel(rollup, resourceIndex),
+        secondaryLabel: getRecoveryRollupItemSecondaryLabel(rollup),
+        contextLabel: [itemTypeLabel, platformLabels.join(', ')].filter(Boolean).join(' · '),
+      };
+    });
+
+    const selected = selectedHistoryRollup();
+    if (!selected) return options;
+    if (options.some((option) => option.rollupId === selected.rollupId)) return options;
+
+    const itemTypeLabel =
+      getRecoveryItemTypePresentation(getRecoveryRollupItemTypeKey(selected))?.label || null;
+    const platformLabels = getRecoveryRollupPlatforms(selected)
+      .map((platform) => getSourcePlatformLabel(String(platform || '').trim()))
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+
+    return [
+      {
+        rollupId: selected.rollupId,
+        label: getRecoveryRollupItemLabel(selected, resourceIndex),
+        secondaryLabel: getRecoveryRollupItemSecondaryLabel(selected),
+        contextLabel: [itemTypeLabel, platformLabels.join(', ')].filter(Boolean).join(' · '),
+      },
+      ...options,
+    ];
   });
 
   const filteredPoints = createMemo<RecoveryPoint[]>(() => {
@@ -633,12 +722,12 @@ const Recovery: Component = () => {
                     availableOutcomes={['all', 'success', 'warning', 'failed', 'running']}
                     clusterFilter={clusterFilter}
                     clusterOptions={clusterOptions}
-                    clearFocusedRollup={() => setRollupId('')}
                     currentPage={currentPage}
                     groupedByDay={groupedByDay}
                     hasActiveArtifactFilters={hasActiveArtifactFilters}
                     hasFocusedRollup={() => rollupId().trim().length > 0}
                     historyOutcomeFilter={historyOutcomeFilter}
+                    historyItemOptions={historyItemOptions}
                     isMobile={isMobile()}
                     kioskMode={kioskMode()}
                     mobileVisibleArtifactColumns={mobileVisibleArtifactColumns}
@@ -656,6 +745,7 @@ const Recovery: Component = () => {
                     resetAdvancedArtifactFilters={resetAdvancedArtifactFilters}
                     resetAllArtifactFilters={resetAllArtifactFilters}
                     resourcesById={resourcesById}
+                    rollupId={rollupId}
                     scopeFilter={scopeFilter}
                     selectedHistoryItemLabel={selectedHistoryItemLabel}
                     setClusterFilter={setClusterFilter}
@@ -667,6 +757,7 @@ const Recovery: Component = () => {
                     setNodeFilter={setNodeFilter}
                     setPlatformFilter={setPlatformFilter}
                     setQueryFilter={setQueryFilter}
+                    setRollupId={setRollupId}
                     setScopeFilter={setScopeFilter}
                     setVerificationFilter={setVerificationFilter}
                     showClusterFilter={showClusterFilter}

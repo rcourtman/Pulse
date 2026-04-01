@@ -749,12 +749,8 @@ describe('Recovery', () => {
     });
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
-    const focusedFilter = within(controls).getByTestId('recovery-history-focused-filter');
-    expect(focusedFilter).toHaveTextContent('Focused Item');
-    expect(focusedFilter).toHaveTextContent('VM 123');
-    expect(
-      within(controls).getByRole('button', { name: /clear focused item filter/i }),
-    ).toBeInTheDocument();
+    const itemFilterTrigger = within(controls).getByTestId('recovery-history-item-filter-trigger');
+    expect(itemFilterTrigger).toHaveTextContent('VM 123');
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
     const table = tables[tables.length - 1];
@@ -886,14 +882,67 @@ describe('Recovery', () => {
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
 
     const controls = await screen.findByRole('group', { name: /recovery events controls/i });
-    expect(within(controls).getByTestId('recovery-history-focused-filter')).toBeInTheDocument();
+    expect(within(controls).getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
+      'VM 123',
+    );
 
     fireEvent.click(within(controls).getByRole('button', { name: 'Reset all' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', ROUTE_STATE_REPLACE_OPTIONS);
-      expect(screen.queryByTestId('recovery-history-focused-filter')).not.toBeInTheDocument();
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+      expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
+        'Any Item',
+      );
       expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('lets operators create and clear the item filter from the recovery events controls', async () => {
+    render(() => <Recovery />);
+
+    fireEvent.click(screen.getByRole('tab', { name: /recovery events/i }));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+
+    const controls = await screen.findByRole('group', { name: /recovery events controls/i });
+    const itemFilterTrigger = within(controls).getByTestId('recovery-history-item-filter-trigger');
+    expect(itemFilterTrigger).toHaveTextContent('Any Item');
+
+    fireEvent.click(itemFilterTrigger);
+    expect(await screen.findByTestId('recovery-history-item-filter-panel')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('recovery-history-item-filter-option-ext:truenas-1'));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?rollupId=ext%3Atruenas-1',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+
+    expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
+      'tank/apps',
+    );
+
+    fireEvent.click(screen.getByTestId('recovery-history-item-filter-trigger'));
+    fireEvent.click(await screen.findByTestId('recovery-history-item-filter-clear'));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+      expect(screen.getByTestId('recovery-history-item-filter-trigger')).toHaveTextContent(
+        'Any Item',
+      );
     });
   });
 

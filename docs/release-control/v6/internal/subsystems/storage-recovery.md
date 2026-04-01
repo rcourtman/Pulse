@@ -111,14 +111,14 @@ querying, and the operator-facing storage health presentation layer.
 9. Letting whitespace-padded recovery timeline params fall off canonical route state; shared recovery URLs must trim and normalize `day`, `range`, `scope`, `status`, `verification`, `cluster`, `node`, `namespace`, `itemType`, and adjacent history filters before the page model validates them so pasted or hand-edited links resolve to the same canonical timeline and filter state as UI-authored routes
 10. Letting explicit recovery `all` sentinels survive in canonical route state; shared recovery URLs must collapse case- or whitespace-variant `all` values for `cluster`, `node`, `namespace`, and `itemType` back to the canonical unset route state so copied links do not preserve fake active filters
 11. Letting non-canonical recovery platform values survive in route or transport state; shared recovery URLs must collapse unsupported or fake `platform` values back to the canonical unset state, and only owned source-platform options or canonical legacy aliases may reach rollups, points, series, and facets transport filters
-11c. Letting route-owned recovery platform selections disappear while filter options are still hydrating; the recovery page state owner must keep the current canonical `platform` query value present in the platform option set until transport-backed facets and records arrive so shared filter selects keep the user-visible TrueNAS or other owned platform selection instead of flashing back to `All Platforms`
-11a. Letting adjacent workload-route changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical `/workloads` platform scoping must not alter the owned `/recovery` `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
-11b. Letting adjacent storage-link additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical `/storage` deep links for unified resources must not reuse recovery-owned query names or alter the owned `/recovery` parse/build contract while those surfaces continue sharing the same route-helper module
+    11c. Letting route-owned recovery platform selections disappear while filter options are still hydrating; the recovery page state owner must keep the current canonical `platform` query value present in the platform option set until transport-backed facets and records arrive so shared filter selects keep the user-visible TrueNAS or other owned platform selection instead of flashing back to `All Platforms`
+    11a. Letting adjacent workload-route changes in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery parse/build semantics; expanding canonical `/workloads` platform scoping must not alter the owned `/recovery` `platform` and `itemType` vocabulary, legacy alias rewrites, or recovery drill-down workspace selection
+    11b. Letting adjacent storage-link additions in shared `frontend-modern/src/routing/resourceLinks.ts` perturb recovery route semantics; expanding canonical `/storage` deep links for unified resources must not reuse recovery-owned query names or alter the owned `/recovery` parse/build contract while those surfaces continue sharing the same route-helper module
 12. Letting protected-item recovery outcome filtering fork from the canonical history status filter; the protected inventory status control must drive the same route-backed `status` field and the same rollups, points, series, and facets transport filters as the history surface instead of keeping a protected-only local outcome branch
 13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
 15. Letting the primary recovery workspace tabs drift out of canonical route state; when operators explicitly switch between protected items and recovery events, the shared recovery link builder and page model must preserve that selection in route state unless the active `rollupId` or `day` context already implies the default workspace
-16. Treating a selected protected-item rollup as header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface, count it with the rest of the active filters, and let the same filter reset path clear it
+16. Treating a selected protected-item rollup as row-click-only or header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface through the same user-creatable item filter control, count it with the rest of the active filters, and let the same filter reset path clear it
 
 ## Completion Obligations
 
@@ -320,7 +320,7 @@ describes the monitored platform families Pulse covers rather than exposing
 backend transport vocabulary as the primary UI model.
 That same operator-facing vocabulary should also prefer `item` over backend
 `subject` wording, and `platform` over generic `source` wording, across the
-primary recovery headers, tables, focus chips, and detail metadata labels.
+primary recovery headers, tables, filter controls, and detail metadata labels.
 The data model can keep its internal subject/provider fields, but the page
 frame that operators read should present one consistent protected-item and
 platform model from summary through drill-in. Shared recovery URLs and
@@ -1572,15 +1572,15 @@ trusts the backend canonical metadata directly instead of re-normalizing it
 locally, so storage and recovery views see the same policy posture the API
 publishes. The same hook and the resource-identity helpers it depends on now
 share the canonical trimmed-string utility instead of each surface rebuilding
-    its own whitespace cleanup, so storage and recovery identity checks stay
-    aligned with the other unified-resource consumers. That same decode path
-    also projects Kubernetes cluster identity through the shared cluster-context
-    helper, so storage and recovery surfaces see the same canonical cluster
-    prefix as the dashboard and unified-resource store instead of rebuilding
-    their own fallback. That same boundary now also owns the backend facet-bundle
-    route for timeline history and related change counts, so storage and recovery
-    surfaces must continue to consume the shared bundle rather than issuing
-    separate local resource-detail fetches.
+its own whitespace cleanup, so storage and recovery identity checks stay
+aligned with the other unified-resource consumers. That same decode path
+also projects Kubernetes cluster identity through the shared cluster-context
+helper, so storage and recovery surfaces see the same canonical cluster
+prefix as the dashboard and unified-resource store instead of rebuilding
+their own fallback. That same boundary now also owns the backend facet-bundle
+route for timeline history and related change counts, so storage and recovery
+surfaces must continue to consume the shared bundle rather than issuing
+separate local resource-detail fetches.
 That same shared `internal/api/` dependency now also assumes canonical
 security-token lifecycle reads. Storage- and recovery-adjacent consumers of
 shared auth/security helpers may inspect token metadata, but they must not
