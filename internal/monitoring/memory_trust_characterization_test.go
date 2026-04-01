@@ -249,6 +249,29 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 			wantUsed:   5 * gib,
 			wantGap:    3 * gib,
 		},
+		{
+			name: "materially inconsistent status memory prefers freemem fallback",
+			status: &proxmox.VMStatus{
+				Status:  "running",
+				MaxMem:  8 * gib,
+				Mem:     7920 * 1024 * 1024,
+				FreeMem: 5 * gib,
+			},
+			wantSource: "status-freemem",
+			wantUsed:   3 * gib,
+		},
+		{
+			name: "ballooned VM derives freemem fallback from balloon total",
+			status: &proxmox.VMStatus{
+				Status:  "running",
+				MaxMem:  8 * gib,
+				Mem:     4 * gib,
+				Balloon: 4 * gib,
+				FreeMem: 1 * gib,
+			},
+			wantSource: "status-freemem",
+			wantUsed:   3 * gib,
+		},
 	}
 
 	for _, tt := range tests {
@@ -380,6 +403,29 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 			},
 			wantSource: "derived-total-minus-used",
 			wantUsed:   5 * gib,
+		},
+		{
+			name: "materially inconsistent status memory prefers freemem fallback",
+			status: &proxmox.VMStatus{
+				Status:  "running",
+				MaxMem:  8 * gib,
+				Mem:     7920 * 1024 * 1024,
+				FreeMem: 5 * gib,
+			},
+			wantSource: "status-freemem",
+			wantUsed:   3 * gib,
+		},
+		{
+			name: "ballooned VM derives freemem fallback from balloon total",
+			status: &proxmox.VMStatus{
+				Status:  "running",
+				MaxMem:  8 * gib,
+				Mem:     4 * gib,
+				Balloon: 4 * gib,
+				FreeMem: 1 * gib,
+			},
+			wantSource: "status-freemem",
+			wantUsed:   3 * gib,
 		},
 	}
 

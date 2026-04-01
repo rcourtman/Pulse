@@ -379,6 +379,12 @@ not only at source selection time: node and guest diagnostic snapshots must
 normalize memory-source aliases and backfill default fallback reasons before
 logging or persistence, so later diagnostics/reporting cannot diverge just
 because one poll path still emitted a compatibility label.
+That same guest-memory boundary also owns the low-trust Proxmox status-memory
+selector. When cache-aware availability is unavailable, the shared selector in
+`internal/monitoring/guest_memory_sources.go` must derive `status-freemem`
+against the effective balloon total and prefer that fallback over `status-mem`
+when Proxmox reports a saturated or materially inconsistent used figure, so
+Windows and ballooned guests do not get pinned to false 100% usage samples.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,

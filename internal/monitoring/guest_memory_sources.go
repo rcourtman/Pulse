@@ -9,6 +9,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const guestStatusMemoryMismatchTolerance uint64 = 128 * 1024 * 1024 // 128 MiB
+
 // deriveGuestMemInfoAvailable normalizes guest meminfo-based availability
 // selection so the efficient VM builder and the node-by-node VM polling path
 // do not drift apart on degraded Proxmox guest-agent payloads.
@@ -84,6 +86,55 @@ func deriveGuestMemInfoAvailable(memInfo *proxmox.VMMemInfo, guestRaw *VMMemoryR
 		}
 		return 0, ""
 	}
+}
+
+func saturatingAddUint64(lhs, rhs uint64) uint64 {
+	if math.MaxUint64-lhs < rhs {
+		return math.MaxUint64
+	}
+	return lhs + rhs
+}
+
+func effectiveGuestFreeMemTotal(memTotal uint64, status *proxmox.VMStatus) uint64 {
+	if status == nil {
+		return memTotal
+	}
+	if status.Balloon > 0 && status.Balloon <= memTotal && status.FreeMem <= status.Balloon {
+		return status.Balloon
+	}
+	return memTotal
+}
+
+func selectGuestLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) (uint64, string) {
+	if status == nil {
+		return 0, ""
+	}
+
+	freeMemTotal := effectiveGuestFreeMemTotal(memTotal, status)
+	hasFreeFallback := status.FreeMem > 0 && freeMemTotal >= status.FreeMem
+	freeDerivedUsed := uint64(0)
+	if hasFreeFallback {
+		freeDerivedUsed = freeMemTotal - status.FreeMem
+	}
+
+	if status.Mem > 0 {
+		if hasFreeFallback && freeDerivedUsed < status.Mem {
+			statusMemPlusFree := saturatingAddUint64(status.Mem, status.FreeMem)
+			if status.Mem >= freeMemTotal && freeDerivedUsed < freeMemTotal {
+				return freeDerivedUsed, "status-freemem"
+			}
+			if statusMemPlusFree > freeMemTotal+guestStatusMemoryMismatchTolerance {
+				return freeDerivedUsed, "status-freemem"
+			}
+		}
+		return status.Mem, "status-mem"
+	}
+
+	if hasFreeFallback {
+		return freeDerivedUsed, "status-freemem"
+	}
+
+	return 0, ""
 }
 
 func guestMemoryFallbackReason(source string) string {
@@ -193,14 +244,11 @@ func (m *Monitor) resolveGuestStatusMemory(
 			memAvailable = memTotal
 		}
 		memUsed = memTotal - memAvailable
-	case status.Mem > 0:
-		memUsed = status.Mem
-		memorySource = "status-mem"
-	case status.FreeMem > 0 && memTotal >= status.FreeMem:
-		memUsed = memTotal - status.FreeMem
-		memorySource = "status-freemem"
 	default:
-		memorySource = "status-unavailable"
+		memUsed, memorySource = selectGuestLowTrustUsedMemory(memTotal, status)
+		if memorySource == "" {
+			memorySource = "status-unavailable"
+		}
 	}
 	if memUsed > memTotal {
 		memUsed = memTotal

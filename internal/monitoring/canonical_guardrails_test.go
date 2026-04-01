@@ -91,6 +91,25 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	}
 }
 
+func TestGuestMemoryFallbackUsesCanonicalLowTrustSelector(t *testing.T) {
+	data, err := os.ReadFile("guest_memory_sources.go")
+	if err != nil {
+		t.Fatalf("failed to read guest_memory_sources.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"func effectiveGuestFreeMemTotal(memTotal uint64, status *proxmox.VMStatus) uint64 {",
+		"if status.Balloon > 0 && status.Balloon <= memTotal && status.FreeMem <= status.Balloon {",
+		"func selectGuestLowTrustUsedMemory(memTotal uint64, status *proxmox.VMStatus) (uint64, string) {",
+		"if statusMemPlusFree > freeMemTotal+guestStatusMemoryMismatchTolerance {",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("guest_memory_sources.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	forbiddenSnippets := []string{
 		"mock.GetMockState(",
