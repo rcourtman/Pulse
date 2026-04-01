@@ -487,6 +487,7 @@ type mockPVEClientExtra struct {
 	vmStatus     *proxmox.VMStatus
 	vmStatusErr  error
 	fsInfo       []proxmox.VMFileSystem
+	fsInfoErr    error
 	netIfaces    []proxmox.VMNetworkInterface
 	agentInfo    map[string]interface{}
 	agentVersion string
@@ -508,6 +509,9 @@ func (m *mockPVEClientExtra) GetVMStatus(ctx context.Context, node string, vmid 
 }
 
 func (m *mockPVEClientExtra) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]proxmox.VMFileSystem, error) {
+	if m.fsInfoErr != nil {
+		return nil, m.fsInfoErr
+	}
 	return m.fsInfo, nil
 }
 
@@ -1068,7 +1072,7 @@ func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	registry := unifiedresources.NewRegistry(nil)
 	registry.IngestSnapshot(models.StateSnapshot{
 		VMs: []models.VM{
-			{ID: "vm-1", Instance: "pve1", VMID: 101, Name: "vm1"},
+			{ID: "vm-1", Instance: "pve1", VMID: 101, Name: "vm1", Disk: models.Disk{Total: 100, Used: 40, Free: 60, Usage: 40}},
 			{ID: "vm-2", Instance: "pve2", VMID: 202, Name: "vm2"},
 		},
 		Containers: []models.Container{
@@ -1092,6 +1096,9 @@ func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	canonicalID := prev.vms[0].ID
 	if len(prev.vmsByID) != 2 || prev.vmsByID[canonicalID].VMID != 101 || prev.vmsByID[makeGuestID("pve1", "", 101)].VMID != 101 {
 		t.Fatalf("expected previous VM lookup to be indexed by canonical and runtime guest IDs, got %#v", prev.vmsByID)
+	}
+	if prev.vmsByID[canonicalID].Disk.Total != 100 || prev.vmsByID[canonicalID].Disk.Used != 40 {
+		t.Fatalf("expected previous VM projection to preserve aggregate disk summary, got %#v", prev.vmsByID[canonicalID].Disk)
 	}
 	if len(prev.containers) != 2 {
 		t.Fatalf("expected only pve1 containers, got %#v", prev.containers)
@@ -1508,6 +1515,191 @@ func TestBuildVMFromClusterResource_UsesLinkedHostAgentDiskFallback(t *testing.T
 	}
 	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda1" {
 		t.Fatalf("expected linked host agent disks to populate VM disks, got %+v", vm.Disks)
+	}
+}
+
+func TestBuildVMFromClusterResource_MarksDiskUnknownWhenGuestFilesystemDataIsUnavailable(t *testing.T) {
+	monitor := &Monitor{
+		rateTracker:          NewRateTracker(),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+	client := &mockPVEClientExtra{
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			Agent:  proxmox.VMAgentField{Value: 1},
+		},
+		fsInfo: nil,
+	}
+
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node-a",
+			Name:    "app-vm",
+			Status:  "running",
+			VMID:    101,
+			MaxCPU:  4,
+			MaxMem:  8192,
+			MaxDisk: 1000,
+		},
+		client,
+		makeGuestID("cluster-a", "node-a", 101),
+		nil,
+		nil,
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.Disk.Usage != -1 {
+		t.Fatalf("expected unknown disk usage, got %.2f", vm.Disk.Usage)
+	}
+	if vm.DiskStatusReason != "no-filesystems" {
+		t.Fatalf("expected no-filesystems disk status reason, got %q", vm.DiskStatusReason)
+	}
+}
+
+func TestBuildVMFromClusterResource_CarriesForwardPreviousDiskSnapshot(t *testing.T) {
+	monitor := &Monitor{
+		rateTracker:          NewRateTracker(),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+	client := &mockPVEClientExtra{
+		vmStatusErr: fmt.Errorf("API error 500: timeout"),
+		fsInfo:      nil,
+	}
+	guestID := makeGuestID("cluster-a", "node-a", 101)
+	prevVM := &models.VM{
+		ID:           guestID,
+		Instance:     "cluster-a",
+		Node:         "node-a",
+		VMID:         101,
+		Name:         "app-vm",
+		Type:         "qemu",
+		Status:       "running",
+		LastSeen:     time.Now(),
+		AgentVersion: "8.2.0",
+		Disk: models.Disk{
+			Total: 1000,
+			Used:  400,
+			Free:  600,
+			Usage: 40,
+		},
+		Disks: []models.Disk{
+			{Total: 1000, Used: 400, Free: 600, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda"},
+		},
+	}
+
+	vm, _, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node-a",
+			Name:    "app-vm",
+			Status:  "running",
+			VMID:    101,
+			MaxCPU:  4,
+			MaxMem:  8192,
+			MaxDisk: 1000,
+		},
+		client,
+		guestID,
+		nil,
+		prevVM,
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.Disk.Usage != 40 {
+		t.Fatalf("expected previous disk usage to be carried forward, got %.2f", vm.Disk.Usage)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda" {
+		t.Fatalf("expected previous individual disks to be preserved, got %#v", vm.Disks)
+	}
+	if vm.DiskStatusReason != "prev-no-filesystems" {
+		t.Fatalf("expected carried-forward disk status reason, got %q", vm.DiskStatusReason)
+	}
+}
+
+func TestPollVMsWithNodes_CarriesForwardPreviousDiskSnapshot(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	registry := unifiedresources.NewRegistry(nil)
+	guestID := makeGuestID("pve1", "node1", 100)
+	registry.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:           guestID,
+				VMID:         100,
+				Name:         "vm100",
+				Node:         "node1",
+				Instance:     "pve1",
+				Type:         "qemu",
+				Status:       "running",
+				AgentVersion: "8.2.0",
+				Disk:         models.Disk{Total: 1000, Used: 400, Free: 600, Usage: 40},
+				Disks:        []models.Disk{{Total: 1000, Used: 400, Free: 600, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda"}},
+				LastSeen:     time.Now(),
+				IPAddresses:  []string{"192.168.1.50"},
+			},
+		},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	client := &mockPVEClientExtra{
+		vms: []proxmox.VM{
+			{VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 1000},
+		},
+		vmStatusErr: fmt.Errorf("API error 500: timeout"),
+		fsInfo:      nil,
+	}
+
+	m.pollVMsWithNodes(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+	)
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.Disk.Usage != 40 {
+		t.Fatalf("expected previous disk usage to be carried forward, got %.2f", vm.Disk.Usage)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda" {
+		t.Fatalf("expected previous individual disks to be preserved, got %#v", vm.Disks)
+	}
+	if vm.DiskStatusReason != "prev-no-filesystems" {
+		t.Fatalf("expected carried-forward disk status reason, got %q", vm.DiskStatusReason)
 	}
 }
 

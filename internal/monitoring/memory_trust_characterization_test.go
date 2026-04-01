@@ -3,7 +3,9 @@ package monitoring
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
@@ -182,6 +184,48 @@ func TestPollPVENodePreservesPreviousSnapshotDuringTransientFallback(t *testing.
 	}
 	if snap.Memory.Used != first.Memory.Used {
 		t.Fatalf("snapshot.Memory.Used = %d, want preserved %d", snap.Memory.Used, first.Memory.Used)
+	}
+}
+
+func TestGuestDiskTrustCharacterizationCarriesForwardRecentSnapshot(t *testing.T) {
+	now := time.Now()
+	prev := &models.VM{
+		Type:         "qemu",
+		Status:       "running",
+		LastSeen:     now.Add(-time.Minute),
+		AgentVersion: "8.2.0",
+		Disk: models.Disk{
+			Total: 1000,
+			Used:  400,
+			Free:  600,
+			Usage: 40,
+		},
+		Disks: []models.Disk{
+			{Total: 1000, Used: 400, Free: 600, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda"},
+		},
+	}
+
+	total, used, free, usage, disks, reason := stabilizeGuestLowTrustDisk(
+		prev,
+		"running",
+		1000,
+		0,
+		1000,
+		-1,
+		nil,
+		"no-filesystems",
+		false,
+		now,
+	)
+
+	if total != 1000 || used != 400 || free != 600 || usage != 40 {
+		t.Fatalf("unexpected carried-forward disk summary: total=%d used=%d free=%d usage=%.2f", total, used, free, usage)
+	}
+	if len(disks) != 1 || disks[0].Device != "/dev/vda" {
+		t.Fatalf("expected previous individual disks to be preserved, got %#v", disks)
+	}
+	if reason != "prev-no-filesystems" {
+		t.Fatalf("reason = %q, want prev-no-filesystems", reason)
 	}
 }
 
@@ -474,6 +518,87 @@ func TestPollVMsWithNodesMemoryTrustCharacterization(t *testing.T) {
 				t.Fatalf("snapshot.FallbackReason = %q, want derived-total-minus-used", snap.FallbackReason)
 			}
 		})
+	}
+}
+
+func TestPollVMsWithNodes_SkipsNativeGuestMetricWritesInMockMode(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	client := &vmMemoryTrustStubClient{
+		stubPVEClient: &stubPVEClient{},
+		vms: []proxmox.VM{{
+			VMID:   101,
+			Name:   "vm-101",
+			Node:   "node1",
+			Status: "running",
+			MaxMem: 8 * 1024,
+			Mem:    3 * 1024,
+			CPUs:   2,
+			CPU:    0.42,
+		}},
+		vmStatus: &proxmox.VMStatus{
+			Status: "running",
+			MaxMem: 8 * 1024,
+			Mem:    3 * 1024,
+			Agent:  proxmox.VMAgentField{Value: 1},
+		},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	nodeEffectiveStatus := map[string]string{"node1": "online"}
+	mon.pollVMsWithNodes(context.Background(), "test", "", false, client, nodes, nodeEffectiveStatus)
+
+	vms := mon.state.GetSnapshot().VMs
+	if len(vms) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(vms))
+	}
+
+	if got := mon.metricsHistory.GetGuestMetrics(vms[0].ID, "cpu", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip native VM metrics history writes, got %+v", got)
+	}
+	if got := mon.metricsHistory.GetGuestMetrics(vms[0].ID, "memory", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip native VM memory history writes, got %+v", got)
+	}
+}
+
+func TestRecordGuestMetric_SkipsNativeWritesInMockMode(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	mon := newTestPVEMonitor("test")
+	defer mon.alertManager.Stop()
+	defer mon.notificationMgr.Stop()
+
+	now := time.Now().UTC()
+	mon.recordGuestMetric(
+		"vm",
+		"test:node1:101",
+		42,
+		48,
+		51,
+		1024,
+		512,
+		256,
+		128,
+		now,
+	)
+
+	if got := mon.metricsHistory.GetGuestMetrics("test:node1:101", "cpu", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip helper cpu history writes, got %+v", got)
+	}
+	if got := mon.metricsHistory.GetGuestMetrics("test:node1:101", "memory", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip helper memory history writes, got %+v", got)
 	}
 }
 

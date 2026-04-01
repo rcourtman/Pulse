@@ -279,7 +279,6 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 						if err != nil {
 							// Handle errors
 							errStr := err.Error()
-							errStrLower := strings.ToLower(errStr)
 							log.Warn().
 								Str("instance", instanceName).
 								Str("vm", vm.Name).
@@ -287,47 +286,21 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								Str("error", errStr).
 								Msg("Failed to get VM filesystem info from guest agent")
 
-							// Classify the error type for better user messaging
-							// Order matters: check most specific patterns first
-							if strings.Contains(errStr, "QEMU guest agent is not running") {
-								diskStatusReason = "agent-not-running"
+							diskStatusReason = classifyGuestAgentDiskStatusError(err)
+
+							switch diskStatusReason {
+							case "agent-not-running":
 								log.Info().
 									Str("instance", instanceName).
 									Str("vm", vm.Name).
 									Int("vmid", vm.VMID).
 									Msg("Guest agent enabled in VM config but not running inside guest OS. Install and start qemu-guest-agent in the VM")
-							} else if strings.Contains(errStr, "timeout") {
-								diskStatusReason = "agent-timeout"
-							} else if strings.Contains(errStr, "500") && (strings.Contains(errStr, "not running") || strings.Contains(errStr, "not available")) {
-								// Proxmox API error 500 with "not running"/"not available" indicates guest agent issue, not permissions
-								// This commonly happens when guest agent is not installed or not running
-								diskStatusReason = "agent-not-running"
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Guest agent communication failed (API error 500). Install and start qemu-guest-agent in the VM")
-							} else if (strings.Contains(errStr, "403") || strings.Contains(errStr, "401")) &&
-								(strings.Contains(errStrLower, "permission") || strings.Contains(errStrLower, "forbidden") || strings.Contains(errStrLower, "not allowed")) {
-								// Only treat as permission-denied if we get explicit auth/permission error codes (401/403)
-								// This distinguishes actual permission issues from guest agent unavailability
-								diskStatusReason = "permission-denied"
+							case "permission-denied":
 								log.Warn().
 									Str("instance", instanceName).
 									Str("vm", vm.Name).
 									Int("vmid", vm.VMID).
 									Msg("Permission denied accessing guest agent. Verify Pulse user has VM.Monitor (PVE 8) or VM.Audit+VM.GuestAgent.Audit (PVE 9) permissions")
-							} else if strings.Contains(errStr, "500") {
-								// Generic 500 error without clear indicators - likely agent unavailable
-								// Refs #596: Proxmox returns 500 errors when guest agent isn't installed/running
-								diskStatusReason = "agent-not-running"
-								log.Info().
-									Str("instance", instanceName).
-									Str("vm", vm.Name).
-									Int("vmid", vm.VMID).
-									Msg("Failed to communicate with guest agent (API error 500). This usually means qemu-guest-agent is not installed or not running in the VM")
-							} else {
-								diskStatusReason = "agent-error"
 							}
 						} else if len(fsInfo) == 0 {
 							diskStatusReason = "no-filesystems"
@@ -495,6 +468,18 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 							Msg("QEMU disk: using linked Pulse host agent disk summary")
 					}
 				}
+				diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason = stabilizeGuestLowTrustDisk(
+					prevVM,
+					vm.Status,
+					diskTotal,
+					diskUsed,
+					diskFree,
+					diskUsage,
+					individualDisks,
+					diskStatusReason,
+					diskFromAgent,
+					sampleTime,
+				)
 
 				prevSnapshot := m.previousGuestSnapshot(instanceName, "qemu", n.Node, vm.VMID)
 				memUsed, memorySource, snapshotNotes := stabilizeGuestLowTrustMemory(

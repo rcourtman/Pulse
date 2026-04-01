@@ -188,6 +188,38 @@ func TestProxmoxGuestMemoryCarryForwardUsesCanonicalSnapshotStability(t *testing
 	}
 }
 
+func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"guest_disk_stability.go": {
+			"func stabilizeGuestLowTrustDisk(",
+			"func classifyGuestAgentDiskStatusError(err error) string {",
+			`return total, used, free, prev.Disk.Usage, cloneGuestDisks(prev.Disks), "prev-" + diskStatusReason`,
+		},
+		"monitor_pve_guest_builders.go": {
+			"state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, state.individualDisks, state.diskStatusReason = stabilizeGuestLowTrustDisk(",
+			"DiskStatusReason:  state.diskStatusReason,",
+			"return nil, classifyGuestAgentDiskStatusError(err), false",
+		},
+		"monitor_polling_vm.go": {
+			"diskStatusReason = classifyGuestAgentDiskStatusError(err)",
+			"diskTotal, diskUsed, diskFree, diskUsage, individualDisks, diskStatusReason = stabilizeGuestLowTrustDisk(",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	forbiddenSnippets := []string{
 		"mock.GetMockState(",

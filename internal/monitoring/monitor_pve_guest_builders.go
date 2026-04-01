@@ -26,6 +26,7 @@ type vmBuildState struct {
 	diskFree          uint64
 	diskUsage         float64
 	diskFromAgent     bool
+	diskStatusReason  string
 	individualDisks   []models.Disk
 	ipAddresses       []string
 	networkInterfaces []models.GuestNetworkInterface
@@ -93,7 +94,7 @@ func (m *Monitor) applyVMStatusDetails(
 	// Prefer guest agent data over cluster/resources data for accuracy
 	if status.Agent.Value > 0 {
 		var fsDisks []models.Disk
-		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent = m.updateVMDisksFromGuestAgentFSInfo(
+		state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
 			ctx,
 			instanceName,
 			res,
@@ -110,6 +111,7 @@ func (m *Monitor) applyVMStatusDetails(
 		if state.diskTotal > 0 {
 			state.diskUsage = -1 // Show as allocated size
 		}
+		state.diskStatusReason = "agent-disabled"
 		log.Debug().
 			Str("instance", instanceName).
 			Str("vm", res.Name).
@@ -125,6 +127,7 @@ func (m *Monitor) applyVMStatusDetails(
 			state.diskFree = uint64(hostDisk.Free)
 			state.diskUsage = hostDisk.Usage
 			state.individualDisks = hostDisks
+			state.diskStatusReason = ""
 			log.Debug().
 				Str("instance", instanceName).
 				Str("vm", res.Name).
@@ -174,6 +177,10 @@ func (m *Monitor) buildVMFromClusterResource(
 	if res.Type == "qemu" && state.diskUsed == 0 && state.diskTotal > 0 && res.Status == "running" {
 		state.diskUsage = -1
 	}
+	if res.Status != "running" && state.diskTotal > 0 {
+		state.diskUsage = -1
+		state.diskStatusReason = "vm-stopped"
+	}
 
 	// For running VMs, always try to get filesystem info from guest agent
 	// The cluster/resources endpoint often returns 0 or incorrect values for disk usage
@@ -182,6 +189,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		// First check if agent is enabled by getting VM status
 		status, err := client.GetVMStatus(ctx, res.Node, res.VMID)
 		if err != nil {
+			if state.diskTotal > 0 {
+				state.diskStatusReason = "no-status"
+			}
 			log.Debug().
 				Err(err).
 				Str("instance", instanceName).
@@ -191,6 +201,9 @@ func (m *Monitor) buildVMFromClusterResource(
 		} else if status != nil {
 			m.applyVMStatusDetails(ctx, instanceName, res, client, guestID, vmIDToHostAgent, status, &state)
 		} else {
+			if state.diskTotal > 0 {
+				state.diskStatusReason = "no-status"
+			}
 			// No vmStatus available - keep cluster/resources data
 			log.Debug().
 				Str("instance", instanceName).
@@ -230,7 +243,7 @@ func (m *Monitor) buildVMFromClusterResource(
 			}
 
 			var fsDisks []models.Disk
-			state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent = m.updateVMDisksFromGuestAgentFSInfo(
+			state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent, state.diskStatusReason = m.updateVMDisksFromGuestAgentFSInfo(
 				ctx,
 				instanceName,
 				res,
@@ -245,6 +258,20 @@ func (m *Monitor) buildVMFromClusterResource(
 		}
 	}
 
+	sampleTime := time.Now()
+	state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, state.individualDisks, state.diskStatusReason = stabilizeGuestLowTrustDisk(
+		prevVM,
+		res.Status,
+		state.diskTotal,
+		state.diskUsed,
+		state.diskFree,
+		state.diskUsage,
+		state.individualDisks,
+		state.diskStatusReason,
+		state.diskFromAgent,
+		sampleTime,
+	)
+
 	if res.Status != "running" {
 		state.memorySource = "powered-off"
 		state.memUsed = 0
@@ -255,7 +282,6 @@ func (m *Monitor) buildVMFromClusterResource(
 		memFree = state.memTotal - state.memUsed
 	}
 
-	sampleTime := time.Now()
 	var snapshotNotes []string
 	state.memUsed, state.memorySource, snapshotNotes = stabilizeGuestLowTrustMemory(
 		prevSnapshot,
@@ -319,6 +345,7 @@ func (m *Monitor) buildVMFromClusterResource(
 			Usage: state.diskUsage,
 		},
 		Disks:             state.individualDisks,
+		DiskStatusReason:  state.diskStatusReason,
 		IPAddresses:       state.ipAddresses,
 		OSName:            state.osName,
 		OSVersion:         state.osVersion,
@@ -361,7 +388,7 @@ type vmFSInfoSummary struct {
 	includedFS      []string
 }
 
-func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, bool) {
+func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res proxmox.ClusterResource, client PVEClientInterface) ([]proxmox.VMFileSystem, string, bool) {
 	// Use retry logic for guest agent calls to handle transient timeouts (refs #630)
 	fsInfoRaw, err := m.retryGuestAgentCall(ctx, m.guestAgentFSInfoTimeout, m.guestAgentRetries, func(ctx context.Context) (interface{}, error) {
 		return client.GetVMFSInfo(ctx, res.Node, res.VMID)
@@ -426,7 +453,7 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 				Int("vmid", res.VMID).
 				Msg("Failed to get filesystem info from guest agent")
 		}
-		return nil, false
+		return nil, classifyGuestAgentDiskStatusError(err), false
 	}
 	if len(fsInfo) == 0 {
 		log.Info().
@@ -434,9 +461,9 @@ func (m *Monitor) fetchVMFSInfo(ctx context.Context, instanceName string, res pr
 			Str("vm", res.Name).
 			Int("vmid", res.VMID).
 			Msg("Guest agent returned no filesystem info - agent may need restart or VM may have no mounted filesystems")
-		return nil, false
+		return nil, "no-filesystems", false
 	}
-	return fsInfo, true
+	return fsInfo, "", true
 }
 
 func (m *Monitor) summarizeVMFSInfo(instanceName string, res proxmox.ClusterResource, fsInfo []proxmox.VMFileSystem) vmFSInfoSummary {
@@ -597,16 +624,16 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 	diskTotal uint64,
 	diskUsed uint64,
 	diskUsage float64,
-) (uint64, uint64, uint64, float64, []models.Disk, bool) {
+) (uint64, uint64, uint64, float64, []models.Disk, bool, string) {
 	log.Debug().
 		Str("instance", instanceName).
 		Str("vm", res.Name).
 		Int("vmid", res.VMID).
 		Msg("Guest agent enabled, querying filesystem info for accurate disk usage")
 
-	fsInfo, ok := m.fetchVMFSInfo(ctx, instanceName, res, client)
+	fsInfo, diskStatusReason, ok := m.fetchVMFSInfo(ctx, instanceName, res, client)
 	if !ok {
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, diskStatusReason
 	}
 
 	log.Debug().
@@ -655,7 +682,7 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 			Uint64("old_disk", res.Disk).
 			Uint64("old_maxdisk", res.MaxDisk).
 			Msg("Using guest agent data for accurate disk usage (replacing cluster/resources data)")
-		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true
+		return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, summary.individualDisks, true, ""
 	}
 
 	// Only special filesystems found - show allocated disk size instead
@@ -668,5 +695,5 @@ func (m *Monitor) updateVMDisksFromGuestAgentFSInfo(
 		Int("filesystems_found", len(fsInfo)).
 		Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 
-	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false
+	return diskTotal, diskUsed, diskTotal - diskUsed, diskUsage, nil, false, "special-filesystems-only"
 }

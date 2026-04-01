@@ -45,6 +45,7 @@ truth for live infrastructure data.
 21. `internal/monitoring/monitor_polling_vm.go`
 22. `internal/monitoring/monitor_pve_guest_builders.go`
 23. `internal/monitoring/monitor_pve_guest_poll.go`
+24. `internal/monitoring/guest_disk_stability.go`
 
 ## Shared Boundaries
 
@@ -431,6 +432,13 @@ signal is sufficient healthy evidence for that decision even before disk or
 network enrichment finishes, and the preserved result must be recorded with an
 explicit snapshot note so diagnostics can distinguish deliberate stabilization
 from ordinary fallback.
+Guest-disk continuity now follows the same canonical rule. The shared VM
+polling paths must classify guest-agent disk failures consistently, surface the
+resulting disk-status reason on the VM model, and only carry forward previous
+disk usage when the last VM snapshot is still recent guest-agent truth rather
+than an already carried-forward fallback. That keeps transient guest-agent or
+status-call failures from regressing a VM back to misleading allocated-disk
+data while still avoiding indefinite replay of stale disk summaries.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,
