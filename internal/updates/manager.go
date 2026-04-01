@@ -131,6 +131,32 @@ func resolveUpdateReleaseFeedURL() (*url.URL, error) {
 	return target, nil
 }
 
+func validateApplyDownloadURL(rawURL string) (*url.URL, error) {
+	downloadURL, err := securityutil.NormalizeAbsoluteHTTPURL(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid download URL: %w", err)
+	}
+	if strings.TrimSpace(os.Getenv("PULSE_UPDATE_SERVER")) != "" {
+		return downloadURL, nil
+	}
+
+	allowedPrefix, err := securityutil.NormalizeHTTPBaseURL(updateReleaseDownloadPrefix(), "")
+	if err != nil {
+		return nil, fmt.Errorf("invalid download URL: %w", err)
+	}
+
+	if downloadURL.Scheme != allowedPrefix.Scheme || !strings.EqualFold(downloadURL.Host, allowedPrefix.Host) {
+		return nil, fmt.Errorf("invalid download URL")
+	}
+
+	allowedPathPrefix := allowedPrefix.Path
+	if downloadURL.Path != allowedPathPrefix && !strings.HasPrefix(downloadURL.Path, allowedPathPrefix+"/") {
+		return nil, fmt.Errorf("invalid download URL")
+	}
+
+	return downloadURL, nil
+}
+
 func updateReleaseMigrationURL() string {
 	return fmt.Sprintf("https://github.com/%s/releases/v4.0.0", updateReleaseRepo())
 }
@@ -465,15 +491,14 @@ func (m *Manager) CheckForUpdatesWithChannel(ctx context.Context, channel string
 
 // ApplyUpdate downloads and applies an update
 func (m *Manager) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) error {
-	// Validate download URL (allow test server URLs when PULSE_UPDATE_SERVER is set)
 	if req.DownloadURL == "" {
 		return fmt.Errorf("download URL is required")
 	}
-	if os.Getenv("PULSE_UPDATE_SERVER") == "" {
-		if !strings.HasPrefix(req.DownloadURL, updateReleaseDownloadPrefix()) {
-			return fmt.Errorf("invalid download URL")
-		}
+	validatedDownloadURL, validationErr := validateApplyDownloadURL(req.DownloadURL)
+	if validationErr != nil {
+		return validationErr
 	}
+	req.DownloadURL = validatedDownloadURL.String()
 
 	// Check if Docker
 	currentInfo, _ := GetCurrentVersion()
@@ -1014,11 +1039,18 @@ func inferVersionFromDownloadURL(downloadURL string) string {
 	if downloadURL == "" {
 		return ""
 	}
+	if parsed, err := securityutil.NormalizeAbsoluteHTTPURL(downloadURL); err == nil {
+		if match := versionInURLRegex.FindString(parsed.Path); match != "" {
+			return match
+		}
+		if match := versionInURLRegex.FindString(filepath.Base(parsed.Path)); match != "" {
+			return match
+		}
+	}
 	if match := versionInURLRegex.FindString(downloadURL); match != "" {
 		return match
 	}
-	base := filepath.Base(downloadURL)
-	if match := versionInURLRegex.FindString(base); match != "" {
+	if match := versionInURLRegex.FindString(filepath.Base(downloadURL)); match != "" {
 		return match
 	}
 	return ""

@@ -73,6 +73,40 @@ func TestValidateApplyTargetVersion(t *testing.T) {
 	if _, err := validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/latest/install.sh"); err == nil {
 		t.Fatal("expected invalid download URL to be rejected")
 	}
+
+	target, err = validateApplyTargetVersion("stable", "https://github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-linux-amd64.tar.gz?download=1#v9.9.9")
+	if err != nil {
+		t.Fatalf("version should be inferred from URL path, got %v", err)
+	}
+	if target != "v6.0.0" {
+		t.Fatalf("unexpected target version with fragment/query = %q", target)
+	}
+}
+
+func TestValidateApplyDownloadURL(t *testing.T) {
+	t.Run("rejects userinfo", func(t *testing.T) {
+		if _, err := validateApplyDownloadURL("https://user:pass@github.com/rcourtman/Pulse/releases/download/v6.0.0/pulse-v6.0.0-linux-amd64.tar.gz"); err == nil {
+			t.Fatal("expected userinfo URL to be rejected")
+		}
+	})
+
+	t.Run("rejects non release host without override", func(t *testing.T) {
+		if _, err := validateApplyDownloadURL("https://example.com/pulse-v6.0.0-linux-amd64.tar.gz"); err == nil {
+			t.Fatal("expected non-GitHub URL to be rejected without update server override")
+		}
+	})
+
+	t.Run("accepts configured update server URL", func(t *testing.T) {
+		t.Setenv("PULSE_UPDATE_SERVER", "https://updates.example.com/proxy")
+
+		validated, err := validateApplyDownloadURL("https://updates.example.com/releases/pulse-v6.0.0-linux-amd64.tar.gz")
+		if err != nil {
+			t.Fatalf("expected configured update server URL to be accepted, got %v", err)
+		}
+		if got := validated.String(); got != "https://updates.example.com/releases/pulse-v6.0.0-linux-amd64.tar.gz" {
+			t.Fatalf("validateApplyDownloadURL() = %q", got)
+		}
+	})
 }
 
 func TestUpdateReleaseHelpersUseConfiguredRepo(t *testing.T) {

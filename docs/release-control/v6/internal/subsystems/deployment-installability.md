@@ -163,7 +163,9 @@ That same boundary also owns outbound update transport safety: env-configured
 update server bases must normalize to absolute HTTP(S) URLs without userinfo,
 and release API, feed, download, and checksum requests must resolve from
 validated URL objects instead of raw string concatenation or request creation
-from unchecked inputs.
+from unchecked inputs. `ApplyUpdate` must canonicalize the supplied download
+URL through that shared validator before version inference, history emission,
+or transfer work begins.
 That same boundary also governs owned filesystem scans inside the update
 manager: when `internal/updates/manager.go` enumerates already-owned extract,
 temp, backup, or restore directories, it must rejoin discovered entry names
