@@ -132,7 +132,6 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                 return (
                   <>
                     <TableRow
-                      ref={(el) => table.registerRowRef(resource.id, el)}
                       data-summary-series-id={resource.id}
                       data-summary-row-active={
                         (tableProps.hoveredResourceId === resource.id || isHighlighted()) &&
@@ -294,7 +293,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                       </TableCell>
                     </TableRow>
                     <Show when={isExpanded()}>
-                      <TableRow>
+                      <TableRow data-inline-detail-for={resource.id}>
                         <TableCell
                           colspan={7}
                           class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"

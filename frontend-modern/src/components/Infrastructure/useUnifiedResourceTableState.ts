@@ -95,7 +95,6 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     ),
   );
   const viewportSync = useUnifiedResourceTableViewportSync({
-    expandedResourceId: () => props.expandedResourceId,
     totalCount: () => hostTableItems().length,
     estimatedRowHeight: HOST_TABLE_ESTIMATED_ROW_HEIGHT,
     hostWindowing,

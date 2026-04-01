@@ -136,6 +136,12 @@ Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan
 versions are consumed at hosted entitlement and workspace-limit enforcement
 boundaries.
+That same hosted browser bootstrap boundary now owns browser-only lifecycle
+attachment too. `frontend-modern/src/useAppRuntimeState.ts` must register its
+auth bootstrap, theme sync, and post-reconnect hosted refresh work through
+Solid `onMount(...)` inside the runtime owner instead of letting `App.tsx`,
+`AppLayout.tsx`, or module-evaluation side effects reach directly into browser
+APIs before the hosted shell has mounted.
 Persisted billing state is now also part of that canonical boundary: when a
 recognized Cloud/MSP plan version is loaded or saved, the stored `plan_version`
 must canonicalize and `limits.max_monitored_systems` must reconcile to the authoritative
@@ -1009,3 +1015,9 @@ Until that
 candidate lane lands, new
 commercial account work must extend the governed Pulse account shape rather
 than spawning additional one-off recovery or billing pages.
+The same owned shell/runtime boundary also keeps signed-in bootstrap free of
+feature-local telemetry collectors. `frontend-modern/src/useAppRuntimeState.ts`
+may start shared app-shell services, auth refresh, and websocket recovery, but
+it must not boot a storage-only disk history collector now that storage
+drawers read the canonical backend metrics-history contract through shared
+chart primitives.

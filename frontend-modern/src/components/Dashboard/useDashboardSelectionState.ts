@@ -1,7 +1,11 @@
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
-import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
+import {
+  findInlineDetailElement,
+  preserveScrollableAncestorVerticalOffset,
+  revealInlineDetailInViewport,
+} from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
@@ -33,7 +37,9 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
 
-  let tableRef: HTMLDivElement | undefined;
+  const [tableWrapperRef, setTableWrapperRefSignal] = createSignal<HTMLDivElement | undefined>(
+    undefined,
+  );
   const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
   const summaryInteraction = useSummaryPageInteractionState({
     hoveredSeriesId: hoveredWorkloadId,
@@ -43,12 +49,12 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   });
 
   const setTableWrapperRef = (element: HTMLDivElement | undefined) => {
-    tableRef = element;
+    setTableWrapperRefSignal(element);
     summaryInteraction.setTableRootRef(element);
   };
 
   const setSelectedGuestIdState = (id: string | null) => {
-    preserveScrollableAncestorVerticalOffset(tableRef, () => {
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
       setSelectedGuestIdRaw(id);
     });
   };
@@ -109,6 +115,52 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     if (!dashboardHasVisibleWorkloadGroupScope(options.filteredGuests(), groupScope)) {
       setHoveredWorkloadGroupScope(null);
     }
+  });
+
+  createEffect(() => {
+    const selectedId = selectedGuestId();
+    const root = tableWrapperRef();
+    if (!selectedId || !root || typeof window === 'undefined') {
+      return;
+    }
+
+    let rafId: number | undefined;
+    let timeoutId: number | undefined;
+    let settled = false;
+
+    const cleanup = () => {
+      settled = true;
+      if (rafId !== undefined) {
+        window.cancelAnimationFrame(rafId);
+      }
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+
+    const attemptReveal = (remainingFrames: number) => {
+      if (settled) {
+        return;
+      }
+
+      const row = root.querySelector<HTMLElement>(`[data-summary-series-id="${selectedId}"]`);
+      const detail = findInlineDetailElement(root, selectedId);
+      if (row && detail) {
+        const didScroll = revealInlineDetailInViewport({ row, detail });
+        if (!didScroll || remainingFrames <= 0) {
+          cleanup();
+          return;
+        }
+      } else if (remainingFrames <= 0) {
+        cleanup();
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(() => attemptReveal(remainingFrames - 1));
+    };
+
+    rafId = window.requestAnimationFrame(() => attemptReveal(24));
+    timeoutId = window.setTimeout(cleanup, 1500);
   });
 
   onCleanup(() => {

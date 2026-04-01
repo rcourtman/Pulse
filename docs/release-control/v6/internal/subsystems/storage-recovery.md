@@ -303,6 +303,12 @@ When the active chart entity is off-screen or hidden behind the other storage
 view, the page must use the shared summary-table focus bridge and reveal the
 target row only through an explicit `Jump to row` action, switching views or
 expanding the owning group only for that deliberate reveal path.
+That same reveal contract now also owns inline-detail expansion. When a pool or
+disk row is deliberately focused and its inline detail opens on the storage
+page, the detail row must publish the same canonical summary series ID through
+`data-inline-detail-for` and let the shared contextual-focus helper reveal only
+enough of that drawer to show the row header plus the top of the detail,
+instead of reverting to storage-local centering or a second row/detail ID map.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,
@@ -1838,3 +1844,11 @@ Storage and recovery must not treat topology labels, datastore attachments, or
 guest identity as recovery ownership, restore targeting, protection grouping,
 or a new VMware-local storage/recovery taxonomy until a separately governed
 slice explicitly promotes them into recovery contracts.
+That same storage/recovery surface now also owns physical-disk live I/O
+presentation through the canonical chart boundary. Storage disk drawers may
+show read, write, busy, and SMART history, but they must route every chart
+through the shared `HistoryChart` API contract using the disk resource's
+canonical history target. Storage must not keep a drawer-local live metrics
+collector, agent-id/device fallback stream, or separate "real-time" history
+store once monitoring and `/api/metrics-store/history` already own the disk
+timeline.

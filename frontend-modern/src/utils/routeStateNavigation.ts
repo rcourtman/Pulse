@@ -3,6 +3,17 @@ export const ROUTE_STATE_REPLACE_OPTIONS = {
   scroll: false,
 } as const;
 
+const ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX = 24;
+const ROUTE_STATE_DELIBERATE_SCROLL_SUPPRESSION_MS = 1000;
+let routeStateDeliberateScrollSuppressedUntil = 0;
+
+export const markRouteStateDeliberateScroll = (now = Date.now()): void => {
+  routeStateDeliberateScrollSuppressedUntil = Math.max(
+    routeStateDeliberateScrollSuppressedUntil,
+    now + ROUTE_STATE_DELIBERATE_SCROLL_SUPPRESSION_MS,
+  );
+};
+
 const isSamePathnameNavigation = (currentPath: string, targetPath: string): boolean => {
   const base = window.location.origin;
   return new URL(currentPath, base).pathname === new URL(targetPath, base).pathname;
@@ -36,6 +47,15 @@ export const createRouteStateNavigateScheduler = (
         window.history.scrollRestoration = 'manual';
         const applyScrollRestore = () => {
           if (/jsdom/i.test(window.navigator.userAgent)) return;
+          if (routeStateDeliberateScrollSuppressedUntil > Date.now()) {
+            return;
+          }
+          if (
+            Math.abs(window.scrollX - restoreScroll.x) > ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX ||
+            Math.abs(window.scrollY - restoreScroll.y) > ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX
+          ) {
+            return;
+          }
           window.scrollTo(restoreScroll.x, restoreScroll.y);
         };
         navigate(target, ROUTE_STATE_REPLACE_OPTIONS);

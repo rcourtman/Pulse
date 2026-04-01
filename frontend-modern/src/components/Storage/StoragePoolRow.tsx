@@ -172,7 +172,11 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         </td>
       </tr>
       <Show when={props.expanded}>
-        <StoragePoolDetail record={props.record} physicalDisks={props.physicalDisks} />
+        <StoragePoolDetail
+          record={props.record}
+          physicalDisks={props.physicalDisks}
+          summarySeriesId={props.summarySeriesId}
+        />
       </Show>
     </>
   );

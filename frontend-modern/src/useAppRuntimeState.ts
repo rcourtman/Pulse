@@ -31,7 +31,6 @@ import {
   hasFreshInfrastructureSummaryCache,
 } from '@/utils/infrastructureSummaryCache';
 import { buildInfrastructurePath } from '@/routing/resourceLinks';
-import { startMetricsCollector } from '@/stores/metricsCollector';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import {
   applyThemeClass,
@@ -88,11 +87,6 @@ export const useAppRuntimeState = () => {
   };
 
   const alertsActivation = useAlertsActivation();
-
-  onMount(() => {
-    startMetricsCollector();
-  });
-
   let hasPreloadedRoutes = false;
   let hasFetchedVersionInfo = false;
   let hasPrewarmedInfrastructureCharts = false;

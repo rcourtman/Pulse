@@ -271,10 +271,14 @@ describe('shared primitive guardrails', () => {
     expect(contextualFocusSource).toContain(
       'export const preserveScrollableAncestorVerticalOffset',
     );
+    expect(contextualFocusSource).toContain('export const findInlineDetailElement');
+    expect(contextualFocusSource).toContain('export const revealInlineDetailInViewport');
     expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
     expect(contextualFocusSource).toContain('chartHoveredSeriesId');
     expect(contextualFocusSource).toContain('hoveredGroupScope');
     expect(contextualFocusSource).toContain('filterSeriesForActiveScope');
+    expect(contextualFocusSource).toContain('markRouteStateDeliberateScroll');
+    expect(contextualFocusSource).toContain('data-inline-detail-for');
     expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
     expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
@@ -294,6 +298,10 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
     expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
+    expect(summaryTableFocusSource).toContain('focusedSeriesId');
+    expect(summaryTableFocusSource).toContain('findInlineDetailElement');
+    expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
+    expect(summaryTableFocusSource).toContain('MutationObserver');
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
     expect(summaryTableFocusSource).toContain(
       "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",

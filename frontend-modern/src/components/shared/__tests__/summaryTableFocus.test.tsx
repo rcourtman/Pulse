@@ -118,4 +118,38 @@ describe('useSummaryPageInteractionState', () => {
     expect(revealActiveSeries).toHaveBeenCalledWith('pool-alpha');
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
   });
+
+  it('reveals focused inline detail without hard-centering the row', () => {
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
+    const revealActiveSeries = vi.fn();
+    const scrollTo = vi.fn();
+    const root = document.createElement('div');
+    const row = document.createElement('div');
+    const detail = document.createElement('div');
+
+    Object.defineProperty(window, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+    vi.stubGlobal('scrollY', 0);
+
+    row.setAttribute('data-summary-series-id', 'workload-a');
+    row.getBoundingClientRect = vi.fn(() => buildRect(680, 40));
+    detail.setAttribute('data-inline-detail-for', 'workload-a');
+    detail.getBoundingClientRect = vi.fn(() => buildRect(724, 220));
+    root.append(row, detail);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId,
+        revealActiveSeries,
+      }),
+    );
+
+    result.setTableRootRef(root);
+
+    expect(revealActiveSeries).toHaveBeenCalledWith('workload-a');
+    expect(scrollTo).toHaveBeenCalledWith({ top: 456, behavior: 'smooth' });
+  });
 });

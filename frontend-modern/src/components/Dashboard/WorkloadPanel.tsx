@@ -167,7 +167,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         onHoverChange={props.setHoveredWorkloadId}
                       />
                       <Show when={props.selectedGuestId() === guestId()}>
-                        <TableRow>
+                        <TableRow data-inline-detail-for={guestId()}>
                           <TableCell
                             colspan={props.totalColumns()}
                             class="p-0 border-b border-border bg-surface-alt"

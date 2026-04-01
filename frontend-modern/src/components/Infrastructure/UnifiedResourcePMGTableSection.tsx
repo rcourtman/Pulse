@@ -149,7 +149,6 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                 return (
                   <>
                     <TableRow
-                      ref={(el) => table.registerRowRef(resource.id, el)}
                       data-summary-series-id={resource.id}
                       data-summary-row-active={
                         (tableProps.hoveredResourceId === resource.id || isHighlighted()) &&
@@ -333,7 +332,7 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                       </TableCell>
                     </TableRow>
                     <Show when={isExpanded()}>
-                      <TableRow>
+                      <TableRow data-inline-detail-for={resource.id}>
                         <TableCell
                           colspan={9}
                           class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"

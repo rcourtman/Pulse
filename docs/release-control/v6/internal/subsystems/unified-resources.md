@@ -277,6 +277,13 @@ interactive-series filtering, focused-resource naming, and active-series
 resolution so the infrastructure summary stays page-scoped while still
 highlighting the same canonical resource IDs used by the unified-resource
 table and route state.
+That same infrastructure focus boundary now also owns deliberate drawer reveal.
+When an infrastructure row opens inline detail on the same route, the page must
+tag that detail with the canonical active resource ID and let the shared
+summary-table/contextual-focus helpers reveal only enough of the drawer to show
+the row header plus the start of the detail. `useUnifiedResourceTableViewportSync.ts`
+must stay viewport-only; it may not grow a second selected-row reveal path or a
+resource-local centering rule.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
 fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`

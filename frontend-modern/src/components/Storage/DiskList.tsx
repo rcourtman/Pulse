@@ -307,7 +307,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
                         </TableRow>
                         <Show when={isSelected()}>
-                          <TableRow>
+                          <TableRow data-inline-detail-for={summarySeriesId}>
                             <TableCell colSpan={9} class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}>
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </TableCell>

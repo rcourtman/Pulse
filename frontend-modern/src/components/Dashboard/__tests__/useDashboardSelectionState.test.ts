@@ -160,7 +160,7 @@ describe('useDashboardSelectionState', () => {
     );
   });
 
-  it('shows a deliberate jump affordance when the active workload row is off-screen', () => {
+  it('shows a deliberate jump affordance when a hovered workload row is off-screen', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([
       {
@@ -198,7 +198,7 @@ describe('useDashboardSelectionState', () => {
     document.body.appendChild(tableWrapper);
 
     result.setTableWrapperRef(tableWrapper as HTMLDivElement);
-    result.setSelectedGuestId('app-container:truenas-main:nextcloud');
+    result.setHoveredWorkloadId('app-container:truenas-main:nextcloud');
 
     expect(result.activeSummaryWorkloadId()).toBe('app-container:truenas-main:nextcloud');
     expect(result.shouldShowJumpToActiveWorkloadRow()).toBe(true);
@@ -207,6 +207,77 @@ describe('useDashboardSelectionState', () => {
 
     expect(result.revealedGuestId()).toBe('app-container:truenas-main:nextcloud');
     expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+  });
+
+  it('reveals mounted workload detail after selecting a row', () => {
+    locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
+    const workloadId = 'app-container:truenas-main:nextcloud';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([
+      {
+        id: workloadId,
+        name: 'nextcloud',
+        status: 'running',
+        instance: 'truenas-main',
+        node: 'truenas-main',
+      } as unknown as WorkloadGuest,
+    ]);
+
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 180,
+    });
+    window.scrollTo = scrollToSpy as typeof window.scrollTo;
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        setSelectedNode: vi.fn(),
+      }),
+    );
+
+    const tableWrapper = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.summarySeriesId = workloadId;
+    row.getBoundingClientRect = vi.fn(() => ({
+      top: 624,
+      bottom: 664,
+      left: 0,
+      right: 320,
+      width: 320,
+      height: 40,
+      x: 0,
+      y: 624,
+      toJSON: () => ({}),
+    })) as unknown as typeof row.getBoundingClientRect;
+
+    const detail = document.createElement('div');
+    detail.dataset.inlineDetailFor = workloadId;
+    detail.getBoundingClientRect = vi.fn(() => ({
+      top: 668,
+      bottom: 964,
+      left: 0,
+      right: 320,
+      width: 320,
+      height: 296,
+      x: 0,
+      y: 668,
+      toJSON: () => ({}),
+    })) as unknown as typeof detail.getBoundingClientRect;
+
+    tableWrapper.appendChild(row);
+    tableWrapper.appendChild(detail);
+    document.body.appendChild(tableWrapper);
+
+    result.setTableWrapperRef(tableWrapper as HTMLDivElement);
+    result.setSelectedGuestId(workloadId);
+    vi.runAllTimers();
+
+    expect(scrollToSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        behavior: 'smooth',
+      }),
+    );
   });
 
   it('tracks hovered workload groups without letting them override entity selection outside scope', () => {

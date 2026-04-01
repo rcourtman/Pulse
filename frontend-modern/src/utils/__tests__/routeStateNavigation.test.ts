@@ -3,21 +3,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ROUTE_STATE_REPLACE_OPTIONS,
   createRouteStateNavigateScheduler,
+  markRouteStateDeliberateScroll,
 } from '@/utils/routeStateNavigation';
 
 describe('routeStateNavigation', () => {
   const scrollToSpy = vi.fn();
+  let currentScrollX = 24;
+  let currentScrollY = 320;
 
   beforeEach(() => {
     vi.useFakeTimers();
     scrollToSpy.mockReset();
+    currentScrollX = 24;
+    currentScrollY = 320;
     Object.defineProperty(window, 'scrollX', {
       configurable: true,
-      value: 24,
+      get: () => currentScrollX,
     });
     Object.defineProperty(window, 'scrollY', {
       configurable: true,
-      value: 320,
+      get: () => currentScrollY,
     });
     Object.defineProperty(window.navigator, 'userAgent', {
       configurable: true,
@@ -27,6 +32,10 @@ describe('routeStateNavigation', () => {
       configurable: true,
       value: 'auto',
       writable: true,
+    });
+    scrollToSpy.mockImplementation((x: number, y: number) => {
+      currentScrollX = x;
+      currentScrollY = y;
     });
     window.scrollTo = scrollToSpy as typeof window.scrollTo;
   });
@@ -58,6 +67,38 @@ describe('routeStateNavigation', () => {
     vi.runAllTimers();
 
     expect(navigate).not.toHaveBeenCalled();
+    expect(scrollToSpy).not.toHaveBeenCalled();
+  });
+
+  it('stops replaying preserved scroll after a later deliberate scroll change', () => {
+    const navigate = vi.fn();
+    let currentPath = '/infrastructure?source=proxmox-pve';
+    const scheduler = createRouteStateNavigateScheduler(navigate, () => currentPath);
+
+    scheduler.schedule('/infrastructure?source=proxmox-pve&resource=agent-123');
+    vi.advanceTimersByTime(0);
+
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+
+    currentScrollY = 540;
+    vi.runAllTimers();
+
+    expect(scrollToSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('suppresses preserved scroll replays while a deliberate scroll handoff is active', () => {
+    const navigate = vi.fn();
+    let currentPath = '/workloads?type=app-container';
+    const scheduler = createRouteStateNavigateScheduler(navigate, () => currentPath);
+
+    markRouteStateDeliberateScroll();
+    scheduler.schedule('/workloads?type=app-container&resource=guest-1');
+    vi.runAllTimers();
+
+    expect(navigate).toHaveBeenCalledWith(
+      '/workloads?type=app-container&resource=guest-1',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
     expect(scrollToSpy).not.toHaveBeenCalled();
   });
 });

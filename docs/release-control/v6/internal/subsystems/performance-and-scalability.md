@@ -238,6 +238,13 @@ scroll-preserving row focus must extend
 `frontend-modern/src/components/shared/contextualFocus.ts` instead of
 rebuilding page-local `Set` scans or scroll repair logic in dashboard,
 infrastructure, or workloads hot paths.
+That same hot-path ownership now also covers deliberate inline-detail reveal.
+When a focused workload or infrastructure row opens its inline detail, the hot
+path may preserve scroll across same-route state writes, but the actual reveal
+must still flow through the shared contextual-focus and summary-table helpers,
+mark the movement as deliberate so route-state restore does not replay over it,
+and scroll only enough to keep the row header plus the top of the detail
+visible instead of hard-centering every expansion.
 That same hot-path ownership now includes summary cache invalidation.
 Infrastructure and workload summary caches may hydrate charts for fast remounts,
 but when the summary chart timeline contract changes, the cache version must
@@ -640,3 +647,9 @@ constructor critical path. `NewStore` may initialize schema and return a usable
 store, but restart-time retention cleanup and one-time auto-vacuum migration
 must run through the background worker so large historical databases do not
 block application startup before the metrics store is even available.
+That same metrics hot path now also owns compact physical-disk drawer charts.
+Thirty-minute storage detail charts must query the same in-memory plus
+store-backed disk history path as longer-term disk charts, with the backend
+doing range selection and fallback. Feature-local polling loops or browser-side
+disk ring buffers are forbidden because they duplicate live sampling work and
+drift out of sync with the governed history timeline.

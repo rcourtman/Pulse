@@ -3,6 +3,8 @@ import infrastructurePageSurfaceSource from '@/features/infrastructure/Infrastru
 import infrastructurePageModelSource from '@/features/infrastructure/infrastructurePageModel.ts?raw';
 import infrastructurePageStateSource from '@/features/infrastructure/useInfrastructurePageState.ts?raw';
 import infrastructurePageRouteStateSource from '@/features/infrastructure/useInfrastructurePageRouteState.ts?raw';
+import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
+import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 
 describe('InfrastructurePageSurface guardrails', () => {
   it('keeps the feature shell separate from route-sync and page-model ownership', () => {
@@ -53,5 +55,15 @@ describe('InfrastructurePageSurface guardrails', () => {
 
     expect(infrastructurePageRouteStateSource).not.toContain('useSummaryPageInteractionState');
     expect(infrastructurePageRouteStateSource).not.toContain('setSummaryTableRootRef');
+  });
+
+  it('keeps inline-detail reveal out of infrastructure viewport sync helpers', () => {
+    expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
+    expect(unifiedResourceTableStateSource).not.toContain('scrollIntoView');
+    expect(unifiedResourceTableViewportSyncSource).toContain('syncHostWindowToViewport');
+    expect(unifiedResourceTableViewportSyncSource).toContain("window.addEventListener('scroll'");
+    expect(unifiedResourceTableViewportSyncSource).not.toContain('expandedResourceId');
+    expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
+    expect(unifiedResourceTableViewportSyncSource).not.toContain('querySelector<HTMLElement>(');
   });
 });

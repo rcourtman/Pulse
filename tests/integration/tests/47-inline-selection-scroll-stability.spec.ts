@@ -100,6 +100,24 @@ async function scrollSectionIntoView(
   return page.evaluate(() => window.scrollY);
 }
 
+async function positionElementNearViewportBottom(
+  page: Page,
+  locator: Locator,
+  bottomInset = 96,
+): Promise<number> {
+  const targetTop = await locator.evaluate(
+    (element, inset) =>
+      Math.max(
+        0,
+        window.scrollY + element.getBoundingClientRect().top - (window.innerHeight - inset),
+      ),
+    bottomInset,
+  );
+  await page.evaluate((nextTop) => window.scrollTo(0, nextTop), targetTop);
+  await page.waitForTimeout(150);
+  return locator.evaluate((element) => element.getBoundingClientRect().top);
+}
+
 test.describe.serial("Inline selection scroll stability", () => {
   test.setTimeout(180_000);
 
@@ -145,14 +163,27 @@ test.describe.serial("Inline selection scroll stability", () => {
       .filter({ hasText: resourceName })
       .first();
     await expect(row).toBeVisible();
+    const beforeRowTop = await positionElementNearViewportBottom(page, row);
+    expect(beforeRowTop).toBeGreaterThan(500);
     await row.click();
 
     await expect(page).toHaveURL(
       /\/infrastructure\?source=proxmox-pve&resource=/,
     );
+    const detailRow = row.locator("xpath=following-sibling::tr[1]");
     await expect(
       page.getByRole("button", { name: /show access|hide access/i }),
     ).toBeVisible();
+    await expect(detailRow).toBeVisible();
+    await page.waitForTimeout(350);
+
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
+    const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
+
+    expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
+    expect(afterRowTop).toBeLessThan(viewportHeight * 0.42);
+    expect(detailTop).toBeLessThan(viewportHeight - 48);
 
     const afterScroll = await page.evaluate(() => window.scrollY);
     expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
@@ -209,6 +240,8 @@ test.describe.serial("Inline selection scroll stability", () => {
     const row = page.locator("tr[data-guest-id]").first();
     const beforeScroll = await scrollSectionIntoView(page, row);
     expect(beforeScroll).toBeGreaterThan(10);
+    const beforeRowTop = await positionElementNearViewportBottom(page, row);
+    expect(beforeRowTop).toBeGreaterThan(500);
 
     const workloadId = (await row.getAttribute("data-guest-id")) ?? "";
     expect(workloadId).not.toBe("");
@@ -216,14 +249,58 @@ test.describe.serial("Inline selection scroll stability", () => {
     await row.click();
 
     await expect(page).toHaveURL(/\/workloads\?(?:.*&)?resource=/);
-    await expect(row.locator("xpath=following-sibling::tr[1]")).toContainText(
+    const detailRow = row.locator("xpath=following-sibling::tr[1]");
+    await expect(detailRow).toContainText(
       "Overview",
     );
+    await page.waitForTimeout(350);
+
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
+    const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
+
+    expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
+    expect(afterRowTop).toBeLessThan(viewportHeight * 0.42);
+    expect(detailTop).toBeLessThan(viewportHeight - 48);
 
     const afterScroll = await page.evaluate(() => window.scrollY);
     expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
 
     await row.click();
     await expect.poll(() => page.url()).not.toContain("resource=");
+  });
+
+  test("reveals storage inline detail without hard-centering the selected row", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only storage interaction proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/storage", { waitUntil: "domcontentloaded" });
+    const row = page.locator("tr[data-summary-series-id]").first();
+    await expect(row).toBeVisible();
+
+    const beforeScroll = await scrollSectionIntoView(page, row);
+    expect(beforeScroll).toBeGreaterThan(10);
+    const beforeRowTop = await positionElementNearViewportBottom(page, row);
+    expect(beforeRowTop).toBeGreaterThan(500);
+
+    await row.click();
+
+    const detailRow = row.locator("xpath=following-sibling::tr[1]");
+    await expect(detailRow).toBeVisible();
+    await page.waitForTimeout(350);
+
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
+    const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
+
+    expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
+    expect(afterRowTop).toBeLessThan(viewportHeight * 0.42);
+    expect(detailTop).toBeLessThan(viewportHeight - 48);
   });
 });

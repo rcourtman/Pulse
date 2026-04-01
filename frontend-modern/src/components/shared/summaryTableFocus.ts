@@ -1,5 +1,9 @@
-import { createMemo, createSignal, type Accessor } from 'solid-js';
-import type { SummaryChartHoverSync } from './contextualFocus';
+import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import {
+  findInlineDetailElement,
+  revealInlineDetailInViewport,
+  type SummaryChartHoverSync,
+} from './contextualFocus';
 import {
   resolveSummaryActiveSeriesId,
   resolveSummaryGroupScope,
@@ -44,11 +48,13 @@ const isElementVisibleWithinViewport = (element: HTMLElement): boolean => {
 
 export interface UseSummaryTableFocusBridgeOptions {
   activeSeriesId: Accessor<string | null | undefined>;
+  focusedSeriesId?: Accessor<string | null | undefined>;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
 export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOptions) {
   const [tableRoot, setTableRoot] = createSignal<HTMLElement | null>(null);
+  const focusedSeriesId = options.focusedSeriesId ?? (() => null);
 
   const normalizedActiveSeriesId = createMemo<string | null>(() => {
     const normalized = normalizeSeriesId(options.activeSeriesId());
@@ -63,6 +69,17 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     }
     return root.querySelector<HTMLElement>(
       `[data-summary-series-id="${escapeAttributeSelectorValue(activeSeriesId)}"]`,
+    );
+  };
+
+  const focusedRow = (): HTMLElement | null => {
+    const root = tableRoot();
+    const focusedId = normalizeSeriesId(focusedSeriesId());
+    if (!root || !focusedId) {
+      return null;
+    }
+    return root.querySelector<HTMLElement>(
+      `[data-summary-series-id="${escapeAttributeSelectorValue(focusedId)}"]`,
     );
   };
 
@@ -100,6 +117,101 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
 
     attemptScroll(6);
   };
+
+  createEffect(() => {
+    const focusedId = normalizeSeriesId(focusedSeriesId());
+    const root = tableRoot();
+    if (!focusedId || !root || typeof window === 'undefined') {
+      return;
+    }
+
+    options.revealActiveSeries?.(focusedId);
+
+    let settled = false;
+    let rafId: number | undefined;
+    let observer: MutationObserver | undefined;
+    let timeoutId: number | undefined;
+
+    const cleanup = () => {
+      settled = true;
+      if (rafId !== undefined) {
+        window.cancelAnimationFrame(rafId);
+      }
+      if (timeoutId !== undefined) {
+        window.clearTimeout(timeoutId);
+      }
+      observer?.disconnect();
+    };
+
+    const settleReveal = (remainingFrames: number) => {
+      if (settled) {
+        return;
+      }
+      const row = focusedRow();
+      const detail = findInlineDetailElement(root, focusedId);
+      if (!row || !detail) {
+        cleanup();
+        return;
+      }
+
+      const didScroll = revealInlineDetailInViewport({
+        row,
+        detail,
+      });
+
+      if (remainingFrames <= 0 || !didScroll) {
+        cleanup();
+        return;
+      }
+
+      rafId = window.requestAnimationFrame(() => {
+        settleReveal(remainingFrames - 1);
+      });
+    };
+
+    const attemptReveal = (): boolean => {
+      if (settled) {
+        return true;
+      }
+      const row = focusedRow();
+      if (!row || !root) {
+        return false;
+      }
+
+      const detail = findInlineDetailElement(root, focusedId);
+      if (!detail) {
+        return false;
+      }
+
+      settleReveal(2);
+      return true;
+    };
+
+    if (attemptReveal()) {
+      return;
+    }
+
+    observer = new MutationObserver(() => {
+      attemptReveal();
+    });
+    observer.observe(root, { childList: true, subtree: true });
+
+    let remainingFrames = 24;
+    const scheduleAttempt = () => {
+      if (attemptReveal() || remainingFrames <= 0) {
+        return;
+      }
+      remainingFrames -= 1;
+      rafId = window.requestAnimationFrame(scheduleAttempt);
+    };
+
+    rafId = window.requestAnimationFrame(scheduleAttempt);
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+    }, 1200);
+
+    onCleanup(cleanup);
+  });
 
   return {
     activeRow,
@@ -143,6 +255,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
 
   const tableFocus = useSummaryTableFocusBridge({
     activeSeriesId,
+    focusedSeriesId,
     revealActiveSeries: options.revealActiveSeries,
   });
 

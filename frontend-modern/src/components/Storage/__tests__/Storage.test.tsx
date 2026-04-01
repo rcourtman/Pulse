@@ -1059,6 +1059,112 @@ describe('Storage', () => {
     storageSummarySpy.mockRestore();
   });
 
+  it('reveals opened pool detail without hard-centering the focused row', async () => {
+    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha-Store',
+          usage: [
+            { timestamp: Date.now() - 60_000, value: 45 },
+            { timestamp: Date.now(), value: 47 },
+          ],
+          used: [
+            { timestamp: Date.now() - 60_000, value: 450 },
+            { timestamp: Date.now(), value: 470 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 60_000, value: 550 },
+            { timestamp: Date.now(), value: 530 },
+          ],
+        },
+      },
+      disks: {},
+      stats: {
+        oldestDataTimestamp: Date.now() - 60_000,
+      },
+    });
+
+    const scrollToSpy = vi.fn();
+    Object.defineProperty(window, 'innerHeight', {
+      configurable: true,
+      value: 800,
+    });
+    Object.defineProperty(window, 'scrollY', {
+      configurable: true,
+      value: 180,
+    });
+    Object.defineProperty(window, 'scrollTo', {
+      configurable: true,
+      value: scrollToSpy,
+    });
+
+    const rowRect = {
+      top: 680,
+      bottom: 728,
+      left: 0,
+      right: 480,
+      width: 480,
+      height: 48,
+      x: 0,
+      y: 680,
+      toJSON: () => ({}),
+    } satisfies DOMRect;
+    const detailRect = {
+      top: 732,
+      bottom: 1012,
+      left: 0,
+      right: 480,
+      width: 480,
+      height: 280,
+      x: 0,
+      y: 732,
+      toJSON: () => ({}),
+    } satisfies DOMRect;
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function mockRect(this: HTMLElement) {
+        if (this.dataset.summarySeriesId === 'pool:alpha') {
+          return rowRect;
+        }
+        if (this.dataset.inlineDetailFor === 'pool:alpha') {
+          return detailRect;
+        }
+        return {
+          top: 0,
+          bottom: 32,
+          left: 0,
+          right: 32,
+          width: 32,
+          height: 32,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } satisfies DOMRect;
+      });
+
+    hookResources = [
+      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:alpha',
+        },
+      }),
+    ];
+
+    render(() => <Storage />);
+
+    await screen.findByTestId('storage-summary');
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for Alpha-Store' }));
+
+    await waitFor(() => {
+      expect(document.querySelector('[data-inline-detail-for="pool:alpha"]')).toBeTruthy();
+      expect(scrollToSpy).toHaveBeenCalledWith({ top: 636, behavior: 'smooth' });
+    });
+
+    rectSpy.mockRestore();
+    storageSummarySpy.mockRestore();
+  });
+
   it('restores canonical TrueNAS source filters from the storage route', async () => {
     nodeResources = [
       {

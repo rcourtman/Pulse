@@ -171,10 +171,6 @@ describe('useAppRuntimeState', () => {
       buildInfrastructurePath: () => '/infrastructure',
     }));
 
-    vi.doMock('@/stores/metricsCollector', () => ({
-      startMetricsCollector: vi.fn(),
-    }));
-
     vi.doMock('@/stores/alertsActivation', () => ({
       useAlertsActivation: () => ({
         refreshConfig: vi.fn().mockResolvedValue(undefined),

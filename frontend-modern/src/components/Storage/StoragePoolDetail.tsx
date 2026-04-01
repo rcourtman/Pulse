@@ -37,6 +37,7 @@ import { useStoragePoolDetailModel } from './useStoragePoolDetailModel';
 interface StoragePoolDetailProps {
   record: StorageRecord;
   physicalDisks: Resource[];
+  summarySeriesId: string;
 }
 
 export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
@@ -47,7 +48,7 @@ export const StoragePoolDetail: Component<StoragePoolDetailProps> = (props) => {
     });
 
   return (
-    <tr class={STORAGE_DETAIL_ROW_CLASS}>
+    <tr class={STORAGE_DETAIL_ROW_CLASS} data-inline-detail-for={props.summarySeriesId}>
       <td colSpan={99} class={STORAGE_DETAIL_CELL_CLASS}>
         <div class={STORAGE_DETAIL_ROOT_GRID_CLASS}>
           {/* Left: Capacity trend chart */}

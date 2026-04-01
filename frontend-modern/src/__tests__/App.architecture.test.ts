@@ -37,6 +37,11 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('Preview');
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
+    expect(appSource).not.toContain("eventBus.on('theme_changed'");
+    expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
+    expect(appSource).not.toContain("apiFetch('/api/security/status')");
+    expect(appLayoutSource).not.toContain("eventBus.on('theme_changed'");
+    expect(appLayoutSource).not.toContain("apiFetch('/api/security/status')");
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
     expect(appRuntimeStateSource).toContain('const connectionStatus = createMemo<AppConnectionStatus>(() => {');
     expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
@@ -47,6 +52,14 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain(
       'const [activeOrgID, setActiveOrgID] = createSignal(',
     );
+    expect(appRuntimeStateSource).toContain('onMount(() => {');
+    expect(appRuntimeStateSource).toContain('onMount(async () => {');
+    expect(appRuntimeStateSource).toContain("eventBus.on('theme_changed', handleRemoteThemeChange);");
+    expect(appRuntimeStateSource).toContain(
+      "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",
+    );
+    expect(appRuntimeStateSource).not.toContain("import { startMetricsCollector } from '@/stores/metricsCollector';");
+    expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
   });
 });
