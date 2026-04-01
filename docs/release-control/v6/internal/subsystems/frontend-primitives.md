@@ -230,7 +230,7 @@ connections` visible as the API-backed alternative for Proxmox and
     `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
     route strings or provider-local link builders inside feature panels.
 15. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
-16. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and layer focused-entity detail into the card chrome instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or covering the heatmap body with a floating detail overlay. That focused rail must only surface complementary context such as the active entity identity, sparkline, and peak value; it must not repeat a second `Latest` or current-value readout that the hover tooltip already owns.
+16. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, peak, and mini sparkline.
 17. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge.
 18. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 19. Keep shared infrastructure/resource selectors on the canonical agent-facet
@@ -623,9 +623,10 @@ The shared density map now follows that same owner split.
 `frontend-modern/src/components/shared/useDensityMapState.ts` owns hover
 signals, canvas draw lifecycle, and resize handling, and
 `frontend-modern/src/components/shared/densityMapModel.ts` owns bucket/window
-math, hover target selection, tooltip time formatting, and density-cell
+math, hover target selection, focused-series tooltip detail, and density-cell
 opacity rules. Future density-map work should extend those owners instead of
-pushing canvas lifecycle or chart math back into the shared shell.
+pushing canvas lifecycle, tooltip shaping, or chart math back into the shared
+shell.
 The shared active-use trial nudge now follows that same owner split.
 `frontend-modern/src/components/shared/ActiveUseTrialNudge.tsx` stays the
 render shell, `frontend-modern/src/components/shared/useActiveUseTrialNudgeState.ts`

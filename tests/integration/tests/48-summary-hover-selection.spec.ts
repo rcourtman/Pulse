@@ -224,15 +224,6 @@ async function expectActiveDensityMapsPreserveOverview(
           );
           return {
             activeCount: activeNodes.length,
-            focusDetailCount: activeNodes.filter((node) => {
-              const detail = node.querySelector(
-                '[data-density-map-focus-detail="true"]',
-              );
-              return (
-                detail?.getAttribute("data-density-map-focus-series-id") ===
-                expectedId
-              );
-            }).length,
             preservedOverview: activeNodes.every(
               (node) =>
                 Number(node.getAttribute("data-rendered-series-count") || "0") >
@@ -243,9 +234,38 @@ async function expectActiveDensityMapsPreserveOverview(
     )
     .toEqual({
       activeCount: expectedCount,
-      focusDetailCount: expectedCount,
       preservedOverview: true,
     });
+}
+
+async function hoverDensityMapUntilTooltipAppears(
+  page: import("@playwright/test").Page,
+  densityMap: import("@playwright/test").Locator,
+): Promise<void> {
+  const canvas = densityMap.locator("canvas").first();
+  await expect(canvas).toBeVisible();
+  const box = await canvas.boundingBox();
+  expect(box).not.toBeNull();
+  if (!box) {
+    throw new Error("Density map canvas has no bounding box");
+  }
+
+  for (const point of [
+    { x: 0.84, y: 0.2 },
+    { x: 0.7, y: 0.35 },
+    { x: 0.56, y: 0.5 },
+  ]) {
+    await page.mouse.move(
+      box.x + box.width * point.x,
+      box.y + box.height * point.y,
+    );
+    const tooltip = page.locator('[data-density-map-tooltip="true"]').last();
+    if (await tooltip.isVisible().catch(() => false)) {
+      return;
+    }
+  }
+
+  throw new Error("Unable to activate a density-map tooltip");
 }
 
 async function expectSummaryHoverTimestampsAligned(
@@ -775,5 +795,37 @@ test.describe.serial("Summary hover selection", () => {
     await expect
       .poll(() => readRenderedSeriesCounts(workloadsSummary))
       .toEqual(resolvedBaselineCounts);
+  });
+
+  test("keeps density-map detail inside the hover tooltip instead of card chrome", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    const workloadsSummary = page.getByTestId("workloads-summary");
+    await expect(workloadsSummary).toBeVisible();
+    await expect(
+      workloadsSummary.locator('[data-density-map-focus-detail="true"]'),
+    ).toHaveCount(0);
+    await expect(workloadsSummary).not.toContainText("Top activity overview");
+
+    const firstDensityMap = workloadsSummary
+      .locator('[data-summary-chart-kind="density-map"]')
+      .first();
+    await hoverDensityMapUntilTooltipAppears(page, firstDensityMap);
+
+    const tooltip = page.locator('[data-density-map-tooltip="true"]').last();
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toContainText("Current");
+    await expect(tooltip).toContainText("Peak");
+    await expect(
+      tooltip.locator('[data-density-map-tooltip-sparkline="true"]'),
+    ).toBeVisible();
   });
 });

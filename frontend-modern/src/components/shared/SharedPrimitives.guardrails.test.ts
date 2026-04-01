@@ -634,7 +634,10 @@ describe('shared primitive guardrails', () => {
   it('keeps density map on shell, runtime, and model owners', () => {
     expect(densityMapSource).toContain('useDensityMapState');
     expect(densityMapSource).not.toContain('Latest');
+    expect(densityMapSource).not.toContain('Top activity overview');
     expect(densityMapSource).not.toContain('detail().currentValue');
+    expect(densityMapSource).toContain('data-density-map-tooltip="true"');
+    expect(densityMapSource).toContain('data-density-map-tooltip-sparkline="true"');
     expect(densityMapSource).not.toContain('timeRangeToMs');
     expect(densityMapSource).not.toContain('createSignal');
     expect(densityMapSource).not.toContain('ctx.fillRect');

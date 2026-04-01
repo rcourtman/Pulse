@@ -54,6 +54,7 @@ describe('DensityMap', () => {
         timeRange="1h"
         series={[
           {
+            id: 'cpu',
             name: 'CPU',
             color: '#10b981',
             data: [
@@ -88,6 +89,10 @@ describe('DensityMap', () => {
     fireEvent.mouseMove(canvas, { clientX: 160, clientY: 20 });
 
     expect(await screen.findByText('CPU')).toBeInTheDocument();
+    expect(screen.getByText('Current')).toBeInTheDocument();
+    expect(screen.getByText('Peak')).toBeInTheDocument();
+    expect(document.querySelector('[data-density-map-tooltip="true"]')).not.toBeNull();
+    expect(document.querySelector('[data-density-map-tooltip-sparkline="true"]')).not.toBeNull();
   });
 
   it('publishes synchronized hover identity and clears it on leave', () => {
@@ -212,7 +217,7 @@ describe('DensityMap', () => {
     expect(detail?.sparklinePath).toContain('M');
   });
 
-  it('renders focused detail while keeping the density-map overview series count intact', () => {
+  it('keeps the density-map card free of persistent focus chrome while preserving overview count', () => {
     const now = Date.now();
     const { container } = render(() => (
       <DensityMap
@@ -245,15 +250,13 @@ describe('DensityMap', () => {
     expect(root?.getAttribute('data-summary-chart-kind')).toBe('density-map');
     expect(root?.getAttribute('data-active-hover-timestamp')).toBe('');
     expect(root?.getAttribute('data-rendered-series-count')).toBe('2');
-    expect(screen.getByText('Alpha')).toBeInTheDocument();
-    expect(screen.getByText('Peak')).toBeInTheDocument();
-    expect(screen.getAllByText('32.0')).toHaveLength(1);
-    const overlay = container.querySelector('[data-density-map-focus-detail="true"]');
-    expect(overlay).not.toBeNull();
-    expect(overlay).toHaveAttribute('data-density-map-focus-series-id', 'alpha');
+    expect(screen.queryByText('Top activity overview')).toBeNull();
+    expect(screen.queryByText('Peak')).toBeNull();
+    expect(screen.queryByText('Alpha')).toBeNull();
+    expect(container.querySelector('[data-density-map-focus-detail="true"]')).toBeNull();
   });
 
-  it('shows an intentional empty-state pill when the focused series has no activity in range', () => {
+  it('keeps empty focused density maps free of persistent empty-state chrome', () => {
     const now = Date.now();
     const { container } = render(() => (
       <DensityMap
@@ -280,11 +283,60 @@ describe('DensityMap', () => {
       />
     ));
 
-    const overlay = container.querySelector('[data-density-map-focus-detail="true"]');
-    expect(overlay).not.toBeNull();
-    expect(overlay).toHaveAttribute('data-density-map-focus-empty', 'true');
-    expect(screen.getByText('No disk activity in range')).toBeInTheDocument();
-    expect(screen.queryByText('Latest')).toBeNull();
+    expect(container.querySelector('[data-density-map-focus-detail="true"]')).toBeNull();
+    expect(screen.queryByText('No disk activity in range')).toBeNull();
     expect(screen.queryByText('Peak')).toBeNull();
+  });
+
+  it('shows empty-state peak copy in the tooltip when the hovered series has no activity in range', async () => {
+    const now = Date.now();
+    const { container } = render(() => (
+      <DensityMap
+        timeRange="1h"
+        highlightSeriesId="alpha"
+        focusEmptyStateLabel="No disk activity in range"
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#10b981',
+            data: [],
+          },
+          {
+            id: 'beta',
+            name: 'Beta',
+            color: '#3b82f6',
+            data: [
+              { timestamp: now - 30_000, value: 18 },
+              { timestamp: now - 5_000, value: 24 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+    if (!canvas) return;
+
+    (canvas as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 180,
+        height: 80,
+        right: 180,
+        bottom: 80,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    fireEvent.mouseMove(canvas, { clientX: 20, clientY: 60 });
+
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(screen.getByText('Peak')).toBeInTheDocument();
+    expect(screen.getByText('No disk activity in range')).toBeInTheDocument();
+    expect(document.querySelector('[data-density-map-tooltip-sparkline="true"]')).toBeNull();
   });
 });
