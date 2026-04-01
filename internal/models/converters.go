@@ -816,6 +816,7 @@ func (s Storage) ToFrontend() StorageFrontend {
 		NodeCount: s.NodeCount,
 		Type:      s.Type,
 		Status:    s.Status,
+		Pool:      s.Pool,
 		Total:     s.Total,
 		Used:      s.Used,
 		Avail:     s.Free,
@@ -825,6 +826,7 @@ func (s Storage) ToFrontend() StorageFrontend {
 		Shared:    s.Shared,
 		Enabled:   s.Enabled,
 		Active:    s.Active,
+		ZFSPool:   s.ZFSPool,
 	}.NormalizeCollections()
 }
 

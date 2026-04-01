@@ -1073,6 +1073,7 @@ type Storage struct {
 	NodeCount int      `json:"nodeCount,omitempty"`
 	Type      string   `json:"type"`
 	Status    string   `json:"status"`
+	Pool      string   `json:"pool,omitempty"`
 	Path      string   `json:"path,omitempty"`
 	Total     int64    `json:"total"`
 	Used      int64    `json:"used"`

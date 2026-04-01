@@ -1166,6 +1166,7 @@ func resourceFromStorage(storage models.Storage) (Resource, ResourceIdentity) {
 			IsCeph:            isCephStorageType(storageType),
 			IsZFS:             isZFSStorageType(storageType) || storage.ZFSPool != nil,
 			Nodes:             append([]string(nil), storage.Nodes...),
+			Pool:              storage.Pool,
 			Path:              storage.Path,
 			ZFSPoolState:      zfsPoolState,
 			ZFSReadErrors:     zfsReadErrors,

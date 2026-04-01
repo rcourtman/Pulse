@@ -15,8 +15,9 @@ import (
 
 // fakeStorageClient provides minimal PVE responses needed by the optimized storage poller.
 type fakeStorageClient struct {
-	allStorage    []proxmox.Storage
-	storageByNode map[string][]proxmox.Storage
+	allStorage     []proxmox.Storage
+	storageByNode  map[string][]proxmox.Storage
+	zfsPoolsByNode map[string][]proxmox.ZFSPoolInfo
 }
 
 func (f *fakeStorageClient) GetNodes(ctx context.Context) ([]proxmox.Node, error) {
@@ -122,6 +123,9 @@ func (f *fakeStorageClient) GetZFSPoolStatus(ctx context.Context, node string) (
 }
 
 func (f *fakeStorageClient) GetZFSPoolsWithDetails(ctx context.Context, node string) ([]proxmox.ZFSPoolInfo, error) {
+	if pools, ok := f.zfsPoolsByNode[node]; ok {
+		return pools, nil
+	}
 	return nil, nil
 }
 
@@ -294,5 +298,121 @@ func TestPollStorageWithNodesSynthesizesSharedClusterOnlyStorage(t *testing.T) {
 	}
 	if shared.Total != 1000 || shared.Used != 100 || shared.Free != 900 {
 		t.Fatalf("expected cluster storage capacity from config, got %+v", *shared)
+	}
+}
+
+func TestPollStorageWithNodesAttachesZFSPoolFromExplicitPoolField(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state:          &models.State{},
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	t.Cleanup(func() {
+		monitor.alertManager.Stop()
+	})
+
+	storage := proxmox.Storage{
+		Storage:   "local-zfs",
+		Type:      "zfspool",
+		Pool:      "rpool/data",
+		Content:   "images,rootdir",
+		Active:    1,
+		Enabled:   1,
+		Shared:    0,
+		Total:     1000,
+		Used:      250,
+		Available: 750,
+	}
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{storage},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {storage},
+		},
+		zfsPoolsByNode: map[string][]proxmox.ZFSPoolInfo{
+			"node1": {
+				{Name: "rpool", Size: 1000, Alloc: 250, Free: 750, Frag: 1, Dedup: 1.0, Health: "ONLINE"},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	if len(monitor.state.Storage) != 1 {
+		t.Fatalf("expected 1 storage entry, got %d", len(monitor.state.Storage))
+	}
+	if got := monitor.state.Storage[0].Pool; got != "rpool/data" {
+		t.Fatalf("storage pool = %q, want %q", got, "rpool/data")
+	}
+	if monitor.state.Storage[0].ZFSPool == nil {
+		t.Fatal("expected explicit pool field to attach ZFS pool details")
+	}
+	if monitor.state.Storage[0].ZFSPool.Name != "rpool" {
+		t.Fatalf("ZFS pool name = %q, want rpool", monitor.state.Storage[0].ZFSPool.Name)
+	}
+}
+
+func TestPollStorageWithNodesUsesClusterStoragePoolFallback(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	monitor := &Monitor{
+		state: models.NewState(),
+		config: &config.Config{
+			PVEInstances: []config.PVEInstance{
+				{
+					Name:        "inst1",
+					IsCluster:   true,
+					ClusterName: "cluster-a",
+				},
+			},
+		},
+		metricsHistory: NewMetricsHistory(16, time.Hour),
+		alertManager:   alerts.NewManager(),
+	}
+	t.Cleanup(func() {
+		monitor.alertManager.Stop()
+	})
+
+	clusterStorage := proxmox.Storage{
+		Storage:   "local-zfs",
+		Type:      "zfspool",
+		Pool:      "rpool/data",
+		Content:   "images,rootdir",
+		Shared:    0,
+		Total:     1000,
+		Used:      250,
+		Available: 750,
+	}
+	nodeStorage := clusterStorage
+	nodeStorage.Pool = ""
+	nodeStorage.Active = 1
+	nodeStorage.Enabled = 1
+
+	client := &fakeStorageClient{
+		allStorage: []proxmox.Storage{clusterStorage},
+		storageByNode: map[string][]proxmox.Storage{
+			"node1": {nodeStorage},
+		},
+		zfsPoolsByNode: map[string][]proxmox.ZFSPoolInfo{
+			"node1": {
+				{Name: "rpool", Size: 1000, Alloc: 250, Free: 750, Frag: 1, Dedup: 1.0, Health: "ONLINE"},
+			},
+		},
+	}
+
+	nodes := []proxmox.Node{{Node: "node1", Status: "online"}}
+	monitor.pollStorageWithNodes(context.Background(), "inst1", client, nodes)
+
+	if len(monitor.state.Storage) != 1 {
+		t.Fatalf("expected 1 storage entry, got %d", len(monitor.state.Storage))
+	}
+	if got := monitor.state.Storage[0].Pool; got != "rpool/data" {
+		t.Fatalf("storage pool = %q, want %q", got, "rpool/data")
+	}
+	if monitor.state.Storage[0].ZFSPool == nil || monitor.state.Storage[0].ZFSPool.Name != "rpool" {
+		t.Fatalf("expected cluster pool fallback to attach rpool, got %#v", monitor.state.Storage[0].ZFSPool)
 	}
 }

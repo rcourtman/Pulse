@@ -1037,6 +1037,7 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 			ProtectionReduced:     true,
 			ProtectionSummary:     "ZFS pool local-zfs is DEGRADED",
 			Nodes:                 []string{"pve-a", "pve-b"},
+			Pool:                  "rpool/data",
 			Path:                  "/mnt/pve/local-zfs",
 			ZFSPoolState:          "ONLINE",
 			ZFSReadErrors:         1,
@@ -1068,6 +1069,9 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 		t.Fatalf("expected ZFS fields to match, got state=%q read=%d write=%d cksum=%d", v.ZFSPoolState(), v.ZFSReadErrors(), v.ZFSWriteErrors(), v.ZFSChecksumErrors())
 	}
 	assertStringSlice(t, v.AccessibleNodes(), []string{"pve-a", "pve-b"})
+	if v.Pool() != "rpool/data" {
+		t.Fatalf("expected Pool %q, got %q", "rpool/data", v.Pool())
+	}
 	if v.Path() != "/mnt/pve/local-zfs" {
 		t.Fatalf("expected Path %q, got %q", "/mnt/pve/local-zfs", v.Path())
 	}

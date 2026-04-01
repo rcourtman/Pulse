@@ -1127,6 +1127,7 @@ type Storage struct {
 	Enabled   int    `json:"enabled"`
 	Shared    int    `json:"shared"`
 	Nodes     string `json:"nodes,omitempty"`
+	Pool      string `json:"pool,omitempty"`
 	Path      string `json:"path,omitempty"`
 	Total     uint64 `json:"total"`
 	Used      uint64 `json:"used"`

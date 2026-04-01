@@ -2082,6 +2082,13 @@ func (v StoragePoolView) AccessibleNodes() []string {
 	return cloneStringSlice(v.r.Storage.Nodes)
 }
 
+func (v StoragePoolView) Pool() string {
+	if v.r == nil || v.r.Storage == nil {
+		return ""
+	}
+	return v.r.Storage.Pool
+}
+
 func (v StoragePoolView) Path() string {
 	if v.r == nil || v.r.Storage == nil {
 		return ""

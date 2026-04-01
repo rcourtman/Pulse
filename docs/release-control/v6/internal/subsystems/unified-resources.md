@@ -208,6 +208,14 @@ assembly branch.
     `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
     must match the user-visible safe label for governed resources instead of
     reintroducing redacted hostnames through search-only fallback candidates.
+15. Preserve provider-backed storage backing-pool identity on canonical
+    storage resources. `internal/unifiedresources/types.go`,
+    `internal/unifiedresources/adapters.go`, `internal/unifiedresources/views.go`,
+    `frontend-modern/src/types/resource.ts`, and
+    `frontend-modern/src/hooks/useUnifiedResources.ts` must carry the
+    provider-reported storage `pool` metadata alongside path and ZFS health so
+    storage consumers do not have to recover backing-pool identity from names
+    or path heuristics.
 
 ## Current State
 

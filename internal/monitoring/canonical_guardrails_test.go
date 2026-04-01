@@ -220,6 +220,26 @@ func TestProxmoxGuestDiskCarryForwardUsesCanonicalStabilityHelper(t *testing.T) 
 	}
 }
 
+func TestStoragePollingUsesCanonicalPoolMetadataForZFSAttachment(t *testing.T) {
+	data, err := os.ReadFile("monitor_polling_storage.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_polling_storage.go: %v", err)
+	}
+	source := string(data)
+
+	for _, snippet := range []string{
+		"func matchZFSPoolForStorage(storage models.Storage, zfsPoolMap map[string]*models.ZFSPool) *models.ZFSPool {",
+		"storage.Pool,",
+		"Pool:     storage.Pool,",
+		"if modelStorage.Pool == \"\" && clusterConfig.Pool != \"\" {",
+		"if pool := matchZFSPoolForStorage(modelStorage, zfsPoolMap); pool != nil {",
+	} {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_polling_storage.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMonitoringTemperatureFallbackUsesSMARTAwareSSHSkipRule(t *testing.T) {
 	requiredSnippets := map[string][]string{
 		"host_agent_temps.go": {

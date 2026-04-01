@@ -613,6 +613,7 @@ export interface Storage {
   nodeIds?: string[];
   nodeCount?: number;
   pbsNames?: string[];
+  pool?: string;
   // ZFS pool status
   zfsPool?: ZFSPool;
 }

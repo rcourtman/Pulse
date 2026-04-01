@@ -189,6 +189,11 @@ Own canonical runtime payload shapes between backend and frontend.
     account/billing shell must remain understandable from the primary header,
     section title, and factual body content alone instead of depending on a
     second context-chip strip to restate the same scope.
+30. Keep storage wire metadata lossless across shared API payload types.
+    `frontend-modern/src/types/api.ts` must continue to expose provider-backed
+    storage metadata such as Proxmox `pool` and `zfsPool` fields when the
+    backend emits them, instead of silently dropping that detail from the
+    shared runtime contract.
 
 ## Forbidden Paths
 

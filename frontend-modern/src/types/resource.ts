@@ -260,6 +260,7 @@ export interface ResourceStorageMeta {
   rebuildInProgress?: boolean;
   rebuildSummary?: string;
   nodes?: string[];
+  pool?: string;
   path?: string;
   zfsPoolState?: string;
   zfsReadErrors?: number;

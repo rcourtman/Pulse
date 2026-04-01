@@ -252,6 +252,40 @@ func TestResourceAPIUsesCanonicalTenantUnifiedSeed(t *testing.T) {
 	}
 }
 
+func TestCanonicalStorageMetadataPreservesBackingPoolField(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"types.go": {
+			"Pool  string   `json:\"pool,omitempty\"`",
+		},
+		"adapters.go": {
+			"Pool:              storage.Pool,",
+		},
+		"views.go": {
+			"func (v StoragePoolView) Pool() string {",
+			"return v.r.Storage.Pool",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "types", "resource.ts"): {
+			"pool?: string;",
+		},
+		filepath.Join("..", "..", "frontend-modern", "src", "hooks", "useUnifiedResources.ts"): {
+			"pool?: string;",
+		},
+	}
+
+	for path, snippets := range requiredSnippets {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", path, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", path, snippet)
+			}
+		}
+	}
+}
+
 func TestResourceAPIExposesDedicatedFacetReads(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "api", "resources.go"))
 	if err != nil {

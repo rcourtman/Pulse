@@ -2113,6 +2113,7 @@ func TestResourceListIncludesStorageMetadata(t *testing.T) {
 				Node:     "pve-1",
 				Instance: "cluster-a",
 				Type:     "rbd",
+				Pool:     "ceph/rbd-a",
 				Content:  "images,backup",
 				Shared:   true,
 				Status:   "available",
@@ -2158,6 +2159,9 @@ func TestResourceListIncludesStorageMetadata(t *testing.T) {
 	}
 	if got, want := resource.Storage.ContentTypes, []string{"images", "backup"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("storage.contentTypes = %v, want %v", got, want)
+	}
+	if got, want := resource.Storage.Pool, "ceph/rbd-a"; got != want {
+		t.Fatalf("storage.pool = %q, want %q", got, want)
 	}
 	if !resource.Storage.Shared {
 		t.Fatalf("expected storage.shared=true")

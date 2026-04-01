@@ -82,6 +82,11 @@ truth for live infrastructure data.
    declared ingestion mode on an admitted first-class platform, not a license
    to create new platform ids from secondary pollers or optional agent
    augmentation paths.
+6. Preserve Proxmox storage backing-pool truth through the canonical storage
+   poller path. `pkg/proxmox.Storage`, `internal/monitoring/monitor_polling_storage.go`,
+   and the attached ZFS health model must carry the provider-reported `pool`
+   field through to runtime storage snapshots and use it before name/path
+   heuristics when matching ZFS pool health on multi-storage hosts.
 
 ## Current State
 

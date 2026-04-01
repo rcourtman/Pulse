@@ -275,6 +275,7 @@ type APIResource = {
     rebuildInProgress?: boolean;
     rebuildSummary?: string;
     nodes?: string[];
+    pool?: string;
     path?: string;
     zfsPoolState?: string;
     zfsReadErrors?: number;

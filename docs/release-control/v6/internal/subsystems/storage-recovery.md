@@ -219,7 +219,13 @@ querying, and the operator-facing storage health presentation layer.
     that retained-value behavior must stay route-owned and filter-owned through
     the canonical recovery state model instead of recreating page-local
     suspense escape hatches in `Recovery.tsx` or the recovery sections.
-18. Keep storage route writes on the shared route-state scheduler. Storage page
+18. Keep storage/recovery-adjacent resource metadata on the shared unified
+    resource contract. When canonical storage resources expose provider-backed
+    identity such as Proxmox storage `pool`, storage and recovery consumers
+    must inherit that field through `frontend-modern/src/hooks/useUnifiedResources.ts`
+    and `frontend-modern/src/types/resource.ts` instead of rebuilding backing
+    pool identity from labels, paths, or storage-row-local heuristics.
+19. Keep storage route writes on the shared route-state scheduler. Storage page
     filter and tab updates may still own their query keys locally, but
     `frontend-modern/src/components/Storage/useStorageRouteState.ts` must route
     same-route replace navigation through the shared

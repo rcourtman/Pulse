@@ -516,6 +516,7 @@ func TestStorageToFrontend(t *testing.T) {
 		NodeCount: 2,
 		Type:      "lvmthin",
 		Status:    "available",
+		Pool:      "rpool/data",
 		Total:     1000000000000,
 		Used:      500000000000,
 		Free:      500000000000,
@@ -524,6 +525,10 @@ func TestStorageToFrontend(t *testing.T) {
 		Shared:    false,
 		Enabled:   true,
 		Active:    true,
+		ZFSPool: &ZFSPool{
+			Name:  "rpool",
+			State: "ONLINE",
+		},
 	}
 
 	frontend := storage.ToFrontend()
@@ -537,6 +542,9 @@ func TestStorageToFrontend(t *testing.T) {
 	if frontend.Type != storage.Type {
 		t.Errorf("Type = %q, want %q", frontend.Type, storage.Type)
 	}
+	if frontend.Pool != storage.Pool {
+		t.Errorf("Pool = %q, want %q", frontend.Pool, storage.Pool)
+	}
 	if frontend.Total != storage.Total {
 		t.Errorf("Total = %d, want %d", frontend.Total, storage.Total)
 	}
@@ -548,6 +556,9 @@ func TestStorageToFrontend(t *testing.T) {
 	}
 	if frontend.Avail != storage.Free {
 		t.Errorf("Avail = %d, want %d", frontend.Avail, storage.Free)
+	}
+	if frontend.ZFSPool == nil || frontend.ZFSPool.Name != "rpool" {
+		t.Fatalf("ZFSPool = %#v, want rpool", frontend.ZFSPool)
 	}
 }
 
@@ -600,7 +611,6 @@ func TestHostSensorSummaryToFrontend(t *testing.T) {
 		})
 	}
 }
-
 
 func TestToDockerHostCommandFrontend(t *testing.T) {
 	now := time.Now()

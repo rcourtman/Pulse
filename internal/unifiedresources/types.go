@@ -280,6 +280,7 @@ type StorageMeta struct {
 
 	// Accessibility metadata.
 	Nodes []string `json:"nodes,omitempty"` // PVE nodes where this storage is accessible
+	Pool  string   `json:"pool,omitempty"`  // Proxmox backing pool/dataset (for example rpool/data)
 	Path  string   `json:"path,omitempty"`  // local mount path on the node
 
 	// ZFS metadata (when IsZFS is true and the source provides details).
