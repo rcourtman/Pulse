@@ -526,11 +526,35 @@ func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.No
 
 		// Always merge SMART attributes from host agent
 		if matched.Attributes != nil {
-			updated[i].SmartAttributes = matched.Attributes
+			updated[i].SmartAttributes = smartAttributesCopy(matched.Attributes)
+			if updated[i].Wearout < 0 {
+				if derivedWearout := deriveWearoutFromSMARTAttributes(matched.Attributes); derivedWearout >= 0 {
+					updated[i].Wearout = derivedWearout
+				}
+			}
+		}
+
+		if (strings.TrimSpace(updated[i].Health) == "" || strings.EqualFold(updated[i].Health, "unknown")) && strings.TrimSpace(matched.Health) != "" {
+			updated[i].Health = matched.Health
 		}
 	}
 
 	return updated
+}
+
+func deriveWearoutFromSMARTAttributes(attrs *models.SMARTAttributes) int {
+	if attrs == nil || attrs.PercentageUsed == nil {
+		return -1
+	}
+
+	used := *attrs.PercentageUsed
+	if used < 0 {
+		used = 0
+	}
+	if used > 100 {
+		used = 100
+	}
+	return 100 - used
 }
 
 func physicalDiskFromReadStateView(view *unifiedresources.PhysicalDiskView) models.PhysicalDisk {

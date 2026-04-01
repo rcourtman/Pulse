@@ -282,6 +282,15 @@ Physical-disk refresh/merge logic now derives physical disks, nodes, and linked
 host-agent context from canonical `ReadState` before applying NVMe temperature
 and SMART merges, so skipped or background disk refresh no longer treats the
 snapshot as internal truth for that path.
+That same monitoring-owned disk merge path must also treat host-agent SMART
+attributes as canonical fill data for the Proxmox disk view. When a linked
+host agent reports SMART health or NVMe `percentage_used` for a physical disk
+that Proxmox itself exposes without trustworthy health or wearout, the merge
+path in `internal/monitoring/monitor.go` must promote that data into the
+canonical physical-disk model and the Proxmox polling runtime in
+`internal/monitoring/monitor_pve.go` must evaluate disk alerts only after that
+merged disk view exists, so controller-backed disks do not lose health and
+endurance coverage between collection and alerting.
 
 Backup polling and recovery guest identity assembly now derive workload node,
 name, and type context from canonical `ReadState` instead of from

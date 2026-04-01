@@ -440,6 +440,43 @@ func TestUnifiedPhysicalDiskMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
 	}
 }
 
+func TestProxmoxDiskAlertsRunOnMergedDiskState(t *testing.T) {
+	cases := []struct {
+		file     string
+		snippets []string
+	}{
+		{
+			file: "monitor.go",
+			snippets: []string{
+				"func mergeHostAgentSMARTIntoDisks(disks []models.PhysicalDisk, nodes []models.Node, hosts []models.Host) []models.PhysicalDisk {",
+				"deriveWearoutFromSMARTAttributes(matched.Attributes)",
+				`strings.EqualFold(updated[i].Health, "unknown")`,
+			},
+		},
+		{
+			file: "monitor_pve.go",
+			snippets: []string{
+				"allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)",
+				"m.alertManager.CheckDiskHealth(inst, disk.Node, proxmoxDiskFromPhysicalDisk(disk))",
+				"func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		data, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", tc.file, err)
+		}
+		source := string(data)
+		for _, snippet := range tc.snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", tc.file, snippet)
+			}
+		}
+	}
+}
+
 func TestUnifiedPhysicalDiskMetricsAllowNativeHistoryProviders(t *testing.T) {
 	monitorData, err := os.ReadFile("monitor.go")
 	if err != nil {

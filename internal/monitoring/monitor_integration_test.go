@@ -148,6 +148,65 @@ func TestMergeHostAgentSMARTIntoDisks_MergesSMARTAttributes(t *testing.T) {
 	}
 }
 
+func TestMergeHostAgentSMARTIntoDisks_DerivesWearoutFromSMARTAttributes(t *testing.T) {
+	disks := []models.PhysicalDisk{
+		{ID: "d1", Node: "pve1", Serial: "SER1", Wearout: -1},
+	}
+	nodes := []models.Node{
+		{Name: "pve1", LinkedAgentID: "host-1"},
+	}
+	used := 6
+	hosts := []models.Host{
+		{
+			ID: "host-1",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{
+					{
+						Device: "/dev/sda [megaraid,7]",
+						Serial: "SER1",
+						Health: "PASSED",
+						Attributes: &models.SMARTAttributes{
+							PercentageUsed: &used,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Wearout != 94 {
+		t.Fatalf("expected wearout derived from PercentageUsed, got %d", result[0].Wearout)
+	}
+	if result[0].SmartAttributes == nil || result[0].SmartAttributes.PercentageUsed == nil || *result[0].SmartAttributes.PercentageUsed != 6 {
+		t.Fatalf("expected merged PercentageUsed, got %+v", result[0].SmartAttributes)
+	}
+}
+
+func TestMergeHostAgentSMARTIntoDisks_FillsMissingHealthFromHostSMART(t *testing.T) {
+	disks := []models.PhysicalDisk{
+		{ID: "d1", Node: "pve1", Serial: "SER1", Health: "UNKNOWN"},
+	}
+	nodes := []models.Node{
+		{Name: "pve1", LinkedAgentID: "host-1"},
+	}
+	hosts := []models.Host{
+		{
+			ID: "host-1",
+			Sensors: models.HostSensorSummary{
+				SMART: []models.HostDiskSMART{
+					{Device: "/dev/sda", Serial: "SER1", Health: "FAILED"},
+				},
+			},
+		},
+	}
+
+	result := mergeHostAgentSMARTIntoDisks(disks, nodes, hosts)
+	if result[0].Health != "FAILED" {
+		t.Fatalf("expected host SMART health to fill unknown disk health, got %q", result[0].Health)
+	}
+}
+
 func TestMergeHostAgentSMARTIntoDisks_NoAgentLink(t *testing.T) {
 	disks := []models.PhysicalDisk{
 		{ID: "d1", Node: "pve1", Serial: "SER1", Temperature: 0},

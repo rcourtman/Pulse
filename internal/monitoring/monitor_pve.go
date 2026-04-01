@@ -807,9 +807,9 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			// Mark this node as successfully polled
 			polledNodes[node.Node] = true
 
-			// Check each disk for health issues and add to state
+			// Record each disk; alert evaluation happens after host-agent SMART merges
+			// so the canonical disk view includes post-merge health/wearout data.
 			for _, disk := range disks {
-				// Create PhysicalDisk model
 				diskID := fmt.Sprintf("%s-%s-%s", inst, node.Node, strings.ReplaceAll(disk.DevPath, "/", "-"))
 				physicalDisk := models.PhysicalDisk{
 					ID:          diskID,
@@ -829,53 +829,6 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 				}
 
 				allDisks = append(allDisks, physicalDisk)
-
-				log.Debug().
-					Str("node", node.Node).
-					Str("disk", disk.DevPath).
-					Str("model", disk.Model).
-					Str("health", disk.Health).
-					Int("wearout", disk.Wearout).
-					Msg("Checking disk health")
-
-				// If the linked host agent has --disk-exclude patterns that match
-				// this disk, send a synthetic healthy status to clear any existing
-				// alerts and skip normal health/wearout checks.
-				if excludePatterns, ok := diskExcludeByNode[node.Node]; ok {
-					if fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
-						healthyDisk := disk
-						healthyDisk.Health = "PASSED"
-						healthyDisk.Wearout = 100
-						m.alertManager.CheckDiskHealth(inst, node.Node, healthyDisk)
-						continue
-					}
-				}
-
-				normalizedHealth := strings.ToUpper(strings.TrimSpace(disk.Health))
-				if normalizedHealth != "" && normalizedHealth != "UNKNOWN" && normalizedHealth != "PASSED" && normalizedHealth != "OK" {
-					// Disk has failed or is failing - alert manager will handle this
-					log.Warn().
-						Str("node", node.Node).
-						Str("disk", disk.DevPath).
-						Str("model", disk.Model).
-						Str("health", disk.Health).
-						Int("wearout", disk.Wearout).
-						Msg("Disk health issue detected")
-
-					// Pass disk info to alert manager
-					m.alertManager.CheckDiskHealth(inst, node.Node, disk)
-				} else if disk.Wearout > 0 && disk.Wearout < 10 {
-					// Low wearout warning (less than 10% life remaining)
-					log.Warn().
-						Str("node", node.Node).
-						Str("disk", disk.DevPath).
-						Str("model", disk.Model).
-						Int("wearout", disk.Wearout).
-						Msg("SSD wearout critical - less than 10% life remaining")
-
-					// Pass to alert manager for wearout alert
-					m.alertManager.CheckDiskHealth(inst, node.Node, disk)
-				}
 			}
 		}
 
@@ -894,6 +847,29 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 
 		allDisks = mergeNVMeTempsIntoDisks(allDisks, nodesFromState)
 		allDisks = mergeHostAgentSMARTIntoDisks(allDisks, nodesFromState, hosts)
+		for _, disk := range allDisks {
+			if !polledNodes[disk.Node] {
+				continue
+			}
+
+			log.Debug().
+				Str("node", disk.Node).
+				Str("disk", disk.DevPath).
+				Str("model", disk.Model).
+				Str("health", disk.Health).
+				Int("wearout", disk.Wearout).
+				Msg("Checking disk health")
+
+			if excludePatterns, ok := diskExcludeByNode[disk.Node]; ok && fsfilters.MatchesDeviceExclude(disk.DevPath, excludePatterns) {
+				healthyDisk := proxmoxDiskFromPhysicalDisk(disk)
+				healthyDisk.Health = "PASSED"
+				healthyDisk.Wearout = 100
+				m.alertManager.CheckDiskHealth(inst, disk.Node, healthyDisk)
+				continue
+			}
+
+			m.alertManager.CheckDiskHealth(inst, disk.Node, proxmoxDiskFromPhysicalDisk(disk))
+		}
 
 		// Write SMART metrics to persistent store
 		if m.metricsStore != nil {
@@ -911,6 +887,21 @@ func (m *Monitor) maybePollPhysicalDisksAsync(
 			Msg("Updating physical disks in state")
 		m.state.UpdatePhysicalDisks(inst, allDisks)
 	}(instanceName, client, nodes, nodeEffectiveStatus, modelNodes)
+}
+
+func proxmoxDiskFromPhysicalDisk(disk models.PhysicalDisk) proxmox.Disk {
+	return proxmox.Disk{
+		DevPath: disk.DevPath,
+		Model:   disk.Model,
+		Serial:  disk.Serial,
+		Type:    disk.Type,
+		Health:  disk.Health,
+		Wearout: disk.Wearout,
+		Size:    disk.Size,
+		RPM:     disk.RPM,
+		Used:    disk.Used,
+		WWN:     disk.WWN,
+	}
 }
 
 // pollPVEInstance polls a single PVE instance
