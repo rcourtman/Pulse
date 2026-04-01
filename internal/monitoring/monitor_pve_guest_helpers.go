@@ -127,22 +127,28 @@ func (m *Monitor) recordGuestMetric(
 	diskRead, diskWrite, networkIn, networkOut int64,
 	now time.Time,
 ) {
-	m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
-	m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
-	if diskUsage >= 0 {
-		m.metricsHistory.AddGuestMetric(resourceID, "disk", diskUsage, now)
+	if m == nil || shouldSkipNativeMockStateMetricWrites() {
+		return
 	}
-	if diskRead >= 0 {
-		m.metricsHistory.AddGuestMetric(resourceID, "diskread", float64(diskRead), now)
-	}
-	if diskWrite >= 0 {
-		m.metricsHistory.AddGuestMetric(resourceID, "diskwrite", float64(diskWrite), now)
-	}
-	if networkIn >= 0 {
-		m.metricsHistory.AddGuestMetric(resourceID, "netin", float64(networkIn), now)
-	}
-	if networkOut >= 0 {
-		m.metricsHistory.AddGuestMetric(resourceID, "netout", float64(networkOut), now)
+
+	if m.metricsHistory != nil {
+		m.metricsHistory.AddGuestMetric(resourceID, "cpu", cpu, now)
+		m.metricsHistory.AddGuestMetric(resourceID, "memory", memory, now)
+		if diskUsage >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "disk", diskUsage, now)
+		}
+		if diskRead >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "diskread", float64(diskRead), now)
+		}
+		if diskWrite >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "diskwrite", float64(diskWrite), now)
+		}
+		if networkIn >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "netin", float64(networkIn), now)
+		}
+		if networkOut >= 0 {
+			m.metricsHistory.AddGuestMetric(resourceID, "netout", float64(networkOut), now)
+		}
 	}
 
 	if m.metricsStore != nil {

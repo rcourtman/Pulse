@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -352,5 +353,55 @@ func TestSLO_GetGuestMetricsForChart_WithNativeHistoryFallback(t *testing.T) {
 
 	if p95 > target {
 		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
+	}
+}
+
+func TestSLO_GetGuestMetricsForChartBatch_DoesNotStitchSparseStoreTailOntoCoveredInMemorySeries(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	inMemorySeries := []MetricPoint{
+		{Timestamp: now.Add(-58 * time.Minute), Value: 74},
+		{Timestamp: now.Add(-36 * time.Minute), Value: 75},
+		{Timestamp: now.Add(-14 * time.Minute), Value: 77},
+		{Timestamp: now.Add(-2 * time.Minute), Value: 78},
+	}
+	for _, point := range inMemorySeries {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "memory", point.Value, point.Timestamp)
+	}
+
+	// This sparse late store point models the old stitched-tail behavior. In
+	// mock mode the batch chart path must ignore persisted history entirely and
+	// serve the canonical sampler timeline instead.
+	writeRawMetricBatch(t, monitor.metricsStore, "vm", "vm-1", "memory", []MetricPoint{
+		{Timestamp: now.Add(-1 * time.Minute), Value: 21},
+	})
+
+	result := monitor.GetGuestMetricsForChartBatch("vm", []GuestChartRequest{{
+		InMemoryKey:   "vm-1",
+		SQLResourceID: "vm-1",
+	}}, duration)
+
+	memoryPoints := result["vm-1"]["memory"]
+	if len(memoryPoints) < 2 {
+		t.Fatalf("expected canonical mock memory series, got %+v", memoryPoints)
+	}
+	checkIndices := []int{0, len(memoryPoints) / 2, len(memoryPoints) - 1}
+	seen := map[int]struct{}{}
+	for _, idx := range checkIndices {
+		if _, ok := seen[idx]; ok {
+			continue
+		}
+		seen[idx] = struct{}{}
+
+		want := mock.SampleMetric("vm", "vm-1", "memory", memoryPoints[idx].Timestamp)
+		if memoryPoints[idx].Value != want {
+			t.Fatalf("memoryPoints[%d] = %+v, want canonical %.12f", idx, memoryPoints[idx], want)
+		}
 	}
 }

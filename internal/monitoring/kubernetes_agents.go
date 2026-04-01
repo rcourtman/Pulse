@@ -374,6 +374,9 @@ func (m *Monitor) recordKubernetesPodMetrics(cluster models.KubernetesCluster, t
 	if timestamp.IsZero() {
 		timestamp = time.Now().UTC()
 	}
+	if shouldSkipNativeMockStateMetricWrites() {
+		return
+	}
 
 	for _, pod := range cluster.Pods {
 		metricID := kubernetesPodMetricID(cluster, pod)

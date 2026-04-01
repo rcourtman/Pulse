@@ -41,6 +41,32 @@ func normalizeMockConfig(cfg MockConfig) MockConfig {
 	return cfg
 }
 
+func mockConfigsEqual(a, b MockConfig) bool {
+	if a.NodeCount != b.NodeCount ||
+		a.VMsPerNode != b.VMsPerNode ||
+		a.LXCsPerNode != b.LXCsPerNode ||
+		a.DockerHostCount != b.DockerHostCount ||
+		a.DockerContainersPerHost != b.DockerContainersPerHost ||
+		a.GenericHostCount != b.GenericHostCount ||
+		a.K8sClusterCount != b.K8sClusterCount ||
+		a.K8sNodesPerCluster != b.K8sNodesPerCluster ||
+		a.K8sPodsPerCluster != b.K8sPodsPerCluster ||
+		a.K8sDeploymentsPerCluster != b.K8sDeploymentsPerCluster ||
+		a.RandomMetrics != b.RandomMetrics ||
+		a.StoppedPercent != b.StoppedPercent {
+		return false
+	}
+	if len(a.HighLoadNodes) != len(b.HighLoadNodes) {
+		return false
+	}
+	for i := range a.HighLoadNodes {
+		if a.HighLoadNodes[i] != b.HighLoadNodes[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func normalizeStoppedPercent(v float64) float64 {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return DefaultConfig.StoppedPercent

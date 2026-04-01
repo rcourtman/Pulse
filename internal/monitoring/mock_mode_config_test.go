@@ -9,10 +9,10 @@ import (
 )
 
 func TestKeepRealPollingInMockMode(t *testing.T) {
-	t.Run("default_true", func(t *testing.T) {
+	t.Run("default_false", func(t *testing.T) {
 		t.Setenv(mockKeepRealPollingEnv, "")
-		if !keepRealPollingInMockMode() {
-			t.Fatal("expected default behavior to keep real polling enabled")
+		if keepRealPollingInMockMode() {
+			t.Fatal("expected default behavior to disable real polling in mock mode")
 		}
 	})
 
@@ -58,7 +58,7 @@ func TestNew_MockModeClientInitializationRespectsKeepRealPollingSetting(t *testi
 		fn(&called)
 	}
 
-	t.Run("enabled_by_default", func(t *testing.T) {
+	t.Run("disabled_by_default", func(t *testing.T) {
 		t.Setenv(mockKeepRealPollingEnv, "")
 		mock.SetEnabled(true)
 		t.Cleanup(func() { mock.SetEnabled(false) })
@@ -70,11 +70,11 @@ func TestNew_MockModeClientInitializationRespectsKeepRealPollingSetting(t *testi
 			}
 			t.Cleanup(func() { monitor.Stop() })
 
-			if !*called {
-				t.Fatal("expected PVE client initialization in mock mode by default")
+			if *called {
+				t.Fatal("expected PVE client initialization to be skipped in mock mode by default")
 			}
-			if len(monitor.pveClients) != 1 {
-				t.Fatalf("expected 1 initialized PVE client, got %d", len(monitor.pveClients))
+			if len(monitor.pveClients) != 0 {
+				t.Fatalf("expected 0 initialized PVE clients, got %d", len(monitor.pveClients))
 			}
 		})
 	})

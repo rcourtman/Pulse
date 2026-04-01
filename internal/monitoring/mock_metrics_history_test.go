@@ -34,6 +34,7 @@ func TestBuildTieredTimestamps_IncludesCanonicalTerminalNow(t *testing.T) {
 }
 
 func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
+	const interval = 30 * time.Second
 	now := time.Now()
 
 	state := models.StateSnapshot{
@@ -106,30 +107,30 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, 30*time.Second)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	nodeCPU := mh.GetNodeMetrics("node-1", "cpu", time.Hour)
 	if len(nodeCPU) < 10 {
 		t.Fatalf("expected seeded node cpu points, got %d", len(nodeCPU))
 	}
-	if got, want := nodeCPU[len(nodeCPU)-1].Value, state.Nodes[0].CPU*100; math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last node cpu point to match current, got=%v want=%v", got, want)
+	if got, want := nodeCPU[len(nodeCPU)-1].Value, mock.SampleMetric("node", "node-1", "cpu", nodeCPU[len(nodeCPU)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last node cpu point to match canonical sampler, got=%v want=%v", got, want)
 	}
 
 	vmCPU := mh.GetGuestMetrics("vm-100", "cpu", time.Hour)
 	if len(vmCPU) < 10 {
 		t.Fatalf("expected seeded vm cpu points, got %d", len(vmCPU))
 	}
-	if got, want := vmCPU[len(vmCPU)-1].Value, state.VMs[0].CPU*100; math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last vm cpu point to match current, got=%v want=%v", got, want)
+	if got, want := vmCPU[len(vmCPU)-1].Value, mock.SampleMetric("vm", "vm-100", "cpu", vmCPU[len(vmCPU)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last vm cpu point to match canonical sampler, got=%v want=%v", got, want)
 	}
 
 	dockerCPU := mh.GetGuestMetrics("docker:cont-1", "cpu", time.Hour)
 	if len(dockerCPU) < 10 {
 		t.Fatalf("expected seeded docker container cpu points, got %d", len(dockerCPU))
 	}
-	if got, want := dockerCPU[len(dockerCPU)-1].Value, state.DockerHosts[0].Containers[0].CPUPercent; math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last docker cpu point to match current, got=%v want=%v", got, want)
+	if got, want := dockerCPU[len(dockerCPU)-1].Value, mock.SampleMetric("dockerContainer", "cont-1", "cpu", dockerCPU[len(dockerCPU)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last docker cpu point to match canonical sampler, got=%v want=%v", got, want)
 	}
 
 	storageMetrics := mh.GetAllStorageMetrics("local", time.Hour)
@@ -137,11 +138,14 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 		t.Fatalf("expected seeded storage capacity history, got usage=%d used=%d avail=%d", len(storageMetrics["usage"]), len(storageMetrics["used"]), len(storageMetrics["avail"]))
 	}
 	last := len(storageMetrics["usage"]) - 1
-	if got, want := storageMetrics["used"][last].Value, float64(state.Storage[0].Used); math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last storage used point to match current, got=%v want=%v", got, want)
+	storageUsageNow := mock.SampleMetric("storage", "local", "usage", storageMetrics["usage"][last].Timestamp)
+	storageUsedNow := float64(state.Storage[0].Total) * (storageUsageNow / 100.0)
+	storageAvailNow := float64(state.Storage[0].Total) - storageUsedNow
+	if got, want := storageMetrics["used"][last].Value, storageUsedNow; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last storage used point to match canonical sampler, got=%v want=%v", got, want)
 	}
-	if got, want := storageMetrics["avail"][last].Value, float64(state.Storage[0].Free); math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last storage avail point to match current, got=%v want=%v", got, want)
+	if got, want := storageMetrics["avail"][last].Value, storageAvailNow; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last storage avail point to match canonical sampler, got=%v want=%v", got, want)
 	}
 	for i := range storageMetrics["usage"] {
 		if diff := math.Abs(storageMetrics["used"][i].Value + storageMetrics["avail"][i].Value - float64(state.Storage[0].Total)); diff > 0.001 {
@@ -153,13 +157,15 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	if len(diskTemps) < 10 {
 		t.Fatalf("expected seeded disk temperature history, got %d points", len(diskTemps))
 	}
-	if got, want := diskTemps[len(diskTemps)-1].Value, float64(state.PhysicalDisks[0].Temperature); math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last disk temp point to match current, got=%v want=%v", got, want)
+	if got, want := diskTemps[len(diskTemps)-1].Value, mock.SampleMetric("disk", "SERIAL-LOCAL-1", "smart_temp", diskTemps[len(diskTemps)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last disk temp point to match canonical sampler, got=%v want=%v", got, want)
 	}
 }
 
 func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
+	const interval = 30 * time.Second
 	now := time.Now().UTC().Truncate(time.Second)
+	alignedNow := normalizeMockMetricTimestamp(now, interval)
 
 	state := models.StateSnapshot{
 		DockerHosts: []models.DockerHost{
@@ -186,7 +192,7 @@ func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, 30*time.Second)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	memorySeries := mh.GetGuestMetrics("docker:cont-1", "memory", time.Hour)
 	if len(memorySeries) < 2 {
@@ -194,13 +200,13 @@ func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
 	}
 
 	last := memorySeries[len(memorySeries)-1]
-	if !last.Timestamp.Equal(now) {
-		t.Fatalf("expected terminal docker memory timestamp %v, got %v", now, last.Timestamp)
+	if !last.Timestamp.Equal(alignedNow) {
+		t.Fatalf("expected terminal docker memory timestamp %v, got %v", alignedNow, last.Timestamp)
 	}
 
 	nowCount := 0
 	for _, point := range memorySeries {
-		if point.Timestamp.Equal(now) {
+		if point.Timestamp.Equal(alignedNow) {
 			nowCount++
 		}
 	}
@@ -210,6 +216,7 @@ func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
 }
 
 func TestSeedMockMetricsHistory_PopulatesKubernetesPodSeries(t *testing.T) {
+	const interval = 30 * time.Second
 	now := time.Now()
 
 	state := models.StateSnapshot{
@@ -234,7 +241,7 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesPodSeries(t *testing.T) {
 	}
 
 	mh := NewMetricsHistory(1000, 24*time.Hour)
-	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, 30*time.Second)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, interval)
 
 	metricID := kubernetesPodMetricID(state.KubernetesClusters[0], state.KubernetesClusters[0].Pods[0])
 	if metricID == "" {
@@ -246,9 +253,8 @@ func TestSeedMockMetricsHistory_PopulatesKubernetesPodSeries(t *testing.T) {
 		t.Fatalf("expected seeded kubernetes cpu points, got %d", len(cpuSeries))
 	}
 
-	current := kubernetesPodCurrentMetrics(state.KubernetesClusters[0], state.KubernetesClusters[0].Pods[0])
-	if got, want := cpuSeries[len(cpuSeries)-1].Value, current["cpu"]; math.Abs(got-want) > 1e-9 {
-		t.Fatalf("expected last kubernetes cpu point to match current, got=%v want=%v", got, want)
+	if got, want := cpuSeries[len(cpuSeries)-1].Value, mock.SampleMetric("k8s", metricID, "cpu", cpuSeries[len(cpuSeries)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last kubernetes cpu point to match canonical sampler, got=%v want=%v", got, want)
 	}
 }
 
@@ -419,6 +425,9 @@ func TestSeedMockMetricsHistory_SeedsVMwareMetricsStore(t *testing.T) {
 	if len(storagePoints) == 0 {
 		t.Fatal("expected metrics store to have seeded VMware datastore usage points")
 	}
+	if got, want := storagePoints[len(storagePoints)-1].Value, mock.SampleMetric("storage", "vc-mock-1:datastore:datastore-201", "usage", now); math.Abs(got-want) > 0.1 {
+		t.Fatalf("expected VMware datastore usage seed to match canonical sampler, got=%v want=%v", got, want)
+	}
 
 	storageUsedPoints, err := store.Query("storage", "vc-mock-1:datastore:datastore-201", "used", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
@@ -484,6 +493,9 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 	}
 	if len(datasetPoints) == 0 {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS dataset usage points")
+	}
+	if got, want := datasetPoints[len(datasetPoints)-1].Value, mock.SampleMetric("storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now); math.Abs(got-want) > 0.1 {
+		t.Fatalf("expected TrueNAS dataset usage seed to match canonical sampler, got=%v want=%v", got, want)
 	}
 
 	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-7*24*time.Hour), now, 3600)
@@ -930,6 +942,7 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
 	next := now.Add(time.Minute)
 	const storageTotal = int64(2 * 1024 * 1024 * 1024 * 1024)
+	const k8sMetricID = "k8s:k8s-tail:pod:workloads/api-tail"
 
 	storageUsageAt := func(at time.Time) (float64, int64, int64) {
 		usage := mock.SampleMetric("storage", "storage-tail", "usage", at)
@@ -979,6 +992,26 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 				Usage:  storageUsageNow,
 			},
 		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:          "k8s-tail",
+				Name:        "k8s-tail",
+				DisplayName: "Tail Cluster",
+				Pods: []models.KubernetesPod{
+					{
+						UID:                "workloads/api-tail",
+						Namespace:          "workloads",
+						Name:               "api-tail",
+						Phase:              "running",
+						UsageCPUPercent:    3,
+						UsageMemoryPercent: 99,
+						DiskUsagePercent:   91,
+						NetInRate:          9_999_999,
+						NetOutRate:         8_888_888,
+					},
+				},
+			},
+		},
 	}
 
 	mh := NewMetricsHistory(5000, 7*24*time.Hour)
@@ -1003,6 +1036,17 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 		want := mock.SampleMetric("storage", "storage-tail", "usage", point.Timestamp)
 		if diff := math.Abs(point.Value - want); diff > 1e-9 {
 			t.Fatalf("expected seeded storage usage point %d to follow canonical runtime timeline: got=%f want=%f ts=%v", i, point.Value, want, point.Timestamp)
+		}
+	}
+
+	k8sSeeded := mh.GetGuestMetrics(k8sMetricID, "memory", 7*24*time.Hour)
+	if len(k8sSeeded) == 0 {
+		t.Fatal("expected seeded kubernetes pod memory history")
+	}
+	for i, point := range k8sSeeded {
+		want := mock.SampleMetric("k8s", k8sMetricID, "memory", point.Timestamp)
+		if diff := math.Abs(point.Value - want); diff > 1e-9 {
+			t.Fatalf("expected seeded k8s memory point %d to follow canonical runtime timeline: got=%f want=%f ts=%v", i, point.Value, want, point.Timestamp)
 		}
 	}
 
@@ -1041,6 +1085,26 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 				Usage:  storageUsageNext,
 			},
 		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:          "k8s-tail",
+				Name:        "k8s-tail",
+				DisplayName: "Tail Cluster",
+				Pods: []models.KubernetesPod{
+					{
+						UID:                "workloads/api-tail",
+						Namespace:          "workloads",
+						Name:               "api-tail",
+						Phase:              "running",
+						UsageCPUPercent:    4,
+						UsageMemoryPercent: 12,
+						DiskUsagePercent:   7,
+						NetInRate:          123,
+						NetOutRate:         456,
+					},
+				},
+			},
+		},
 	}
 
 	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(liveState), next)
@@ -1065,5 +1129,332 @@ func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *te
 	}
 	if got := storageAfterTick[len(storageAfterTick)-2].Timestamp; !got.Equal(now) {
 		t.Fatalf("expected penultimate storage point to remain anchored at seed now %v, got %v", now, got)
+	}
+
+	k8sMemoryAfterTick := mh.GetGuestMetrics(k8sMetricID, "memory", 7*24*time.Hour)
+	if got := k8sMemoryAfterTick[len(k8sMemoryAfterTick)-1].Timestamp; !got.Equal(next) {
+		t.Fatalf("expected latest k8s memory point at %v, got %v", next, got)
+	}
+	if got, want := k8sMemoryAfterTick[len(k8sMemoryAfterTick)-1].Value, mock.SampleMetric("k8s", k8sMetricID, "memory", next); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected live k8s memory tick to continue canonical runtime timeline: got=%f want=%f", got, want)
+	}
+	if got := k8sMemoryAfterTick[len(k8sMemoryAfterTick)-2].Timestamp; !got.Equal(now) {
+		t.Fatalf("expected penultimate k8s memory point to remain anchored at seed now %v, got %v", now, got)
+	}
+}
+
+func TestSeedMockMetricsHistory_UsesCanonicalMetricModelForPlatformFixtures(t *testing.T) {
+	ts := time.Now().UTC().Truncate(time.Minute)
+	graph := mock.FixtureGraph{
+		PlatformFixtures: mock.PlatformFixtures{
+			TrueNAS: truenas.DefaultFixtures(),
+			VMware:  vmware.DefaultFixtures(),
+		},
+	}
+
+	mh := NewMetricsHistory(20_000, 4*time.Hour)
+	seedMockMetricsHistory(mh, nil, graph, ts, 4*time.Hour, time.Minute)
+
+	assertCanonicalSeries := func(series []MetricPoint, resourceType, resourceID, metric string) {
+		t.Helper()
+		if len(series) == 0 {
+			t.Fatalf("expected seeded %s/%s history", resourceType, metric)
+		}
+		for i, point := range series {
+			want := mock.SampleMetric(resourceType, resourceID, metric, point.Timestamp)
+			if diff := math.Abs(point.Value - want); diff > 1e-9 {
+				t.Fatalf(
+					"expected seeded %s/%s point %d to follow canonical runtime timeline: got=%f want=%f ts=%v",
+					resourceType,
+					metric,
+					i,
+					point.Value,
+					want,
+					point.Timestamp,
+				)
+			}
+		}
+	}
+
+	trueNASHost := strings.TrimSpace(graph.PlatformFixtures.TrueNAS.System.Hostname)
+	if trueNASHost == "" {
+		t.Fatal("expected TrueNAS fixture host")
+	}
+	assertCanonicalSeries(mh.GetGuestMetrics("agent:"+trueNASHost, "cpu", 8*time.Hour), "agent", trueNASHost, "cpu")
+
+	if len(graph.PlatformFixtures.TrueNAS.Apps) == 0 {
+		t.Fatal("expected TrueNAS app fixtures")
+	}
+	trueNASAppID := strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].ID)
+	if trueNASAppID == "" {
+		trueNASAppID = strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].Name)
+	}
+	if trueNASAppID == "" {
+		t.Fatal("expected TrueNAS app identifier")
+	}
+	assertCanonicalSeries(mh.GetGuestMetrics("docker:"+trueNASAppID, "netin", 8*time.Hour), "dockerContainer", trueNASAppID, "netin")
+
+	if len(graph.PlatformFixtures.VMware.VMs) == 0 || len(graph.PlatformFixtures.VMware.Datastores) == 0 {
+		t.Fatal("expected VMware VM and datastore fixtures")
+	}
+	vmwareVMID := vmware.SourceID(
+		graph.PlatformFixtures.VMware.ConnectionID,
+		"vm",
+		graph.PlatformFixtures.VMware.VMs[0].VM,
+	)
+	assertCanonicalSeries(mh.GetGuestMetrics(vmwareVMID, "memory", 8*time.Hour), "vm", vmwareVMID, "memory")
+
+	vmwareDatastoreID := vmware.SourceID(
+		graph.PlatformFixtures.VMware.ConnectionID,
+		"datastore",
+		graph.PlatformFixtures.VMware.Datastores[0].Datastore,
+	)
+	assertCanonicalSeries(mh.GetAllStorageMetrics(vmwareDatastoreID, 8*time.Hour)["usage"], "storage", vmwareDatastoreID, "usage")
+}
+
+func TestSeedMockMetricsHistory_NormalizesTerminalTimestampToCanonicalGrid(t *testing.T) {
+	now := time.Now().UTC().Add(-53 * time.Second).Truncate(time.Second).Add(482 * time.Millisecond)
+	alignedNow := normalizeMockMetricTimestamp(now, time.Minute)
+	graph := fixtureGraphWithState(models.StateSnapshot{
+		VMs: []models.VM{
+			{ID: "vm-grid", Status: "running"},
+		},
+	})
+
+	mh := NewMetricsHistory(4_000, 2*time.Hour)
+	seedMockMetricsHistory(mh, nil, graph, now, 2*time.Hour, time.Minute)
+
+	points := mh.GetGuestMetrics("vm-grid", "cpu", 2*time.Hour)
+	if len(points) == 0 {
+		t.Fatal("expected seeded vm cpu history")
+	}
+	last := points[len(points)-1]
+	if !last.Timestamp.Equal(alignedNow) {
+		t.Fatalf("expected seeded terminal timestamp %v, got %v", alignedNow, last.Timestamp)
+	}
+	if got, want := last.Value, mock.SampleMetric("vm", "vm-grid", "cpu", alignedNow); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected seeded terminal point to use canonical aligned timeline: got=%f want=%f", got, want)
+	}
+}
+
+func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForStateBackedResources(t *testing.T) {
+	ts := time.Date(2026, time.April, 1, 14, 0, 0, 0, time.UTC)
+	const storageTotal = int64(4 * 1024 * 1024 * 1024 * 1024)
+
+	graph := fixtureGraphWithState(models.StateSnapshot{
+		Nodes: []models.Node{
+			{
+				ID:     "node-live",
+				Status: "online",
+				CPU:    0.91,
+				Memory: models.Memory{Usage: 97, Total: 128 * 1024 * 1024 * 1024},
+				Disk:   models.Disk{Usage: 92, Total: 1024, Used: 950},
+			},
+		},
+		VMs: []models.VM{
+			{
+				ID:         "vm-live",
+				Status:     "running",
+				CPU:        0.87,
+				Memory:     models.Memory{Usage: 94, Total: 16 * 1024 * 1024 * 1024},
+				Disk:       models.Disk{Usage: 89, Total: 512 * 1024 * 1024 * 1024, Used: 500 * 1024 * 1024 * 1024},
+				NetworkIn:  99_000_000,
+				NetworkOut: 77_000_000,
+				DiskRead:   55_000_000,
+				DiskWrite:  44_000_000,
+			},
+		},
+		Containers: []models.Container{
+			{
+				ID:         "container-live",
+				Status:     "running",
+				CPU:        0.83,
+				Memory:     models.Memory{Usage: 88, Total: 2 * 1024 * 1024 * 1024},
+				Disk:       models.Disk{Usage: 84, Total: 128 * 1024 * 1024 * 1024, Used: 100 * 1024 * 1024 * 1024},
+				NetworkIn:  21_000_000,
+				NetworkOut: 12_000_000,
+				DiskRead:   11_000_000,
+				DiskWrite:  9_000_000,
+			},
+		},
+		Storage: []models.Storage{
+			{
+				ID:     "storage-live",
+				Status: "available",
+				Total:  storageTotal,
+				Used:   storageTotal - (256 * 1024 * 1024 * 1024),
+				Free:   256 * 1024 * 1024 * 1024,
+				Usage:  94,
+			},
+		},
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-live",
+				Serial:      "disk-live-serial",
+				Temperature: 68,
+			},
+		},
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "docker-host-live",
+				Status:   "online",
+				CPUUsage: 91,
+				Memory:   models.Memory{Usage: 95, Total: 32 * 1024 * 1024 * 1024},
+				Containers: []models.DockerContainer{
+					{
+						ID:            "docker-cont-live",
+						State:         "running",
+						CPUPercent:    93,
+						MemoryPercent: 96,
+					},
+				},
+			},
+		},
+		Hosts: []models.Host{
+			{
+				ID:            "agent-live",
+				Status:        "online",
+				CPUUsage:      92,
+				Memory:        models.Memory{Usage: 98, Total: 64 * 1024 * 1024 * 1024},
+				DiskReadRate:  88_000_000,
+				DiskWriteRate: 77_000_000,
+				NetInRate:     66_000_000,
+				NetOutRate:    55_000_000,
+				Disks: []models.Disk{
+					{Usage: 93, Total: 2 * 1024 * 1024 * 1024 * 1024, Used: 1800 * 1024 * 1024 * 1024},
+				},
+			},
+		},
+		KubernetesClusters: []models.KubernetesCluster{
+			{
+				ID:          "k8s-live",
+				Name:        "k8s-live",
+				DisplayName: "Live Cluster",
+				Pods: []models.KubernetesPod{
+					{
+						UID:                "production/api-live",
+						Namespace:          "production",
+						Name:               "api-live",
+						Phase:              "running",
+						UsageCPUPercent:    2,
+						UsageMemoryPercent: 99,
+						DiskUsagePercent:   91,
+						NetInRate:          91_000_000,
+						NetOutRate:         77_000_000,
+					},
+				},
+			},
+		},
+	})
+
+	mh := NewMetricsHistory(256, 24*time.Hour)
+	recordMockStateToMetricsHistory(mh, nil, graph, ts)
+
+	const lookback = 24 * time.Hour
+
+	if got, want := mh.GetNodeMetrics("node-live", "cpu", lookback)[0].Value, mock.SampleMetric("node", "node-live", "cpu", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected node cpu live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	if got, want := mh.GetGuestMetrics("vm-live", "diskread", lookback)[0].Value, mock.SampleMetric("vm", "vm-live", "diskread", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected vm diskread live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	if got, want := mh.GetGuestMetrics("container-live", "memory", lookback)[0].Value, mock.SampleMetric("container", "container-live", "memory", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected container memory live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+
+	storageMetrics := mh.GetAllStorageMetrics("storage-live", lookback)
+	storageUsage := storageMetrics["usage"][0].Value
+	if want := mock.SampleMetric("storage", "storage-live", "usage", ts); math.Abs(storageUsage-want) > 1e-9 {
+		t.Fatalf("expected storage usage live tick to use canonical metric model: got=%f want=%f", storageUsage, want)
+	}
+	wantUsed := float64(storageTotal) * (storageUsage / 100.0)
+	if diff := math.Abs(storageMetrics["used"][0].Value - wantUsed); diff > 1e-6 {
+		t.Fatalf("expected storage used live tick to derive from canonical usage: got=%f want=%f", storageMetrics["used"][0].Value, wantUsed)
+	}
+
+	if got, want := mh.GetDiskMetrics("disk-live-serial", "smart_temp", lookback)[0].Value, mock.SampleMetric("disk", "disk-live-serial", "smart_temp", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected disk temperature live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	if got, want := mh.GetGuestMetrics("dockerHost:docker-host-live", "disk", lookback)[0].Value, mock.SampleMetric("dockerHost", "docker-host-live", "disk", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected docker host disk live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	if got, want := mh.GetGuestMetrics("docker:docker-cont-live", "cpu", lookback)[0].Value, mock.SampleMetric("dockerContainer", "docker-cont-live", "cpu", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected docker container cpu live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	if got, want := mh.GetGuestMetrics("agent:agent-live", "netin", lookback)[0].Value, mock.SampleMetric("agent", "agent-live", "netin", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected agent netin live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+	const k8sMetricID = "k8s:k8s-live:pod:production/api-live"
+	if got, want := mh.GetGuestMetrics(k8sMetricID, "memory", lookback)[0].Value, mock.SampleMetric("k8s", k8sMetricID, "memory", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected k8s pod memory live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+}
+
+func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForPlatformFixtures(t *testing.T) {
+	ts := time.Date(2026, time.April, 1, 14, 37, 0, 0, time.UTC)
+
+	graph := mock.FixtureGraph{
+		PlatformFixtures: mock.PlatformFixtures{
+			TrueNAS: truenas.DefaultFixtures(),
+			VMware:  vmware.DefaultFixtures(),
+		},
+	}
+
+	mh := NewMetricsHistory(256, 24*time.Hour)
+	recordMockStateToMetricsHistory(mh, nil, graph, ts)
+
+	const lookback = 24 * time.Hour
+
+	trueNASHost := strings.TrimSpace(graph.PlatformFixtures.TrueNAS.System.Hostname)
+	if trueNASHost == "" {
+		t.Fatal("expected TrueNAS fixture host")
+	}
+	if got, want := mh.GetGuestMetrics("agent:"+trueNASHost, "cpu", lookback)[0].Value, mock.SampleMetric("agent", trueNASHost, "cpu", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected TrueNAS host cpu live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+
+	if len(graph.PlatformFixtures.TrueNAS.Pools) == 0 {
+		t.Fatal("expected TrueNAS pool fixtures")
+	}
+	trueNASPoolID := "pool:" + graph.PlatformFixtures.TrueNAS.Pools[0].Name
+	trueNASPoolMetrics := mh.GetAllStorageMetrics(trueNASPoolID, lookback)
+	if got, want := trueNASPoolMetrics["usage"][0].Value, mock.SampleMetric("storage", trueNASPoolID, "usage", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected TrueNAS pool usage live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+
+	if len(graph.PlatformFixtures.TrueNAS.Apps) == 0 {
+		t.Fatal("expected TrueNAS app fixtures")
+	}
+	trueNASAppID := strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].ID)
+	if trueNASAppID == "" {
+		trueNASAppID = strings.TrimSpace(graph.PlatformFixtures.TrueNAS.Apps[0].Name)
+	}
+	if trueNASAppID == "" {
+		t.Fatal("expected TrueNAS app identifier")
+	}
+	if got, want := mh.GetGuestMetrics("docker:"+trueNASAppID, "netin", lookback)[0].Value, mock.SampleMetric("dockerContainer", trueNASAppID, "netin", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected TrueNAS app netin live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+
+	if len(graph.PlatformFixtures.VMware.Hosts) == 0 || len(graph.PlatformFixtures.VMware.Datastores) == 0 {
+		t.Fatal("expected VMware host and datastore fixtures")
+	}
+	vmwareHostID := vmware.SourceID(
+		graph.PlatformFixtures.VMware.ConnectionID,
+		"host",
+		graph.PlatformFixtures.VMware.Hosts[0].Host,
+	)
+	if got, want := mh.GetGuestMetrics("agent:"+vmwareHostID, "memory", lookback)[0].Value, mock.SampleMetric("agent", vmwareHostID, "memory", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected VMware host memory live tick to use canonical metric model: got=%f want=%f", got, want)
+	}
+
+	vmwareDatastoreID := vmware.SourceID(
+		graph.PlatformFixtures.VMware.ConnectionID,
+		"datastore",
+		graph.PlatformFixtures.VMware.Datastores[0].Datastore,
+	)
+	vmwareDatastoreMetrics := mh.GetAllStorageMetrics(vmwareDatastoreID, lookback)
+	if got, want := vmwareDatastoreMetrics["usage"][0].Value, mock.SampleMetric("storage", vmwareDatastoreID, "usage", ts); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected VMware datastore usage live tick to use canonical metric model: got=%f want=%f", got, want)
 	}
 }

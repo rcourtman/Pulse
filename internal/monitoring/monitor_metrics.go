@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
@@ -34,6 +35,8 @@ const (
 	shortRangeCoverageRatioDen = 4
 	shortRangeCoverageMaxSlack = 2 * time.Minute
 )
+
+var storageChartMetricTypes = []string{"usage", "used", "avail", "total"}
 
 // MonitorGuestMetricHistoryProvider optionally exposes source-native guest
 // metric history through the canonical chart boundary when local Pulse history
@@ -77,8 +80,15 @@ func (m *Monitor) GetGuestMetrics(guestID string, duration time.Duration) map[st
 // sqlResourceType/sqlResourceID are the type/id used in the SQLite store
 // (e.g. "dockerContainer"/"abc123").
 func (m *Monitor) GetGuestMetricsForChart(inMemoryKey, sqlResourceType, sqlResourceID string, duration time.Duration) map[string][]MetricPoint {
+	if mock.IsMockEnabled() {
+		if synthetic := mockGuestMetricsForChart(sqlResourceType, sqlResourceID, duration); len(synthetic) > 0 {
+			return synthetic
+		}
+		return m.GetGuestMetrics(inMemoryKey, duration)
+	}
+
 	inMemoryResult := m.GetGuestMetrics(inMemoryKey, duration)
-	if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemoryResult, duration) {
+	if hasSufficientChartMapCoverage(inMemoryResult, duration) {
 		return inMemoryResult
 	}
 
@@ -104,11 +114,15 @@ func (m *Monitor) GetNodeMetrics(nodeID string, metricType string, duration time
 // GetNodeMetricsForChart returns node metrics for a single metric type,
 // falling back to SQLite + LTTB for longer ranges.
 func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration time.Duration) []MetricPoint {
+	if mock.IsMockEnabled() {
+		return mockNodeMetricsForChart(nodeID, []string{metricType}, duration)[metricType]
+	}
+
 	inMemoryPoints := m.metricsHistory.GetNodeMetrics(nodeID, metricType, duration)
 	if m.metricsStore == nil {
 		return inMemoryPoints
 	}
-	if duration <= inMemoryChartThreshold && hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
+	if hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
 		return inMemoryPoints
 	}
 
@@ -116,7 +130,7 @@ func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration tim
 	if !ok {
 		return inMemoryPoints
 	}
-	if duration <= inMemoryChartThreshold && chartSeriesCoverageSpan(downsampled) <= chartSeriesCoverageSpan(inMemoryPoints) {
+	if chartSeriesCoverageSpan(downsampled) <= chartSeriesCoverageSpan(inMemoryPoints) {
 		return inMemoryPoints
 	}
 	return downsampled
@@ -124,28 +138,34 @@ func (m *Monitor) GetNodeMetricsForChart(nodeID, metricType string, duration tim
 
 // GetStorageMetrics returns historical metrics for storage
 func (m *Monitor) GetStorageMetrics(storageID string, duration time.Duration) map[string][]MetricPoint {
+	if m == nil || m.metricsHistory == nil {
+		return map[string][]MetricPoint{}
+	}
 	return m.metricsHistory.GetAllStorageMetrics(storageID, duration)
 }
 
 // GetStorageMetricsForChart returns storage metrics, falling back to SQLite +
 // LTTB for longer ranges.
 func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Duration) map[string][]MetricPoint {
-	inMemoryResult := m.metricsHistory.GetAllStorageMetrics(storageID, duration)
+	inMemoryResult := map[string][]MetricPoint{}
+	if m != nil && m.metricsHistory != nil {
+		inMemoryResult = m.metricsHistory.GetAllStorageMetrics(storageID, duration)
+	}
+	if mock.IsMockEnabled() {
+		return m.mockStorageMetricsForChart(storageID, duration, inMemoryResult)
+	}
 	if m.metricsStore == nil {
 		return inMemoryResult
 	}
-	if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemoryResult, duration) {
+	if hasSufficientChartMapCoverageForMetrics(inMemoryResult, duration, storageChartMetricTypes) {
 		return inMemoryResult
 	}
 
-	converted, ok := m.queryStoreMetricMapWithGapFill("storage", storageID, duration)
-	if !ok {
-		return inMemoryResult
+	best := cloneMetricPointMap(inMemoryResult)
+	if converted, ok := m.queryStoreMetricMapWithGapFill("storage", storageID, duration); ok {
+		best = mergeMetricHistory(best, converted, duration)
 	}
-	if duration <= inMemoryChartThreshold && chartMapCoverageSpan(converted) <= chartMapCoverageSpan(inMemoryResult) {
-		return inMemoryResult
-	}
-	return converted
+	return best
 }
 
 // DiskChartEntry holds temperature chart data and display metadata for a
@@ -167,6 +187,10 @@ type DiskChartEntry struct {
 func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[string]DiskChartEntry {
 	if m == nil {
 		return nil
+	}
+
+	if mock.IsMockEnabled() {
+		return m.mockPhysicalDiskTemperatureCharts(duration)
 	}
 
 	readState := m.GetUnifiedReadStateOrSnapshot()
@@ -222,23 +246,30 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 	for i, d := range disks {
 		resourceIDs[i] = d.resourceID
 	}
+	inMemoryHistory := make(map[string][]MetricPoint, len(disks))
+	if m.metricsHistory != nil {
+		for _, d := range disks {
+			inMemoryHistory[d.resourceID] = m.metricsHistory.GetDiskMetrics(d.resourceID, "smart_temp", duration)
+		}
+	}
 	batchMetrics := m.queryStoreBatchMetricMapWithGapFill("disk", resourceIDs, duration)
 	nativeHistory := m.nativePhysicalDiskTemperatureHistory(duration)
 
 	// Phase 3: Build result entries.
 	result := make(map[string]DiskChartEntry, len(disks))
 	for _, d := range disks {
-		var tempPoints []MetricPoint
+		tempPoints := cloneMetricSeries(inMemoryHistory[d.resourceID])
 		if resMetrics, ok := batchMetrics[d.resourceID]; ok {
 			if pts, found := resMetrics["smart_temp"]; found {
-				tempPoints = pts
+				if shouldPreferMetricSeries(tempPoints, pts, duration) {
+					tempPoints = cloneMetricSeries(pts)
+				}
 			}
 		}
 		if nativePoints, ok := nativeHistory[d.resourceID]; ok {
 			nativePoints = lttb(nativePoints, chartDownsampleTarget)
-			if chartSeriesCoverageSpan(nativePoints) > chartSeriesCoverageSpan(tempPoints) &&
-				(!hasSufficientChartSeriesCoverage(tempPoints, duration) || len(tempPoints) < 2) {
-				tempPoints = nativePoints
+			if shouldPreferMetricSeries(tempPoints, nativePoints, duration) {
+				tempPoints = cloneMetricSeries(nativePoints)
 			}
 		}
 
@@ -265,6 +296,10 @@ func (m *Monitor) GetPhysicalDiskTemperatureCharts(duration time.Duration) map[s
 }
 
 func (m *Monitor) nativePhysicalDiskTemperatureHistory(duration time.Duration) map[string][]MetricPoint {
+	if mock.IsMockEnabled() {
+		return nil
+	}
+
 	providers := m.supplementalProviderSnapshot()
 	if len(providers) == 0 {
 		return nil
@@ -383,6 +418,18 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 		return nil
 	}
 
+	if mock.IsMockEnabled() {
+		result := make(map[string]map[string][]MetricPoint, len(requests))
+		for _, req := range requests {
+			if synthetic := mockGuestMetricsForChart(sqlResourceType, req.SQLResourceID, duration); len(synthetic) > 0 {
+				result[req.SQLResourceID] = synthetic
+				continue
+			}
+			result[req.SQLResourceID] = m.GetGuestMetrics(req.InMemoryKey, duration)
+		}
+		return result
+	}
+
 	result := make(map[string]map[string][]MetricPoint, len(requests))
 
 	// Phase 1: Check in-memory for all guests and identify which need fallback.
@@ -390,7 +437,7 @@ func (m *Monitor) GetGuestMetricsForChartBatch(
 	for _, req := range requests {
 		inMemory := m.GetGuestMetrics(req.InMemoryKey, duration)
 		result[req.SQLResourceID] = inMemory
-		if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemory, duration) {
+		if hasSufficientChartMapCoverage(inMemory, duration) {
 			result[req.SQLResourceID] = inMemory
 			continue
 		}
@@ -452,6 +499,14 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 		return nil
 	}
 
+	if mock.IsMockEnabled() {
+		result := make(map[string]map[string][]MetricPoint, len(nodeIDs))
+		for _, nodeID := range nodeIDs {
+			result[nodeID] = mockNodeMetricsForChart(nodeID, metricTypes, duration)
+		}
+		return result
+	}
+
 	result := make(map[string]map[string][]MetricPoint, len(nodeIDs))
 
 	// Phase 1: Check in-memory for all nodes and identify which need store.
@@ -462,7 +517,7 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 		for _, mt := range metricTypes {
 			points := m.metricsHistory.GetNodeMetrics(nid, mt, duration)
 			nodeResult[mt] = points
-			if m.metricsStore != nil && (duration > inMemoryChartThreshold || !hasSufficientChartSeriesCoverage(points, duration)) {
+			if m.metricsStore != nil && !hasSufficientChartSeriesCoverage(points, duration) {
 				allSufficient = false
 			}
 		}
@@ -491,7 +546,7 @@ func (m *Monitor) GetNodeMetricsForChartBatch(
 				continue
 			}
 			inMemory := result[nid][mt]
-			if duration <= inMemoryChartThreshold && chartSeriesCoverageSpan(storePoints) <= chartSeriesCoverageSpan(inMemory) {
+			if chartSeriesCoverageSpan(storePoints) <= chartSeriesCoverageSpan(inMemory) {
 				continue
 			}
 			result[nid][mt] = storePoints
@@ -514,15 +569,29 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 
 	result := make(map[string]map[string][]MetricPoint, len(storageIDs))
 
+	if mock.IsMockEnabled() {
+		for _, sid := range storageIDs {
+			inMemory := map[string][]MetricPoint{}
+			if m.metricsHistory != nil {
+				inMemory = m.metricsHistory.GetAllStorageMetrics(sid, duration)
+			}
+			result[sid] = m.mockStorageMetricsForChart(sid, duration, inMemory)
+		}
+		return result
+	}
+
 	// Phase 1: Check in-memory for all storage pools.
 	var needStore []string
 	for _, sid := range storageIDs {
-		inMemory := m.metricsHistory.GetAllStorageMetrics(sid, duration)
+		inMemory := map[string][]MetricPoint{}
+		if m.metricsHistory != nil {
+			inMemory = m.metricsHistory.GetAllStorageMetrics(sid, duration)
+		}
 		if m.metricsStore == nil {
 			result[sid] = inMemory
 			continue
 		}
-		if duration <= inMemoryChartThreshold && hasSufficientChartMapCoverage(inMemory, duration) {
+		if hasSufficientChartMapCoverageForMetrics(inMemory, duration, storageChartMetricTypes) {
 			result[sid] = inMemory
 			continue
 		}
@@ -543,11 +612,7 @@ func (m *Monitor) GetStorageMetricsForChartBatch(
 		if !ok {
 			continue
 		}
-		inMemory := result[id]
-		if duration <= inMemoryChartThreshold && chartMapCoverageSpan(storeData) <= chartMapCoverageSpan(inMemory) {
-			continue
-		}
-		result[id] = storeData
+		result[id] = mergeMetricHistory(result[id], storeData, duration)
 	}
 
 	return result
@@ -714,13 +779,17 @@ func cloneMetricPointMap(metrics map[string][]MetricPoint) map[string][]MetricPo
 }
 
 func mergeGuestMetricHistory(base, candidate map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
+	return mergeMetricHistory(base, candidate, duration)
+}
+
+func mergeMetricHistory(base, candidate map[string][]MetricPoint, duration time.Duration) map[string][]MetricPoint {
 	if len(candidate) == 0 {
 		return cloneMetricPointMap(base)
 	}
 
 	merged := cloneMetricPointMap(base)
 	for metricType, candidateSeries := range candidate {
-		if !shouldPreferGuestMetricSeries(merged[metricType], candidateSeries, duration) {
+		if !shouldPreferMetricSeries(merged[metricType], candidateSeries, duration) {
 			continue
 		}
 		merged[metricType] = cloneMetricSeries(candidateSeries)
@@ -728,7 +797,7 @@ func mergeGuestMetricHistory(base, candidate map[string][]MetricPoint, duration 
 	return merged
 }
 
-func shouldPreferGuestMetricSeries(current, candidate []MetricPoint, duration time.Duration) bool {
+func shouldPreferMetricSeries(current, candidate []MetricPoint, duration time.Duration) bool {
 	if len(candidate) == 0 {
 		return false
 	}
@@ -738,15 +807,13 @@ func shouldPreferGuestMetricSeries(current, candidate []MetricPoint, duration ti
 
 	candidateSpan := chartSeriesCoverageSpan(candidate)
 	currentSpan := chartSeriesCoverageSpan(current)
-	if duration <= inMemoryChartThreshold {
-		currentSufficient := hasSufficientChartSeriesCoverage(current, duration)
-		candidateSufficient := hasSufficientChartSeriesCoverage(candidate, duration)
-		switch {
-		case currentSufficient && !candidateSufficient:
-			return false
-		case !currentSufficient && candidateSufficient:
-			return true
-		}
+	currentSufficient := hasSufficientChartSeriesCoverage(current, duration)
+	candidateSufficient := hasSufficientChartSeriesCoverage(candidate, duration)
+	switch {
+	case currentSufficient && !candidateSufficient:
+		return false
+	case !currentSufficient && candidateSufficient:
+		return true
 	}
 
 	if candidateSpan > currentSpan {
@@ -843,4 +910,16 @@ func hasSufficientChartSeriesCoverage(points []MetricPoint, duration time.Durati
 
 func hasSufficientChartMapCoverage(metrics map[string][]MetricPoint, duration time.Duration) bool {
 	return chartMapCoverageSpan(metrics) >= chartCoverageRequiredSpan(duration)
+}
+
+func hasSufficientChartMapCoverageForMetrics(metrics map[string][]MetricPoint, duration time.Duration, metricTypes []string) bool {
+	if len(metricTypes) == 0 {
+		return hasSufficientChartMapCoverage(metrics, duration)
+	}
+	for _, metricType := range metricTypes {
+		if !hasSufficientChartSeriesCoverage(metrics[metricType], duration) {
+			return false
+		}
+	}
+	return true
 }

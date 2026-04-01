@@ -638,9 +638,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	m.state.UpdateVMsForInstance(instanceName, allVMs)
 
 	// Record guest metrics history for running VMs (enables sparkline/trends view)
-	now := time.Now()
-	for _, vm := range allVMs {
-		if vm.Status == "running" {
+	if !shouldSkipNativeMockStateMetricWrites() {
+		now := time.Now()
+		for _, vm := range allVMs {
+			if vm.Status != "running" {
+				continue
+			}
 			m.metricsHistory.AddGuestMetric(vm.ID, "cpu", vm.CPU*100, now)
 			m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)
 			if vm.Disk.Usage >= 0 {

@@ -723,6 +723,14 @@ func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 			},
 		},
 		{
+			file: "mock_chart_history.go",
+			snippets: []string{
+				"func mockCanonicalMetricSeries(resourceType, resourceID, metricType string, timestamps []time.Time) []MetricPoint {",
+				"values := canonicalMetricSeries(resourceType, resourceID, metricType, timestamps)",
+				"return lttb(points, chartDownsampleTarget)",
+			},
+		},
+		{
 			file: "mock_metrics_history.go",
 			snippets: []string{
 				`cpu := mock.SampleMetric("k8s", metricID, "cpu", ts)`,

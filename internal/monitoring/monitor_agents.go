@@ -1274,94 +1274,90 @@ func (m *Monitor) ApplyDockerReport(report agentsdocker.Report, tokenRecord *con
 		m.alertManager.CheckDockerHost(host)
 	}
 
-	// Record Docker HOST metrics for sparkline charts
-	now := time.Now()
-	hostMetricKey := fmt.Sprintf("dockerHost:%s", host.ID)
+	// Record Docker HOST and CONTAINER metrics for sparkline charts unless the
+	// canonical mock sampler owns history continuity.
+	if !shouldSkipNativeMockStateMetricWrites() {
+		now := time.Now()
+		hostMetricKey := fmt.Sprintf("dockerHost:%s", host.ID)
 
-	// Record host CPU usage
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-
-	// Record host Memory usage
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-
-	// Record host Disk usage (use first disk or calculate total)
-	var hostDiskPercent float64
-	if len(host.Disks) > 0 {
-		hostDiskPercent = host.Disks[0].Usage
-	}
-	m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
-
-	// Also write to persistent SQLite store
-	if m.metricsStore != nil {
-		m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)
-		m.metricsStore.Write("dockerHost", host.ID, "memory", host.Memory.Usage, now)
-		m.metricsStore.Write("dockerHost", host.ID, "disk", hostDiskPercent, now)
-	}
-
-	// Record Docker CONTAINER metrics for sparkline charts
-	// Use a prefixed key (docker:containerID) to distinguish from Proxmox containers
-	for _, container := range containers {
-		if container.ID == "" {
-			continue
-		}
-		// Build a unique metric key for Docker containers
-		metricKey := fmt.Sprintf("docker:%s", container.ID)
-
-		// Record CPU (already a percentage 0-100)
-		m.metricsHistory.AddGuestMetric(metricKey, "cpu", container.CPUPercent, now)
-
-		// Record Memory (already a percentage 0-100)
-		m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
-
-		// Record Disk usage as percentage of writable layer vs root filesystem
-		var diskPercent float64
-		if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
-			diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
-			if diskPercent > 100 {
-				diskPercent = 100
-			}
-		}
-		m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
-
-		var diskReadRate float64
-		var diskWriteRate float64
-		if container.BlockIO != nil {
-			if container.BlockIO.ReadRateBytesPerSecond != nil {
-				diskReadRate = *container.BlockIO.ReadRateBytesPerSecond
-			}
-			if container.BlockIO.WriteRateBytesPerSecond != nil {
-				diskWriteRate = *container.BlockIO.WriteRateBytesPerSecond
-			}
-		}
-		if container.NetInRate >= 0 {
-			m.metricsHistory.AddGuestMetric(metricKey, "netin", container.NetInRate, now)
-		}
-		if container.NetOutRate >= 0 {
-			m.metricsHistory.AddGuestMetric(metricKey, "netout", container.NetOutRate, now)
-		}
-		if diskReadRate >= 0 {
-			m.metricsHistory.AddGuestMetric(metricKey, "diskread", diskReadRate, now)
-		}
-		if diskWriteRate >= 0 {
-			m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", diskWriteRate, now)
+		// Record host Disk usage (use first disk or calculate total)
+		var hostDiskPercent float64
+		if len(host.Disks) > 0 {
+			hostDiskPercent = host.Disks[0].Usage
 		}
 
-		// Also write to persistent SQLite store for long-term storage
+		if m.metricsHistory != nil {
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+		}
+
 		if m.metricsStore != nil {
-			m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
-			m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
-			m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
-			if container.NetInRate >= 0 {
-				m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
+			m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)
+			m.metricsStore.Write("dockerHost", host.ID, "memory", host.Memory.Usage, now)
+			m.metricsStore.Write("dockerHost", host.ID, "disk", hostDiskPercent, now)
+		}
+
+		// Use a prefixed key (docker:containerID) to distinguish from Proxmox containers.
+		for _, container := range containers {
+			if container.ID == "" {
+				continue
 			}
-			if container.NetOutRate >= 0 {
-				m.metricsStore.Write("dockerContainer", container.ID, "netout", container.NetOutRate, now)
+			metricKey := fmt.Sprintf("docker:%s", container.ID)
+
+			var diskPercent float64
+			if container.RootFilesystemBytes > 0 && container.WritableLayerBytes > 0 {
+				diskPercent = float64(container.WritableLayerBytes) / float64(container.RootFilesystemBytes) * 100
+				if diskPercent > 100 {
+					diskPercent = 100
+				}
 			}
-			if diskReadRate >= 0 {
-				m.metricsStore.Write("dockerContainer", container.ID, "diskread", diskReadRate, now)
+
+			var diskReadRate float64
+			var diskWriteRate float64
+			if container.BlockIO != nil {
+				if container.BlockIO.ReadRateBytesPerSecond != nil {
+					diskReadRate = *container.BlockIO.ReadRateBytesPerSecond
+				}
+				if container.BlockIO.WriteRateBytesPerSecond != nil {
+					diskWriteRate = *container.BlockIO.WriteRateBytesPerSecond
+				}
 			}
-			if diskWriteRate >= 0 {
-				m.metricsStore.Write("dockerContainer", container.ID, "diskwrite", diskWriteRate, now)
+
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddGuestMetric(metricKey, "cpu", container.CPUPercent, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "memory", container.MemoryPercent, now)
+				m.metricsHistory.AddGuestMetric(metricKey, "disk", diskPercent, now)
+				if container.NetInRate >= 0 {
+					m.metricsHistory.AddGuestMetric(metricKey, "netin", container.NetInRate, now)
+				}
+				if container.NetOutRate >= 0 {
+					m.metricsHistory.AddGuestMetric(metricKey, "netout", container.NetOutRate, now)
+				}
+				if diskReadRate >= 0 {
+					m.metricsHistory.AddGuestMetric(metricKey, "diskread", diskReadRate, now)
+				}
+				if diskWriteRate >= 0 {
+					m.metricsHistory.AddGuestMetric(metricKey, "diskwrite", diskWriteRate, now)
+				}
+			}
+
+			if m.metricsStore != nil {
+				m.metricsStore.Write("dockerContainer", container.ID, "cpu", container.CPUPercent, now)
+				m.metricsStore.Write("dockerContainer", container.ID, "memory", container.MemoryPercent, now)
+				m.metricsStore.Write("dockerContainer", container.ID, "disk", diskPercent, now)
+				if container.NetInRate >= 0 {
+					m.metricsStore.Write("dockerContainer", container.ID, "netin", container.NetInRate, now)
+				}
+				if container.NetOutRate >= 0 {
+					m.metricsStore.Write("dockerContainer", container.ID, "netout", container.NetOutRate, now)
+				}
+				if diskReadRate >= 0 {
+					m.metricsStore.Write("dockerContainer", container.ID, "diskread", diskReadRate, now)
+				}
+				if diskWriteRate >= 0 {
+					m.metricsStore.Write("dockerContainer", container.ID, "diskwrite", diskWriteRate, now)
+				}
 			}
 		}
 	}
@@ -1828,41 +1824,43 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		hostDiskPercent = host.Disks[0].Usage
 	}
 
-	if m.metricsHistory != nil {
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
-		m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
+	if !shouldSkipNativeMockStateMetricWrites() {
+		if m.metricsHistory != nil {
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "cpu", host.CPUUsage, now)
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "memory", host.Memory.Usage, now)
+			m.metricsHistory.AddGuestMetric(hostMetricKey, "disk", hostDiskPercent, now)
 
-		if netInRate >= 0 {
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", netInRate, now)
+			if netInRate >= 0 {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "netin", netInRate, now)
+			}
+			if netOutRate >= 0 {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", netOutRate, now)
+			}
+			if diskReadRate >= 0 {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "diskread", diskReadRate, now)
+			}
+			if diskWriteRate >= 0 {
+				m.metricsHistory.AddGuestMetric(hostMetricKey, "diskwrite", diskWriteRate, now)
+			}
 		}
-		if netOutRate >= 0 {
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "netout", netOutRate, now)
-		}
-		if diskReadRate >= 0 {
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "diskread", diskReadRate, now)
-		}
-		if diskWriteRate >= 0 {
-			m.metricsHistory.AddGuestMetric(hostMetricKey, "diskwrite", diskWriteRate, now)
-		}
-	}
 
-	if m.metricsStore != nil {
-		m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
-		m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
-		m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
-		m.writeHostSMARTMetrics(host, now)
-		if netInRate >= 0 {
-			m.metricsStore.Write("agent", host.ID, "netin", netInRate, now)
-		}
-		if netOutRate >= 0 {
-			m.metricsStore.Write("agent", host.ID, "netout", netOutRate, now)
-		}
-		if diskReadRate >= 0 {
-			m.metricsStore.Write("agent", host.ID, "diskread", diskReadRate, now)
-		}
-		if diskWriteRate >= 0 {
-			m.metricsStore.Write("agent", host.ID, "diskwrite", diskWriteRate, now)
+		if m.metricsStore != nil {
+			m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
+			m.metricsStore.Write("agent", host.ID, "memory", host.Memory.Usage, now)
+			m.metricsStore.Write("agent", host.ID, "disk", hostDiskPercent, now)
+			m.writeHostSMARTMetrics(host, now)
+			if netInRate >= 0 {
+				m.metricsStore.Write("agent", host.ID, "netin", netInRate, now)
+			}
+			if netOutRate >= 0 {
+				m.metricsStore.Write("agent", host.ID, "netout", netOutRate, now)
+			}
+			if diskReadRate >= 0 {
+				m.metricsStore.Write("agent", host.ID, "diskread", diskReadRate, now)
+			}
+			if diskWriteRate >= 0 {
+				m.metricsStore.Write("agent", host.ID, "diskwrite", diskWriteRate, now)
+			}
 		}
 	}
 
@@ -1873,6 +1871,10 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 }
 
 func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
+	if shouldSkipNativeMockStateMetricWrites() || m.metricsStore == nil {
+		return
+	}
+
 	for _, disk := range host.Sensors.SMART {
 		resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)
 		if resourceID == "" {

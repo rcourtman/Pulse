@@ -296,9 +296,12 @@ func (m *Monitor) pollContainersWithNodes(ctx context.Context, instanceName stri
 	m.state.UpdateContainersForInstance(instanceName, allContainers)
 
 	// Record guest metrics history for running containers (enables sparkline/trends view)
-	now := time.Now()
-	for _, ct := range allContainers {
-		if ct.Status == "running" {
+	if !shouldSkipNativeMockStateMetricWrites() {
+		now := time.Now()
+		for _, ct := range allContainers {
+			if ct.Status != "running" {
+				continue
+			}
 			m.metricsHistory.AddGuestMetric(ct.ID, "cpu", ct.CPU*100, now)
 			m.metricsHistory.AddGuestMetric(ct.ID, "memory", ct.Memory.Usage, now)
 			if ct.Disk.Usage >= 0 {

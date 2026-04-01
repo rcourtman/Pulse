@@ -47,12 +47,12 @@ const mockKeepRealPollingEnv = "PULSE_MOCK_KEEP_REAL_POLLING"
 func keepRealPollingInMockMode() bool {
 	raw := strings.TrimSpace(strings.ToLower(os.Getenv(mockKeepRealPollingEnv)))
 	switch raw {
-	case "", "1", "true", "yes", "on":
+	case "1", "true", "yes", "on":
 		return true
-	case "0", "false", "no", "off":
+	case "", "0", "false", "no", "off":
 		return false
 	default:
-		return true
+		return false
 	}
 }
 
@@ -691,6 +691,10 @@ func hostsFromReadState(readState unifiedresources.ReadState) []models.Host {
 // writeSMARTMetrics writes SMART temperature history to the in-memory chart
 // buffer and persists SMART attributes when the metrics store is enabled.
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
+	if shouldSkipNativeMockStateMetricWrites() {
+		return
+	}
+
 	resourceID := unifiedresources.PhysicalDiskMetricID(disk)
 	if resourceID == "" {
 		return
@@ -1557,11 +1561,11 @@ func New(cfg *config.Config) (*Monitor, error) {
 		log.Warn().Err(err).Msg("failed to load webhook configuration")
 	}
 
-	// In mock mode we keep real polling enabled by default so production metrics
-	// continue to accumulate while the UI renders mock data.
+	// In mock mode the canonical sampler owns demo chart history by default.
+	// Support-only hybrid runs can opt back into real client initialization.
 	mockEnabled := mock.IsMockEnabled()
 	if mockEnabled && !keepRealPollingInMockMode() {
-		log.Info().Msg("mock mode enabled - real client initialization disabled by env override")
+		log.Info().Msg("mock mode enabled - real client initialization disabled")
 	} else {
 		m.initPVEClients(cfg)
 		m.initPBSClients(cfg)
@@ -4754,14 +4758,15 @@ func shouldSkipMockOwnedUnifiedMetricSync(resource unifiedresources.Resource) bo
 		return false
 	}
 
-	for _, source := range resource.Sources {
-		switch source {
-		case unifiedresources.SourceTrueNAS, unifiedresources.SourceVMware:
-			return true
-		}
-	}
+	// In mock mode the canonical mock sampler owns chart/history continuity for
+	// the entire demo estate. Unified-resource sync must not append a second
+	// live timeline on top of seeded mock history for any resource class.
+	_ = resource
+	return true
+}
 
-	return false
+func shouldSkipNativeMockStateMetricWrites() bool {
+	return mock.IsMockEnabled()
 }
 
 // getUnifiedResourcesForBroadcast retrieves all resources from the store.

@@ -289,6 +289,35 @@ func TestSetEnabledUsesCurrentConfigInsteadOfReloadingEnv(t *testing.T) {
 	}
 }
 
+func TestSetMockConfigEquivalentEnabledConfigDoesNotRebuildGraph(t *testing.T) {
+	resetMockIntegrationState(t)
+
+	cfg := DefaultConfig
+	cfg.NodeCount = 3
+	cfg.DockerHostCount = 2
+	cfg.DockerContainersPerHost = 5
+
+	dataMu.Lock()
+	mockConfig = cfg
+	mockGraph = buildFixtureGraph(cfg, time.Unix(1700000000, 0).UTC())
+	enabled.Store(true)
+	dataMu.Unlock()
+
+	before := CurrentFixtureGraph()
+	SetMockConfig(cfg)
+	after := CurrentFixtureGraph()
+
+	if !after.State.LastUpdate.Equal(before.State.LastUpdate) {
+		t.Fatalf("expected equivalent config update to preserve graph freshness, before=%s after=%s", before.State.LastUpdate, after.State.LastUpdate)
+	}
+	if len(after.State.DockerHosts) != len(before.State.DockerHosts) {
+		t.Fatalf("expected equivalent config update to preserve docker host count, before=%d after=%d", len(before.State.DockerHosts), len(after.State.DockerHosts))
+	}
+	if len(after.State.PhysicalDisks) != len(before.State.PhysicalDisks) {
+		t.Fatalf("expected equivalent config update to preserve physical disk count, before=%d after=%d", len(before.State.PhysicalDisks), len(after.State.PhysicalDisks))
+	}
+}
+
 func TestUpdateMetricsGuardAndTimestamp(t *testing.T) {
 	resetMockIntegrationState(t)
 

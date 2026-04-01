@@ -7,6 +7,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentsdocker "github.com/rcourtman/pulse-go-rewrite/pkg/agents/docker"
 )
@@ -189,6 +190,73 @@ func TestApplyDockerReportUsesTokenToDisambiguateAgentIDCollisions(t *testing.T)
 	}
 	if updatedHostOne.ID != hostOne.ID {
 		t.Fatalf("expected hostOne to retain identifier %q, got %q", hostOne.ID, updatedHostOne.ID)
+	}
+}
+
+func TestApplyDockerReportSkipsMetricsHistoryInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	monitor := newTestMonitor(t)
+	report := agentsdocker.Report{
+		Agent: agentsdocker.AgentInfo{
+			ID:              "docker-agent-1",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentsdocker.HostInfo{
+			Hostname:         "docker-demo",
+			Name:             "Docker Demo",
+			MachineID:        "docker-machine",
+			DockerVersion:    "26.0.0",
+			TotalCPU:         4,
+			TotalMemoryBytes: 8 << 30,
+			UptimeSeconds:    120,
+			CPUUsagePercent:  37,
+			Memory: agentsdocker.MemoryMetric{
+				TotalBytes: 8 << 30,
+				UsedBytes:  4 << 30,
+				FreeBytes:  4 << 30,
+				Usage:      50,
+			},
+			Disks: []agentsdocker.Disk{
+				{
+					Device:     "/dev/vda1",
+					Mountpoint: "/",
+					TotalBytes: 1000,
+					UsedBytes:  500,
+					FreeBytes:  500,
+					Usage:      50,
+				},
+			},
+		},
+		Containers: []agentsdocker.Container{
+			{
+				ID:                  "docker-cont-1",
+				Name:                "api",
+				CPUPercent:          48,
+				MemoryPercent:       62,
+				RootFilesystemBytes: 1000,
+				WritableLayerBytes:  240,
+				NetworkRXBytes:      120,
+				NetworkTXBytes:      80,
+				BlockIO:             &agentsdocker.ContainerBlockIO{ReadBytes: 220, WriteBytes: 140},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyDockerReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyDockerReport: %v", err)
+	}
+
+	if got := monitor.metricsHistory.GetGuestMetrics("dockerHost:"+host.ID, "cpu", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip docker host metrics history, got %+v", got)
+	}
+	if got := monitor.metricsHistory.GetGuestMetrics("docker:docker-cont-1", "cpu", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip docker container metrics history, got %+v", got)
 	}
 }
 

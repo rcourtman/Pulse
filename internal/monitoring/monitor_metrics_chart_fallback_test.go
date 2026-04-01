@@ -1,9 +1,11 @@
 package monitoring
 
 import (
+	"math"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -96,6 +98,30 @@ func writeRawMetricBatch(t *testing.T, store *metrics.Store, resourceType, resou
 	store.WriteBatchSync(records)
 }
 
+func assertFollowsCanonicalMockSeries(t *testing.T, points []MetricPoint, resourceType, resourceID, metricType string) {
+	t.Helper()
+	if len(points) < 2 {
+		t.Fatalf("expected canonical mock series with at least 2 points, got %+v", points)
+	}
+
+	checkIndices := []int{0, len(points) / 2, len(points) - 1}
+	seen := map[int]struct{}{}
+	for _, idx := range checkIndices {
+		if idx < 0 || idx >= len(points) {
+			continue
+		}
+		if _, ok := seen[idx]; ok {
+			continue
+		}
+		seen[idx] = struct{}{}
+
+		want := mock.SampleMetric(resourceType, resourceID, metricType, points[idx].Timestamp)
+		if diff := math.Abs(points[idx].Value - want); diff > 1e-9 {
+			t.Fatalf("points[%d] = %+v, want canonical %.12f", idx, points[idx], want)
+		}
+	}
+}
+
 func TestGetGuestMetricsForChart_ShortRangeFallsBackToStoreWhenInMemoryCoverageShallow(t *testing.T) {
 	t.Parallel()
 
@@ -116,6 +142,34 @@ func TestGetGuestMetricsForChart_ShortRangeFallsBackToStoreWhenInMemoryCoverageS
 	result := monitor.GetGuestMetricsForChart(inMemoryKey, "agent", "host-1", duration)
 	if got, wantMin := chartMapCoverageSpan(result), 45*time.Minute; got < wantMin {
 		t.Fatalf("expected store-backed coverage >= %s, got %s", wantMin, got)
+	}
+}
+
+func TestGetGuestMetricsForChart_LongRangeUsesInMemoryWhenCoverageSufficient(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 12 * time.Hour
+
+	inMemoryKey := "agent:host-1"
+	for _, offset := range []time.Duration{-11 * time.Hour, -6 * time.Hour, -1 * time.Minute} {
+		monitor.metricsHistory.AddGuestMetric(inMemoryKey, "cpu", 17, now.Add(offset))
+	}
+
+	writeRawMetricBatch(t, monitor.metricsStore, "agent", "host-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-11 * time.Hour), Value: 91},
+		{Timestamp: now.Add(-6 * time.Hour), Value: 94},
+		{Timestamp: now.Add(-1 * time.Minute), Value: 99},
+	})
+
+	result := monitor.GetGuestMetricsForChart(inMemoryKey, "agent", "host-1", duration)
+	cpuPoints := result["cpu"]
+	if len(cpuPoints) == 0 {
+		t.Fatal("expected in-memory guest chart points")
+	}
+	if cpuPoints[0].Value != 17 {
+		t.Fatalf("expected long-range in-memory guest history to win, got first value %.2f", cpuPoints[0].Value)
 	}
 }
 
@@ -142,6 +196,32 @@ func TestGetNodeMetricsForChart_ShortRangeUsesInMemoryWhenCoverageSufficient(t *
 	}
 	if result[0].Value != 11 {
 		t.Fatalf("expected in-memory series to be preferred, got first value %.2f", result[0].Value)
+	}
+}
+
+func TestGetNodeMetricsForChart_LongRangeUsesInMemoryWhenCoverageSufficient(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 12 * time.Hour
+
+	for _, offset := range []time.Duration{-11 * time.Hour, -6 * time.Hour, -1 * time.Minute} {
+		monitor.metricsHistory.AddNodeMetric("node-1", "cpu", 13, now.Add(offset))
+	}
+
+	writeRawMetricBatch(t, monitor.metricsStore, "node", "node-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-11 * time.Hour), Value: 88},
+		{Timestamp: now.Add(-6 * time.Hour), Value: 92},
+		{Timestamp: now.Add(-1 * time.Minute), Value: 96},
+	})
+
+	result := monitor.GetNodeMetricsForChart("node-1", "cpu", duration)
+	if len(result) == 0 {
+		t.Fatal("expected in-memory node chart series")
+	}
+	if result[0].Value != 13 {
+		t.Fatalf("expected long-range in-memory node history to win, got first value %.2f", result[0].Value)
 	}
 }
 
@@ -186,6 +266,69 @@ func TestGetStorageMetricsForChart_ShortRangeFallsBackToStoreWhenInMemoryCoverag
 	result := monitor.GetStorageMetricsForChart("storage-1", duration)
 	if got, wantMin := chartMapCoverageSpan(result), 45*time.Minute; got < wantMin {
 		t.Fatalf("expected store-backed storage coverage >= %s, got %s", wantMin, got)
+	}
+}
+
+func TestGetStorageMetricsForChart_LongRangeUsesInMemoryWhenCoverageSufficient(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 12 * time.Hour
+
+	for _, offset := range []time.Duration{-11 * time.Hour, -6 * time.Hour, -1 * time.Minute} {
+		monitor.metricsHistory.AddStorageMetric("storage-1", "usage", 26, now.Add(offset))
+	}
+
+	writeRawMetricBatch(t, monitor.metricsStore, "storage", "storage-1", "usage", []MetricPoint{
+		{Timestamp: now.Add(-11 * time.Hour), Value: 71},
+		{Timestamp: now.Add(-6 * time.Hour), Value: 74},
+		{Timestamp: now.Add(-1 * time.Minute), Value: 79},
+	})
+
+	result := monitor.GetStorageMetricsForChart("storage-1", duration)
+	usagePoints := result["usage"]
+	if len(usagePoints) == 0 {
+		t.Fatal("expected in-memory storage chart points")
+	}
+	if usagePoints[0].Value != 26 {
+		t.Fatalf("expected long-range in-memory storage history to win, got first value %.2f", usagePoints[0].Value)
+	}
+}
+
+func TestGetStorageMetricsForChart_MergesStorageMetricsPerMetricType(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	for _, offset := range []time.Duration{-58 * time.Minute, -30 * time.Minute, -1 * time.Minute} {
+		monitor.metricsHistory.AddStorageMetric("storage-1", "usage", 42, now.Add(offset))
+	}
+	monitor.metricsHistory.AddStorageMetric("storage-1", "used", 420, now.Add(-2*time.Minute))
+	monitor.metricsHistory.AddStorageMetric("storage-1", "avail", 580, now.Add(-2*time.Minute))
+
+	writeRawMetricBatch(t, monitor.metricsStore, "storage", "storage-1", "used", []MetricPoint{
+		{Timestamp: now.Add(-58 * time.Minute), Value: 390},
+		{Timestamp: now.Add(-30 * time.Minute), Value: 405},
+		{Timestamp: now.Add(-1 * time.Minute), Value: 420},
+	})
+	writeRawMetricBatch(t, monitor.metricsStore, "storage", "storage-1", "avail", []MetricPoint{
+		{Timestamp: now.Add(-58 * time.Minute), Value: 610},
+		{Timestamp: now.Add(-30 * time.Minute), Value: 595},
+		{Timestamp: now.Add(-1 * time.Minute), Value: 580},
+	})
+
+	result := monitor.GetStorageMetricsForChart("storage-1", duration)
+	if len(result["usage"]) != 3 {
+		t.Fatalf("expected in-memory usage series to remain intact, got %d points", len(result["usage"]))
+	}
+	if got, wantMin := chartSeriesCoverageSpan(result["used"]), 45*time.Minute; got < wantMin {
+		t.Fatalf("expected store-backed used coverage >= %s, got %s", wantMin, got)
+	}
+	if got, wantMin := chartSeriesCoverageSpan(result["avail"]), 45*time.Minute; got < wantMin {
+		t.Fatalf("expected store-backed avail coverage >= %s, got %s", wantMin, got)
 	}
 }
 
@@ -237,6 +380,53 @@ func TestGetPhysicalDiskTemperatureCharts_UsesUnifiedReadStateDiskViews(t *testi
 	}
 }
 
+func TestGetPhysicalDiskTemperatureCharts_UsesInMemoryHistoryWithoutMetricsStore(t *testing.T) {
+	t.Parallel()
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestSnapshot(models.StateSnapshot{
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-1",
+				Node:        "node-a",
+				Instance:    "lab-a",
+				DevPath:     "/dev/nvme0n1",
+				Model:       "Samsung PM9A3",
+				Serial:      "SERIAL-DISK-1",
+				Temperature: 42,
+				LastChecked: time.Now().UTC(),
+			},
+		},
+	})
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		state:          models.NewState(),
+		resourceStore:  unifiedresources.NewMonitorAdapter(registry),
+	}
+
+	now := time.Now().UTC().Truncate(time.Second)
+	for _, sample := range []struct {
+		offset time.Duration
+		value  float64
+	}{
+		{-58 * time.Minute, 39},
+		{-30 * time.Minute, 41},
+		{-1 * time.Minute, 42},
+	} {
+		monitor.metricsHistory.AddDiskMetric("SERIAL-DISK-1", "smart_temp", sample.value, now.Add(sample.offset))
+	}
+
+	charts := monitor.GetPhysicalDiskTemperatureCharts(time.Hour)
+	entry, ok := charts["SERIAL-DISK-1"]
+	if !ok {
+		t.Fatalf("expected chart entry for canonical disk metric ID, got %#v", charts)
+	}
+	if got, wantMin := chartSeriesCoverageSpan(entry.Temperature), 45*time.Minute; got < wantMin {
+		t.Fatalf("expected in-memory disk temperature coverage >= %s, got %s", wantMin, got)
+	}
+}
+
 func TestGetPhysicalDiskTemperatureCharts_UsesNativeHistoryWhenStoreCoverageShallow(t *testing.T) {
 	t.Parallel()
 
@@ -283,6 +473,103 @@ func TestGetPhysicalDiskTemperatureCharts_UsesNativeHistoryWhenStoreCoverageShal
 	}
 	if entry.Temperature[0].Value != 29 || entry.Temperature[len(entry.Temperature)-1].Value != 34 {
 		t.Fatalf("expected native history values to win, got %+v", entry.Temperature)
+	}
+}
+
+func TestGetPhysicalDiskTemperatureCharts_SkipsNativeHistoryInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.PlatformFixtures.TrueNAS.Disks) == 0 {
+		t.Fatal("expected mock mode TrueNAS disks")
+	}
+	resourceID := trueNASDiskMetricsResourceID(graph.PlatformFixtures.TrueNAS.Disks[0])
+	if resourceID == "" {
+		t.Fatal("expected canonical TrueNAS disk metric id")
+	}
+
+	now := time.Now().UTC().Truncate(time.Minute)
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		state:          models.NewState(),
+		supplementalProviders: map[unifiedresources.DataSource]MonitorSupplementalRecordsProvider{
+			unifiedresources.SourceTrueNAS: &stubDiskTemperatureHistoryProvider{
+				history: map[string][]MetricPoint{
+					resourceID: {
+						{Timestamp: now.Add(-2 * time.Hour), Value: 29},
+						{Timestamp: now.Add(-1 * time.Hour), Value: 31},
+						{Timestamp: now, Value: 34},
+					},
+				},
+			},
+		},
+	}
+	for _, sample := range []struct {
+		offset time.Duration
+		value  float64
+	}{
+		{-4 * time.Minute, 32},
+		{-2 * time.Minute, 33},
+		{0, 34},
+	} {
+		monitor.metricsHistory.AddDiskMetric(resourceID, "smart_temp", sample.value, now.Add(sample.offset))
+	}
+
+	charts := monitor.GetPhysicalDiskTemperatureCharts(time.Hour)
+	entry, ok := charts[resourceID]
+	if !ok {
+		t.Fatalf("expected chart entry for canonical disk metric id, got %#v", charts)
+	}
+	assertFollowsCanonicalMockSeries(t, entry.Temperature, "disk", resourceID, "smart_temp")
+}
+
+func TestGetGuestMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "vm", "vm-1", "memory", []MetricPoint{
+		{Timestamp: now.Add(-3 * time.Minute), Value: 12},
+		{Timestamp: now.Add(-1 * time.Minute), Value: 91},
+	})
+
+	result := monitor.GetGuestMetricsForChart("vm-1", "vm", "vm-1", duration)
+	assertFollowsCanonicalMockSeries(t, result["memory"], "vm", "vm-1", "memory")
+}
+
+func TestGetStorageMetricsForChart_UsesCanonicalMockSamplerInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	defer mock.SetEnabled(previous)
+
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.Storage) == 0 {
+		t.Fatal("expected canonical mock storage fixtures")
+	}
+	storageID := graph.State.Storage[0].ID
+	if storageID == "" {
+		t.Fatal("expected canonical storage id")
+	}
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		state:          models.NewState(),
+	}
+
+	result := monitor.GetStorageMetricsForChart(storageID, time.Hour)
+	assertFollowsCanonicalMockSeries(t, result["usage"], "storage", storageID, "usage")
+	if len(result["used"]) == 0 || len(result["avail"]) == 0 || len(result["total"]) == 0 {
+		t.Fatalf("expected full storage capacity series, got %+v", result)
+	}
+	total := result["total"][len(result["total"])-1].Value
+	if total <= 0 {
+		t.Fatalf("expected positive storage total, got %+v", result["total"])
 	}
 }
 
@@ -447,6 +734,35 @@ func TestGetGuestMetricsForChartBatch_PrefersInMemoryForShortRanges(t *testing.T
 	}
 }
 
+func TestGetGuestMetricsForChartBatch_PrefersInMemoryWhenLongRangeCoverageIsSufficient(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 12 * time.Hour
+
+	for _, offset := range []time.Duration{-11 * time.Hour, -6 * time.Hour, -5 * time.Minute} {
+		monitor.metricsHistory.AddGuestMetric("vm-1", "cpu", 19, now.Add(offset))
+	}
+
+	writeRawMetricBatch(t, monitor.metricsStore, "vm", "vm-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-11 * time.Hour), Value: 89},
+		{Timestamp: now.Add(-6 * time.Hour), Value: 93},
+		{Timestamp: now.Add(-5 * time.Minute), Value: 98},
+	})
+
+	requests := []GuestChartRequest{{InMemoryKey: "vm-1", SQLResourceID: "vm-1"}}
+	result := monitor.GetGuestMetricsForChartBatch("vm", requests, duration)
+
+	cpuPoints := result["vm-1"]["cpu"]
+	if len(cpuPoints) == 0 {
+		t.Fatal("expected non-empty cpu series")
+	}
+	if cpuPoints[0].Value != 19 {
+		t.Fatalf("expected long-range in-memory batch series to win, got %.2f", cpuPoints[0].Value)
+	}
+}
+
 func TestGetGuestMetricsForChartBatch_UsesNativeAgentHistoryWhenStoreCoverageShallow(t *testing.T) {
 	t.Parallel()
 
@@ -581,6 +897,39 @@ func TestGetNodeMetricsForChartBatch_BatchesMultipleNodesAndMetricTypes(t *testi
 				t.Errorf("%s/%s: expected points from store, got none", nid, mt)
 			}
 		}
+	}
+}
+
+func TestGetNodeMetricsForChartBatch_PrefersInMemoryWhenLongRangeCoverageIsSufficient(t *testing.T) {
+	t.Parallel()
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 12 * time.Hour
+
+	for _, offset := range []time.Duration{-11 * time.Hour, -6 * time.Hour, -5 * time.Minute} {
+		monitor.metricsHistory.AddNodeMetric("node-1", "cpu", 14, now.Add(offset))
+		monitor.metricsHistory.AddNodeMetric("node-1", "memory", 37, now.Add(offset))
+	}
+
+	writeRawMetricBatch(t, monitor.metricsStore, "node", "node-1", "cpu", []MetricPoint{
+		{Timestamp: now.Add(-11 * time.Hour), Value: 84},
+		{Timestamp: now.Add(-6 * time.Hour), Value: 88},
+		{Timestamp: now.Add(-5 * time.Minute), Value: 94},
+	})
+	writeRawMetricBatch(t, monitor.metricsStore, "node", "node-1", "memory", []MetricPoint{
+		{Timestamp: now.Add(-11 * time.Hour), Value: 74},
+		{Timestamp: now.Add(-6 * time.Hour), Value: 78},
+		{Timestamp: now.Add(-5 * time.Minute), Value: 82},
+	})
+
+	result := monitor.GetNodeMetricsForChartBatch([]string{"node-1"}, []string{"cpu", "memory"}, duration)
+
+	if cpuPoints := result["node-1"]["cpu"]; len(cpuPoints) == 0 || cpuPoints[0].Value != 14 {
+		t.Fatalf("expected long-range in-memory node batch cpu history to win, got %+v", cpuPoints)
+	}
+	if memoryPoints := result["node-1"]["memory"]; len(memoryPoints) == 0 || memoryPoints[0].Value != 37 {
+		t.Fatalf("expected long-range in-memory node batch memory history to win, got %+v", memoryPoints)
 	}
 }
 

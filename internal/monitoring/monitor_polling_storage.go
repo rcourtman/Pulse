@@ -581,7 +581,7 @@ func (m *Monitor) pollStorageWithNodes(ctx context.Context, instanceName string,
 
 	// Record metrics and check alerts for all storage devices
 	for _, storage := range allStorage {
-		if m.metricsHistory != nil {
+		if m.metricsHistory != nil && !shouldSkipNativeMockStateMetricWrites() {
 			timestamp := time.Now()
 			m.metricsHistory.AddStorageMetric(storage.ID, "usage", storage.Usage, timestamp)
 			m.metricsHistory.AddStorageMetric(storage.ID, "used", float64(storage.Used), timestamp)

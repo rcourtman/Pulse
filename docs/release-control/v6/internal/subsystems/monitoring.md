@@ -46,6 +46,8 @@ truth for live infrastructure data.
 22. `internal/monitoring/monitor_pve_guest_builders.go`
 23. `internal/monitoring/monitor_pve_guest_poll.go`
 24. `internal/monitoring/guest_disk_stability.go`
+25. `internal/monitoring/mock_metrics_history.go`
+26. `internal/monitoring/mock_chart_history.go`
 
 ## Shared Boundaries
 
@@ -59,6 +61,9 @@ truth for live infrastructure data.
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 5. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
 6. Add or change Docker Swarm manager task/service runtime collection through `internal/dockeragent/swarm.go`
+7. Add or change mock chart synthesis, seeded history continuity, or mock-owned
+   chart fallbacks through `internal/monitoring/mock_metrics_history.go` and
+   `internal/monitoring/mock_chart_history.go`
 
 ## Forbidden Paths
 

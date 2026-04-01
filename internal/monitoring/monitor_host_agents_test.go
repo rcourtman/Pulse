@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
@@ -666,6 +667,77 @@ func TestApplyHostReportPersistsSMARTMetricsForAgentDisksWithFallbackID(t *testi
 	points = waitForStoredDiskMetric(t, store, resourceID, "smart_media_errors")
 	if len(points) == 0 || points[len(points)-1].Value != float64(mediaErrors) {
 		t.Fatalf("expected media-errors metric %.0f, got %+v", float64(mediaErrors), points)
+	}
+}
+
+func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsHistory:    NewMetricsHistory(1000, 24*time.Hour),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	report := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-demo",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "machine-demo",
+			Hostname:  "demo-host",
+			MachineID: "machine-demo",
+		},
+		Metrics: agentshost.Metrics{
+			CPUUsagePercent: 44,
+			Memory:          agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "/dev/sda",
+					Serial:      "SERIAL-DEMO-1",
+					Temperature: 39,
+				},
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	host, err := monitor.ApplyHostReport(report, nil)
+	if err != nil {
+		t.Fatalf("ApplyHostReport: %v", err)
+	}
+	store.Flush()
+
+	if got := monitor.metricsHistory.GetGuestMetrics("agent:"+host.ID, "cpu", time.Hour); len(got) != 0 {
+		t.Fatalf("expected mock mode to skip host-agent metrics history, got %+v", got)
+	}
+
+	now := time.Now().UTC()
+	points, err := store.Query("disk", "SERIAL-DEMO-1", "smart_temp", now.Add(-time.Hour), now.Add(time.Hour), 60)
+	if err != nil {
+		t.Fatalf("Query smart_temp: %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("expected mock mode to skip SMART metric persistence, got %+v", points)
 	}
 }
 

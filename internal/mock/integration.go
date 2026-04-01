@@ -414,26 +414,33 @@ func SetMockConfig(cfg MockConfig) {
 		log.Warn().Float64("provided", cfg.StoppedPercent).Float64("applied", normalized.StoppedPercent).Msg("Normalized invalid mock StoppedPercent")
 	}
 
+	var configChanged bool
 	dataMu.Lock()
+	configChanged = !mockConfigsEqual(mockConfig, normalized)
 	mockConfig = normalized
-	if enabled.Load() {
+	if configChanged && enabled.Load() {
 		mockGraph = buildFixtureGraph(normalized, time.Now())
 	}
 	dataMu.Unlock()
 
+	if !configChanged {
+		log.Debug().Msg("Mock configuration unchanged")
+		return
+	}
+
 	log.Info().
-		Int("nodes", cfg.NodeCount).
-		Int("vms_per_node", cfg.VMsPerNode).
-		Int("lxcs_per_node", cfg.LXCsPerNode).
-		Int("agent_hosts", cfg.GenericHostCount).
-		Int("docker_hosts", cfg.DockerHostCount).
-		Int("docker_containers_per_host", cfg.DockerContainersPerHost).
-		Int("k8s_clusters", cfg.K8sClusterCount).
-		Int("k8s_nodes_per_cluster", cfg.K8sNodesPerCluster).
-		Int("k8s_pods_per_cluster", cfg.K8sPodsPerCluster).
-		Int("k8s_deployments_per_cluster", cfg.K8sDeploymentsPerCluster).
-		Bool("random_metrics", cfg.RandomMetrics).
-		Float64("stopped_percent", cfg.StoppedPercent).
+		Int("nodes", normalized.NodeCount).
+		Int("vms_per_node", normalized.VMsPerNode).
+		Int("lxcs_per_node", normalized.LXCsPerNode).
+		Int("agent_hosts", normalized.GenericHostCount).
+		Int("docker_hosts", normalized.DockerHostCount).
+		Int("docker_containers_per_host", normalized.DockerContainersPerHost).
+		Int("k8s_clusters", normalized.K8sClusterCount).
+		Int("k8s_nodes_per_cluster", normalized.K8sNodesPerCluster).
+		Int("k8s_pods_per_cluster", normalized.K8sPodsPerCluster).
+		Int("k8s_deployments_per_cluster", normalized.K8sDeploymentsPerCluster).
+		Bool("random_metrics", normalized.RandomMetrics).
+		Float64("stopped_percent", normalized.StoppedPercent).
 		Msg("Mock configuration updated")
 }
 

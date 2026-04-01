@@ -1,6 +1,10 @@
 package monitoring
 
-import "testing"
+import (
+	"os"
+	"strings"
+	"testing"
+)
 
 func TestDescribeMemorySourceCanonicalizesAliases(t *testing.T) {
 	t.Parallel()
@@ -120,5 +124,26 @@ func TestDescribeMemorySourceCanonicalizesAliases(t *testing.T) {
 				t.Fatalf("DefaultFallbackReason = %q, want %q", got.DefaultFallbackReason, tt.wantDefaultFallback)
 			}
 		})
+	}
+}
+
+func TestMockVMPollingDefersMemoryHistoryToCanonicalSampler(t *testing.T) {
+	t.Parallel()
+
+	data, err := os.ReadFile("monitor_polling_vm.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_polling_vm.go: %v", err)
+	}
+	source := string(data)
+
+	requiredSnippets := []string{
+		"if !shouldSkipNativeMockStateMetricWrites() {",
+		`m.metricsHistory.AddGuestMetric(vm.ID, "memory", vm.Memory.Usage, now)`,
+		`m.metricsStore.Write("vm", vm.ID, "memory", vm.Memory.Usage, now)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_polling_vm.go must contain %q", snippet)
+		}
 	}
 }
