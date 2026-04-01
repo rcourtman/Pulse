@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import calloutCardSource from '@/components/shared/CalloutCard.tsx?raw';
 import commandPaletteModalSource from '@/components/shared/CommandPaletteModal.tsx?raw';
@@ -103,8 +105,14 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
+import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
+import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
+import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
+import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
+import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
@@ -119,6 +127,7 @@ const sharedSources = import.meta.glob(['./*.tsx', './cards/*.tsx', './responsiv
   eager: true,
   import: 'default',
 }) as Record<string, string>;
+const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
 
 describe('shared primitive guardrails', () => {
   it('limits raw Table composition inside shared primitives to the canonical allowlist', () => {
@@ -284,6 +293,30 @@ describe('shared primitive guardrails', () => {
     expect(workloadsSummarySource).toContain('useSummaryContextualFocusState');
     expect(workloadsSummarySource).toContain('chartHoverSync');
     expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
+  });
+
+  it('keeps summary-linked table row emphasis on the shared active-row presentation contract', () => {
+    expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
+    expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
+    expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
+
+    expect(guestRowSource).toContain('data-summary-row-active');
+    expect(guestRowStateSource).not.toContain('bg-sky-50/70');
+    expect(guestRowStateSource).not.toContain('ring-sky-400/25');
+
+    for (const source of [
+      storagePoolRowSource,
+      diskListSource,
+      unifiedResourceHostTableCardSource,
+      unifiedResourcePBSTableSectionSource,
+      unifiedResourcePMGTableSectionSource,
+    ]) {
+      expect(source).toContain('data-summary-row-active');
+      expect(source).not.toContain('bg-sky-50/70');
+      expect(source).not.toContain('ring-sky-400/25');
+      expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
+      expect(source).not.toContain('ring-blue-300 dark:ring-blue-600');
+    }
   });
 
   it('keeps trial banner on shell, runtime, and model owners', () => {

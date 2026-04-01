@@ -128,6 +128,7 @@ work extends shared components instead of creating new local variants.
 106. `frontend-modern/src/utils/environmentLockPresentation.ts`
 107. `frontend-modern/src/utils/docsLinks.ts`
 108. `tests/integration/tests/20-local-doc-links.spec.ts`
+109. `frontend-modern/src/index.css`
 
 ## Shared Boundaries
 
@@ -149,6 +150,7 @@ work extends shared components instead of creating new local variants.
 9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
 10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, and local scroll preservation instead of rebuilding page-local `Set` filters, focused-label scans, or ad hoc scroll restoration in each surface.
 11. Keep summary-to-table coordination deliberate and reversible. Shared summary hover may highlight the matching table row when it is already visible, but transient chart hover must not auto-filter tables, auto-scroll the page, or reshuffle table ordering. When the active row is off-screen, page owners must route through `frontend-modern/src/components/shared/summaryTableFocus.ts` and surface a lightweight `Jump to row` affordance that reveals and scrolls only on explicit user action.
+12. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer.
 
 ## Forbidden Paths
 

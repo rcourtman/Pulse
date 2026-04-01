@@ -347,6 +347,17 @@ describe('GuestRow', () => {
       expect(tr?.className).toContain('bg-blue-50');
     });
 
+    it('routes summary-linked emphasis through the shared active-row marker instead of lane-local fills', () => {
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        isSummaryHighlighted: true,
+      });
+      const tr = container.querySelector('tr');
+      expect(tr?.getAttribute('data-summary-row-active')).toBe('true');
+      expect(tr?.className).not.toContain('bg-sky-50');
+      expect(tr?.className).not.toContain('ring-sky-400');
+    });
+
     it('applies critical alert background for unacknowledged critical alerts', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),

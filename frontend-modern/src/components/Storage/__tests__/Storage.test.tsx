@@ -443,10 +443,14 @@ describe('Storage', () => {
 
     const alphaRow = screen.getByText('Alpha-Store').closest('tr')!;
     expect(alphaRow).toHaveAttribute('data-summary-series-id', 'pool:alpha');
+    expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');
 
     fireEvent.mouseEnter(alphaRow);
 
     await waitFor(() => {
+      expect(alphaRow).toHaveAttribute('data-summary-row-active', 'true');
+      expect(alphaRow.className).not.toContain('bg-sky-50');
+      expect(alphaRow.className).not.toContain('ring-sky-400');
       expect(
         summary.querySelectorAll(
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
@@ -463,6 +467,7 @@ describe('Storage', () => {
     fireEvent.mouseLeave(alphaRow);
 
     await waitFor(() => {
+      expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');
       expect(summary.querySelectorAll('[data-highlight-series-active="true"]').length).toBe(0);
       expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
     });

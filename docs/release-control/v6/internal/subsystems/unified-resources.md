@@ -197,6 +197,12 @@ assembly branch.
     is off-screen, the page must offer an explicit `Jump to row` affordance
     rather than auto-scrolling or collapsing the table on hover.
     disk or network data is missing in range.
+13. Keep infrastructure row emphasis on the shared frontend presentation
+    contract. Host, PBS, and PMG table sections may decide whether a resource
+    is contextually active, but they must expose that state through
+    `data-summary-row-active` and rely on the shared row presentation owned by
+    `frontend-modern/src/index.css` instead of provider-specific background
+    classes that drift across resource tables or hide inline metric bars.
 
 ## Current State
 

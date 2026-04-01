@@ -59,17 +59,13 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   return (
     <>
       <tr
-        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''} ${
-          props.summaryHighlighted && !props.expanded
-            ? 'bg-sky-50/70 ring-1 ring-inset ring-sky-400/25 dark:bg-sky-950/40'
-            : ''
-        }`}
+        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`}
         style={{ ...props.rowStyle, ...STORAGE_POOL_ROW_STYLE }}
         onClick={props.onToggleExpand}
         onMouseEnter={() => props.onHoverChange?.(props.summarySeriesId)}
         onMouseLeave={() => props.onHoverChange?.(null)}
         data-summary-series-id={props.summarySeriesId}
-        data-summary-row-active={props.summaryHighlighted ? 'true' : 'false'}
+        data-summary-row-active={props.summaryHighlighted && !props.expanded ? 'true' : 'false'}
         {...props.alertDataAttrs}
       >
         <td class={STORAGE_POOL_ROW_NAME_CELL_CLASS}>

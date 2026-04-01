@@ -216,6 +216,11 @@ in place if it is already mounted and visible, but the hot path must not
 auto-scroll the page or rebuild the table into a one-row filtered view on
 transient hover. Off-screen reveal must stay behind an explicit `Jump to row`
 action routed through the shared summary-table focus bridge.
+That same hot-path contract also owns the row-emphasis paint. Dashboard guest
+rows and infrastructure resource rows must expose summary-linked activity
+through the shared `data-summary-row-active` marker and let the shared frontend
+primitive render the emphasis, instead of layering lane-local row-fill classes
+that diverge across pages or wash out inline metric bars.
 `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts` must
 write workload selection back into the workloads route through the shared
 same-path route-state scheduler so opening a focused workload preserves scroll

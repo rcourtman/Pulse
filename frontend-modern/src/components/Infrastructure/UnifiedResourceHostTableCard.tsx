@@ -243,13 +243,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     }
 
                     let className = baseHover;
-                    if (isHighlighted()) {
-                      className +=
-                        ' bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300 dark:ring-blue-600';
-                    }
-                    if (tableProps.hoveredResourceId === resource.id && !isHighlighted()) {
-                      className += ' bg-surface-hover';
-                    }
                     if (!isResourceOnline(resource)) {
                       className += ' opacity-60';
                     }
@@ -274,7 +267,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         data-row-id={resource.id}
                         data-summary-series-id={resource.id}
                         data-summary-row-active={
-                          tableProps.hoveredResourceId === resource.id ? 'true' : 'false'
+                          (tableProps.hoveredResourceId === resource.id || isHighlighted()) &&
+                          !isExpanded()
+                            ? 'true'
+                            : 'false'
                         }
                         class={rowClass()}
                         style={{ 'min-height': '32px' }}

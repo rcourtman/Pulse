@@ -190,6 +190,12 @@ querying, and the operator-facing storage health presentation layer.
     metrics targets, but infrastructure/workloads/storage/recovery navigation
     and focus handoffs must stay on canonical workload IDs instead of
     provider-native metric keys.
+15. Keep storage row emphasis on the shared frontend primitive contract. Pool
+    rows and physical-disk rows that mirror the active summary entity must
+    expose that state through `data-summary-row-active` and let the shared row
+    presentation owned by `frontend-modern/src/index.css` render the emphasis,
+    rather than carrying storage-local sky fill classes that drift from the
+    rest of the product or obscure inline capacity bars.
 
 ## Current State
 

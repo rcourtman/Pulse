@@ -58,6 +58,10 @@
     --color-border-base: theme('colors.slate.200');
     --color-text-base: theme('colors.slate.900');
     --color-text-muted: theme('colors.slate.500');
+    --color-summary-row-bg: rgba(14, 165, 233, 0.05);
+    --color-summary-row-bg-hover: rgba(14, 165, 233, 0.08);
+    --color-summary-row-border: rgba(14, 165, 233, 0.16);
+    --color-summary-row-accent: rgba(14, 165, 233, 0.42);
   }
 
   .dark {
@@ -71,6 +75,10 @@
     --color-border-base: theme('colors.slate.700');
     --color-text-base: theme('colors.slate.100');
     --color-text-muted: theme('colors.slate.400');
+    --color-summary-row-bg: rgba(56, 189, 248, 0.08);
+    --color-summary-row-bg-hover: rgba(56, 189, 248, 0.12);
+    --color-summary-row-border: rgba(56, 189, 248, 0.18);
+    --color-summary-row-accent: rgba(56, 189, 248, 0.5);
   }
 
   body {
@@ -153,6 +161,44 @@
 
   .table-row {
     @apply border-b border-border hover:bg-surface-hover;
+  }
+
+  tr[data-summary-row-active='true'] > td,
+  tr[data-summary-row-active='true'] > th {
+    background-color: var(--color-summary-row-bg);
+    box-shadow:
+      inset 0 1px 0 var(--color-summary-row-border),
+      inset 0 -1px 0 var(--color-summary-row-border);
+  }
+
+  tr[data-summary-row-active='true']:hover > td,
+  tr[data-summary-row-active='true']:hover > th {
+    background-color: var(--color-summary-row-bg-hover);
+  }
+
+  tr[data-summary-row-active='true'] > td:first-child,
+  tr[data-summary-row-active='true'] > th:first-child {
+    box-shadow:
+      inset 3px 0 0 var(--color-summary-row-accent),
+      inset 0 1px 0 var(--color-summary-row-border),
+      inset 0 -1px 0 var(--color-summary-row-border);
+  }
+
+  tr[data-summary-row-active='true'] > td:last-child,
+  tr[data-summary-row-active='true'] > th:last-child {
+    box-shadow:
+      inset -1px 0 0 var(--color-summary-row-border),
+      inset 0 1px 0 var(--color-summary-row-border),
+      inset 0 -1px 0 var(--color-summary-row-border);
+  }
+
+  tr[data-summary-row-active='true'] > td:first-child:last-child,
+  tr[data-summary-row-active='true'] > th:first-child:last-child {
+    box-shadow:
+      inset 3px 0 0 var(--color-summary-row-accent),
+      inset -1px 0 0 var(--color-summary-row-border),
+      inset 0 1px 0 var(--color-summary-row-border),
+      inset 0 -1px 0 var(--color-summary-row-border);
   }
 
   /* Form input — reusable base for text inputs, textareas, selects */

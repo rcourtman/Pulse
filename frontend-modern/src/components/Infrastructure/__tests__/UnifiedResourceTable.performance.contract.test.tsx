@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, waitFor, within } from '@solidjs/testing-library';
 import type { Resource } from '@/types/resource';
@@ -13,6 +15,9 @@ import unifiedResourceTableStateModelSource from '@/components/Infrastructure/un
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
+import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
+import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
+import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import {
@@ -25,6 +30,7 @@ import {
   computeIOScale,
 } from '@/components/Infrastructure/infrastructureSelectors';
 const resourceDetailDrawerMock = vi.hoisted(() => vi.fn());
+const frontendIndexCssSource = readFileSync(join(process.cwd(), 'src/index.css'), 'utf8');
 // Stub ResizeObserver for jsdom
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -260,6 +266,22 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(infrastructureSummaryModelSource).toContain(
         'export function shouldShowInfrastructureNetworkCard',
       );
+    });
+
+    it('keeps contextual resource-row emphasis on the shared active-row presentation contract', () => {
+      expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
+      expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
+      expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
+
+      for (const source of [
+        unifiedResourceHostTableCardSource,
+        unifiedResourcePBSTableSectionSource,
+        unifiedResourcePMGTableSectionSource,
+      ]) {
+        expect(source).toContain('data-summary-row-active');
+        expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300');
+        expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
+      }
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

@@ -178,16 +178,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           data-row-id={disk.id}
                           data-summary-series-id={summarySeriesId}
                           data-summary-row-active={
-                            isSummaryHighlighted() ? 'true' : 'false'
+                            isSummaryHighlighted() && !isSelected() ? 'true' : 'false'
                           }
                           class={`${PHYSICAL_DISK_TABLE_ROW_CLASS} ${
                             isSelected()
                               ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS
                               : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
-                          } ${
-                            isSummaryHighlighted() && !isSelected()
-                              ? 'bg-sky-50/70 ring-1 ring-inset ring-sky-400/25 dark:bg-sky-950/40'
-                              : ''
                           }`}
                           style={PHYSICAL_DISK_TABLE_ROW_STYLE}
                           onMouseEnter={() => props.onHoverChange?.(disk.id)}
