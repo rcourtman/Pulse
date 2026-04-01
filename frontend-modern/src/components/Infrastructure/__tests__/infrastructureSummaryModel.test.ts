@@ -175,6 +175,13 @@ describe('infrastructureSummaryModel', () => {
   it('uses one canonical active series id across hover and focused summary selection', () => {
     expect(
       resolveSummaryActiveSeriesId({
+        chartHoveredSeriesId: 'agent-3',
+        hoveredSeriesId: 'agent-1',
+        focusedSeriesId: 'agent-2',
+      }),
+    ).toBe('agent-3');
+    expect(
+      resolveSummaryActiveSeriesId({
         hoveredSeriesId: 'agent-1',
         focusedSeriesId: 'agent-2',
       }),

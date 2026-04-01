@@ -7,9 +7,15 @@ type SummarySeriesIdentity = {
 const normalizeSeriesId = (value: string | null | undefined): string => value?.trim() || '';
 
 export function resolveSummaryActiveSeriesId(options: {
+  chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
 }): string | null {
+  const chartHoveredSeriesId = normalizeSeriesId(options.chartHoveredSeriesId);
+  if (chartHoveredSeriesId) {
+    return chartHoveredSeriesId;
+  }
+
   const hoveredSeriesId = normalizeSeriesId(options.hoveredSeriesId);
   if (hoveredSeriesId) {
     return hoveredSeriesId;
@@ -21,10 +27,12 @@ export function resolveSummaryActiveSeriesId(options: {
 
 export function resolveSummaryCardInteractionState(options: {
   series: readonly SummarySeriesIdentity[];
+  chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
 }): SummaryCardInteractionState {
   const activeSeriesId = resolveSummaryActiveSeriesId({
+    chartHoveredSeriesId: options.chartHoveredSeriesId,
     hoveredSeriesId: options.hoveredSeriesId,
     focusedSeriesId: options.focusedSeriesId,
   });

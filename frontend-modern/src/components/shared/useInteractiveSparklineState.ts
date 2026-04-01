@@ -5,6 +5,7 @@ import {
   buildInteractiveSparklineChartData,
   buildInteractiveSparklineGridLineX,
   buildInteractiveSparklineGridLineY,
+  buildInteractiveSparklineSynchronizedHoverState,
   buildInteractiveSparklineTopLabel,
   buildInteractiveSparklineXAxisTicks,
   clampInteractiveSparklineValue,
@@ -80,6 +81,29 @@ export function useInteractiveSparklineState(
       tooltipEstimatedWidth,
     });
     setHoveredState(computed);
+    if (!props.onHoverSyncChange || !props.hoverSourceKey) {
+      return;
+    }
+    if (!computed) {
+      props.onHoverSyncChange(null);
+      return;
+    }
+    const highlightedIndex = computed?.highlightedSeriesIndex;
+    if (highlightedIndex === null || highlightedIndex === undefined) {
+      props.onHoverSyncChange(null);
+      return;
+    }
+    const highlightedSeries = chartData().validSeries[highlightedIndex];
+    const highlightedSeriesId = highlightedSeries?.id?.trim() || '';
+    if (!highlightedSeriesId) {
+      props.onHoverSyncChange(null);
+      return;
+    }
+    props.onHoverSyncChange({
+      sourceKey: props.hoverSourceKey,
+      seriesId: highlightedSeriesId,
+      timestamp: computed.timestamp,
+    });
   };
 
   const flushHoverState = () => {
@@ -108,6 +132,7 @@ export function useInteractiveSparklineState(
       hoverRafId = null;
     }
     setHoveredState(null);
+    props.onHoverSyncChange?.(null);
   };
 
   const handleClick = () => {
@@ -154,11 +179,30 @@ export function useInteractiveSparklineState(
   const externalSeriesIndex = createMemo(() =>
     getInteractiveSparklineExternalSeriesIndex(chartData(), props.highlightSeriesId),
   );
+  const synchronizedHoverState = createMemo(() => {
+    const hoverSync = props.hoverSync;
+    if (!hoverSync) {
+      return null;
+    }
+    if (props.hoverSourceKey && hoverSync.sourceKey === props.hoverSourceKey) {
+      return null;
+    }
+    return buildInteractiveSparklineSynchronizedHoverState({
+      chartData: chartData(),
+      hoverSync,
+      vbW,
+      vbH,
+      yMode: yMode(),
+    });
+  });
+  const activeHoverState = createMemo<InteractiveSparklineHoverState | null>(() => {
+    return hoveredState() ?? synchronizedHoverState();
+  });
   const activeEmphasisSeriesIndex = createMemo(() =>
     getInteractiveSparklineActiveEmphasisSeriesIndex({
       highlightNearestSeriesOnHover: props.highlightNearestSeriesOnHover === true,
       lockedSeriesIndex: lockedSeriesIndex(),
-      hoveredState: hoveredState(),
+      hoveredState: activeHoverState(),
       externalSeriesIndex: externalSeriesIndex(),
     }),
   );
@@ -341,7 +385,7 @@ export function useInteractiveSparklineState(
       ctx.restore();
     }
 
-    const hover = hoveredState();
+    const hover = activeHoverState();
     if (!hover) return;
     ctx.save();
     const x = (hover.x / vbW) * width;
@@ -378,7 +422,7 @@ export function useInteractiveSparklineState(
 
     void chartData();
     void activeEmphasisSeriesIndex();
-    void hoveredState();
+    void activeHoverState();
     queueCanvasDraw();
   });
 
@@ -404,6 +448,7 @@ export function useInteractiveSparklineState(
 
   return {
     activeEmphasisSeriesIndex,
+    activeHoverState,
     activeSeriesDisplay,
     axisTicks,
     chartData,

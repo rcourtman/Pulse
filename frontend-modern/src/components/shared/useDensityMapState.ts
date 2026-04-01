@@ -3,6 +3,7 @@ import {
   buildDensityMapChartData,
   getDensityMapExternalSeriesIndex,
   buildDensityMapHoveredState,
+  buildDensityMapSynchronizedHoveredState,
   formatDensityMapValue,
   getDensityMapCellOpacity,
   DENSITY_MAP_COLUMNS,
@@ -26,6 +27,22 @@ export function useDensityMapState(props: DensityMapProps) {
   const externalSeriesIndex = createMemo(() =>
     getDensityMapExternalSeriesIndex(chartData(), props.highlightSeriesId),
   );
+  const synchronizedHoveredState = createMemo(() => {
+    const hoverSync = props.hoverSync;
+    if (!hoverSync) {
+      return null;
+    }
+    if (props.hoverSourceKey && hoverSync.sourceKey === props.hoverSourceKey) {
+      return null;
+    }
+    return buildDensityMapSynchronizedHoveredState({
+      data: chartData(),
+      hoverSync,
+    });
+  });
+  const activeHoveredState = createMemo<DensityMapHoveredState | null>(() => {
+    return hoveredState() ?? synchronizedHoveredState();
+  });
 
   const formatValue = (value: number) => formatDensityMapValue(value, props.formatValue);
 
@@ -55,7 +72,8 @@ export function useDensityMapState(props: DensityMapProps) {
     const cellWidth = width / DENSITY_MAP_COLUMNS;
     const cellHeight = height / rows;
     const interactionOpacity = props.interactionState === 'inactive' ? 0.35 : 1;
-    const activeSeriesIndex = hoveredState()?.seriesIndex ?? externalSeriesIndex();
+    const hover = activeHoveredState();
+    const activeSeriesIndex = hover?.seriesIndex ?? externalSeriesIndex();
     const activeSeries =
       activeSeriesIndex !== null && activeSeriesIndex >= 0 && activeSeriesIndex < data.series.length
         ? data.series[activeSeriesIndex]
@@ -109,6 +127,12 @@ export function useDensityMapState(props: DensityMapProps) {
     if (activeSeries !== null && activeSeriesIndex !== null) {
       const highlightY = activeSeriesIndex * cellHeight;
       context.save();
+      if (hover) {
+        const highlightX = hover.columnIndex * cellWidth;
+        context.globalAlpha = 0.12 * interactionOpacity;
+        context.fillStyle = activeSeries.color;
+        context.fillRect(highlightX, 0, Math.max(cellWidth, 1), height);
+      }
       context.globalAlpha = 0.12 * interactionOpacity;
       context.fillStyle = activeSeries.color;
       context.fillRect(0, highlightY, width, cellHeight);
@@ -136,18 +160,33 @@ export function useDensityMapState(props: DensityMapProps) {
     const canvas = canvasRef();
     if (!canvas) return;
 
-    setHoveredState(
-      buildDensityMapHoveredState({
-        clientX: event.clientX,
-        clientY: event.clientY,
-        rect: canvas.getBoundingClientRect(),
-        data: chartData(),
-      }),
-    );
+    const computed = buildDensityMapHoveredState({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      rect: canvas.getBoundingClientRect(),
+      data: chartData(),
+    });
+    setHoveredState(computed);
+    if (!props.onHoverSyncChange || !props.hoverSourceKey || !computed) {
+      props.onHoverSyncChange?.(null);
+      return;
+    }
+    const hoveredSeries = chartData().series[computed.seriesIndex];
+    const hoveredSeriesId = hoveredSeries?.id?.trim() || '';
+    if (!hoveredSeriesId) {
+      props.onHoverSyncChange(null);
+      return;
+    }
+    props.onHoverSyncChange({
+      sourceKey: props.hoverSourceKey,
+      seriesId: hoveredSeriesId,
+      timestamp: computed.timestamp,
+    });
   };
 
   const handleMouseLeave = () => {
     setHoveredState(null);
+    props.onHoverSyncChange?.(null);
   };
 
   createEffect(() => {
@@ -159,6 +198,7 @@ export function useDensityMapState(props: DensityMapProps) {
   });
 
   return {
+    activeHoveredState,
     chartData,
     externalSeriesIndex,
     formatValue,

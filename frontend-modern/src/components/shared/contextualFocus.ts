@@ -10,7 +10,14 @@ type ContextualFocusSeries = {
   name?: string | null;
 };
 
+export interface SummaryChartHoverSync {
+  sourceKey: string;
+  seriesId: string;
+  timestamp: number;
+}
+
 export interface UseSummaryContextualFocusStateOptions<T extends ContextualFocusSeries> {
+  chartHoveredSeriesId?: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
   getSeriesName?: (series: T) => string | null | undefined;
   hoveredSeriesId?: Accessor<string | null | undefined>;
@@ -62,6 +69,7 @@ export const preserveScrollableAncestorVerticalOffset = (
 export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
   options: UseSummaryContextualFocusStateOptions<T>,
 ) {
+  const chartHoveredSeriesId = options.chartHoveredSeriesId ?? (() => null);
   const hoveredSeriesId = options.hoveredSeriesId ?? (() => null);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
   const getSeriesName =
@@ -93,16 +101,23 @@ export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
     return hasInteractiveSeriesId(hoveredSeriesId()) ? normalizeSeriesId(hoveredSeriesId()) : null;
   });
 
+  const effectiveChartHoveredSeriesId = createMemo<string | null>(() => {
+    return hasInteractiveSeriesId(chartHoveredSeriesId())
+      ? normalizeSeriesId(chartHoveredSeriesId())
+      : null;
+  });
+
   const effectiveFocusedSeriesId = createMemo<string | null>(() => {
     return hasInteractiveSeriesId(focusedSeriesId()) ? normalizeSeriesId(focusedSeriesId()) : null;
   });
 
-  const activeSeriesId = createMemo<string | null>(() =>
-    resolveSummaryActiveSeriesId({
+  const activeSeriesId = createMemo<string | null>(() => {
+    return resolveSummaryActiveSeriesId({
+      chartHoveredSeriesId: effectiveChartHoveredSeriesId(),
       hoveredSeriesId: effectiveHoveredSeriesId(),
       focusedSeriesId: effectiveFocusedSeriesId(),
-    }),
-  );
+    });
+  });
 
   const getFocusedSeriesName = (series: readonly T[]): string | null => {
     const focusedId = effectiveFocusedSeriesId();
@@ -113,19 +128,31 @@ export function useSummaryContextualFocusState<T extends ContextualFocusSeries>(
     return match ? getSeriesName(match) || null : null;
   };
 
+  const getActiveSeriesName = (series: readonly T[]): string | null => {
+    const currentActiveId = activeSeriesId();
+    if (!currentActiveId) {
+      return null;
+    }
+    const match = series.find((entry) => normalizeSeriesId(entry.id) === currentActiveId);
+    return match ? getSeriesName(match) || null : null;
+  };
+
   const interactionStateFor = (
     series: ReadonlyArray<{ id?: string | null }>,
   ): SummaryCardInteractionState =>
     resolveSummaryCardInteractionState({
       series,
+      chartHoveredSeriesId: effectiveChartHoveredSeriesId(),
       hoveredSeriesId: effectiveHoveredSeriesId(),
       focusedSeriesId: effectiveFocusedSeriesId(),
     });
 
   return {
     activeSeriesId,
+    effectiveChartHoveredSeriesId,
     effectiveFocusedSeriesId,
     effectiveHoveredSeriesId,
+    getActiveSeriesName,
     getFocusedSeriesName,
     hasInteractiveSeriesId,
     interactionStateFor,

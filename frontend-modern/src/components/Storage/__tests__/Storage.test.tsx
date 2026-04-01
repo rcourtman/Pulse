@@ -467,6 +467,51 @@ describe('Storage', () => {
       expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
     });
 
+    const poolUsageChart = screen
+      .getByText('Pool Usage')
+      .closest('[data-summary-card-state]')
+      ?.querySelector('svg');
+    expect(poolUsageChart).not.toBeNull();
+    if (!poolUsageChart) {
+      storageSummarySpy.mockRestore();
+      return;
+    }
+
+    (
+      poolUsageChart as unknown as {
+        getBoundingClientRect: () => DOMRect;
+      }
+    ).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 200,
+        height: 50,
+        right: 200,
+        bottom: 50,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    fireEvent.mouseMove(poolUsageChart, { clientX: 199, clientY: 26 });
+
+    await waitFor(() => {
+      expect(
+        summary.querySelectorAll(
+          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
+        ).length,
+      ).toBe(3);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(1);
+    });
+
+    fireEvent.mouseLeave(poolUsageChart);
+
+    await waitFor(() => {
+      expect(summary.querySelectorAll('[data-highlight-series-active="true"]').length).toBe(0);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(0);
+    });
+
     storageSummarySpy.mockRestore();
   });
 

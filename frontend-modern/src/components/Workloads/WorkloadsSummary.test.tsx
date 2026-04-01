@@ -26,20 +26,47 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
     highlightSeriesId?: string | null;
     interactionState?: string;
     activeSeriesDisplay?: string;
+    hoverSourceKey?: string;
+    hoverSync?: { seriesId: string } | null;
+    onHoverSyncChange?: (value: {
+      sourceKey: string;
+      seriesId: string;
+      timestamp: number;
+    } | null) => void;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
+    const triggerHover = () => {
+      const seriesId = series[0]?.id;
+      if (!props.onHoverSyncChange || !seriesId || !props.hoverSourceKey) {
+        return;
+      }
+      props.onHoverSyncChange({
+        sourceKey: props.hoverSourceKey,
+        seriesId,
+        timestamp: Date.now(),
+      });
+    };
     return (
-      <div
-        data-testid="sparkline"
-        data-series-count={series.length}
-        data-series-ids={series.map((current) => current.id || '').join('|')}
-        data-series-names={series.map((current) => current.name || '').join('|')}
-        data-max-points={maxPoints}
-        data-highlight-series-id={props.highlightSeriesId || ''}
-        data-interaction-state={props.interactionState || 'default'}
-        data-active-series-display={props.activeSeriesDisplay || ''}
-      />
+      <>
+        <button
+          type="button"
+          data-testid={`chart-hover-${props.hoverSourceKey || 'unknown'}`}
+          onClick={triggerHover}
+        />
+        <div
+          data-testid="sparkline"
+          data-series-count={series.length}
+          data-series-ids={series.map((current) => current.id || '').join('|')}
+          data-series-names={series.map((current) => current.name || '').join('|')}
+          data-max-points={maxPoints}
+          data-highlight-series-id={props.highlightSeriesId || ''}
+          data-hover-source-key={props.hoverSourceKey || ''}
+          data-hover-sync-series-id={props.hoverSync?.seriesId || ''}
+          data-interaction-state={props.interactionState || 'default'}
+          data-active-series-display={props.activeSeriesDisplay || ''}
+        />
+      </>
     );
   },
 }));
@@ -49,19 +76,46 @@ vi.mock('@/components/shared/DensityMap', () => ({
     series?: Array<{ id?: string; name?: string; data?: Array<unknown> }>;
     highlightSeriesId?: string | null;
     interactionState?: string;
+    hoverSourceKey?: string;
+    hoverSync?: { seriesId: string } | null;
+    onHoverSyncChange?: (value: {
+      sourceKey: string;
+      seriesId: string;
+      timestamp: number;
+    } | null) => void;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
+    const triggerHover = () => {
+      const seriesId = series[0]?.id;
+      if (!props.onHoverSyncChange || !seriesId || !props.hoverSourceKey) {
+        return;
+      }
+      props.onHoverSyncChange({
+        sourceKey: props.hoverSourceKey,
+        seriesId,
+        timestamp: Date.now(),
+      });
+    };
     return (
-      <div
-        data-testid="sparkline"
-        data-series-count={series.length}
-        data-series-ids={series.map((current) => current.id || '').join('|')}
-        data-series-names={series.map((current) => current.name || '').join('|')}
-        data-max-points={maxPoints}
-        data-highlight-series-id={props.highlightSeriesId || ''}
-        data-interaction-state={props.interactionState || 'default'}
-      />
+      <>
+        <button
+          type="button"
+          data-testid={`chart-hover-${props.hoverSourceKey || 'unknown'}`}
+          onClick={triggerHover}
+        />
+        <div
+          data-testid="sparkline"
+          data-series-count={series.length}
+          data-series-ids={series.map((current) => current.id || '').join('|')}
+          data-series-names={series.map((current) => current.name || '').join('|')}
+          data-max-points={maxPoints}
+          data-highlight-series-id={props.highlightSeriesId || ''}
+          data-hover-source-key={props.hoverSourceKey || ''}
+          data-hover-sync-series-id={props.hoverSync?.seriesId || ''}
+          data-interaction-state={props.interactionState || 'default'}
+        />
+      </>
     );
   },
 }));
@@ -309,6 +363,35 @@ describe('WorkloadsSummary performance behavior', () => {
       expect(sparklines).toHaveLength(4);
       for (const sparkline of sparklines) {
         expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadId);
+        expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
+      }
+    });
+  });
+
+  it('promotes chart hover into shared summary focus across all workload cards', async () => {
+    const workloadIds = ['cluster-a:pve1:101', 'cluster-a:pve1:102'];
+    mockGetWorkloadCharts.mockResolvedValueOnce(makeChartsResponse(workloadIds));
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: workloadIds.length, running: workloadIds.length, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots(workloadIds)}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('sparkline')).toHaveLength(4);
+    });
+
+    screen.getByTestId('chart-hover-cpu').click();
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(4);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadIds[0]);
+        expect(sparkline.getAttribute('data-hover-sync-series-id')).toBe(workloadIds[0]);
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
     });

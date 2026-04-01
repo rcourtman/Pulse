@@ -56,6 +56,7 @@ import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw'
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
+import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
@@ -244,17 +245,24 @@ describe('shared primitive guardrails', () => {
   it('keeps contextual row focus on one shared helper across summary consumers', () => {
     expect(contextualFocusSource).toContain('export const preserveScrollableAncestorVerticalOffset');
     expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
+    expect(contextualFocusSource).toContain('chartHoveredSeriesId');
+    expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
+    expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
+    expect(densityMapModelSource).toContain('onHoverSyncChange');
 
     expect(dashboardSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
     expect(dashboardSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
 
     expect(infrastructureSummaryStateSource).toContain('useSummaryContextualFocusState');
+    expect(infrastructureSummaryStateSource).toContain('chartHoverSync');
     expect(infrastructureSummaryStateSource).not.toContain('const interactiveResourceIds = createMemo');
 
     expect(storageSummarySource).toContain('useSummaryContextualFocusState');
+    expect(storageSummarySource).toContain('chartHoverSync');
     expect(storageSummarySource).not.toContain('resolveSummaryActiveSeriesId');
 
     expect(workloadsSummarySource).toContain('useSummaryContextualFocusState');
+    expect(workloadsSummarySource).toContain('chartHoverSync');
     expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
   });
 

@@ -1,7 +1,10 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ChartData, TimeRange } from '@/api/charts';
 import { useResources } from '@/hooks/useResources';
-import { useSummaryContextualFocusState } from '@/components/shared/contextualFocus';
+import {
+  useSummaryContextualFocusState,
+  type SummaryChartHoverSync,
+} from '@/components/shared/contextualFocus';
 import {
   fetchInfrastructureSummaryAndCache,
   readInfrastructureSummaryCache,
@@ -59,6 +62,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
   const [oldestDataTimestamp, setOldestDataTimestamp] = createSignal<number | null>(null);
   const [fetchFailed, setFetchFailed] = createSignal(false);
+  const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
   const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());
@@ -229,6 +233,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
       : buildInfrastructureSummarySeries(props.resources, new Map(), agentResources()),
   );
   const summaryFocus = useSummaryContextualFocusState({
+    chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: resourceSeries,
     hoveredSeriesId: () => props.hoveredResourceId,
     focusedSeriesId: () => props.focusedResourceId,
@@ -244,7 +249,15 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   });
 
   const focusedResourceName = createMemo(() => {
-    return summaryFocus.getFocusedSeriesName(resourceSeries());
+    return summaryFocus.getActiveSeriesName(resourceSeries());
+  });
+
+  createEffect(() => {
+    const hovered = chartHoverSync();
+    if (!hovered) return;
+    if (!summaryFocus.hasInteractiveSeriesId(hovered.seriesId)) {
+      setChartHoverSync(null);
+    }
   });
 
   const singleDisplayedOnlineResource = createMemo(() => {
@@ -291,10 +304,12 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
 
   return {
     selectedRange,
+    chartHoverSync,
     isCurrentRangeLoaded,
     emptyHistoryLabel,
     emptyMessage,
     activeSeriesId: summaryFocus.activeSeriesId,
+    setChartHoverSync,
     effectiveFocusedResourceId: summaryFocus.effectiveFocusedSeriesId,
     focusedResourceName,
     hasInteractiveResourceId: summaryFocus.hasInteractiveSeriesId,

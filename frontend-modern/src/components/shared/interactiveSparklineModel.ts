@@ -1,6 +1,7 @@
 import type { MetricPoint, TimeRange } from '@/api/charts';
 import { downsampleLTTB, calculateOptimalPoints } from '@/utils/downsample';
 import { timeRangeToMs } from '@/utils/timeRange';
+import type { SummaryChartHoverSync } from './contextualFocus';
 import type { SummaryCardInteractionState } from './summaryCardInteraction';
 
 export interface InteractiveSparklineSeries {
@@ -25,6 +26,9 @@ export interface InteractiveSparklineProps {
   maxTooltipRows?: number;
   highlightNearestSeriesOnHover?: boolean;
   highlightSeriesId?: string | null;
+  hoverSourceKey?: string;
+  hoverSync?: SummaryChartHoverSync | null;
+  onHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
   interactionState?: SummaryCardInteractionState;
 }
 
@@ -450,6 +454,64 @@ export const getInteractiveSparklineActiveEmphasisSeriesIndex = ({
     return hoveredState.highlightedSeriesIndex;
   }
   return externalSeriesIndex;
+};
+
+export const buildInteractiveSparklineSynchronizedHoverState = ({
+  chartData,
+  hoverSync,
+  vbW,
+  vbH,
+  yMode,
+}: {
+  chartData: InteractiveSparklineChartData;
+  hoverSync?: SummaryChartHoverSync | null;
+  vbW: number;
+  vbH: number;
+  yMode: 'percent' | 'auto';
+}): InteractiveSparklineHoverState | null => {
+  if (!hoverSync || chartData.validSeries.length === 0 || chartData.rangeMs <= 0) {
+    return null;
+  }
+
+  const seriesIndex = chartData.validSeries.findIndex((series) => series.id === hoverSync.seriesId);
+  if (seriesIndex < 0) {
+    return null;
+  }
+
+  const clampedTimestamp = clampInteractiveSparklineValue(
+    hoverSync.timestamp,
+    chartData.windowStart,
+    chartData.windowStart + chartData.rangeMs,
+  );
+  const series = chartData.validSeries[seriesIndex];
+  const nearest = findNearestMetricPoint(series.hoverData, clampedTimestamp);
+  if (!nearest) {
+    return null;
+  }
+
+  const valueToChartY = createInteractiveSparklineValueToY(yMode, chartData.scaleMax, vbH);
+  const pointY = valueToChartY(nearest.point.value);
+  const chartX = ((clampedTimestamp - chartData.windowStart) / chartData.rangeMs) * vbW;
+
+  return {
+    x: chartX,
+    tooltipX: 0,
+    tooltipY: 0,
+    timestamp: clampedTimestamp,
+    totalValues: 1,
+    minY: pointY,
+    nearestSeriesIndex: seriesIndex,
+    highlightedSeriesIndex: seriesIndex,
+    focusedTooltip: true,
+    values: [
+      {
+        name: series.name || 'Series',
+        color: series.color,
+        value: nearest.point.value,
+        seriesIndex,
+      },
+    ],
+  };
 };
 
 export const computeInteractiveSparklineHoverState = ({

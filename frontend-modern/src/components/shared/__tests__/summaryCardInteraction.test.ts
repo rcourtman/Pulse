@@ -27,6 +27,14 @@ describe('summaryCardInteraction', () => {
   it('prefers hovered series ids and falls back to focused ids', () => {
     expect(
       resolveSummaryActiveSeriesId({
+        chartHoveredSeriesId: 'gamma',
+        hoveredSeriesId: 'beta',
+        focusedSeriesId: 'alpha',
+      }),
+    ).toBe('gamma');
+
+    expect(
+      resolveSummaryActiveSeriesId({
         hoveredSeriesId: 'beta',
         focusedSeriesId: 'alpha',
       }),
@@ -52,6 +60,7 @@ describe('summaryCardInteraction', () => {
     expect(
       resolveSummaryCardInteractionState({
         series: [{ id: 'alpha' }, { id: 'beta' }],
+        chartHoveredSeriesId: 'beta',
         hoveredSeriesId: 'beta',
         focusedSeriesId: 'alpha',
       }),
@@ -71,9 +80,11 @@ describe('summaryCardInteraction', () => {
   it('filters contextual focus down to interactive series ids through one shared hook', () => {
     const [hoveredSeriesId] = createSignal<string | null>('gamma');
     const [focusedSeriesId] = createSignal<string | null>('alpha');
+    const [chartHoveredSeriesId, setChartHoveredSeriesId] = createSignal<string | null>(null);
 
     const { result } = renderHook(() =>
       useSummaryContextualFocusState({
+        chartHoveredSeriesId,
         interactiveSeries: () => [
           { id: 'alpha', name: 'Alpha', interactive: true },
           { id: 'beta', name: 'Beta', interactive: false },
@@ -97,6 +108,13 @@ describe('summaryCardInteraction', () => {
     ).toBe('Alpha');
     expect(result.interactionStateFor([{ id: 'alpha' }])).toBe('active');
     expect(result.interactionStateFor([{ id: 'beta' }])).toBe('inactive');
+
+    setChartHoveredSeriesId('alpha');
+    expect(result.effectiveChartHoveredSeriesId()).toBe('alpha');
+    expect(result.activeSeriesId()).toBe('alpha');
+    expect(result.getActiveSeriesName([{ id: 'alpha', name: 'Alpha', interactive: true }])).toBe(
+      'Alpha',
+    );
   });
 
   it('preserves the nearest scrollable ancestor when contextual focus changes locally', () => {

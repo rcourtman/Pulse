@@ -1,7 +1,10 @@
 import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { InteractiveSparklineSeries } from '@/components/shared/InteractiveSparkline';
-import { useSummaryContextualFocusState } from '@/components/shared/contextualFocus';
+import {
+  useSummaryContextualFocusState,
+  type SummaryChartHoverSync,
+} from '@/components/shared/contextualFocus';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import {
@@ -64,6 +67,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const [data, setData] = createSignal<StorageSummaryChartsResponse | null>(null);
   const [loaded, setLoaded] = createSignal(false);
   const [fetchFailed, setFetchFailed] = createSignal(false);
+  const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
 
   // Track org switches so the effect re-runs when the org changes.
   const [orgVersion, setOrgVersion] = createSignal(0);
@@ -230,9 +234,18 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       ...diskTempSeries(),
   ]);
   const summaryFocus = useSummaryContextualFocusState({
+    chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: interactiveSummarySeries,
     hoveredSeriesId: () => props.hoveredResourceId,
     focusedSeriesId: () => props.focusedResourceId,
+  });
+
+  createEffect(() => {
+    const hovered = chartHoverSync();
+    if (!hovered) return;
+    if (!summaryFocus.hasInteractiveSeriesId(hovered.seriesId)) {
+      setChartHoverSync(null);
+    }
   });
 
   const hasPoolUsage = () => poolUsageSeries().length > 0;
@@ -248,7 +261,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
 
   const showComponent = () => props.poolCount > 0 || props.diskCount > 0;
   const getFocusedSeriesName = (series: InteractiveSparklineSeries[]): string | null =>
-    summaryFocus.getFocusedSeriesName(series);
+    summaryFocus.getActiveSeriesName(series);
   const focusedLabel = (series: InteractiveSparklineSeries[]) => {
     const name = getFocusedSeriesName(series);
     if (!name) return undefined;
@@ -290,8 +303,11 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               activeSeriesDisplay="isolate"
               yMode="percent"
               highlightNearestSeriesOnHover
+              hoverSourceKey="pool-usage"
+              hoverSync={chartHoverSync()}
               highlightSeriesId={summaryFocus.activeSeriesId()}
               interactionState={summaryFocus.interactionStateFor(poolUsageSeries())}
+              onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
 
@@ -312,8 +328,11 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={formatTemp}
               formatTopLabel={(max) => `${max.toFixed(0)}°C`}
               highlightNearestSeriesOnHover
+              hoverSourceKey="disk-temperature"
+              hoverSync={chartHoverSync()}
               highlightSeriesId={summaryFocus.activeSeriesId()}
               interactionState={summaryFocus.interactionStateFor(diskTempSeries())}
+              onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
 
@@ -334,8 +353,11 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
+              hoverSourceKey="used-capacity"
+              hoverSync={chartHoverSync()}
               highlightSeriesId={summaryFocus.activeSeriesId()}
               interactionState={summaryFocus.interactionStateFor(poolUsedSeries())}
+              onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
 
@@ -356,8 +378,11 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
+              hoverSourceKey="available-space"
+              hoverSync={chartHoverSync()}
               highlightSeriesId={summaryFocus.activeSeriesId()}
               interactionState={summaryFocus.interactionStateFor(poolAvailSeries())}
+              onHoverSyncChange={setChartHoverSync}
             />
           </SummaryMetricCard>
         </SummaryPanel>

@@ -118,7 +118,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                   )}
                 </For>
 
-                <Show when={sparkline.hoveredState()}>
+                <Show when={sparkline.activeHoverState()}>
                   {(hover) => (
                     <line
                       x1={hover().x}

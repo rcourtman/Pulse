@@ -3,7 +3,10 @@ import {
   InteractiveSparkline,
   type InteractiveSparklineSeries,
 } from '@/components/shared/InteractiveSparkline';
-import { useSummaryContextualFocusState } from '@/components/shared/contextualFocus';
+import {
+  useSummaryContextualFocusState,
+  type SummaryChartHoverSync,
+} from '@/components/shared/contextualFocus';
 import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
@@ -405,6 +408,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const [loadedScopeKey, setLoadedScopeKey] = createSignal<string | null>(null);
   const [fetchFailed, setFetchFailed] = createSignal(false);
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
+  const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const selectedNodeScope = createMemo(() => props.selectedNodeId?.trim() || '');
   const activeScopeKey = createMemo(
@@ -648,6 +652,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
 
   const displaySeries = createMemo(() => workloadSeries());
   const summaryFocus = useSummaryContextualFocusState({
+    chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: workloadSeries,
     hoveredSeriesId: () => props.hoveredWorkloadId,
     focusedSeriesId: () => props.focusedWorkloadId,
@@ -658,7 +663,15 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       series.network.length >= 2,
   });
 
-  const focusedWorkloadName = createMemo(() => summaryFocus.getFocusedSeriesName(workloadSeries()));
+  createEffect(() => {
+    const hovered = chartHoverSync();
+    if (!hovered) return;
+    if (!summaryFocus.hasInteractiveSeriesId(hovered.seriesId)) {
+      setChartHoverSync(null);
+    }
+  });
+
+  const focusedWorkloadName = createMemo(() => summaryFocus.getActiveSeriesName(workloadSeries()));
 
   const cpuSeries = createMemo<InteractiveSparklineSeries[]>(() =>
     displaySeries().map((series) => ({
@@ -752,8 +765,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           sortTooltipByValue
           maxTooltipRows={8}
           highlightNearestSeriesOnHover
+          hoverSourceKey="cpu"
+          hoverSync={chartHoverSync()}
           highlightSeriesId={summaryFocus.activeSeriesId()}
           interactionState={summaryFocus.interactionStateFor(cpuSeries())}
+          onHoverSyncChange={setChartHoverSync}
         />
       </SummaryMetricCard>
 
@@ -774,8 +790,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           sortTooltipByValue
           maxTooltipRows={8}
           highlightNearestSeriesOnHover
+          hoverSourceKey="memory"
+          hoverSync={chartHoverSync()}
           highlightSeriesId={summaryFocus.activeSeriesId()}
           interactionState={summaryFocus.interactionStateFor(memorySeries())}
+          onHoverSyncChange={setChartHoverSync}
         />
       </SummaryMetricCard>
 
@@ -792,8 +811,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
+          hoverSourceKey="diskio"
+          hoverSync={chartHoverSync()}
           highlightSeriesId={summaryFocus.activeSeriesId()}
           interactionState={summaryFocus.interactionStateFor(diskioSeries())}
+          onHoverSyncChange={setChartHoverSync}
         />
       </SummaryMetricCard>
 
@@ -810,8 +832,11 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
+          hoverSourceKey="network"
+          hoverSync={chartHoverSync()}
           highlightSeriesId={summaryFocus.activeSeriesId()}
           interactionState={summaryFocus.interactionStateFor(networkSeries())}
+          onHoverSyncChange={setChartHoverSync}
         />
       </SummaryMetricCard>
     </SummaryPanel>

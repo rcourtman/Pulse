@@ -222,6 +222,11 @@ the shared summary contract so pool usage, used capacity, and available space
 cards can isolate the active row through the shared sparkline primitive while
 non-matching cards such as disk temperature demote to inactive context instead
 of rebuilding a row-local summary surface.
+That same shared summary contract now also owns chart-driven emphasis.
+Hovering one storage summary chart must promote the same canonical metrics
+target ID through sibling cards, so pool charts cross-highlight the same pool
+while non-matching cards such as disk temperature demote to inactive context
+instead of keeping chart-local hover state.
 That same storage summary contract now uses the shared contextual-focus owner.
 `frontend-modern/src/components/Storage/StorageSummary.tsx` must route
 interactive-series filtering, focused-label lookup, and active-series

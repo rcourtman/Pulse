@@ -73,6 +73,62 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(screen.queryByText('CPU')).toBeNull();
   });
 
+  it('publishes synchronized hover identity and clears it on leave', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+    const onHoverSyncChange = vi.fn();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        hoverSourceKey="cpu"
+        onHoverSyncChange={onHoverSyncChange}
+        highlightNearestSeriesOnHover
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30_000, value: 40 },
+              { timestamp: now - 10_000, value: 50 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+    if (!svg) return;
+
+    (svg as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 100,
+        width: 200,
+        height: 50,
+        right: 200,
+        bottom: 150,
+        x: 0,
+        y: 100,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    fireEvent.mouseMove(svg, { clientX: 199, clientY: 125 });
+
+    const publishedHover = onHoverSyncChange.mock.calls.at(-1)?.[0];
+    expect(publishedHover).toMatchObject({
+      sourceKey: 'cpu',
+      seriesId: 'alpha',
+    });
+    expect(publishedHover?.timestamp).toBe(now - 10_000);
+
+    fireEvent.mouseLeave(svg);
+    expect(onHoverSyncChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('limits tooltip rows and shows the "+N more series" affordance', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));

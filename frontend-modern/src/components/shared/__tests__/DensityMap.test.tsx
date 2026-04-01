@@ -86,6 +86,60 @@ describe('DensityMap', () => {
     expect(await screen.findByText('CPU')).toBeInTheDocument();
   });
 
+  it('publishes synchronized hover identity and clears it on leave', () => {
+    const now = Date.now();
+    const onHoverSyncChange = vi.fn();
+    const { container } = render(() => (
+      <DensityMap
+        timeRange="1h"
+        hoverSourceKey="diskio"
+        onHoverSyncChange={onHoverSyncChange}
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#10b981',
+            data: [
+              { timestamp: now - 30_000, value: 25 },
+              { timestamp: now - 10_000, value: 55 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const canvas = container.querySelector('canvas');
+    expect(canvas).not.toBeNull();
+    if (!canvas) return;
+
+    (canvas as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 0,
+        width: 180,
+        height: 80,
+        right: 180,
+        bottom: 80,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    fireEvent.mouseMove(canvas, { clientX: 160, clientY: 20 });
+
+    const publishedHover = onHoverSyncChange.mock.calls.at(-1)?.[0];
+    expect(publishedHover).toMatchObject({
+      sourceKey: 'diskio',
+      seriesId: 'alpha',
+    });
+    expect(typeof publishedHover?.timestamp).toBe('number');
+    expect(publishedHover?.timestamp).toBeGreaterThanOrEqual(now - 3_600_000);
+    expect(publishedHover?.timestamp).toBeLessThanOrEqual(now);
+
+    fireEvent.mouseLeave(canvas);
+    expect(onHoverSyncChange).toHaveBeenLastCalledWith(null);
+  });
+
   it('keeps an externally highlighted series visible when it falls outside the default density top set', () => {
     const now = Date.now();
     const series = Array.from({ length: 24 }, (_, index) => ({

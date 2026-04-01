@@ -30,17 +30,44 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
     highlightSeriesId?: string | null;
     interactionState?: string;
     activeSeriesDisplay?: string;
+    hoverSourceKey?: string;
+    hoverSync?: { seriesId: string } | null;
+    onHoverSyncChange?: (value: {
+      sourceKey: string;
+      seriesId: string;
+      timestamp: number;
+    } | null) => void;
   }) => {
     const series = props.series ?? [];
+    const triggerHover = () => {
+      const seriesId = series[0]?.id;
+      if (!props.onHoverSyncChange || !seriesId || !props.hoverSourceKey) {
+        return;
+      }
+      props.onHoverSyncChange({
+        sourceKey: props.hoverSourceKey,
+        seriesId,
+        timestamp: Date.now(),
+      });
+    };
     return (
-      <div
-        data-testid="sparkline"
-        data-series-count={series.length}
-        data-series-ids={series.map((current) => current.id || '').join('|')}
-        data-highlight-series-id={props.highlightSeriesId || ''}
-        data-interaction-state={props.interactionState || 'default'}
-        data-active-series-display={props.activeSeriesDisplay || ''}
-      />
+      <>
+        <button
+          type="button"
+          data-testid={`chart-hover-${props.hoverSourceKey || 'unknown'}`}
+          onClick={triggerHover}
+        />
+        <div
+          data-testid="sparkline"
+          data-series-count={series.length}
+          data-series-ids={series.map((current) => current.id || '').join('|')}
+          data-highlight-series-id={props.highlightSeriesId || ''}
+          data-hover-source-key={props.hoverSourceKey || ''}
+          data-hover-sync-series-id={props.hoverSync?.seriesId || ''}
+          data-interaction-state={props.interactionState || 'default'}
+          data-active-series-display={props.activeSeriesDisplay || ''}
+        />
+      </>
     );
   },
 }));
@@ -95,6 +122,64 @@ describe('StorageSummary', () => {
         expect(sparkline.getAttribute('data-highlight-series-id')).toBe('pool:alpha');
         expect(sparkline.getAttribute('data-active-series-display')).toBe('isolate');
       }
+    });
+  });
+
+  it('treats chart hover as the shared active storage entity across cards', async () => {
+    mockGetStorageSummaryCharts.mockResolvedValueOnce({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha Pool',
+          usage: twoPointSeries,
+          used: twoPointSeries,
+          avail: twoPointSeries,
+        },
+        'pool:beta': {
+          name: 'Beta Pool',
+          usage: twoPointSeries,
+          used: twoPointSeries,
+          avail: twoPointSeries,
+        },
+      },
+      disks: {
+        'disk:serial-1': {
+          name: 'Disk 1',
+          temperature: twoPointSeries,
+        },
+      },
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    render(() => <StorageSummary poolCount={2} diskCount={1} timeRange="1h" />);
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('sparkline')).toHaveLength(4);
+    });
+
+    screen.getByTestId('chart-hover-pool-usage').click();
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      const poolCards = sparklines.filter((sparkline) =>
+        ['pool-usage', 'used-capacity', 'available-space'].includes(
+          sparkline.getAttribute('data-hover-source-key') || '',
+        ),
+      );
+      const diskTempCard = sparklines.find(
+        (sparkline) => sparkline.getAttribute('data-hover-source-key') === 'disk-temperature',
+      );
+
+      expect(poolCards).toHaveLength(3);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe('pool:alpha');
+        expect(sparkline.getAttribute('data-hover-sync-series-id')).toBe('pool:alpha');
+      }
+      for (const sparkline of poolCards) {
+        expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
+      }
+      expect(diskTempCard?.getAttribute('data-interaction-state')).toBe('inactive');
     });
   });
 });

@@ -1,6 +1,7 @@
 import type { TimeRange } from '@/api/charts';
 import { timeRangeToMs } from '@/utils/timeRange';
 import type { InteractiveSparklineSeries } from './InteractiveSparkline';
+import type { SummaryChartHoverSync } from './contextualFocus';
 import type { SummaryCardInteractionState } from './summaryCardInteraction';
 
 export interface DensityMapProps {
@@ -8,11 +9,15 @@ export interface DensityMapProps {
   rangeLabel?: string;
   timeRange?: TimeRange;
   formatValue?: (value: number) => string;
+  hoverSourceKey?: string;
+  hoverSync?: SummaryChartHoverSync | null;
+  onHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
   highlightSeriesId?: string | null;
   interactionState?: SummaryCardInteractionState;
 }
 
 export interface DensityMapHoveredState {
+  columnIndex: number;
   tooltipX: number;
   tooltipY: number;
   timestamp: number;
@@ -172,6 +177,7 @@ export function buildDensityMapHoveredState(options: {
   const cellHeight = rect.height / data.series.length;
 
   return {
+    columnIndex: column,
     tooltipX: rect.left + column * cellWidth + cellWidth / 2,
     tooltipY: rect.top + row * cellHeight,
     timestamp: data.windowStart + column * data.bucketDuration,
@@ -179,5 +185,42 @@ export function buildDensityMapHoveredState(options: {
     seriesName: data.series[row].name || 'Unknown',
     seriesColor: data.series[row].color,
     seriesIndex: row,
+  };
+}
+
+export function buildDensityMapSynchronizedHoveredState(options: {
+  data: DensityMapChartData;
+  hoverSync?: SummaryChartHoverSync | null;
+}): DensityMapHoveredState | null {
+  const { data, hoverSync } = options;
+  if (!hoverSync || data.series.length === 0 || data.rangeMs <= 0) {
+    return null;
+  }
+
+  const seriesIndex = data.series.findIndex((series) => series.id === hoverSync.seriesId);
+  if (seriesIndex < 0) {
+    return null;
+  }
+
+  const clampedTimestamp = clampDensityMapValue(
+    hoverSync.timestamp,
+    data.windowStart,
+    data.windowStart + data.rangeMs,
+  );
+  const column = clampDensityMapValue(
+    Math.floor(((clampedTimestamp - data.windowStart) / data.rangeMs) * DENSITY_MAP_COLUMNS),
+    0,
+    DENSITY_MAP_COLUMNS - 1,
+  );
+
+  return {
+    columnIndex: column,
+    tooltipX: 0,
+    tooltipY: 0,
+    timestamp: clampedTimestamp,
+    value: data.grid[seriesIndex][column],
+    seriesName: data.series[seriesIndex].name || 'Unknown',
+    seriesColor: data.series[seriesIndex].color,
+    seriesIndex,
   };
 }

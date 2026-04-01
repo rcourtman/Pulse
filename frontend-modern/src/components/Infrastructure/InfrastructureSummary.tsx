@@ -59,8 +59,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               activeSeriesDisplay="isolate"
               yMode="percent"
               highlightNearestSeriesOnHover
+              hoverSourceKey="cpu"
+              hoverSync={state.chartHoverSync()}
               highlightSeriesId={state.activeSeriesId()}
               interactionState={state.interactionStateFor(state.seriesFor('cpu'))}
+              onHoverSyncChange={state.setChartHoverSync}
             />
           </SummaryMetricCard>
 
@@ -79,8 +82,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               activeSeriesDisplay="isolate"
               yMode="percent"
               highlightNearestSeriesOnHover
+              hoverSourceKey="memory"
+              hoverSync={state.chartHoverSync()}
               highlightSeriesId={state.activeSeriesId()}
               interactionState={state.interactionStateFor(state.seriesFor('memory'))}
+              onHoverSyncChange={state.setChartHoverSync}
             />
           </SummaryMetricCard>
 
@@ -106,8 +112,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange}
               formatValue={formatThroughputRate}
+              hoverSourceKey="diskio"
+              hoverSync={state.chartHoverSync()}
               highlightSeriesId={state.activeSeriesId()}
               interactionState={state.interactionStateFor(state.diskioSeries())}
+              onHoverSyncChange={state.setChartHoverSync}
             />
           </SummaryMetricCard>
 
@@ -178,8 +187,11 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                 rangeLabel={rangeLabel()}
                 timeRange={props.timeRange}
                 formatValue={formatThroughputRate}
+                hoverSourceKey="network"
+                hoverSync={state.chartHoverSync()}
                 highlightSeriesId={state.activeSeriesId()}
                 interactionState={state.interactionStateFor(state.networkSeries())}
+                onHoverSyncChange={state.setChartHoverSync}
               />
             </SummaryMetricCard>
           </Show>
