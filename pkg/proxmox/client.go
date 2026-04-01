@@ -88,9 +88,23 @@ func parseFlexibleIntString(raw string) (int, error) {
 }
 
 func int64ToInt(v int64) (int, error) {
-	maxInt := int64(^uint(0) >> 1)
-	minInt := -maxInt - 1
-	if v > maxInt || v < minInt {
+	if strconv.IntSize == 32 {
+		if v > math.MaxInt32 || v < math.MinInt32 {
+			return 0, fmt.Errorf("integer %d exceeds int range", v)
+		}
+		return int(int32(v)), nil
+	}
+	return int(v), nil
+}
+
+func uint64ToInt(v uint64) (int, error) {
+	if strconv.IntSize == 32 {
+		if v > math.MaxInt32 {
+			return 0, fmt.Errorf("integer %d exceeds int range", v)
+		}
+		return int(int32(v)), nil
+	}
+	if v > math.MaxInt64 {
 		return 0, fmt.Errorf("integer %d exceeds int range", v)
 	}
 	return int(v), nil
@@ -100,8 +114,13 @@ func floatToIntTrunc(v float64) (int, error) {
 	if math.IsNaN(v) || math.IsInf(v, 0) {
 		return 0, fmt.Errorf("non-finite float %v cannot be converted to int", v)
 	}
-	limit := math.Exp2(float64(strconv.IntSize - 1))
-	if v >= limit || v < -limit {
+	var maxAbs float64
+	if strconv.IntSize == 32 {
+		maxAbs = float64(math.MaxInt32) + 1
+	} else {
+		maxAbs = float64(math.MaxInt64) + 1
+	}
+	if v >= maxAbs || v < -maxAbs {
 		return 0, fmt.Errorf("float %v exceeds int range", v)
 	}
 	return int(v), nil
@@ -1681,15 +1700,16 @@ func (a *VMIPAddress) UnmarshalJSON(data []byte) error {
 
 	a.Address = coerceString(raw["ip-address"])
 
-	maxInt := uint64(^uint(0) >> 1)
 	prefix, err := coerceUint64("prefix", raw["prefix"])
 	if err != nil {
 		prefix = 0
 	}
-	if prefix > maxInt {
-		prefix = maxInt
+	if prefix > 128 {
+		prefix = 128
 	}
-	a.Prefix = int(prefix)
+	if prefixInt, err := uint64ToInt(prefix); err == nil {
+		a.Prefix = prefixInt
+	}
 	return nil
 }
 

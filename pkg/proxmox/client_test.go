@@ -587,6 +587,42 @@ func TestFlexIntUnmarshalJSONRejectsNonFiniteAndOverflow(t *testing.T) {
 	}
 }
 
+func TestVMIPAddressUnmarshalJSONCapsPrefixToCIDRRange(t *testing.T) {
+	tests := []struct {
+		name    string
+		payload string
+		want    int
+	}{
+		{
+			name:    "keeps valid prefix",
+			payload: `{"ip-address":"10.0.0.10","prefix":24}`,
+			want:    24,
+		},
+		{
+			name:    "caps overlong ipv6 prefix",
+			payload: `{"ip-address":"2001:db8::10","prefix":129}`,
+			want:    128,
+		},
+		{
+			name:    "caps huge prefix before int conversion",
+			payload: `{"ip-address":"2001:db8::10","prefix":"18446744073709551615"}`,
+			want:    128,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var got VMIPAddress
+			if err := json.Unmarshal([]byte(tc.payload), &got); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Prefix != tc.want {
+				t.Fatalf("prefix = %d, want %d", got.Prefix, tc.want)
+			}
+		})
+	}
+}
+
 func TestParseUint64Flexible(t *testing.T) {
 	tests := []struct {
 		name    string
