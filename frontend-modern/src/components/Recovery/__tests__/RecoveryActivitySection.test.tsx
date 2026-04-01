@@ -1,5 +1,5 @@
-import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it } from 'vitest';
+import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivitySection';
 
@@ -49,5 +49,43 @@ describe('RecoveryActivitySection', () => {
     expect(screen.queryByText(/^Range$/)).not.toBeInTheDocument();
     expect(screen.queryByText(/1.5 \/ day/i)).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /recovery points/i })).toHaveLength(2);
+  });
+
+  it('shows the focused rollup as a clearable active filter chip', async () => {
+    const clearFocusedRollup = vi.fn();
+
+    render(() => (
+      <RecoveryActivitySection
+        activitySummary={() => ({ totalPoints: 3, activeDays: 2, averagePerDay: 1.5 })}
+        activeClusterLabel={() => ''}
+        activeItemTypeLabel={() => ''}
+        activeNamespaceLabel={() => ''}
+        activeNodeLabel={() => ''}
+        chartRangeDays={() => 30}
+        clearClusterFilter={() => undefined}
+        clearFocusedRollup={clearFocusedRollup}
+        clearItemTypeFilter={() => undefined}
+        clearNamespaceFilter={() => undefined}
+        clearNodeFilter={() => undefined}
+        clearSelectedDate={() => undefined}
+        hasFocusedRollup={() => true}
+        isMobile={false}
+        loading={() => false}
+        overallRollupsSummary={() => ({ total: 2, stale: 0, neverSucceeded: 0 })}
+        selectedDateKey={() => null}
+        selectedDateLabel={() => ''}
+        selectedHistoryItemLabel={() => 'Archive VM'}
+        timeline={() => ({ points: [], axisMax: 0, labelEvery: 1 })}
+        toggleSelectedDate={() => undefined}
+      />
+    ));
+
+    const chip = screen.getByTestId('active-rollup-chip');
+    expect(chip).toHaveTextContent('Focused Item');
+    expect(chip).toHaveTextContent('Archive VM');
+    expect(screen.getByText('Showing selected item history')).toBeInTheDocument();
+
+    await fireEvent.click(screen.getByRole('button', { name: /clear focused item/i }));
+    expect(clearFocusedRollup).toHaveBeenCalledTimes(1);
   });
 });

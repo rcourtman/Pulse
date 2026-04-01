@@ -38,4 +38,14 @@ describe('RecoveryRoute', () => {
     });
     expect(navigateSpy).not.toHaveBeenCalled();
   });
+
+  it('preserves focused rollup routes without redirecting away from the selected history view', async () => {
+    mockLocationSearch = '?view=events&rollupId=res%3Avm-123';
+    render(() => <RecoveryRoute />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('recovery-component')).toBeInTheDocument();
+    });
+    expect(navigateSpy).not.toHaveBeenCalled();
+  });
 });

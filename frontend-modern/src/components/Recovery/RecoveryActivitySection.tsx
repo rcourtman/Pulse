@@ -3,9 +3,6 @@ import type { Accessor, Component, JSX } from 'solid-js';
 
 import { Card } from '@/components/shared/Card';
 import { hideTooltip, showTooltip } from '@/components/shared/Tooltip';
-import {
-  getRecoveryBreadcrumbLinkClass,
-} from '@/utils/recoveryActionPresentation';
 import { getRecoveryFilterChipPresentation } from '@/utils/recoveryFilterChipPresentation';
 import {
   getRecoveryActivityEmptyState,
@@ -96,21 +93,11 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
             </Show>
           </div>
           <div class="flex flex-wrap items-center gap-2">
-            <Show when={props.selectedHistoryItemLabel()}>
-              <div class="inline-flex items-center gap-2 rounded-md border border-border-subtle bg-surface/70 px-2.5 py-1 text-xs">
-                <span class="font-semibold uppercase tracking-[0.14em] text-muted">Focused Item</span>
-                <span class="max-w-[18rem] truncate font-medium text-base-content">
-                  {props.selectedHistoryItemLabel()}
-                </span>
-              </div>
-            </Show>
             <Show
               when={props.hasFocusedRollup()}
               fallback={<span class="text-xs text-muted">All protected items</span>}
             >
-              <button type="button" onClick={props.clearFocusedRollup} class={getRecoveryBreadcrumbLinkClass()}>
-                All history
-              </button>
+              <span class="text-xs font-medium text-muted">Showing selected item history</span>
             </Show>
           </div>
         </div>
@@ -118,6 +105,7 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
 
       <Show
         when={
+          props.selectedHistoryItemLabel() ||
           props.selectedDateKey() ||
           props.activeItemTypeLabel() ||
           props.activeClusterLabel() ||
@@ -126,6 +114,30 @@ function RecoveryActivitySectionContent(props: RecoveryActivitySectionProps): JS
         }
       >
         <div class="mb-1 flex flex-wrap items-center gap-1.5">
+          <Show when={props.selectedHistoryItemLabel()}>
+            {(() => {
+              const chip = getRecoveryFilterChipPresentation('focused-item');
+              return (
+                <div data-testid="active-rollup-chip" class={chip.className}>
+                  <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+                  <span
+                    class="truncate font-mono text-[10px]"
+                    title={props.selectedHistoryItemLabel() ?? undefined}
+                  >
+                    {props.selectedHistoryItemLabel()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={props.clearFocusedRollup}
+                    class={chip.clearButtonClass}
+                    aria-label="Clear focused item"
+                  >
+                    Clear
+                  </button>
+                </div>
+              );
+            })()}
+          </Show>
           <Show when={props.selectedDateKey()}>
             {(() => {
               const chip = getRecoveryFilterChipPresentation('day');
