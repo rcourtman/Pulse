@@ -652,6 +652,8 @@ describe('shared primitive guardrails', () => {
     expect(densityMapSource).not.toContain('detail().currentValue');
     expect(densityMapSource).toContain('data-density-map-tooltip="true"');
     expect(densityMapSource).toContain('data-density-map-tooltip-sparkline="true"');
+    expect(densityMapSource).toContain('grid-cols-[auto_minmax(0,1fr)_auto]');
+    expect(densityMapSource).not.toContain('max-w-[94px]');
     expect(densityMapSource).not.toContain('timeRangeToMs');
     expect(densityMapSource).not.toContain('createSignal');
     expect(densityMapSource).not.toContain('ctx.fillRect');

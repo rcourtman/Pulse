@@ -57,13 +57,13 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
       <Show when={densityMap.hoveredState()}>
         {(hover) => (
           <TooltipPortal when={true} x={hover().tooltipX} y={hover().tooltipY + 2}>
-            <div class="min-w-[152px]" data-density-map-tooltip="true">
-              <div class="mb-1 flex items-center gap-1.5 border-b border-border pb-1 text-[10px] leading-none">
+            <div class="min-w-[152px] max-w-[236px]" data-density-map-tooltip="true">
+              <div class="mb-1 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 border-b border-border pb-1 text-[10px] leading-none">
                 <span class="h-2 w-2 rounded-sm" style={{ background: hover().seriesColor }} />
-                <span class="max-w-[94px] truncate font-semibold tracking-[0.12em] text-base-content">
+                <span class="min-w-0 truncate font-semibold tracking-[0.12em] text-base-content">
                   {hover().seriesName}
                 </span>
-                <span class="ml-auto whitespace-nowrap text-muted">
+                <span class="whitespace-nowrap text-muted">
                   {formatDensityMapHoverTime(hover().timestamp)}
                 </span>
               </div>
