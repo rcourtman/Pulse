@@ -201,6 +201,10 @@ The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only
 context. Future hot-path filter/group/sort/windowing changes must route through
 the explicit dashboard performance proof policy in the subsystem registry.
+Route-backed workload `resource` focus on that hot path is contextual state
+only, not inferred filter state: opening or closing an inline drawer must not
+invent, retain, or clear `agent` or node-scope filters unless those filters
+were already explicit in the managed workload URL.
 That same hot-path ownership now covers top-of-page summary emphasis: infrastructure
 and workloads summary cards must treat row hover, chart hover, and route focus
 as one shared active-series contract so time-range switches, row scrubbing, and

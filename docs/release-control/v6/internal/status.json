@@ -3716,11 +3716,11 @@
     {
       "id": "codex-lane-l8",
       "agent_id": "codex",
-      "summary": "Add canonical synced summary readouts so sibling charts show compact hover values without spawning multi-tooltip overlays.",
+      "summary": "Fix canonical row-focus close behavior so collapsing an inline drawer never leaves behind accidental filter state.",
       "target_id": "v6-ga-promotion",
       "claimed_at": "2026-04-01T22:34:28Z",
-      "heartbeat_at": "2026-04-01T22:34:28Z",
-      "expires_at": "2026-04-02T00:34:28Z",
+      "heartbeat_at": "2026-04-01T22:51:28Z",
+      "expires_at": "2026-04-02T00:51:28Z",
       "work_item": {
         "kind": "lane",
         "id": "L8"

@@ -94,7 +94,6 @@ export function useDashboardState(props: DashboardProps) {
     selectedKubernetesNamespace,
     selectedNode,
     setContainerRuntime,
-    setSelectedNode,
     setSelectedPlatform,
     setSelectedKubernetesContext,
     setSelectedKubernetesNamespace,
@@ -217,7 +216,6 @@ export function useDashboardState(props: DashboardProps) {
     tableBodyRef,
   } = useDashboardSelectionState({
     filteredGuests,
-    setSelectedNode,
   });
 
   const {

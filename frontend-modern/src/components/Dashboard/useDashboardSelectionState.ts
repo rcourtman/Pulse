@@ -19,7 +19,6 @@ import {
 
 interface UseDashboardSelectionStateOptions {
   filteredGuests: Accessor<WorkloadGuest[]>;
-  setSelectedNode: (value: string | null) => void;
 }
 
 export function useDashboardSelectionState(options: UseDashboardSelectionStateOptions) {
@@ -81,13 +80,10 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
       return;
     }
 
-    const { resourceId, selectedNode } = selection;
+    const { resourceId } = selection;
     if (resourceId === handledResourceId()) return;
 
     setSelectedGuestIdState(resourceId);
-    if (selectedNode) {
-      options.setSelectedNode(selectedNode);
-    }
     setHandledResourceId(resourceId);
   });
 

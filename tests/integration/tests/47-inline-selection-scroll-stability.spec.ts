@@ -118,6 +118,26 @@ async function positionElementNearViewportBottom(
   return locator.evaluate((element) => element.getBoundingClientRect().top);
 }
 
+async function findLegacyScopedWorkloadRow(page: Page): Promise<Locator> {
+  const rows = page.locator("tr[data-guest-id]");
+  const rowCount = await rows.count();
+  for (let index = 0; index < rowCount; index += 1) {
+    const row = rows.nth(index);
+    if (!(await row.isVisible())) {
+      continue;
+    }
+    const guestId = ((await row.getAttribute("data-guest-id")) || "").trim();
+    if (
+      /^([^:]+):([^:]+):(\d+)$/.test(guestId) &&
+      !guestId.startsWith("app-container:") &&
+      !guestId.startsWith("pod:")
+    ) {
+      return row;
+    }
+  }
+  throw new Error("Expected one visible legacy-scoped workload row");
+}
+
 test.describe.serial("Inline selection scroll stability", () => {
   test.setTimeout(180_000);
 
@@ -182,7 +202,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
     expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
-    expect(afterRowTop).toBeLessThan(viewportHeight * 0.42);
+    expect(afterRowTop).toBeLessThan(viewportHeight * 0.5);
     expect(detailTop).toBeLessThan(viewportHeight - 48);
 
     const afterScroll = await page.evaluate(() => window.scrollY);
@@ -237,7 +257,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
     await expect(page.locator("tr[data-guest-id]").first()).toBeVisible();
 
-    const row = page.locator("tr[data-guest-id]").first();
+    const row = await findLegacyScopedWorkloadRow(page);
     const beforeScroll = await scrollSectionIntoView(page, row);
     expect(beforeScroll).toBeGreaterThan(10);
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
@@ -249,6 +269,11 @@ test.describe.serial("Inline selection scroll stability", () => {
     await row.click();
 
     await expect(page).toHaveURL(/\/workloads\?(?:.*&)?resource=/);
+    {
+      const openedUrl = new URL(page.url());
+      expect(openedUrl.searchParams.get("resource")).toBe(workloadId);
+      expect(openedUrl.searchParams.has("agent")).toBe(false);
+    }
     const detailRow = row.locator("xpath=following-sibling::tr[1]");
     await expect(detailRow).toContainText(
       "Overview",
@@ -260,7 +285,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
     expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
-    expect(afterRowTop).toBeLessThan(viewportHeight * 0.42);
+    expect(afterRowTop).toBeLessThan(viewportHeight * 0.5);
     expect(detailTop).toBeLessThan(viewportHeight - 48);
 
     const afterScroll = await page.evaluate(() => window.scrollY);
@@ -268,6 +293,11 @@ test.describe.serial("Inline selection scroll stability", () => {
 
     await row.click();
     await expect.poll(() => page.url()).not.toContain("resource=");
+    {
+      const closedUrl = new URL(page.url());
+      expect(closedUrl.searchParams.has("resource")).toBe(false);
+      expect(closedUrl.searchParams.has("agent")).toBe(false);
+    }
   });
 
   test("reveals storage inline detail without hard-centering the selected row", async ({

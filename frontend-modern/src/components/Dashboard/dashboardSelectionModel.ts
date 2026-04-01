@@ -6,11 +6,10 @@ import {
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
-import { getCanonicalWorkloadId, normalizeWorkloadViewModeParam } from '@/utils/workloads';
+import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 export interface DashboardResourceSelection {
   resourceId: string;
-  selectedNode: string | null;
 }
 
 export interface DashboardSelectionNavigateTargetOptions {
@@ -22,24 +21,11 @@ export interface DashboardSelectionNavigateTargetOptions {
 export const resolveDashboardResourceSelection = (
   search: string,
 ): DashboardResourceSelection | null => {
-  const { resource: resourceId, type } = parseWorkloadsLinkSearch(search);
+  const { resource: resourceId } = parseWorkloadsLinkSearch(search);
   if (!resourceId) return null;
-
-  const normalizedViewMode = normalizeWorkloadViewModeParam(type || '');
-  const [firstSegment] = resourceId.split(':');
-  const structuredResourceType = normalizeWorkloadViewModeParam(firstSegment || '');
-  const legacyScopedMatch =
-    normalizedViewMode !== 'app-container' &&
-    normalizedViewMode !== 'pod' &&
-    structuredResourceType !== 'app-container' &&
-    structuredResourceType !== 'pod'
-      ? resourceId.match(/^([^:]+):([^:]+):(\d+)$/)
-      : null;
-  const selectedNode = legacyScopedMatch ? `${legacyScopedMatch[1]}-${legacyScopedMatch[2]}` : null;
 
   return {
     resourceId,
-    selectedNode,
   };
 };
 

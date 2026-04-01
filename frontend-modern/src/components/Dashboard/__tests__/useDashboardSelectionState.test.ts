@@ -40,22 +40,19 @@ describe('useDashboardSelectionState', () => {
     vi.unstubAllGlobals();
   });
 
-  it('owns dashboard resource deep-link selection and node synchronization', () => {
+  it('owns dashboard resource deep-link selection without mutating workload filters', () => {
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
-    const setSelectedNode = vi.fn();
 
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode,
       }),
     );
 
     expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
-    expect(setSelectedNode).toHaveBeenCalledWith('cluster-a-node-1');
-    expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBe(
-      'cluster-a-node-1',
-    );
+    expect(resolveDashboardResourceSelection(locationSearch)).toEqual({
+      resourceId: 'cluster-a:node-1:101',
+    });
   });
 
   it('clears stale hovered workload ids when filtered guests change', () => {
@@ -72,7 +69,6 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode: vi.fn(),
       }),
     );
 
@@ -86,18 +82,17 @@ describe('useDashboardSelectionState', () => {
   it('does not invent node filters for canonical app-container deep links', () => {
     locationSearch = '?type=app-container&resource=app-container:truenas-main:nextcloud';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
-    const setSelectedNode = vi.fn();
 
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode,
       }),
     );
 
     expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
-    expect(setSelectedNode).not.toHaveBeenCalled();
-    expect(resolveDashboardResourceSelection(locationSearch)?.selectedNode).toBeNull();
+    expect(resolveDashboardResourceSelection(locationSearch)).toEqual({
+      resourceId: 'app-container:truenas-main:nextcloud',
+    });
   });
 
   it('writes workload row selection back into the route state without dropping filters', () => {
@@ -107,7 +102,6 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode: vi.fn(),
       }),
     );
 
@@ -127,7 +121,6 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode: vi.fn(),
       }),
     );
 
@@ -175,7 +168,6 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode: vi.fn(),
       }),
     );
 
@@ -232,7 +224,6 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode: vi.fn(),
       }),
     );
 
@@ -308,7 +299,6 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
-        setSelectedNode: vi.fn(),
       }),
     );
 
@@ -317,5 +307,23 @@ describe('useDashboardSelectionState', () => {
 
     expect(result.activeSummaryWorkloadGroupScope()?.id).toBe('cluster-b');
     expect(result.activeSummaryWorkloadId()).toBeNull();
+  });
+
+  it('clears row focus without leaving behind an inferred agent filter', () => {
+    locationSearch = '?resource=cluster-a:node-1:101';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+      }),
+    );
+
+    expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
+
+    result.setSelectedGuestId(null);
+    vi.runAllTimers();
+
+    expect(navigateSpy).toHaveBeenCalledWith('/workloads', ROUTE_STATE_REPLACE_OPTIONS);
   });
 });

@@ -9,10 +9,9 @@ import {
 } from '../dashboardSelectionModel';
 
 describe('dashboardSelectionModel', () => {
-  it('resolves dashboard resource deep links into selected guest and node scope', () => {
+  it('resolves dashboard resource deep links into focused guest ids without inventing filters', () => {
     expect(resolveDashboardResourceSelection('?resource=cluster-a:node-1:101')).toEqual({
       resourceId: 'cluster-a:node-1:101',
-      selectedNode: 'cluster-a-node-1',
     });
     expect(
       resolveDashboardResourceSelection(
@@ -20,17 +19,14 @@ describe('dashboardSelectionModel', () => {
       ),
     ).toEqual({
       resourceId: 'app-container:truenas-main:nextcloud',
-      selectedNode: null,
     });
     expect(
       resolveDashboardResourceSelection('?resource=app-container:docker-main:container-123'),
     ).toEqual({
       resourceId: 'app-container:docker-main:container-123',
-      selectedNode: null,
     });
     expect(resolveDashboardResourceSelection('?resource=guest-1')).toEqual({
       resourceId: 'guest-1',
-      selectedNode: null,
     });
     expect(resolveDashboardResourceSelection('')).toBeNull();
   });
