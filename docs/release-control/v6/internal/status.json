@@ -3712,21 +3712,7 @@
       ]
     }
   ],
-  "work_claims": [
-    {
-      "id": "codex-candidate-lane-platform-admission-execution",
-      "agent_id": "codex",
-      "summary": "Continue VMware first-lab-ready work by hardening degraded and partial-data handling in the live vCenter poll path so optional VMware read failures preserve canonical runtime health and usable inventory instead of collapsing the whole phase-1 refresh.",
-      "target_id": "v6-product-lane-expansion",
-      "claimed_at": "2026-03-31T08:53:10Z",
-      "heartbeat_at": "2026-03-31T09:32:12Z",
-      "expires_at": "2026-03-31T11:32:12Z",
-      "work_item": {
-        "kind": "candidate-lane",
-        "id": "platform-admission-execution"
-      }
-    }
-  ],
+  "work_claims": [],
   "open_decisions": [],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
