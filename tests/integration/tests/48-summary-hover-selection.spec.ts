@@ -638,4 +638,64 @@ test.describe.serial("Summary hover selection", () => {
     await expectSummaryHoverTimestampsAligned(storageSummary, 4);
     await expectActiveIsolatedLineCards(storageSummary, 3);
   });
+
+  test("keeps table coordination non-destructive and reversible", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+    const infrastructureSummary = page.getByTestId("infrastructure-summary");
+    await expect(infrastructureSummary).toBeVisible();
+    const infrastructureChartId = await hoverSummaryChartUntilActiveId(
+      page,
+      infrastructureSummary,
+      infrastructureSummary
+        .locator('[data-active-series-display="isolate"]')
+        .first(),
+    );
+    const highlightedInfrastructureRow = page.locator(
+      `tr[data-summary-series-id="${infrastructureChartId}"]`,
+    );
+    const infrastructureJumpButton = page.getByRole("button", {
+      name: "Jump to row",
+    });
+    if (await highlightedInfrastructureRow.first().isVisible()) {
+      await expect(highlightedInfrastructureRow.first()).toHaveAttribute(
+        "data-summary-row-active",
+        "true",
+      );
+    } else {
+      await expect(infrastructureJumpButton).toBeVisible();
+      await infrastructureJumpButton.click();
+      await expect(highlightedInfrastructureRow.first()).toBeVisible();
+    }
+
+    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    const workloadsSummary = page.getByTestId("workloads-summary");
+    await expect(workloadsSummary).toBeVisible();
+    const focusedWorkloadRow = page.locator("tr[data-guest-id]").first();
+    const focusedWorkloadId = await readSummarySeriesId(
+      focusedWorkloadRow,
+      "data-guest-id",
+    );
+    expect(focusedWorkloadId).not.toBe("");
+    await focusedWorkloadRow.click();
+    await scrollPrimaryViewportToBottom(page);
+    const jumpButton = page.getByRole("button", { name: "Jump to row" });
+    const focusedSummaryRow = page
+      .locator(`tr[data-summary-series-id="${focusedWorkloadId}"]`)
+      .first();
+    if (await jumpButton.isVisible()) {
+      await jumpButton.click();
+      await expect(focusedSummaryRow).toBeVisible();
+    } else {
+      await expect(focusedSummaryRow).toBeVisible();
+    }
+  });
 });

@@ -5,6 +5,7 @@ import {
   useSummaryContextualFocusState,
   type SummaryChartHoverSync,
 } from '@/components/shared/contextualFocus';
+import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import {
@@ -57,6 +58,10 @@ interface StorageSummaryProps {
   nodeId?: string;
   hoveredResourceId?: string | null;
   focusedResourceId?: string | null;
+  chartHoverSync?: SummaryChartHoverSync | null;
+  onChartHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
+  showJumpToActiveRow?: boolean;
+  onJumpToActiveRow?: () => void;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +72,16 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const [data, setData] = createSignal<StorageSummaryChartsResponse | null>(null);
   const [loaded, setLoaded] = createSignal(false);
   const [fetchFailed, setFetchFailed] = createSignal(false);
-  const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
+  const [localChartHoverSync, setLocalChartHoverSync] = createSignal<SummaryChartHoverSync | null>(
+    null,
+  );
+  const chartHoverSync = () => props.chartHoverSync ?? localChartHoverSync();
+  const setChartHoverSync = (value: SummaryChartHoverSync | null) => {
+    if (props.chartHoverSync === undefined) {
+      setLocalChartHoverSync(value);
+    }
+    props.onChartHoverSyncChange?.(value);
+  };
 
   // Track org switches so the effect re-runs when the org changes.
   const [orgVersion, setOrgVersion] = createSignal(0);
@@ -282,6 +296,9 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
                 <span class="text-muted">
                   {props.diskCount} {props.diskCount === 1 ? 'disk' : 'disks'}
                 </span>
+              </Show>
+              <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
+                <SummaryJumpToRowButton onClick={() => props.onJumpToActiveRow?.()} />
               </Show>
             </>
           }

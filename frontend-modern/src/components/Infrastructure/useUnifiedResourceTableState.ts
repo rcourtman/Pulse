@@ -32,11 +32,13 @@ export interface UnifiedResourceTableProps {
   resources: Resource[];
   expandedResourceId: string | null;
   highlightedResourceId?: string | null;
+  revealedResourceId?: string | null;
   hoveredResourceId?: string | null;
   onExpandedResourceChange: (id: string | null) => void;
   onHoverChange?: (id: string | null) => void;
   groupingMode?: 'grouped' | 'flat';
   onDeployCluster?: (clusterId: string, clusterName: string) => void;
+  setTableRootRef?: (element: HTMLDivElement | undefined) => void;
 }
 
 export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
@@ -65,6 +67,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
       hostRowIndexById(),
       props.expandedResourceId,
       props.highlightedResourceId,
+      props.revealedResourceId,
     ),
   );
 

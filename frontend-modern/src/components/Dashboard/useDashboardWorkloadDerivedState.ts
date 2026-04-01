@@ -37,6 +37,7 @@ interface DashboardWorkloadDerivedStateOptions {
   guestSortComparator: Accessor<((a: WorkloadGuest, b: WorkloadGuest) => number) | null>;
   nodes: Accessor<Node[]>;
   selectedGuestId: Accessor<string | null>;
+  revealedGuestId: Accessor<string | null>;
   tableBodyRef: Accessor<HTMLTableSectionElement | null>;
 }
 
@@ -156,8 +157,12 @@ export function useDashboardWorkloadDerivedState(
 
   const revealGuestIndex = createMemo<number | null>(() => {
     const selectedId = options.selectedGuestId();
-    if (!selectedId) return null;
-    return guestGlobalIndexById().get(selectedId) ?? null;
+    if (selectedId) {
+      return guestGlobalIndexById().get(selectedId) ?? null;
+    }
+    const revealedId = options.revealedGuestId();
+    if (!revealedId) return null;
+    return guestGlobalIndexById().get(revealedId) ?? null;
   });
 
   const groupedWindowing = useGroupedTableWindowing({

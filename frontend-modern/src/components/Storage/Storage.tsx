@@ -34,6 +34,7 @@ const Storage: Component = () => {
     activeBannerKind,
     cephSummaryStats,
     filteredRecords,
+    activeSummaryStorageResourceId,
     nodeOptions,
     physicalDisks,
     nodes,
@@ -45,12 +46,17 @@ const Storage: Component = () => {
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
+    chartHoverSync,
     hoveredStorageResourceId,
     isLoadingPools,
     focusedStorageResourceId,
+    jumpToActiveStorageRow,
     selectedDiskId,
+    setChartHoverSync,
     setHoveredStorageResourceId,
     setSelectedDiskId,
+    setSummaryTableRootRef,
+    shouldShowJumpToActiveStorageRow,
   } = useStoragePageModel();
 
   return (
@@ -63,6 +69,10 @@ const Storage: Component = () => {
           physicalDisks={physicalDisks}
           hoveredResourceId={hoveredStorageResourceId}
           focusedResourceId={focusedStorageResourceId}
+          chartHoverSync={chartHoverSync}
+          onChartHoverSyncChange={setChartHoverSync}
+          showJumpToActiveRow={shouldShowJumpToActiveStorageRow}
+          onJumpToActiveRow={jumpToActiveStorageRow}
         />
       </StickySummarySection>
 
@@ -114,7 +124,9 @@ const Storage: Component = () => {
         highlightedRecordId={highlightedRecordId}
         getRecordAlertState={getRecordAlertState}
         isLoadingPools={isLoadingPools}
+        highlightedSummaryResourceId={activeSummaryStorageResourceId}
         hoveredStorageResourceId={hoveredStorageResourceId}
+        setTableRootRef={setSummaryTableRootRef}
         setHoveredStorageResourceId={setHoveredStorageResourceId}
         selectedDiskId={selectedDiskId}
         setSelectedDiskId={setSelectedDiskId}

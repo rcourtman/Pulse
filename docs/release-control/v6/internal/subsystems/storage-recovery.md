@@ -254,6 +254,13 @@ interactive-series filtering, focused-label lookup, and active-series
 resolution through `frontend-modern/src/components/shared/contextualFocus.ts`
 so storage keeps the same page-scoped focus semantics as infrastructure and
 workloads instead of preserving a storage-local hover/focus branch.
+That same storage ownership now also governs summary-to-table reveal. Hovering
+pool or disk charts may highlight the matching row when the active view already
+shows it, but storage hover must not auto-filter or auto-scroll the table.
+When the active chart entity is off-screen or hidden behind the other storage
+view, the page must use the shared summary-table focus bridge and reveal the
+target row only through an explicit `Jump to row` action, switching views or
+expanding the owning group only for that deliberate reveal path.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,

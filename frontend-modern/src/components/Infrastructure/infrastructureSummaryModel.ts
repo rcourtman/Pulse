@@ -16,13 +16,18 @@ import { asTrimmedString } from '@/utils/stringUtils';
 import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 import type { Resource } from '@/types/resource';
 import { getDiskPercent } from '@/types/resource';
+import type { SummaryChartHoverSync } from '@/components/shared/contextualFocus';
 
 export interface InfrastructureSummaryProps {
   resources: Resource[];
   timeRange?: TimeRange;
   hoveredResourceId?: string | null;
   focusedResourceId?: string | null;
+  chartHoverSync?: SummaryChartHoverSync | null;
   onTimeRangeChange?: (range: TimeRange) => void;
+  onChartHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
+  showJumpToActiveRow?: boolean;
+  onJumpToActiveRow?: () => void;
 }
 
 export interface InfrastructureSummarySeries {

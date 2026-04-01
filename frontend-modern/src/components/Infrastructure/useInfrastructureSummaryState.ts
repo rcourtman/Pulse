@@ -62,7 +62,16 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   const [loadedRange, setLoadedRange] = createSignal<TimeRange | null>(null);
   const [oldestDataTimestamp, setOldestDataTimestamp] = createSignal<number | null>(null);
   const [fetchFailed, setFetchFailed] = createSignal(false);
-  const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
+  const [localChartHoverSync, setLocalChartHoverSync] = createSignal<SummaryChartHoverSync | null>(
+    null,
+  );
+  const chartHoverSync = () => props.chartHoverSync ?? localChartHoverSync();
+  const setChartHoverSync = (value: SummaryChartHoverSync | null) => {
+    if (props.chartHoverSync === undefined) {
+      setLocalChartHoverSync(value);
+    }
+    props.onChartHoverSyncChange?.(value);
+  };
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const hasCurrentRangeCharts = createMemo(() => chartRange() === selectedRange());
   const isCurrentRangeLoaded = createMemo(() => loadedRange() === selectedRange());

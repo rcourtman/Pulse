@@ -2,6 +2,7 @@ import { useLocation, useNavigate } from '@solidjs/router';
 import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
 import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
+import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import type { WorkloadGuest } from '@/types/workloads';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
@@ -26,12 +27,19 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
 
   let tableRef: HTMLDivElement | undefined;
   const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
+  const summaryInteraction = useSummaryPageInteractionState({
+    hoveredSeriesId: hoveredWorkloadId,
+    focusedSeriesId: selectedGuestId,
+    revealActiveSeries: setRevealedGuestId,
+  });
 
   const setTableWrapperRef = (element: HTMLDivElement | undefined) => {
     tableRef = element;
+    summaryInteraction.setTableRootRef(element);
   };
 
   const setSelectedGuestIdState = (id: string | null) => {
@@ -80,17 +88,31 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     }
   });
 
+  createEffect(() => {
+    const revealedId = revealedGuestId();
+    if (!revealedId) return;
+    if (!dashboardHasHoveredWorkload(options.filteredGuests(), revealedId)) {
+      setRevealedGuestId(null);
+    }
+  });
+
   onCleanup(() => {
     routeStateNavigate.cleanup();
   });
 
   return {
+    activeSummaryWorkloadId: summaryInteraction.activeSeriesId,
+    chartHoverSync: summaryInteraction.chartHoverSync,
     hoveredWorkloadId,
+    jumpToActiveWorkloadRow: summaryInteraction.jumpToActiveRow,
+    revealedGuestId,
     selectedGuestId,
+    setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,
     setTableWrapperRef,
+    shouldShowJumpToActiveWorkloadRow: summaryInteraction.shouldShowJumpToActiveRow,
     tableBodyRef,
   } as const;
 }

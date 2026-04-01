@@ -37,4 +37,21 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageModelSource).toContain('tokenizeSearch');
     expect(infrastructurePageModelSource).toContain('filterResources');
   });
+
+  it('keeps summary-to-table coordination on the page-state owner', () => {
+    expect(infrastructurePageSurfaceSource).toContain('showJumpToActiveRow={shouldShowJumpToActiveResourceRow()}');
+    expect(infrastructurePageSurfaceSource).toContain('onJumpToActiveRow={jumpToActiveResourceRow}');
+    expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
+    expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
+
+    expect(infrastructurePageStateSource).toContain('useSummaryPageInteractionState');
+    expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
+    expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');
+    expect(infrastructurePageStateSource).toContain('shouldShowJumpToActiveResourceRow');
+    expect(infrastructurePageStateSource).not.toContain('querySelector<HTMLElement>(');
+    expect(infrastructurePageStateSource).not.toContain('scrollIntoView({ behavior: \'smooth\', block: \'center\' })');
+
+    expect(infrastructurePageRouteStateSource).not.toContain('useSummaryPageInteractionState');
+    expect(infrastructurePageRouteStateSource).not.toContain('setSummaryTableRootRef');
+  });
 });

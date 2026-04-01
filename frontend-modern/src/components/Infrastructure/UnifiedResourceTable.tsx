@@ -10,7 +10,7 @@ export const UnifiedResourceTable: Component<UnifiedResourceTableProps> = (props
   const table = useUnifiedResourceTableState(props);
 
   return (
-    <div class="space-y-4">
+    <div ref={props.setTableRootRef} class="space-y-4">
       <UnifiedResourceHostTableCard table={table} tableProps={props} />
       <UnifiedResourceServiceInfrastructureCard table={table} tableProps={props} />
     </div>

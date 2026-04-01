@@ -5,6 +5,7 @@ import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { useInfrastructurePageRouteState } from './useInfrastructurePageRouteState';
 import { buildInfrastructurePageFilterDerivation } from './infrastructurePageModel';
@@ -68,6 +69,11 @@ export function useInfrastructurePageState() {
     searchQuery,
     setSearchQuery,
   });
+  const summaryInteraction = useSummaryPageInteractionState({
+    hoveredSeriesId: routeState.hoveredResourceId,
+    focusedSeriesId: routeState.expandedResourceId,
+    revealActiveSeries: routeState.setRevealedResourceId,
+  });
 
   const clearFilters = () => {
     setSelectedSource('');
@@ -99,8 +105,11 @@ export function useInfrastructurePageState() {
     setSummaryCollapsed,
     groupingMode,
     setGroupingMode,
+    activeSummaryResourceId: summaryInteraction.activeSeriesId,
     ...routeState,
+    chartHoverSync: summaryInteraction.chartHoverSync,
     isMobile,
+    jumpToActiveResourceRow: summaryInteraction.jumpToActiveRow,
     deployCluster,
     setDeployCluster,
     filtersOpen,
@@ -114,5 +123,8 @@ export function useInfrastructurePageState() {
     clearFilters,
     filteredResources,
     hasFilteredResources,
+    setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setSummaryTableRootRef: summaryInteraction.setTableRootRef,
+    shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
   };
 }

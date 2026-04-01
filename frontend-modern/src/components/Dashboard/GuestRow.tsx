@@ -96,6 +96,8 @@ export function GuestRow(props: GuestRowProps) {
         class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''}`}
         style={rowStyle()}
         data-guest-id={guestId()}
+        data-summary-series-id={guestId()}
+        data-summary-row-active={props.isSummaryHighlighted ? 'true' : 'false'}
         onClick={props.onClick}
         onMouseEnter={() => props.onHoverChange?.(guestId())}
         onMouseLeave={() => props.onHoverChange?.(null)}

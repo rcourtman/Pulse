@@ -984,6 +984,75 @@ describe('Storage', () => {
     storageSummarySpy.mockRestore();
   });
 
+  it('offers a deliberate jump affordance when the focused storage row is off-screen', async () => {
+    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha-Store',
+          usage: [
+            { timestamp: Date.now() - 60_000, value: 45 },
+            { timestamp: Date.now(), value: 47 },
+          ],
+          used: [
+            { timestamp: Date.now() - 60_000, value: 450 },
+            { timestamp: Date.now(), value: 470 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 60_000, value: 550 },
+            { timestamp: Date.now(), value: 530 },
+          ],
+        },
+      },
+      disks: {},
+      stats: {
+        oldestDataTimestamp: Date.now() - 60_000,
+      },
+    });
+
+    hookResources = [
+      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:alpha',
+        },
+      }),
+    ];
+
+    render(() => <Storage />);
+
+    await screen.findByTestId('storage-summary');
+    const alphaRow = screen.getByText('Alpha-Store').closest('tr') as HTMLTableRowElement;
+    expect(alphaRow).toBeTruthy();
+
+    alphaRow.getBoundingClientRect = vi.fn(() => ({
+      top: window.innerHeight + 120,
+      bottom: window.innerHeight + 168,
+      left: 0,
+      right: 480,
+      width: 480,
+      height: 48,
+      x: 0,
+      y: window.innerHeight + 120,
+      toJSON: () => ({}),
+    })) as unknown as typeof alphaRow.getBoundingClientRect;
+    alphaRow.scrollIntoView = vi.fn();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for Alpha-Store' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Jump to row' })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to row' }));
+
+    expect(alphaRow.scrollIntoView).toHaveBeenCalledWith({
+      behavior: 'smooth',
+      block: 'center',
+    });
+
+    storageSummarySpy.mockRestore();
+  });
+
   it('restores canonical TrueNAS source filters from the storage route', async () => {
     nodeResources = [
       {

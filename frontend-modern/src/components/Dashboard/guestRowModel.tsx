@@ -41,6 +41,7 @@ export interface GuestRowProps {
   visibleColumnIds?: string[];
   onClick?: () => void;
   isExpanded?: boolean;
+  isSummaryHighlighted?: boolean;
   ioEmphasis?: WorkloadIOEmphasis;
   onHoverChange?: (guestId: string | null) => void;
 }

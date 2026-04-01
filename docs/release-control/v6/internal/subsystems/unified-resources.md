@@ -190,6 +190,12 @@ assembly branch.
     must still resolve through the same unified-resource id that powers the
     table row, line charts, density maps, and drawer route state instead of
     dropping the highlight or inventing a metric-local summary identity when
+12. Keep infrastructure chart hover non-destructive to the unified-resource
+    table. If the hovered resource row is already visible in
+    `frontend-modern/src/components/Infrastructure/UnifiedResourceTable.tsx`,
+    the row may highlight in place through the shared active-resource id; if it
+    is off-screen, the page must offer an explicit `Jump to row` affordance
+    rather than auto-scrolling or collapsing the table on hover.
     disk or network data is missing in range.
 
 ## Current State

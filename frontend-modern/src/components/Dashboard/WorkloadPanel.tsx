@@ -24,6 +24,7 @@ type WorkloadPanelProps = Pick<
   | 'groupingMode'
   | 'handleCustomUrlUpdate'
   | 'handleTagClick'
+  | 'activeSummaryWorkloadId'
   | 'mobileVisibleColumnIds'
   | 'nodeByInstance'
   | 'search'
@@ -120,6 +121,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                           )
                         }
                         isExpanded={props.selectedGuestId() === guestId()}
+                        isSummaryHighlighted={props.activeSummaryWorkloadId() === guestId()}
                         ioEmphasis={props.workloadIOEmphasis()}
                         onHoverChange={props.setHoveredWorkloadId}
                       />

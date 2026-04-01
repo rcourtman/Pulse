@@ -8,6 +8,7 @@ import {
   type SummaryChartHoverSync,
 } from '@/components/shared/contextualFocus';
 import { DensityMap } from '@/components/shared/DensityMap';
+import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import {
@@ -34,7 +35,11 @@ interface WorkloadsSummaryProps {
   fallbackSnapshots?: WorkloadSummarySnapshot[];
   hoveredWorkloadId?: string | null;
   focusedWorkloadId?: string | null;
+  chartHoverSync?: SummaryChartHoverSync | null;
   onTimeRangeChange?: (range: TimeRange) => void;
+  onChartHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
+  showJumpToActiveRow?: boolean;
+  onJumpToActiveRow?: () => void;
 }
 
 export interface WorkloadSummarySnapshot {
@@ -408,7 +413,16 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const [loadedScopeKey, setLoadedScopeKey] = createSignal<string | null>(null);
   const [fetchFailed, setFetchFailed] = createSignal(false);
   const [orgScope, setOrgScope] = createSignal(normalizeOrgScope(getOrgID()));
-  const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
+  const [localChartHoverSync, setLocalChartHoverSync] = createSignal<SummaryChartHoverSync | null>(
+    null,
+  );
+  const chartHoverSync = () => props.chartHoverSync ?? localChartHoverSync();
+  const setChartHoverSync = (value: SummaryChartHoverSync | null) => {
+    if (props.chartHoverSync === undefined) {
+      setLocalChartHoverSync(value);
+    }
+    props.onChartHoverSyncChange?.(value);
+  };
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const selectedNodeScope = createMemo(() => props.selectedNodeId?.trim() || '');
   const activeScopeKey = createMemo(
@@ -742,6 +756,9 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           </Show>
           <Show when={guestCounts().stopped > 0}>
             <span class="text-muted">{guestCounts().stopped} stopped</span>
+          </Show>
+          <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
+            <SummaryJumpToRowButton onClick={() => props.onJumpToActiveRow?.()} />
           </Show>
         </>
       }

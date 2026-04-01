@@ -1,4 +1,11 @@
-import { createEffect, createSignal, onCleanup, type Accessor, type Setter, untrack } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  type Accessor,
+  type Setter,
+  untrack,
+} from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { Resource } from '@/types/resource';
 import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
@@ -8,6 +15,7 @@ import {
   INFRASTRUCTURE_QUERY_PARAMS,
   parseInfrastructureLinkSearch,
 } from '@/routing/resourceLinks';
+import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 
 interface InfrastructurePageRouteStateOptions {
@@ -32,32 +40,20 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
   } = options;
   const location = useLocation();
   const navigate = useNavigate();
+  const routeStateNavigate = createRouteStateNavigateScheduler(
+    navigate,
+    () => `${untrack(() => location.pathname)}${untrack(() => location.search)}`,
+  );
 
   const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
   const [hoveredResourceId, setHoveredResourceId] = createSignal<string | null>(null);
   const [highlightedResourceId, setHighlightedResourceId] = createSignal<string | null>(null);
+  const [revealedResourceId, setRevealedResourceId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
   const [handledQueryParam, setHandledQueryParam] = createSignal('');
 
   let highlightTimer: number | undefined;
-  let pendingUrlSyncHandle: number | null = null;
-  let pendingUrlSyncPath: string | null = null;
-
-  const scheduleUrlSyncNavigate = (nextPath: string) => {
-    pendingUrlSyncPath = nextPath;
-    if (pendingUrlSyncHandle !== null) return;
-    pendingUrlSyncHandle = window.setTimeout(() => {
-      pendingUrlSyncHandle = null;
-      const target = pendingUrlSyncPath;
-      pendingUrlSyncPath = null;
-      if (!target) return;
-      const current = `${untrack(() => location.pathname)}${untrack(() => location.search)}`;
-      if (current === target) return;
-      navigate(target, { replace: true });
-    }, 0);
-  };
-
   createEffect(() => {
     const { resource: resourceId } = parseInfrastructureLinkSearch(location.search);
     if (!resourceId || resourceId === handledResourceId()) return;
@@ -156,7 +152,7 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
     if (!areSearchParamsEquivalent(currentParams, nextParams)) {
       const nextSearch = nextParams.toString();
       const nextPath = nextSearch ? `${INFRASTRUCTURE_PATH}?${nextSearch}` : INFRASTRUCTURE_PATH;
-      scheduleUrlSyncNavigate(nextPath);
+      routeStateNavigate.schedule(nextPath);
     }
   });
 
@@ -169,12 +165,17 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
     }
   });
 
-  onCleanup(() => {
-    if (pendingUrlSyncHandle !== null) {
-      window.clearTimeout(pendingUrlSyncHandle);
-      pendingUrlSyncHandle = null;
-      pendingUrlSyncPath = null;
+  createEffect(() => {
+    const revealedId = revealedResourceId();
+    if (!revealedId) return;
+    const exists = filteredResources().some((resource) => resource.id === revealedId);
+    if (!exists) {
+      setRevealedResourceId(null);
     }
+  });
+
+  onCleanup(() => {
+    routeStateNavigate.cleanup();
     if (highlightTimer) {
       window.clearTimeout(highlightTimer);
     }
@@ -186,6 +187,8 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
     hoveredResourceId,
     setHoveredResourceId,
     highlightedResourceId,
+    revealedResourceId,
+    setRevealedResourceId,
   };
 }
 

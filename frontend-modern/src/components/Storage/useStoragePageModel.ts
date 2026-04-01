@@ -5,6 +5,7 @@ import {
   resolveStorageRecordMetricResourceId,
 } from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { useStorageExpansionState } from './useStorageExpansionState';
 import { useStorageFilterState } from './useStorageFilterState';
 import { useStoragePageData } from './useStoragePageData';
@@ -135,6 +136,22 @@ export const useStoragePageModel = () => {
     if (!expandedId) return null;
     return storageRecordMetricIds().get(expandedId) ?? expandedId;
   });
+  const storageGroupKeyByMetricSeriesId = createMemo(() => {
+    const keys = new Map<string, string>();
+    for (const group of groupedRecords()) {
+      for (const record of group.items) {
+        keys.set(resolveStorageRecordMetricResourceId(record), group.key);
+      }
+    }
+    return keys;
+  });
+  const physicalDiskSeriesIds = createMemo(() => {
+    const ids = new Set<string>();
+    for (const disk of physicalDisks()) {
+      ids.add(resolvePhysicalDiskMetricResourceId(disk));
+    }
+    return ids;
+  });
 
   createEffect(() => {
     view();
@@ -177,8 +194,32 @@ export const useStoragePageModel = () => {
     isStorageRecordCeph,
     setExpandedPoolId,
   });
+  const summaryInteraction = useSummaryPageInteractionState({
+    hoveredSeriesId: hoveredStorageResourceId,
+    focusedSeriesId: focusedStorageResourceId,
+    revealActiveSeries: (seriesId) => {
+      if (physicalDiskSeriesIds().has(seriesId)) {
+        if (view() !== 'disks') {
+          setView('disks');
+        }
+        return;
+      }
+
+      const groupKey = storageGroupKeyByMetricSeriesId().get(seriesId);
+      if (!groupKey) {
+        return;
+      }
+      if (view() !== 'pools') {
+        setView('pools');
+      }
+      if (!expandedGroups().has(groupKey)) {
+        toggleGroup(groupKey);
+      }
+    },
+  });
 
   return {
+    activeSummaryStorageResourceId: summaryInteraction.activeSeriesId,
     kioskMode,
     reconnect: reconnectSurface,
     selectedNodeId,
@@ -213,14 +254,19 @@ export const useStoragePageModel = () => {
     toggleGroup,
     expandedPoolId,
     setExpandedPoolId,
+    chartHoverSync: summaryInteraction.chartHoverSync,
     focusedStorageResourceId,
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
     hoveredStorageResourceId,
     isLoadingPools,
+    jumpToActiveStorageRow: summaryInteraction.jumpToActiveRow,
     selectedDiskId,
+    setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredStorageResourceId,
     setSelectedDiskId,
+    setSummaryTableRootRef: summaryInteraction.setTableRootRef,
+    shouldShowJumpToActiveStorageRow: summaryInteraction.shouldShowJumpToActiveRow,
   };
 };

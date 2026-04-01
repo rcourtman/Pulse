@@ -158,4 +158,53 @@ describe('useDashboardSelectionState', () => {
       ROUTE_STATE_REPLACE_OPTIONS,
     );
   });
+
+  it('shows a deliberate jump affordance when the active workload row is off-screen', () => {
+    locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([
+      {
+        id: 'app-container:truenas-main:nextcloud',
+        name: 'nextcloud',
+        status: 'running',
+        instance: 'truenas-main',
+        node: 'truenas-main',
+      } as unknown as WorkloadGuest,
+    ]);
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        setSelectedNode: vi.fn(),
+      }),
+    );
+
+    const tableWrapper = document.createElement('div');
+    const row = document.createElement('div');
+    row.dataset.summarySeriesId = 'app-container:truenas-main:nextcloud';
+    row.scrollIntoView = vi.fn();
+    row.getBoundingClientRect = vi.fn(() => ({
+      top: window.innerHeight + 120,
+      bottom: window.innerHeight + 160,
+      left: 0,
+      right: 240,
+      width: 240,
+      height: 40,
+      x: 0,
+      y: window.innerHeight + 120,
+      toJSON: () => ({}),
+    })) as unknown as typeof row.getBoundingClientRect;
+    tableWrapper.appendChild(row);
+    document.body.appendChild(tableWrapper);
+
+    result.setTableWrapperRef(tableWrapper as HTMLDivElement);
+    result.setSelectedGuestId('app-container:truenas-main:nextcloud');
+
+    expect(result.activeSummaryWorkloadId()).toBe('app-container:truenas-main:nextcloud');
+    expect(result.shouldShowJumpToActiveWorkloadRow()).toBe(true);
+
+    result.jumpToActiveWorkloadRow();
+
+    expect(result.revealedGuestId()).toBe('app-container:truenas-main:nextcloud');
+    expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+  });
 });

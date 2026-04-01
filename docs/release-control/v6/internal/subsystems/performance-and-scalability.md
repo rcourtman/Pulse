@@ -210,6 +210,12 @@ isolate the selected series inside the existing render budget, but that
 isolation must still reuse the same summary series set and timeline data rather
 than triggering a second page-local chart recomputation.
 That same hot-path rule now covers contextual row focus on those pages.
+That same hot-path ownership now also forbids hover-driven table movement.
+When a summary chart promotes one active entity, the matching row may highlight
+in place if it is already mounted and visible, but the hot path must not
+auto-scroll the page or rebuild the table into a one-row filtered view on
+transient hover. Off-screen reveal must stay behind an explicit `Jump to row`
+action routed through the shared summary-table focus bridge.
 `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts` must
 write workload selection back into the workloads route through the shared
 same-path route-state scheduler so opening a focused workload preserves scroll

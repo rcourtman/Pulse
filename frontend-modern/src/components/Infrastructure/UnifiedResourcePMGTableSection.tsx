@@ -157,6 +157,10 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                   <>
                     <TableRow
                       ref={(el) => table.registerRowRef(resource.id, el)}
+                      data-summary-series-id={resource.id}
+                      data-summary-row-active={
+                        tableProps.hoveredResourceId === resource.id ? 'true' : 'false'
+                      }
                       class={rowClass()}
                       style={{ 'min-height': '32px' }}
                       onClick={() => table.toggleExpand(resource.id)}

@@ -31,6 +31,7 @@ type StoragePoolsTableProps = {
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoading: boolean;
+  highlightedSummarySeriesId?: string | null;
   onHoverChange?: (recordId: string | null) => void;
 };
 
@@ -87,6 +88,10 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                                 record={record()}
                                 summarySeriesId={resolveStorageRecordMetricResourceId(record())}
                                 expanded={rowModel().expanded}
+                                summaryHighlighted={
+                                  props.highlightedSummarySeriesId ===
+                                  resolveStorageRecordMetricResourceId(record())
+                                }
                                 onToggleExpand={() => model.togglePool(record().id)}
                                 onHoverChange={props.onHoverChange}
                                 rowClass={rowModel().rowClass}

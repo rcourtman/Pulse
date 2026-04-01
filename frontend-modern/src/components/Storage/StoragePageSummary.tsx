@@ -3,6 +3,7 @@ import StorageSummary from '@/components/Storage/StorageSummary';
 import type { Resource } from '@/types/resource';
 import type { StoragePageNodeOption } from './storagePageState';
 import { useStoragePageSummary } from './useStoragePageSummary';
+import type { SummaryChartHoverSync } from '@/components/shared/contextualFocus';
 
 type StoragePageSummaryProps = {
   filteredRecordCount: () => number;
@@ -11,6 +12,10 @@ type StoragePageSummaryProps = {
   physicalDisks: () => Resource[];
   hoveredResourceId: () => string | null;
   focusedResourceId: () => string | null;
+  chartHoverSync: () => SummaryChartHoverSync | null;
+  onChartHoverSyncChange: (value: SummaryChartHoverSync | null) => void;
+  showJumpToActiveRow: () => boolean;
+  onJumpToActiveRow: () => void;
 };
 
 export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) => {
@@ -30,6 +35,10 @@ export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) =>
       nodeId={props.selectedNodeId()}
       hoveredResourceId={props.hoveredResourceId()}
       focusedResourceId={props.focusedResourceId()}
+      chartHoverSync={props.chartHoverSync()}
+      onChartHoverSyncChange={props.onChartHoverSyncChange}
+      showJumpToActiveRow={props.showJumpToActiveRow()}
+      onJumpToActiveRow={props.onJumpToActiveRow}
     />
   );
 };

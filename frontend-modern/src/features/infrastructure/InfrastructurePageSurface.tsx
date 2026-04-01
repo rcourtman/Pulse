@@ -42,12 +42,16 @@ export function InfrastructurePageSurface() {
     setSummaryCollapsed,
     groupingMode,
     setGroupingMode,
+    activeSummaryResourceId,
     expandedResourceId,
     setExpandedResourceId,
+    chartHoverSync,
     hoveredResourceId,
     setHoveredResourceId,
     highlightedResourceId,
+    revealedResourceId,
     isMobile,
+    jumpToActiveResourceRow,
     deployCluster,
     setDeployCluster,
     filtersOpen,
@@ -60,6 +64,9 @@ export function InfrastructurePageSurface() {
     clearFilters,
     filteredResources,
     hasFilteredResources,
+    setChartHoverSync,
+    setSummaryTableRootRef,
+    shouldShowJumpToActiveResourceRow,
   } = useInfrastructurePageState();
 
   const infrastructureEmptyState = () => getInfrastructureEmptyState();
@@ -138,6 +145,10 @@ export function InfrastructurePageSurface() {
                     onTimeRangeChange={setInfrastructureSummaryRange}
                     hoveredResourceId={hoveredResourceId()}
                     focusedResourceId={expandedResourceId()}
+                    chartHoverSync={chartHoverSync()}
+                    onChartHoverSyncChange={setChartHoverSync}
+                    showJumpToActiveRow={shouldShowJumpToActiveResourceRow()}
+                    onJumpToActiveRow={jumpToActiveResourceRow}
                   />
                 </StickySummarySection>
               </Show>
@@ -303,12 +314,14 @@ export function InfrastructurePageSurface() {
                 <UnifiedResourceTable
                   resources={filteredResources()}
                   expandedResourceId={expandedResourceId()}
-                  hoveredResourceId={hoveredResourceId()}
+                  hoveredResourceId={activeSummaryResourceId()}
                   highlightedResourceId={highlightedResourceId()}
+                  revealedResourceId={revealedResourceId()}
                   onExpandedResourceChange={setExpandedResourceId}
                   onHoverChange={setHoveredResourceId}
                   groupingMode={groupingMode()}
                   onDeployCluster={(id, name) => setDeployCluster({ id, name })}
+                  setTableRootRef={setSummaryTableRootRef}
                 />
               </Show>
             </div>

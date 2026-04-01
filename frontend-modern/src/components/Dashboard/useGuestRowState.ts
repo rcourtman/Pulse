@@ -235,10 +235,15 @@ export function useGuestRowState(props: GuestRowProps) {
         ? 'bg-red-50 dark:bg-red-950'
         : 'bg-yellow-50 dark:bg-yellow-950'
       : '';
+    const summaryHighlight = props.isSummaryHighlighted
+      ? 'bg-sky-50/70 dark:bg-sky-950/40 ring-1 ring-inset ring-sky-400/25'
+      : '';
     const defaultHover = hasUnacknowledgedAlert() ? '' : 'hover:bg-surface-hover';
     const stoppedDimming = !isRunning() ? 'opacity-60' : '';
 
-    return [base, hover, defaultHover, alertBg, stoppedDimming].filter(Boolean).join(' ');
+    return [base, hover, defaultHover, alertBg, summaryHighlight, stoppedDimming]
+      .filter(Boolean)
+      .join(' ');
   });
 
   const rowStyle = createMemo(() => {

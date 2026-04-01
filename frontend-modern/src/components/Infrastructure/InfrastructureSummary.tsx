@@ -3,6 +3,7 @@ import { Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import { DensityMap } from '@/components/shared/DensityMap';
+import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
 import { formatThroughputRate } from '@/utils/throughputPresentation';
@@ -38,6 +39,9 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               </Show>
               <Show when={state.resourceCounts().offline > 0}>
                 <span class="text-muted">{state.resourceCounts().offline} offline</span>
+              </Show>
+              <Show when={props.showJumpToActiveRow && props.onJumpToActiveRow}>
+                <SummaryJumpToRowButton onClick={() => props.onJumpToActiveRow?.()} />
               </Show>
             </>
           }

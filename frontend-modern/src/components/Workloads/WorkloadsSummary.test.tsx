@@ -544,4 +544,22 @@ describe('WorkloadsSummary performance behavior', () => {
     const call = mockGetWorkloadCharts.mock.calls[0];
     expect(call[2]).toMatchObject({ maxPoints: 48 });
   });
+
+  it('renders a deliberate jump affordance when the active workload row is off-screen', () => {
+    const onJumpToActiveRow = vi.fn();
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: 0, running: 0, stopped: 0 }}
+        fallbackSnapshots={[]}
+        showJumpToActiveRow
+        onJumpToActiveRow={onJumpToActiveRow}
+      />
+    ));
+
+    screen.getByRole('button', { name: 'Jump to row' }).click();
+
+    expect(onJumpToActiveRow).toHaveBeenCalledTimes(1);
+  });
 });

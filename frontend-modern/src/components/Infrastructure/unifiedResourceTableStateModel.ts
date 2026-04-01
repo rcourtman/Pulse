@@ -76,8 +76,9 @@ export const getHostRevealTargetIndex = (
   rowIndexById: Map<string, number>,
   expandedResourceId: string | null,
   highlightedResourceId: string | null | undefined,
+  revealedResourceId?: string | null,
 ): number | null => {
-  const targetId = expandedResourceId ?? highlightedResourceId ?? null;
+  const targetId = expandedResourceId ?? revealedResourceId ?? highlightedResourceId ?? null;
   if (!targetId) return null;
   return rowIndexById.get(targetId) ?? null;
 };

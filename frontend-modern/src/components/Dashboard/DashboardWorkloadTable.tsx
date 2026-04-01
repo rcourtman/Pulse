@@ -20,6 +20,7 @@ type DashboardWorkloadTableProps = Pick<
   | 'handleCustomUrlUpdate'
   | 'handleSort'
   | 'handleTagClick'
+  | 'activeSummaryWorkloadId'
   | 'isMobile'
   | 'mobileVisibleColumnIds'
   | 'mobileVisibleColumns'
@@ -76,6 +77,7 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
               groupingMode={props.groupingMode}
               handleCustomUrlUpdate={props.handleCustomUrlUpdate}
               handleTagClick={props.handleTagClick}
+              activeSummaryWorkloadId={props.activeSummaryWorkloadId}
               mobileVisibleColumnIds={props.mobileVisibleColumnIds}
               nodeByInstance={props.nodeByInstance}
               search={props.search}

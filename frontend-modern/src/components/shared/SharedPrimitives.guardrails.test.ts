@@ -57,6 +57,8 @@ import interactiveSparklineSource from '@/components/shared/InteractiveSparkline
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
+import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
+import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
@@ -254,6 +256,20 @@ describe('shared primitive guardrails', () => {
 
     expect(dashboardSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
     expect(dashboardSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
+
+    expect(summaryJumpToRowButtonSource).toContain('<span>Jump to row</span>');
+    expect(summaryJumpToRowButtonSource).toContain('props.onClick');
+    expect(summaryJumpToRowButtonSource).not.toContain('querySelector');
+    expect(summaryJumpToRowButtonSource).not.toContain('scrollIntoView');
+
+    expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
+    expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
+    expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
+    expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
+    expect(summaryTableFocusSource).toContain(
+      "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",
+    );
+    expect(summaryTableFocusSource).not.toContain('useNavigate(');
 
     expect(infrastructureSummaryStateSource).toContain('useSummaryContextualFocusState');
     expect(infrastructureSummaryStateSource).toContain('chartHoverSync');

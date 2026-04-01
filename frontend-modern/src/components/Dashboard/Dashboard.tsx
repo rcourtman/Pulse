@@ -3,6 +3,7 @@ import { InfrastructureSelector } from '@/components/shared/InfrastructureSelect
 import { DashboardFilter } from './DashboardFilter';
 import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
+import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { DashboardStateCards } from './DashboardStateCards';
 import { DashboardStatsStrip } from './DashboardStatsStrip';
 import { DashboardWorkloadTable } from './DashboardWorkloadTable';
@@ -14,7 +15,7 @@ export function Dashboard(props: DashboardProps) {
   return (
     <div class="space-y-3">
       <Show when={state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}>
-        <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
+        <StickySummarySection>
           <WorkloadsSummary
             timeRange={state.workloadsSummaryRange()}
             onTimeRangeChange={state.setWorkloadsSummaryRange}
@@ -22,10 +23,14 @@ export function Dashboard(props: DashboardProps) {
             fallbackGuestCounts={state.workloadsSummaryFallbackCounts()}
             fallbackSnapshots={state.workloadsSummaryFallbackSnapshots()}
             visibleWorkloadIds={state.workloadsSummaryVisibleIds()}
+            chartHoverSync={state.chartHoverSync()}
             hoveredWorkloadId={state.hoveredWorkloadId()}
             focusedWorkloadId={state.selectedGuestId()}
+            onChartHoverSyncChange={state.setChartHoverSync}
+            showJumpToActiveRow={state.shouldShowJumpToActiveWorkloadRow()}
+            onJumpToActiveRow={state.jumpToActiveWorkloadRow}
           />
-        </div>
+        </StickySummarySection>
       </Show>
 
       <InfrastructureSelector
@@ -107,6 +112,7 @@ export function Dashboard(props: DashboardProps) {
           handleCustomUrlUpdate={state.handleCustomUrlUpdate}
           handleSort={state.handleSort}
           handleTagClick={state.handleTagClick}
+          activeSummaryWorkloadId={state.activeSummaryWorkloadId}
           isMobile={state.isMobile}
           mobileVisibleColumnIds={state.mobileVisibleColumnIds}
           mobileVisibleColumns={state.mobileVisibleColumns}
