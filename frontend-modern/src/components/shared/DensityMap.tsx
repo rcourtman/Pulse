@@ -70,7 +70,7 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
               <div class="flex items-center gap-2.5">
                 <div class="flex items-baseline gap-1">
                   <span class="text-[9px] uppercase tracking-wide text-muted">Current</span>
-                  <span class="text-[11px] font-semibold text-emerald-400">
+                  <span class="whitespace-nowrap text-[11px] font-semibold text-emerald-400">
                     {densityMap.formatValue(hover().value)}
                   </span>
                 </div>
@@ -79,7 +79,9 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                   fallback={
                     <div class="flex items-baseline gap-1">
                       <span class="text-[9px] uppercase tracking-wide text-muted">Peak</span>
-                      <span class="text-[11px] font-semibold text-base-content">No sample</span>
+                      <span class="whitespace-nowrap text-[11px] font-semibold text-base-content">
+                        No sample
+                      </span>
                     </div>
                   }
                 >
@@ -97,7 +99,7 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                     >
                       <div class="flex items-baseline gap-1">
                         <span class="text-[9px] uppercase tracking-wide text-muted">Peak</span>
-                        <span class="text-[11px] font-semibold text-base-content">
+                        <span class="whitespace-nowrap text-[11px] font-semibold text-base-content">
                           {formatDetailValue(detail().peakValue)}
                         </span>
                       </div>
