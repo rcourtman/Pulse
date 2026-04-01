@@ -175,6 +175,7 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 	var tasks []agentsdocker.Task
 	if includeTasks {
 		taskFilters := filters.NewArgs()
+		taskFilters.Add("desired-state", string(swarmtypes.TaskStateRunning))
 		if scope != swarmScopeCluster && info.Swarm.NodeID != "" {
 			taskFilters.Add("node", info.Swarm.NodeID)
 		}
@@ -188,6 +189,9 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 
 		tasks = make([]agentsdocker.Task, 0, len(taskList))
 		for i := range taskList {
+			if !isRuntimeSwarmTask(&taskList[i]) {
+				continue
+			}
 			var svc *swarmtypes.Service
 			if ptr, ok := servicePointers[taskList[i].ServiceID]; ok {
 				svc = ptr
@@ -215,6 +219,32 @@ func (a *Agent) collectSwarmDataFromManager(ctx context.Context, info systemtype
 	}
 
 	return services, tasks, nil
+}
+
+func isRuntimeSwarmTask(task *swarmtypes.Task) bool {
+	if task == nil {
+		return false
+	}
+	if task.DesiredState == swarmtypes.TaskStateRunning {
+		return true
+	}
+
+	// Defensive fallback in case the daemon returns an empty desired state for an
+	// otherwise active task. Terminal tasks should never be retained in runtime state.
+	switch task.Status.State {
+	case swarmtypes.TaskStateNew,
+		swarmtypes.TaskStateAllocated,
+		swarmtypes.TaskStatePending,
+		swarmtypes.TaskStateAssigned,
+		swarmtypes.TaskStateAccepted,
+		swarmtypes.TaskStatePreparing,
+		swarmtypes.TaskStateReady,
+		swarmtypes.TaskStateStarting,
+		swarmtypes.TaskStateRunning:
+		return task.DesiredState == ""
+	default:
+		return false
+	}
 }
 
 func mapSwarmService(svc *swarmtypes.Service) agentsdocker.Service {

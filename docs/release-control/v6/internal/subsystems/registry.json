@@ -2929,7 +2929,8 @@
         "internal/truenas/"
       ],
       "owned_files": [
-        "docker-entrypoint.sh"
+        "docker-entrypoint.sh",
+        "internal/dockeragent/swarm.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": true,
@@ -3034,6 +3035,20 @@
               "internal/monitoring/memory_source_catalog_test.go",
               "internal/monitoring/memory_trust_characterization_test.go",
               "internal/monitoring/node_memory_sources_test.go"
+            ]
+          },
+          {
+            "id": "docker-swarm-runtime",
+            "label": "docker swarm runtime proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/dockeragent/swarm.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/dockeragent/swarm_coverage_test.go",
+              "internal/dockeragent/swarm_test.go"
             ]
           },
           {

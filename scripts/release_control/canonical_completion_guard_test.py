@@ -34,6 +34,30 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
 ]
 
 
+def _contract_reference(contract_path: str, needle: str, runtime_path: str) -> dict:
+    lines = (REPO_ROOT / contract_path).read_text(encoding="utf-8").splitlines()
+    current_heading = None
+    current_heading_line = None
+
+    for line_number, line in enumerate(lines, start=1):
+        if line.startswith("## "):
+            current_heading = line
+            current_heading_line = line_number
+        if needle in line:
+            if current_heading is None or current_heading_line is None:
+                raise AssertionError(
+                    f"reference {needle!r} in {contract_path} has no enclosing heading"
+                )
+            return {
+                "heading": current_heading,
+                "path": runtime_path,
+                "line": line_number,
+                "heading_line": current_heading_line,
+            }
+
+    raise AssertionError(f"reference {needle!r} not found in {contract_path}")
+
+
 def split_workspace_path(path: str) -> tuple[Path, str]:
     if ":" not in path:
         return REPO_ROOT, path
@@ -184,6 +208,7 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
                 "metrics-hot-path",
                 "metrics-history-runtime",
                 "memory-source-runtime",
+                "docker-swarm-runtime",
                 "container-entrypoint-runtime",
                 "monitoring-runtime",
             ],
@@ -2823,18 +2848,16 @@ class CanonicalCompletionGuardTest(unittest.TestCase):
         self.assertEqual(
             required["docs/release-control/v6/internal/subsystems/monitoring.md"]["matched_reference_details"],
             [
-                {
-                    "heading": "## Canonical Files",
-                    "path": "internal/unifiedresources/views.go",
-                    "line": 36,
-                    "heading_line": 23,
-                },
-                {
-                    "heading": "## Extension Points",
-                    "path": "internal/unifiedresources/views.go",
-                    "line": 51,
-                    "heading_line": 47,
-                },
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "12. `internal/unifiedresources/views.go`",
+                    "internal/unifiedresources/views.go",
+                ),
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "3. Add typed read access through `internal/unifiedresources/views.go`",
+                    "internal/unifiedresources/views.go",
+                ),
             ],
         )
 

@@ -4461,6 +4461,27 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_docker_swarm_runtime_to_monitoring(self) -> None:
+        result = lookup_paths(["internal/dockeragent/swarm.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(len(file_entry["matches"]), 1)
+
+        match = file_entry["matches"][0]
+        self.assertEqual(match["subsystem"], "monitoring")
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/monitoring.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L13")
+        self.assertEqual(match["verification_requirement"]["id"], "docker-swarm-runtime")
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            [
+                "internal/dockeragent/swarm_coverage_test.go",
+                "internal/dockeragent/swarm_test.go",
+            ],
+        )
+
     def test_lookup_paths_assigns_system_logs_runtime_owner_to_frontend_primitives(self) -> None:
         result = lookup_paths(
             ["frontend-modern/src/components/Settings/useSystemLogsPanelState.ts"]
@@ -4631,18 +4652,16 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(
             monitoring_contract["matched_reference_details"],
             [
-                {
-                    "heading": "## Canonical Files",
-                    "path": "internal/unifiedresources/views.go",
-                    "line": 36,
-                    "heading_line": 23,
-                },
-                {
-                    "heading": "## Extension Points",
-                    "path": "internal/unifiedresources/views.go",
-                    "line": 51,
-                    "heading_line": 47,
-                },
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "12. `internal/unifiedresources/views.go`",
+                    "internal/unifiedresources/views.go",
+                ),
+                _contract_reference(
+                    "docs/release-control/v6/internal/subsystems/monitoring.md",
+                    "3. Add typed read access through `internal/unifiedresources/views.go`",
+                    "internal/unifiedresources/views.go",
+                ),
             ],
         )
         self.assertEqual(

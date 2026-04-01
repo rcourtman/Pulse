@@ -39,6 +39,7 @@ truth for live infrastructure data.
 15. `docker-entrypoint.sh`
 16. `internal/monitoring/truenas_poller.go`
 17. `internal/monitoring/vmware_poller.go`
+18. `internal/dockeragent/swarm.go`
 
 ## Shared Boundaries
 
@@ -51,6 +52,7 @@ truth for live infrastructure data.
 3. Add typed read access through `internal/unifiedresources/views.go`
 4. Add unified supplemental ingest through `internal/monitoring/poll_providers.go`
 5. Add or change container startup ownership/bootstrap behavior for hosted or managed Pulse runtime mounts through `docker-entrypoint.sh`
+6. Add or change Docker Swarm manager task/service runtime collection through `internal/dockeragent/swarm.go`
 
 ## Forbidden Paths
 
@@ -62,7 +64,7 @@ truth for live infrastructure data.
 
 1. Update this contract when monitoring truth ownership changes
 2. Tighten guardrails when `GetState()`-centric paths are removed
-3. Keep discovery-provider, metrics-history, and container bootstrap proof routes explicit in `registry.json`
+3. Keep discovery-provider, metrics-history, Docker Swarm collection, and container bootstrap proof routes explicit in `registry.json`
 4. Update related read-state or monitor tests when new collector paths land
 5. Keep platform ingestion semantics aligned with
    `docs/release-control/v6/internal/PLATFORM_SUPPORT_MODEL.md`: hybrid is a
@@ -238,6 +240,10 @@ boundary. Hosted or managed tenant bootstrap changes must preserve safe startup
 when immutable read-only mounts are layered into `/etc/pulse`; the entrypoint
 may not reintroduce ownership mutation against those read-only files during
 container boot.
+That same monitoring boundary now also owns Docker Swarm runtime truth at the
+collection seam. `internal/dockeragent/swarm.go` is the canonical manager-side
+filter for live Swarm services and tasks, so monitoring consumers do not ingest
+historical shutdown tasks as if they were still part of the active runtime.
 
 Storage export is now derived from canonical `ReadState.StoragePools()`
 instead of `GetState().Storage`; `models.Storage` is treated as a boundary
