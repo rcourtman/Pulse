@@ -300,7 +300,7 @@ func TestHandleClusterVMResourceMemoryTrustCharacterization(t *testing.T) {
 				MaxCPU: 4,
 			}
 
-			vm, ok := mon.handleClusterVMResource(context.Background(), "test", res, makeGuestID("test", "node1", 101), client, nil)
+			vm, ok := mon.handleClusterVMResource(context.Background(), "test", res, makeGuestID("test", "node1", 101), client, nil, nil)
 			if !ok {
 				t.Fatal("handleClusterVMResource() returned ok=false")
 			}

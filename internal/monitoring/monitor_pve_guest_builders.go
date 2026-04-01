@@ -72,7 +72,7 @@ func (m *Monitor) applyVMStatusDetails(
 	state.networkOutBytes = int64(status.NetOut)
 
 	// Gather guest metadata from the agent when available
-	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status)
+	guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, res.Node, res.Name, res.VMID, status, false)
 	if len(guestIPs) > 0 {
 		state.ipAddresses = guestIPs
 	}
@@ -142,6 +142,7 @@ func (m *Monitor) buildVMFromClusterResource(
 	client PVEClientInterface,
 	guestID string,
 	vmIDToHostAgent map[string]models.Host,
+	prevVM *models.VM,
 ) (models.VM, VMMemoryRaw, string, time.Time, bool) {
 	// Skip templates if configured
 	if res.Template == 1 {
@@ -195,6 +196,51 @@ func (m *Monitor) buildVMFromClusterResource(
 				Str("vm", res.Name).
 				Int("vmid", res.VMID).
 				Msg("Could not get VM status, using cluster/resources disk data")
+		}
+
+		now := time.Now()
+		guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||
+			m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)
+		if guestAgentAvailable && state.detailedStatus == nil {
+			guestIPs, guestIfaces, guestOSName, guestOSVersion, guestAgentVersion := m.fetchGuestAgentMetadata(
+				ctx,
+				client,
+				instanceName,
+				res.Node,
+				res.Name,
+				res.VMID,
+				nil,
+				true,
+			)
+			if len(guestIPs) > 0 {
+				state.ipAddresses = guestIPs
+			}
+			if len(guestIfaces) > 0 {
+				state.networkInterfaces = guestIfaces
+			}
+			if guestOSName != "" {
+				state.osName = guestOSName
+			}
+			if guestOSVersion != "" {
+				state.osVersion = guestOSVersion
+			}
+			if guestAgentVersion != "" {
+				state.agentVersion = guestAgentVersion
+			}
+
+			var fsDisks []models.Disk
+			state.diskTotal, state.diskUsed, state.diskFree, state.diskUsage, fsDisks, state.diskFromAgent = m.updateVMDisksFromGuestAgentFSInfo(
+				ctx,
+				instanceName,
+				res,
+				client,
+				state.diskTotal,
+				state.diskUsed,
+				state.diskUsage,
+			)
+			if len(fsDisks) > 0 {
+				state.individualDisks = fsDisks
+			}
 		}
 	}
 

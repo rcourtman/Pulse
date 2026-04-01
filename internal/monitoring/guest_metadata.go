@@ -18,6 +18,7 @@ import (
 
 const (
 	guestMetadataCacheTTL    = 5 * time.Minute
+	guestMetadataEmptyTTL    = 30 * time.Second
 	defaultGuestMetadataHold = 15 * time.Second
 
 	// Guest agent timeout defaults (configurable via environment variables)
@@ -43,6 +44,48 @@ type guestMetadataCacheEntry struct {
 	fetchedAt          time.Time
 	osInfoFailureCount int  // Track consecutive OS info failures
 	osInfoSkip         bool // Skip OS info calls after repeated failures (refs #692)
+}
+
+func guestMetadataCacheHasUsefulData(entry guestMetadataCacheEntry) bool {
+	return len(entry.ipAddresses) > 0 ||
+		len(entry.networkInterfaces) > 0 ||
+		entry.osName != "" ||
+		entry.osVersion != "" ||
+		entry.agentVersion != ""
+}
+
+func guestMetadataCacheHasCompleteNetworkData(entry guestMetadataCacheEntry) bool {
+	for _, iface := range entry.networkInterfaces {
+		if strings.TrimSpace(iface.Name) != "" || strings.TrimSpace(iface.MAC) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func guestMetadataCacheEntryTTL(entry guestMetadataCacheEntry) time.Duration {
+	// Treat identity-only and IP-only metadata as incomplete so VMs that answered
+	// guest-info/version or partial network calls but not full interface inventory
+	// are retried soon instead of freezing incomplete VM Summary data for minutes.
+	if guestMetadataCacheHasCompleteNetworkData(entry) {
+		return guestMetadataCacheTTL
+	}
+	return guestMetadataEmptyTTL
+}
+
+func (m *Monitor) hasRecentGuestMetadataEvidence(instanceName, nodeName string, vmid int, now time.Time) bool {
+	if m == nil {
+		return false
+	}
+
+	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
+	m.guestMetadataMu.RLock()
+	entry, ok := m.guestMetadataCache[key]
+	m.guestMetadataMu.RUnlock()
+	if !ok || entry.fetchedAt.IsZero() || !guestMetadataCacheHasUsefulData(entry) {
+		return false
+	}
+	return now.Sub(entry.fetchedAt) < guestMetadataCacheEntryTTL(entry)
 }
 
 func (m *Monitor) tryReserveGuestMetadataFetch(key string, now time.Time) bool {
@@ -78,6 +121,19 @@ func (m *Monitor) scheduleNextGuestMetadataFetch(key string, now time.Time) {
 	m.guestMetadataLimiterMu.Lock()
 	m.guestMetadataLimiter[key] = now.Add(interval)
 	m.guestMetadataLimiterMu.Unlock()
+}
+
+func (m *Monitor) scheduleGuestMetadataFetchForEntry(key string, now time.Time, entry guestMetadataCacheEntry) {
+	if m == nil {
+		return
+	}
+	if guestMetadataCacheEntryTTL(entry) == guestMetadataEmptyTTL {
+		m.guestMetadataLimiterMu.Lock()
+		m.guestMetadataLimiter[key] = now.Add(guestMetadataEmptyTTL)
+		m.guestMetadataLimiterMu.Unlock()
+		return
+	}
+	m.scheduleNextGuestMetadataFetch(key, now)
 }
 
 func (m *Monitor) deferGuestMetadataRetry(key string, now time.Time) {
@@ -164,17 +220,7 @@ func (m *Monitor) retryGuestAgentCall(ctx context.Context, timeout time.Duration
 	return nil, lastErr
 }
 
-func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus) ([]string, []models.GuestNetworkInterface, string, string, string) {
-	if vmStatus == nil || client == nil {
-		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
-		return nil, nil, "", "", ""
-	}
-
-	if vmStatus.Agent.Value <= 0 {
-		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
-		return nil, nil, "", "", ""
-	}
-
+func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientInterface, instanceName, nodeName, vmName string, vmid int, vmStatus *proxmox.VMStatus, allowWithoutStatus bool) ([]string, []models.GuestNetworkInterface, string, string, string) {
 	key := guestMetadataCacheKey(instanceName, nodeName, vmid)
 	now := time.Now()
 
@@ -182,11 +228,20 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	cached, ok := m.guestMetadataCache[key]
 	m.guestMetadataMu.RUnlock()
 
-	if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheTTL {
+	agentAvailable := client != nil && ((vmStatus != nil && vmStatus.Agent.Value > 0) || allowWithoutStatus)
+	if !agentAvailable {
+		if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
+			return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
+		}
+		m.clearGuestMetadataCache(instanceName, nodeName, vmid)
+		return nil, nil, "", "", ""
+	}
+
+	if ok && now.Sub(cached.fetchedAt) < guestMetadataCacheEntryTTL(cached) {
 		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
 	}
 
-	needsFetch := !ok || now.Sub(cached.fetchedAt) >= guestMetadataCacheTTL
+	needsFetch := !ok || now.Sub(cached.fetchedAt) >= guestMetadataCacheEntryTTL(cached)
 	if !needsFetch {
 		return cloneStringSlice(cached.ipAddresses), cloneGuestNetworkInterfaces(cached.networkInterfaces), cached.osName, cached.osVersion, cached.agentVersion
 	}
@@ -212,9 +267,6 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			return ipAddresses, networkIfaces, osName, osVersion, agentVersion
 		}
 		defer m.releaseGuestMetadataSlot()
-		defer func() {
-			m.scheduleNextGuestMetadataFetch(key, time.Now())
-		}()
 	}
 
 	// Network interfaces with configurable timeout and retry (refs #592)
@@ -229,10 +281,24 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Err(err).
 			Msg("Guest agent network interfaces unavailable")
 	} else if ifaces, ok := interfaces.([]proxmox.VMNetworkInterface); ok && len(ifaces) > 0 {
-		ipAddresses, networkIfaces = processGuestNetworkInterfaces(ifaces)
+		processedIPs, processedIfaces := processGuestNetworkInterfaces(ifaces)
+		if len(processedIPs) > 0 || len(processedIfaces) > 0 {
+			ipAddresses, networkIfaces = processedIPs, processedIfaces
+		} else if len(cached.ipAddresses) == 0 && len(cached.networkInterfaces) == 0 {
+			ipAddresses = nil
+			networkIfaces = nil
+		} else {
+			log.Debug().
+				Str("instance", instanceName).
+				Str("vm", vmName).
+				Int("vmid", vmid).
+				Msg("Guest agent returned empty network metadata; preserving last known interfaces")
+		}
 	} else {
-		ipAddresses = nil
-		networkIfaces = nil
+		if len(cached.ipAddresses) == 0 && len(cached.networkInterfaces) == 0 {
+			ipAddresses = nil
+			networkIfaces = nil
+		}
 	}
 
 	// OS info with configurable timeout and retry (refs #592)
@@ -275,10 +341,13 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 				}
 			}
 		} else if agentInfo, ok := agentInfoRaw.(map[string]interface{}); ok && len(agentInfo) > 0 {
-			osName, osVersion = extractGuestOSInfo(agentInfo)
+			extractedOSName, extractedOSVersion := extractGuestOSInfo(agentInfo)
+			if extractedOSName != "" || extractedOSVersion != "" {
+				osName, osVersion = extractedOSName, extractedOSVersion
+			}
 			osInfoFailureCount = 0 // Reset on success
 			osInfoSkip = false
-		} else {
+		} else if cached.osName == "" && cached.osVersion == "" {
 			osName = ""
 			osVersion = ""
 		}
@@ -304,7 +373,7 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 			Msg("Guest agent version unavailable")
 	} else if version, ok := versionRaw.(string); ok && version != "" {
 		agentVersion = version
-	} else {
+	} else if cached.agentVersion == "" {
 		agentVersion = ""
 	}
 
@@ -325,6 +394,9 @@ func (m *Monitor) fetchGuestAgentMetadata(ctx context.Context, client PVEClientI
 	}
 	m.guestMetadataCache[key] = entry
 	m.guestMetadataMu.Unlock()
+	if reserved {
+		m.scheduleGuestMetadataFetchForEntry(key, time.Now(), entry)
+	}
 
 	return ipAddresses, networkIfaces, osName, osVersion, agentVersion
 }

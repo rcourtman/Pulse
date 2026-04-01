@@ -11,6 +11,120 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/proxmox"
 )
 
+type emptyGuestMetadataClient struct {
+	mockPVEClient
+}
+
+func (emptyGuestMetadataClient) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error) {
+	return []proxmox.VMNetworkInterface{}, nil
+}
+
+func (emptyGuestMetadataClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+func (emptyGuestMetadataClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
+}
+
+type emptyThenPopulatedGuestMetadataClient struct {
+	mockPVEClient
+	networkCalls int
+}
+
+func (c *emptyThenPopulatedGuestMetadataClient) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error) {
+	c.networkCalls++
+	if c.networkCalls == 1 {
+		return []proxmox.VMNetworkInterface{}, nil
+	}
+	return []proxmox.VMNetworkInterface{
+		{
+			Name:         "Ethernet0",
+			HardwareAddr: "00:11:22:33:44:55",
+			IPAddresses: []proxmox.VMIPAddress{
+				{Address: "192.168.1.50", Prefix: 24},
+			},
+		},
+	}, nil
+}
+
+func (*emptyThenPopulatedGuestMetadataClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+func (*emptyThenPopulatedGuestMetadataClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
+}
+
+type identityThenNetworkGuestMetadataClient struct {
+	mockPVEClient
+	networkCalls int
+}
+
+func (c *identityThenNetworkGuestMetadataClient) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error) {
+	c.networkCalls++
+	if c.networkCalls == 1 {
+		return []proxmox.VMNetworkInterface{}, nil
+	}
+	return []proxmox.VMNetworkInterface{
+		{
+			Name:         "Ethernet0",
+			HardwareAddr: "00:11:22:33:44:55",
+			IPAddresses: []proxmox.VMIPAddress{
+				{Address: "192.168.1.50", Prefix: 24},
+			},
+		},
+	}, nil
+}
+
+func (*identityThenNetworkGuestMetadataClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return map[string]interface{}{
+		"result": map[string]interface{}{
+			"name":    "Microsoft Windows",
+			"version": "11",
+		},
+	}, nil
+}
+
+func (*identityThenNetworkGuestMetadataClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "8.2.2", nil
+}
+
+type ipOnlyThenNetworkGuestMetadataClient struct {
+	mockPVEClient
+	networkCalls int
+}
+
+func (c *ipOnlyThenNetworkGuestMetadataClient) GetVMNetworkInterfaces(ctx context.Context, node string, vmid int) ([]proxmox.VMNetworkInterface, error) {
+	c.networkCalls++
+	if c.networkCalls == 1 {
+		return []proxmox.VMNetworkInterface{
+			{
+				IPAddresses: []proxmox.VMIPAddress{
+					{Address: "192.168.1.60", Prefix: 24},
+				},
+			},
+		}, nil
+	}
+	return []proxmox.VMNetworkInterface{
+		{
+			Name:         "Ethernet0",
+			HardwareAddr: "00:11:22:33:44:66",
+			IPAddresses: []proxmox.VMIPAddress{
+				{Address: "192.168.1.60", Prefix: 24},
+			},
+		},
+	}, nil
+}
+
+func (*ipOnlyThenNetworkGuestMetadataClient) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	return map[string]interface{}{}, nil
+}
+
+func (*ipOnlyThenNetworkGuestMetadataClient) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	return "", nil
+}
+
 func TestGuestMetadataCacheKey(t *testing.T) {
 	t.Parallel()
 
@@ -769,6 +883,414 @@ func TestRetryGuestAgentCall(t *testing.T) {
 			t.Fatalf("expected result 'ok', got %v", result)
 		}
 	})
+}
+
+func TestGuestMetadataCacheEntryTTL(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name  string
+		entry guestMetadataCacheEntry
+		want  time.Duration
+	}{
+		{
+			name:  "empty entry retries quickly",
+			entry: guestMetadataCacheEntry{},
+			want:  guestMetadataEmptyTTL,
+		},
+		{
+			name: "network metadata uses full ttl",
+			entry: guestMetadataCacheEntry{
+				ipAddresses: []string{"192.168.1.10"},
+				networkInterfaces: []models.GuestNetworkInterface{
+					{Name: "eth0", Addresses: []string{"192.168.1.10"}},
+				},
+			},
+			want: guestMetadataCacheTTL,
+		},
+		{
+			name: "ip-only metadata retries quickly",
+			entry: guestMetadataCacheEntry{
+				ipAddresses: []string{"192.168.1.10"},
+			},
+			want: guestMetadataEmptyTTL,
+		},
+		{
+			name: "identity-only metadata retries quickly",
+			entry: guestMetadataCacheEntry{
+				osName: "Ubuntu",
+			},
+			want: guestMetadataEmptyTTL,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := guestMetadataCacheEntryTTL(tc.entry); got != tc.want {
+				t.Fatalf("guestMetadataCacheEntryTTL() = %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestScheduleGuestMetadataFetchForEntry(t *testing.T) {
+	t.Parallel()
+
+	t.Run("incomplete metadata retries sooner", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{
+			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataMinRefresh:    5 * time.Minute,
+			guestMetadataRefreshJitter: 0,
+		}
+		now := time.Now()
+		entry := guestMetadataCacheEntry{osName: "Ubuntu"}
+
+		m.scheduleGuestMetadataFetchForEntry("vm-1", now, entry)
+
+		next := m.guestMetadataLimiter["vm-1"]
+		expectedNext := now.Add(guestMetadataEmptyTTL)
+		if next.Sub(expectedNext) > time.Millisecond || expectedNext.Sub(next) > time.Millisecond {
+			t.Fatalf("expected next time ~%v, got %v", expectedNext, next)
+		}
+	})
+
+	t.Run("complete network metadata uses normal refresh cadence", func(t *testing.T) {
+		t.Parallel()
+
+		m := &Monitor{
+			guestMetadataLimiter:       make(map[string]time.Time),
+			guestMetadataMinRefresh:    5 * time.Minute,
+			guestMetadataRefreshJitter: 0,
+		}
+		now := time.Now()
+		entry := guestMetadataCacheEntry{
+			networkInterfaces: []models.GuestNetworkInterface{
+				{Name: "eth0", Addresses: []string{"192.168.1.10"}},
+			},
+		}
+
+		m.scheduleGuestMetadataFetchForEntry("vm-1", now, entry)
+
+		next := m.guestMetadataLimiter["vm-1"]
+		expectedNext := now.Add(5 * time.Minute)
+		if next.Sub(expectedNext) > time.Millisecond || expectedNext.Sub(next) > time.Millisecond {
+			t.Fatalf("expected next time ~%v, got %v", expectedNext, next)
+		}
+	})
+}
+
+func TestFetchGuestAgentMetadataPreservesCachedValuesOnEmptyResponses(t *testing.T) {
+	t.Parallel()
+
+	key := guestMetadataCacheKey("pve", "node1", 100)
+	cachedFetchedAt := time.Now().Add(-guestMetadataCacheTTL - time.Minute)
+	monitor := &Monitor{
+		guestMetadataCache: map[string]guestMetadataCacheEntry{
+			key: {
+				ipAddresses: []string{"192.168.1.10"},
+				networkInterfaces: []models.GuestNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.10"}},
+				},
+				osName:       "Ubuntu",
+				osVersion:    "24.04",
+				agentVersion: "8.2.0",
+				fetchedAt:    cachedFetchedAt,
+			},
+		},
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+
+	gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		&emptyGuestMetadataClient{},
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		&proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}},
+		false,
+	)
+
+	if len(gotIPs) != 1 || gotIPs[0] != "192.168.1.10" {
+		t.Fatalf("expected cached IPs to be preserved, got %#v", gotIPs)
+	}
+	if len(gotIfaces) != 1 || gotIfaces[0].Name != "eth0" {
+		t.Fatalf("expected cached interfaces to be preserved, got %#v", gotIfaces)
+	}
+	if gotOSName != "Ubuntu" || gotOSVersion != "24.04" {
+		t.Fatalf("expected cached OS info to be preserved, got %q %q", gotOSName, gotOSVersion)
+	}
+	if gotAgentVersion != "8.2.0" {
+		t.Fatalf("expected cached agent version to be preserved, got %q", gotAgentVersion)
+	}
+
+	updated := monitor.guestMetadataCache[key]
+	if len(updated.ipAddresses) != 1 || updated.ipAddresses[0] != "192.168.1.10" {
+		t.Fatalf("expected cache IPs to remain populated, got %#v", updated.ipAddresses)
+	}
+	if len(updated.networkInterfaces) != 1 || updated.networkInterfaces[0].Name != "eth0" {
+		t.Fatalf("expected cache interfaces to remain populated, got %#v", updated.networkInterfaces)
+	}
+	if updated.fetchedAt.Before(cachedFetchedAt) {
+		t.Fatalf("expected cache timestamp to be refreshed, old=%v new=%v", cachedFetchedAt, updated.fetchedAt)
+	}
+}
+
+func TestFetchGuestAgentMetadataPreservesFreshCacheWhenAgentTemporarilyUnavailable(t *testing.T) {
+	t.Parallel()
+
+	key := guestMetadataCacheKey("pve", "node1", 100)
+	cachedFetchedAt := time.Now().Add(-time.Minute)
+
+	newMonitor := func() *Monitor {
+		return &Monitor{
+			guestMetadataCache: map[string]guestMetadataCacheEntry{
+				key: {
+					ipAddresses: []string{"192.168.1.10"},
+					networkInterfaces: []models.GuestNetworkInterface{
+						{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.10"}},
+					},
+					osName:       "Ubuntu",
+					osVersion:    "24.04",
+					agentVersion: "8.2.0",
+					fetchedAt:    cachedFetchedAt,
+				},
+			},
+			guestMetadataLimiter: make(map[string]time.Time),
+		}
+	}
+
+	assertCachePreserved := func(t *testing.T, monitor *Monitor, gotIPs []string, gotIfaces []models.GuestNetworkInterface, gotOSName, gotOSVersion, gotAgentVersion string) {
+		t.Helper()
+
+		if len(gotIPs) != 1 || gotIPs[0] != "192.168.1.10" {
+			t.Fatalf("expected cached IPs to be preserved, got %#v", gotIPs)
+		}
+		if len(gotIfaces) != 1 || gotIfaces[0].Name != "eth0" {
+			t.Fatalf("expected cached interfaces to be preserved, got %#v", gotIfaces)
+		}
+		if gotOSName != "Ubuntu" || gotOSVersion != "24.04" {
+			t.Fatalf("expected cached OS info to be preserved, got %q %q", gotOSName, gotOSVersion)
+		}
+		if gotAgentVersion != "8.2.0" {
+			t.Fatalf("expected cached agent version to be preserved, got %q", gotAgentVersion)
+		}
+
+		entry, ok := monitor.guestMetadataCache[key]
+		if !ok {
+			t.Fatal("expected guest metadata cache entry to remain populated")
+		}
+		if len(entry.networkInterfaces) != 1 || entry.networkInterfaces[0].Name != "eth0" {
+			t.Fatalf("expected cached interfaces to remain populated, got %#v", entry.networkInterfaces)
+		}
+	}
+
+	t.Run("nil vm status keeps fresh cache", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newMonitor()
+		gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion := monitor.fetchGuestAgentMetadata(
+			context.Background(),
+			&emptyGuestMetadataClient{},
+			"pve",
+			"node1",
+			"vm100",
+			100,
+			nil,
+			false,
+		)
+
+		assertCachePreserved(t, monitor, gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion)
+	})
+
+	t.Run("agent temporarily unavailable keeps fresh cache", func(t *testing.T) {
+		t.Parallel()
+
+		monitor := newMonitor()
+		gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion := monitor.fetchGuestAgentMetadata(
+			context.Background(),
+			&emptyGuestMetadataClient{},
+			"pve",
+			"node1",
+			"vm100",
+			100,
+			&proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 0}},
+			false,
+		)
+
+		assertCachePreserved(t, monitor, gotIPs, gotIfaces, gotOSName, gotOSVersion, gotAgentVersion)
+	})
+}
+
+func TestFetchGuestAgentMetadataRetriesIdentityOnlyCacheSooner(t *testing.T) {
+	t.Parallel()
+
+	client := &identityThenNetworkGuestMetadataClient{}
+	monitor := &Monitor{
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+
+	status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
+
+	firstIPs, firstIfaces, firstOSName, firstOSVersion, firstAgentVersion := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		client,
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		status,
+		false,
+	)
+	if len(firstIPs) != 0 || len(firstIfaces) != 0 {
+		t.Fatalf("expected first fetch to be missing network metadata, got ips=%#v ifaces=%#v", firstIPs, firstIfaces)
+	}
+	if firstOSName == "" || firstOSVersion == "" || firstAgentVersion == "" {
+		t.Fatalf("expected identity metadata on first fetch, got os=%q version=%q agent=%q", firstOSName, firstOSVersion, firstAgentVersion)
+	}
+
+	key := guestMetadataCacheKey("pve", "node1", 100)
+	entry := monitor.guestMetadataCache[key]
+	if got := guestMetadataCacheEntryTTL(entry); got != guestMetadataEmptyTTL {
+		t.Fatalf("guestMetadataCacheEntryTTL(identity-only) = %s, want %s", got, guestMetadataEmptyTTL)
+	}
+	entry.fetchedAt = time.Now().Add(-guestMetadataEmptyTTL - time.Second)
+	monitor.guestMetadataCache[key] = entry
+	monitor.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
+
+	secondIPs, secondIfaces, secondOSName, secondOSVersion, secondAgentVersion := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		client,
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		status,
+		false,
+	)
+
+	if len(secondIPs) == 0 || len(secondIfaces) == 0 {
+		t.Fatalf("expected second fetch to populate network metadata, got ips=%#v ifaces=%#v", secondIPs, secondIfaces)
+	}
+	if secondOSName != firstOSName || secondOSVersion != firstOSVersion || secondAgentVersion != firstAgentVersion {
+		t.Fatalf("expected identity metadata to be preserved, got os=%q/%q agent=%q want os=%q/%q agent=%q",
+			secondOSName, secondOSVersion, secondAgentVersion, firstOSName, firstOSVersion, firstAgentVersion)
+	}
+}
+
+func TestFetchGuestAgentMetadataRetriesIPOnlyCacheSooner(t *testing.T) {
+	t.Parallel()
+
+	client := &ipOnlyThenNetworkGuestMetadataClient{}
+	monitor := &Monitor{
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+
+	status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
+
+	firstIPs, firstIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		client,
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		status,
+		false,
+	)
+	if len(firstIPs) != 1 || firstIPs[0] != "192.168.1.60" {
+		t.Fatalf("expected first fetch to preserve discovered IP, got %#v", firstIPs)
+	}
+	if len(firstIfaces) != 1 || firstIfaces[0].Name != "" || firstIfaces[0].MAC != "" {
+		t.Fatalf("expected first fetch to remain identity-incomplete, got %#v", firstIfaces)
+	}
+
+	key := guestMetadataCacheKey("pve", "node1", 100)
+	entry := monitor.guestMetadataCache[key]
+	if got := guestMetadataCacheEntryTTL(entry); got != guestMetadataEmptyTTL {
+		t.Fatalf("guestMetadataCacheEntryTTL(ip-only) = %s, want %s", got, guestMetadataEmptyTTL)
+	}
+	entry.fetchedAt = time.Now().Add(-guestMetadataEmptyTTL - time.Second)
+	monitor.guestMetadataCache[key] = entry
+	monitor.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
+
+	secondIPs, secondIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		client,
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		status,
+		false,
+	)
+	if len(secondIPs) != 1 || secondIPs[0] != "192.168.1.60" {
+		t.Fatalf("expected second fetch to preserve IP, got %#v", secondIPs)
+	}
+	if len(secondIfaces) != 1 || secondIfaces[0].Name != "Ethernet0" {
+		t.Fatalf("expected second fetch to populate interfaces, got %#v", secondIfaces)
+	}
+	if client.networkCalls != 2 {
+		t.Fatalf("expected network metadata to be fetched twice, got %d calls", client.networkCalls)
+	}
+}
+
+func TestFetchGuestAgentMetadataRetriesEmptyCacheSooner(t *testing.T) {
+	t.Parallel()
+
+	client := &emptyThenPopulatedGuestMetadataClient{}
+	monitor := &Monitor{
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+
+	status := &proxmox.VMStatus{Agent: proxmox.VMAgentField{Value: 1}}
+
+	firstIPs, firstIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		client,
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		status,
+		false,
+	)
+	if len(firstIPs) != 0 || len(firstIfaces) != 0 {
+		t.Fatalf("expected first fetch to be empty, got ips=%#v ifaces=%#v", firstIPs, firstIfaces)
+	}
+
+	key := guestMetadataCacheKey("pve", "node1", 100)
+	entry := monitor.guestMetadataCache[key]
+	entry.fetchedAt = time.Now().Add(-guestMetadataEmptyTTL - time.Second)
+	monitor.guestMetadataCache[key] = entry
+	monitor.guestMetadataLimiter[key] = time.Now().Add(-time.Second)
+
+	secondIPs, secondIfaces, _, _, _ := monitor.fetchGuestAgentMetadata(
+		context.Background(),
+		client,
+		"pve",
+		"node1",
+		"vm100",
+		100,
+		status,
+		false,
+	)
+	if len(secondIPs) != 1 || secondIPs[0] != "192.168.1.50" {
+		t.Fatalf("expected second fetch to refresh IPs, got %#v", secondIPs)
+	}
+	if len(secondIfaces) != 1 || secondIfaces[0].Name != "Ethernet0" {
+		t.Fatalf("expected second fetch to refresh interfaces, got %#v", secondIfaces)
+	}
+	if client.networkCalls != 2 {
+		t.Fatalf("expected network metadata to be fetched twice, got %d calls", client.networkCalls)
+	}
 }
 
 func TestAcquireGuestMetadataSlot(t *testing.T) {

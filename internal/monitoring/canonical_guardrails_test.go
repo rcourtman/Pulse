@@ -381,6 +381,55 @@ func TestProxmoxGuestPollersCarryPoolIntoCanonicalModels(t *testing.T) {
 	}
 }
 
+func TestProxmoxGuestAgentContinuityUsesCanonicalEvidenceAndRetryPaths(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"guest_agent_evidence.go": {
+			"func hasRecentGuestAgentEvidence(prev *models.VM, now time.Time) bool {",
+			`if prev == nil || prev.Type != "qemu" {`,
+			"func shouldQueryGuestAgent(vmStatus *proxmox.VMStatus, prev *models.VM, now time.Time) bool {",
+			"return hasRecentGuestAgentEvidence(prev, now)",
+		},
+		"guest_metadata.go": {
+			"guestMetadataEmptyTTL    = 30 * time.Second",
+			"func guestMetadataCacheEntryTTL(entry guestMetadataCacheEntry) time.Duration {",
+			"if guestMetadataCacheHasCompleteNetworkData(entry) {",
+			"return guestMetadataEmptyTTL",
+			"func (m *Monitor) hasRecentGuestMetadataEvidence(instanceName, nodeName string, vmid int, now time.Time) bool {",
+			"func (m *Monitor) scheduleGuestMetadataFetchForEntry(key string, now time.Time, entry guestMetadataCacheEntry) {",
+		},
+		"monitor_previous_state.go": {
+			"vmsByID            map[string]models.VM",
+			"ctx.vmsByID[modelVM.ID] = modelVM",
+			"guestID := makeGuestID(modelVM.Instance, modelVM.Node, modelVM.VMID)",
+			"ctx.vmsByID[guestID] = modelVM",
+		},
+		"monitor_pve_guest_builders.go": {
+			"guestAgentAvailable := shouldQueryGuestAgent(state.detailedStatus, prevVM, now) ||",
+			"m.hasRecentGuestMetadataEvidence(instanceName, res.Node, res.VMID, now)",
+			"if guestAgentAvailable && state.detailedStatus == nil {",
+		},
+		"monitor_polling_vm.go": {
+			"prevVMByID := prevGuests.vmsByID",
+			"guestAgentAvailable := vm.Status == \"running\" &&",
+			"m.hasRecentGuestMetadataEvidence(instanceName, n.Node, vm.VMID, now)",
+			"if guestAgentAvailable && diskTotal > 0 {",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestUnifiedAppContainerMetricsUseCanonicalGuestHistoryPath(t *testing.T) {
 	data, err := os.ReadFile("monitor.go")
 	if err != nil {

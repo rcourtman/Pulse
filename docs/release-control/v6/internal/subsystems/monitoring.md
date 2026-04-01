@@ -576,3 +576,9 @@ metrics into the existing shared `agent` and `vm` history stores. Pulse must
 not add a VMware-only charts cache, host history model, or VM metrics store
 just because vSphere performance collection uses a different API family from
 inventory and alarm reads.
+That same monitoring boundary now also owns Proxmox guest-agent continuity
+when `/status` is transiently missing. Recent guest-agent evidence and the
+shared guest metadata cache must keep VM network and identity metadata alive
+long enough to survive short Proxmox status failures, while incomplete
+guest-agent metadata stays on a short retry cadence instead of freezing
+partial VM summary data for minutes.

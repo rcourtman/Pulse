@@ -28,6 +28,7 @@ func TestBuildVMFromClusterResource_PreservesProxmoxPool(t *testing.T) {
 		nil,
 		"",
 		nil,
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected VM to be built")

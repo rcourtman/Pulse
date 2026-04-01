@@ -9,6 +9,7 @@ import (
 
 type previousGuestContext struct {
 	vms                []models.VM
+	vmsByID            map[string]models.VM
 	containers         []models.Container
 	containerOCIByVMID map[int]bool
 	hostAgentsByVMID   map[string]models.Host
@@ -17,6 +18,7 @@ type previousGuestContext struct {
 func (m *Monitor) previousGuestContextForInstance(instanceName string) previousGuestContext {
 	ctx := previousGuestContext{
 		vms:                make([]models.VM, 0),
+		vmsByID:            make(map[string]models.VM),
 		containers:         make([]models.Container, 0),
 		containerOCIByVMID: make(map[int]bool),
 		hostAgentsByVMID:   make(map[string]models.Host),
@@ -31,7 +33,15 @@ func (m *Monitor) previousGuestContextForInstance(instanceName string) previousG
 		if vm == nil || vm.Instance() != instanceName {
 			continue
 		}
-		ctx.vms = append(ctx.vms, previousVMFromView(vm))
+		modelVM := previousVMFromView(vm)
+		ctx.vms = append(ctx.vms, modelVM)
+		if modelVM.ID != "" {
+			ctx.vmsByID[modelVM.ID] = modelVM
+		}
+		guestID := makeGuestID(modelVM.Instance, modelVM.Node, modelVM.VMID)
+		if guestID != "" {
+			ctx.vmsByID[guestID] = modelVM
+		}
 	}
 
 	for _, ct := range readState.Containers() {
@@ -84,13 +94,21 @@ func previousVMFromView(vm *unifiedresources.VMView) models.VM {
 		return models.VM{}
 	}
 	return models.VM{
-		ID:       vm.ID(),
-		Instance: vm.Instance(),
-		Node:     vm.Node(),
-		VMID:     vm.VMID(),
-		Name:     vm.Name(),
-		Status:   string(vm.Status()),
-		LastSeen: vm.LastSeen(),
+		ID:                vm.ID(),
+		Instance:          vm.Instance(),
+		Node:              vm.Node(),
+		VMID:              vm.VMID(),
+		Name:              vm.Name(),
+		Type:              "qemu",
+		Status:            string(vm.Status()),
+		IPAddresses:       vm.IPAddresses(),
+		OSName:            vm.OSName(),
+		OSVersion:         vm.OSVersion(),
+		AgentVersion:      vm.AgentVersion(),
+		NetworkInterfaces: guestNetworkInterfacesFromReadStateView(vm.NetworkInterfaces()),
+		Disks:             guestDisksFromReadStateView(vm.Disks()),
+		DiskStatusReason:  vm.DiskStatusReason(),
+		LastSeen:          vm.LastSeen(),
 	}
 }
 

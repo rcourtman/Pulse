@@ -473,17 +473,28 @@ func TestMonitor_LinkNodeToHostAgent_Extra(t *testing.T) {
 
 type mockPVEClientExtra struct {
 	mockPVEClient
-	resources []proxmox.ClusterResource
-	vmStatus  *proxmox.VMStatus
-	fsInfo    []proxmox.VMFileSystem
-	netIfaces []proxmox.VMNetworkInterface
+	vms          []proxmox.VM
+	resources    []proxmox.ClusterResource
+	vmStatus     *proxmox.VMStatus
+	vmStatusErr  error
+	fsInfo       []proxmox.VMFileSystem
+	netIfaces    []proxmox.VMNetworkInterface
+	agentInfo    map[string]interface{}
+	agentVersion string
 }
 
 func (m *mockPVEClientExtra) GetClusterResources(ctx context.Context, resourceType string) ([]proxmox.ClusterResource, error) {
 	return m.resources, nil
 }
 
+func (m *mockPVEClientExtra) GetVMs(ctx context.Context, node string) ([]proxmox.VM, error) {
+	return m.vms, nil
+}
+
 func (m *mockPVEClientExtra) GetVMStatus(ctx context.Context, node string, vmid int) (*proxmox.VMStatus, error) {
+	if m.vmStatusErr != nil {
+		return nil, m.vmStatusErr
+	}
 	return m.vmStatus, nil
 }
 
@@ -520,10 +531,16 @@ func (m *mockPVEClientExtra) GetContainerInterfaces(ctx context.Context, node st
 }
 
 func (m *mockPVEClientExtra) GetVMAgentInfo(ctx context.Context, node string, vmid int) (map[string]interface{}, error) {
+	if m.agentInfo != nil {
+		return m.agentInfo, nil
+	}
 	return map[string]interface{}{"os": "linux"}, nil
 }
 
 func (m *mockPVEClientExtra) GetVMAgentVersion(ctx context.Context, node string, vmid int) (string, error) {
+	if m.agentVersion != "" {
+		return m.agentVersion, nil
+	}
 	return "1.0", nil
 }
 
@@ -1063,6 +1080,10 @@ func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	if len(prev.vms) != 1 || prev.vms[0].VMID != 101 || prev.vms[0].Instance != "pve1" || prev.vms[0].Name != "vm1" {
 		t.Fatalf("expected only pve1 VMs, got %#v", prev.vms)
 	}
+	canonicalID := prev.vms[0].ID
+	if len(prev.vmsByID) != 2 || prev.vmsByID[canonicalID].VMID != 101 || prev.vmsByID[makeGuestID("pve1", "", 101)].VMID != 101 {
+		t.Fatalf("expected previous VM lookup to be indexed by canonical and runtime guest IDs, got %#v", prev.vmsByID)
+	}
 	if len(prev.containers) != 2 {
 		t.Fatalf("expected only pve1 containers, got %#v", prev.containers)
 	}
@@ -1074,6 +1095,362 @@ func TestMonitor_PreviousGuestContextForInstance_Extra(t *testing.T) {
 	}
 	if len(prev.hostAgentsByVMID) != 2 || prev.hostAgentsByVMID["vm-1"].LinkedVMID != "vm-1" || prev.hostAgentsByVMID["vm-3"].LinkedVMID != "vm-3" {
 		t.Fatalf("expected all online linked hosts to be tracked for memory and disk fallback, got %#v", prev.hostAgentsByVMID)
+	}
+}
+
+func TestBuildVMFromClusterResource_ContinuesGuestAgentQueriesAfterTransientStatusFailure(t *testing.T) {
+	monitor := &Monitor{
+		rateTracker:          NewRateTracker(),
+		guestMetadataCache:   make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter: make(map[string]time.Time),
+	}
+	client := &mockPVEClientExtra{
+		vmStatusErr: fmt.Errorf("API error 500: timeout"),
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "/", Type: "ext4", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 40 * 1024 * 1024 * 1024, Disk: "/dev/vda"},
+		},
+		netIfaces: []proxmox.VMNetworkInterface{
+			{Name: "eth0", HardwareAddr: "00:11:22:33:44:55", IPAddresses: []proxmox.VMIPAddress{{Address: "192.168.1.50", Prefix: 24}}},
+		},
+		agentInfo: map[string]interface{}{
+			"result": map[string]interface{}{
+				"name":    "Debian GNU/Linux",
+				"version": "12",
+			},
+		},
+		agentVersion: "8.2.0",
+	}
+	guestID := makeGuestID("cluster-a", "node-a", 101)
+	prevVM := &models.VM{
+		ID:           guestID,
+		Instance:     "cluster-a",
+		Node:         "node-a",
+		VMID:         101,
+		Name:         "app-vm",
+		Type:         "qemu",
+		Status:       "running",
+		AgentVersion: "8.1.0",
+		NetworkInterfaces: []models.GuestNetworkInterface{
+			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.50"}},
+		},
+		LastSeen: time.Now(),
+	}
+
+	vm, _, _, _, ok := monitor.buildVMFromClusterResource(
+		context.Background(),
+		"cluster-a",
+		proxmox.ClusterResource{
+			Type:    "qemu",
+			Node:    "node-a",
+			Name:    "app-vm",
+			Status:  "running",
+			VMID:    101,
+			MaxCPU:  4,
+			MaxMem:  8192,
+			MaxDisk: 100 * 1024 * 1024 * 1024,
+		},
+		client,
+		guestID,
+		nil,
+		prevVM,
+	)
+	if !ok {
+		t.Fatal("expected VM to be built")
+	}
+	if vm.Disk.Usage != 40 {
+		t.Fatalf("expected guest-agent disk usage after status failure, got %.2f", vm.Disk.Usage)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda" {
+		t.Fatalf("expected guest-agent disk inventory, got %#v", vm.Disks)
+	}
+	if len(vm.NetworkInterfaces) != 1 || vm.NetworkInterfaces[0].Name != "eth0" {
+		t.Fatalf("expected guest-agent interfaces after status failure, got %#v", vm.NetworkInterfaces)
+	}
+	if vm.AgentVersion != "8.2.0" {
+		t.Fatalf("expected refreshed agent version, got %q", vm.AgentVersion)
+	}
+	if vm.OSName != "Debian GNU/Linux" || vm.OSVersion != "12" {
+		t.Fatalf("expected refreshed OS info, got %q %q", vm.OSName, vm.OSVersion)
+	}
+}
+
+func TestPollVMsAndContainersEfficient_ContinuesGuestAgentQueriesAfterTransientStatusFailure(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	registry := unifiedresources.NewRegistry(nil)
+	guestID := makeGuestID("pve1", "node1", 100)
+	registry.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:           guestID,
+				VMID:         100,
+				Name:         "vm100",
+				Node:         "node1",
+				Instance:     "pve1",
+				Type:         "qemu",
+				Status:       "running",
+				IPAddresses:  []string{"192.168.1.50"},
+				AgentVersion: "8.1.0",
+				NetworkInterfaces: []models.GuestNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.50"}},
+				},
+				Disks: []models.Disk{
+					{Total: 100 * 1024 * 1024 * 1024, Used: 40 * 1024 * 1024 * 1024, Free: 60 * 1024 * 1024 * 1024, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda"},
+				},
+				LastSeen: time.Now(),
+			},
+		},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	prev := m.previousGuestContextForInstance("pve1")
+	prevVM, ok := prev.vmsByID[guestID]
+	if !ok || !hasRecentGuestAgentEvidence(&prevVM, time.Now()) {
+		t.Fatalf("expected recent guest-agent evidence for %s, got %#v", guestID, prev.vmsByID)
+	}
+
+	client := &mockPVEClientExtra{
+		resources: []proxmox.ClusterResource{
+			{VMID: 100, Name: "vm100", Node: "node1", Status: "running", Type: "qemu", MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 100 * 1024 * 1024 * 1024},
+		},
+		vmStatusErr: fmt.Errorf("API error 500: timeout"),
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "/", Type: "ext4", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 40 * 1024 * 1024 * 1024, Disk: "/dev/vda"},
+		},
+		netIfaces: []proxmox.VMNetworkInterface{
+			{Name: "eth0", HardwareAddr: "00:11:22:33:44:55", IPAddresses: []proxmox.VMIPAddress{{Address: "192.168.1.50", Prefix: 24}}},
+		},
+		agentInfo: map[string]interface{}{
+			"result": map[string]interface{}{
+				"name":    "Debian GNU/Linux",
+				"version": "12",
+			},
+		},
+		agentVersion: "8.2.0",
+	}
+
+	if ok := m.pollVMsAndContainersEfficient(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		map[string]string{"node1": "online"},
+	); !ok {
+		t.Fatal("expected efficient polling path to succeed")
+	}
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.Disk.Usage != 40 {
+		t.Fatalf("expected guest-agent disk usage after status failure, got %.2f", vm.Disk.Usage)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda" {
+		t.Fatalf("expected guest-agent disk inventory, got %#v", vm.Disks)
+	}
+	if len(vm.NetworkInterfaces) != 1 || vm.NetworkInterfaces[0].Name != "eth0" {
+		t.Fatalf("expected guest-agent interfaces after status failure, got %#v", vm.NetworkInterfaces)
+	}
+	if vm.AgentVersion != "8.2.0" {
+		t.Fatalf("expected refreshed agent version, got %q", vm.AgentVersion)
+	}
+}
+
+func TestPollVMsWithNodes_PreservesCachedGuestMetadataWhenStatusUnavailable(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	cacheKey := guestMetadataCacheKey("pve1", "node1", 100)
+	m.guestMetadataCache[cacheKey] = guestMetadataCacheEntry{
+		ipAddresses: []string{"192.168.1.50"},
+		networkInterfaces: []models.GuestNetworkInterface{
+			{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.50"}},
+		},
+		osName:       "Debian",
+		osVersion:    "12",
+		agentVersion: "8.2.0",
+		fetchedAt:    time.Now().Add(-time.Minute),
+	}
+
+	client := &mockPVEClientExtra{
+		vms: []proxmox.VM{
+			{VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: 8 * 1024, Mem: 4 * 1024},
+		},
+		vmStatusErr: fmt.Errorf("API error 500: timeout"),
+	}
+
+	m.pollVMsWithNodes(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+	)
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if len(vm.IPAddresses) != 1 || vm.IPAddresses[0] != "192.168.1.50" {
+		t.Fatalf("expected cached IP addresses to be preserved, got %#v", vm.IPAddresses)
+	}
+	if len(vm.NetworkInterfaces) != 1 || vm.NetworkInterfaces[0].Name != "eth0" {
+		t.Fatalf("expected cached network interfaces to be preserved, got %#v", vm.NetworkInterfaces)
+	}
+	if vm.OSName != "Debian" || vm.OSVersion != "12" {
+		t.Fatalf("expected cached OS info to be preserved, got %q %q", vm.OSName, vm.OSVersion)
+	}
+	if vm.AgentVersion != "8.2.0" {
+		t.Fatalf("expected cached agent version to be preserved, got %q", vm.AgentVersion)
+	}
+}
+
+func TestPollVMsWithNodes_ContinuesGuestAgentQueriesAfterTransientStatusFailure(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+
+	m := &Monitor{
+		state:                    models.NewState(),
+		guestAgentFSInfoTimeout:  time.Second,
+		guestAgentRetries:        1,
+		guestAgentNetworkTimeout: time.Second,
+		guestAgentOSInfoTimeout:  time.Second,
+		guestAgentVersionTimeout: time.Second,
+		guestMetadataCache:       make(map[string]guestMetadataCacheEntry),
+		guestMetadataLimiter:     make(map[string]time.Time),
+		rateTracker:              NewRateTracker(),
+		metricsHistory:           NewMetricsHistory(100, time.Hour),
+		alertManager:             alerts.NewManager(),
+		stalenessTracker:         NewStalenessTracker(nil),
+		nodeRRDMemCache:          make(map[string]rrdMemCacheEntry),
+		vmRRDMemCache:            make(map[string]rrdMemCacheEntry),
+	}
+	defer m.alertManager.Stop()
+
+	registry := unifiedresources.NewRegistry(nil)
+	guestID := makeGuestID("pve1", "node1", 100)
+	registry.IngestSnapshot(models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:           guestID,
+				VMID:         100,
+				Name:         "vm100",
+				Node:         "node1",
+				Instance:     "pve1",
+				Type:         "qemu",
+				Status:       "running",
+				IPAddresses:  []string{"192.168.1.50"},
+				AgentVersion: "8.1.0",
+				NetworkInterfaces: []models.GuestNetworkInterface{
+					{Name: "eth0", MAC: "00:11:22:33:44:55", Addresses: []string{"192.168.1.50"}},
+				},
+				Disks: []models.Disk{
+					{Total: 100 * 1024 * 1024 * 1024, Used: 40 * 1024 * 1024 * 1024, Free: 60 * 1024 * 1024 * 1024, Usage: 40, Mountpoint: "/", Type: "ext4", Device: "/dev/vda"},
+				},
+				LastSeen: time.Now(),
+			},
+		},
+	})
+	m.resourceStore = unifiedresources.NewMonitorAdapter(registry)
+
+	prev := m.previousGuestContextForInstance("pve1")
+	prevVM, ok := prev.vmsByID[guestID]
+	if !ok || !hasRecentGuestAgentEvidence(&prevVM, time.Now()) {
+		t.Fatalf("expected recent guest-agent evidence for %s, got %#v", guestID, prev.vmsByID)
+	}
+
+	client := &mockPVEClientExtra{
+		vms: []proxmox.VM{
+			{VMID: 100, Name: "vm100", Node: "node1", Status: "running", MaxMem: 8 * 1024, Mem: 4 * 1024, MaxDisk: 100 * 1024 * 1024 * 1024},
+		},
+		vmStatusErr: fmt.Errorf("API error 500: timeout"),
+		fsInfo: []proxmox.VMFileSystem{
+			{Mountpoint: "/", Type: "ext4", TotalBytes: 100 * 1024 * 1024 * 1024, UsedBytes: 40 * 1024 * 1024 * 1024, Disk: "/dev/vda"},
+		},
+		netIfaces: []proxmox.VMNetworkInterface{
+			{Name: "eth0", HardwareAddr: "00:11:22:33:44:55", IPAddresses: []proxmox.VMIPAddress{{Address: "192.168.1.50", Prefix: 24}}},
+		},
+		agentInfo: map[string]interface{}{
+			"result": map[string]interface{}{
+				"name":    "Debian GNU/Linux",
+				"version": "12",
+			},
+		},
+		agentVersion: "8.2.0",
+	}
+
+	m.pollVMsWithNodes(
+		context.Background(),
+		"pve1",
+		"",
+		false,
+		client,
+		[]proxmox.Node{{Node: "node1", Status: "online"}},
+		map[string]string{"node1": "online"},
+	)
+
+	state := m.GetState()
+	if len(state.VMs) != 1 {
+		t.Fatalf("expected 1 VM, got %d", len(state.VMs))
+	}
+
+	vm := state.VMs[0]
+	if vm.Disk.Usage != 40 {
+		t.Fatalf("expected guest-agent disk usage after status failure, got %.2f", vm.Disk.Usage)
+	}
+	if vm.DiskStatusReason != "" {
+		t.Fatalf("expected empty disk status reason, got %q", vm.DiskStatusReason)
+	}
+	if len(vm.Disks) != 1 || vm.Disks[0].Device != "/dev/vda" {
+		t.Fatalf("expected guest-agent disk inventory, got %#v", vm.Disks)
+	}
+	if len(vm.NetworkInterfaces) != 1 || vm.NetworkInterfaces[0].Name != "eth0" {
+		t.Fatalf("expected guest-agent interfaces after status failure, got %#v", vm.NetworkInterfaces)
+	}
+	if vm.AgentVersion != "8.2.0" {
+		t.Fatalf("expected refreshed agent version, got %q", vm.AgentVersion)
 	}
 }
 
@@ -1112,6 +1489,7 @@ func TestBuildVMFromClusterResource_UsesLinkedHostAgentDiskFallback(t *testing.T
 				},
 			},
 		},
+		nil,
 	)
 	if !ok {
 		t.Fatal("expected VM to be built")

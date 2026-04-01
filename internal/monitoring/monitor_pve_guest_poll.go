@@ -30,7 +30,15 @@ func (m *Monitor) pollVMsAndContainersEfficient(ctx context.Context, instanceNam
 	// behavior is based on a consistent pre-poll snapshot.
 	prevGuests := m.previousGuestContextForInstance(instanceName)
 
-	allVMs, allContainers := m.collectGuestsFromClusterResources(ctx, instanceName, resources, client, prevGuests.containerOCIByVMID, prevGuests.hostAgentsByVMID)
+	allVMs, allContainers := m.collectGuestsFromClusterResources(
+		ctx,
+		instanceName,
+		resources,
+		client,
+		prevGuests.containerOCIByVMID,
+		prevGuests.vmsByID,
+		prevGuests.hostAgentsByVMID,
+	)
 
 	allVMs, allContainers = m.preserveGuestsForGracePeriod(instanceName, resources, prevGuests.vms, prevGuests.containers, nodeEffectiveStatus, allVMs, allContainers)
 
@@ -62,6 +70,7 @@ func (m *Monitor) collectGuestsFromClusterResources(
 	resources []proxmox.ClusterResource,
 	client PVEClientInterface,
 	prevContainerIsOCI map[int]bool,
+	prevVMByID map[string]models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) ([]models.VM, []models.Container) {
 	allVMs := make([]models.VM, 0, len(resources))
@@ -81,7 +90,11 @@ func (m *Monitor) collectGuestsFromClusterResources(
 
 		switch res.Type {
 		case "qemu":
-			vm, ok := m.handleClusterVMResource(ctx, instanceName, res, guestID, client, vmIDToHostAgent)
+			var prevVM *models.VM
+			if prev, ok := prevVMByID[guestID]; ok {
+				prevVM = &prev
+			}
+			vm, ok := m.handleClusterVMResource(ctx, instanceName, res, guestID, client, prevVM, vmIDToHostAgent)
 			if !ok {
 				continue
 			}
@@ -104,9 +117,10 @@ func (m *Monitor) handleClusterVMResource(
 	res proxmox.ClusterResource,
 	guestID string,
 	client PVEClientInterface,
+	prevVM *models.VM,
 	vmIDToHostAgent map[string]models.Host,
 ) (models.VM, bool) {
-	vm, guestRaw, memorySource, sampleTime, ok := m.buildVMFromClusterResource(ctx, instanceName, res, client, guestID, vmIDToHostAgent)
+	vm, guestRaw, memorySource, sampleTime, ok := m.buildVMFromClusterResource(ctx, instanceName, res, client, guestID, vmIDToHostAgent, prevVM)
 	if !ok {
 		return models.VM{}, false
 	}

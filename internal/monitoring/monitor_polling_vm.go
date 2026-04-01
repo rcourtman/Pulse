@@ -38,6 +38,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 	// Capture the previous guest context once per poll cycle so fallback behavior
 	// is based on a consistent pre-poll snapshot.
 	prevGuests := m.previousGuestContextForInstance(instanceName)
+	prevVMByID := prevGuests.vmsByID
 	vmIDToHostAgent := prevGuests.hostAgentsByVMID
 
 	log.Debug().
@@ -89,6 +90,10 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 
 				// Generate canonical guest ID: instance:node:vmid
 				guestID := makeGuestID(instanceName, n.Node, vm.VMID)
+				var prevVM *models.VM
+				if prev, ok := prevVMByID[guestID]; ok {
+					prevVM = &prev
+				}
 
 				guestRaw := VMMemoryRaw{
 					ListingMem:    vm.Mem,
@@ -151,8 +156,12 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 					memorySource = "status-unavailable"
 				}
 
-				if vm.Status == "running" && vmStatus != nil {
-					guestIPs, guestIfaces, guestOSName, guestOSVersion, agentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus)
+				now := time.Now()
+				guestAgentAvailable := vm.Status == "running" &&
+					(shouldQueryGuestAgent(vmStatus, prevVM, now) ||
+						m.hasRecentGuestMetadataEvidence(instanceName, n.Node, vm.VMID, now))
+				if guestAgentAvailable {
+					guestIPs, guestIfaces, guestOSName, guestOSVersion, agentVersion := m.fetchGuestAgentMetadata(ctx, client, instanceName, n.Node, vm.Name, vm.VMID, vmStatus, vmStatus == nil)
 					if len(guestIPs) > 0 {
 						ipAddresses = guestIPs
 					}
@@ -221,21 +230,26 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 
 				// For running VMs, ALWAYS try to get filesystem info from guest agent
 				// The cluster/resources endpoint always returns 0 for disk usage
-				if vm.Status == "running" && vmStatus != nil && diskTotal > 0 {
+				if guestAgentAvailable && diskTotal > 0 {
+					agentValue := 0
+					if vmStatus != nil {
+						agentValue = vmStatus.Agent.Value
+					}
+
 					// Log the initial state
 					if logging.IsLevelEnabled(zerolog.DebugLevel) {
 						log.Debug().
 							Str("instance", instanceName).
 							Str("vm", vm.Name).
 							Int("vmid", vm.VMID).
-							Int("agent", vmStatus.Agent.Value).
+							Int("agent", agentValue).
 							Uint64("diskUsed", diskUsed).
 							Uint64("diskTotal", diskTotal).
 							Msg("VM has 0 disk usage, checking guest agent")
 					}
 
 					// Check if agent is enabled
-					if vmStatus.Agent.Value == 0 {
+					if vmStatus != nil && vmStatus.Agent.Value == 0 {
 						diskStatusReason = "agent-disabled"
 						if logging.IsLevelEnabled(zerolog.DebugLevel) {
 							log.Debug().
@@ -243,7 +257,7 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 								Str("vm", vm.Name).
 								Msg("Guest agent disabled in VM config")
 						}
-					} else if vmStatus.Agent.Value > 0 || diskUsed == 0 {
+					} else {
 						if logging.IsLevelEnabled(zerolog.DebugLevel) {
 							log.Debug().
 								Str("instance", instanceName).
@@ -453,17 +467,15 @@ func (m *Monitor) pollVMsWithNodes(ctx context.Context, instanceName string, clu
 									Msg("Guest agent provided filesystem info but no usable filesystems found (all were special mounts)")
 							}
 						}
-					} else {
-						// No vmStatus available or agent disabled - show allocated disk
-						if diskTotal > 0 {
-							diskUsage = -1 // Show as allocated size
-							diskStatusReason = "no-agent"
-						}
 					}
 				} else if vm.Status == "running" && diskTotal > 0 {
-					// Running VM but no vmStatus - show allocated disk
+					// Running VM but no guest-agent evidence - show allocated disk
 					diskUsage = -1
-					diskStatusReason = "no-status"
+					if vmStatus == nil {
+						diskStatusReason = "no-status"
+					} else {
+						diskStatusReason = "no-agent"
+					}
 				}
 
 				if vm.Status == "running" && !diskFromAgent {
