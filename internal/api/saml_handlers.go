@@ -258,13 +258,9 @@ func (r *Router) handleSAMLACS(w http.ResponseWriter, req *http.Request) {
 
 	LogAuditEventForTenant(GetOrgID(req.Context()), "saml_login", username, GetClientIP(req), req.URL.Path, true, "SAML login success via "+providerID)
 
-	// Redirect to return URL - sanitize relayState to prevent open redirect
-	target := sanitizeOIDCReturnTo(relayState)
-	if target == "" {
-		target = "/"
-	}
-	target = addQueryParam(target, "saml", "success")
-	http.Redirect(w, req, target, http.StatusFound)
+	http.Redirect(w, req, buildLocalRedirectTarget(relayState, map[string]string{
+		"saml": "success",
+	}), http.StatusFound)
 }
 
 // handleSAMLMetadata returns the SP metadata XML
@@ -497,16 +493,10 @@ func (r *Router) clearSession(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) redirectSAMLError(w http.ResponseWriter, req *http.Request, returnTo string, code string) {
-	// Sanitize returnTo to prevent open redirect attacks
-	target := sanitizeOIDCReturnTo(returnTo)
-	if target == "" {
-		target = "/"
-	}
-	target = addQueryParam(target, "saml", "error")
-	if code != "" {
-		target = addQueryParam(target, "saml_error", code)
-	}
-	http.Redirect(w, req, target, http.StatusFound)
+	http.Redirect(w, req, buildLocalRedirectTarget(returnTo, map[string]string{
+		"saml":       "error",
+		"saml_error": code,
+	}), http.StatusFound)
 }
 
 // extractSAMLProviderID extracts the provider ID from a SAML endpoint path

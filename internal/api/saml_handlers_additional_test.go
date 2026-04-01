@@ -125,6 +125,18 @@ func TestRedirectSAMLError(t *testing.T) {
 	}
 }
 
+func TestRedirectSAMLErrorRejectsAbsoluteReturnTo(t *testing.T) {
+	router := &Router{}
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+
+	router.redirectSAMLError(rec, req, "https://evil.example.com/pwn", "session_failed")
+
+	if loc := rec.Header().Get("Location"); loc != "/?saml=error&saml_error=session_failed" {
+		t.Fatalf("unexpected redirect location %q", loc)
+	}
+}
+
 func TestInitializeSAMLProviders(t *testing.T) {
 	provider := testSAMLProvider("okta", true)
 	provider.SAML = &config.SAMLProviderConfig{

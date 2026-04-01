@@ -343,6 +343,11 @@ That same SSO boundary also owns manual SAML endpoint validation payloads.
 through the same validated absolute HTTP(S) helpers instead of letting the
 manual logout URL drift out of the request model or bypass the governed URL
 normalization path.
+That same SSO API boundary also owns final browser redirect construction after
+local auth handoff. OIDC and SAML success/error handlers must build their
+local `returnTo` targets through one canonical local-path helper that rejects
+absolute or host-bearing targets before query params are appended, so shared
+identity flows cannot drift back to per-handler open-redirect shaping.
 Commercial self-service actions in that shell must stay same-origin as well:
 the frontend may only call the portal-owned `/api/portal/commercial/*` routes,
 and `internal/cloudcp/portal/commercial_proxy.go` plus `internal/cloudcp/routes.go`

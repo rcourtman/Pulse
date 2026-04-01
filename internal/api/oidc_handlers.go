@@ -20,23 +20,24 @@ func sanitizeOIDCReturnTo(raw string) string {
 	if trimmed == "" {
 		return ""
 	}
-	if !strings.HasPrefix(trimmed, "/") || strings.HasPrefix(trimmed, "//") {
+	if !strings.HasPrefix(trimmed, "/") {
+		return ""
+	}
+	if len(trimmed) > 1 && (trimmed[1] == '/' || trimmed[1] == '\\') {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" {
 		return ""
 	}
 	return trimmed
 }
 
 func (r *Router) redirectOIDCError(w http.ResponseWriter, req *http.Request, returnTo string, code string) {
-	target := returnTo
-	if target == "" {
-		target = "/"
-	}
-	target = addQueryParam(target, "oidc", "error")
-	if code != "" {
-		target = addQueryParam(target, "oidc_error", code)
-	}
-
-	http.Redirect(w, req, target, http.StatusFound)
+	http.Redirect(w, req, buildLocalRedirectTarget(returnTo, map[string]string{
+		"oidc":       "error",
+		"oidc_error": code,
+	}), http.StatusFound)
 }
 
 func addQueryParam(path, key, value string) string {
@@ -51,6 +52,32 @@ func addQueryParam(path, key, value string) string {
 	q.Set(key, value)
 	u.RawQuery = q.Encode()
 	return u.String()
+}
+
+func buildLocalRedirectTarget(returnTo string, queryParams map[string]string) string {
+	target := sanitizeOIDCReturnTo(returnTo)
+	if target == "" {
+		target = "/"
+	}
+
+	parsed, err := url.Parse(target)
+	if err != nil || parsed.IsAbs() || parsed.Host != "" {
+		target = "/"
+	} else if parsed.Path == "" {
+		parsed.Path = "/"
+		target = parsed.String()
+	} else {
+		target = parsed.String()
+	}
+
+	for key, value := range queryParams {
+		if key == "" || value == "" {
+			continue
+		}
+		target = addQueryParam(target, key, value)
+	}
+
+	return target
 }
 
 func extractStringClaim(claims map[string]any, key string) string {
@@ -582,10 +609,7 @@ func (r *Router) handleSSOOIDCCallback(w http.ResponseWriter, req *http.Request)
 
 	LogAuditEventForTenant(GetOrgID(req.Context()), "sso_oidc_login", username, GetClientIP(req), req.URL.Path, true, "SSO OIDC login success via provider: "+providerID)
 
-	target := entry.ReturnTo
-	if target == "" {
-		target = "/"
-	}
-	target = addQueryParam(target, "oidc", "success")
-	http.Redirect(w, req, target, http.StatusFound)
+	http.Redirect(w, req, buildLocalRedirectTarget(entry.ReturnTo, map[string]string{
+		"oidc": "success",
+	}), http.StatusFound)
 }

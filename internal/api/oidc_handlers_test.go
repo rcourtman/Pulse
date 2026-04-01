@@ -1,7 +1,11 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestSanitizeOIDCReturnTo(t *testing.T) {
@@ -79,6 +83,11 @@ func TestSanitizeOIDCReturnTo(t *testing.T) {
 			raw:  "//evil.com/path",
 			want: "",
 		},
+		{
+			name: "backslash relative path",
+			raw:  "/\\evil.com/path",
+			want: "",
+		},
 
 		// Whitespace handling
 		{
@@ -107,6 +116,64 @@ func TestSanitizeOIDCReturnTo(t *testing.T) {
 				t.Errorf("sanitizeOIDCReturnTo(%q) = %q, want %q", tc.raw, result, tc.want)
 			}
 		})
+	}
+}
+
+func TestBuildLocalRedirectTarget(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		returnTo    string
+		queryParams map[string]string
+		want        string
+	}{
+		{
+			name:        "rejects absolute URL",
+			returnTo:    "https://evil.example.com/pwn",
+			queryParams: map[string]string{"oidc": "error"},
+			want:        "/?oidc=error",
+		},
+		{
+			name:        "preserves query and fragment",
+			returnTo:    "/login?foo=bar#section",
+			queryParams: map[string]string{"oidc": "success"},
+			want:        "/login?foo=bar&oidc=success#section",
+		},
+		{
+			name:        "drops empty key and value",
+			returnTo:    "/",
+			queryParams: map[string]string{"": "ignored", "oidc": "", "state": "ok"},
+			want:        "/?state=ok",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := buildLocalRedirectTarget(tc.returnTo, tc.queryParams)
+			if result != tc.want {
+				t.Fatalf("buildLocalRedirectTarget(%q, %#v) = %q, want %q", tc.returnTo, tc.queryParams, result, tc.want)
+			}
+		})
+	}
+}
+
+func TestRedirectOIDCErrorRejectsAbsoluteReturnTo(t *testing.T) {
+	t.Parallel()
+
+	router := &Router{config: &config.Config{}}
+	req := httptest.NewRequest(http.MethodGet, "/api/oidc/callback", nil)
+	rec := httptest.NewRecorder()
+
+	router.redirectOIDCError(rec, req, "https://evil.example.com/pwn", "bad")
+
+	if rec.Code != http.StatusFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusFound)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/?oidc=error&oidc_error=bad" {
+		t.Fatalf("unexpected redirect location %q", loc)
 	}
 }
 

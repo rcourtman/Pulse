@@ -324,6 +324,11 @@ manual SAML test payload preserves the optional `idpSloUrl` alongside
 identity before first-user or first-host handoff do not silently lose logout
 endpoint validation when they choose manual SAML entry instead of metadata
 import.
+That same shared `internal/api/` dependency also now assumes post-auth browser
+handoff stays on one canonical local redirect builder. Lifecycle-adjacent setup
+and hosted bootstrap surfaces may depend on shared OIDC/SAML callbacks, but
+they must not reintroduce per-handler `returnTo` shaping that can bypass the
+governed local-path validation before success or error query markers are added.
 
 Agent lifecycle owns the install/register/update continuity surfaces, but it
 does not own unified-resource history or control-plane timeline persistence.

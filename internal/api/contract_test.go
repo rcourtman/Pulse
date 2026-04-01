@@ -1280,6 +1280,20 @@ func TestContract_SSOTestOIDCDiscoveryKeepsIssuerBasePath(t *testing.T) {
 	}
 }
 
+func TestContract_SSOLocalRedirectTargetsStayCanonical(t *testing.T) {
+	if got := buildLocalRedirectTarget("https://evil.example.com/pwn", map[string]string{
+		"oidc": "error",
+	}); got != "/?oidc=error" {
+		t.Fatalf("absolute redirect target = %q, want %q", got, "/?oidc=error")
+	}
+
+	if got := buildLocalRedirectTarget("/login?foo=bar#section", map[string]string{
+		"saml": "success",
+	}); got != "/login?foo=bar&saml=success#section" {
+		t.Fatalf("local redirect target = %q, want %q", got, "/login?foo=bar&saml=success#section")
+	}
+}
+
 func TestContract_FindingJSONSnapshot(t *testing.T) {
 	now := time.Date(2026, 2, 8, 13, 14, 15, 0, time.UTC)
 	lastSeen := now.Add(5 * time.Minute)

@@ -143,6 +143,10 @@ querying, and the operator-facing storage health presentation layer.
    handoff. `frontend-modern/src/pages/Dashboard.tsx` may stay storage/recovery-
    owned for dashboard composition, but when no resources have reported yet it
    must route operators to `/settings/infrastructure/install` instead of
+8. Keep shared OIDC/SAML callback redirects on the canonical local-target helper
+   contract when storage- or recovery-adjacent routes inherit shared auth
+   browser handoff through `internal/api/`, so adjacent surfaces do not revive
+   per-handler absolute-target acceptance or raw `returnTo` concatenation.
    leaving the dashboard as a passive dead end.
 8. Keep dependent first-session reset behavior honest on the shared `internal/api/`
    boundary: when `/api/security/dev/reset-first-run` is used to reopen the
@@ -1210,6 +1214,11 @@ or recover those tokens through encrypted-at-rest session payloads, and any
 missing-crypto or invalid-ciphertext path must drop the refresh token instead
 of preserving plaintext-at-rest session state that storage and recovery
 surfaces might inherit through shared auth runtime helpers.
+That same shared `internal/api/` dependency also assumes shared OIDC/SAML
+callbacks finish on canonical local redirect targets. Storage- or
+recovery-adjacent routes that rely on shared auth helpers may not reintroduce
+per-handler `returnTo` concatenation or absolute-target acceptance when they
+inherit those browser handoff paths through the common API router surface.
 That same shared `internal/api/` dependency also assumes notification test
 handlers stay decode-and-delegate only: `internal/api/notifications.go` may
 share the API helper boundary with storage-adjacent routes, but service-template
