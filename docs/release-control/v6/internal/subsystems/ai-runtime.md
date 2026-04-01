@@ -21,22 +21,23 @@ runtime cost control, and shared AI transport surfaces.
 ## Canonical Files
 
 1. `internal/ai/`
-2. `internal/api/ai_handler.go`
-3. `internal/api/ai_handlers.go`
-4. `internal/api/ai_hosted_runtime.go`
-5. `internal/api/ai_intelligence_handlers.go`
-6. `frontend-modern/src/api/ai.ts`
-7. `frontend-modern/src/api/patrol.ts`
-8. `frontend-modern/src/components/AI/AICostDashboard.tsx`
-9. `frontend-modern/src/components/AI/Chat/`
-10. `frontend-modern/src/utils/aiChatPresentation.ts`
-11. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
-12. `frontend-modern/src/utils/aiCostPresentation.ts`
-13. `frontend-modern/src/utils/aiExplorePresentation.ts`
-14. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
-15. `frontend-modern/src/utils/aiProviderPresentation.ts`
-16. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
-17. `frontend-modern/src/utils/textPresentation.ts`
+2. `internal/config/ai.go`
+3. `internal/api/ai_handler.go`
+4. `internal/api/ai_handlers.go`
+5. `internal/api/ai_hosted_runtime.go`
+6. `internal/api/ai_intelligence_handlers.go`
+7. `frontend-modern/src/api/ai.ts`
+8. `frontend-modern/src/api/patrol.ts`
+9. `frontend-modern/src/components/AI/AICostDashboard.tsx`
+10. `frontend-modern/src/components/AI/Chat/`
+11. `frontend-modern/src/utils/aiChatPresentation.ts`
+12. `frontend-modern/src/utils/aiControlLevelPresentation.ts`
+13. `frontend-modern/src/utils/aiCostPresentation.ts`
+14. `frontend-modern/src/utils/aiExplorePresentation.ts`
+15. `frontend-modern/src/utils/aiProviderHealthPresentation.ts`
+16. `frontend-modern/src/utils/aiProviderPresentation.ts`
+17. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
+18. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -49,11 +50,12 @@ runtime cost control, and shared AI transport surfaces.
 ## Extension Points
 
 1. Add or change chat runtime, Patrol orchestration, findings generation, or remediation behavior through `internal/ai/`
-2. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go` and `frontend-modern/src/api/ai.ts`
-3. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
-4. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
-5. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
-6. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
+2. Add or change canonical AI provider config, provider-scoped model selection, or runtime auth/base-URL defaults through `internal/config/ai.go`
+3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go` and `frontend-modern/src/api/ai.ts`
+4. Add or change Patrol, alert-analysis, or remediation transport through `internal/api/ai_handlers.go`, `internal/api/ai_intelligence_handlers.go`, and `frontend-modern/src/api/patrol.ts`
+5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
+6. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
+7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
 
 ## Forbidden Paths
 
@@ -85,6 +87,10 @@ governed floor is ready.
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and
 provider selection, remediation flow, and cost persistence.
+That same backend runtime ownership includes `internal/config/ai.go`, because
+provider auth, base URLs, provider-scoped model defaults, and other persisted
+runtime AI selection rules must stay canonical in the shared AI config model
+instead of drifting into handler-local fallbacks or frontend-only assumptions.
 That quickstart ownership includes the public proxy dependency under
 `internal/ai/providers/quickstart.go`: the runtime must default to the owned
 commercial API edge at `https://license.pulserelay.pro/v1/quickstart/patrol`

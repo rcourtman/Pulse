@@ -2018,6 +2018,25 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["verification_requirement"]["id"], "ai-runtime-engine")
         self.assertEqual(match["verification_requirement"]["test_prefixes"], ["internal/ai/"])
 
+    def test_lookup_paths_assigns_internal_ai_config_to_ai_runtime(self) -> None:
+        result = lookup_paths(["internal/config/ai.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"ai-runtime"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"ai-runtime"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(match["contract"], "docs/release-control/v6/internal/subsystems/ai-runtime.md")
+        self.assertEqual(match["lane_context"]["lane_id"], "L6")
+        self.assertEqual(match["verification_requirement"]["id"], "ai-runtime-config")
+        self.assertEqual(match["verification_requirement"]["exact_files"], ["internal/config/ai_config_test.go"])
+
     def test_lookup_paths_reports_notification_client_as_shared_boundary(self) -> None:
         result = lookup_paths(["frontend-modern/src/api/notifications.ts"])
         self.assertEqual(result["unowned_runtime_files"], [])
@@ -4676,7 +4695,7 @@ class SubsystemLookupTest(unittest.TestCase):
         ai_runtime_expected = [
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-                "2. `internal/api/ai_handler.go`",
+                "3. `internal/api/ai_handler.go`",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(
@@ -4686,7 +4705,7 @@ class SubsystemLookupTest(unittest.TestCase):
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-                "2. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`",
+                "3. Add or change Pulse Assistant request flow through `internal/api/ai_handler.go`",
                 "internal/api/ai_handler.go",
             ),
         ]
@@ -4764,8 +4783,8 @@ class SubsystemLookupTest(unittest.TestCase):
         )
         self.assertIn(
             "contract focus: "
-            f"{_contract_reference('docs/release-control/v6/internal/subsystems/ai-runtime.md', '2. `internal/api/ai_handler.go`', 'internal/api/ai_handler.go')['heading']} "
-            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/ai-runtime.md', '2. `internal/api/ai_handler.go`', 'internal/api/ai_handler.go')['line']}: "
+            f"{_contract_reference('docs/release-control/v6/internal/subsystems/ai-runtime.md', '3. `internal/api/ai_handler.go`', 'internal/api/ai_handler.go')['heading']} "
+            f"@L{_contract_reference('docs/release-control/v6/internal/subsystems/ai-runtime.md', '3. `internal/api/ai_handler.go`', 'internal/api/ai_handler.go')['line']}: "
             "internal/api/ai_handler.go",
             rendered,
         )

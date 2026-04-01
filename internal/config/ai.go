@@ -38,6 +38,8 @@ type AIConfig struct {
 	DeepSeekAPIKey   string `json:"deepseek_api_key,omitempty"`   // DeepSeek API key
 	GeminiAPIKey     string `json:"gemini_api_key,omitempty"`     // Google Gemini API key
 	OllamaBaseURL    string `json:"ollama_base_url,omitempty"`    // Ollama server URL (default: http://localhost:11434)
+	OllamaUsername   string `json:"ollama_username,omitempty"`    // Optional Basic Auth username for Ollama
+	OllamaPassword   string `json:"ollama_password,omitempty"`    // Optional Basic Auth password for Ollama
 	OpenAIBaseURL    string `json:"openai_base_url,omitempty"`    // Custom OpenAI-compatible base URL (optional)
 
 	// OAuth fields for Claude Pro/Max subscription authentication
@@ -367,6 +369,24 @@ func (c *AIConfig) GetModel() string {
 	}
 
 	return ""
+}
+
+// GetPreferredModelForProvider returns the most relevant configured model for a provider.
+// It prefers explicitly selected models for that provider before falling back to the
+// provider default model string.
+func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
+	for _, candidate := range []string{c.Model, c.ChatModel, c.PatrolModel, c.AutoFixModel, c.DiscoveryModel} {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		candidateProvider, _ := ParseModelString(candidate)
+		if candidateProvider == provider {
+			return candidate
+		}
+	}
+
+	return DefaultModelForProvider(provider)
 }
 
 // GetChatModel returns the model for interactive chat conversations

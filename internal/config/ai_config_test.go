@@ -492,6 +492,63 @@ func TestAIConfig_GetChatModel(t *testing.T) {
 	})
 }
 
+func TestAIConfig_GetPreferredModelForProvider(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   AIConfig
+		provider string
+		expected string
+	}{
+		{
+			name: "uses main model when provider matches",
+			config: AIConfig{
+				Model: "ollama:llama3.2",
+			},
+			provider: AIProviderOllama,
+			expected: "ollama:llama3.2",
+		},
+		{
+			name: "falls back to patrol override for provider",
+			config: AIConfig{
+				Model:       "openai:gpt-4o",
+				PatrolModel: "ollama:qwen2.5",
+			},
+			provider: AIProviderOllama,
+			expected: "ollama:qwen2.5",
+		},
+		{
+			name: "detects unprefixed ollama model",
+			config: AIConfig{
+				PatrolModel: "llama3.1",
+			},
+			provider: AIProviderOllama,
+			expected: "llama3.1",
+		},
+		{
+			name: "falls back to provider default when no model matches",
+			config: AIConfig{
+				Model: "openai:gpt-4o",
+			},
+			provider: AIProviderGemini,
+			expected: FormatModelString(AIProviderGemini, DefaultAIModelGemini),
+		},
+		{
+			name:     "unknown provider returns empty",
+			config:   AIConfig{Model: "openai:gpt-4o"},
+			provider: "unknown",
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.config.GetPreferredModelForProvider(tt.provider); got != tt.expected {
+				t.Fatalf("GetPreferredModelForProvider(%q) = %q, want %q", tt.provider, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestAIConfig_GetPatrolModel(t *testing.T) {
 	t.Run("explicit patrol model", func(t *testing.T) {
 		config := AIConfig{

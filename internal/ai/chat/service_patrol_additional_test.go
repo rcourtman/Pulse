@@ -2,6 +2,9 @@ package chat
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -84,6 +87,48 @@ func TestService_CreateProviderForModel(t *testing.T) {
 	}
 	if _, err := svc.createProviderForModel("deepseek:deepseek-chat"); err != nil {
 		t.Fatalf("expected deepseek provider: %v", err)
+	}
+}
+
+func TestService_CreateProviderForModel_OllamaUsesConfiguredBasicAuth(t *testing.T) {
+	versionHits := 0
+	tagsHits := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username, password, ok := r.BasicAuth()
+		if !ok || username != "unai" || password != "secret" {
+			t.Fatalf("unexpected basic auth: ok=%v user=%q pass=%q", ok, username, password)
+		}
+		switch r.URL.Path {
+		case "/api/version":
+			versionHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		case "/api/tags":
+			tagsHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "llama3:latest"}}})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	svc := &Service{
+		cfg: &config.AIConfig{
+			OllamaBaseURL:  server.URL,
+			OllamaUsername: "unai",
+			OllamaPassword: "secret",
+		},
+	}
+
+	provider, err := svc.createProviderForModel("ollama:llama3")
+	if err != nil {
+		t.Fatalf("expected ollama provider to be created: %v", err)
+	}
+
+	if err := provider.TestConnection(context.Background()); err != nil {
+		t.Fatalf("expected ollama provider test connection to succeed: %v", err)
+	}
+	if versionHits != 1 || tagsHits != 1 {
+		t.Fatalf("expected version+tags check, got version=%d tags=%d", versionHits, tagsHits)
 	}
 }
 

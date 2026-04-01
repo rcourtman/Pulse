@@ -88,9 +88,11 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	// Update settings to enable AI via Ollama.
 	{
 		body, _ := json.Marshal(AISettingsUpdateRequest{
-			Enabled:       ptr(true),
-			Model:         ptr("ollama:llama3"),
-			OllamaBaseURL: ptr("http://localhost:11434"),
+			Enabled:        ptr(true),
+			Model:          ptr("ollama:llama3"),
+			OllamaBaseURL:  ptr("http://localhost:11434"),
+			OllamaUsername: ptr("unai"),
+			OllamaPassword: ptr("secret"),
 		})
 		req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
 		rec := httptest.NewRecorder()
@@ -109,6 +111,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		if resp.OllamaBaseURL != "http://localhost:11434" {
 			t.Fatalf("unexpected ollama base url: %+v", resp)
+		}
+		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
+			t.Fatalf("expected ollama auth state in response, got %+v", resp)
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
@@ -134,6 +139,9 @@ func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 		}
 		if !resp.Enabled || !resp.OllamaConfigured {
 			t.Fatalf("expected enabled + ollama configured, got %+v", resp)
+		}
+		if resp.OllamaUsername != "unai" || !resp.OllamaPasswordSet {
+			t.Fatalf("expected persisted ollama auth state, got %+v", resp)
 		}
 		responseBody := rec.Body.String()
 		if !strings.Contains(responseBody, `"available_models":[]`) ||
@@ -573,12 +581,23 @@ func ptr[T any](v T) *T { return &v }
 func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 	t.Parallel()
 
+	versionHits := 0
+	tagsHits := 0
 	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/version" {
-			http.NotFound(w, r)
-			return
+		username, password, ok := r.BasicAuth()
+		if !ok || username != "unai" || password != "secret" {
+			t.Fatalf("unexpected basic auth: ok=%v user=%q pass=%q", ok, username, password)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		switch r.URL.Path {
+		case "/api/version":
+			versionHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		case "/api/tags":
+			tagsHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "llama3:latest"}}})
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer ollama.Close()
 
@@ -590,6 +609,8 @@ func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 	aiCfg.Enabled = true
 	aiCfg.Model = "ollama:llama3"
 	aiCfg.OllamaBaseURL = ollama.URL
+	aiCfg.OllamaUsername = "unai"
+	aiCfg.OllamaPassword = "secret"
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
@@ -614,17 +635,31 @@ func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 	if !resp.Success {
 		t.Fatalf("expected success, got %+v", resp)
 	}
+	if versionHits != 1 || tagsHits != 1 {
+		t.Fatalf("expected version+tags check, got version=%d tags=%d", versionHits, tagsHits)
+	}
 }
 
 func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 	t.Parallel()
 
+	versionHits := 0
+	tagsHits := 0
 	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/version" {
-			http.NotFound(w, r)
-			return
+		username, password, ok := r.BasicAuth()
+		if !ok || username != "unai" || password != "secret" {
+			t.Fatalf("unexpected basic auth: ok=%v user=%q pass=%q", ok, username, password)
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		switch r.URL.Path {
+		case "/api/version":
+			versionHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		case "/api/tags":
+			tagsHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"models": []map[string]any{{"name": "llama3:latest"}}})
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer ollama.Close()
 
@@ -634,8 +669,11 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 
 	aiCfg := config.NewDefaultAIConfig()
 	aiCfg.Enabled = true
-	aiCfg.Model = "ollama:llama3"
+	aiCfg.Model = "openai:gpt-4o"
+	aiCfg.PatrolModel = "ollama:llama3"
 	aiCfg.OllamaBaseURL = ollama.URL
+	aiCfg.OllamaUsername = "unai"
+	aiCfg.OllamaPassword = "secret"
 	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
 		t.Fatalf("SaveAIConfig: %v", err)
 	}
@@ -659,6 +697,9 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 	}
 	if !resp.Success || resp.Provider != "ollama" {
 		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if versionHits != 1 || tagsHits != 1 {
+		t.Fatalf("expected version+tags check, got version=%d tags=%d", versionHits, tagsHits)
 	}
 }
 

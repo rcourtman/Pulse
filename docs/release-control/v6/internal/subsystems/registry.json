@@ -969,7 +969,8 @@
         "frontend-modern/src/utils/aiSessionDiffPresentation.ts",
         "internal/api/ai_handler.go",
         "internal/api/ai_handlers.go",
-        "internal/api/ai_intelligence_handlers.go"
+        "internal/api/ai_intelligence_handlers.go",
+        "internal/config/ai.go"
       ],
       "verification": {
         "allow_same_subsystem_tests": false,
@@ -1051,6 +1052,19 @@
               "internal/ai/"
             ],
             "exact_files": []
+          },
+          {
+            "id": "ai-runtime-config",
+            "label": "AI runtime config proof",
+            "match_prefixes": [],
+            "match_files": [
+              "internal/config/ai.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/config/ai_config_test.go"
+            ]
           }
         ]
       }

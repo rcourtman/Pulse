@@ -2,6 +2,8 @@ package ai
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -4422,6 +4424,11 @@ func buildModelsCacheKey(cfg *config.AIConfig) string {
 	b.WriteString(cfg.OpenAIBaseURL)
 	b.WriteString("|ollama_base=")
 	b.WriteString(cfg.OllamaBaseURL)
+	b.WriteString("|ollama_auth=")
+	if cfg.OllamaUsername != "" || cfg.OllamaPassword != "" {
+		sum := sha256.Sum256([]byte(cfg.OllamaUsername + "\n" + cfg.OllamaPassword))
+		b.WriteString(hex.EncodeToString(sum[:]))
+	}
 
 	return b.String()
 }

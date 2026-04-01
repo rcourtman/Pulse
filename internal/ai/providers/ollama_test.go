@@ -35,7 +35,7 @@ func TestOllamaClient_ChatStream_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, 0)
+	client := NewOllamaClient("llama3", server.URL, "", "", 0)
 
 	var content string
 	var done bool
@@ -78,7 +78,7 @@ func TestOllamaClient_ChatStream_ToolCall(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, 0)
+	client := NewOllamaClient("llama3", server.URL, "", "", 0)
 
 	var toolsFound []string
 
@@ -111,7 +111,7 @@ func TestOllamaClient_ChatStream_Errors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, 0)
+	client := NewOllamaClient("llama3", server.URL, "", "", 0)
 
 	err := client.ChatStream(context.Background(), ChatRequest{Messages: []Message{{Role: "user"}}}, func(e StreamEvent) {})
 	assert.Error(t, err)
@@ -132,7 +132,7 @@ func TestOllamaClient_ListModels(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, 0)
+	client := NewOllamaClient("llama3", server.URL, "", "", 0)
 	models, err := client.ListModels(context.Background())
 
 	require.NoError(t, err)
@@ -153,7 +153,7 @@ func TestNewOllamaClient_Normalization(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		client := NewOllamaClient("model", tt.input, 0)
+		client := NewOllamaClient("model", tt.input, "", "", 0)
 		assert.Equal(t, tt.expect, client.baseURL)
 	}
 }
@@ -186,7 +186,7 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, 0)
+	client := NewOllamaClient("llama3", server.URL, "", "", 0)
 	resp, err := client.Chat(context.Background(), ChatRequest{
 		Messages: []Message{{Role: "user", Content: "Hi"}},
 		Tools: []Tool{
@@ -211,20 +211,59 @@ func TestOllamaClient_Chat_Success(t *testing.T) {
 }
 
 func TestOllamaClient_TestConnection(t *testing.T) {
+	versionHits := 0
+	tagsHits := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		assert.Equal(t, "/api/version", r.URL.Path)
-		w.WriteHeader(http.StatusOK)
+		username, password, ok := r.BasicAuth()
+		assert.True(t, ok)
+		assert.Equal(t, "unai", username)
+		assert.Equal(t, "secret", password)
+		switch r.URL.Path {
+		case "/api/version":
+			versionHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		case "/api/tags":
+			tagsHits++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{{"name": "llama3:latest"}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
 	}))
 	defer server.Close()
 
-	client := NewOllamaClient("llama3", server.URL, 0)
+	client := NewOllamaClient("llama3", server.URL, "unai", "secret", 0)
 	err := client.TestConnection(context.Background())
 	require.NoError(t, err)
+	assert.Equal(t, 1, versionHits)
+	assert.Equal(t, 1, tagsHits)
 }
 
 func TestOllamaClient_SupportsThinking(t *testing.T) {
-	client := NewOllamaClient("llama3", "http://localhost:11434", 0)
+	client := NewOllamaClient("llama3", "http://localhost:11434", "", "", 0)
 	if client.SupportsThinking("llama3") {
 		t.Fatal("expected SupportsThinking to be false")
 	}
+}
+
+func TestOllamaClient_TestConnection_ModelUnavailable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/version":
+			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.1.0"})
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{{"name": "mistral:latest"}},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewOllamaClient("llama3", server.URL, "", "", 0)
+	err := client.TestConnection(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `model "llama3" is not available`)
 }

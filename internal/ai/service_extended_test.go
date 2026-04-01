@@ -1295,6 +1295,31 @@ func TestService_ListModelsWithCache_CacheHit(t *testing.T) {
 	}
 }
 
+func TestBuildModelsCacheKey_OllamaAuthFingerprint(t *testing.T) {
+	cfgA := &config.AIConfig{
+		Enabled:        true,
+		OllamaBaseURL:  "http://localhost:11434",
+		OllamaUsername: "unai",
+		OllamaPassword: "secret-a",
+	}
+	cfgB := &config.AIConfig{
+		Enabled:        true,
+		OllamaBaseURL:  "http://localhost:11434",
+		OllamaUsername: "unai",
+		OllamaPassword: "secret-b",
+	}
+
+	keyA := buildModelsCacheKey(cfgA)
+	keyB := buildModelsCacheKey(cfgB)
+
+	if keyA == keyB {
+		t.Fatal("expected different cache keys when Ollama credentials change")
+	}
+	if strings.Contains(keyA, "secret-a") || strings.Contains(keyB, "secret-b") {
+		t.Fatal("expected cache keys to avoid embedding raw Ollama passwords")
+	}
+}
+
 // Note: ListModelsWithCache does not handle nil persistence gracefully (panics)
 // This is acceptable as NewService should always be called with a valid persistence
 

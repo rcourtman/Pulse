@@ -29,6 +29,10 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 		return nil, fmt.Errorf("Pulse Assistant config is nil")
 	}
 
+	if normalizedProvider, normalizedModel := config.ParseModelString(model); normalizedProvider == provider && normalizedModel != "" {
+		model = normalizedModel
+	}
+
 	// Get the configured timeout
 	timeout := cfg.GetRequestTimeout()
 
@@ -77,7 +81,7 @@ func NewForProvider(cfg *config.AIConfig, provider, model string) (Provider, err
 
 	case config.AIProviderOllama:
 		baseURL := cfg.GetBaseURLForProvider(config.AIProviderOllama)
-		return NewOllamaClient(model, baseURL, timeout), nil
+		return NewOllamaClient(model, baseURL, cfg.OllamaUsername, cfg.OllamaPassword, timeout), nil
 
 	case config.AIProviderGemini:
 		apiKey := cfg.GetAPIKeyForProvider(config.AIProviderGemini)

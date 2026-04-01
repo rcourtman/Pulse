@@ -246,11 +246,8 @@ func (s *Service) createProviderForExplore(modelStr string) (providers.Streaming
 		}
 		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", exploreHTTPTimeout), nil
 	case "ollama":
-		baseURL := s.cfg.OllamaBaseURL
-		if baseURL == "" {
-			baseURL = "http://localhost:11434"
-		}
-		return providers.NewOllamaClient(modelName, baseURL, exploreHTTPTimeout), nil
+		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderOllama)
+		return providers.NewOllamaClient(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, exploreHTTPTimeout), nil
 	case config.AIProviderQuickstart:
 		// Quickstart uses the hosted proxy and does not require a BYOK key.
 		// The orgID carries the hosted workspace identity for credit accounting.

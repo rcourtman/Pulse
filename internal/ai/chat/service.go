@@ -930,11 +930,8 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 		}
 		return providers.NewGeminiClient(s.cfg.GeminiAPIKey, modelName, "", timeout), nil
 	case "ollama":
-		baseURL := s.cfg.OllamaBaseURL
-		if baseURL == "" {
-			baseURL = "http://localhost:11434"
-		}
-		return providers.NewOllamaClient(modelName, baseURL, timeout), nil
+		baseURL := s.cfg.GetBaseURLForProvider(config.AIProviderOllama)
+		return providers.NewOllamaClient(modelName, baseURL, s.cfg.OllamaUsername, s.cfg.OllamaPassword, timeout), nil
 	case config.AIProviderQuickstart:
 		// Quickstart uses the hosted proxy — no API key needed.
 		// The licenseID is embedded in the client via orgID.

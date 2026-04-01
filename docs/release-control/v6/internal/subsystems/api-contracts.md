@@ -205,6 +205,7 @@ Own canonical runtime payload shapes between backend and frontend.
 20. Backend config/settings handlers pointing operator guidance at GitHub `main` docs when the running build already ships that guidance locally under `/docs/`
 21. Telemetry preview or reset endpoints drifting from the exact server-owned telemetry runtime contract instead of reusing the same source-of-truth snapshot and install-ID state the background sender uses
 22. Shared SSO test or metadata-preview handlers open-coding outbound metadata/discovery URLs, allowing userinfo-bearing HTTP(S) inputs, or rebuilding `/.well-known/openid-configuration` with origin-root string concatenation instead of the shared validated URL helpers before any outbound request
+23. AI settings handlers echoing raw provider secrets or testing the wrong provider model: `/api/settings/ai` may expose masked provider-auth presence such as `ollama_password_set`, but backend payloads must never echo stored secrets back to clients, and provider-specific test routes must stay bound to the selected provider's own configured model instead of whichever other provider currently owns the default `model` field
 
 ## Completion Obligations
 
@@ -265,6 +266,13 @@ Own canonical runtime payload shapes between backend and frontend.
     (`agent`, `docker`, `kubernetes`) and platform-connections-managed
     surfaces (`proxmox`, `pbs`, `pmg`, `truenas`) instead of collapsing them
     into one uninstall/stop-monitoring model.
+23. Keep AI settings payload continuity explicit on the shared `/api/settings/ai`
+    surface: `internal/api/ai_handlers.go` and `internal/api/contract_test.go`
+    must expose masked provider-auth state such as `ollama_username` and
+    `ollama_password_set` without echoing raw stored secrets, and the same
+    backend contract must keep provider test routes bound to the selected
+    provider's configured model instead of whichever other provider currently
+    owns the default `model` field.
 23. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
@@ -2244,6 +2252,13 @@ on its empty-list payload once AI is enabled, even when the first enablement
 happens after process startup. A post-boot settings save may not leave that
 surface on `503 Approval store not initialized` just because the direct AI
 runtime had not previously started.
+That same shared AI settings contract also owns provider-auth continuity and
+provider-scoped test selection. `internal/api/ai_handlers.go` and
+`internal/api/contract_test.go` must expose masked Ollama auth state through
+`ollama_username` and `ollama_password_set`, accept provider-auth updates
+without echoing raw secrets back into the payload, and keep provider test
+routes bound to the provider's own configured model instead of whichever
+other provider currently owns the default `model` selection.
 That same shared infrastructure-settings API contract now also owns the
 connected-infrastructure distinction between machine-managed and
 platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,

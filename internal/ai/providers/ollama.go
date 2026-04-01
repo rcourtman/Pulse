@@ -15,13 +15,15 @@ import (
 type OllamaClient struct {
 	model        string
 	baseURL      string
+	username     string
+	password     string
 	client       *http.Client // For non-streaming requests (has overall timeout)
 	streamClient *http.Client // For streaming requests (no overall timeout — relies on context)
 }
 
 // NewOllamaClient creates a new Ollama API client
 // timeout is optional - pass 0 to use the default 5 minute timeout
-func NewOllamaClient(model, baseURL string, timeout time.Duration) *OllamaClient {
+func NewOllamaClient(model, baseURL, username, password string, timeout time.Duration) *OllamaClient {
 	if baseURL == "" {
 		baseURL = "http://localhost:11434"
 	}
@@ -34,8 +36,10 @@ func NewOllamaClient(model, baseURL string, timeout time.Duration) *OllamaClient
 		timeout = 300 * time.Second // Default 5 minutes
 	}
 	return &OllamaClient{
-		model:   model,
-		baseURL: baseURL,
+		model:    model,
+		baseURL:  baseURL,
+		username: username,
+		password: password,
 		client: &http.Client{
 			Timeout: timeout,
 		},
@@ -48,6 +52,12 @@ func NewOllamaClient(model, baseURL string, timeout time.Duration) *OllamaClient
 				ResponseHeaderTimeout: timeout, // Still timeout if server never starts responding
 			},
 		},
+	}
+}
+
+func (c *OllamaClient) applyAuth(req *http.Request) {
+	if c.username != "" || c.password != "" {
+		req.SetBasicAuth(c.username, c.password)
 	}
 }
 
@@ -223,6 +233,7 @@ func (c *OllamaClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.applyAuth(httpReq)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -388,6 +399,7 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 	}
 
 	httpReq.Header.Set("Content-Type", "application/json")
+	c.applyAuth(httpReq)
 
 	// Use streamClient which has no overall timeout — http.Client.Timeout
 	// includes response body reading time, which kills slow streaming responses.
@@ -477,12 +489,14 @@ func (c *OllamaClient) ChatStream(ctx context.Context, req ChatRequest, callback
 }
 
 // TestConnection validates connectivity by checking the Ollama version endpoint
+// and ensuring the configured model is available from the local model registry.
 func (c *OllamaClient) TestConnection(ctx context.Context) error {
 	versionURL := c.baseURL + "/api/version"
 	httpReq, err := http.NewRequestWithContext(ctx, "GET", versionURL, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
+	c.applyAuth(httpReq)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -494,7 +508,74 @@ func (c *OllamaClient) TestConnection(ctx context.Context) error {
 		return fmt.Errorf("Ollama returned status %d", resp.StatusCode)
 	}
 
+	models, err := c.ListModels(ctx)
+	if err != nil {
+		return fmt.Errorf("connected to Ollama version endpoint but failed to list models: %w", err)
+	}
+	if c.model != "" && !ollamaModelAvailable(c.model, models) {
+		available := make([]string, 0, len(models))
+		for _, model := range models {
+			label := strings.TrimSpace(model.ID)
+			if label == "" {
+				label = strings.TrimSpace(model.Name)
+			}
+			if label != "" {
+				available = append(available, label)
+			}
+		}
+		if len(available) > 0 {
+			return fmt.Errorf("connected to Ollama but model %q is not available; found: %s", normalizeOllamaModelRef(c.model), strings.Join(available, ", "))
+		}
+		return fmt.Errorf("connected to Ollama but model %q is not available", normalizeOllamaModelRef(c.model))
+	}
+
 	return nil
+}
+
+func normalizeOllamaModelRef(model string) string {
+	model = strings.TrimSpace(model)
+	if strings.HasPrefix(model, "ollama:") {
+		model = strings.TrimPrefix(model, "ollama:")
+	}
+	return model
+}
+
+func splitOllamaModelRef(model string) (string, string) {
+	model = normalizeOllamaModelRef(model)
+	if model == "" {
+		return "", ""
+	}
+	idx := strings.LastIndex(model, ":")
+	if idx == -1 {
+		return model, ""
+	}
+	return model[:idx], model[idx+1:]
+}
+
+func ollamaModelAvailable(model string, available []ModelInfo) bool {
+	wantName, wantTag := splitOllamaModelRef(model)
+	if wantName == "" {
+		return len(available) > 0
+	}
+
+	for _, candidate := range available {
+		ref := strings.TrimSpace(candidate.ID)
+		if ref == "" {
+			ref = strings.TrimSpace(candidate.Name)
+		}
+		haveName, haveTag := splitOllamaModelRef(ref)
+		if haveName == "" {
+			continue
+		}
+		if wantName != haveName {
+			continue
+		}
+		if wantTag == "" || haveTag == "" || wantTag == haveTag {
+			return true
+		}
+	}
+
+	return false
 }
 
 // ListModels fetches available models from the local Ollama instance
@@ -504,6 +585,7 @@ func (c *OllamaClient) ListModels(ctx context.Context) ([]ModelInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
+	c.applyAuth(httpReq)
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {

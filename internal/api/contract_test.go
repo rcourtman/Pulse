@@ -1644,6 +1644,7 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"gemini_configured":false,
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
+		"ollama_password_set":false,
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
@@ -1653,6 +1654,72 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"quickstart_credits_remaining":25,
 		"quickstart_credits_available":true,
 		"using_quickstart":true
+	}`
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
+func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "openai:gpt-4o"
+	aiCfg.PatrolModel = "ollama:llama3"
+	aiCfg.OllamaBaseURL = "http://ollama.example:11434"
+	aiCfg.OllamaUsername = "unai"
+	aiCfg.OllamaPassword = "secret"
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	const want = `{
+		"enabled":true,
+		"model":"openai:gpt-4o",
+		"patrol_model":"ollama:llama3",
+		"configured":true,
+		"custom_context":"",
+		"auth_method":"api_key",
+		"oauth_connected":false,
+		"patrol_interval_minutes":360,
+		"patrol_enabled":true,
+		"patrol_auto_fix":false,
+		"alert_triggered_analysis":true,
+		"patrol_event_triggers_enabled":true,
+		"patrol_alert_triggers_enabled":true,
+		"patrol_anomaly_triggers_enabled":true,
+		"use_proactive_thresholds":false,
+		"available_models":[],
+		"anthropic_configured":false,
+		"openai_configured":false,
+		"openrouter_configured":false,
+		"deepseek_configured":false,
+		"gemini_configured":false,
+		"ollama_configured":true,
+		"ollama_base_url":"http://ollama.example:11434",
+		"ollama_username":"unai",
+		"ollama_password_set":true,
+		"configured_providers":["ollama"],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"quickstart_credits_total":0,
+		"quickstart_credits_used":0,
+		"quickstart_credits_remaining":0,
+		"quickstart_credits_available":false,
+		"using_quickstart":false
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -2112,6 +2179,7 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 		"gemini_configured":false,
 		"ollama_configured":false,
 		"ollama_base_url":"http://localhost:11434",
+		"ollama_password_set":false,
 		"configured_providers":[],
 		"control_level":"read_only",
 		"protected_guests":[],
