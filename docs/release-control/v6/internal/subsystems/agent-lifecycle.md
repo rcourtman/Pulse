@@ -642,7 +642,11 @@ first preference. Unified Agent setup must send canonical `candidateHosts`
 alongside the preferred `host`, and `/api/auto-register` must store the first
 candidate that Pulse can actually reach for fingerprint capture from its own
 network view so mixed-DNS and split-network installs do not register a host the
-server itself cannot use afterward.
+server itself cannot use afterward. That same selection path must only persist
+`VerifySSL=true` when Pulse actually captured a certificate fingerprint for the
+selected host; if every candidate fingerprint probe fails, registration must
+fall back to the preferred normalized host with strict TLS disabled instead of
+pretending public-CA verification is now safe for a self-signed Proxmox node.
 That same canonical behavior also includes one auth transport for Proxmox
 completion: runtime-side Unified Agent and script callers must send `/api/auto-register`
 authentication through a one-time setup token in the request-body

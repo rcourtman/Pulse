@@ -346,10 +346,10 @@ func normalizeAutoRegisterHostCandidates(nodeType, primary string, alternates []
 	return candidates, nil
 }
 
-func selectAutoRegisterHost(nodeType, primary string, alternates []string) (string, string, []string, error) {
+func selectAutoRegisterHost(nodeType, primary string, alternates []string) (string, string, bool, []string, error) {
 	candidates, err := normalizeAutoRegisterHostCandidates(nodeType, primary, alternates)
 	if err != nil {
-		return "", "", nil, err
+		return "", "", false, nil, err
 	}
 
 	for idx, candidate := range candidates {
@@ -369,10 +369,10 @@ func selectAutoRegisterHost(nodeType, primary string, alternates []string) (stri
 				Str("requestedHost", candidates[0]).
 				Msg("Auto-register switched to fallback host candidate reachable from Pulse")
 		}
-		return candidate, fingerprint, candidates, nil
+		return candidate, fingerprint, true, candidates, nil
 	}
 
-	return candidates[0], "", candidates, nil
+	return candidates[0], "", false, candidates, nil
 }
 
 func canonicalAutoRegisterMatchMessage(reason string) string {
@@ -682,13 +682,12 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 	req.ServerName = serverName
 	req.Source = registrationSource
 
-	host, fingerprint, candidateHosts, err := selectAutoRegisterHost(req.Type, req.Host, req.CandidateHosts)
+	host, fingerprint, verifySSL, candidateHosts, err := selectAutoRegisterHost(req.Type, req.Host, req.CandidateHosts)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	verifySSL := true
 	log.Info().
 		Str("requestedHost", req.Host).
 		Str("selectedHost", host).

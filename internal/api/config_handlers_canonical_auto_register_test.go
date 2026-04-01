@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/pkg/tlsutil"
 )
 
 func TestHandleCanonicalAutoRegister_PVE(t *testing.T) {
@@ -164,6 +165,127 @@ func TestHandleCanonicalAutoRegister_PVEAcceptsCallerProvidedTokenWithoutCredent
 	}
 	if instance.Source != "agent" {
 		t.Fatalf("source = %q, want agent", instance.Source)
+	}
+}
+
+func TestHandleCanonicalAutoRegisterSelectsReachableFallbackCandidateHost(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	reachable := newIPv4TLSServer(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer reachable.Close()
+
+	reqBody := AutoRegisterRequest{
+		Type:           "pve",
+		Host:           "https://127.0.0.1:1",
+		CandidateHosts: []string{"https://127.0.0.1:1", reachable.URL},
+		ServerName:     "test-node",
+		TokenID:        "pulse-monitor@pve!pulse-test-node",
+		TokenValue:     "created-locally",
+		Source:         "agent",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(handler.defaultConfig.PVEInstances))
+	}
+
+	instance := handler.defaultConfig.PVEInstances[0]
+	if instance.Host != reachable.URL {
+		t.Fatalf("host = %q, want reachable fallback %q", instance.Host, reachable.URL)
+	}
+
+	expectedFingerprint, err := tlsutil.FetchFingerprint(reachable.URL)
+	if err != nil {
+		t.Fatalf("fetch expected fingerprint: %v", err)
+	}
+	if instance.Fingerprint != expectedFingerprint {
+		t.Fatalf("fingerprint = %q, want %q", instance.Fingerprint, expectedFingerprint)
+	}
+	if !instance.VerifySSL {
+		t.Fatal("expected verifySSL to stay enabled when Pulse captured a reachable fingerprint")
+	}
+
+	var resp AutoRegisterResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Host != reachable.URL {
+		t.Fatalf("response host = %q, want %q", resp.Host, reachable.URL)
+	}
+}
+
+func TestHandleCanonicalAutoRegisterDisablesStrictTLSWhenFingerprintCaptureFails(t *testing.T) {
+	tempDir := t.TempDir()
+	t.Setenv("PULSE_DATA_DIR", tempDir)
+
+	cfg := &config.Config{
+		DataPath:   tempDir,
+		ConfigPath: tempDir,
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	originalFingerprint := fetchTLSFingerprint
+	fetchTLSFingerprint = func(string) (string, error) {
+		return "", nil
+	}
+	t.Cleanup(func() {
+		fetchTLSFingerprint = originalFingerprint
+	})
+
+	reqBody := AutoRegisterRequest{
+		Type:           "pve",
+		Host:           "https://pve.local:8006",
+		CandidateHosts: []string{"https://pve.local:8006", "https://10.0.0.5:8006"},
+		ServerName:     "test-node",
+		TokenID:        "pulse-monitor@pve!pulse-test-node",
+		TokenValue:     "created-locally",
+		Source:         "agent",
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/auto-register", nil)
+	rec := httptest.NewRecorder()
+
+	handler.handleCanonicalAutoRegister(rec, req, &reqBody, "127.0.0.1")
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	if len(handler.defaultConfig.PVEInstances) != 1 {
+		t.Fatalf("expected 1 PVE instance, got %d", len(handler.defaultConfig.PVEInstances))
+	}
+
+	expectedHost, err := normalizeNodeHost(reqBody.Host, reqBody.Type)
+	if err != nil {
+		t.Fatalf("normalize expected host: %v", err)
+	}
+
+	instance := handler.defaultConfig.PVEInstances[0]
+	if instance.Host != expectedHost {
+		t.Fatalf("host = %q, want primary normalized host %q", instance.Host, expectedHost)
+	}
+	if instance.Fingerprint != "" {
+		t.Fatalf("fingerprint = %q, want empty when capture failed", instance.Fingerprint)
+	}
+	if instance.VerifySSL {
+		t.Fatal("expected verifySSL to be disabled when Pulse could not capture any candidate fingerprint")
 	}
 }
 
