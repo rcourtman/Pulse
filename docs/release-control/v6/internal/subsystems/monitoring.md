@@ -127,6 +127,12 @@ window instead of stitching a second live tail onto the end of seeded
 sparklines. Monitoring must not let provider-owned mock resources receive a
 duplicate generic unified-resource writer that appends a divergent recent tail
 after the canonical mock sampler has already seeded and extended that series.
+That same chart boundary also owns storage-series identity. Monitoring and
+`ReadState` consumers must address storage pool and physical-disk history
+through the resolved unified-resource metrics target, so seeded history,
+runtime writes, storage summary hover selection, and detail charts all extend
+one series instead of splitting between canonical resource IDs and
+source-native metric IDs.
 That same summary owner also owns VMware partial-success classification.
 Optional VI JSON or Automation enrichment reads that fail after base
 host/VM/datastore inventory succeeds must not collapse the whole poll into a

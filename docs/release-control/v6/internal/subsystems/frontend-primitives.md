@@ -144,6 +144,7 @@ work extends shared components instead of creating new local variants.
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
 6. Keep shared storage feature presenters on canonical platform truth. When reusable storage presenters under `frontend-modern/src/features/storageBackups/` classify canonical resources for the shared storage route, API-backed virtualization datastores such as VMware must stay inventory-only datastores instead of inheriting PBS-specific backup-repository or protected-target copy from older fallback branches.
+7. Keep top-of-page summary interaction on shared primitives. Infrastructure, workloads, and storage summary cards must route sticky-shell behavior through `frontend-modern/src/components/shared/StickySummarySection.tsx` and route row-hover or focused-series rendering through shared chart primitives such as `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/DensityMap.tsx`, rather than page-local sticky wrappers or metric-card-specific hover logic.
 
 ## Forbidden Paths
 
@@ -468,10 +469,11 @@ Those supporting cards must also keep their content factual and count-based:
 active findings, critical findings, warnings, and fixes are valid secondary
 readouts, while labels such as `Issues detected` or `Partial verification`
 belong only to the primary Patrol assessment and verification surfaces.
-The same applies to the Patrol activity strip during active execution: the
-shared feature surface may add an explicit run-in-progress badge, but the main
-status-strip label remains factual activity copy rather than shifting into a
-second Patrol verdict label while a run is underway.
+The same applies to Patrol operational context during active execution: the
+shared feature surface may add an explicit run-in-progress badge, but any
+activity support surface or integrated summary panel must remain factual
+activity copy rather than shifting into a second Patrol verdict label while a
+run is underway.
 `frontend-modern/src/components/shared/TagBadges.tsx` is now also the
 canonical tag-badge primitive. Dashboard workload rows and the unified-resource
 detail drawer must import that shared owner instead of keeping a dashboard-local
@@ -1175,11 +1177,11 @@ whether recent activity was limited to scoped/erroring patrol runs.
 When the same governed run-history contract shows a recent full patrol plus
 same-day scoped follow-up work, that summary shell should also carry a compact
 activity-mix explanation rather than forcing operators to infer why Patrol
-looked busy from a separate activity strip alone.
+looked busy from a second competing status band.
 That explanation belongs on the verification surface itself when operators are
 reconciling `Recently verified` copy against same-day scoped Patrol bursts; the
-status strip may support the readout, but it is not sufficient as the only
-explanation path.
+supporting activity context may complement the readout, but it is not
+sufficient as the only explanation path.
 That same shell rule also owns Patrol recency labels. Shared Patrol header and
 status-shell surfaces must keep `Last full patrol` tied only to the full-sweep
 transport fact and use `Last activity` for scoped or verification work instead

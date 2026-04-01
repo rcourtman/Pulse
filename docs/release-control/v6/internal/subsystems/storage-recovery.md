@@ -157,6 +157,11 @@ querying, and the operator-facing storage health presentation layer.
     snapshot-backed platforms, provider-backed fixtures, unified inventory,
     and recovery/storage context stay aligned instead of drifting through
     recovery-local fixture assembly or partial mock helper APIs.
+12. Keep storage summary chart identity and sticky-shell behavior on the
+    shared storage path. Pool rows, disk rows, storage summary cards, and
+    storage detail charts must all address history through the canonical
+    unified-resource metrics-target IDs, and the storage page must reuse the
+    shared sticky summary primitive instead of a storage-local scroll wrapper.
 
 ## Current State
 
@@ -221,6 +226,11 @@ used-capacity, and available-space cards may consume shaped chart payloads for
 presentation, but those payloads must still reflect one canonical mock metric
 timeline instead of a seeded seven-day sparkline with a second live tail
 stitched on afterward.
+That same chart boundary now also owns row-hover summary filtering. Storage
+pool and disk rows may focus the summary cards, but the shared storage summary
+must filter every supported card through the same canonical metrics-target
+identity rather than letting temperature, capacity, or detail cards drift onto
+page-local row identifiers.
 That same shared `internal/api/` dependency also assumes auth-persistence
 teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or

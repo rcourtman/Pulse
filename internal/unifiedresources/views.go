@@ -1760,10 +1760,31 @@ func (v StoragePoolView) IncidentAction() string {
 }
 
 func (v StoragePoolView) Node() string {
-	if v.r == nil || v.r.Proxmox == nil {
+	if v.r == nil {
 		return ""
 	}
-	return strings.TrimSpace(v.r.Proxmox.NodeName)
+	if v.r.Proxmox != nil && strings.TrimSpace(v.r.Proxmox.NodeName) != "" {
+		return strings.TrimSpace(v.r.Proxmox.NodeName)
+	}
+	if v.r.Storage != nil {
+		for _, node := range v.r.Storage.Nodes {
+			if node = strings.TrimSpace(node); node != "" {
+				return node
+			}
+		}
+	}
+	if parentName := strings.TrimSpace(v.r.ParentName); parentName != "" {
+		return parentName
+	}
+	if v.r.TrueNAS != nil && strings.TrimSpace(v.r.TrueNAS.Hostname) != "" {
+		return strings.TrimSpace(v.r.TrueNAS.Hostname)
+	}
+	for _, hostname := range v.r.Identity.Hostnames {
+		if hostname = strings.TrimSpace(hostname); hostname != "" {
+			return hostname
+		}
+	}
+	return ""
 }
 
 func (v StoragePoolView) Instance() string {
@@ -1773,12 +1794,20 @@ func (v StoragePoolView) Instance() string {
 	return strings.TrimSpace(v.r.Proxmox.Instance)
 }
 
-// SourceID returns the original Proxmox-level storage ID (e.g. "local-lvm").
+// SourceID returns the canonical storage identity used by charts and provider
+// lookups. It prefers the resolved metrics target and falls back to
+// source-native identifiers when needed.
 func (v StoragePoolView) SourceID() string {
-	if v.r == nil || v.r.Proxmox == nil {
+	if v.r == nil {
 		return ""
 	}
-	return strings.TrimSpace(v.r.Proxmox.SourceID)
+	if v.r.MetricsTarget != nil && strings.TrimSpace(v.r.MetricsTarget.ResourceID) != "" {
+		return strings.TrimSpace(v.r.MetricsTarget.ResourceID)
+	}
+	if v.r.Proxmox != nil && strings.TrimSpace(v.r.Proxmox.SourceID) != "" {
+		return strings.TrimSpace(v.r.Proxmox.SourceID)
+	}
+	return strings.TrimSpace(v.r.ID)
 }
 
 func (v StoragePoolView) StorageType() string {

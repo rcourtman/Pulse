@@ -153,6 +153,30 @@ func pulseBinDir() string {
 	return "/opt/pulse/bin"
 }
 
+func storageChartsSelectedNodeName(resource unifiedresources.Resource) string {
+	if name := strings.TrimSpace(resource.Name); name != "" {
+		return name
+	}
+	if resource.TrueNAS != nil {
+		if hostname := strings.TrimSpace(resource.TrueNAS.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	for _, hostname := range resource.Identity.Hostnames {
+		if hostname = strings.TrimSpace(hostname); hostname != "" {
+			return hostname
+		}
+	}
+	return ""
+}
+
+func storageChartsSelectedNodeInstance(resource unifiedresources.Resource) string {
+	if resource.Proxmox == nil {
+		return ""
+	}
+	return strings.TrimSpace(resource.Proxmox.Instance)
+}
+
 func isDirectLoopbackRequest(req *http.Request) bool {
 	if req == nil {
 		return false
@@ -7626,17 +7650,30 @@ func (r *Router) handleStorageCharts(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	// Resolve node filter — look up node name+instance from ID to disambiguate
-	// nodes with the same name across different Proxmox instances.
+	// Resolve node filter from canonical unified resources so storage charts use
+	// the same node identity model as the frontend storage page.
 	var selectedNodeName, selectedNodeInstance string
 	if selectedNodeID != "" {
 		found := false
-		for _, n := range monitor.NodesSnapshot() {
-			if n.ID == selectedNodeID {
-				selectedNodeName = n.Name
-				selectedNodeInstance = n.Instance
+		for _, resource := range monitor.GetUnifiedResources() {
+			if strings.TrimSpace(resource.ID) != selectedNodeID {
+				continue
+			}
+			selectedNodeName = storageChartsSelectedNodeName(resource)
+			selectedNodeInstance = storageChartsSelectedNodeInstance(resource)
+			if selectedNodeName != "" || selectedNodeInstance != "" {
 				found = true
 				break
+			}
+		}
+		if !found {
+			for _, n := range monitor.NodesSnapshot() {
+				if n.ID == selectedNodeID {
+					selectedNodeName = n.Name
+					selectedNodeInstance = n.Instance
+					found = true
+					break
+				}
 			}
 		}
 		if !found {

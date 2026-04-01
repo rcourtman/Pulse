@@ -9,6 +9,8 @@ type StoragePageSummaryProps = {
   selectedNodeId: () => string;
   nodeOptions: () => StoragePageNodeOption[];
   physicalDisks: () => Resource[];
+  hoveredResourceId: () => string | null;
+  focusedResourceId: () => string | null;
 };
 
 export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) => {
@@ -26,6 +28,8 @@ export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) =>
       timeRange={summaryTimeRange()}
       onTimeRangeChange={setSummaryTimeRange}
       nodeId={props.selectedNodeId()}
+      hoveredResourceId={props.hoveredResourceId()}
+      focusedResourceId={props.focusedResourceId()}
     />
   );
 };

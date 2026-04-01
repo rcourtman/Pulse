@@ -150,6 +150,43 @@ func TestMonitorAdapterReadStateReturnsClonedIncidents(t *testing.T) {
 	}
 }
 
+func TestMonitorAdapterStoragePoolViewsAttachCanonicalMetricsTarget(t *testing.T) {
+	adapter := NewMonitorAdapter(NewRegistry(nil))
+	now := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
+
+	adapter.PopulateSupplementalRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-1:datastore:datastore-202",
+			Resource: Resource{
+				ID:       "storage-vmware-1",
+				Type:     ResourceTypeStorage,
+				Name:     "archive-tier",
+				Status:   StatusOnline,
+				LastSeen: now,
+				Storage: &StorageMeta{
+					Type:     "datastore",
+					Platform: "vmware",
+					Nodes:    []string{"esxi-01.lab.local"},
+				},
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					EntityType:      "datastore",
+					ManagedObjectID: "datastore-202",
+					RuntimeHostName: "esxi-01.lab.local",
+				},
+			},
+		},
+	})
+
+	pools := adapter.StoragePools()
+	if len(pools) != 1 {
+		t.Fatalf("expected 1 storage pool view, got %d", len(pools))
+	}
+	if got := pools[0].SourceID(); got != "vc-1:datastore:datastore-202" {
+		t.Fatalf("expected canonical metrics target on storage pool view, got %q", got)
+	}
+}
+
 func TestMonitorAdapterRecordsSupplementalChangeTimeline(t *testing.T) {
 	store := NewMemoryStore()
 	adapter := NewMonitorAdapter(NewRegistry(store))

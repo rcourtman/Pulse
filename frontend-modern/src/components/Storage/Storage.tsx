@@ -4,6 +4,7 @@ import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
+import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { isStorageRecordCeph } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
 
@@ -44,17 +45,26 @@ const Storage: Component = () => {
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
+    hoveredStorageResourceId,
     isLoadingPools,
+    focusedStorageResourceId,
+    selectedDiskId,
+    setHoveredStorageResourceId,
+    setSelectedDiskId,
   } = useStoragePageModel();
 
   return (
     <div class="space-y-4">
-      <StoragePageSummary
-        filteredRecordCount={() => filteredRecords().length}
-        selectedNodeId={selectedNodeId}
-        nodeOptions={nodeOptions}
-        physicalDisks={physicalDisks}
-      />
+      <StickySummarySection desktopOnly={false}>
+        <StoragePageSummary
+          filteredRecordCount={() => filteredRecords().length}
+          selectedNodeId={selectedNodeId}
+          nodeOptions={nodeOptions}
+          physicalDisks={physicalDisks}
+          hoveredResourceId={hoveredStorageResourceId}
+          focusedResourceId={focusedStorageResourceId}
+        />
+      </StickySummarySection>
 
       <StorageCephSection
         view={view}
@@ -104,6 +114,10 @@ const Storage: Component = () => {
         highlightedRecordId={highlightedRecordId}
         getRecordAlertState={getRecordAlertState}
         isLoadingPools={isLoadingPools}
+        hoveredStorageResourceId={hoveredStorageResourceId}
+        setHoveredStorageResourceId={setHoveredStorageResourceId}
+        selectedDiskId={selectedDiskId}
+        setSelectedDiskId={setSelectedDiskId}
       />
     </div>
   );

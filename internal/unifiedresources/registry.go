@@ -403,6 +403,14 @@ func BuildMetricsTargetForRegistry(rr *ResourceRegistry, resourceID string) *Met
 	rr.mu.RLock()
 	defer rr.mu.RUnlock()
 
+	return rr.metricsTargetForResourceLocked(resourceID)
+}
+
+func (rr *ResourceRegistry) metricsTargetForResourceLocked(resourceID string) *MetricsTarget {
+	if rr == nil {
+		return nil
+	}
+
 	resourceID = CanonicalResourceID(resourceID)
 	resource := rr.resources[resourceID]
 	if resource == nil {
@@ -1902,6 +1910,7 @@ func (rr *ResourceRegistry) rebuildViews() {
 
 	for _, r := range rr.resources {
 		viewResource := cloneResourcePtr(r)
+		viewResource.MetricsTarget = rr.metricsTargetForResourceLocked(r.ID)
 		switch r.Type {
 		case ResourceTypeVM:
 			v := NewVMView(viewResource)

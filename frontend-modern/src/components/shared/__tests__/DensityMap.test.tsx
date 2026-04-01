@@ -4,6 +4,10 @@ import densityMapSource from '@/components/shared/DensityMap.tsx?raw';
 import densityMapModelSource from '@/components/shared/densityMapModel.ts?raw';
 import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw';
 import { DensityMap } from '@/components/shared/DensityMap';
+import {
+  buildDensityMapChartData,
+  getDensityMapExternalSeriesIndex,
+} from '@/components/shared/densityMapModel';
 
 HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
   clearRect: vi.fn(),
@@ -31,6 +35,7 @@ describe('DensityMap', () => {
 
     expect(densityMapModelSource).toContain('buildDensityMapChartData');
     expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
+    expect(densityMapModelSource).toContain('getDensityMapExternalSeriesIndex');
     expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
   });
 
@@ -75,5 +80,31 @@ describe('DensityMap', () => {
     fireEvent.mouseMove(canvas, { clientX: 160, clientY: 20 });
 
     expect(await screen.findByText('CPU')).toBeInTheDocument();
+  });
+
+  it('keeps an externally highlighted series visible when it falls outside the default density top set', () => {
+    const now = Date.now();
+    const series = Array.from({ length: 24 }, (_, index) => ({
+      id: `series-${index + 1}`,
+      name: `Series ${index + 1}`,
+      color: '#10b981',
+      data:
+        index === 23
+          ? []
+          : [
+              { timestamp: now - 30_000, value: 100 - index },
+              { timestamp: now - 10_000, value: 100 - index },
+            ],
+    }));
+
+    const chartData = buildDensityMapChartData({
+      series,
+      timeRange: '1h',
+      now,
+      highlightSeriesId: 'series-24',
+    });
+
+    expect(chartData.series.map((entry) => entry.id)).toContain('series-24');
+    expect(getDensityMapExternalSeriesIndex(chartData, 'series-24')).not.toBeNull();
   });
 });

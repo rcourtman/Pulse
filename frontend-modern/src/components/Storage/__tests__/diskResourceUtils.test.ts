@@ -106,5 +106,18 @@ describe('diskResourceUtils', () => {
         }),
       ),
     ).toBe('WWN-1');
+
+    expect(
+      resolvePhysicalDiskHistoryResourceId(
+        buildDisk({
+          metricsTarget: undefined,
+          physicalDisk: { serial: '', wwn: '' } as any,
+          platformData: {
+            proxmox: { nodeName: 'tower', instance: 'cluster-main' },
+            physicalDisk: { serial: '', wwn: '' },
+          } as any,
+        }),
+      ),
+    ).toBe('disk-1');
   });
 });

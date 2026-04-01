@@ -1,5 +1,9 @@
-import { createMemo } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
+import {
+  resolvePhysicalDiskMetricResourceId,
+  resolveStorageRecordMetricResourceId,
+} from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useStorageExpansionState } from './useStorageExpansionState';
 import { useStorageFilterState } from './useStorageFilterState';
@@ -14,6 +18,8 @@ export const useStoragePageModel = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const kioskMode = useKioskMode();
+  const [hoveredStorageRowId, setHoveredStorageResourceId] = createSignal<string | null>(null);
+  const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
   const {
     state,
     activeAlerts,
@@ -97,6 +103,43 @@ export const useStoragePageModel = () => {
       groupedKeys: () => groupedRecords().map((group) => group.key),
       view,
     });
+  const storageRecordMetricIds = createMemo(() => {
+    const ids = new Map<string, string>();
+    for (const record of records()) {
+      ids.set(record.id, resolveStorageRecordMetricResourceId(record));
+    }
+    return ids;
+  });
+  const physicalDiskMetricIds = createMemo(() => {
+    const ids = new Map<string, string>();
+    for (const disk of physicalDisks()) {
+      ids.set(disk.id, resolvePhysicalDiskMetricResourceId(disk));
+    }
+    return ids;
+  });
+  const hoveredStorageResourceId = createMemo(() => {
+    const hoveredId = hoveredStorageRowId();
+    if (!hoveredId) return null;
+    if (view() === 'disks') {
+      return physicalDiskMetricIds().get(hoveredId) ?? hoveredId;
+    }
+    return storageRecordMetricIds().get(hoveredId) ?? hoveredId;
+  });
+  const focusedStorageResourceId = createMemo(() => {
+    if (view() === 'disks') {
+      const selectedId = selectedDiskId();
+      if (!selectedId) return null;
+      return physicalDiskMetricIds().get(selectedId) ?? selectedId;
+    }
+    const expandedId = expandedPoolId();
+    if (!expandedId) return null;
+    return storageRecordMetricIds().get(expandedId) ?? expandedId;
+  });
+
+  createEffect(() => {
+    view();
+    setHoveredStorageResourceId(null);
+  });
 
   const {
     nodeFilterOptions,
@@ -170,9 +213,14 @@ export const useStoragePageModel = () => {
     toggleGroup,
     expandedPoolId,
     setExpandedPoolId,
+    focusedStorageResourceId,
     nodeOnlineByLabel,
     highlightedRecordId,
     getRecordAlertState,
+    hoveredStorageResourceId,
     isLoadingPools,
+    selectedDiskId,
+    setHoveredStorageResourceId,
+    setSelectedDiskId,
   };
 };

@@ -1053,6 +1053,44 @@ func TestView_StoragePoolViewAccessors(t *testing.T) {
 	}
 }
 
+func TestView_StoragePoolViewUsesCanonicalMetricsTargetAndGenericNodeHints(t *testing.T) {
+	r := &Resource{
+		ID:   "storage-vmware-1",
+		Type: ResourceTypeStorage,
+		Name: "archive-tier",
+		MetricsTarget: &MetricsTarget{
+			ResourceType: "storage",
+			ResourceID:   "vc-1:datastore:datastore-202",
+		},
+		ParentName: "esxi-01.lab.local",
+		Identity: ResourceIdentity{
+			Hostnames: []string{"esxi-01.lab.local"},
+		},
+		Storage: &StorageMeta{
+			Type:     "datastore",
+			Platform: "vmware",
+			Nodes:    []string{"esxi-01.lab.local", "esxi-02.lab.local"},
+		},
+		VMware: &VMwareData{
+			ConnectionID:    "vc-1",
+			EntityType:      "datastore",
+			ManagedObjectID: "datastore-202",
+			RuntimeHostName: "esxi-01.lab.local",
+		},
+	}
+
+	v := NewStoragePoolView(r)
+	if v.SourceID() != "vc-1:datastore:datastore-202" {
+		t.Fatalf("expected canonical source id, got %q", v.SourceID())
+	}
+	if v.Node() != "esxi-01.lab.local" {
+		t.Fatalf("expected generic node hint to resolve VMware host, got %q", v.Node())
+	}
+	if v.Instance() != "" {
+		t.Fatalf("expected non-Proxmox storage instance to remain empty, got %q", v.Instance())
+	}
+}
+
 func TestView_DockerContainerViewMetricsTargetAccessor(t *testing.T) {
 	now := time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC)
 	parentID := "host-1"

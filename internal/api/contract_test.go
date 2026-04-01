@@ -103,6 +103,91 @@ func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
 	}
 }
 
+func TestContract_StorageChartsUseCanonicalMetricsTargetIDs(t *testing.T) {
+	monitor, state, metricsHistory := newTestMonitor(t)
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+
+	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "usage", 0.25, now)
+	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "used", 3.57*1024*1024*1024*1024, now)
+	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "avail", 11.03*1024*1024*1024*1024, now)
+	metricsHistory.AddStorageMetric("pool:archive", "usage", 0.36, now)
+	metricsHistory.AddStorageMetric("pool:archive", "used", 5.49*1024*1024*1024*1024, now)
+	metricsHistory.AddStorageMetric("pool:archive", "avail", 4.51*1024*1024*1024*1024, now)
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSnapshotAndSupplemental(state.GetSnapshot(), map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: {
+			{
+				SourceID: "vc-1:datastore:datastore-202",
+				Resource: unifiedresources.Resource{
+					ID:       "storage-vmware-1",
+					Type:     unifiedresources.ResourceTypeStorage,
+					Name:     "archive-tier",
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: now,
+					Storage: &unifiedresources.StorageMeta{
+						Type:     "datastore",
+						Platform: "vmware",
+						Nodes:    []string{"esxi-01.lab.local"},
+					},
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						EntityType:      "datastore",
+						ManagedObjectID: "datastore-202",
+						RuntimeHostName: "esxi-01.lab.local",
+					},
+				},
+			},
+		},
+		unifiedresources.SourceTrueNAS: {
+			{
+				SourceID: "pool:archive",
+				Resource: unifiedresources.Resource{
+					ID:       "storage-truenas-1",
+					Type:     unifiedresources.ResourceTypeStorage,
+					Name:     "archive",
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: now,
+					Storage: &unifiedresources.StorageMeta{
+						Type:     "zfs-pool",
+						Platform: "truenas",
+					},
+					TrueNAS: &unifiedresources.TrueNASData{
+						Hostname: "truenas-main",
+					},
+				},
+			},
+		},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/storage-charts?range=60", nil)
+	rec := httptest.NewRecorder()
+	router.handleStorageCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded StorageChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal storage charts response: %v", err)
+	}
+	if _, ok := decoded.Pools["vc-1:datastore:datastore-202"]; !ok {
+		t.Fatalf("expected VMware datastore chart keyed by canonical metrics target, got %v", decoded.Pools)
+	}
+	if _, ok := decoded.Pools["pool:archive"]; !ok {
+		t.Fatalf("expected TrueNAS pool chart keyed by canonical metrics target, got %v", decoded.Pools)
+	}
+	if _, ok := decoded.Pools["storage-vmware-1"]; ok {
+		t.Fatalf("expected raw VMware resource id to stay out of chart payload, got %v", decoded.Pools)
+	}
+	if _, ok := decoded.Pools["storage-truenas-1"]; ok {
+		t.Fatalf("expected raw TrueNAS resource id to stay out of chart payload, got %v", decoded.Pools)
+	}
+}
+
 func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	setTrueNASFeatureForTest(t, false)
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)

@@ -6,6 +6,7 @@ import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
 import ServerIcon from 'lucide-solid/icons/server';
@@ -130,7 +131,7 @@ export function InfrastructurePageSurface() {
           >
             <div class="space-y-3">
               <Show when={!summaryCollapsed()}>
-                <div class="hidden lg:block sticky-shield sticky top-0 z-20 bg-surface">
+                <StickySummarySection>
                   <InfrastructureSummary
                     resources={filteredResources()}
                     timeRange={infrastructureSummaryRange()}
@@ -138,7 +139,7 @@ export function InfrastructurePageSurface() {
                     hoveredResourceId={hoveredResourceId()}
                     focusedResourceId={expandedResourceId()}
                   />
-                </div>
+                </StickySummarySection>
               </Show>
 
               <Show when={!kioskMode()}>

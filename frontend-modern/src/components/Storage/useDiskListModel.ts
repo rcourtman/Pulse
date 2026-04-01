@@ -1,4 +1,4 @@
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import {
   buildPhysicalDiskPresentationDataMap,
@@ -13,11 +13,11 @@ type UseDiskListModelOptions = {
   nodes: () => Resource[];
   selectedNode: () => string | null;
   searchTerm: () => string;
+  selectedDiskId: () => string | null;
+  setSelectedDiskId: (diskId: string | null) => void;
 };
 
 export const useDiskListModel = (options: UseDiskListModelOptions) => {
-  const [selectedDisk, setSelectedDisk] = createSignal<Resource | null>(null);
-
   const hasPVENodes = createMemo(() => options.nodes().length > 0);
 
   const diskDataById = createMemo(() => buildPhysicalDiskPresentationDataMap(options.disks()));
@@ -39,9 +39,12 @@ export const useDiskListModel = (options: UseDiskListModelOptions) => {
   );
 
   const selectedNodeName = createMemo(() => selectedNodeResource()?.name || null);
+  const selectedDisk = createMemo(
+    () => options.disks().find((disk) => disk.id === options.selectedDiskId()) ?? null,
+  );
 
   const toggleSelectedDisk = (disk: Resource) => {
-    setSelectedDisk((current) => (current?.id === disk.id ? null : disk));
+    options.setSelectedDiskId(selectedDisk()?.id === disk.id ? null : disk.id);
   };
 
   return {

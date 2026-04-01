@@ -1,4 +1,5 @@
 import type { Resource } from '@/types/resource';
+import { resolvePhysicalDiskMetricResourceId as resolveCanonicalPhysicalDiskMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import { getLinkedAgentId, getProxmoxData } from '@/utils/resourcePlatformData';
 
 type DiskPlatformData = {
@@ -79,16 +80,5 @@ export const resolvePhysicalDiskMetricResourceId = (
 };
 
 export const resolvePhysicalDiskHistoryResourceId = (disk: Resource): string | null => {
-  const metricsTargetType = normalize(disk.metricsTarget?.resourceType);
-  const metricsTargetId = trim(disk.metricsTarget?.resourceId);
-  if (metricsTargetId && (!metricsTargetType || metricsTargetType === 'disk')) {
-    return metricsTargetId;
-  }
-
-  const platformData = ((disk.platformData as DiskPlatformData | undefined) || {}) as DiskPlatformData;
-  const serial = trim(disk.physicalDisk?.serial || platformData.physicalDisk?.serial);
-  if (serial) return serial;
-
-  const wwn = trim(disk.physicalDisk?.wwn || platformData.physicalDisk?.wwn);
-  return wwn || null;
+  return resolveCanonicalPhysicalDiskMetricResourceId(disk);
 };

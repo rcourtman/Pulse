@@ -28,6 +28,10 @@ type StorageContentCardProps = {
   highlightedRecordId: () => string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoadingPools: () => boolean;
+  hoveredStorageResourceId: () => string | null;
+  setHoveredStorageResourceId: (value: string | null) => void;
+  selectedDiskId: () => string | null;
+  setSelectedDiskId: (value: string | null) => void;
 };
 
 export const StorageContentCard: Component<StorageContentCardProps> = (props) => {
@@ -38,9 +42,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
 
   return (
     <Card padding="none" tone="card" class="overflow-hidden">
-      <div class={STORAGE_CONTENT_CARD_HEADER_CLASS}>
-        {model.heading()}
-      </div>
+      <div class={STORAGE_CONTENT_CARD_HEADER_CLASS}>{model.heading()}</div>
       <Show when={model.showDisks()}>
         <div class={STORAGE_CONTENT_CARD_BODY_CLASS}>
           <DiskList
@@ -48,6 +50,9 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
             nodes={props.nodes()}
             selectedNode={model.selectedDiskNodeId()}
             searchTerm={props.search()}
+            selectedDiskId={props.selectedDiskId()}
+            onSelectedDiskChange={props.setSelectedDiskId}
+            onHoverChange={props.setHoveredStorageResourceId}
           />
         </div>
       </Show>
@@ -64,6 +69,7 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           highlightedRecordId={props.highlightedRecordId()}
           getRecordAlertState={props.getRecordAlertState}
           isLoading={props.isLoadingPools()}
+          onHoverChange={props.setHoveredStorageResourceId}
         />
       </Show>
     </Card>

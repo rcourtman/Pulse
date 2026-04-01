@@ -190,9 +190,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   const statusIndicator = createMemo(() =>
                     getAgentStatusIndicator({ status: resource.status }),
                   );
-                  const metricsKey = createMemo(() =>
-                    buildMetricKeyForUnifiedResource(resource),
-                  );
+                  const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
 
                   const cpuPercentValue = createMemo(() =>
                     resource.cpu ? Math.round(getCpuPercent(resource)) : null,
@@ -258,16 +256,12 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
 
                     return className;
                   });
-                  const platformBadge = createMemo(() =>
-                    getPlatformBadge(resource.platformType),
-                  );
+                  const platformBadge = createMemo(() => getPlatformBadge(resource.platformType));
                   const sourceBadge = createMemo(() => getSourceBadge(resource.sourceType));
                   const unifiedSourceBadges = createMemo(() =>
                     getUnifiedSourceBadges(table.getUnifiedSources(resource)),
                   );
-                  const hasUnifiedSources = createMemo(
-                    () => unifiedSourceBadges().length > 0,
-                  );
+                  const hasUnifiedSources = createMemo(() => unifiedSourceBadges().length > 0);
                   const policyBadges = createMemo(() =>
                     getResourcePolicyTableBadges(resource.policy),
                   );
@@ -277,6 +271,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     <>
                       <TableRow
                         ref={(el) => table.registerRowRef(resource.id, el)}
+                        data-row-id={resource.id}
                         class={rowClass()}
                         style={{ 'min-height': '32px' }}
                         onClick={() => table.toggleExpand(resource.id)}
@@ -444,7 +439,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           </Show>
                         </TableCell>
 
-                        <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
+                        <TableCell
+                          classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                        >
                           <Show
                             when={resource.network}
                             fallback={
@@ -481,7 +478,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         </TableCell>
 
                         <TableCell
-                          classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                          classList={{
+                            hidden: table.isMobile() || !table.isVisible('supplementary'),
+                          }}
                         >
                           <Show
                             when={resource.diskIO}
@@ -522,7 +521,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           </Show>
                         </TableCell>
 
-                        <TableCell classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}>
+                        <TableCell
+                          classList={{ hidden: table.isMobile() || !table.isVisible('secondary') }}
+                        >
                           <div class="flex items-center justify-center gap-1">
                             <Show
                               when={hasUnifiedSources()}
@@ -557,7 +558,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         </TableCell>
 
                         <TableCell
-                          classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                          classList={{
+                            hidden: table.isMobile() || !table.isVisible('supplementary'),
+                          }}
                         >
                           <div class="flex justify-center">
                             <Show
@@ -572,7 +575,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         </TableCell>
 
                         <TableCell
-                          classList={{ hidden: table.isMobile() || !table.isVisible('supplementary') }}
+                          classList={{
+                            hidden: table.isMobile() || !table.isVisible('supplementary'),
+                          }}
                         >
                           <div class="flex justify-center">
                             <Show

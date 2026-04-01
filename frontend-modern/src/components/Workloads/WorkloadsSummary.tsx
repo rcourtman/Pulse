@@ -785,6 +785,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
+          highlightSeriesId={props.hoveredWorkloadId}
         />
       </SummaryMetricCard>
 
@@ -800,6 +801,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
+          highlightSeriesId={props.hoveredWorkloadId}
         />
       </SummaryMetricCard>
     </SummaryPanel>

@@ -1,6 +1,9 @@
 import { Component, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { formatInteractiveSparklineHoverTime, type InteractiveSparklineProps } from './interactiveSparklineModel';
+import {
+  formatInteractiveSparklineHoverTime,
+  type InteractiveSparklineProps,
+} from './interactiveSparklineModel';
 import { useInteractiveSparklineState } from './useInteractiveSparklineState';
 
 export type {
@@ -20,7 +23,11 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
   });
 
   return (
-    <div class="w-full h-full min-h-[88px] flex flex-col">
+    <div
+      class="w-full h-full min-h-[88px] flex flex-col"
+      data-highlight-series-id={props.highlightSeriesId ?? ''}
+      data-highlight-series-active={sparkline.externalSeriesIndex() !== null ? 'true' : 'false'}
+    >
       <div class="relative flex-1 min-h-0">
         <div class="absolute inset-y-0 left-0 w-7 pointer-events-none">
           <For each={sparkline.axisTicks()}>

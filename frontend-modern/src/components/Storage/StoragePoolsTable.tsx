@@ -11,6 +11,7 @@ import {
   STORAGE_POOLS_TABLE_CLASS,
   STORAGE_POOL_TABLE_COLUMNS,
 } from '@/features/storageBackups/storagePagePresentation';
+import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { StorageAlertRowState } from '@/features/storageBackups/storageAlertState';
 import type { Resource } from '@/types/resource';
 import { StorageGroupRow } from './StorageGroupRow';
@@ -30,6 +31,7 @@ type StoragePoolsTableProps = {
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoading: boolean;
+  onHoverChange?: (recordId: string | null) => void;
 };
 
 export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
@@ -50,7 +52,9 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
       fallback={
         <Show
           when={props.groupedRecords.length > 0}
-          fallback={<div class={STORAGE_POOLS_EMPTY_STATE_CLASS}>{getStorageEmptyStateMessage()}</div>}
+          fallback={
+            <div class={STORAGE_POOLS_EMPTY_STATE_CLASS}>{getStorageEmptyStateMessage()}</div>
+          }
         >
           <div class={STORAGE_POOLS_SCROLL_WRAP_CLASS}>
             <Table class={STORAGE_POOLS_TABLE_CLASS}>
@@ -81,8 +85,10 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                             return (
                               <StoragePoolRow
                                 record={record()}
+                                summarySeriesId={resolveStorageRecordMetricResourceId(record())}
                                 expanded={rowModel().expanded}
                                 onToggleExpand={() => model.togglePool(record().id)}
+                                onHoverChange={props.onHoverChange}
                                 rowClass={rowModel().rowClass}
                                 rowStyle={rowModel().rowStyle}
                                 physicalDisks={props.physicalDisks}

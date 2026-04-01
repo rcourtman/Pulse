@@ -1068,6 +1068,138 @@ func TestHandleStorageCharts_Success(t *testing.T) {
 	}
 }
 
+func TestHandleStorageCharts_IncludesSupplementalStorageAndResolvesUnifiedNodeFilter(t *testing.T) {
+	monitor, state, metricsHistory := newTestMonitor(t)
+	now := time.Now()
+	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "usage", 0.25, now)
+	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "used", 3.57*1024*1024*1024*1024, now)
+	metricsHistory.AddStorageMetric("vc-1:datastore:datastore-202", "avail", 11.03*1024*1024*1024*1024, now)
+	metricsHistory.AddStorageMetric("pool:archive", "usage", 0.36, now)
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSnapshotAndSupplemental(state.GetSnapshot(), map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: {
+			{
+				SourceID: "vc-1:host:host-101",
+				Resource: unifiedresources.Resource{
+					ID:   "agent-vmware-1",
+					Type: unifiedresources.ResourceTypeAgent,
+					Name: "esxi-01.lab.local",
+					Identity: unifiedresources.ResourceIdentity{
+						Hostnames: []string{"esxi-01.lab.local"},
+					},
+					MetricsTarget: &unifiedresources.MetricsTarget{
+						ResourceType: "agent",
+						ResourceID:   "vc-1:host:host-101",
+					},
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						EntityType:      "host",
+						ManagedObjectID: "host-101",
+					},
+				},
+			},
+			{
+				SourceID:       "vc-1:datastore:datastore-202",
+				ParentSourceID: "vc-1:host:host-101",
+				Resource: unifiedresources.Resource{
+					ID:         "storage-vmware-1",
+					Type:       unifiedresources.ResourceTypeStorage,
+					Name:       "archive-tier",
+					ParentName: "esxi-01.lab.local",
+					MetricsTarget: &unifiedresources.MetricsTarget{
+						ResourceType: "storage",
+						ResourceID:   "vc-1:datastore:datastore-202",
+					},
+					Storage: &unifiedresources.StorageMeta{
+						Type:     "datastore",
+						Platform: "vmware",
+						Nodes:    []string{"esxi-01.lab.local", "esxi-02.lab.local"},
+					},
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						EntityType:      "datastore",
+						ManagedObjectID: "datastore-202",
+						RuntimeHostName: "esxi-01.lab.local",
+					},
+				},
+			},
+		},
+		unifiedresources.SourceTrueNAS: {
+			{
+				SourceID: "system:truenas-main",
+				Resource: unifiedresources.Resource{
+					ID:   "agent-truenas-1",
+					Type: unifiedresources.ResourceTypeAgent,
+					Name: "truenas-main",
+					Identity: unifiedresources.ResourceIdentity{
+						Hostnames: []string{"truenas-main"},
+					},
+					TrueNAS: &unifiedresources.TrueNASData{
+						Hostname: "truenas-main",
+					},
+				},
+			},
+			{
+				SourceID:       "pool:archive",
+				ParentSourceID: "system:truenas-main",
+				Resource: unifiedresources.Resource{
+					ID:         "storage-truenas-1",
+					Type:       unifiedresources.ResourceTypeStorage,
+					Name:       "archive",
+					ParentName: "truenas-main",
+					MetricsTarget: &unifiedresources.MetricsTarget{
+						ResourceType: "storage",
+						ResourceID:   "pool:archive",
+					},
+					Storage: &unifiedresources.StorageMeta{
+						Type:     "zfs-pool",
+						Platform: "truenas",
+					},
+					TrueNAS: &unifiedresources.TrueNASData{
+						Hostname: "truenas-main",
+					},
+				},
+			},
+		},
+	})
+	selectedNodeID := ""
+	for _, resource := range adapter.GetAll() {
+		if resource.Type == unifiedresources.ResourceTypeAgent && resource.Name == "esxi-01.lab.local" {
+			selectedNodeID = resource.ID
+			break
+		}
+	}
+	if selectedNodeID == "" {
+		t.Fatal("expected canonical VMware host resource id in adapter")
+	}
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/storage-charts?range=30&node="+selectedNodeID, nil)
+	rec := httptest.NewRecorder()
+
+	router.handleStorageCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var decoded StorageChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal StorageChartsResponse: %v", err)
+	}
+	if len(decoded.Pools) != 1 {
+		t.Fatalf("expected unified node filter to keep 1 VMware pool, got %d (%v)", len(decoded.Pools), decoded.Pools)
+	}
+	if _, ok := decoded.Pools["vc-1:datastore:datastore-202"]; !ok {
+		t.Fatalf("expected VMware datastore chart keyed by canonical metrics target, got %v", decoded.Pools)
+	}
+	if _, ok := decoded.Pools["pool:archive"]; ok {
+		t.Fatalf("expected TrueNAS pool to be filtered out by VMware host selection, got %v", decoded.Pools)
+	}
+}
+
 func TestEstablishSession(t *testing.T) {
 	router := &Router{}
 	req := httptest.NewRequest(http.MethodGet, "/", nil)

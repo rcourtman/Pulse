@@ -9,6 +9,7 @@ import {
   getStorageRecordUsagePercent,
   getStorageRecordZfsPool,
 } from '@/features/storageBackups/recordPresentation';
+import { resolveStorageRecordMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import type { Resource } from '@/types/resource';
 import { formatBytes, formatPercent } from '@/utils/format';
 
@@ -67,7 +68,7 @@ export function resolveStoragePoolDetailChartTarget(
 ): StoragePoolDetailChartTarget {
   return {
     resourceType: (record.metricsTarget?.resourceType as HistoryChartResourceType) || 'storage',
-    resourceId: record.metricsTarget?.resourceId || record.refs?.resourceId || record.id,
+    resourceId: resolveStorageRecordMetricResourceId(record),
   };
 }
 

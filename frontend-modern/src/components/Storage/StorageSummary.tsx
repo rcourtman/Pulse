@@ -51,6 +51,8 @@ interface StorageSummaryProps {
   timeRange: SummaryTimeRange;
   onTimeRangeChange?: (range: SummaryTimeRange) => void;
   nodeId?: string;
+  hoveredResourceId?: string | null;
+  focusedResourceId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -165,6 +167,21 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   // Series builders
   // ---------------------------------------------------------------------------
 
+  const filterFocusedSeries = (
+    series: InteractiveSparklineSeries[],
+  ): InteractiveSparklineSeries[] => {
+    const focusedId = props.focusedResourceId;
+    if (!focusedId) return series;
+    const match = series.find((entry) => entry.id === focusedId);
+    return match ? [match] : series;
+  };
+
+  const getFocusedSeriesName = (series: InteractiveSparklineSeries[]): string | null => {
+    const focusedId = props.focusedResourceId;
+    if (!focusedId) return null;
+    return series.find((entry) => entry.id === focusedId)?.name ?? null;
+  };
+
   const poolUsageSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
     if (!d?.pools) return [];
@@ -178,6 +195,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
         data: pool.usage as MetricPoint[],
       }));
   });
+  const displayedPoolUsageSeries = createMemo(() => filterFocusedSeries(poolUsageSeries()));
 
   const poolUsedSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
@@ -192,6 +210,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
         data: pool.used as MetricPoint[],
       }));
   });
+  const displayedPoolUsedSeries = createMemo(() => filterFocusedSeries(poolUsedSeries()));
 
   const poolAvailSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
@@ -206,6 +225,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
         data: pool.avail as MetricPoint[],
       }));
   });
+  const displayedPoolAvailSeries = createMemo(() => filterFocusedSeries(poolAvailSeries()));
 
   const diskTempSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
@@ -220,11 +240,12 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
         data: disk.temperature as MetricPoint[],
       }));
   });
+  const displayedDiskTempSeries = createMemo(() => filterFocusedSeries(diskTempSeries()));
 
-  const hasPoolUsage = () => poolUsageSeries().length > 0;
-  const hasDiskTemp = () => diskTempSeries().length > 0;
-  const hasPoolUsed = () => poolUsedSeries().length > 0;
-  const hasPoolAvail = () => poolAvailSeries().length > 0;
+  const hasPoolUsage = () => displayedPoolUsageSeries().length > 0;
+  const hasDiskTemp = () => displayedDiskTempSeries().length > 0;
+  const hasPoolUsed = () => displayedPoolUsedSeries().length > 0;
+  const hasPoolAvail = () => displayedPoolAvailSeries().length > 0;
 
   const emptyLabel = () => (fetchFailed() ? 'Trend data unavailable' : 'No history yet');
 
@@ -233,6 +254,11 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const formatTemp = (value: number) => `${value.toFixed(0)}°C`;
 
   const showComponent = () => props.poolCount > 0 || props.diskCount > 0;
+  const focusedLabel = (series: InteractiveSparklineSeries[]) => {
+    const name = getFocusedSeriesName(series);
+    if (!name) return undefined;
+    return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
+  };
 
   return (
     <Show when={showComponent()}>
@@ -256,67 +282,75 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
         >
           <SummaryMetricCard
             label="Pool Usage"
+            secondaryLabel={focusedLabel(poolUsageSeries())}
             loaded={loaded()}
             hasData={hasPoolUsage()}
             emptyMessage={emptyLabel()}
           >
             <InteractiveSparkline
-              series={poolUsageSeries()}
+              series={displayedPoolUsageSeries()}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange as TimeRange}
               yMode="percent"
               highlightNearestSeriesOnHover
+              highlightSeriesId={props.hoveredResourceId}
             />
           </SummaryMetricCard>
 
           <SummaryMetricCard
             label="Disk Temperature"
+            secondaryLabel={focusedLabel(diskTempSeries())}
             loaded={loaded()}
             hasData={hasDiskTemp()}
             emptyMessage={emptyLabel()}
           >
             <InteractiveSparkline
-              series={diskTempSeries()}
+              series={displayedDiskTempSeries()}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange as TimeRange}
               yMode="auto"
               formatValue={formatTemp}
               formatTopLabel={(max) => `${max.toFixed(0)}°C`}
               highlightNearestSeriesOnHover
+              highlightSeriesId={props.hoveredResourceId}
             />
           </SummaryMetricCard>
 
           <SummaryMetricCard
             label="Used Capacity"
+            secondaryLabel={focusedLabel(poolUsedSeries())}
             loaded={loaded()}
             hasData={hasPoolUsed()}
             emptyMessage={emptyLabel()}
           >
             <InteractiveSparkline
-              series={poolUsedSeries()}
+              series={displayedPoolUsedSeries()}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange as TimeRange}
               yMode="auto"
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
+              highlightSeriesId={props.hoveredResourceId}
             />
           </SummaryMetricCard>
 
           <SummaryMetricCard
             label="Available Space"
+            secondaryLabel={focusedLabel(poolAvailSeries())}
             loaded={loaded()}
             hasData={hasPoolAvail()}
             emptyMessage={emptyLabel()}
           >
             <InteractiveSparkline
-              series={poolAvailSeries()}
+              series={displayedPoolAvailSeries()}
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange as TimeRange}
               yMode="auto"
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
+              highlightSeriesId={props.hoveredResourceId}
             />
           </SummaryMetricCard>
         </SummaryPanel>

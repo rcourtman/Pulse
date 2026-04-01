@@ -1,5 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { resolvePhysicalDiskMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import {
   Table,
   TableBody,
@@ -75,6 +76,9 @@ interface DiskListProps {
   nodes: Resource[];
   selectedNode: string | null;
   searchTerm: string;
+  selectedDiskId: string | null;
+  onSelectedDiskChange: (diskId: string | null) => void;
+  onHoverChange?: (diskId: string | null) => void;
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
@@ -83,6 +87,8 @@ export const DiskList: Component<DiskListProps> = (props) => {
     nodes: () => props.nodes,
     selectedNode: () => props.selectedNode,
     searchTerm: () => props.searchTerm,
+    selectedDiskId: () => props.selectedDiskId,
+    setSelectedDiskId: props.onSelectedDiskChange,
   });
   const emptyState = () =>
     getPhysicalDiskEmptyStatePresentation({
@@ -110,7 +116,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
               when={emptyState().showRequirements}
               fallback={
                 <div class={PHYSICAL_DISK_EMPTY_FALLBACK_CLASS}>
-                  <p class={PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS}>{emptyState().fallbackMessage}</p>
+                  <p class={PHYSICAL_DISK_EMPTY_FALLBACK_TEXT_CLASS}>
+                    {emptyState().fallbackMessage}
+                  </p>
                 </div>
               }
             >
@@ -132,7 +140,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
 
       <Show when={model.filteredDisks().length > 0}>
         <Card padding="none" tone="card" class="overflow-hidden">
-          <div class={PHYSICAL_DISK_TABLE_SCROLL_CLASS} style={{ '-webkit-overflow-scrolling': 'touch' }}>
+          <div
+            class={PHYSICAL_DISK_TABLE_SCROLL_CLASS}
+            style={{ '-webkit-overflow-scrolling': 'touch' }}
+          >
             <Table class={PHYSICAL_DISK_TABLE_CLASS}>
               <TableHeader>
                 <TableRow class={PHYSICAL_DISK_TABLE_HEADER_ROW_CLASS}>
@@ -160,10 +171,16 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     return (
                       <>
                         <TableRow
+                          data-row-id={disk.id}
+                          data-summary-series-id={resolvePhysicalDiskMetricResourceId(disk)}
                           class={`${PHYSICAL_DISK_TABLE_ROW_CLASS} ${
-                            isSelected() ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
+                            isSelected()
+                              ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS
+                              : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
                           }`}
                           style={PHYSICAL_DISK_TABLE_ROW_STYLE}
+                          onMouseEnter={() => props.onHoverChange?.(disk.id)}
+                          onMouseLeave={() => props.onHoverChange?.(null)}
                           onClick={() => model.toggleSelectedDisk(disk)}
                         >
                           <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
@@ -182,7 +199,12 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
 
                           <TableCell class={PHYSICAL_DISK_CELL_HOST_CLASS}>
-                            <Show when={hostLabel} fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}>
+                            <Show
+                              when={hostLabel}
+                              fallback={
+                                <span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>
+                              }
+                            >
                               <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={hostLabel}>
                                 {hostLabel}
                               </span>
@@ -192,9 +214,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <TableCell class={PHYSICAL_DISK_CELL_ROLE_CLASS}>
                             <Show
                               when={getPhysicalDiskRoleLabel(data)}
-                              fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
+                              fallback={
+                                <span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>
+                              }
                             >
-                              <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={getPhysicalDiskRoleLabel(data)}>
+                              <span
+                                class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
+                                title={getPhysicalDiskRoleLabel(data)}
+                              >
                                 {getPhysicalDiskRoleLabel(data)}
                               </span>
                             </Show>
@@ -203,9 +230,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           <TableCell class={PHYSICAL_DISK_CELL_PARENT_CLASS}>
                             <Show
                               when={getPhysicalDiskParentLabel(data)}
-                              fallback={<span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>}
+                              fallback={
+                                <span class={PHYSICAL_DISK_MUTED_PLACEHOLDER_CLASS}>—</span>
+                              }
                             >
-                              <span class={PHYSICAL_DISK_VALUE_TEXT_CLASS} title={getPhysicalDiskParentLabel(data)}>
+                              <span
+                                class={PHYSICAL_DISK_VALUE_TEXT_CLASS}
+                                title={getPhysicalDiskParentLabel(data)}
+                              >
                                 {getPhysicalDiskParentLabel(data)}
                               </span>
                             </Show>
@@ -217,7 +249,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 {status.label}
                               </span>
                               <Show when={healthSummary}>
-                                <span class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS} title={healthSummary}>
+                                <span
+                                  class={PHYSICAL_DISK_HEALTH_SUMMARY_CLASS}
+                                  title={healthSummary}
+                                >
                                   {healthSummary}
                                 </span>
                               </Show>
@@ -225,13 +260,17 @@ export const DiskList: Component<DiskListProps> = (props) => {
                           </TableCell>
 
                           <TableCell class={PHYSICAL_DISK_CELL_TEMP_CLASS}>
-                            <span class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(data.temperature)}`}>
+                            <span
+                              class={`${PHYSICAL_DISK_TEMPERATURE_CLASS} ${getTemperatureTextClass(data.temperature)}`}
+                            >
                               {data.temperature > 0 ? formatTemperature(data.temperature) : '—'}
                             </span>
                           </TableCell>
 
                           <TableCell class={PHYSICAL_DISK_CELL_SIZE_CLASS}>
-                            <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>{formatBytes(data.size)}</span>
+                            <span class={PHYSICAL_DISK_SIZE_VALUE_CLASS}>
+                              {formatBytes(data.size)}
+                            </span>
                           </TableCell>
 
                           <TableCell class={PHYSICAL_DISK_CELL_EXPAND_CLASS}>
@@ -262,10 +301,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow>
-                            <TableCell
-                              colSpan={9}
-                              class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
-                            >
+                            <TableCell colSpan={9} class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}>
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </TableCell>
                           </TableRow>

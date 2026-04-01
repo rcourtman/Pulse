@@ -361,6 +361,7 @@ export function useInteractiveSparklineState(
     activeEmphasisSeriesIndex,
     axisTicks,
     chartData,
+    externalSeriesIndex,
     formatValue,
     gridLineX,
     gridLineY,

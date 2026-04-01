@@ -7,6 +7,7 @@ export interface DensityMapProps {
   rangeLabel?: string;
   timeRange?: TimeRange;
   formatValue?: (value: number) => string;
+  highlightSeriesId?: string | null;
 }
 
 export interface DensityMapHoveredState {
@@ -16,6 +17,7 @@ export interface DensityMapHoveredState {
   value: number;
   seriesName: string;
   seriesColor: string;
+  seriesIndex: number;
 }
 
 export interface DensityMapChartData {
@@ -56,6 +58,7 @@ export function buildDensityMapChartData(options: {
   series: InteractiveSparklineSeries[];
   timeRange?: TimeRange;
   now?: number;
+  highlightSeriesId?: string | null;
 }): DensityMapChartData {
   const range = options.timeRange || '1h';
   const rangeMs = timeRangeToMs(range);
@@ -63,7 +66,9 @@ export function buildDensityMapChartData(options: {
   const windowStart = windowEnd - rangeMs;
   const bucketDuration = rangeMs / DENSITY_MAP_COLUMNS;
 
-  const activeSeries = options.series.filter((series) => series.data.length > 0);
+  const activeSeries = options.series.filter(
+    (series) => series.data.length > 0 || series.id === options.highlightSeriesId,
+  );
   const seriesWithVolume = activeSeries.map((series) => {
     let total = 0;
     for (const point of series.data) {
@@ -73,7 +78,23 @@ export function buildDensityMapChartData(options: {
   });
   seriesWithVolume.sort((left, right) => right.total - left.total);
 
-  const topSeries = seriesWithVolume.slice(0, 20).map((entry) => entry.series);
+  const topSeriesEntries = seriesWithVolume.slice(0, 20);
+  const highlightedEntry = options.highlightSeriesId
+    ? seriesWithVolume.find((entry) => entry.series.id === options.highlightSeriesId)
+    : undefined;
+
+  if (
+    highlightedEntry &&
+    !topSeriesEntries.some((entry) => entry.series.id === highlightedEntry.series.id)
+  ) {
+    if (topSeriesEntries.length >= 20) {
+      topSeriesEntries[topSeriesEntries.length - 1] = highlightedEntry;
+    } else {
+      topSeriesEntries.push(highlightedEntry);
+    }
+  }
+
+  const topSeries = topSeriesEntries.map((entry) => entry.series);
   let globalMax = 0;
   const grid: { sum: number; count: number; max: number }[][] = topSeries.map(() =>
     Array(DENSITY_MAP_COLUMNS)
@@ -118,6 +139,15 @@ export function getDensityMapCellOpacity(value: number, globalMax: number): numb
   return clampDensityMapValue(normalized, 0.15, 1.0);
 }
 
+export function getDensityMapExternalSeriesIndex(
+  data: DensityMapChartData,
+  highlightSeriesId?: string | null,
+): number | null {
+  if (!highlightSeriesId) return null;
+  const index = data.series.findIndex((series) => series.id === highlightSeriesId);
+  return index >= 0 ? index : null;
+}
+
 export function buildDensityMapHoveredState(options: {
   clientX: number;
   clientY: number;
@@ -146,5 +176,6 @@ export function buildDensityMapHoveredState(options: {
     value: data.grid[row][column],
     seriesName: data.series[row].name || 'Unknown',
     seriesColor: data.series[row].color,
+    seriesIndex: row,
   };
 }

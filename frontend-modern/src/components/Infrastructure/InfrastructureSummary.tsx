@@ -99,6 +99,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
               rangeLabel={rangeLabel()}
               timeRange={props.timeRange}
               formatValue={formatThroughputRate}
+              highlightSeriesId={props.hoveredResourceId}
             />
           </SummaryMetricCard>
 
@@ -138,10 +139,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                         <span>{state.workloadStats().vms} VMs</span>
                       </Show>
                       <Show
-                        when={
-                          state.workloadStats().vms > 0 &&
-                          state.workloadStats().containers > 0
-                        }
+                        when={state.workloadStats().vms > 0 && state.workloadStats().containers > 0}
                       >
                         <span class="mx-0.5">&middot;</span>
                       </Show>
@@ -171,6 +169,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
                 rangeLabel={rangeLabel()}
                 timeRange={props.timeRange}
                 formatValue={formatThroughputRate}
+                highlightSeriesId={props.hoveredResourceId}
               />
             </SummaryMetricCard>
           </Show>

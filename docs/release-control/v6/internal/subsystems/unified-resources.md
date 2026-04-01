@@ -222,6 +222,13 @@ must preserve the canonical `MetricsTarget` already attached to provider-backed
 agents or app-containers, and typed views must expose that stored target
 unchanged so shared chart routes keep using canonical IDs across live and demo
 projections.
+That same registry/view boundary now also applies to provider-backed storage.
+`internal/unifiedresources/registry.go` must attach the resolved
+`MetricsTarget` onto cached view clones before `ReadState` exposes
+`StoragePoolView` or `PhysicalDiskView`, so `/api/resources`, storage summary
+selection, and `/api/storage-charts` all see the same canonical history
+identity instead of splitting between view-cache resource IDs and API
+serialization-time metric IDs.
 That same VMware contract now also includes the identity rule. VMware managed
 object identifiers are phase-1 provider identities, but they must be scoped by
 the owning `vCenter` connection or discovered vCenter identity so bare object

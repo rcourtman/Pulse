@@ -4,6 +4,7 @@ import { ChartsAPI } from '@/api/charts';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
+import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
@@ -59,7 +60,8 @@ let hookLoading = false;
 let hookError: unknown = undefined;
 let alertsActivationState: 'active' | 'pending_review' | 'snoozed' | null = 'active';
 const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-  const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  const url =
+    typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
   if (url.includes('/api/license/entitlements')) {
     return new Response(JSON.stringify({ entitlements: [] }), {
       status: 200,
@@ -376,6 +378,88 @@ describe('Storage', () => {
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
   });
 
+  it('routes hovered pool rows into the shared summary highlight contract and keeps the summary sticky', async () => {
+    const storageSummarySpy = vi.spyOn(ChartsAPI, 'getStorageSummaryCharts').mockResolvedValue({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha-Store',
+          usage: [
+            { timestamp: Date.now() - 60_000, value: 45 },
+            { timestamp: Date.now(), value: 47 },
+          ],
+          used: [
+            { timestamp: Date.now() - 60_000, value: 450 },
+            { timestamp: Date.now(), value: 470 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 60_000, value: 550 },
+            { timestamp: Date.now(), value: 530 },
+          ],
+        },
+        'pool:beta': {
+          name: 'Beta-Store',
+          usage: [
+            { timestamp: Date.now() - 60_000, value: 68 },
+            { timestamp: Date.now(), value: 70 },
+          ],
+          used: [
+            { timestamp: Date.now() - 60_000, value: 680 },
+            { timestamp: Date.now(), value: 700 },
+          ],
+          avail: [
+            { timestamp: Date.now() - 60_000, value: 320 },
+            { timestamp: Date.now(), value: 300 },
+          ],
+        },
+      },
+      disks: {},
+    });
+
+    hookResources = [
+      buildStorageResource('storage-display-alpha', 'Alpha-Store', 'pve1', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:alpha',
+        },
+      }),
+      buildStorageResource('storage-display-beta', 'Beta-Store', 'pve2', {
+        metricsTarget: {
+          resourceType: 'storage',
+          resourceId: 'pool:beta',
+        },
+      }),
+    ];
+
+    render(() => <Storage />);
+
+    const summary = await screen.findByTestId('storage-summary');
+    const stickyWrapper = summary.closest('[data-sticky-summary="true"]');
+    expect(stickyWrapper).toHaveAttribute('data-sticky-summary-desktop-only', 'false');
+    expect(stickyWrapper?.className).toContain('sticky');
+    expect(stickyWrapper?.className).toContain('top-0');
+
+    const alphaRow = screen.getByText('Alpha-Store').closest('tr')!;
+    expect(alphaRow).toHaveAttribute('data-summary-series-id', 'pool:alpha');
+
+    fireEvent.mouseEnter(alphaRow);
+
+    await waitFor(() => {
+      expect(
+        summary.querySelectorAll(
+          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
+        ).length,
+      ).toBe(3);
+    });
+
+    fireEvent.mouseLeave(alphaRow);
+
+    await waitFor(() => {
+      expect(summary.querySelectorAll('[data-highlight-series-active="true"]').length).toBe(0);
+    });
+
+    storageSummarySpy.mockRestore();
+  });
+
   it('renders compact table columns and supports sort/group controls', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Alpha-Store', 'pve1', {
@@ -539,7 +623,10 @@ describe('Storage', () => {
       expect(navigateSpy).toHaveBeenCalled();
     });
 
-    const [nextPath, nextOptions] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
+    const [nextPath, nextOptions] = navigateSpy.mock.calls.at(-1) as [
+      string,
+      { replace?: boolean; scroll?: boolean },
+    ];
     const nextParams = new URLSearchParams(nextPath.split('?')[1] || '');
     expect(nextParams.get('tab')).toBe('disks');
     expect(nextParams.get('node')).toBe('node-2');
@@ -550,6 +637,7 @@ describe('Storage', () => {
     expect(nextParams.get('order')).toBe('asc');
     expect(nextParams.get('status')).toBe('available');
     expect(nextOptions?.replace).toBe(true);
+    expect(nextOptions?.scroll).toBe(false);
 
     expect(screen.getByRole('tab', { name: 'Physical Disks' })).toHaveAttribute(
       'aria-selected',
@@ -568,7 +656,10 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/storage?source=proxmox-pve', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/storage?source=proxmox-pve',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
 
     expect((screen.getByLabelText('Source') as HTMLSelectElement).value).toBe('proxmox-pve');
@@ -581,7 +672,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/storage', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/storage', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('all');
@@ -847,7 +938,10 @@ describe('Storage', () => {
       expect(navigateSpy).toHaveBeenCalled();
     });
 
-    const [nextPath, nextOptions] = navigateSpy.mock.calls.at(-1) as [string, { replace?: boolean }];
+    const [nextPath, nextOptions] = navigateSpy.mock.calls.at(-1) as [
+      string,
+      { replace?: boolean },
+    ];
     const nextParams = new URLSearchParams(nextPath.split('?')[1] || '');
     expect(nextParams.get('resource')).toBe('storage-ceph-link');
     expect(nextParams.get('from')).toBe('proxmox-overview');
@@ -1048,7 +1142,10 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     expect(screen.getAllByRole('tablist', { name: 'Storage view' })[0]).toBeInTheDocument();
-    expect(screen.getAllByRole('tab', { name: 'Pools' })[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getAllByRole('tab', { name: 'Pools' })[0]).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     expect(screen.getAllByRole('tab', { name: 'Physical Disks' })[0]).toHaveAttribute(
       'aria-selected',
       'false',

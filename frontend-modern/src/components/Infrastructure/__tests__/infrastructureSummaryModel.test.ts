@@ -115,6 +115,31 @@ describe('infrastructureSummaryModel', () => {
     expect(buildInfrastructureEmptyMessage(false, 'No history yet')).toBe('No history yet');
   });
 
+  it('keeps network and diskio series on canonical ids when focused summary selection narrows the view', () => {
+    const displayedSeries = buildInfrastructureDisplaySeries(
+      [
+        makeSeries('host-1', {
+          name: 'Host 1',
+          network: [{ timestamp: 1, value: 120 }],
+          diskio: [{ timestamp: 1, value: 45 }],
+        }),
+        makeSeries('host-2', {
+          name: 'Host 2',
+          network: [{ timestamp: 2, value: 240 }],
+          diskio: [{ timestamp: 2, value: 90 }],
+        }),
+      ],
+      'host-2',
+    );
+
+    expect(buildInfrastructureMetricSeries(displayedSeries, 'network')).toEqual([
+      { id: 'host-2', data: [{ timestamp: 2, value: 240 }], color: '#00aaff', name: 'Host 2' },
+    ]);
+    expect(buildInfrastructureMetricSeries(displayedSeries, 'diskio')).toEqual([
+      { id: 'host-2', data: [{ timestamp: 2, value: 90 }], color: '#00aaff', name: 'Host 2' },
+    ]);
+  });
+
   it('shows the network card when either data or network capability exists', () => {
     expect(
       shouldShowInfrastructureNetworkCard(false, [

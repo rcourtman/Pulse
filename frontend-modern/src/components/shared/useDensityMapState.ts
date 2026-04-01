@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   buildDensityMapChartData,
+  getDensityMapExternalSeriesIndex,
   buildDensityMapHoveredState,
   formatDensityMapValue,
   getDensityMapCellOpacity,
@@ -19,7 +20,11 @@ export function useDensityMapState(props: DensityMapProps) {
     buildDensityMapChartData({
       series: props.series,
       timeRange: props.timeRange,
+      highlightSeriesId: props.highlightSeriesId,
     }),
+  );
+  const externalSeriesIndex = createMemo(() =>
+    getDensityMapExternalSeriesIndex(chartData(), props.highlightSeriesId),
   );
 
   const formatValue = (value: number) => formatDensityMapValue(value, props.formatValue);
@@ -49,14 +54,17 @@ export function useDensityMapState(props: DensityMapProps) {
     const rows = data.series.length;
     const cellWidth = width / DENSITY_MAP_COLUMNS;
     const cellHeight = height / rows;
+    const activeSeriesIndex = hoveredState()?.seriesIndex ?? externalSeriesIndex();
 
     for (let row = 0; row < rows; row += 1) {
       const cellY = row * cellHeight;
+      const isDimmed = activeSeriesIndex !== null && row !== activeSeriesIndex;
       for (let column = 0; column < DENSITY_MAP_COLUMNS; column += 1) {
         const cellX = column * cellWidth;
         const value = data.grid[row][column];
 
         if (value <= 0) {
+          context.globalAlpha = isDimmed ? 0.45 : 1;
           context.fillStyle = 'rgba(128, 128, 128, 0.05)';
           context.fillRect(
             cellX + DENSITY_MAP_PADDING_X / 2,
@@ -67,7 +75,8 @@ export function useDensityMapState(props: DensityMapProps) {
           continue;
         }
 
-        context.globalAlpha = getDensityMapCellOpacity(value, data.globalMax);
+        context.globalAlpha =
+          getDensityMapCellOpacity(value, data.globalMax) * (isDimmed ? 0.18 : 1);
         context.fillStyle = data.series[row].color;
         if (context.roundRect) {
           context.beginPath();
@@ -125,6 +134,7 @@ export function useDensityMapState(props: DensityMapProps) {
 
   return {
     chartData,
+    externalSeriesIndex,
     formatValue,
     handleMouseLeave,
     handleMouseMove,

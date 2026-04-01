@@ -1,9 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import {
-  formatDensityMapHoverTime,
-  type DensityMapProps,
-} from './densityMapModel';
+import { formatDensityMapHoverTime, type DensityMapProps } from './densityMapModel';
 import { useDensityMapState } from './useDensityMapState';
 
 export type { DensityMapProps } from './densityMapModel';
@@ -12,7 +9,11 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
   const densityMap = useDensityMapState(props);
 
   return (
-    <div class="relative w-full h-full flex flex-col group">
+    <div
+      class="relative w-full h-full flex flex-col group"
+      data-highlight-series-id={props.highlightSeriesId ?? ''}
+      data-highlight-series-active={densityMap.externalSeriesIndex() !== null ? 'true' : 'false'}
+    >
       <div class="flex-1 relative min-h-0 bg-transparent flex">
         {/* Y-axis: typically in a density map we might just show "Top Nodes" */}
         <div class="absolute left-0 top-0 h-full w-full pointer-events-none flex flex-col justify-between py-1 opacity-0 group-hover:opacity-100 transition-opacity">
