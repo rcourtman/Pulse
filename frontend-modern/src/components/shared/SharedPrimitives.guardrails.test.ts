@@ -540,6 +540,7 @@ describe('shared primitive guardrails', () => {
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
     expect(interactiveSparklineSource).toContain('data-active-series-display');
+    expect(interactiveSparklineSource).toContain('data-active-hover-cursor-x');
     expect(interactiveSparklineSource).toContain('data-rendered-series-count');
     expect(interactiveSparklineSource).not.toContain('createEffect');
     expect(interactiveSparklineSource).not.toContain('createSignal');
@@ -555,6 +556,10 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineStateSource).toContain('createSignal');
     expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
     expect(interactiveSparklineStateSource).toContain('computeInteractiveSparklineHoverState');
+    expect(interactiveSparklineStateSource).toContain('const localHover = hoveredState();');
+    expect(interactiveSparklineStateSource).toContain('return localHover.x;');
+    expect(interactiveSparklineStateSource).toContain('timestamp: synchronizedHoverTimestamp()');
+    expect(interactiveSparklineStateSource).not.toContain('timestamp: activeHoverTimestamp()');
 
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');

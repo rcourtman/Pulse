@@ -212,13 +212,17 @@ export function useInteractiveSparklineState(
   const activeHoverTimestamp = createMemo<number | null>(() => {
     return hoveredState()?.timestamp ?? synchronizedHoverTimestamp();
   });
-  const activeHoverCursorX = createMemo<number | null>(() =>
-    getInteractiveSparklineCursorXForTimestamp({
+  const activeHoverCursorX = createMemo<number | null>(() => {
+    const localHover = hoveredState();
+    if (localHover) {
+      return localHover.x;
+    }
+    return getInteractiveSparklineCursorXForTimestamp({
       chartData: chartData(),
-      timestamp: activeHoverTimestamp(),
+      timestamp: synchronizedHoverTimestamp(),
       vbW,
-    }),
-  );
+    });
+  });
   const activeEmphasisSeriesIndex = createMemo(() =>
     getInteractiveSparklineActiveEmphasisSeriesIndex({
       highlightNearestSeriesOnHover: props.highlightNearestSeriesOnHover === true,

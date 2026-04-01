@@ -73,6 +73,55 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(screen.queryByText('CPU')).toBeNull();
   });
 
+  it('keeps the local hover cursor on the actual scrub position instead of snapping to the nearest sample timestamp', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+    const windowStart = now - 60 * 60_000;
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        rangeLabel="1h"
+        series={[
+          {
+            name: 'CPU',
+            color: '#ff0000',
+            data: [
+              { timestamp: windowStart + 5 * 60_000, value: 40 },
+              { timestamp: windowStart + 55 * 60_000, value: 50 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const svg = container.querySelector('svg');
+    expect(svg).not.toBeNull();
+    if (!svg) return;
+
+    (svg as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
+      ({
+        left: 0,
+        top: 100,
+        width: 200,
+        height: 50,
+        right: 200,
+        bottom: 150,
+        x: 0,
+        y: 100,
+        toJSON: () => ({}),
+      }) as unknown as DOMRect;
+
+    fireEvent.mouseMove(svg, { clientX: 100, clientY: 120 });
+
+    const root = container.firstElementChild;
+    expect(svg.querySelector('line[stroke-dasharray="3 3"]')).toBeInTheDocument();
+    expect(
+      Number.parseFloat(root?.getAttribute('data-active-hover-cursor-x') ?? 'NaN'),
+    ).toBeCloseTo(100, 1);
+  });
+
   it('publishes synchronized hover identity and clears it on leave', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));

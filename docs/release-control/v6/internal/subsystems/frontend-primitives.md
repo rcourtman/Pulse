@@ -228,19 +228,20 @@ connections` visible as the API-backed alternative for Proxmox and
     route strings or provider-local link builders inside feature panels.
 15. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
 16. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and layer focused-entity detail into the card chrome instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or covering the heatmap body with a floating detail overlay.
-17. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
-18. Keep shared infrastructure/resource selectors on the canonical agent-facet
+17. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp.
+18. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
+19. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
     top-level TrueNAS appliances as agent-facet infrastructure via shared
     helper ownership instead of reviving a direct `resource.type === 'truenas'`
     branch inside page shells, selectors, or reporting-resource type helpers.
-19. Keep shared feature-shell Patrol run fixtures on the canonical run-record
+20. Keep shared feature-shell Patrol run fixtures on the canonical run-record
     contract. When `frontend-modern/src/features/patrol/` consumes Patrol run
     history, the shared normalized record must preserve provider-backed counts
     such as `truenas_checked` instead of letting feature-local fixtures or
     fallback objects collapse API-backed TrueNAS systems back into generic
     agent-host presentation.
-20. Keep the authenticated app root aligned with that same first-session path.
+21. Keep the authenticated app root aligned with that same first-session path.
     That same shared-primitive ownership now includes contextual row focus.
     `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
     owner for interactive-series filtering, focused-label lookup, active-series
@@ -253,34 +254,34 @@ connections` visible as the API-backed alternative for Proxmox and
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
-21. Keep relay settings shell copy on the shared presentation owner in
+22. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability
     copy instead of drifting into separate rollout or pairing wording.
-22. Keep shared settings-shell legal and docs referrals on
+23. Keep shared settings-shell legal and docs referrals on
     `frontend-modern/src/utils/docsLinks.ts`. Shared settings surfaces such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
     privacy, security, proxy-auth, scope-reference, or Terms-of-Service links.
-23. Keep shared settings-shell telemetry transparency controls on the governed
+24. Keep shared settings-shell telemetry transparency controls on the governed
     general settings panel. Preview/reset affordances for anonymous telemetry
     must stay rendered inside
     `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
     instead of drifting into route-local modals, hidden dev tools, or shell
     chrome that operators would not naturally inspect.
-24. Keep the short telemetry/privacy summary copy on that same shared surface
+25. Keep the short telemetry/privacy summary copy on that same shared surface
     accurate to the governed privacy doc. If the trust boundary depends on a
     specific retention window or on “IP addresses are not stored” rather than
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
-25. Keep shared storage-route feature presentation on neutral capability truth.
+26. Keep shared storage-route feature presentation on neutral capability truth.
     Reusable mappers and presenters in `frontend-modern/src/features/storageBackups/`
     must distinguish inventory datastores from backup repositories so VMware
     rows on the shared storage route stay canonical to the admitted phase-1 floor instead of
     reviving backup-target, protected-target, or recovery-local semantics on a
     shared page.
-26. Keep infrastructure settings-shell API alternatives on the shared shell
+27. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts`, and
@@ -288,7 +289,7 @@ connections` visible as the API-backed alternative for Proxmox and
     present `Platform connections` as the canonical API-backed alternative for
     Proxmox, TrueNAS, and future provider integrations instead of reviving
     top-level `Direct Proxmox` wording or shell-local provider routes.
-27. Keep the infrastructure settings platform-connections summary and provider
+28. Keep the infrastructure settings platform-connections summary and provider
     workspaces on one shared state source. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
     `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
     `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
@@ -296,14 +297,14 @@ connections` visible as the API-backed alternative for Proxmox and
     derive TrueNAS connection counts and availability from the shared
     infrastructure settings state instead of letting the reporting summary and
     the provider-specific panel issue separate connection fetches.
-28. Keep alert-history feature composition on the current owned state contract.
+29. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
     shared `alertData()` history state instead of reviving deleted aliases, and
     it must pass unified-resource resolution through to
     `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
     the panel can render shared route chips without creating another page-local
     resource lookup or provider-specific handoff layer.
-29. Keep the alert-thresholds containers surface on the canonical shared owner.
+30. Keep the alert-thresholds containers surface on the canonical shared owner.
     `alertOverridesModel.ts`, `useAlertOverridesState.ts`, and
     `useAlertsConfigurationState.ts` must surface API-backed `app-container`
     parents such as TrueNAS as first-class `Container Runtimes`, while

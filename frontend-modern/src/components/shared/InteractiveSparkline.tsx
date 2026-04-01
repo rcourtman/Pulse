@@ -35,6 +35,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       data-highlight-series-id={props.highlightSeriesId ?? ''}
       data-highlight-series-active={sparkline.externalSeriesIndex() !== null ? 'true' : 'false'}
       data-active-hover-timestamp={sparkline.activeHoverTimestamp() ?? ''}
+      data-active-hover-cursor-x={sparkline.activeHoverCursorX() ?? ''}
       data-active-series-display={sparkline.activeSeriesDisplay()}
       data-rendered-series-count={sparkline.renderedSeriesCount()}
       data-summary-chart-state={interactionState()}
