@@ -133,6 +133,9 @@ window instead of stitching a second live tail onto the end of seeded
 sparklines. Monitoring must not let provider-owned mock resources receive a
 duplicate generic unified-resource writer that appends a divergent recent tail
 after the canonical mock sampler has already seeded and extended that series.
+The seed path must therefore include the canonical terminal `now` sample on
+its tiered timeline instead of generating history only up to before `now` and
+then appending a separately anchored current-value tail afterward.
 That same chart boundary also owns role-shaped realism. Seeded history,
 synthetic summary fallbacks, and runtime mock writes must derive their bounds
 and curve shape from the same canonical resource-role registry, so database,

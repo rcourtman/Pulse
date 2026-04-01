@@ -501,14 +501,15 @@ func generateFlatSeries(current float64, points int, min, max, span float64, rng
 }
 
 // buildTieredTimestamps generates a sorted list of timestamps with denser
-// intervals for recent data:
+// intervals for recent data, including the canonical terminal sample at now:
 //
 //	Last 2h:   1min intervals  (~120 points)
 //	2h–24h:    2min intervals  (~660 points)
 //	24h–end:   ~65min intervals (variable)
 //
 // This ensures short time ranges (1h, 4h) have enough data points without
-// needing an API-level fallback layer.
+// needing an API-level fallback layer, and it keeps seeded history on the same
+// timeline the live mock sampler would have produced.
 func buildTieredTimestamps(now time.Time, totalDuration time.Duration) []time.Time {
 	// Each segment covers [now - startOffset, now - endOffset) and is walked
 	// chronologically from oldest to newest. Segments are defined oldest-first
@@ -547,6 +548,10 @@ func buildTieredTimestamps(now time.Time, totalDuration time.Duration) []time.Ti
 		}
 	}
 
+	if len(timestamps) == 0 || !timestamps[len(timestamps)-1].Equal(now) {
+		timestamps = append(timestamps, now)
+	}
+
 	return timestamps
 }
 
@@ -559,13 +564,11 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		return
 	}
 
-	// Build a tiered timestamp list so short time ranges (1h, 4h) have dense
-	// data without needing an API-level fallback layer.
+	// Build one canonical timestamp list so seeded history and subsequent live
+	// mock ticks sample the same runtime timeline model.
 	//   Last 2h:   1min intervals  (~120 points)
 	//   2h–24h:    2min intervals  (~660 points)
 	//   24h–90d:   ~65min intervals (~1920 points)
-	// The current "now" point is appended explicitly by each recorder so the
-	// seed and live sampler share one canonical terminal timestamp.
 	seedTimestamps := buildTieredTimestamps(now, seedDuration)
 	const seedBatchSize = 5000
 	numPoints := len(seedTimestamps)
@@ -603,34 +606,30 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		series := mockmodel.StorageCapacitySeriesForTimestampsWithRole(
-			currentUsed,
-			currentTotal,
+		currentUsage := clampFloat((currentUsed/currentTotal)*100, 0, 100)
+		usageSeries := GenerateSeededResourceMetricSeriesForTimestamps(
+			currentUsage,
 			seedTimestamps,
-			mock.MetricSeed("storage", storageID, "usage"),
-			mock.MetricRole("storage", storageID),
+			"storage",
+			storageID,
+			"usage",
+			styleFlat,
 		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
-			mh.AddStorageMetric(storageID, "usage", series.Usage[i], ts)
-			mh.AddStorageMetric(storageID, "used", series.Used[i], ts)
-			mh.AddStorageMetric(storageID, "avail", series.Avail[i], ts)
-			mh.AddStorageMetric(storageID, "total", series.Total[i], ts)
-			queueMetric("storage", storageID, "usage", series.Usage[i], ts)
-			queueMetric("storage", storageID, "used", series.Used[i], ts)
-			queueMetric("storage", storageID, "avail", series.Avail[i], ts)
-			queueMetric("storage", storageID, "total", series.Total[i], ts)
+			usage := clampFloat(usageSeries[i], 0, 100)
+			used := currentTotal * (usage / 100.0)
+			avail := math.Max(0, currentTotal-used)
+			mh.AddStorageMetric(storageID, "usage", usage, ts)
+			mh.AddStorageMetric(storageID, "used", used, ts)
+			mh.AddStorageMetric(storageID, "avail", avail, ts)
+			mh.AddStorageMetric(storageID, "total", currentTotal, ts)
+			queueMetric("storage", storageID, "usage", usage, ts)
+			queueMetric("storage", storageID, "used", used, ts)
+			queueMetric("storage", storageID, "avail", avail, ts)
+			queueMetric("storage", storageID, "total", currentTotal, ts)
 		}
 
-		last := numPoints - 1
-		mh.AddStorageMetric(storageID, "usage", series.Usage[last], now)
-		mh.AddStorageMetric(storageID, "used", series.Used[last], now)
-		mh.AddStorageMetric(storageID, "avail", series.Avail[last], now)
-		mh.AddStorageMetric(storageID, "total", series.Total[last], now)
-		queueMetric("storage", storageID, "usage", series.Usage[last], now)
-		queueMetric("storage", storageID, "used", series.Used[last], now)
-		queueMetric("storage", storageID, "avail", series.Avail[last], now)
-		queueMetric("storage", storageID, "total", series.Total[last], now)
 	}
 
 	recordNode := func(node models.Node) {
@@ -656,13 +655,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			queueMetric("node", node.ID, "disk", diskSeries[i], ts)
 		}
 
-		// Ensure the latest point lands at "now" for full-range charts.
-		mh.AddNodeMetric(node.ID, "cpu", node.CPU*100, now)
-		mh.AddNodeMetric(node.ID, "memory", node.Memory.Usage, now)
-		mh.AddNodeMetric(node.ID, "disk", node.Disk.Usage, now)
-		queueMetric("node", node.ID, "cpu", node.CPU*100, now)
-		queueMetric("node", node.ID, "memory", node.Memory.Usage, now)
-		queueMetric("node", node.ID, "disk", node.Disk.Usage, now)
 	}
 
 	recordGuest := func(
@@ -748,35 +740,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			}
 		}
 
-		// Ensure the latest point lands at "now" for full-range charts.
-		for _, metricID := range uniqueMetricIDs {
-			mh.AddGuestMetric(metricID, "cpu", cpuPercent, now)
-			mh.AddGuestMetric(metricID, "memory", memPercent, now)
-		}
-		queueMetric(storeType, storeID, "cpu", cpuPercent, now)
-		queueMetric(storeType, storeID, "memory", memPercent, now)
-		if includeDisk {
-			for _, metricID := range uniqueMetricIDs {
-				mh.AddGuestMetric(metricID, "disk", diskPercent, now)
-			}
-			queueMetric(storeType, storeID, "disk", diskPercent, now)
-		}
-		if includeDiskIO {
-			for _, metricID := range uniqueMetricIDs {
-				mh.AddGuestMetric(metricID, "diskread", diskRead, now)
-				mh.AddGuestMetric(metricID, "diskwrite", diskWrite, now)
-			}
-			queueMetric(storeType, storeID, "diskread", diskRead, now)
-			queueMetric(storeType, storeID, "diskwrite", diskWrite, now)
-		}
-		if includeNetwork {
-			for _, metricID := range uniqueMetricIDs {
-				mh.AddGuestMetric(metricID, "netin", netIn, now)
-				mh.AddGuestMetric(metricID, "netout", netOut, now)
-			}
-			queueMetric(storeType, storeID, "netin", netIn, now)
-			queueMetric(storeType, storeID, "netout", netOut, now)
-		}
 	}
 
 	log.Debug().Int("count", len(state.Nodes)).Msg("mock seeding: processing nodes")
@@ -921,9 +884,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
 		}
 
-		// Ensure the latest point lands at "now" for full-range charts.
-		mh.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
-		queueMetric("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
 	log.Debug().Int("count", len(state.CephClusters)).Msg("mock seeding: processing ceph clusters")
@@ -954,8 +914,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			queueMetric("ceph", cephID, "usage", usageSeries[i], ts)
 		}
 
-		// Ensure the latest point lands at "now" for full-range charts.
-		queueMetric("ceph", cephID, "usage", cluster.UsagePercent, now)
 	}
 
 	log.Debug().Int("count", len(state.DockerHosts)).Msg("mock seeding: processing docker hosts")
@@ -1079,8 +1037,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			mh.AddGuestMetric(poolKey, "disk", diskSeries[i], ts)
 			queueMetric("storage", poolKey, "usage", diskSeries[i], ts)
 		}
-		mh.AddGuestMetric(poolKey, "disk", diskPercent, now)
-		queueMetric("storage", poolKey, "usage", diskPercent, now)
 		recordStorageTimeline(poolKey, float64(pool.UsedBytes), float64(pool.TotalBytes))
 	}
 
@@ -1106,8 +1062,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			mh.AddGuestMetric(dsKey, "disk", diskSeries[i], ts)
 			queueMetric("storage", dsKey, "usage", diskSeries[i], ts)
 		}
-		mh.AddGuestMetric(dsKey, "disk", diskPercent, now)
-		queueMetric("storage", dsKey, "usage", diskPercent, now)
 		recordStorageTimeline(dsKey, float64(dataset.UsedBytes), float64(totalBytes))
 	}
 
@@ -1136,8 +1090,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
 			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
 		}
-		mh.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
-		queueMetric("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
 	for _, app := range trueNASFixtures.Apps {

@@ -19,7 +19,7 @@ func fixtureGraphWithState(state models.StateSnapshot) mock.FixtureGraph {
 	return mock.FixtureGraph{State: state}
 }
 
-func TestBuildTieredTimestamps_LeavesTerminalNowToRecorders(t *testing.T) {
+func TestBuildTieredTimestamps_IncludesCanonicalTerminalNow(t *testing.T) {
 	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
 
 	timestamps := buildTieredTimestamps(now, time.Hour)
@@ -28,8 +28,8 @@ func TestBuildTieredTimestamps_LeavesTerminalNowToRecorders(t *testing.T) {
 	}
 
 	last := timestamps[len(timestamps)-1]
-	if !last.Before(now) {
-		t.Fatalf("expected seed timestamps to stop before now, got %v with now=%v", last, now)
+	if !last.Equal(now) {
+		t.Fatalf("expected seed timestamps to include terminal now, got %v with now=%v", last, now)
 	}
 }
 
@@ -923,5 +923,147 @@ func TestGenerateSeededMetricSeriesForTimestamps_UsesSameTimelineAsMockRuntime(t
 				)
 			}
 		}
+	}
+}
+
+func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	next := now.Add(time.Minute)
+	const storageTotal = int64(2 * 1024 * 1024 * 1024 * 1024)
+
+	storageUsageAt := func(at time.Time) (float64, int64, int64) {
+		usage := mock.SampleMetric("storage", "storage-tail", "usage", at)
+		used := int64(math.Round((float64(storageTotal) * usage) / 100.0))
+		if used < 0 {
+			used = 0
+		}
+		if used > storageTotal {
+			used = storageTotal
+		}
+		return usage, used, storageTotal - used
+	}
+
+	vmMemoryNow := mock.SampleMetric("vm", "vm-tail", "memory", now)
+	vmDiskNow := mock.SampleMetric("vm", "vm-tail", "disk", now)
+	storageUsageNow, storageUsedNow, storageFreeNow := storageUsageAt(now)
+
+	seedState := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:     "vm-tail",
+				Status: "running",
+				CPU:    mock.SampleMetric("vm", "vm-tail", "cpu", now) / 100.0,
+				Memory: models.Memory{
+					Usage: vmMemoryNow,
+					Total: 16 * 1024 * 1024 * 1024,
+					Used:  int64(math.Round((16 * 1024 * 1024 * 1024) * (vmMemoryNow / 100.0))),
+				},
+				Disk: models.Disk{
+					Usage: vmDiskNow,
+					Total: 512 * 1024 * 1024 * 1024,
+					Used:  int64(math.Round((512 * 1024 * 1024 * 1024) * (vmDiskNow / 100.0))),
+				},
+				NetworkIn:  mock.SampleMetricInt("vm", "vm-tail", "netin", now),
+				NetworkOut: mock.SampleMetricInt("vm", "vm-tail", "netout", now),
+				DiskRead:   mock.SampleMetricInt("vm", "vm-tail", "diskread", now),
+				DiskWrite:  mock.SampleMetricInt("vm", "vm-tail", "diskwrite", now),
+			},
+		},
+		Storage: []models.Storage{
+			{
+				ID:     "storage-tail",
+				Status: "available",
+				Total:  storageTotal,
+				Used:   storageUsedNow,
+				Free:   storageFreeNow,
+				Usage:  storageUsageNow,
+			},
+		},
+	}
+
+	mh := NewMetricsHistory(5000, 7*24*time.Hour)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(seedState), now, 7*24*time.Hour, time.Minute)
+
+	vmCPUSeeded := mh.GetGuestMetrics("vm-tail", "cpu", 7*24*time.Hour)
+	if len(vmCPUSeeded) == 0 {
+		t.Fatal("expected seeded vm cpu history")
+	}
+	for i, point := range vmCPUSeeded {
+		want := mock.SampleMetric("vm", "vm-tail", "cpu", point.Timestamp)
+		if diff := math.Abs(point.Value - want); diff > 1e-9 {
+			t.Fatalf("expected seeded vm cpu point %d to follow canonical runtime timeline: got=%f want=%f ts=%v", i, point.Value, want, point.Timestamp)
+		}
+	}
+
+	storageSeeded := mh.GetAllStorageMetrics("storage-tail", 7*24*time.Hour)["usage"]
+	if len(storageSeeded) == 0 {
+		t.Fatal("expected seeded storage usage history")
+	}
+	for i, point := range storageSeeded {
+		want := mock.SampleMetric("storage", "storage-tail", "usage", point.Timestamp)
+		if diff := math.Abs(point.Value - want); diff > 1e-9 {
+			t.Fatalf("expected seeded storage usage point %d to follow canonical runtime timeline: got=%f want=%f ts=%v", i, point.Value, want, point.Timestamp)
+		}
+	}
+
+	vmMemoryNext := mock.SampleMetric("vm", "vm-tail", "memory", next)
+	vmDiskNext := mock.SampleMetric("vm", "vm-tail", "disk", next)
+	storageUsageNext, storageUsedNext, storageFreeNext := storageUsageAt(next)
+	liveState := models.StateSnapshot{
+		VMs: []models.VM{
+			{
+				ID:     "vm-tail",
+				Status: "running",
+				CPU:    mock.SampleMetric("vm", "vm-tail", "cpu", next) / 100.0,
+				Memory: models.Memory{
+					Usage: vmMemoryNext,
+					Total: 16 * 1024 * 1024 * 1024,
+					Used:  int64(math.Round((16 * 1024 * 1024 * 1024) * (vmMemoryNext / 100.0))),
+				},
+				Disk: models.Disk{
+					Usage: vmDiskNext,
+					Total: 512 * 1024 * 1024 * 1024,
+					Used:  int64(math.Round((512 * 1024 * 1024 * 1024) * (vmDiskNext / 100.0))),
+				},
+				NetworkIn:  mock.SampleMetricInt("vm", "vm-tail", "netin", next),
+				NetworkOut: mock.SampleMetricInt("vm", "vm-tail", "netout", next),
+				DiskRead:   mock.SampleMetricInt("vm", "vm-tail", "diskread", next),
+				DiskWrite:  mock.SampleMetricInt("vm", "vm-tail", "diskwrite", next),
+			},
+		},
+		Storage: []models.Storage{
+			{
+				ID:     "storage-tail",
+				Status: "available",
+				Total:  storageTotal,
+				Used:   storageUsedNext,
+				Free:   storageFreeNext,
+				Usage:  storageUsageNext,
+			},
+		},
+	}
+
+	recordMockStateToMetricsHistory(mh, nil, fixtureGraphWithState(liveState), next)
+
+	vmCPUAfterTick := mh.GetGuestMetrics("vm-tail", "cpu", 7*24*time.Hour)
+	if got := vmCPUAfterTick[len(vmCPUAfterTick)-1].Timestamp; !got.Equal(next) {
+		t.Fatalf("expected latest vm cpu point at %v, got %v", next, got)
+	}
+	if got, want := vmCPUAfterTick[len(vmCPUAfterTick)-1].Value, mock.SampleMetric("vm", "vm-tail", "cpu", next); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected live vm cpu tick to continue canonical runtime timeline: got=%f want=%f", got, want)
+	}
+	if got := vmCPUAfterTick[len(vmCPUAfterTick)-2].Timestamp; !got.Equal(now) {
+		t.Fatalf("expected penultimate vm cpu point to remain anchored at seed now %v, got %v", now, got)
+	}
+
+	storageAfterTick := mh.GetAllStorageMetrics("storage-tail", 7*24*time.Hour)["usage"]
+	if got := storageAfterTick[len(storageAfterTick)-1].Timestamp; !got.Equal(next) {
+		t.Fatalf("expected latest storage usage point at %v, got %v", next, got)
+	}
+	if got, want := storageAfterTick[len(storageAfterTick)-1].Value, mock.SampleMetric("storage", "storage-tail", "usage", next); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected live storage usage tick to continue canonical runtime timeline: got=%f want=%f", got, want)
+	}
+	if got := storageAfterTick[len(storageAfterTick)-2].Timestamp; !got.Equal(now) {
+		t.Fatalf("expected penultimate storage point to remain anchored at seed now %v, got %v", now, got)
 	}
 }
