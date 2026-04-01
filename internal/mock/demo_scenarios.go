@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
 type demoWorkloadProfile struct {
@@ -104,7 +106,7 @@ var demoDockerHostProfiles = []demoDockerHostProfile{
 		DisplayName: "Ops Services 01",
 		Containers: []demoDockerContainerProfile{
 			{Name: "postgres-archive", Image: "postgres:16.4", Tags: []string{"database", "archive", "internal"}, Health: "healthy"},
-			{Name: "backup-coordinator", Image: "ghcr.io/pulse-demo/backup-coordinator:2026.04", Tags: []string{"backup", "platform", "worker"}, Health: "unhealthy"},
+			{Name: "backup-coordinator", Image: "ghcr.io/pulse-demo/backup-coordinator:2026.04", Tags: []string{"backup", "platform", "worker"}, Health: "healthy"},
 			{Name: "sftp-ingest", Image: "atmoz/sftp:latest", Tags: []string{"transfer", "integration", "internal"}, Health: "healthy"},
 			{Name: "prometheus", Image: "prom/prometheus:v2.54.1", Tags: []string{"monitoring", "platform"}, Health: "healthy"},
 			{Name: "grafana-agent", Image: "grafana/agent:v0.42.0", Tags: []string{"monitoring", "agent", "platform"}, Health: "healthy"},
@@ -145,6 +147,7 @@ func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
 		return
 	}
 
+	applyDemoPlatformScenario(&graph.PlatformFixtures)
 	applyDemoNodeScenario(&graph.State)
 	vmNames := applyDemoWorkloadScenario(graph.State.VMs, demoVMProfiles, now)
 	containerNames := applyDemoContainerScenario(graph.State.Containers, demoContainerProfiles, now)
@@ -152,6 +155,113 @@ func applyDemoScenarioGraph(graph *FixtureGraph, now time.Time) {
 	applyDemoKubernetesScenario(&graph.State, now)
 	applyDemoStorageScenario(&graph.State)
 	applyDemoBackupScenario(&graph.State, vmNames, containerNames, now)
+}
+
+func applyDemoPlatformScenario(fixtures *PlatformFixtures) {
+	if fixtures == nil {
+		return
+	}
+
+	fixtures.TrueNAS = applyDemoTrueNASPlatformScenario(fixtures.TrueNAS)
+	fixtures.VMware = applyDemoVMwarePlatformScenario(fixtures.VMware)
+}
+
+func applyDemoTrueNASPlatformScenario(snapshot truenas.FixtureSnapshot) truenas.FixtureSnapshot {
+	out := cloneTrueNASFixtureSnapshot(snapshot)
+	nameByID := map[string]string{
+		"nextcloud":     "client-files",
+		"immich":        "photo-archive",
+		"paperless-ngx": "document-hub",
+		"grafana":       "ops-dashboards",
+		"adguard-home":  "edge-dns",
+	}
+	notesByID := map[string]string{
+		"nextcloud":     "Client file portal and secure sync",
+		"immich":        "Shared photo archive and mobile uploads",
+		"paperless-ngx": "Operations document inbox and OCR workflows",
+		"grafana":       "Operations dashboards and service overviews",
+		"adguard-home":  "Edge DNS and network filtering",
+	}
+	for i := range out.Apps {
+		app := &out.Apps[i]
+		if name := strings.TrimSpace(nameByID[strings.TrimSpace(app.ID)]); name != "" {
+			app.Name = name
+		}
+		if note := strings.TrimSpace(notesByID[strings.TrimSpace(app.ID)]); note != "" {
+			app.Notes = note
+		}
+		app.State = "RUNNING"
+		for j := range app.Containers {
+			app.Containers[j].State = "running"
+		}
+	}
+	return out
+}
+
+func applyDemoVMwarePlatformScenario(snapshot vmware.InventorySnapshot) vmware.InventorySnapshot {
+	out := cloneVMwareInventorySnapshot(snapshot)
+
+	vmNameByID := map[string]string{
+		"vm-201": "warehouse-api-01",
+		"vm-202": "warehouse-db-01",
+		"vm-203": "client-portal-01",
+		"vm-204": "ops-observability-01",
+		"vm-205": "finance-jump-01",
+		"vm-206": "etl-batch-01",
+	}
+	vmIPByID := map[string][]string{
+		"vm-201": {"10.42.10.121"},
+		"vm-202": {"10.42.10.132"},
+		"vm-203": {"10.42.10.144"},
+		"vm-204": {"10.42.20.115"},
+		"vm-205": {"10.42.30.118"},
+		"vm-206": {"10.42.40.206"},
+	}
+
+	for i := range out.Hosts {
+		host := &out.Hosts[i]
+		if strings.TrimSpace(host.Host) == "host-102" {
+			host.OverallStatus = "green"
+			host.TriggeredAlarms = nil
+			for j := range host.RecentTasks {
+				host.RecentTasks[j].State = "success"
+			}
+		}
+	}
+
+	for i := range out.VMs {
+		vm := &out.VMs[i]
+		if name := strings.TrimSpace(vmNameByID[strings.TrimSpace(vm.VM)]); name != "" {
+			vm.Name = name
+			vm.GuestHostname = name + ".internal"
+		}
+		if ips := vmIPByID[strings.TrimSpace(vm.VM)]; len(ips) > 0 {
+			vm.GuestIPAddresses = append([]string(nil), ips...)
+		}
+		vm.PowerState = "POWERED_ON"
+		vm.OverallStatus = "green"
+		vm.TriggeredAlarms = nil
+		for j := range vm.RecentTasks {
+			if strings.EqualFold(strings.TrimSpace(vm.RecentTasks[j].State), "queued") {
+				vm.RecentTasks[j].State = "success"
+			}
+		}
+		if vm.Metrics == nil {
+			vm.Metrics = defaultDemoVMwareMetrics()
+		}
+	}
+
+	for i := range out.Datastores {
+		datastore := &out.Datastores[i]
+		datastore.VMNames = make([]string, 0, len(datastore.VMIDs))
+		for _, vmID := range datastore.VMIDs {
+			if name := strings.TrimSpace(vmNameByID[strings.TrimSpace(vmID)]); name != "" {
+				datastore.VMNames = append(datastore.VMNames, name)
+			}
+		}
+	}
+
+	return out
 }
 
 func applyDemoNodeScenario(state *models.StateSnapshot) {
@@ -314,7 +424,7 @@ func applyDemoKubernetesScenario(state *models.StateSnapshot, now time.Time) {
 		cluster := &state.KubernetesClusters[clusterIndex]
 		cluster.Name = "Production"
 		cluster.DisplayName = "Production"
-		cluster.Status = "warning"
+		cluster.Status = "online"
 
 		nodeNameMap := make(map[string]string, len(cluster.Nodes))
 		for i := range cluster.Nodes {
@@ -409,17 +519,9 @@ func applyDemoStorageScenario(state *models.StateSnapshot) {
 		return
 	}
 
-	clusterStorageNames := map[string]string{
-		"local":          "iso-library",
-		"local-zfs":      "service-pool",
-		"shared-storage": "shared-backup-fabric",
-		"pbs-pve1":       "backup-vault-a",
-		"pbs-pve2":       "backup-vault-b",
-		"pbs-pve3":       "backup-vault-c",
-	}
 	for i := range state.Storage {
 		storage := &state.Storage[i]
-		if name := strings.TrimSpace(clusterStorageNames[storage.Name]); name != "" {
+		if name := strings.TrimSpace(storageScenarioAlias(*storage)); name != "" {
 			storage.Name = name
 		}
 		storage.Instance = scenarioClusterAlias(storage.Instance)
@@ -433,7 +535,7 @@ func applyDemoStorageScenario(state *models.StateSnapshot) {
 				if j < len(datastoreNames) {
 					state.PBSInstances[i].Datastores[j].Name = datastoreNames[j]
 				}
-				state.PBSInstances[i].Datastores[j].Status = "available"
+				state.PBSInstances[i].Datastores[j].Status = "online"
 			}
 		}
 	}
@@ -509,8 +611,8 @@ func applyDemoBackupScenario(
 		if guestName := vmNames[job.GuestID]; guestName != "" {
 			job.GuestName = guestName
 		}
-		job.SourceStorage = scenarioStorageAlias(job.SourceStorage)
-		job.TargetStorage = scenarioStorageAlias(job.TargetStorage)
+		job.SourceStorage = scenarioStorageAliasForNode(job.SourceStorage, job.SourceNode)
+		job.TargetStorage = scenarioStorageAliasForNode(job.TargetStorage, job.TargetNode)
 	}
 
 	for i := range state.VMs {
@@ -612,14 +714,80 @@ func scenarioClusterAlias(name string) string {
 }
 
 func scenarioStorageAlias(name string) string {
-	switch strings.ToLower(strings.TrimSpace(name)) {
+	return scenarioStorageAliasForNode(name, "")
+}
+
+func storageScenarioAlias(storage models.Storage) string {
+	return scenarioStorageAliasForNode(storage.Name, storage.Node)
+}
+
+func scenarioStorageAliasForNode(name, node string) string {
+	trimmedName := strings.TrimSpace(name)
+	normalizedName := strings.ToLower(trimmedName)
+	normalizedNode := strings.ToLower(strings.TrimSpace(node))
+	switch normalizedName {
+	case "shared-storage":
+		return "shared-backup-fabric"
+	case "pbs-pve1":
+		return "backup-vault-a"
+	case "pbs-pve2":
+		return "backup-vault-b"
+	case "pbs-pve3":
+		return "backup-vault-c"
+	case "local":
+		switch normalizedNode {
+		case "pve1":
+			return "west-a-iso-library"
+		case "pve2":
+			return "west-b-iso-library"
+		case "pve3":
+			return "west-c-iso-library"
+		case "pve4":
+			return "dr-a-iso-library"
+		case "pve5":
+			return "dr-b-iso-library"
+		default:
+			return "iso-library"
+		}
 	case "local-zfs":
-		return "service-pool"
-	case "replica-zfs":
-		return "dr-service-pool"
+		switch normalizedNode {
+		case "pve1":
+			return "west-a-service-pool"
+		case "pve2":
+			return "west-b-service-pool"
+		case "pve3":
+			return "west-c-service-pool"
+		case "pve4":
+			return "dr-a-service-pool"
+		case "pve5":
+			return "dr-b-service-pool"
+		default:
+			return "service-pool"
+		}
 	default:
-		return name
+		return trimmedName
 	}
+}
+
+func defaultDemoVMwareMetrics() *vmware.InventoryMetrics {
+	return &vmware.InventoryMetrics{
+		CPUPercent:              demoFloat64Ptr(17.4),
+		MemoryPercent:           demoFloat64Ptr(48.8),
+		MemoryUsedBytes:         demoInt64Ptr(4_192_337_920),
+		MemoryTotalBytes:        demoInt64Ptr(8_589_934_592),
+		NetInBytesPerSecond:     demoFloat64Ptr(260_000),
+		NetOutBytesPerSecond:    demoFloat64Ptr(340_000),
+		DiskReadBytesPerSecond:  demoFloat64Ptr(540_000),
+		DiskWriteBytesPerSecond: demoFloat64Ptr(460_000),
+	}
+}
+
+func demoFloat64Ptr(value float64) *float64 {
+	return &value
+}
+
+func demoInt64Ptr(value int64) *int64 {
+	return &value
 }
 
 func atoiSafe(raw string) int {

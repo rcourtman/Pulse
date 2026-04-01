@@ -33,6 +33,16 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 			t.Fatalf("expected curated app container %q in canonical demo graph", want)
 		}
 	}
+	for _, want := range []string{"client-files", "edge-dns"} {
+		if !trueNASAppNameExists(graph, want) {
+			t.Fatalf("expected curated TrueNAS app %q in canonical demo graph", want)
+		}
+	}
+	for _, want := range []string{"warehouse-api-01", "etl-batch-01"} {
+		if !vmwareVMNameExists(graph, want) {
+			t.Fatalf("expected curated VMware VM %q in canonical demo graph", want)
+		}
+	}
 	if !nodeDisplayNameExists(graph, "West Production A") {
 		t.Fatal("expected curated infrastructure node display name in canonical demo graph")
 	}
@@ -44,13 +54,19 @@ func TestBuildFixtureGraphAppliesCuratedDemoScenarioAcrossEstate(t *testing.T) {
 			t.Fatalf("expected curated kubernetes deployment %q in canonical demo graph", want)
 		}
 	}
-	for _, want := range []string{"shared-backup-fabric", "service-pool"} {
+	for _, want := range []string{"shared-backup-fabric", "west-a-service-pool"} {
 		if !storageNameExists(graph, want) {
 			t.Fatalf("expected curated storage name %q in canonical demo graph", want)
 		}
 	}
+	if storageNameExists(graph, "service-pool") {
+		t.Fatal("expected demo storage naming to remove generic service-pool alias")
+	}
 	if !pbsInstanceExists(graph, "backup-vault") {
 		t.Fatal("expected curated PBS instance in canonical demo graph")
+	}
+	if !allPBSDatastoresOnline(graph) {
+		t.Fatal("expected curated PBS datastores to normalize onto online status")
 	}
 	if !pmgInstanceExists(graph, "mail-gateway-eu") {
 		t.Fatal("expected curated PMG instance in canonical demo graph")
@@ -76,11 +92,20 @@ func TestFixtureGraphUpdateMetricsPreservesCuratedDemoScenario(t *testing.T) {
 	if !dockerContainerNameExists(graph, "customer-portal") {
 		t.Fatal("expected curated docker container naming to survive metric refresh")
 	}
+	if !trueNASAppNameExists(graph, "client-files") {
+		t.Fatal("expected curated TrueNAS app naming to survive metric refresh")
+	}
+	if !vmwareVMNameExists(graph, "warehouse-api-01") {
+		t.Fatal("expected curated VMware naming to survive metric refresh")
+	}
 	if !kubernetesNodeExists(graph, "prod-euw1-k8s-01") {
 		t.Fatal("expected curated kubernetes node naming to survive metric refresh")
 	}
-	if !storageNameExists(graph, "shared-backup-fabric") {
+	if !storageNameExists(graph, "west-a-service-pool") {
 		t.Fatal("expected curated storage naming to survive metric refresh")
+	}
+	if !allPBSDatastoresOnline(graph) {
+		t.Fatal("expected curated PBS datastore status to survive metric refresh")
 	}
 	if leak := firstLegacyMockClusterLeak(graph); leak != "" {
 		t.Fatalf("expected metric refresh to preserve cluster aliasing, found %s", leak)
@@ -120,6 +145,24 @@ func dockerContainerNameExists(graph FixtureGraph, want string) bool {
 			if container.Name == want {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+func trueNASAppNameExists(graph FixtureGraph, want string) bool {
+	for _, app := range graph.PlatformFixtures.TrueNAS.Apps {
+		if app.Name == want {
+			return true
+		}
+	}
+	return false
+}
+
+func vmwareVMNameExists(graph FixtureGraph, want string) bool {
+	for _, vm := range graph.PlatformFixtures.VMware.VMs {
+		if vm.Name == want {
+			return true
 		}
 	}
 	return false
@@ -172,6 +215,17 @@ func pbsInstanceExists(graph FixtureGraph, want string) bool {
 		}
 	}
 	return false
+}
+
+func allPBSDatastoresOnline(graph FixtureGraph) bool {
+	for _, instance := range graph.State.PBSInstances {
+		for _, datastore := range instance.Datastores {
+			if datastore.Status != "online" {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func pmgInstanceExists(graph FixtureGraph, want string) bool {

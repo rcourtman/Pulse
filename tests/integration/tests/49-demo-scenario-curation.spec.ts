@@ -55,6 +55,20 @@ async function ensureMockModeEnabled(
   }
 }
 
+async function waitForAppRoute(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await page.waitForLoadState("domcontentloaded");
+  await page.waitForFunction(
+    () => {
+      const root = document.getElementById("root");
+      return root !== null && root.children.length > 0;
+    },
+    undefined,
+    { timeout: 20_000 },
+  );
+}
+
 async function tableRowsText(
   page: import("@playwright/test").Page,
 ): Promise<string[]> {
@@ -118,23 +132,28 @@ test.describe.serial("Demo scenario curation", () => {
     await ensureMockModeEnabled(page);
 
     await page.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+    await waitForAppRoute(page);
     await expect(page.getByTestId("infrastructure-summary")).toBeVisible();
     await expectSomeRowContains(page, "West Production A");
     await expectSomeRowContains(page, "Prod Euw1 K8s 01");
     await expectNoRowContains(page, "mock-cluster");
 
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    await waitForAppRoute(page);
     await expect(page.getByTestId("workloads-summary")).toBeVisible();
     await expectSomeRowContains(page, "customer-portal");
     await expectSomeRowContains(page, "backup-coordinator");
     await expectSomeRowContains(page, "checkout-web-01");
 
     await page.goto("/storage", { waitUntil: "domcontentloaded" });
+    await waitForAppRoute(page);
     await expect(page.getByTestId("storage-summary")).toBeVisible();
     await expectSomeRowContains(page, "shared-backup-fabric");
-    await expectSomeRowContains(page, "service-pool");
+    await expectSomeRowContains(page, "west-a-service-pool");
+    await expectNoRowContains(page, "service-pool");
 
     await page.goto("/recovery", { waitUntil: "domcontentloaded" });
+    await waitForAppRoute(page);
     await expectSomeRowContains(page, "checkout-web-01");
     await expectSomeRowContains(page, "production/monitoring/prometheus-pvc");
   });
