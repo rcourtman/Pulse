@@ -239,6 +239,53 @@ func TestVMFileSystemUnmarshalFlexibleNumbers(t *testing.T) {
 			t.Fatalf("unexpected float string values: got total=%d used=%d", fs.TotalBytes, fs.UsedBytes)
 		}
 	})
+
+	t.Run("falls back to total-bytes-privileged when total-bytes is missing", func(t *testing.T) {
+		payload := `{"name":"windows","type":"ntfs","mountpoint":"C:\\\\","total-bytes-privileged":536870912000,"used-bytes":214748364800}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling privileged total-bytes: %v", err)
+		}
+		if fs.TotalBytes != 536870912000 || fs.TotalBytesPrivileged != 536870912000 || fs.UsedBytes != 214748364800 {
+			t.Fatalf("unexpected privileged values: got total=%d privileged=%d used=%d", fs.TotalBytes, fs.TotalBytesPrivileged, fs.UsedBytes)
+		}
+	})
+
+	t.Run("uses windows name as mountpoint fallback when mountpoint is empty", func(t *testing.T) {
+		payload := `{"name":"C:\\Windows","type":"ntfs","mountpoint":"","total-bytes":536870912000,"used-bytes":214748364800}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling windows name fallback: %v", err)
+		}
+		if fs.Mountpoint != "C:\\Windows" {
+			t.Fatalf("expected windows mountpoint fallback from name, got %q", fs.Mountpoint)
+		}
+	})
+
+	t.Run("replaces windows volume GUID mountpoint with normalized name", func(t *testing.T) {
+		payload := `{"name":"C:\\","type":"ntfs","mountpoint":"\\\\?\\Volume{1234-5678}\\","total-bytes":536870912000,"used-bytes":214748364800}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling volume GUID mountpoint: %v", err)
+		}
+		if fs.Mountpoint != "C:\\" {
+			t.Fatalf("expected windows drive mountpoint fallback, got %q", fs.Mountpoint)
+		}
+	})
+
+	t.Run("accepts disk metadata as an object", func(t *testing.T) {
+		payload := `{"name":"rootfs","type":"ext4","mountpoint":"/","total-bytes":1000,"used-bytes":200,"disk":{"dev":"/dev/sda"}}`
+		var fs VMFileSystem
+		if err := json.Unmarshal([]byte(payload), &fs); err != nil {
+			t.Fatalf("unexpected error unmarshalling disk object: %v", err)
+		}
+		if len(fs.DiskRaw) != 1 {
+			t.Fatalf("expected disk metadata object to normalize to one entry, got %d", len(fs.DiskRaw))
+		}
+		if diskMap, ok := fs.DiskRaw[0].(map[string]interface{}); !ok || diskMap["dev"] != "/dev/sda" {
+			t.Fatalf("expected normalized disk metadata to preserve dev, got %#v", fs.DiskRaw[0])
+		}
+	})
 }
 
 func TestVMFileSystemUnmarshalJSON_InvalidValues(t *testing.T) {

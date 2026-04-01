@@ -1589,23 +1589,25 @@ func (c *Client) GetVMAgentVersion(ctx context.Context, node string, vmid int) (
 
 // VMFileSystem represents filesystem information from QEMU guest agent
 type VMFileSystem struct {
-	Name       string        `json:"name"`
-	Type       string        `json:"type"`
-	Mountpoint string        `json:"mountpoint"`
-	TotalBytes uint64        `json:"total-bytes"`
-	UsedBytes  uint64        `json:"used-bytes"`
-	Disk       string        // Extracted disk device name for duplicate detection
-	DiskRaw    []interface{} `json:"disk"` // Raw disk device info from API
+	Name                 string        `json:"name"`
+	Type                 string        `json:"type"`
+	Mountpoint           string        `json:"mountpoint"`
+	TotalBytes           uint64        `json:"total-bytes"`
+	TotalBytesPrivileged uint64        `json:"total-bytes-privileged"`
+	UsedBytes            uint64        `json:"used-bytes"`
+	Disk                 string        // Extracted disk device name for duplicate detection
+	DiskRaw              []interface{} `json:"disk"` // Raw disk device info from API
 }
 
 func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 	type rawVMFileSystem struct {
-		Name       string        `json:"name"`
-		Type       string        `json:"type"`
-		Mountpoint string        `json:"mountpoint"`
-		TotalBytes interface{}   `json:"total-bytes"`
-		UsedBytes  interface{}   `json:"used-bytes"`
-		DiskRaw    []interface{} `json:"disk"`
+		Name                 string      `json:"name"`
+		Type                 string      `json:"type"`
+		Mountpoint           string      `json:"mountpoint"`
+		TotalBytes           interface{} `json:"total-bytes"`
+		TotalBytesPrivileged interface{} `json:"total-bytes-privileged"`
+		UsedBytes            interface{} `json:"used-bytes"`
+		DiskRaw              interface{} `json:"disk"`
 	}
 
 	var raw rawVMFileSystem
@@ -1617,19 +1619,67 @@ func (fs *VMFileSystem) UnmarshalJSON(data []byte) error {
 	if err != nil {
 		return err
 	}
+	totalPrivileged, err := parseUint64Flexible(raw.TotalBytesPrivileged)
+	if err != nil {
+		return err
+	}
 	used, err := parseUint64Flexible(raw.UsedBytes)
 	if err != nil {
 		return err
+	}
+	if total == 0 && totalPrivileged > 0 {
+		total = totalPrivileged
 	}
 
 	fs.Name = raw.Name
 	fs.Type = raw.Type
 	fs.Mountpoint = raw.Mountpoint
+	if normalized, ok := normalizeWindowsDriveMountpoint(raw.Name); ok {
+		if fs.Mountpoint == "" || isWindowsVolumeGUIDMountpoint(fs.Mountpoint) {
+			fs.Mountpoint = normalized
+		}
+	}
 	fs.TotalBytes = total
+	fs.TotalBytesPrivileged = totalPrivileged
 	fs.UsedBytes = used
-	fs.DiskRaw = raw.DiskRaw
+	fs.DiskRaw = normalizeVMFilesystemDiskRaw(raw.DiskRaw)
 	fs.Disk = ""
 	return nil
+}
+
+func normalizeVMFilesystemDiskRaw(value interface{}) []interface{} {
+	switch v := value.(type) {
+	case nil:
+		return nil
+	case []interface{}:
+		return v
+	case map[string]interface{}:
+		return []interface{}{v}
+	default:
+		return nil
+	}
+}
+
+func normalizeWindowsDriveMountpoint(value string) (string, bool) {
+	value = strings.TrimSpace(value)
+	if len(value) < 2 || value[1] != ':' {
+		return "", false
+	}
+	drive := strings.ToUpper(value[:2])
+	if len(value) == 2 {
+		return drive, true
+	}
+	switch value[2] {
+	case '\\', '/':
+		return drive + value[2:], true
+	default:
+		return "", false
+	}
+}
+
+func isWindowsVolumeGUIDMountpoint(value string) bool {
+	value = strings.TrimSpace(strings.ToLower(value))
+	return strings.HasPrefix(value, `\\?\volume{`) && strings.HasSuffix(value, `}\`)
 }
 
 func parseUint64Flexible(value interface{}) (uint64, error) {
@@ -1879,15 +1929,30 @@ func (c *Client) GetVMFSInfo(ctx context.Context, node string, vmid int) ([]VMFi
 		Str("response", string(bodyBytes)).
 		Msg("Raw response from guest agent get-fsinfo")
 
-	// Try to unmarshal as an array first (expected format)
+	// Decode array payloads entry-by-entry so one malformed filesystem record
+	// does not wipe valid guest-agent disk data for the whole VM.
 	var arrayResult struct {
 		Data struct {
-			Result []VMFileSystem `json:"result"`
+			Result []json.RawMessage `json:"result"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(bodyBytes, &arrayResult); err == nil && arrayResult.Data.Result != nil {
-		postProcessVMFilesystems(node, vmid, arrayResult.Data.Result)
-		return arrayResult.Data.Result, nil
+		filesystems := make([]VMFileSystem, 0, len(arrayResult.Data.Result))
+		for idx, rawFS := range arrayResult.Data.Result {
+			var fs VMFileSystem
+			if err := json.Unmarshal(rawFS, &fs); err != nil {
+				log.Warn().
+					Err(err).
+					Str("node", node).
+					Int("vmid", vmid).
+					Int("filesystem_index", idx).
+					Msg("Skipping malformed guest agent filesystem entry")
+				continue
+			}
+			filesystems = append(filesystems, fs)
+		}
+		postProcessVMFilesystems(node, vmid, filesystems)
+		return filesystems, nil
 	}
 
 	// If that fails, try as an object (might be an error response or different format)
