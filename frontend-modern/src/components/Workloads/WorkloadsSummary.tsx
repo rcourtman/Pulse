@@ -11,7 +11,10 @@ import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
+import { SummarySynchronizedReadout } from '@/components/shared/SummarySynchronizedReadout';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import { buildDensityMapSynchronizedReadout } from '@/components/shared/densityMapModel';
+import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import {
   ChartsAPI,
   type ChartData,
@@ -748,6 +751,48 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
+  const renderSyncedReadout = (
+    readout: { empty?: boolean; timestamp: number; value: string } | null,
+  ) =>
+    readout ? (
+      <SummarySynchronizedReadout
+        empty={readout.empty}
+        timestamp={readout.timestamp}
+        value={readout.value}
+      />
+    ) : undefined;
+  const cpuSyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      hoverSourceKey: 'cpu',
+      hoverSync: chartHoverSync(),
+      series: cpuSeries(),
+      timeRange: selectedRange(),
+    });
+  const memorySyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      hoverSourceKey: 'memory',
+      hoverSync: chartHoverSync(),
+      series: memorySeries(),
+      timeRange: selectedRange(),
+    });
+  const diskIOSyncedReadout = () =>
+    buildDensityMapSynchronizedReadout({
+      emptyValue: 'No sample',
+      formatValue: formatThroughputRate,
+      hoverSourceKey: 'diskio',
+      hoverSync: chartHoverSync(),
+      series: diskioSeries(),
+      timeRange: selectedRange(),
+    });
+  const networkSyncedReadout = () =>
+    buildDensityMapSynchronizedReadout({
+      emptyValue: 'No sample',
+      formatValue: formatThroughputRate,
+      hoverSourceKey: 'network',
+      hoverSync: chartHoverSync(),
+      series: networkSeries(),
+      timeRange: selectedRange(),
+    });
 
   return (
     <SummaryPanel
@@ -775,6 +820,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       <SummaryMetricCard
         label="CPU"
         secondaryLabel={focusedLabel()}
+        headerValue={renderSyncedReadout(cpuSyncedReadout())}
         loaded={!isLoading()}
         hasData={hasCpuData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
@@ -800,6 +846,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       <SummaryMetricCard
         label="Memory"
         secondaryLabel={focusedLabel()}
+        headerValue={renderSyncedReadout(memorySyncedReadout())}
         loaded={!isLoading()}
         hasData={hasMemoryData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
@@ -825,6 +872,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       <SummaryMetricCard
         label="Disk I/O"
         secondaryLabel={focusedLabel()}
+        headerValue={renderSyncedReadout(diskIOSyncedReadout())}
         loaded={!isLoading()}
         hasData={hasDiskIOData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
@@ -847,6 +895,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
       <SummaryMetricCard
         label="Network"
         secondaryLabel={focusedLabel()}
+        headerValue={renderSyncedReadout(networkSyncedReadout())}
         loaded={!isLoading()}
         hasData={hasNetworkData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}

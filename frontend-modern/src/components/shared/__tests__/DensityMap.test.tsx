@@ -7,6 +7,7 @@ import { DensityMap } from '@/components/shared/DensityMap';
 import {
   buildDensityMapChartData,
   buildDensityMapFocusDetail,
+  buildDensityMapSynchronizedReadout,
   getDensityMapExternalSeriesIndex,
 } from '@/components/shared/densityMapModel';
 
@@ -147,6 +148,68 @@ describe('DensityMap', () => {
 
     fireEvent.mouseLeave(canvas);
     expect(onHoverSyncChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('builds a compact synchronized readout for sibling density-map cards', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+
+    expect(
+      buildDensityMapSynchronizedReadout({
+        formatValue: (value) => `${value.toFixed(1)} MB/s`,
+        hoverSourceKey: 'network',
+        hoverSync: {
+          sourceKey: 'diskio',
+          seriesId: 'alpha',
+          timestamp: now - 10_000,
+        },
+        series: [
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#10b981',
+            data: [
+              { timestamp: now - 30_000, value: 25 },
+              { timestamp: now - 10_000, value: 55 },
+            ],
+          },
+        ],
+        timeRange: '1h',
+      }),
+    ).toEqual({
+      timestamp: now - 10_000,
+      value: '55.0 MB/s',
+    });
+
+    expect(
+      buildDensityMapSynchronizedReadout({
+        emptyValue: 'No sample',
+        formatValue: (value) => `${value.toFixed(1)} MB/s`,
+        hoverSourceKey: 'network',
+        hoverSync: {
+          sourceKey: 'diskio',
+          seriesId: 'alpha',
+          timestamp: now - 50 * 60_000,
+        },
+        series: [
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#10b981',
+            data: [
+              { timestamp: now - 30_000, value: 25 },
+              { timestamp: now - 10_000, value: 55 },
+            ],
+          },
+        ],
+        timeRange: '1h',
+      }),
+    ).toEqual({
+      empty: true,
+      timestamp: now - 50 * 60_000,
+      value: 'No sample',
+    });
   });
 
   it('keeps an externally highlighted series visible when it falls outside the default density top set', () => {

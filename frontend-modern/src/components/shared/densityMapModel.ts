@@ -252,6 +252,71 @@ export function buildDensityMapSynchronizedHoveredState(options: {
   };
 }
 
+export function buildDensityMapSynchronizedReadout(options: {
+  emptyValue?: string;
+  formatValue?: (value: number) => string;
+  hoverSourceKey?: string;
+  hoverSync?: SummaryChartHoverSync | null;
+  series: InteractiveSparklineSeries[];
+  timeRange?: TimeRange;
+}): { empty?: boolean; timestamp: number; value: string } | null {
+  const { hoverSync } = options;
+  if (!hoverSync) {
+    return null;
+  }
+  if (options.hoverSourceKey && hoverSync.sourceKey === options.hoverSourceKey) {
+    return null;
+  }
+
+  const targetSeries = options.series.find((series) => series.id?.trim() === hoverSync.seriesId);
+  if (!targetSeries) {
+    return null;
+  }
+
+  const range = options.timeRange ?? '1h';
+  const rangeMs = timeRangeToMs(range);
+  const windowEnd = Date.now();
+  const windowStart = windowEnd - rangeMs;
+  const clampedTimestamp = clampDensityMapValue(hoverSync.timestamp, windowStart, windowEnd);
+  const bucketDuration = rangeMs / DENSITY_MAP_COLUMNS;
+  const bucketIndex = clampDensityMapValue(
+    Math.floor(((clampedTimestamp - windowStart) / rangeMs) * DENSITY_MAP_COLUMNS),
+    0,
+    DENSITY_MAP_COLUMNS - 1,
+  );
+  const bucketStart = windowStart + bucketIndex * bucketDuration;
+  const bucketEnd = bucketStart + bucketDuration;
+
+  let bucketMax: number | null = null;
+  for (const point of targetSeries.data) {
+    if (point.timestamp < windowStart || point.timestamp > windowEnd) {
+      continue;
+    }
+    const inBucket =
+      point.timestamp >= bucketStart &&
+      (bucketIndex === DENSITY_MAP_COLUMNS - 1
+        ? point.timestamp <= bucketEnd
+        : point.timestamp < bucketEnd);
+    if (!inBucket) {
+      continue;
+    }
+    bucketMax = bucketMax === null ? point.value : Math.max(bucketMax, point.value);
+  }
+
+  if (bucketMax === null) {
+    return {
+      empty: true,
+      timestamp: clampedTimestamp,
+      value: options.emptyValue ?? 'No sample',
+    };
+  }
+
+  return {
+    timestamp: clampedTimestamp,
+    value: formatDensityMapValue(bucketMax, options.formatValue),
+  };
+}
+
 export function buildDensityMapFocusDetail(options: {
   activeHoveredState?: DensityMapHoveredState | null;
   data: DensityMapChartData;

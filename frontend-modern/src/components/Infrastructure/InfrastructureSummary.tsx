@@ -6,6 +6,9 @@ import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
+import { SummarySynchronizedReadout } from '@/components/shared/SummarySynchronizedReadout';
+import { buildDensityMapSynchronizedReadout } from '@/components/shared/densityMapModel';
+import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import { formatThroughputRate } from '@/utils/throughputPresentation';
 import type { InfrastructureSummaryProps } from './infrastructureSummaryModel';
 import { useInfrastructureSummaryState } from './useInfrastructureSummaryState';
@@ -19,6 +22,62 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
     const name = state.focusedResourceName();
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
+  };
+  const renderSyncedReadout = (
+    readout: { empty?: boolean; timestamp: number; value: string } | null,
+  ) =>
+    readout ? (
+      <SummarySynchronizedReadout
+        empty={readout.empty}
+        timestamp={readout.timestamp}
+        value={readout.value}
+      />
+    ) : undefined;
+  const cpuSyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      hoverSourceKey: 'cpu',
+      hoverSync: state.chartHoverSync(),
+      series: state.seriesFor('cpu'),
+      timeRange: props.timeRange,
+    });
+  const memorySyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      hoverSourceKey: 'memory',
+      hoverSync: state.chartHoverSync(),
+      series: state.seriesFor('memory'),
+      timeRange: props.timeRange,
+    });
+  const diskIOSyncedReadout = () =>
+    buildDensityMapSynchronizedReadout({
+      emptyValue: 'No sample',
+      formatValue: formatThroughputRate,
+      hoverSourceKey: 'diskio',
+      hoverSync: state.chartHoverSync(),
+      series: state.diskioSeries(),
+      timeRange: props.timeRange,
+    });
+  const networkSyncedReadout = () =>
+    buildDensityMapSynchronizedReadout({
+      emptyValue: 'No sample',
+      formatValue: formatThroughputRate,
+      hoverSourceKey: 'network',
+      hoverSync: state.chartHoverSync(),
+      series: state.networkSeries(),
+      timeRange: props.timeRange,
+    });
+  const diskIOHeaderValue = () => {
+    const synced = renderSyncedReadout(diskIOSyncedReadout());
+    if (synced) {
+      return synced;
+    }
+    if (!state.focusedResourceName() && state.avgDiskCapacity() !== null) {
+      return (
+        <span class="text-[10px] text-muted shrink-0">
+          Capacity: {state.avgDiskCapacity()}%
+        </span>
+      );
+    }
+    return undefined;
   };
 
   return (
@@ -51,6 +110,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           <SummaryMetricCard
             label="CPU"
             secondaryLabel={focusedLabel()}
+            headerValue={renderSyncedReadout(cpuSyncedReadout())}
             loaded={state.isCurrentRangeLoaded()}
             hasData={state.hasData('cpu')}
             emptyMessage={state.emptyMessage()}
@@ -74,6 +134,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
           <SummaryMetricCard
             label="Memory"
             secondaryLabel={focusedLabel()}
+            headerValue={renderSyncedReadout(memorySyncedReadout())}
             loaded={state.isCurrentRangeLoaded()}
             hasData={state.hasData('memory')}
             emptyMessage={state.emptyMessage()}
@@ -96,16 +157,8 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
 
           <SummaryMetricCard
             label="Disk I/O"
-            secondaryLabel={
-              <>
-                {focusedLabel()}
-                <Show when={!state.focusedResourceName() && state.avgDiskCapacity() !== null}>
-                  <span class="text-[10px] text-muted ml-auto shrink-0">
-                    Capacity: {state.avgDiskCapacity()}%
-                  </span>
-                </Show>
-              </>
-            }
+            secondaryLabel={focusedLabel()}
+            headerValue={diskIOHeaderValue()}
             loaded={state.isCurrentRangeLoaded()}
             hasData={state.hasDiskIOData()}
             emptyMessage={state.emptyMessage()}
@@ -182,6 +235,7 @@ export const InfrastructureSummary: Component<InfrastructureSummaryProps> = (pro
             <SummaryMetricCard
               label="Network"
               secondaryLabel={focusedLabel()}
+              headerValue={renderSyncedReadout(networkSyncedReadout())}
               loaded={state.isCurrentRangeLoaded()}
               hasData={state.hasNetData()}
               emptyMessage={state.emptyHistoryLabel()}

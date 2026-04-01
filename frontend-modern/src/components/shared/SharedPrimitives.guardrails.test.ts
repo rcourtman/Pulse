@@ -73,6 +73,7 @@ import selectionCardGroupSource from '@/components/shared/SelectionCardGroup.tsx
 import selectionCardGroupModelSource from '@/components/shared/selectionCardGroupModel.ts?raw';
 import summaryMetricCardSource from '@/components/shared/SummaryMetricCard.tsx?raw';
 import summaryPanelSource from '@/components/shared/SummaryPanel.tsx?raw';
+import summarySynchronizedReadoutSource from '@/components/shared/SummarySynchronizedReadout.tsx?raw';
 import tagBadgesSource from '@/components/shared/TagBadges.tsx?raw';
 import commandPaletteStateSource from '@/components/shared/useCommandPaletteState.ts?raw';
 import activeUseTrialNudgeStateSource from '@/components/shared/useActiveUseTrialNudgeState.ts?raw';
@@ -108,6 +109,7 @@ import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterface
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
+import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
@@ -323,6 +325,33 @@ describe('shared primitive guardrails', () => {
     expect(workloadsSummarySource).toContain('hoveredGroupScope');
     expect(workloadsSummarySource).toContain('filterSeriesForActiveScope');
     expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
+  });
+
+  it('keeps synchronized summary values on one shared card/readout contract', () => {
+    expect(summaryMetricCardSource).toContain('headerValue?: JSX.Element');
+    expect(summaryMetricCardSource).toContain('props.headerValue');
+    expect(summaryMetricCardSource).not.toContain('data-summary-sync-readout');
+
+    expect(summarySynchronizedReadoutSource).toContain(
+      'export const SummarySynchronizedReadout',
+    );
+    expect(summarySynchronizedReadoutSource).toContain('data-summary-sync-readout="true"');
+    expect(summarySynchronizedReadoutSource).toContain(
+      'formatSummarySynchronizedReadoutTime',
+    );
+    expect(summarySynchronizedReadoutSource).not.toContain('Portal');
+
+    expect(interactiveSparklineModelSource).toContain(
+      'buildInteractiveSparklineSynchronizedReadout',
+    );
+    expect(densityMapModelSource).toContain('buildDensityMapSynchronizedReadout');
+
+    expect(infrastructureSummarySource).toContain('SummarySynchronizedReadout');
+    expect(infrastructureSummarySource).toContain('headerValue={');
+    expect(workloadsSummarySource).toContain('SummarySynchronizedReadout');
+    expect(workloadsSummarySource).toContain('headerValue={');
+    expect(storageSummarySource).toContain('SummarySynchronizedReadout');
+    expect(storageSummarySource).toContain('headerValue={');
   });
 
   it('keeps summary-linked table row emphasis on the shared active-row presentation contract', () => {

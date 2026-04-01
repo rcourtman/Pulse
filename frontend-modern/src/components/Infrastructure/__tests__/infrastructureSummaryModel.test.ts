@@ -3,6 +3,8 @@ import useInfrastructureSummaryStateSource from '../useInfrastructureSummaryStat
 
 import type { Resource } from '@/types/resource';
 import type { InfrastructureSummarySeries } from '@/components/Infrastructure/infrastructureSummaryModel';
+import { buildDensityMapSynchronizedReadout } from '@/components/shared/densityMapModel';
+import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import { resolveSummaryActiveSeriesId } from '@/components/shared/summaryCardInteraction';
 import {
   buildInfrastructureDisplaySeries,
@@ -224,6 +226,66 @@ describe('infrastructureSummaryModel', () => {
         focusedSeriesId: 'agent-2',
       }),
     ).toBe('agent-2');
+  });
+
+  it('builds sibling synchronized readouts from canonical infrastructure series without duplicating the source tooltip', () => {
+    const displayedSeries = buildInfrastructureDisplaySeries(
+      [
+        makeSeries('host-1', {
+          name: 'Host 1',
+          cpu: [{ timestamp: Date.now() - 45_000, value: 20 }],
+          memory: [{ timestamp: Date.now() - 45_000, value: 35 }],
+          network: [],
+          diskio: [],
+        }),
+        makeSeries('host-2', {
+          name: 'Host 2',
+          cpu: [{ timestamp: Date.now() - 30_000, value: 40 }],
+          memory: [{ timestamp: Date.now() - 30_000, value: 55 }],
+          network: [{ timestamp: Date.now() - 30_000, value: 240 }],
+          diskio: [{ timestamp: Date.now() - 30_000, value: 90 }],
+        }),
+      ],
+      null,
+    );
+    const hoverSync = {
+      sourceKey: 'cpu',
+      seriesId: 'host-2',
+      timestamp: Date.now() - 30_000,
+    };
+
+    expect(
+      buildInteractiveSparklineSynchronizedReadout({
+        hoverSourceKey: 'cpu',
+        hoverSync,
+        series: buildInfrastructureMetricSeries(displayedSeries, 'cpu'),
+        timeRange: '1h',
+      }),
+    ).toBeNull();
+    expect(
+      buildInteractiveSparklineSynchronizedReadout({
+        hoverSourceKey: 'memory',
+        hoverSync,
+        series: buildInfrastructureMetricSeries(displayedSeries, 'memory'),
+        timeRange: '1h',
+      }),
+    ).toMatchObject({ value: '55.0%' });
+    expect(
+      buildDensityMapSynchronizedReadout({
+        hoverSourceKey: 'diskio',
+        hoverSync,
+        series: buildInfrastructureMetricSeries(displayedSeries, 'diskio'),
+        timeRange: '1h',
+      }),
+    ).toMatchObject({ value: '90.0' });
+    expect(
+      buildDensityMapSynchronizedReadout({
+        hoverSourceKey: 'network',
+        hoverSync,
+        series: buildInfrastructureMetricSeries(displayedSeries, 'network'),
+        timeRange: '1h',
+      }),
+    ).toMatchObject({ value: '240.0' });
   });
 
   it('shows the network card when either data or network capability exists', () => {

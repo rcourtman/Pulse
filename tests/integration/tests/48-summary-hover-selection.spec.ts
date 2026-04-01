@@ -238,6 +238,27 @@ async function expectActiveDensityMapsPreserveOverview(
     });
 }
 
+async function expectSummarySyncedReadoutCount(
+  summary: import("@playwright/test").Locator,
+  expectedCount: number,
+): Promise<void> {
+  await expect
+    .poll(async () => summary.locator('[data-summary-sync-readout="true"]').count())
+    .toBe(expectedCount);
+}
+
+async function expectOnlyOneSummaryHoverTooltip(
+  page: import("@playwright/test").Page,
+): Promise<void> {
+  await expect
+    .poll(async () =>
+      page
+        .locator('[data-sparkline-tooltip="true"], [data-density-map-tooltip="true"]')
+        .count(),
+    )
+    .toBe(1);
+}
+
 async function hoverDensityMapUntilTooltipAppears(
   page: import("@playwright/test").Page,
   densityMap: import("@playwright/test").Locator,
@@ -634,6 +655,8 @@ test.describe.serial("Summary hover selection", () => {
       infrastructureChartId,
       2,
     );
+    await expectSummarySyncedReadoutCount(infrastructureSummary, 3);
+    await expectOnlyOneSummaryHoverTooltip(page);
 
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
     const workloadsSummary = page.getByTestId("workloads-summary");
@@ -654,6 +677,8 @@ test.describe.serial("Summary hover selection", () => {
       workloadChartId,
       2,
     );
+    await expectSummarySyncedReadoutCount(workloadsSummary, 3);
+    await expectOnlyOneSummaryHoverTooltip(page);
 
     await page.goto("/storage", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
@@ -667,6 +692,8 @@ test.describe.serial("Summary hover selection", () => {
     await expectSummaryHighlightCount(storageSummary, storageChartId, 3);
     await expectSummaryHoverTimestampsAligned(storageSummary, 4);
     await expectActiveIsolatedLineCards(storageSummary, 3);
+    await expectSummarySyncedReadoutCount(storageSummary, 2);
+    await expectOnlyOneSummaryHoverTooltip(page);
   });
 
   test("keeps table coordination non-destructive and reversible", async ({

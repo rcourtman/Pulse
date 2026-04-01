@@ -526,6 +526,58 @@ export const buildInteractiveSparklineSynchronizedHoverState = ({
   };
 };
 
+export const buildInteractiveSparklineSynchronizedReadout = ({
+  formatValue,
+  hoverSourceKey,
+  hoverSync,
+  series,
+  timeRange,
+}: {
+  formatValue?: (value: number) => string;
+  hoverSourceKey?: string;
+  hoverSync?: SummaryChartHoverSync | null;
+  series: InteractiveSparklineSeries[];
+  timeRange?: TimeRange;
+}): { empty?: boolean; timestamp: number; value: string } | null => {
+  if (!hoverSync) {
+    return null;
+  }
+  if (hoverSourceKey && hoverSync.sourceKey === hoverSourceKey) {
+    return null;
+  }
+
+  const targetSeries = series.find((entry) => entry.id?.trim() === hoverSync.seriesId);
+  if (!targetSeries) {
+    return null;
+  }
+
+  const range = timeRange ?? '1h';
+  const rangeMs = timeRangeToMs(range);
+  const windowEnd = Date.now();
+  const windowStart = windowEnd - rangeMs;
+  const inWindow = targetSeries.data.filter(
+    (point) => point.timestamp >= windowStart && point.timestamp <= windowEnd,
+  );
+  if (inWindow.length === 0) {
+    return null;
+  }
+
+  const clampedTimestamp = clampInteractiveSparklineValue(
+    hoverSync.timestamp,
+    windowStart,
+    windowEnd,
+  );
+  const nearest = findNearestMetricPoint(inWindow, clampedTimestamp);
+  if (!nearest) {
+    return null;
+  }
+
+  return {
+    timestamp: nearest.point.timestamp,
+    value: formatValue ? formatValue(nearest.point.value) : `${nearest.point.value.toFixed(1)}%`,
+  };
+};
+
 export const computeInteractiveSparklineHoverState = ({
   chartData,
   chartRect,

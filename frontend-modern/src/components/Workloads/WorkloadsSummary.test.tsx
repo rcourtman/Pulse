@@ -414,6 +414,12 @@ describe('WorkloadsSummary performance behavior', () => {
         expect(sparkline.getAttribute('data-hover-sync-timestamp')).not.toBe('');
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
+      const readouts = document.querySelectorAll('[data-summary-sync-readout="true"]');
+      expect(readouts).toHaveLength(3);
+      for (const readout of readouts) {
+        expect(readout.getAttribute('data-summary-sync-empty')).toBe('false');
+        expect(readout.getAttribute('data-summary-sync-timestamp')).not.toBe('');
+      }
     });
   });
 

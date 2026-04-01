@@ -8,6 +8,8 @@ import {
 import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
+import { SummarySynchronizedReadout } from '@/components/shared/SummarySynchronizedReadout';
+import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import {
   ChartsAPI,
   type MetricPoint,
@@ -282,6 +284,47 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
+  const renderSyncedReadout = (
+    readout: { empty?: boolean; timestamp: number; value: string } | null,
+  ) =>
+    readout ? (
+      <SummarySynchronizedReadout
+        empty={readout.empty}
+        timestamp={readout.timestamp}
+        value={readout.value}
+      />
+    ) : undefined;
+  const poolUsageSyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      hoverSourceKey: 'pool-usage',
+      hoverSync: chartHoverSync(),
+      series: poolUsageSeries(),
+      timeRange: props.timeRange as TimeRange,
+    });
+  const diskTempSyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      formatValue: formatTemp,
+      hoverSourceKey: 'disk-temperature',
+      hoverSync: chartHoverSync(),
+      series: diskTempSeries(),
+      timeRange: props.timeRange as TimeRange,
+    });
+  const poolUsedSyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      formatValue: (value) => formatBytes(value),
+      hoverSourceKey: 'used-capacity',
+      hoverSync: chartHoverSync(),
+      series: poolUsedSeries(),
+      timeRange: props.timeRange as TimeRange,
+    });
+  const poolAvailSyncedReadout = () =>
+    buildInteractiveSparklineSynchronizedReadout({
+      formatValue: (value) => formatBytes(value),
+      hoverSourceKey: 'available-space',
+      hoverSync: chartHoverSync(),
+      series: poolAvailSeries(),
+      timeRange: props.timeRange as TimeRange,
+    });
 
   return (
     <Show when={showComponent()}>
@@ -309,6 +352,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
           <SummaryMetricCard
             label="Pool Usage"
             secondaryLabel={focusedLabel(poolUsageSeries())}
+            headerValue={renderSyncedReadout(poolUsageSyncedReadout())}
             loaded={loaded()}
             hasData={hasPoolUsage()}
             emptyMessage={emptyLabel()}
@@ -332,6 +376,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
           <SummaryMetricCard
             label="Disk Temperature"
             secondaryLabel={focusedLabel(diskTempSeries())}
+            headerValue={renderSyncedReadout(diskTempSyncedReadout())}
             loaded={loaded()}
             hasData={hasDiskTemp()}
             emptyMessage={emptyLabel()}
@@ -357,6 +402,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
           <SummaryMetricCard
             label="Used Capacity"
             secondaryLabel={focusedLabel(poolUsedSeries())}
+            headerValue={renderSyncedReadout(poolUsedSyncedReadout())}
             loaded={loaded()}
             hasData={hasPoolUsed()}
             emptyMessage={emptyLabel()}
@@ -382,6 +428,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
           <SummaryMetricCard
             label="Available Space"
             secondaryLabel={focusedLabel(poolAvailSeries())}
+            headerValue={renderSyncedReadout(poolAvailSyncedReadout())}
             loaded={loaded()}
             hasData={hasPoolAvail()}
             emptyMessage={emptyLabel()}

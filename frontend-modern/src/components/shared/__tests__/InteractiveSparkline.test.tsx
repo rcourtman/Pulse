@@ -4,6 +4,7 @@ import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
+import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 
 describe('InteractiveSparkline hover behavior', () => {
   afterEach(() => {
@@ -182,6 +183,60 @@ describe('InteractiveSparkline hover behavior', () => {
 
     fireEvent.mouseLeave(svg);
     expect(onHoverSyncChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it('builds a compact synchronized readout for sibling sparkline cards', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+
+    const readout = buildInteractiveSparklineSynchronizedReadout({
+      hoverSourceKey: 'memory',
+      hoverSync: {
+        sourceKey: 'cpu',
+        seriesId: 'alpha',
+        timestamp: now - 12_000,
+      },
+      series: [
+        {
+          id: 'alpha',
+          name: 'Alpha',
+          color: '#ff0000',
+          data: [
+            { timestamp: now - 30_000, value: 40 },
+            { timestamp: now - 10_000, value: 50 },
+          ],
+        },
+      ],
+      timeRange: '1h',
+    });
+
+    expect(readout).toEqual({
+      timestamp: now - 10_000,
+      value: '50.0%',
+    });
+    expect(
+      buildInteractiveSparklineSynchronizedReadout({
+        hoverSourceKey: 'cpu',
+        hoverSync: {
+          sourceKey: 'cpu',
+          seriesId: 'alpha',
+          timestamp: now - 12_000,
+        },
+        series: [
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30_000, value: 40 },
+              { timestamp: now - 10_000, value: 50 },
+            ],
+          },
+        ],
+        timeRange: '1h',
+      }),
+    ).toBeNull();
   });
 
   it('keeps a synchronized hover timestamp visible even when the synced series is absent locally', () => {
