@@ -67,6 +67,9 @@ that already belong to the canonical system.
    named boundary-only exception still owns it. Do not wait for the current
    slice to have authored the replacement before cleaning up clearly obsolete
    old-way internals in the surface it is already governing.
+   Do not preserve or polish legacy-primary internal paths once the canonical
+   replacement exists and the remaining obligation is only boundary
+   compatibility.
 12. Prefer the largest coherent slice.
    When a claimed lane is already moving through one clear behavior arc on one
    surface, prefer the largest same-surface slice that still has one coherent

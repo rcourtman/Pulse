@@ -4958,7 +4958,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 	chartData := make(map[string]VMChartData)
 	nodeData := make(map[string]NodeChartData)
 
-	currentTime := time.Now().Unix() * 1000 // JavaScript timestamp format
+	currentTime := time.Now().UnixMilli() // JavaScript timestamp format
 	oldestTimestamp := currentTime
 
 	// Process VMs - batch-load historical data (1-2 SQL calls instead of N).
@@ -4989,7 +4989,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				chartData[vid][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5037,7 +5037,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				chartData[cid][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5083,7 +5083,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 			if usagePoints, found := batchMetrics["usage"]; found && len(usagePoints) > 0 {
 				storageData[sid]["disk"] = make([]MetricPoint, len(usagePoints))
 				for i, point := range usagePoints {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5131,7 +5131,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				nodeData[nid][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5217,7 +5217,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				dockerData[responseKey][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5267,7 +5267,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5314,7 +5314,7 @@ func (r *Router) handleCharts(w http.ResponseWriter, req *http.Request) {
 				}
 				agentData[hID][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -5808,7 +5808,7 @@ func convertMetricsForChart(
 		}
 		points := make([]MetricPoint, len(metricPoints))
 		for i, point := range metricPoints {
-			ts := point.Timestamp.Unix() * 1000
+			ts := point.Timestamp.UnixMilli()
 			if ts < *oldestTimestamp {
 				*oldestTimestamp = ts
 			}
@@ -5893,7 +5893,6 @@ func generateStyledMockSeries(
 ) []MetricPoint {
 	seed := monitoring.HashSeed(seedPrefix, resourceID, metricType)
 	style := mockMetricStyle(metricType)
-	values := monitoring.GenerateSeededSeries(current, numPoints, seed, min, max, style)
 
 	durationMillis := int64(duration / time.Millisecond)
 	if durationMillis <= 0 {
@@ -5904,6 +5903,11 @@ func generateStyledMockSeries(
 		step = 1
 	}
 	startMillis := nowMillis - durationMillis
+	timestamps := make([]time.Time, numPoints)
+	for i := 0; i < numPoints; i++ {
+		timestamps[i] = time.UnixMilli(startMillis + int64(i)*step)
+	}
+	values := monitoring.GenerateSeededMetricSeriesForTimestamps(current, timestamps, seed, min, max, metricType, style)
 	points := make([]MetricPoint, numPoints)
 	for i := 0; i < numPoints; i++ {
 		points[i] = MetricPoint{
@@ -6045,7 +6049,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 		primarySourceHint = "store_or_memory_fallback"
 	}
 
-	currentTime := time.Now().Unix() * 1000
+	currentTime := time.Now().UnixMilli()
 	oldestTimestamp := currentTime
 
 	var selectedNode *models.Node
@@ -6409,7 +6413,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 		primarySourceHint = "store_or_memory_fallback"
 	}
 
-	currentTime := time.Now().Unix() * 1000
+	currentTime := time.Now().UnixMilli()
 	oldestTimestamp := currentTime
 
 	// Process Nodes - batch-load historical data (1-2 SQL calls instead of N×5).
@@ -6443,7 +6447,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 				nodeData[nid][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -6510,7 +6514,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 				dockerHostData[dhID][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -6558,7 +6562,7 @@ func (r *Router) handleInfrastructureCharts(w http.ResponseWriter, req *http.Req
 				}
 				agentData[hID][metricType] = make([]MetricPoint, len(points))
 				for i, point := range points {
-					ts := point.Timestamp.Unix() * 1000
+					ts := point.Timestamp.UnixMilli()
 					if ts < oldestTimestamp {
 						oldestTimestamp = ts
 					}
@@ -6810,7 +6814,7 @@ func appendWorkloadMetricPoints(
 ) int {
 	added := 0
 	for _, point := range points {
-		ts := point.Timestamp.Unix() * 1000
+		ts := point.Timestamp.UnixMilli()
 		if ts <= 0 {
 			continue
 		}
@@ -6845,14 +6849,14 @@ func mergeWorkloadNetworkPoints(
 ) []monitoring.MetricPoint {
 	totals := make(map[int64]float64)
 	for _, point := range netIn {
-		ts := point.Timestamp.Unix() * 1000
+		ts := point.Timestamp.UnixMilli()
 		if ts <= 0 {
 			continue
 		}
 		totals[ts] += clampNonNegativeWorkloadValue(point.Value)
 	}
 	for _, point := range netOut {
-		ts := point.Timestamp.Unix() * 1000
+		ts := point.Timestamp.UnixMilli()
 		if ts <= 0 {
 			continue
 		}
@@ -7086,7 +7090,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		primarySourceHint = "store_or_memory_fallback"
 	}
 
-	currentTime := time.Now().Unix() * 1000
+	currentTime := time.Now().UnixMilli()
 	currentTimeTime := time.UnixMilli(currentTime)
 	oldestTimestamp := currentTime
 	buckets := make(map[int64]*workloadSummaryBuckets)
@@ -7711,7 +7715,7 @@ func monitorPointsToAPI(points []monitoring.MetricPoint) []MetricPoint {
 	}
 	out := make([]MetricPoint, len(points))
 	for i, p := range points {
-		out[i] = MetricPoint{Timestamp: p.Timestamp.Unix() * 1000, Value: p.Value}
+		out[i] = MetricPoint{Timestamp: p.Timestamp.UnixMilli(), Value: p.Value}
 	}
 	return out
 }

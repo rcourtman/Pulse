@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmodel"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rs/zerolog/log"
@@ -283,6 +285,47 @@ func GenerateSeededSeries(current float64, points int, seed uint64, min, max flo
 	return raw
 }
 
+func GenerateSeededSeriesForTimestamps(
+	current float64,
+	timestamps []time.Time,
+	seed uint64,
+	min float64,
+	max float64,
+	style SeriesStyle,
+) []float64 {
+	var mappedStyle mockmodel.SeriesStyle
+	switch style {
+	case stylePlateau:
+		mappedStyle = mockmodel.StylePlateau
+	case styleFlat:
+		mappedStyle = mockmodel.StyleFlat
+	default:
+		mappedStyle = mockmodel.StyleSpiky
+	}
+	return mockmodel.SeriesForTimestamps(current, timestamps, seed, min, max, mappedStyle)
+}
+
+func GenerateSeededMetricSeriesForTimestamps(
+	current float64,
+	timestamps []time.Time,
+	seed uint64,
+	min float64,
+	max float64,
+	metricType string,
+	style SeriesStyle,
+) []float64 {
+	var mappedStyle mockmodel.SeriesStyle
+	switch style {
+	case stylePlateau:
+		mappedStyle = mockmodel.StylePlateau
+	case styleFlat:
+		mappedStyle = mockmodel.StyleFlat
+	default:
+		mappedStyle = mockmodel.StyleSpiky
+	}
+	return mockmodel.SeriesForMetricTimestamps(current, timestamps, seed, min, max, metricType, mappedStyle)
+}
+
 // generateSpikySeries produces a low baseline with occasional sharp spikes —
 // matching how real CPU and I/O metrics behave (mostly idle, with bursts).
 func generateSpikySeries(current float64, points int, seed uint64, min, max, span float64, rng *rand.Rand) []float64 {
@@ -468,14 +511,6 @@ func buildTieredTimestamps(now time.Time, totalDuration time.Duration) []time.Ti
 		}
 	}
 
-	// Add "now" as the final point
-	if len(timestamps) > 0 {
-		last := timestamps[len(timestamps)-1]
-		if !last.Equal(now) {
-			timestamps = append(timestamps, now)
-		}
-	}
-
 	return timestamps
 }
 
@@ -490,13 +525,17 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 
 	// Build a tiered timestamp list so short time ranges (1h, 4h) have dense
 	// data without needing an API-level fallback layer.
-	//   Last 2h:   30s intervals  (~240 points)
+	//   Last 2h:   1min intervals  (~120 points)
 	//   2h–24h:    2min intervals  (~660 points)
 	//   24h–90d:   ~65min intervals (~1920 points)
-	// Total: ~2820 points per metric per resource.
+	// The current "now" point is appended explicitly by each recorder so the
+	// seed and live sampler share one canonical terminal timestamp.
 	seedTimestamps := buildTieredTimestamps(now, seedDuration)
 	const seedBatchSize = 5000
-
+	numPoints := len(seedTimestamps)
+	generateSeries := func(metricType string, current float64, seed uint64, min, max float64, style SeriesStyle) []float64 {
+		return GenerateSeededMetricSeriesForTimestamps(current, seedTimestamps, seed, min, max, metricType, style)
+	}
 	var seedBatch []metrics.WriteMetric
 	queueMetric := func(resourceType, resourceID, metricType string, value float64, ts time.Time) {
 		if ms == nil {
@@ -526,16 +565,51 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			seedBatch = seedBatch[:0]
 		}
 	}
+	recordStorageTimeline := func(storageID string, currentUsed, currentTotal float64) {
+		if strings.TrimSpace(storageID) == "" || currentTotal <= 0 || numPoints == 0 {
+			return
+		}
+
+		series := mockmodel.StorageCapacitySeriesForTimestamps(
+			currentUsed,
+			currentTotal,
+			seedTimestamps,
+			mock.MetricSeed("storage", storageID, "usage"),
+		)
+		for i := 0; i < numPoints; i++ {
+			ts := seedTimestamps[i]
+			mh.AddStorageMetric(storageID, "usage", series.Usage[i], ts)
+			mh.AddStorageMetric(storageID, "used", series.Used[i], ts)
+			mh.AddStorageMetric(storageID, "avail", series.Avail[i], ts)
+			mh.AddStorageMetric(storageID, "total", series.Total[i], ts)
+			queueMetric("storage", storageID, "usage", series.Usage[i], ts)
+			queueMetric("storage", storageID, "used", series.Used[i], ts)
+			queueMetric("storage", storageID, "avail", series.Avail[i], ts)
+			queueMetric("storage", storageID, "total", series.Total[i], ts)
+		}
+
+		last := numPoints - 1
+		mh.AddStorageMetric(storageID, "usage", series.Usage[last], now)
+		mh.AddStorageMetric(storageID, "used", series.Used[last], now)
+		mh.AddStorageMetric(storageID, "avail", series.Avail[last], now)
+		mh.AddStorageMetric(storageID, "total", series.Total[last], now)
+		queueMetric("storage", storageID, "usage", series.Usage[last], now)
+		queueMetric("storage", storageID, "used", series.Used[last], now)
+		queueMetric("storage", storageID, "avail", series.Avail[last], now)
+		queueMetric("storage", storageID, "total", series.Total[last], now)
+	}
 
 	recordNode := func(node models.Node) {
 		if node.ID == "" {
 			return
 		}
 
-		numPoints := len(seedTimestamps)
-		cpuSeries := GenerateSeededSeries(node.CPU*100, numPoints, HashSeed("node", node.ID, "cpu"), 5, 85, styleSpiky)
-		memSeries := GenerateSeededSeries(node.Memory.Usage, numPoints, HashSeed("node", node.ID, "memory"), 10, 85, stylePlateau)
-		diskSeries := GenerateSeededSeries(node.Disk.Usage, numPoints, HashSeed("node", node.ID, "disk"), 5, 95, styleFlat)
+		cpuMin, cpuMax := mock.MetricBounds("node", "cpu")
+		memMin, memMax := mock.MetricBounds("node", "memory")
+		diskMin, diskMax := mock.MetricBounds("node", "disk")
+		cpuSeries := generateSeries("cpu", node.CPU*100, mock.MetricSeed("node", node.ID, "cpu"), cpuMin, cpuMax, styleSpiky)
+		memSeries := generateSeries("memory", node.Memory.Usage, mock.MetricSeed("node", node.ID, "memory"), memMin, memMax, stylePlateau)
+		diskSeries := generateSeries("disk", node.Disk.Usage, mock.MetricSeed("node", node.ID, "disk"), diskMin, diskMax, styleFlat)
 
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
@@ -583,24 +657,27 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		numPoints := len(seedTimestamps)
-		cpuSeries := GenerateSeededSeries(cpuPercent, numPoints, HashSeed(storeType, storeID, "cpu"), 0, 100, styleSpiky)
-		memSeries := GenerateSeededSeries(memPercent, numPoints, HashSeed(storeType, storeID, "memory"), 0, 100, stylePlateau)
+		cpuMin, cpuMax := mock.MetricBounds(storeType, "cpu")
+		memMin, memMax := mock.MetricBounds(storeType, "memory")
+		diskMin, diskMax := mock.MetricBounds(storeType, "disk")
+		readMin, readMax := mock.MetricBounds(storeType, "diskread")
+		writeMin, writeMax := mock.MetricBounds(storeType, "diskwrite")
+		netInMin, netInMax := mock.MetricBounds(storeType, "netin")
+		netOutMin, netOutMax := mock.MetricBounds(storeType, "netout")
+		cpuSeries := generateSeries("cpu", cpuPercent, mock.MetricSeed(storeType, storeID, "cpu"), cpuMin, cpuMax, styleSpiky)
+		memSeries := generateSeries("memory", memPercent, mock.MetricSeed(storeType, storeID, "memory"), memMin, memMax, stylePlateau)
 		var diskSeries []float64
 		if includeDisk {
-			diskSeries = GenerateSeededSeries(diskPercent, numPoints, HashSeed(storeType, storeID, "disk"), 0, 100, styleFlat)
-		}
-		ioMax := func(value float64) float64 {
-			return math.Max(value*1.8, 1)
+			diskSeries = generateSeries("disk", diskPercent, mock.MetricSeed(storeType, storeID, "disk"), diskMin, diskMax, styleFlat)
 		}
 		var diskReadSeries, diskWriteSeries, netInSeries, netOutSeries []float64
 		if includeDiskIO {
-			diskReadSeries = GenerateSeededSeries(diskRead, numPoints, HashSeed(storeType, storeID, "diskread"), 0, ioMax(diskRead), styleSpiky)
-			diskWriteSeries = GenerateSeededSeries(diskWrite, numPoints, HashSeed(storeType, storeID, "diskwrite"), 0, ioMax(diskWrite), styleSpiky)
+			diskReadSeries = generateSeries("diskread", diskRead, mock.MetricSeed(storeType, storeID, "diskread"), readMin, readMax, styleSpiky)
+			diskWriteSeries = generateSeries("diskwrite", diskWrite, mock.MetricSeed(storeType, storeID, "diskwrite"), writeMin, writeMax, styleSpiky)
 		}
 		if includeNetwork {
-			netInSeries = GenerateSeededSeries(netIn, numPoints, HashSeed(storeType, storeID, "netin"), 0, ioMax(netIn), styleSpiky)
-			netOutSeries = GenerateSeededSeries(netOut, numPoints, HashSeed(storeType, storeID, "netout"), 0, ioMax(netOut), styleSpiky)
+			netInSeries = generateSeries("netin", netIn, mock.MetricSeed(storeType, storeID, "netin"), netInMin, netInMax, styleSpiky)
+			netOutSeries = generateSeries("netout", netOut, mock.MetricSeed(storeType, storeID, "netout"), netOutMin, netOutMax, styleSpiky)
 		}
 
 		for i := 0; i < numPoints; i++ {
@@ -776,18 +853,8 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if storage.ID == "" {
 			continue
 		}
-		numPoints := len(seedTimestamps)
-		usageSeries := GenerateSeededSeries(storage.Usage, numPoints, HashSeed("storage", storage.ID, "usage"), 0, 100, styleFlat)
-
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddStorageMetric(storage.ID, "usage", usageSeries[i], ts)
-			queueMetric("storage", storage.ID, "usage", usageSeries[i], ts)
-		}
-
-		// Ensure the latest point lands at "now" for full-range charts.
-		mh.AddStorageMetric(storage.ID, "usage", storage.Usage, now)
-		queueMetric("storage", storage.ID, "usage", storage.Usage, now)
+		_, used, total, _ := normalizedStorageCapacityMetrics(storage.Total, storage.Used, storage.Free, storage.Usage)
+		recordStorageTimeline(storage.ID, used, total)
 		time.Sleep(50 * time.Millisecond) // Reduced from 200ms for faster startup
 	}
 
@@ -801,21 +868,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
-		numPoints := len(seedTimestamps)
-		tempSeries := GenerateSeededSeries(
-			float64(disk.Temperature),
-			numPoints,
-			HashSeed("disk", resourceID, "smart_temp"),
-			25,
-			95,
-			styleFlat,
-		)
+		tempMin, tempMax := mock.MetricBounds("disk", "smart_temp")
+		tempSeries := generateSeries("smart_temp", float64(disk.Temperature), mock.MetricSeed("disk", resourceID, "smart_temp"), tempMin, tempMax, styleFlat)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
+			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
 			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
 		}
 
 		// Ensure the latest point lands at "now" for full-range charts.
+		mh.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
 		queueMetric("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
@@ -832,15 +894,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
-		numPoints := len(seedTimestamps)
-		usageSeries := GenerateSeededSeries(
-			cluster.UsagePercent,
-			numPoints,
-			HashSeed("ceph", cephID, "usage"),
-			0,
-			100,
-			styleFlat,
-		)
+		usageSeries := generateSeries("usage", cluster.UsagePercent, mock.MetricSeed("ceph", cephID, "usage"), 0, 100, styleFlat)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			queueMetric("ceph", cephID, "usage", usageSeries[i], ts)
@@ -956,34 +1010,15 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if pool.TotalBytes > 0 {
 			diskPercent = float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
 		}
-		numPoints := len(seedTimestamps)
-		diskSeries := GenerateSeededSeries(diskPercent, numPoints, HashSeed("pool", pool.Name, "disk"), 0, 100, styleFlat)
-		usedSeries := GenerateSeededSeries(float64(pool.UsedBytes), numPoints, HashSeed("pool", pool.Name, "used"), 0, float64(pool.TotalBytes), styleFlat)
-		availSeries := GenerateSeededSeries(float64(pool.FreeBytes), numPoints, HashSeed("pool", pool.Name, "avail"), 0, float64(pool.TotalBytes), styleFlat)
-		totalSeries := GenerateSeededSeries(float64(pool.TotalBytes), numPoints, HashSeed("pool", pool.Name, "total"), 0, float64(pool.TotalBytes), styleFlat)
+		diskSeries := generateSeries("usage", diskPercent, mock.MetricSeed("pool", pool.Name, "disk"), 0, 100, styleFlat)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddGuestMetric(poolKey, "disk", diskSeries[i], ts)
 			queueMetric("pool", pool.Name, "disk", diskSeries[i], ts)
-			mh.AddStorageMetric(poolKey, "usage", diskSeries[i], ts)
-			mh.AddStorageMetric(poolKey, "used", usedSeries[i], ts)
-			mh.AddStorageMetric(poolKey, "avail", availSeries[i], ts)
-			mh.AddStorageMetric(poolKey, "total", totalSeries[i], ts)
-			queueMetric("storage", poolKey, "usage", diskSeries[i], ts)
-			queueMetric("storage", poolKey, "used", usedSeries[i], ts)
-			queueMetric("storage", poolKey, "avail", availSeries[i], ts)
-			queueMetric("storage", poolKey, "total", totalSeries[i], ts)
 		}
 		mh.AddGuestMetric(poolKey, "disk", diskPercent, now)
 		queueMetric("pool", pool.Name, "disk", diskPercent, now)
-		mh.AddStorageMetric(poolKey, "usage", diskPercent, now)
-		mh.AddStorageMetric(poolKey, "used", float64(pool.UsedBytes), now)
-		mh.AddStorageMetric(poolKey, "avail", float64(pool.FreeBytes), now)
-		mh.AddStorageMetric(poolKey, "total", float64(pool.TotalBytes), now)
-		queueMetric("storage", poolKey, "usage", diskPercent, now)
-		queueMetric("storage", poolKey, "used", float64(pool.UsedBytes), now)
-		queueMetric("storage", poolKey, "avail", float64(pool.FreeBytes), now)
-		queueMetric("storage", poolKey, "total", float64(pool.TotalBytes), now)
+		recordStorageTimeline(poolKey, float64(pool.UsedBytes), float64(pool.TotalBytes))
 	}
 
 	for _, dataset := range trueNASFixtures.Datasets {
@@ -993,34 +1028,34 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if totalBytes > 0 {
 			diskPercent = float64(dataset.UsedBytes) / float64(totalBytes) * 100
 		}
-		numPoints := len(seedTimestamps)
-		diskSeries := GenerateSeededSeries(diskPercent, numPoints, HashSeed("dataset", dataset.Name, "disk"), 0, 100, styleFlat)
-		usedSeries := GenerateSeededSeries(float64(dataset.UsedBytes), numPoints, HashSeed("dataset", dataset.Name, "used"), 0, float64(totalBytes), styleFlat)
-		availSeries := GenerateSeededSeries(float64(dataset.AvailBytes), numPoints, HashSeed("dataset", dataset.Name, "avail"), 0, float64(totalBytes), styleFlat)
-		totalSeries := GenerateSeededSeries(float64(totalBytes), numPoints, HashSeed("dataset", dataset.Name, "total"), 0, float64(totalBytes), styleFlat)
+		diskSeries := generateSeries("usage", diskPercent, mock.MetricSeed("dataset", dataset.Name, "disk"), 0, 100, styleFlat)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddGuestMetric(dsKey, "disk", diskSeries[i], ts)
 			queueMetric("dataset", dataset.Name, "disk", diskSeries[i], ts)
-			mh.AddStorageMetric(dsKey, "usage", diskSeries[i], ts)
-			mh.AddStorageMetric(dsKey, "used", usedSeries[i], ts)
-			mh.AddStorageMetric(dsKey, "avail", availSeries[i], ts)
-			mh.AddStorageMetric(dsKey, "total", totalSeries[i], ts)
-			queueMetric("storage", dsKey, "usage", diskSeries[i], ts)
-			queueMetric("storage", dsKey, "used", usedSeries[i], ts)
-			queueMetric("storage", dsKey, "avail", availSeries[i], ts)
-			queueMetric("storage", dsKey, "total", totalSeries[i], ts)
 		}
 		mh.AddGuestMetric(dsKey, "disk", diskPercent, now)
 		queueMetric("dataset", dataset.Name, "disk", diskPercent, now)
-		mh.AddStorageMetric(dsKey, "usage", diskPercent, now)
-		mh.AddStorageMetric(dsKey, "used", float64(dataset.UsedBytes), now)
-		mh.AddStorageMetric(dsKey, "avail", float64(dataset.AvailBytes), now)
-		mh.AddStorageMetric(dsKey, "total", float64(totalBytes), now)
-		queueMetric("storage", dsKey, "usage", diskPercent, now)
-		queueMetric("storage", dsKey, "used", float64(dataset.UsedBytes), now)
-		queueMetric("storage", dsKey, "avail", float64(dataset.AvailBytes), now)
-		queueMetric("storage", dsKey, "total", float64(totalBytes), now)
+		recordStorageTimeline(dsKey, float64(dataset.UsedBytes), float64(totalBytes))
+	}
+
+	for _, disk := range trueNASFixtures.Disks {
+		if disk.Temperature <= 0 {
+			continue
+		}
+		resourceID := trueNASDiskMetricsResourceID(disk)
+		if resourceID == "" {
+			continue
+		}
+
+		tempSeries := generateSeries("smart_temp", float64(disk.Temperature), mock.MetricSeed("disk", resourceID, "smart_temp"), 25, 95, styleFlat)
+		for i := 0; i < numPoints; i++ {
+			ts := seedTimestamps[i]
+			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
+			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
+		}
+		mh.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
+		queueMetric("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
 	}
 
 	for _, app := range trueNASFixtures.Apps {
@@ -1126,30 +1161,7 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if sourceID == "" {
 			continue
 		}
-		numPoints := len(seedTimestamps)
-		usageSeries := GenerateSeededSeries(usage, numPoints, HashSeed("vmware-datastore", sourceID, "usage"), 0, 100, styleFlat)
-		usedSeries := GenerateSeededSeries(float64(used), numPoints, HashSeed("vmware-datastore", sourceID, "used"), 0, float64(total), styleFlat)
-		availSeries := GenerateSeededSeries(float64(avail), numPoints, HashSeed("vmware-datastore", sourceID, "avail"), 0, float64(total), styleFlat)
-		totalSeries := GenerateSeededSeries(float64(total), numPoints, HashSeed("vmware-datastore", sourceID, "total"), 0, float64(total), styleFlat)
-		for i := 0; i < numPoints; i++ {
-			ts := seedTimestamps[i]
-			mh.AddStorageMetric(sourceID, "usage", usageSeries[i], ts)
-			mh.AddStorageMetric(sourceID, "used", usedSeries[i], ts)
-			mh.AddStorageMetric(sourceID, "avail", availSeries[i], ts)
-			mh.AddStorageMetric(sourceID, "total", totalSeries[i], ts)
-			queueMetric("storage", sourceID, "usage", usageSeries[i], ts)
-			queueMetric("storage", sourceID, "used", usedSeries[i], ts)
-			queueMetric("storage", sourceID, "avail", availSeries[i], ts)
-			queueMetric("storage", sourceID, "total", totalSeries[i], ts)
-		}
-		mh.AddStorageMetric(sourceID, "usage", usage, now)
-		mh.AddStorageMetric(sourceID, "used", float64(used), now)
-		mh.AddStorageMetric(sourceID, "avail", float64(avail), now)
-		mh.AddStorageMetric(sourceID, "total", float64(total), now)
-		queueMetric("storage", sourceID, "usage", usage, now)
-		queueMetric("storage", sourceID, "used", float64(used), now)
-		queueMetric("storage", sourceID, "avail", float64(avail), now)
-		queueMetric("storage", sourceID, "total", float64(total), now)
+		recordStorageTimeline(sourceID, float64(used), float64(total))
 	}
 
 	if ms != nil && len(seedBatch) > 0 {
@@ -1244,6 +1256,21 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 				ms.Write("storage", dsKey, "avail", float64(dataset.AvailBytes), ts)
 				ms.Write("storage", dsKey, "total", float64(totalBytes), ts)
 			}
+		}
+	}
+
+	for _, disk := range snapshot.Disks {
+		if disk.Temperature <= 0 {
+			continue
+		}
+		resourceID := trueNASDiskMetricsResourceID(disk)
+		if resourceID == "" {
+			continue
+		}
+
+		mh.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), ts)
+		if ms != nil {
+			ms.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), ts)
 		}
 	}
 
@@ -1581,13 +1608,17 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 		if storage.ID == "" || storage.Status != "available" {
 			continue
 		}
-		mh.AddStorageMetric(storage.ID, "usage", storage.Usage, ts)
-		mh.AddStorageMetric(storage.ID, "used", float64(storage.Used), ts)
-		mh.AddStorageMetric(storage.ID, "total", float64(storage.Total), ts)
-		mh.AddStorageMetric(storage.ID, "avail", float64(storage.Free), ts)
+		usage, used, total, avail := normalizedStorageCapacityMetrics(storage.Total, storage.Used, storage.Free, storage.Usage)
+		mh.AddStorageMetric(storage.ID, "usage", usage, ts)
+		mh.AddStorageMetric(storage.ID, "used", used, ts)
+		mh.AddStorageMetric(storage.ID, "total", total, ts)
+		mh.AddStorageMetric(storage.ID, "avail", avail, ts)
 
 		if ms != nil {
-			ms.Write("storage", storage.ID, "usage", storage.Usage, ts)
+			ms.Write("storage", storage.ID, "usage", usage, ts)
+			ms.Write("storage", storage.ID, "used", used, ts)
+			ms.Write("storage", storage.ID, "total", total, ts)
+			ms.Write("storage", storage.ID, "avail", avail, ts)
 		}
 	}
 
@@ -1600,6 +1631,7 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			continue
 		}
 
+		mh.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), ts)
 		if ms != nil {
 			ms.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), ts)
 		}
@@ -1723,6 +1755,44 @@ func diskMetricsResourceID(disk models.PhysicalDisk) string {
 	return resourceID
 }
 
+func normalizedStorageCapacityMetrics(total, used, free int64, usage float64) (float64, float64, float64, float64) {
+	totalValue := float64(total)
+	usedValue := float64(used)
+	freeValue := float64(free)
+
+	if totalValue > 0 {
+		if free >= 0 {
+			derivedUsed := float64(total - free)
+			if derivedUsed >= 0 && derivedUsed <= totalValue {
+				usedValue = derivedUsed
+				freeValue = totalValue - usedValue
+			}
+		} else {
+			if usedValue < 0 {
+				usedValue = 0
+			}
+			if usedValue > totalValue {
+				usedValue = totalValue
+			}
+			freeValue = totalValue - usedValue
+		}
+		usage = (usedValue / totalValue) * 100
+	}
+
+	return clampFloat(usage, 0, 100), usedValue, totalValue, math.Max(0, freeValue)
+}
+
+func trueNASDiskMetricsResourceID(disk truenas.Disk) string {
+	resourceID := strings.TrimSpace(disk.Serial)
+	if resourceID == "" {
+		resourceID = strings.TrimSpace(disk.ID)
+	}
+	if resourceID == "" {
+		resourceID = strings.TrimSpace(disk.Name)
+	}
+	return resourceID
+}
+
 func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	if ctx == nil || m == nil {
 		log.Debug().Msg("mock metrics sampler: nil context or monitor")
@@ -1768,7 +1838,6 @@ func (m *Monitor) startMockMetricsSampler(ctx context.Context) {
 	// Keep mock trend generation in-memory only so production history in the
 	// persistent metrics store remains untouched while mock mode is active.
 	seedMockMetricsHistory(m.metricsHistory, nil, graph, time.Now(), seedDuration, cfg.SampleInterval)
-	recordMockStateToMetricsHistory(m.metricsHistory, nil, graph, time.Now())
 
 	m.mockMetricsWg.Add(1)
 	go func() {

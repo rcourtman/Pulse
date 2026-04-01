@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"math"
 	"testing"
 	"time"
 
@@ -101,5 +102,46 @@ func TestFixtureGraphUpdateMetricsKeepsPlatformFixtureFreshnessCurrent(t *testin
 	}
 	if got := graph.PlatformFixtures.VMware.Hosts[0].RecentEvents[0].CreatedAt; got.Before(later.Add(-2*time.Hour)) || got.After(later) {
 		t.Fatalf("expected VMware event timestamp to remain fresh near %s, got %s", later, got)
+	}
+}
+
+func TestBuildFixtureGraphRefreshesPlatformFixtureMetricsFromCanonicalModel(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 17, 30, 45, 0, time.UTC)
+
+	graph := buildFixtureGraph(DefaultConfig, now)
+
+	system := graph.PlatformFixtures.TrueNAS.System
+	if got, want := system.CPUPercent, SampleMetric("agent", system.Hostname, "cpu", now); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected refreshed TrueNAS system cpu %.6f, got %.6f", want, got)
+	}
+
+	app := graph.PlatformFixtures.TrueNAS.Apps[1]
+	if app.Stats == nil {
+		t.Fatal("expected refreshed TrueNAS app stats")
+	}
+	if got, want := app.Stats.CPUPercent, SampleMetric("dockerContainer", app.ID, "cpu", now); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected refreshed TrueNAS app cpu %.6f, got %.6f", want, got)
+	}
+	if got, want := app.Stats.MemoryBytes, bytesFromPercent(system.MemoryTotalBytes, SampleMetric("dockerContainer", app.ID, "memory", now)); got != want {
+		t.Fatalf("expected refreshed TrueNAS app memory bytes %d, got %d", want, got)
+	}
+
+	disk := graph.PlatformFixtures.TrueNAS.Disks[0]
+	if got, want := disk.Temperature, int(math.Round(SampleMetric("disk", disk.Serial, "smart_temp", now))); got != want {
+		t.Fatalf("expected refreshed TrueNAS disk temperature %d, got %d", want, got)
+	}
+
+	host := graph.PlatformFixtures.VMware.Hosts[0]
+	if host.Metrics == nil || host.Metrics.CPUPercent == nil {
+		t.Fatal("expected refreshed VMware host metrics")
+	}
+	if got, want := *host.Metrics.CPUPercent, SampleMetric("agent", "vc-mock-1:host:host-101", "cpu", now); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected refreshed VMware host cpu %.6f, got %.6f", want, got)
+	}
+
+	datastore := graph.PlatformFixtures.VMware.Datastores[0]
+	wantFree := datastore.Capacity - bytesFromPercent(datastore.Capacity, SampleMetric("storage", "vc-mock-1:datastore:"+datastore.Datastore, "usage", now))
+	if datastore.FreeSpace != wantFree {
+		t.Fatalf("expected refreshed VMware datastore free space %d, got %d", wantFree, datastore.FreeSpace)
 	}
 }

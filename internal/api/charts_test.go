@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 )
 
 // TestChartResponseTypes verifies the ChartResponse struct fields
@@ -196,6 +197,31 @@ func TestMetricPointStructure(t *testing.T) {
 	}
 }
 
+func TestConvertMetricsForChart_PreservesMillisecondTimestamps(t *testing.T) {
+	t.Parallel()
+
+	oldest := time.Now().UnixMilli()
+	ts := time.Date(2026, time.March, 31, 12, 0, 0, 789_000_000, time.UTC)
+
+	converted := convertMetricsForChart(
+		map[string][]monitoring.MetricPoint{
+			"memory": {
+				{Timestamp: ts, Value: 42},
+			},
+		},
+		&oldest,
+		180,
+	)
+
+	points := converted["memory"]
+	if len(points) != 1 {
+		t.Fatalf("expected 1 converted point, got %d", len(points))
+	}
+	if points[0].Timestamp != ts.UnixMilli() {
+		t.Fatalf("expected timestamp %d, got %d", ts.UnixMilli(), points[0].Timestamp)
+	}
+}
+
 func TestTimeRangeConversion(t *testing.T) {
 	t.Parallel()
 
@@ -318,12 +344,21 @@ func TestNormalizeInfrastructureSummaryMetricPointSeriesAveragesPlateauMetrics(t
 	durationMillis := duration.Milliseconds()
 	firstBucketEnd := windowStart.UnixMilli() + durationMillis/int64(bucketCount)
 
-	points := []MetricPoint{
-		{Timestamp: windowStart.UnixMilli() + 1_000, Value: 20},
-		{Timestamp: windowStart.UnixMilli() + 30_000, Value: 40},
-		{Timestamp: firstBucketEnd - 1_000, Value: 80},
-		{Timestamp: now.UnixMilli(), Value: 55},
+	points := make([]MetricPoint, 0, bucketCount+2)
+	points = append(points,
+		MetricPoint{Timestamp: windowStart.UnixMilli() + 1_000, Value: 20},
+		MetricPoint{Timestamp: windowStart.UnixMilli() + 30_000, Value: 40},
+		MetricPoint{Timestamp: firstBucketEnd - 1_000, Value: 80},
+	)
+	for bucketIndex := 1; bucketIndex < bucketCount-1; bucketIndex++ {
+		bucketStart := windowStart.UnixMilli() + (int64(bucketIndex)*durationMillis)/int64(bucketCount)
+		bucketEnd := windowStart.UnixMilli() + (int64(bucketIndex+1)*durationMillis)/int64(bucketCount)
+		points = append(points, MetricPoint{
+			Timestamp: bucketStart + (bucketEnd-bucketStart)/2,
+			Value:     float64(20 + bucketIndex),
+		})
 	}
+	points = append(points, MetricPoint{Timestamp: now.UnixMilli(), Value: 55})
 
 	normalized := normalizeInfrastructureSummaryMetricPointSeries(points, "memory", duration, now.UnixMilli())
 	if len(normalized) < 2 {

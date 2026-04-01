@@ -10,6 +10,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/mockmodel"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
 
@@ -376,55 +377,15 @@ func buildFixtureState(config MockConfig) models.StateSnapshot {
 	// Generate VMs and containers for each node
 	vmidCounter := 100
 	for nodeIdx, node := range data.Nodes {
-		// Determine node specialty for more realistic distribution
-		nodeRole := "mixed"
-		if nodeIdx > 0 {
-			roleRand := rand.Float64()
-			if roleRand < 0.3 {
-				nodeRole = "vm-heavy" // 30% chance of being VM-focused
-			} else if roleRand < 0.5 {
-				nodeRole = "container-heavy" // 20% chance of being container-focused
-			} else if roleRand < 0.6 {
-				nodeRole = "light" // 10% chance of having few guests
-			}
-			// 40% remain mixed
-		}
-
-		// Calculate VM count based on node role
-		var vmCount, lxcCount int
-
-		switch nodeRole {
-		case "vm-heavy":
-			vmCount = config.VMsPerNode
-			if config.VMsPerNode > 0 {
-				vmCount += rand.Intn(config.VMsPerNode) // 100-200% of base
-			}
-
-			lxcCount = config.LXCsPerNode / 2
-			if lxcCount > 0 {
-				lxcCount += rand.Intn(lxcCount) // 50-75% of base
-			}
-		case "container-heavy":
-			vmCount = rand.Intn(config.VMsPerNode/2 + 1) // 0-50% of base
-			lxcCount = config.LXCsPerNode * 2
-			if config.LXCsPerNode > 0 {
-				lxcCount += rand.Intn(config.LXCsPerNode) // 200-300% of base
-			}
-		case "light":
-			vmCount = rand.Intn(config.VMsPerNode/2 + 1)   // 0-50% of base
-			lxcCount = rand.Intn(config.LXCsPerNode/2 + 1) // 0-50% of base
-		default: // mixed
-			// Add some variation
-			vmCount = config.VMsPerNode + rand.Intn(5) - 2   // +/- 2
-			lxcCount = config.LXCsPerNode + rand.Intn(7) - 3 // +/- 3
-		}
+		nodeRole := deterministicNodeRole(node, nodeIdx)
+		vmCount, lxcCount := computeGuestCountsForNode(config, nodeRole, node)
 
 		// Ensure at least some activity on most nodes
 		if nodeIdx < 3 && vmCount == 0 && lxcCount == 0 {
-			if rand.Float64() < 0.5 {
-				vmCount = 1 + rand.Intn(2)
+			if mockStableChoice(2, node.ID, node.Instance, node.Name, "minimum-activity") == 0 {
+				vmCount = 1 + mockStableChoice(2, node.ID, "minimum-vm-count")
 			} else {
-				lxcCount = 2 + rand.Intn(3)
+				lxcCount = 2 + mockStableChoice(3, node.ID, "minimum-lxc-count")
 			}
 		}
 
@@ -583,6 +544,103 @@ func randIntnSafe(n int) int {
 	return rand.Intn(n)
 }
 
+func mockStableChoice(length int, parts ...string) int {
+	if length <= 0 {
+		return 0
+	}
+	return int(mockStableHash64(parts...) % uint64(length))
+}
+
+func mockStableHexString(n int, parts ...string) string {
+	if n <= 0 {
+		return ""
+	}
+
+	var out strings.Builder
+	for counter := 0; out.Len() < n; counter++ {
+		token := fmt.Sprintf("%016x", mockStableHash64(append(parts, fmt.Sprintf("%d", counter))...))
+		out.WriteString(token)
+	}
+	return out.String()[:n]
+}
+
+func mockStableDecimalString(width int, parts ...string) string {
+	if width <= 0 {
+		return fmt.Sprintf("%d", mockStableHash64(parts...))
+	}
+
+	modulus := uint64(1)
+	for i := 0; i < width; i++ {
+		modulus *= 10
+	}
+	return fmt.Sprintf("%0*d", width, mockStableHash64(parts...)%modulus)
+}
+
+func mockHostDiskMetricID(hostID string, diskIndex int) string {
+	return fmt.Sprintf("%s-disk-%d", strings.TrimSpace(hostID), diskIndex)
+}
+
+func deterministicNodeRole(node models.Node, nodeIdx int) string {
+	if nodeIdx == 0 {
+		return "mixed"
+	}
+
+	roleRoll := mockStableChoice(10, strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name), "node-role")
+	switch {
+	case roleRoll < 3:
+		return "vm-heavy"
+	case roleRoll < 5:
+		return "container-heavy"
+	case roleRoll == 5:
+		return "light"
+	default:
+		return "mixed"
+	}
+}
+
+func computeGuestCountsForNode(config MockConfig, nodeRole string, node models.Node) (int, int) {
+	vmBase := config.VMsPerNode
+	if vmBase < 0 {
+		vmBase = 0
+	}
+	lxcBase := config.LXCsPerNode
+	if lxcBase < 0 {
+		lxcBase = 0
+	}
+
+	stableN := func(max int, parts ...string) int {
+		if max <= 0 {
+			return 0
+		}
+		return int(mockStableHash64(append([]string{strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name)}, parts...)...) % uint64(max))
+	}
+
+	var vmCount, lxcCount int
+	switch nodeRole {
+	case "vm-heavy":
+		vmCount = vmBase + stableN(vmBase+1, "vm-heavy", "vm")
+		lxcHalf := lxcBase / 2
+		lxcCount = lxcHalf + stableN(lxcHalf+1, "vm-heavy", "lxc")
+	case "container-heavy":
+		vmCount = stableN(vmBase/2+1, "container-heavy", "vm")
+		lxcCount = lxcBase*2 + stableN(lxcBase+1, "container-heavy", "lxc")
+	case "light":
+		vmCount = stableN(vmBase/2+1, "light", "vm")
+		lxcCount = stableN(lxcBase/2+1, "light", "lxc")
+	default:
+		vmCount = vmBase + stableN(5, "mixed", "vm") - 2
+		lxcCount = lxcBase + stableN(7, "mixed", "lxc") - 3
+	}
+
+	if vmCount < 0 {
+		vmCount = 0
+	}
+	if lxcCount < 0 {
+		lxcCount = 0
+	}
+	return vmCount, lxcCount
+}
+
 func generateReplicationJobs(nodes []models.Node, vms []models.VM) []models.ReplicationJob {
 	if len(nodes) == 0 || len(vms) == 0 {
 		return []models.ReplicationJob{}
@@ -710,6 +768,9 @@ func generateNodes(config MockConfig) []models.Node {
 		node.ClusterName = "mock-cluster"
 		// ID format matches real system: instance-nodename
 		node.ID = fmt.Sprintf("%s-%s", node.Instance, nodeName)
+		node.CPU = sampleNaturalMetric("node", node.ID, "cpu", 0.05, 0.85, 1.0, time.Now())
+		applyMemoryUsage(&node.Memory, sampleNaturalMetric("node", node.ID, "memory", 10, 85, 0.5, time.Now()))
+		applyDiskUsage(&node.Disk, sampleNaturalMetric("node", node.ID, "disk", 10, 90, 0.12, time.Now()))
 
 		node.ConnectionHealth = "healthy"
 
@@ -735,6 +796,9 @@ func generateNodes(config MockConfig) []models.Node {
 		node.ConnectionHealth = "healthy" // Standalone nodes are healthy if online
 		// ID format matches real system: instance-nodename (same when standalone)
 		node.ID = fmt.Sprintf("%s-%s", node.Instance, nodeName)
+		node.CPU = sampleNaturalMetric("node", node.ID, "cpu", 0.05, 0.85, 1.0, time.Now())
+		applyMemoryUsage(&node.Memory, sampleNaturalMetric("node", node.ID, "memory", 10, 85, 0.5, time.Now()))
+		applyDiskUsage(&node.Disk, sampleNaturalMetric("node", node.ID, "disk", 10, 90, 0.12, time.Now()))
 		nodes = append(nodes, node)
 	}
 
@@ -971,7 +1035,7 @@ func generateRealisticIO(ioType string) int64 {
 }
 
 func generateVM(nodeName string, instance string, vmid int, config MockConfig) models.VM {
-	name := generateGuestName("vm")
+	name := generateGuestName("vm", fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid))
 	status := "running"
 	if rand.Float64() < config.StoppedPercent {
 		status = "stopped"
@@ -1059,6 +1123,14 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	} else {
 		vmID = fmt.Sprintf("%s-%s-%d", instance, nodeName, vmid)
 	}
+	if status == "running" {
+		now := time.Now()
+		cpu = SampleMetric("vm", vmID, "cpu", now) / 100.0
+		applyMemoryUsage(&mem, SampleMetric("vm", vmID, "memory", now))
+		if aggregatedDisk.Usage >= 0 {
+			applyDiskUsage(&aggregatedDisk, SampleMetric("vm", vmID, "disk", now))
+		}
+	}
 
 	osName, osVersion := generateGuestOSMetadata()
 	ipAddresses, networkIfaces := generateGuestNetworkInfo()
@@ -1076,10 +1148,10 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 		Disk:              aggregatedDisk,
 		Disks:             virtualDisks,
 		DiskStatusReason:  diskStatusReason,
-		DiskRead:          generateRealisticIO("disk-read"),
-		DiskWrite:         generateRealisticIO("disk-write"),
-		NetworkIn:         generateRealisticIO("network-in"),
-		NetworkOut:        generateRealisticIO("network-out"),
+		DiskRead:          SampleMetricInt("vm", vmID, "diskread", time.Now()),
+		DiskWrite:         SampleMetricInt("vm", vmID, "diskwrite", time.Now()),
+		NetworkIn:         SampleMetricInt("vm", vmID, "netin", time.Now()),
+		NetworkOut:        SampleMetricInt("vm", vmID, "netout", time.Now()),
 		Uptime:            uptime,
 		ID:                vmID,
 		Tags:              generateTags(),
@@ -1492,7 +1564,7 @@ func updateMockKubernetesPodUsage(
 	baseMemory := 9.0 + float64(mockStableHash64(seedID, "mem-base")%20)
 	burstMemory := 14.0 + float64(mockStableHash64(seedID, "mem-burst")%36)
 	targetMemory := (baseMemory + activity*burstMemory) * (0.92 + ownerScale*0.12)
-	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.22), 3, 97)
+	pod.UsageMemoryPercent = clampFloat(smoothMetricToward(pod.UsageMemoryPercent, targetMemory, 0.08), 3, 97)
 	pod.UsageMemoryBytes = int64(float64(allocMemory) * (pod.UsageMemoryPercent / 100.0))
 
 	baseNetIn := float64((24 + int(mockStableHash64(seedID, "netin-base")%180)) * 1024)
@@ -1712,6 +1784,7 @@ func smoothMetricToward(current, target, weight float64) float64 {
 	if weight <= 0 || weight > 1 {
 		weight = 0.25
 	}
+	weight = normalizeMockBlendWeight(weight, updateInterval, time.Minute)
 	if current <= 0 {
 		current = target * (0.68 + rand.Float64()*0.22)
 	}
@@ -1753,7 +1826,7 @@ func generateKubernetesNodes(clusterID string, count int) []models.KubernetesNod
 		}
 
 		nodes = append(nodes, models.KubernetesNode{
-			UID:                     fmt.Sprintf("%s-%s", name, randomHexString(8)),
+			UID:                     fmt.Sprintf("%s-%s", name, mockStableHexString(8, clusterID, name, "k8s-node-uid")),
 			Name:                    name,
 			Ready:                   ready,
 			Unschedulable:           unschedulable,
@@ -1792,7 +1865,7 @@ func generateKubernetesPods(clusterID string, nodes []models.KubernetesNode, cou
 	for i := 0; i < count; i++ {
 		namespace := k8sNamespaces[rand.Intn(len(k8sNamespaces))]
 		prefix := k8sPodPrefixes[rand.Intn(len(k8sPodPrefixes))]
-		name := fmt.Sprintf("%s-%s-%d", prefix, randomHexString(5), i+1)
+		name := fmt.Sprintf("%s-%s-%d", prefix, mockStableHexString(5, clusterID, namespace, prefix, fmt.Sprintf("%d", i), "k8s-pod-name"), i+1)
 		nodeName := ""
 		if len(nodes) > 0 && rand.Float64() > 0.08 {
 			nodeName = nodes[rand.Intn(len(nodes))].Name
@@ -1863,7 +1936,7 @@ func generateKubernetesPods(clusterID string, nodes []models.KubernetesNode, cou
 		}
 
 		ownerKind := []string{"Deployment", "StatefulSet", "DaemonSet", "Job"}[rand.Intn(4)]
-		ownerName := fmt.Sprintf("%s-%s", strings.ToLower(prefix), randomHexString(4))
+		ownerName := fmt.Sprintf("%s-%s", strings.ToLower(prefix), mockStableHexString(4, clusterID, namespace, prefix, fmt.Sprintf("%d", i), "k8s-pod-owner"))
 
 		labels := map[string]string{
 			"app.kubernetes.io/name":       prefix,
@@ -1872,7 +1945,7 @@ func generateKubernetesPods(clusterID string, nodes []models.KubernetesNode, cou
 		}
 
 		pod := models.KubernetesPod{
-			UID:        fmt.Sprintf("%s-%s", name, randomHexString(10)),
+			UID:        fmt.Sprintf("%s-%s", name, mockStableHexString(10, clusterID, namespace, name, fmt.Sprintf("%d", i), "k8s-pod-uid")),
 			Name:       name,
 			Namespace:  namespace,
 			NodeName:   nodeName,
@@ -1908,7 +1981,7 @@ func generateKubernetesDeployments(clusterID string, count int) []models.Kuberne
 	for i := 0; i < count; i++ {
 		namespace := k8sNamespaces[rand.Intn(len(k8sNamespaces))]
 		prefix := k8sPodPrefixes[rand.Intn(len(k8sPodPrefixes))]
-		name := fmt.Sprintf("%s-%s", prefix, randomHexString(4))
+		name := fmt.Sprintf("%s-%s", prefix, mockStableHexString(4, clusterID, namespace, prefix, fmt.Sprintf("%d", i), "k8s-deployment-name"))
 
 		desired := int32(1 + rand.Intn(6))
 		updated := desired
@@ -1923,7 +1996,7 @@ func generateKubernetesDeployments(clusterID string, count int) []models.Kuberne
 		}
 
 		deployments = append(deployments, models.KubernetesDeployment{
-			UID:               fmt.Sprintf("%s-%s", name, randomHexString(10)),
+			UID:               fmt.Sprintf("%s-%s", name, mockStableHexString(10, clusterID, namespace, name, fmt.Sprintf("%d", i), "k8s-deployment-uid")),
 			Name:              name,
 			Namespace:         namespace,
 			DesiredReplicas:   desired,
@@ -2071,14 +2144,14 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			}
 		}
 
-		cpuUsage := clampFloat(10+rand.Float64()*70, 4, 98)
+		cpuUsage := SampleMetric("dockerHost", hostID, "cpu", now)
 		loadAverage := []float64{
 			clampFloat(rand.Float64()*float64(cpus), 0, float64(cpus)+1),
 			clampFloat(rand.Float64()*float64(cpus), 0, float64(cpus)+1),
 			clampFloat(rand.Float64()*float64(cpus), 0, float64(cpus)+1),
 		}
 
-		memUsageRatio := clampFloat(0.3+rand.Float64()*0.55, 0.05, 0.98)
+		memUsageRatio := SampleMetric("dockerHost", hostID, "memory", now) / 100.0
 		usedMemoryBytes := int64(float64(totalMemoryBytes) * memUsageRatio)
 		if usedMemoryBytes > totalMemoryBytes {
 			usedMemoryBytes = totalMemoryBytes
@@ -2099,10 +2172,12 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			diskUsed = diskTotal
 		}
 		diskFree := diskTotal - diskUsed
-		diskUsage := 0.0
-		if diskTotal > 0 {
-			diskUsage = clampFloat((float64(diskUsed)/float64(diskTotal))*100, 0, 100)
+		diskUsage := SampleMetric("dockerHost", mockHostDiskMetricID(hostID, 0), "disk", now)
+		diskUsed = int64(float64(diskTotal) * (diskUsage / 100.0))
+		if diskUsed > diskTotal {
+			diskUsed = diskTotal
 		}
+		diskFree = diskTotal - diskUsed
 
 		disks := []models.Disk{
 			{
@@ -2132,7 +2207,8 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 				TXBytes:   uint64(rand.Int63n(1_500_000_000) + 150_000_000),
 			})
 		}
-		temperature := generateMockTemperature(cpuUsage)
+		temperatureValue := SampleMetric("dockerHost", hostID, "temperature", now)
+		temperature := &temperatureValue
 		if status == "offline" {
 			temperature = nil
 		}
@@ -2166,10 +2242,10 @@ func generateDockerHosts(config MockConfig) []models.DockerHost {
 			Tasks:             tasks,
 			Swarm:             swarmInfo,
 			Temperature:       temperature,
-			NetInRate:         generateMockHostRate("network-in"),
-			NetOutRate:        generateMockHostRate("network-out"),
-			DiskReadRate:      generateMockHostRate("disk-read"),
-			DiskWriteRate:     generateMockHostRate("disk-write"),
+			NetInRate:         SampleMetric("dockerHost", hostID, "netin", now),
+			NetOutRate:        SampleMetric("dockerHost", hostID, "netout", now),
+			DiskReadRate:      SampleMetric("dockerHost", hostID, "diskread", now),
+			DiskWriteRate:     SampleMetric("dockerHost", hostID, "diskwrite", now),
 		}
 		if status == "offline" {
 			host.NetInRate = 0
@@ -2210,19 +2286,20 @@ func generateHosts(config MockConfig) []models.Host {
 		}
 
 		displayName := strings.ToUpper(hostname[:1]) + hostname[1:]
+		hostID := fmt.Sprintf("host-%s-%d", profile.Platform, i+1)
 
 		cpuCount := 4 + rand.Intn(28) // 4-32 cores
 		if profile.Platform == "macos" {
 			cpuCount = 8 + rand.Intn(10)
 		}
-		cpuUsage := clampFloat(10+rand.Float64()*55, 4, 94)
+		cpuUsage := SampleMetric("agent", hostID, "cpu", now)
 
 		memTotalGiB := 16 + rand.Intn(192)
 		if profile.Platform == "macos" {
 			memTotalGiB = 16 + rand.Intn(64)
 		}
 		memTotal := int64(memTotalGiB) << 30
-		memUsage := clampFloat(30+rand.Float64()*50, 12, 96)
+		memUsage := SampleMetric("agent", hostID, "memory", now)
 		memUsed := int64(float64(memTotal) * (memUsage / 100.0))
 		memFree := memTotal - memUsed
 
@@ -2230,7 +2307,7 @@ func generateHosts(config MockConfig) []models.Host {
 		swapUsed := int64(float64(swapTotal) * rand.Float64())
 
 		rootDiskTotal := int64(120+rand.Intn(680)) << 30
-		rootDiskUsage := clampFloat(25+rand.Float64()*55, 8, 95)
+		rootDiskUsage := SampleMetric("agent", mockHostDiskMetricID(hostID, 0), "disk", now)
 		rootDiskUsed := int64(float64(rootDiskTotal) * (rootDiskUsage / 100.0))
 		rootDisk := models.Disk{
 			Total:      rootDiskTotal,
@@ -2254,7 +2331,7 @@ func generateHosts(config MockConfig) []models.Host {
 		disks := []models.Disk{rootDisk}
 		if rand.Float64() < 0.70 {
 			dataDiskTotal := int64(200+rand.Intn(1400)) << 30
-			dataDiskUsage := clampFloat(35+rand.Float64()*45, 6, 97)
+			dataDiskUsage := SampleMetric("agent", mockHostDiskMetricID(hostID, 1), "disk", now)
 			dataDiskUsed := int64(float64(dataDiskTotal) * (dataDiskUsage / 100.0))
 			mount := "/data"
 			device := "/dev/sdb1"
@@ -2281,7 +2358,7 @@ func generateHosts(config MockConfig) []models.Host {
 		}
 		if len(disks) > 1 && rand.Float64() < 0.35 {
 			backupDiskTotal := int64(500+rand.Intn(3000)) << 30
-			backupDiskUsage := clampFloat(10+rand.Float64()*40, 3, 70)
+			backupDiskUsage := SampleMetric("agent", mockHostDiskMetricID(hostID, 2), "disk", now)
 			backupDiskUsed := int64(float64(backupDiskTotal) * (backupDiskUsage / 100.0))
 			mount := "/backup"
 			device := "/dev/sdc1"
@@ -2328,11 +2405,11 @@ func generateHosts(config MockConfig) []models.Host {
 		sensors := models.HostSensorSummary{}
 		if profile.Platform == "linux" || profile.Platform == "macos" {
 			sensors.TemperatureCelsius = map[string]float64{
-				"cpu.package": clampFloat(38+rand.Float64()*22, 30, 85),
+				"cpu.package": SampleMetric("agent", hostID, "temperature", now),
 			}
 			if rand.Float64() < 0.4 {
 				sensors.Additional = map[string]float64{
-					"nvme0": clampFloat(40+rand.Float64()*20, 30, 90),
+					"nvme0": SampleMetric("agent", hostID+":nvme0", "temperature", now),
 				}
 			}
 		}
@@ -2375,7 +2452,7 @@ func generateHosts(config MockConfig) []models.Host {
 		}
 
 		host := models.Host{
-			ID:                fmt.Sprintf("host-%s-%d", profile.Platform, i+1),
+			ID:                hostID,
 			Hostname:          hostname,
 			DisplayName:       displayName,
 			Platform:          profile.Platform,
@@ -2400,10 +2477,10 @@ func generateHosts(config MockConfig) []models.Host {
 			TokenName:         tokenName,
 			TokenHint:         tokenHint,
 			TokenLastUsedAt:   tokenLastUsed,
-			NetInRate:         generateMockHostRate("network-in"),
-			NetOutRate:        generateMockHostRate("network-out"),
-			DiskReadRate:      generateMockHostRate("disk-read"),
-			DiskWriteRate:     generateMockHostRate("disk-write"),
+			NetInRate:         SampleMetric("agent", hostID, "netin", now),
+			NetOutRate:        SampleMetric("agent", hostID, "netout", now),
+			DiskReadRate:      SampleMetric("agent", hostID, "diskread", now),
+			DiskWriteRate:     SampleMetric("agent", hostID, "diskwrite", now),
 		}
 		if status == "offline" {
 			host.NetInRate = 0
@@ -2442,16 +2519,16 @@ func ensureMockNodeHostLinks(data *models.StateSnapshot) {
 			continue
 		}
 		if host.NetInRate <= 0 {
-			host.NetInRate = generateMockHostRate("network-in")
+			host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
 		}
 		if host.NetOutRate <= 0 {
-			host.NetOutRate = generateMockHostRate("network-out")
+			host.NetOutRate = SampleMetric("agent", host.ID, "netout", now)
 		}
 		if host.DiskReadRate <= 0 {
-			host.DiskReadRate = generateMockHostRate("disk-read")
+			host.DiskReadRate = SampleMetric("agent", host.ID, "diskread", now)
 		}
 		if host.DiskWriteRate <= 0 {
-			host.DiskWriteRate = generateMockHostRate("disk-write")
+			host.DiskWriteRate = SampleMetric("agent", host.ID, "diskwrite", now)
 		}
 	}
 
@@ -2572,7 +2649,7 @@ func buildMockLinkedHostFromKubernetesNode(
 	}
 
 	diskTotal := int64(128+(mockStableHash64(cluster.ID, node.Name, "disk-total")%1024)) * 1024 * 1024 * 1024
-	diskUsage := clampFloat(24+float64(mockStableHash64(cluster.ID, node.Name, "disk-usage")%44), 8, 92)
+	diskUsage := SampleMetric("agent", mockHostDiskMetricID(hostID, 0), "disk", now)
 	diskUsed := int64(float64(diskTotal) * (diskUsage / 100.0))
 	diskFree := diskTotal - diskUsed
 	if diskFree < 0 {
@@ -2580,10 +2657,8 @@ func buildMockLinkedHostFromKubernetesNode(
 	}
 
 	sensors := models.HostSensorSummary{}
-	if temp := generateMockTemperature(cpuUsage); temp != nil {
-		sensors.TemperatureCelsius = map[string]float64{
-			"cpu_package": *temp,
-		}
+	sensors.TemperatureCelsius = map[string]float64{
+		"cpu_package": SampleMetric("agent", hostID, "temperature", now),
 	}
 
 	tags := []string{"mock", "kubernetes-node"}
@@ -2649,7 +2724,10 @@ func buildMockLinkedHostFromKubernetesNode(
 		MachineID:       randomHexString(32),
 		Tags:            tags,
 	}
-	updateMockHostRates(&host)
+	host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
+	host.NetOutRate = SampleMetric("agent", host.ID, "netout", now)
+	host.DiskReadRate = SampleMetric("agent", host.ID, "diskread", now)
+	host.DiskWriteRate = SampleMetric("agent", host.ID, "diskwrite", now)
 	if status == "offline" {
 		host.NetInRate = 0
 		host.NetOutRate = 0
@@ -2722,12 +2800,10 @@ func syncMockKubernetesNodeHosts(data *models.StateSnapshot) {
 				}
 			}
 
-			if temp := generateMockTemperature(host.CPUUsage); temp != nil {
-				if host.Sensors.TemperatureCelsius == nil {
-					host.Sensors.TemperatureCelsius = make(map[string]float64)
-				}
-				host.Sensors.TemperatureCelsius["cpu_package"] = *temp
+			if host.Sensors.TemperatureCelsius == nil {
+				host.Sensors.TemperatureCelsius = make(map[string]float64)
 			}
+			host.Sensors.TemperatureCelsius["cpu_package"] = SampleMetric("agent", host.ID, "temperature", time.Now())
 		}
 	}
 }
@@ -2792,7 +2868,7 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 	// Add a data partition for variety
 	if hostIndex%2 == 0 {
 		dataDiskTotal := int64(500+rand.Intn(1500)) << 30
-		dataDiskUsage := clampFloat(20+rand.Float64()*60, 5, 95)
+		dataDiskUsage := SampleMetric("agent", mockHostDiskMetricID(hostID, 1), "disk", now)
 		dataDiskUsed := int64(float64(dataDiskTotal) * (dataDiskUsage / 100.0))
 		disks = append(disks, models.Disk{
 			Total:      dataDiskTotal,
@@ -2806,7 +2882,7 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 	}
 	if hostIndex%3 == 0 {
 		logDiskTotal := int64(100+rand.Intn(400)) << 30
-		logDiskUsage := clampFloat(30+rand.Float64()*50, 10, 90)
+		logDiskUsage := SampleMetric("agent", mockHostDiskMetricID(hostID, 2), "disk", now)
 		logDiskUsed := int64(float64(logDiskTotal) * (logDiskUsage / 100.0))
 		disks = append(disks, models.Disk{
 			Total:      logDiskTotal,
@@ -2870,7 +2946,10 @@ func buildMockLinkedHostFromNode(node models.Node, hostID string, hostIndex int,
 		LinkedNodeID:    node.ID,
 	}
 
-	updateMockHostRates(&host)
+	host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
+	host.NetOutRate = SampleMetric("agent", host.ID, "netout", now)
+	host.DiskReadRate = SampleMetric("agent", host.ID, "diskread", now)
+	host.DiskWriteRate = SampleMetric("agent", host.ID, "diskwrite", now)
 	if status == "offline" {
 		host.NetInRate = 0
 		host.NetOutRate = 0
@@ -3009,7 +3088,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 	if base < 1 {
 		base = 6
 	}
-	variation := rand.Intn(5) - 2
+	variation := mockStableChoice(5, hostName, fmt.Sprintf("%d", hostIdx), "docker-container-count") - 2
 	count := base + variation
 	if count < 3 {
 		count = 3
@@ -3033,7 +3112,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 
 		podCount := maxPods
 		if maxPods > 1 {
-			podCount = 1 + rand.Intn(maxPods)
+			podCount = 1 + mockStableChoice(maxPods, hostName, fmt.Sprintf("%d", hostIdx), "docker-pod-count")
 		}
 
 		podDefs = make([]podDefinition, podCount)
@@ -3059,10 +3138,10 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 
 			podDefs[idx] = podDefinition{
 				Name:              fmt.Sprintf("%s-pod-%d", baseProject, idx+1),
-				ID:                randomHexString(24),
+				ID:                mockStableHexString(24, hostName, fmt.Sprintf("%d", hostIdx), fmt.Sprintf("%d", idx), "docker-pod-id"),
 				ComposeProject:    composeProject,
 				ComposeWorkdir:    composeWorkdir,
-				ComposeConfigHash: randomHexString(16),
+				ComposeConfigHash: mockStableHexString(16, hostName, fmt.Sprintf("%d", hostIdx), fmt.Sprintf("%d", idx), "docker-pod-compose-config"),
 				AutoUpdatePolicy:  autoUpdatePolicy,
 				AutoUpdateRestart: autoUpdateRestart,
 				UserNamespace:     userNamespace,
@@ -3071,7 +3150,7 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 	}
 
 	for i := 0; i < count; i++ {
-		baseName := appNames[rand.Intn(len(appNames))]
+		baseName := appNames[mockStableChoice(len(appNames), hostName, fmt.Sprintf("%d", hostIdx), fmt.Sprintf("%d", i), "docker-container-name")]
 		nameUsage[baseName]++
 		containerName := baseName
 		if nameUsage[baseName] > 1 {
@@ -3088,7 +3167,11 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 			}
 		}
 
-		containerID := fmt.Sprintf("%s-%s", hostName, randomHexString(12))
+		containerID := fmt.Sprintf(
+			"%s-%s",
+			hostName,
+			mockStableHexString(12, hostName, fmt.Sprintf("%d", hostIdx), fmt.Sprintf("%d", i), containerName, "docker-container-id"),
+		)
 		running := rand.Float64() >= config.StoppedPercent
 		if running && rand.Float64() < 0.05 {
 			running = false // small chance of paused/exited container regardless of stopped percent
@@ -3101,12 +3184,16 @@ func generateDockerContainers(hostName string, hostIdx int, config MockConfig, p
 		memPercent := clampFloat(20+rand.Float64()*65, 2, 96)
 		if !running {
 			memPercent = 0
+		} else {
+			memPercent = sampleNaturalMetric("dockerContainer", containerID, "memory", 1, 97, 0.6, now)
 		}
 		memUsage := int64(float64(memLimit) * (memPercent / 100.0))
 
 		cpuPercent := clampFloat(rand.Float64()*70, 0.2, 180)
 		if !running {
 			cpuPercent = 0
+		} else {
+			cpuPercent = sampleNaturalMetric("dockerContainer", containerID, "cpu", 0, 190, 1.0, now)
 		}
 
 		restartCount := rand.Intn(4)
@@ -3356,87 +3443,56 @@ func clampFloat(value, min, max float64) float64 {
 //
 // speed controls metric character: 1.0 = CPU (low baseline + spikes),
 // ~0.5 = memory (stable plateau), ~0.12 = disk (very gradual drift).
-func naturalMetricUpdate(current, min, max float64, resourceID, metric string, speed float64) float64 {
-	seed := mockStableHash64(resourceID, metric)
+func normalizeMockBlendWeight(weight float64, step, reference time.Duration) float64 {
+	return mockmodel.NormalizeBlendWeight(weight, step, reference)
+}
+
+func sampleNaturalMetric(resourceClass, resourceID, metric string, min, max float64, speed float64, at time.Time) float64 {
+	seed := MetricSeed(resourceClass, resourceID, metric)
+	return mockmodel.ValueAtMetric(seed, min, max, metric, speed, at)
+}
+
+func applyMemoryUsage(memory *models.Memory, usage float64) {
+	if memory == nil || memory.Total <= 0 {
+		return
+	}
+
+	memory.Usage = clampFloat(usage, 0, 100)
+	memory.Used = int64(float64(memory.Total) * (memory.Usage / 100.0))
+	if memory.Used > memory.Total {
+		memory.Used = memory.Total
+	}
+	memory.Free = memory.Total - memory.Used
+	if memory.Free < 0 {
+		memory.Free = 0
+	}
+}
+
+func applyDiskUsage(disk *models.Disk, usage float64) {
+	if disk == nil || disk.Total <= 0 {
+		return
+	}
+
+	disk.Usage = clampFloat(usage, 0, 100)
+	disk.Used = int64(float64(disk.Total) * (disk.Usage / 100.0))
+	if disk.Used > disk.Total {
+		disk.Used = disk.Total
+	}
+	disk.Free = disk.Total - disk.Used
+	if disk.Free < 0 {
+		disk.Free = 0
+	}
+}
+
+func naturalMetricUpdate(current, min, max float64, resourceClass, resourceID, metric string, speed float64) float64 {
 	now := time.Now()
-	span := math.Max(1, max-min)
 	if speed <= 0 {
 		speed = 1.0
 	}
 
-	// Time-varying noise seed (unique per tick).
-	noiseSeed := seed ^ uint64(now.UnixNano()/int64(time.Millisecond))
-	rng := rand.New(rand.NewSource(int64(noiseSeed)))
-
-	// --- Baseline target ---
-	// Shifts periodically, but stays in a characteristic range for each
-	// metric type. The personality (seed) determines where in the range
-	// each resource sits, so different resources have different baselines.
-	// Window is long (15-30min for CPU) so baseline drifts slowly, matching
-	// the seeded history generator's near-constant baseline.
-	targetWindow := int64(float64(900+seed%900) / math.Max(speed, 0.1))
-	if targetWindow < 60 {
-		targetWindow = 60
-	}
-	targetSeed := seed ^ uint64(now.Unix()/targetWindow)
-	targetRng := rand.New(rand.NewSource(int64(targetSeed)))
-
-	isCPULike := speed >= 0.8
-	var baselineFraction float64
-	if isCPULike {
-		// CPU: most resources idle low. Personality determines the tier.
-		// Ranges match generateSpikySeries in mock_metrics_history.go.
-		personality := seed % 20
-		r := targetRng.Float64()
-		switch {
-		case personality == 0: // 5%: busy resource
-			baselineFraction = 0.30 + r*0.15
-		case personality <= 4: // 20%: moderate load
-			baselineFraction = 0.16 + r*0.14
-		default: // 75%: low/idle
-			baselineFraction = 0.04 + r*0.12
-		}
-	} else if speed >= 0.3 {
-		// Memory: moderate stable level.
-		baselineFraction = 0.28 + targetRng.Float64()*0.37
-	} else {
-		// Disk: moderate, very stable.
-		baselineFraction = 0.22 + targetRng.Float64()*0.42
-	}
-	baseTarget := min + span*baselineFraction
-
-	// --- Spike events (CPU-like metrics only) ---
-	// Each time bucket is deterministically either a spike or not.
-	// Spikes ramp up fast and decay gradually, like real CPU bursts.
-	// Frequency and height match generateSpikySeries in mock_metrics_history.go.
-	var spikeValue float64
-	if isCPULike {
-		spikeBucket := int64(120 + seed%180) // 2-5 min spike windows
-		bucketSeed := seed ^ uint64(now.Unix()/spikeBucket)
-		bucketRng := rand.New(rand.NewSource(int64(bucketSeed)))
-
-		// ~1.5-4.5% of buckets are spike periods (matches seeded history).
-		spikeFreq := 0.015 + float64(seed%10)*0.003
-		if bucketRng.Float64() < spikeFreq {
-			// Spike height: 10-55% of range above baseline.
-			spikeHeight := span * (0.10 + bucketRng.Float64()*0.45)
-			// Position within bucket: fast rise (~12%), then power-law decay.
-			progress := float64(now.Unix()%spikeBucket) / float64(spikeBucket)
-			if progress < 0.12 {
-				spikeValue = spikeHeight * (progress / 0.12)
-			} else {
-				decay := (progress - 0.12) / 0.88
-				spikeValue = spikeHeight * math.Pow(1-decay, 1.5)
-			}
-		}
-	}
-
-	// --- Smoothing toward ideal ---
-	// Exponential smoothing: fast tracking during spikes so the value
-	// actually reaches the peak, slower drift otherwise.
-	ideal := baseTarget + spikeValue
+	ideal := sampleNaturalMetric(resourceClass, resourceID, metric, min, max, speed, now)
 	alpha := 0.06 * speed
-	if spikeValue > span*0.03 {
+	if speed >= 0.8 && math.Abs(ideal-current) > math.Max(1, (max-min)*0.03) {
 		alpha = 0.15 // track spike (gentler than before to avoid jarring snaps)
 	}
 	if alpha < 0.005 {
@@ -3445,11 +3501,8 @@ func naturalMetricUpdate(current, min, max float64, resourceID, metric string, s
 	if alpha > 0.5 {
 		alpha = 0.5
 	}
+	alpha = normalizeMockBlendWeight(alpha, updateInterval, time.Minute)
 	newValue := current + alpha*(ideal-current)
-
-	// --- Per-tick noise ---
-	noiseScale := span * 0.003 * math.Min(speed, 1.0)
-	newValue += rng.NormFloat64() * noiseScale
 
 	return clampFloat(newValue, min, max)
 }
@@ -3481,7 +3534,7 @@ func humanizeHostDisplayName(hostname string) string {
 }
 
 func generateContainer(nodeName string, instance string, vmid int, config MockConfig) models.Container {
-	name := generateGuestName("lxc")
+	name := generateGuestName("lxc", fmt.Sprintf("%s:%s:%d", instance, nodeName, vmid))
 	status := "running"
 	if rand.Float64() < config.StoppedPercent {
 		status = "stopped"
@@ -3547,6 +3600,11 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 	} else {
 		ctID = fmt.Sprintf("%s-%s-%d", instance, nodeName, vmid)
 	}
+	if status == "running" {
+		now := time.Now()
+		cpu = SampleMetric("container", ctID, "cpu", now) / 100.0
+		applyMemoryUsage(&mem, SampleMetric("container", ctID, "memory", now))
+	}
 
 	ct := models.Container{
 		Name:     name,
@@ -3564,14 +3622,17 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 			Free:  totalDisk - usedDisk,
 			Usage: float64(usedDisk) / float64(totalDisk) * 100,
 		},
-		DiskRead:   generateRealisticIO("disk-read-ct"),
-		DiskWrite:  generateRealisticIO("disk-write-ct"),
-		NetworkIn:  generateRealisticIO("network-in-ct"),
-		NetworkOut: generateRealisticIO("network-out-ct"),
+		DiskRead:   SampleMetricInt("container", ctID, "diskread", time.Now()),
+		DiskWrite:  SampleMetricInt("container", ctID, "diskwrite", time.Now()),
+		NetworkIn:  SampleMetricInt("container", ctID, "netin", time.Now()),
+		NetworkOut: SampleMetricInt("container", ctID, "netout", time.Now()),
 		Uptime:     uptime,
 		ID:         ctID,
 		Tags:       generateTags(),
 		LastBackup: generateLastBackupTime(),
+	}
+	if status == "running" {
+		applyDiskUsage(&ct.Disk, SampleMetric("container", ctID, "disk", time.Now()))
 	}
 
 	if status != "running" {
@@ -3593,8 +3654,10 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 	return ct
 }
 
-func generateGuestName(prefix string) string {
-	return fmt.Sprintf("%s-%s-%d", prefix, appNames[rand.Intn(len(appNames))], rand.Intn(100))
+func generateGuestName(prefix string, key string) string {
+	name := appNames[mockStableChoice(len(appNames), prefix, key, "guest-name")]
+	suffix := 10 + mockStableChoice(90, prefix, key, "guest-suffix")
+	return fmt.Sprintf("%s-%s-%d", prefix, name, suffix)
 }
 
 // generateLastBackupTime generates a realistic last backup timestamp.
@@ -3747,17 +3810,19 @@ func generateZFSPoolWithIssues(poolName string) *models.ZFSPool {
 // generateStorage generates mock storage data for nodes
 func generateStorage(nodes []models.Node) []models.Storage {
 	var storage []models.Storage
+	now := time.Now()
 
 	for _, node := range nodes {
 		isOffline := node.Status != "online" || node.ConnectionHealth == "offline" || node.Uptime <= 0
 		// Local storage (always present)
 		localTotal := int64(500 * 1024 * 1024 * 1024) // 500GB
-		localUsed := int64(float64(localTotal) * (0.3 + rand.Float64()*0.5))
+		localID := fmt.Sprintf("%s-%s-local", node.Instance, node.Name)
+		localUsage := SampleMetric("storage", localID, "usage", now)
+		localUsed := int64(float64(localTotal) * (localUsage / 100.0))
 		if isOffline {
 			localUsed = 0
 		}
 		localFree := localTotal - localUsed
-		localUsage := 0.0
 		if localTotal > 0 {
 			localUsage = float64(localUsed) / float64(localTotal) * 100
 		}
@@ -3771,7 +3836,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		}
 
 		storage = append(storage, models.Storage{
-			ID:       fmt.Sprintf("%s-%s-local", node.Instance, node.Name),
+			ID:       localID,
 			Name:     "local",
 			Node:     node.Name,
 			Instance: node.Instance,
@@ -3789,12 +3854,13 @@ func generateStorage(nodes []models.Node) []models.Storage {
 
 		// Local-zfs (common)
 		zfsTotal := int64(2 * 1024 * 1024 * 1024 * 1024) // 2TB
-		zfsUsed := int64(float64(zfsTotal) * (0.2 + rand.Float64()*0.6))
+		zfsID := fmt.Sprintf("%s-%s-local-zfs", node.Instance, node.Name)
+		zfsUsage := SampleMetric("storage", zfsID, "usage", now)
+		zfsUsed := int64(float64(zfsTotal) * (zfsUsage / 100.0))
 		if isOffline {
 			zfsUsed = 0
 		}
 		zfsFree := zfsTotal - zfsUsed
-		zfsUsage := 0.0
 		if zfsTotal > 0 {
 			zfsUsage = float64(zfsUsed) / float64(zfsTotal) * 100
 		}
@@ -3835,7 +3901,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		}
 
 		storage = append(storage, models.Storage{
-			ID:       fmt.Sprintf("%s-%s-local-zfs", node.Instance, node.Name),
+			ID:       zfsID,
 			Name:     "local-zfs",
 			Node:     node.Name,
 			Instance: node.Instance,
@@ -3872,9 +3938,11 @@ func generateStorage(nodes []models.Node) []models.Storage {
 		// Each node sees ALL PBS storage configurations
 		for _, pbsTargetNode := range clusterNodes {
 			pbsTotal := int64(950 * 1024 * 1024 * 1024) // ~950GB matching real PBS
-			pbsUsed := int64(float64(pbsTotal) * 0.14)  // ~14% usage matching real data
+			pbsID := fmt.Sprintf("%s-%s-pbs-%s", node.Instance, node.Name, pbsTargetNode.Name)
+			pbsUsage := SampleMetric("pbsDatastore", pbsID, "usage", now)
+			pbsUsed := int64(float64(pbsTotal) * (pbsUsage / 100.0))
 			storage = append(storage, models.Storage{
-				ID:       fmt.Sprintf("%s-%s-pbs-%s", node.Instance, node.Name, pbsTargetNode.Name),
+				ID:       pbsID,
 				Name:     fmt.Sprintf("pbs-%s", pbsTargetNode.Name),
 				Node:     node.Name, // The node that reports this storage
 				Instance: node.Instance,
@@ -3895,7 +3963,8 @@ func generateStorage(nodes []models.Node) []models.Storage {
 	// Add a shared storage (NFS or CephFS)
 	if len(nodes) > 1 {
 		sharedTotal := int64(10 * 1024 * 1024 * 1024 * 1024) // 10TB
-		sharedUsed := int64(float64(sharedTotal) * (0.4 + rand.Float64()*0.3))
+		sharedUsage := SampleMetric("storage", "shared-storage", "usage", now)
+		sharedUsed := int64(float64(sharedTotal) * (sharedUsage / 100.0))
 		storage = append(storage, models.Storage{
 			ID:       "shared-storage",
 			Name:     "shared-storage",
@@ -3906,7 +3975,7 @@ func generateStorage(nodes []models.Node) []models.Storage {
 			Total:    sharedTotal,
 			Used:     sharedUsed,
 			Free:     sharedTotal - sharedUsed,
-			Usage:    float64(sharedUsed) / float64(sharedTotal) * 100,
+			Usage:    sharedUsage,
 			Content:  "images,rootdir,backup",
 			Shared:   true,
 			Enabled:  true,
@@ -4670,8 +4739,8 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 			continue
 		}
 
-		inst.CPU = naturalMetricUpdate(inst.CPU, 6, 62, inst.ID, "cpu", 0.4)
-		inst.Memory = naturalMetricUpdate(inst.Memory, 24, 78, inst.ID, "memory", 0.25)
+		inst.CPU = SampleMetric("pbs", inst.ID, "cpu", refreshNow)
+		inst.Memory = SampleMetric("pbs", inst.ID, "memory", refreshNow)
 		if inst.MemoryTotal > 0 {
 			inst.MemoryUsed = int64(float64(inst.MemoryTotal) * (inst.Memory / 100.0))
 			if inst.MemoryUsed < 0 {
@@ -4685,7 +4754,7 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 				continue
 			}
 
-			datastore.Usage = naturalMetricUpdate(datastore.Usage, 12, 78, inst.ID+":"+datastore.Name, "usage", 0.08)
+			datastore.Usage = SampleMetric("pbsDatastore", inst.ID+":"+datastore.Name, "usage", refreshNow)
 			datastore.Used = int64(float64(datastore.Total) * (datastore.Usage / 100.0))
 			if datastore.Used < 0 {
 				datastore.Used = 0
@@ -4712,11 +4781,9 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 	// Update node metrics
 	for i := range data.Nodes {
 		node := &data.Nodes[i]
-		node.CPU = naturalMetricUpdate(node.CPU, 0.05, 0.85, node.ID, "cpu", 1.0)
-
-		node.Memory.Usage = naturalMetricUpdate(node.Memory.Usage, 10, 85, node.ID, "memory", 0.5)
-		node.Memory.Used = int64(float64(node.Memory.Total) * (node.Memory.Usage / 100))
-		node.Memory.Free = node.Memory.Total - node.Memory.Used
+		node.CPU = SampleMetric("node", node.ID, "cpu", refreshNow) / 100.0
+		applyMemoryUsage(&node.Memory, SampleMetric("node", node.ID, "memory", refreshNow))
+		applyDiskUsage(&node.Disk, SampleMetric("node", node.ID, "disk", refreshNow))
 	}
 
 	// Update VM metrics
@@ -4726,23 +4793,13 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 			continue
 		}
 
-		vm.CPU = naturalMetricUpdate(vm.CPU, 0.01, 0.85, vm.ID, "cpu", 1.0)
-
-		vm.Memory.Usage = naturalMetricUpdate(vm.Memory.Usage, 10, 85, vm.ID, "memory", 0.5)
-		vm.Memory.Used = int64(float64(vm.Memory.Total) * (vm.Memory.Usage / 100))
-		vm.Memory.Free = vm.Memory.Total - vm.Memory.Used
-
-		vm.Disk.Usage = naturalMetricUpdate(vm.Disk.Usage, 10, 90, vm.ID, "disk", 0.12)
-		vm.Disk.Used = int64(float64(vm.Disk.Total) * (vm.Disk.Usage / 100))
-		vm.Disk.Free = vm.Disk.Total - vm.Disk.Used
-
-		// Update network/disk I/O with small chance of changing
-		if rand.Float64() < 0.15 { // 15% chance of I/O change
-			vm.NetworkIn = generateRealisticIO("network-in")
-			vm.NetworkOut = generateRealisticIO("network-out")
-			vm.DiskRead = generateRealisticIO("disk-read")
-			vm.DiskWrite = generateRealisticIO("disk-write")
-		}
+		vm.CPU = SampleMetric("vm", vm.ID, "cpu", refreshNow) / 100.0
+		applyMemoryUsage(&vm.Memory, SampleMetric("vm", vm.ID, "memory", refreshNow))
+		applyDiskUsage(&vm.Disk, SampleMetric("vm", vm.ID, "disk", refreshNow))
+		vm.NetworkIn = SampleMetricInt("vm", vm.ID, "netin", refreshNow)
+		vm.NetworkOut = SampleMetricInt("vm", vm.ID, "netout", refreshNow)
+		vm.DiskRead = SampleMetricInt("vm", vm.ID, "diskread", refreshNow)
+		vm.DiskWrite = SampleMetricInt("vm", vm.ID, "diskwrite", refreshNow)
 
 		// Update uptime
 		vm.Uptime += 2 // Add 2 seconds per update
@@ -4755,42 +4812,37 @@ func updateFixtureStateMetrics(data *models.StateSnapshot, config MockConfig) {
 			continue
 		}
 
-		ct.CPU = naturalMetricUpdate(ct.CPU, 0.01, 0.75, ct.ID, "cpu", 1.0)
-
-		ct.Memory.Usage = naturalMetricUpdate(ct.Memory.Usage, 5, 85, ct.ID, "memory", 0.5)
-		ct.Memory.Used = int64(float64(ct.Memory.Total) * (ct.Memory.Usage / 100))
-		ct.Memory.Free = ct.Memory.Total - ct.Memory.Used
-
-		ct.Disk.Usage = naturalMetricUpdate(ct.Disk.Usage, 5, 85, ct.ID, "disk", 0.10)
-		ct.Disk.Used = int64(float64(ct.Disk.Total) * (ct.Disk.Usage / 100))
-		ct.Disk.Free = ct.Disk.Total - ct.Disk.Used
-
-		// Update network/disk I/O with small chance of changing
-		if rand.Float64() < 0.10 { // 10% chance of I/O change (containers change less often)
-			ct.NetworkIn = generateRealisticIO("network-in-ct")
-			ct.NetworkOut = generateRealisticIO("network-out-ct")
-			ct.DiskRead = generateRealisticIO("disk-read-ct")
-			ct.DiskWrite = generateRealisticIO("disk-write-ct")
-		}
+		ct.CPU = SampleMetric("container", ct.ID, "cpu", refreshNow) / 100.0
+		applyMemoryUsage(&ct.Memory, SampleMetric("container", ct.ID, "memory", refreshNow))
+		applyDiskUsage(&ct.Disk, SampleMetric("container", ct.ID, "disk", refreshNow))
+		ct.NetworkIn = SampleMetricInt("container", ct.ID, "netin", refreshNow)
+		ct.NetworkOut = SampleMetricInt("container", ct.ID, "netout", refreshNow)
+		ct.DiskRead = SampleMetricInt("container", ct.ID, "diskread", refreshNow)
+		ct.DiskWrite = SampleMetricInt("container", ct.ID, "diskwrite", refreshNow)
 
 		// Update uptime
 		ct.Uptime += 2
 	}
 
-	// Update disk metrics occasionally
+	for i := range data.Storage {
+		storage := &data.Storage[i]
+		if storage.ID == "" || storage.Total <= 0 || storage.Status != "available" {
+			continue
+		}
+		ApplyStorageUsage(storage, SampleMetric("storage", storage.ID, "usage", refreshNow))
+	}
+
+	// Update disk metrics.
 	for i := range data.PhysicalDisks {
 		disk := &data.PhysicalDisks[i]
-
-		// Occasionally change temperature
-		if rand.Float64() < 0.1 {
-			disk.Temperature += rand.Intn(5) - 2
-			if disk.Temperature < 30 {
-				disk.Temperature = 30
-			}
-			if disk.Temperature > 85 {
-				disk.Temperature = 85
-			}
+		resourceID := disk.Serial
+		if strings.TrimSpace(resourceID) == "" {
+			resourceID = disk.ID
 		}
+		if strings.TrimSpace(resourceID) == "" {
+			resourceID = fmt.Sprintf("%s-%s-%s", disk.Instance, disk.Node, disk.DevPath)
+		}
+		disk.Temperature = int(math.Round(SampleMetric("disk", resourceID, "smart_temp", refreshNow)))
 
 		// Occasionally degrade SSD life
 		if disk.Wearout > 0 && rand.Float64() < 0.01 {
@@ -4968,17 +5020,33 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 			host.LastSeen = now.Add(-time.Duration(rand.Intn(6)) * time.Second)
 			host.UptimeSeconds += step
 			if config.RandomMetrics {
-				updateMockDockerHostRates(host)
-				host.CPUUsage = naturalMetricUpdate(host.CPUUsage, 3, 99, host.ID, "cpu", 1.0)
+				host.CPUUsage = SampleMetric("dockerHost", host.ID, "cpu", now)
+				applyMemoryUsage(&host.Memory, SampleMetric("dockerHost", host.ID, "memory", now))
+				for diskIndex := range host.Disks {
+					applyDiskUsage(&host.Disks[diskIndex], SampleMetric("dockerHost", mockHostDiskMetricID(host.ID, diskIndex), "disk", now))
+				}
+				host.NetInRate = SampleMetric("dockerHost", host.ID, "netin", now)
+				host.NetOutRate = SampleMetric("dockerHost", host.ID, "netout", now)
+				host.DiskReadRate = SampleMetric("dockerHost", host.ID, "diskread", now)
+				host.DiskWriteRate = SampleMetric("dockerHost", host.ID, "diskwrite", now)
 			}
-			host.Temperature = generateMockTemperature(host.CPUUsage)
+			temperature := SampleMetric("dockerHost", host.ID, "temperature", now)
+			host.Temperature = &temperature
 		} else if config.RandomMetrics && rand.Float64() < 0.01 {
 			// Occasionally bring an offline host back online
 			host.Status = "online"
 			host.LastSeen = now
-			updateMockDockerHostRates(host)
-			host.CPUUsage = clampFloat(8+rand.Float64()*35, 3, 99)
-			host.Temperature = generateMockTemperature(host.CPUUsage)
+			host.CPUUsage = SampleMetric("dockerHost", host.ID, "cpu", now)
+			applyMemoryUsage(&host.Memory, SampleMetric("dockerHost", host.ID, "memory", now))
+			for diskIndex := range host.Disks {
+				applyDiskUsage(&host.Disks[diskIndex], SampleMetric("dockerHost", mockHostDiskMetricID(host.ID, diskIndex), "disk", now))
+			}
+			host.NetInRate = SampleMetric("dockerHost", host.ID, "netin", now)
+			host.NetOutRate = SampleMetric("dockerHost", host.ID, "netout", now)
+			host.DiskReadRate = SampleMetric("dockerHost", host.ID, "diskread", now)
+			host.DiskWriteRate = SampleMetric("dockerHost", host.ID, "diskwrite", now)
+			temperature := SampleMetric("dockerHost", host.ID, "temperature", now)
+			host.Temperature = &temperature
 			if len(host.Containers) == 0 {
 				isPodman := strings.EqualFold(host.Runtime, "podman")
 				host.Containers = generateDockerContainers(host.Hostname, i, config, isPodman)
@@ -5008,10 +5076,14 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 					container.State = "running"
 					container.Status = "Up a few seconds"
 					container.Health = "starting"
-					container.CPUPercent = clampFloat(rand.Float64()*35, 2, 90)
-					container.MemoryPercent = clampFloat(25+rand.Float64()*40, 5, 85)
+					container.CPUPercent = SampleMetric("dockerContainer", container.ID, "cpu", now)
+					container.MemoryPercent = SampleMetric("dockerContainer", container.ID, "memory", now)
 					if container.MemoryLimit > 0 {
 						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
+					}
+					if container.RootFilesystemBytes > 0 {
+						diskPercent := SampleMetric("dockerContainer", container.ID, "disk", now)
+						container.WritableLayerBytes = int64(float64(container.RootFilesystemBytes) * (diskPercent / 100.0))
 					}
 					container.UptimeSeconds = step
 					start := now.Add(-time.Duration(container.UptimeSeconds) * time.Second)
@@ -5028,10 +5100,17 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 				running++
 
 				if config.RandomMetrics {
-					container.CPUPercent = naturalMetricUpdate(container.CPUPercent, 0, 190, container.ID, "cpu", 1.0)
-					container.MemoryPercent = naturalMetricUpdate(container.MemoryPercent, 1, 97, container.ID, "memory", 0.6)
+					container.CPUPercent = SampleMetric("dockerContainer", container.ID, "cpu", now)
+					container.MemoryPercent = SampleMetric("dockerContainer", container.ID, "memory", now)
 					if container.MemoryLimit > 0 {
 						container.MemoryUsage = int64(float64(container.MemoryLimit) * (container.MemoryPercent / 100.0))
+					}
+					if container.RootFilesystemBytes > 0 {
+						diskPercent := SampleMetric("dockerContainer", container.ID, "disk", now)
+						container.WritableLayerBytes = int64(float64(container.RootFilesystemBytes) * (diskPercent / 100.0))
+						if container.WritableLayerBytes > container.RootFilesystemBytes {
+							container.WritableLayerBytes = container.RootFilesystemBytes
+						}
 					}
 
 					container.UptimeSeconds += step
@@ -5112,7 +5191,8 @@ func updateDockerHosts(data *models.StateSnapshot, config MockConfig) {
 		} else {
 			host.Status = "online"
 		}
-		host.Temperature = generateMockTemperature(host.CPUUsage)
+		temperature := SampleMetric("dockerHost", host.ID, "temperature", now)
+		host.Temperature = &temperature
 	}
 }
 
@@ -5288,7 +5368,10 @@ func updateHosts(data *models.StateSnapshot, config MockConfig) {
 				host.Status = "online"
 				host.LastSeen = now
 				host.UptimeSeconds = int64(120 + rand.Intn(3600))
-				updateMockHostRates(host)
+				host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
+				host.NetOutRate = SampleMetric("agent", host.ID, "netout", now)
+				host.DiskReadRate = SampleMetric("agent", host.ID, "diskread", now)
+				host.DiskWriteRate = SampleMetric("agent", host.ID, "diskwrite", now)
 			}
 			continue
 		}
@@ -5300,19 +5383,21 @@ func updateHosts(data *models.StateSnapshot, config MockConfig) {
 			continue
 		}
 
-		updateMockHostRates(host)
+		host.NetInRate = SampleMetric("agent", host.ID, "netin", now)
+		host.NetOutRate = SampleMetric("agent", host.ID, "netout", now)
+		host.DiskReadRate = SampleMetric("agent", host.ID, "diskread", now)
+		host.DiskWriteRate = SampleMetric("agent", host.ID, "diskwrite", now)
 
-		host.CPUUsage = naturalMetricUpdate(host.CPUUsage, 4, 97, host.ID, "cpu", 1.0)
-
-		host.Memory.Usage = naturalMetricUpdate(host.Memory.Usage, 12, 96, host.ID, "memory", 0.5)
-		host.Memory.Used = int64(float64(host.Memory.Total) * (host.Memory.Usage / 100.0))
-		host.Memory.Free = host.Memory.Total - host.Memory.Used
+		host.CPUUsage = SampleMetric("agent", host.ID, "cpu", now)
+		applyMemoryUsage(&host.Memory, SampleMetric("agent", host.ID, "memory", now))
 
 		for j := range host.Disks {
-			diskID := fmt.Sprintf("%s-disk-%d", host.ID, j)
-			host.Disks[j].Usage = naturalMetricUpdate(host.Disks[j].Usage, 5, 98, diskID, "disk", 0.12)
-			host.Disks[j].Used = int64(float64(host.Disks[j].Total) * (host.Disks[j].Usage / 100.0))
-			host.Disks[j].Free = host.Disks[j].Total - host.Disks[j].Used
+			diskID := mockHostDiskMetricID(host.ID, j)
+			applyDiskUsage(&host.Disks[j], SampleMetric("agent", diskID, "disk", now))
+		}
+
+		if host.Sensors.TemperatureCelsius != nil {
+			host.Sensors.TemperatureCelsius["cpu.package"] = SampleMetric("agent", host.ID, "temperature", now)
 		}
 
 		if len(host.LoadAverage) == 3 {
@@ -5360,9 +5445,10 @@ func fluctuateInt(value, delta, min, max int) int {
 
 func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 	disks := []models.PhysicalDisk{}
+	now := time.Now()
 
 	// Generate 1-3 disks per node
-	diskCount := rand.Intn(3) + 1
+	diskCount := 1 + mockStableChoice(3, strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name), "physical-disk-count")
 
 	diskModels := []struct {
 		model    string
@@ -5381,7 +5467,7 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 	}
 
 	for i := 0; i < diskCount; i++ {
-		diskModel := diskModels[rand.Intn(len(diskModels))]
+		diskModel := diskModels[mockStableChoice(len(diskModels), strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name), fmt.Sprintf("%d", i), "physical-disk-model")]
 
 		// Generate health status - most are healthy
 		health := "PASSED"
@@ -5408,19 +5494,18 @@ func generateDisksForNode(node models.Node) []models.PhysicalDisk {
 			wearout = 100
 		}
 
-		// Generate temperature
-		temp := rand.Intn(20) + 35 // 35-55°C normal range
-		if rand.Float64() < 0.1 {  // 10% chance of high temp
-			temp = rand.Intn(15) + 65 // 65-80°C hot
-		}
+		devPath := fmt.Sprintf("/dev/%s%d", []string{"nvme", "sd"}[i%2], i)
+		diskID := fmt.Sprintf("%s-%s-%s", node.Instance, node.Name, devPath)
+		serial := "SERIAL" + mockStableDecimalString(12, strings.TrimSpace(node.ID), strings.TrimSpace(node.Instance), strings.TrimSpace(node.Name), devPath, "physical-disk-serial")
+		temp := int(math.Round(SampleMetric("disk", serial, "smart_temp", now)))
 
 		disk := models.PhysicalDisk{
-			ID:          fmt.Sprintf("%s-%s-/dev/%s%d", node.Instance, node.Name, []string{"nvme", "sd"}[i%2], i),
+			ID:          diskID,
 			Node:        node.Name,
 			Instance:    node.Instance,
-			DevPath:     fmt.Sprintf("/dev/%s%d", []string{"nvme", "sd"}[i%2], i),
+			DevPath:     devPath,
 			Model:       diskModel.model,
-			Serial:      fmt.Sprintf("SERIAL%d%d%d", rand.Intn(9999), rand.Intn(9999), rand.Intn(9999)),
+			Serial:      serial,
 			Type:        diskModel.diskType,
 			Size:        diskModel.size,
 			Health:      health,

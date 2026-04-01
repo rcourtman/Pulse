@@ -664,7 +664,8 @@ func hostsFromReadState(readState unifiedresources.ReadState) []models.Host {
 	return out
 }
 
-// writeSMARTMetrics writes SMART attribute metrics to the persistent metrics store for a single disk.
+// writeSMARTMetrics writes SMART temperature history to the in-memory chart
+// buffer and persists SMART attributes when the metrics store is enabled.
 func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 	resourceID := unifiedresources.PhysicalDiskMetricID(disk)
 	if resourceID == "" {
@@ -673,11 +674,16 @@ func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {
 
 	// Temperature (always write if > 0)
 	if disk.Temperature > 0 {
-		m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
+		if m.metricsHistory != nil {
+			m.metricsHistory.AddDiskMetric(resourceID, "smart_temp", float64(disk.Temperature), now)
+		}
+		if m.metricsStore != nil {
+			m.metricsStore.Write("disk", resourceID, "smart_temp", float64(disk.Temperature), now)
+		}
 	}
 
 	attrs := disk.SmartAttributes
-	if attrs == nil {
+	if attrs == nil || m.metricsStore == nil {
 		return
 	}
 
@@ -4238,6 +4244,9 @@ func (m *Monitor) syncUnifiedAgentMetrics(store ResourceStoreInterface) {
 		if resource.Type != unifiedresources.ResourceTypeAgent || resource.Metrics == nil {
 			continue
 		}
+		if shouldSkipMockOwnedUnifiedMetricSync(resource) {
+			continue
+		}
 		if monitorHasSource(resource.Sources, unifiedresources.SourceAgent) ||
 			monitorHasSource(resource.Sources, unifiedresources.SourceProxmox) ||
 			monitorHasSource(resource.Sources, unifiedresources.SourceDocker) {
@@ -4340,6 +4349,9 @@ func (m *Monitor) syncUnifiedVMMetrics(store ResourceStoreInterface) {
 	seenTargets := make(map[string]struct{})
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypeVM || resource.Metrics == nil {
+			continue
+		}
+		if shouldSkipMockOwnedUnifiedMetricSync(resource) {
 			continue
 		}
 
@@ -4451,6 +4463,9 @@ func (m *Monitor) syncUnifiedStorageMetrics(store ResourceStoreInterface) {
 		if resource.Type != unifiedresources.ResourceTypeStorage || resource.Metrics == nil || resource.Metrics.Disk == nil {
 			continue
 		}
+		if shouldSkipMockOwnedUnifiedMetricSync(resource) {
+			continue
+		}
 
 		// Native Proxmox storage already writes to history during the storage poller.
 		if resource.Storage != nil && resource.Storage.Platform == "" {
@@ -4529,6 +4544,9 @@ func (m *Monitor) syncUnifiedPhysicalDiskMetrics(store ResourceStoreInterface) {
 		if resource.Type != unifiedresources.ResourceTypePhysicalDisk || resource.PhysicalDisk == nil {
 			continue
 		}
+		if shouldSkipMockOwnedUnifiedMetricSync(resource) {
+			continue
+		}
 
 		hasNativeWriter := false
 		for _, source := range resource.Sources {
@@ -4600,6 +4618,9 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 	seenTargets := make(map[string]struct{})
 	for _, resource := range store.GetAll() {
 		if resource.Type != unifiedresources.ResourceTypeAppContainer || resource.Metrics == nil {
+			continue
+		}
+		if shouldSkipMockOwnedUnifiedMetricSync(resource) {
 			continue
 		}
 		hasDockerSource := false
@@ -4693,6 +4714,21 @@ func (m *Monitor) syncUnifiedAppContainerMetrics(store ResourceStoreInterface) {
 			}
 		}
 	}
+}
+
+func shouldSkipMockOwnedUnifiedMetricSync(resource unifiedresources.Resource) bool {
+	if !mock.IsMockEnabled() {
+		return false
+	}
+
+	for _, source := range resource.Sources {
+		switch source {
+		case unifiedresources.SourceTrueNAS, unifiedresources.SourceVMware:
+			return true
+		}
+	}
+
+	return false
 }
 
 // getUnifiedResourcesForBroadcast retrieves all resources from the store.

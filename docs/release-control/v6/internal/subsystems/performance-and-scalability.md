@@ -218,6 +218,12 @@ query only if the runtime preserves ascending timestamps plus correct
 avg/min/max bucket aggregates within every returned resource/metric series, and
 the hot-path proof keeps latency, ordering, and aggregate correctness guarded
 together in the explicit metrics SLO surface. That protected surface should
+That same workload-summary hot path now also owns chart-cache invalidation
+whenever the shaped timeline contract changes. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
+must version-bust cached summary payloads in the same slice that changes
+workload chart bucket semantics or timestamp precision, so operators are not
+served stale mixed-cadence chart shapes after the backend timeline model has
+already been corrected.
 stay on one ordered index scan plus Go-side bucket aggregation rather than
 forcing SQLite to `GROUP BY` computed buckets through a temp B-tree on the
 fleet-scale dashboard path.

@@ -30,12 +30,18 @@ type StorageMetrics struct {
 	Avail []MetricPoint `json:"avail"`
 }
 
-// MetricsHistory maintains historical metrics for all guests and nodes
+// DiskMetrics holds historical metrics for a single physical disk.
+type DiskMetrics struct {
+	Temperature []MetricPoint `json:"smart_temp"`
+}
+
+// MetricsHistory maintains historical metrics for guests, nodes, storage, and disks.
 type MetricsHistory struct {
 	mu             sync.RWMutex
 	guestMetrics   map[string]*GuestMetrics   // key: guestID
 	nodeMetrics    map[string]*GuestMetrics   // key: nodeID
 	storageMetrics map[string]*StorageMetrics // key: storageID
+	diskMetrics    map[string]*DiskMetrics    // key: disk metrics resource ID
 	maxDataPoints  int
 	retentionTime  time.Duration
 }
@@ -46,6 +52,7 @@ func NewMetricsHistory(maxDataPoints int, retentionTime time.Duration) *MetricsH
 		guestMetrics:   make(map[string]*GuestMetrics),
 		nodeMetrics:    make(map[string]*GuestMetrics),
 		storageMetrics: make(map[string]*StorageMetrics),
+		diskMetrics:    make(map[string]*DiskMetrics),
 		maxDataPoints:  maxDataPoints,
 		retentionTime:  retentionTime,
 	}
@@ -59,6 +66,7 @@ func (mh *MetricsHistory) Reset() {
 	mh.guestMetrics = make(map[string]*GuestMetrics)
 	mh.nodeMetrics = make(map[string]*GuestMetrics)
 	mh.storageMetrics = make(map[string]*StorageMetrics)
+	mh.diskMetrics = make(map[string]*DiskMetrics)
 }
 
 // AddGuestMetric adds a metric value for a guest
@@ -123,8 +131,13 @@ func (mh *MetricsHistory) AddNodeMetric(nodeID string, metricType string, value 
 
 // appendMetric appends a metric point and maintains max data points and retention
 func (mh *MetricsHistory) appendMetric(metrics []MetricPoint, point MetricPoint) []MetricPoint {
-	// Append new point
-	metrics = append(metrics, point)
+	// Keep a single canonical value per timestamp so chart consumers never
+	// have to guess which duplicate tail point to render.
+	if len(metrics) > 0 && metrics[len(metrics)-1].Timestamp.Equal(point.Timestamp) {
+		metrics[len(metrics)-1] = point
+	} else {
+		metrics = append(metrics, point)
+	}
 
 	// Remove old points beyond retention time
 	cutoffTime := time.Now().Add(-mh.retentionTime)
@@ -313,6 +326,44 @@ func (mh *MetricsHistory) GetAllStorageMetrics(storageID string, duration time.D
 	return result
 }
 
+// AddDiskMetric adds a metric value for a physical disk.
+func (mh *MetricsHistory) AddDiskMetric(resourceID string, metricType string, value float64, timestamp time.Time) {
+	mh.mu.Lock()
+	defer mh.mu.Unlock()
+
+	if _, exists := mh.diskMetrics[resourceID]; !exists {
+		mh.diskMetrics[resourceID] = &DiskMetrics{}
+	}
+
+	metrics := mh.diskMetrics[resourceID]
+	point := MetricPoint{Value: value, Timestamp: timestamp}
+
+	switch metricType {
+	case "smart_temp":
+		metrics.Temperature = mh.appendMetric(metrics.Temperature, point)
+	}
+}
+
+// GetDiskMetrics returns historical metrics for a physical disk.
+func (mh *MetricsHistory) GetDiskMetrics(resourceID string, metricType string, duration time.Duration) []MetricPoint {
+	mh.mu.RLock()
+	defer mh.mu.RUnlock()
+
+	metrics, exists := mh.diskMetrics[resourceID]
+	if !exists {
+		return []MetricPoint{}
+	}
+
+	cutoffTime := time.Now().Add(-duration)
+
+	switch metricType {
+	case "smart_temp":
+		return filterMetricsByTime(metrics.Temperature, cutoffTime)
+	default:
+		return []MetricPoint{}
+	}
+}
+
 // Cleanup removes old data points beyond retention time and deletes
 // map entries for resources that have no remaining data points.
 // This prevents unbounded memory growth when containers/VMs are deleted.
@@ -321,7 +372,7 @@ func (mh *MetricsHistory) Cleanup() {
 	defer mh.mu.Unlock()
 
 	cutoffTime := time.Now().Add(-mh.retentionTime)
-	var guestsRemoved, nodesRemoved, storageRemoved int
+	var guestsRemoved, nodesRemoved, storageRemoved, disksRemoved int
 
 	// Cleanup guest metrics and remove empty entries
 	for key, metrics := range mh.guestMetrics {
@@ -368,15 +419,25 @@ func (mh *MetricsHistory) Cleanup() {
 		}
 	}
 
+	for key, metrics := range mh.diskMetrics {
+		metrics.Temperature = mh.cleanupMetrics(metrics.Temperature, cutoffTime)
+		if len(metrics.Temperature) == 0 {
+			delete(mh.diskMetrics, key)
+			disksRemoved++
+		}
+	}
+
 	// Log cleanup activity at debug level
-	if guestsRemoved > 0 || nodesRemoved > 0 || storageRemoved > 0 {
+	if guestsRemoved > 0 || nodesRemoved > 0 || storageRemoved > 0 || disksRemoved > 0 {
 		log.Debug().
 			Int("guestsRemoved", guestsRemoved).
 			Int("nodesRemoved", nodesRemoved).
 			Int("storageRemoved", storageRemoved).
+			Int("disksRemoved", disksRemoved).
 			Int("guestsRemaining", len(mh.guestMetrics)).
 			Int("nodesRemaining", len(mh.nodeMetrics)).
 			Int("storageRemaining", len(mh.storageMetrics)).
+			Int("disksRemaining", len(mh.diskMetrics)).
 			Msg("Cleaned up stale metrics history entries")
 	}
 }

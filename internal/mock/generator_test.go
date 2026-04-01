@@ -1,8 +1,10 @@
 package mock
 
 import (
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 )
@@ -117,6 +119,19 @@ func TestBuildFixtureStateIncludesHostAgents(t *testing.T) {
 		if host.Status == "" {
 			t.Fatalf("host agent missing status: %+v", host)
 		}
+	}
+}
+
+func TestNormalizeMockBlendWeight_ComposesAcrossUpdateInterval(t *testing.T) {
+	perMinuteWeight := 0.22
+	perTickWeight := normalizeMockBlendWeight(perMinuteWeight, updateInterval, time.Minute)
+	compounded := 1 - math.Pow(1-perTickWeight, float64(time.Minute/updateInterval))
+
+	if perTickWeight >= perMinuteWeight {
+		t.Fatalf("expected per-tick weight %.6f to be less than per-minute weight %.6f", perTickWeight, perMinuteWeight)
+	}
+	if math.Abs(compounded-perMinuteWeight) > 0.01 {
+		t.Fatalf("expected compounded weight %.6f to stay close to %.6f", compounded, perMinuteWeight)
 	}
 }
 

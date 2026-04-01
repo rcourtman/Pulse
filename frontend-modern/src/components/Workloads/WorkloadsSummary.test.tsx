@@ -144,6 +144,37 @@ describe('WorkloadsSummary performance behavior', () => {
     });
   });
 
+  it('ignores stale cache versions while waiting for live fetch', async () => {
+    const staleWorkloadId = 'cluster-a:pve1:stale';
+    localStorage.setItem(
+      'pulse.workloadsSummaryCharts.default::1h::__all__',
+      JSON.stringify({
+        version: 0,
+        range: '1h',
+        nodeScope: '',
+        cachedAt: Date.now(),
+        data: makeChartsResponse([staleWorkloadId]).data,
+        dockerData: {},
+      }),
+    );
+    mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => {}));
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: 1, running: 1, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots(['cluster-a:pve1:fresh'])}
+      />
+    ));
+
+    await waitFor(() => {
+      expect(mockGetWorkloadCharts).toHaveBeenCalledTimes(1);
+    });
+
+    expect(screen.queryByTestId('sparkline')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('sparkline-skeleton')).toHaveLength(4);
+  });
+
   it('requests fewer chart points for large workload sets', async () => {
     mockGetWorkloadCharts.mockResolvedValueOnce(makeChartsResponse([]));
 

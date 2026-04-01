@@ -10,6 +10,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/storagehealth"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
@@ -591,6 +592,44 @@ func TestSyncUnifiedAppContainerMetricsRecordsTrueNASHistory(t *testing.T) {
 	}
 }
 
+func TestSyncUnifiedAppContainerMetricsSkipsMockOwnedTrueNASHistoryWhenMockEnabled(t *testing.T) {
+	previousFeature := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previousFeature)
+	})
+
+	previousMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() {
+		mock.SetEnabled(previousMock)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedAppContainerMetrics(resourceStore)
+
+	if got := len(monitor.GetGuestMetrics("docker:nextcloud", time.Hour)["cpu"]); got != 0 {
+		t.Fatalf("expected mock-owned TrueNAS app history to be skipped, got %d cpu points", got)
+	}
+}
+
 func TestSyncUnifiedAgentMetricsRecordsTrueNASHostHistory(t *testing.T) {
 	previous := truenas.IsFeatureEnabled()
 	truenas.SetFeatureEnabled(true)
@@ -646,6 +685,44 @@ func TestSyncUnifiedAgentMetricsRecordsTrueNASHostHistory(t *testing.T) {
 	storeBacked := monitor.GetGuestMetricsForChart("agent:truenas-main", "agent", "truenas-main", 7*24*time.Hour)
 	if got := len(storeBacked["cpu"]); got == 0 {
 		t.Fatalf("expected persisted cpu history for truenas-main")
+	}
+}
+
+func TestSyncUnifiedAgentMetricsSkipsMockOwnedProviderHistoryWhenMockEnabled(t *testing.T) {
+	previousTrueNAS := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previousTrueNAS)
+	})
+
+	previousMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() {
+		mock.SetEnabled(previousMock)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedAgentMetrics(resourceStore)
+
+	if got := len(monitor.GetGuestMetrics("agent:truenas-main", time.Hour)["cpu"]); got != 0 {
+		t.Fatalf("expected mock-owned TrueNAS host history to be skipped, got %d cpu points", got)
 	}
 }
 
@@ -869,6 +946,53 @@ func TestSyncUnifiedPhysicalDiskMetricsRecordsTrueNASDiskHistory(t *testing.T) {
 	last := entry.Temperature[len(entry.Temperature)-1]
 	if last.Value != 63 {
 		t.Fatalf("expected last disk temperature 63, got %.2f", last.Value)
+	}
+}
+
+func TestSyncUnifiedStorageAndDiskMetricsSkipMockOwnedTrueNASHistoryWhenMockEnabled(t *testing.T) {
+	previousFeature := truenas.IsFeatureEnabled()
+	truenas.SetFeatureEnabled(true)
+	t.Cleanup(func() {
+		truenas.SetFeatureEnabled(previousFeature)
+	})
+
+	previousMock := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() {
+		mock.SetEnabled(previousMock)
+	})
+
+	cfg := metrics.DefaultConfig(t.TempDir())
+	store, err := metrics.NewStore(cfg)
+	if err != nil {
+		t.Fatalf("metrics.NewStore() error = %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	resourceStore := unifiedresources.NewMonitorAdapter(nil)
+	resourceStore.PopulateSnapshotAndSupplemental(models.StateSnapshot{}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceTrueNAS: truenas.NewProvider(truenas.DefaultFixtures()).Records(),
+	})
+
+	monitor := &Monitor{
+		resourceStore:  resourceStore,
+		metricsHistory: NewMetricsHistory(1024, 24*time.Hour),
+		metricsStore:   store,
+	}
+
+	monitor.syncUnifiedStorageMetrics(resourceStore)
+	monitor.syncUnifiedPhysicalDiskMetrics(resourceStore)
+
+	if got := len(monitor.GetStorageMetrics("pool:tank", time.Hour)["usage"]); got != 0 {
+		t.Fatalf("expected mock-owned TrueNAS storage history to be skipped, got %d usage points", got)
+	}
+
+	points, err := store.Query("disk", "WD-WX12A3456", "smart_temp", time.Now().Add(-time.Hour), time.Now(), 0)
+	if err != nil {
+		t.Fatalf("store.Query() error = %v", err)
+	}
+	if len(points) != 0 {
+		t.Fatalf("expected mock-owned TrueNAS disk history to be skipped, got %d points", len(points))
 	}
 }
 

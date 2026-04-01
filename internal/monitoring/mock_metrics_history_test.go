@@ -10,12 +10,27 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/truenas"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 )
 
 func fixtureGraphWithState(state models.StateSnapshot) mock.FixtureGraph {
 	return mock.FixtureGraph{State: state}
+}
+
+func TestBuildTieredTimestamps_LeavesTerminalNowToRecorders(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+
+	timestamps := buildTieredTimestamps(now, time.Hour)
+	if len(timestamps) == 0 {
+		t.Fatal("expected tiered timestamps")
+	}
+
+	last := timestamps[len(timestamps)-1]
+	if !last.Before(now) {
+		t.Fatalf("expected seed timestamps to stop before now, got %v with now=%v", last, now)
+	}
 }
 
 func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
@@ -57,6 +72,14 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 				Used:   420,
 				Free:   580,
 				Usage:  42,
+			},
+		},
+		PhysicalDisks: []models.PhysicalDisk{
+			{
+				ID:          "disk-1",
+				Node:        "node-1",
+				Serial:      "SERIAL-LOCAL-1",
+				Temperature: 41,
 			},
 		},
 		DockerHosts: []models.DockerHost{
@@ -107,6 +130,82 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	}
 	if got, want := dockerCPU[len(dockerCPU)-1].Value, state.DockerHosts[0].Containers[0].CPUPercent; math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected last docker cpu point to match current, got=%v want=%v", got, want)
+	}
+
+	storageMetrics := mh.GetAllStorageMetrics("local", time.Hour)
+	if len(storageMetrics["usage"]) < 10 || len(storageMetrics["used"]) < 10 || len(storageMetrics["avail"]) < 10 {
+		t.Fatalf("expected seeded storage capacity history, got usage=%d used=%d avail=%d", len(storageMetrics["usage"]), len(storageMetrics["used"]), len(storageMetrics["avail"]))
+	}
+	last := len(storageMetrics["usage"]) - 1
+	if got, want := storageMetrics["used"][last].Value, float64(state.Storage[0].Used); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last storage used point to match current, got=%v want=%v", got, want)
+	}
+	if got, want := storageMetrics["avail"][last].Value, float64(state.Storage[0].Free); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last storage avail point to match current, got=%v want=%v", got, want)
+	}
+	for i := range storageMetrics["usage"] {
+		if diff := math.Abs(storageMetrics["used"][i].Value + storageMetrics["avail"][i].Value - float64(state.Storage[0].Total)); diff > 0.001 {
+			t.Fatalf("expected storage used+avail to equal total at index %d, diff=%f", i, diff)
+		}
+	}
+
+	diskTemps := mh.GetDiskMetrics("SERIAL-LOCAL-1", "smart_temp", time.Hour)
+	if len(diskTemps) < 10 {
+		t.Fatalf("expected seeded disk temperature history, got %d points", len(diskTemps))
+	}
+	if got, want := diskTemps[len(diskTemps)-1].Value, float64(state.PhysicalDisks[0].Temperature); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last disk temp point to match current, got=%v want=%v", got, want)
+	}
+}
+
+func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+
+	state := models.StateSnapshot{
+		DockerHosts: []models.DockerHost{
+			{
+				ID:       "host-1",
+				Status:   "online",
+				CPUUsage: 22.5,
+				Memory:   models.Memory{Usage: 58, Total: 16 * 1024 * 1024 * 1024},
+				Disks: []models.Disk{
+					{Total: 1000, Used: 600, Usage: 60},
+				},
+				Containers: []models.DockerContainer{
+					{
+						ID:                  "cont-1",
+						State:               "running",
+						CPUPercent:          3.3,
+						MemoryPercent:       11.2,
+						WritableLayerBytes:  10,
+						RootFilesystemBytes: 100,
+					},
+				},
+			},
+		},
+	}
+
+	mh := NewMetricsHistory(1000, 24*time.Hour)
+	seedMockMetricsHistory(mh, nil, fixtureGraphWithState(state), now, time.Hour, 30*time.Second)
+
+	memorySeries := mh.GetGuestMetrics("docker:cont-1", "memory", time.Hour)
+	if len(memorySeries) < 2 {
+		t.Fatalf("expected seeded docker memory points, got %d", len(memorySeries))
+	}
+
+	last := memorySeries[len(memorySeries)-1]
+	if !last.Timestamp.Equal(now) {
+		t.Fatalf("expected terminal docker memory timestamp %v, got %v", now, last.Timestamp)
+	}
+
+	nowCount := 0
+	for _, point := range memorySeries {
+		if point.Timestamp.Equal(now) {
+			nowCount++
+		}
+	}
+	if nowCount != 1 {
+		t.Fatalf("expected exactly one terminal now point, got %d", nowCount)
 	}
 }
 
@@ -395,6 +494,11 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded TrueNAS pool used points")
 	}
 
+	diskTempPoints := mh.GetDiskMetrics(fixtures.Disks[0].Serial, "smart_temp", 7*24*time.Hour)
+	if len(diskTempPoints) == 0 {
+		t.Fatal("expected in-memory history to have seeded TrueNAS disk temperature points")
+	}
+
 	appPoints, err := store.Query("dockerContainer", "nextcloud", "cpu", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
 		t.Fatalf("failed to query TrueNAS app cpu metrics: %v", err)
@@ -557,6 +661,108 @@ func TestStartMockMetricsSampler_DoesNotClearExistingMetricsStoreData(t *testing
 	}
 }
 
+func TestStartMockMetricsSampler_SeedsCanonicalMockResourceHistory(t *testing.T) {
+	previousEnabled := mock.IsMockEnabled()
+	previousConfig := mock.GetConfig()
+	t.Cleanup(func() {
+		mock.SetEnabled(false)
+		mock.SetMockConfig(previousConfig)
+		if previousEnabled {
+			mock.SetEnabled(true)
+			mock.SetMockConfig(previousConfig)
+		}
+	})
+
+	cfg := mock.DefaultConfig
+	cfg.NodeCount = 3
+	cfg.DockerHostCount = 2
+	cfg.DockerContainersPerHost = 5
+	cfg.RandomMetrics = true
+
+	mock.SetEnabled(false)
+	mock.SetMockConfig(cfg)
+	mock.SetEnabled(true)
+
+	resources, _ := mock.UnifiedResourceSnapshot()
+	if len(resources) == 0 {
+		t.Fatal("expected canonical mock unified resources")
+	}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestResources(resources)
+
+	monitor := &Monitor{
+		metricsHistory: NewMetricsHistory(1000, 24*time.Hour),
+		state:          models.NewState(),
+		resourceStore:  unifiedresources.NewMonitorAdapter(registry),
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	monitor.startMockMetricsSampler(ctx)
+	t.Cleanup(func() { monitor.stopMockMetricsSampler() })
+
+	graph := mock.CurrentFixtureGraph()
+	if len(graph.State.PhysicalDisks) == 0 {
+		t.Fatal("expected proxmox physical disks in canonical mock graph")
+	}
+	if len(graph.State.DockerHosts) == 0 || len(graph.State.DockerHosts[0].Containers) == 0 {
+		t.Fatal("expected docker app containers in canonical mock graph")
+	}
+
+	proxmoxDiskID := strings.TrimSpace(graph.State.PhysicalDisks[0].Serial)
+	if proxmoxDiskID == "" {
+		proxmoxDiskID = strings.TrimSpace(graph.State.PhysicalDisks[0].ID)
+	}
+	if proxmoxDiskID == "" {
+		t.Fatal("expected proxmox physical disk metric id")
+	}
+
+	diskPoints := monitor.metricsHistory.GetDiskMetrics(proxmoxDiskID, "smart_temp", 7*24*time.Hour)
+	if got := len(diskPoints); got < 300 {
+		t.Fatalf("expected seeded in-memory proxmox disk history, got %d points for %q", got, proxmoxDiskID)
+	}
+
+	diskCharts := monitor.GetPhysicalDiskTemperatureCharts(7 * 24 * time.Hour)
+	diskChart, ok := diskCharts[proxmoxDiskID]
+	if !ok {
+		t.Fatalf("expected disk chart for %q, got keys=%v", proxmoxDiskID, keysDiskCharts(diskCharts))
+	}
+	if got := len(diskChart.Temperature); got < 300 {
+		t.Fatalf("expected seeded proxmox disk chart history, got %d points for %q", got, proxmoxDiskID)
+	}
+
+	dockerMetricID := strings.TrimSpace(graph.State.DockerHosts[0].Containers[0].ID)
+	if dockerMetricID == "" {
+		t.Fatal("expected docker app container metric id")
+	}
+
+	workloadMetrics := monitor.GetGuestMetricsForChartBatch(
+		"dockerContainer",
+		[]GuestChartRequest{{
+			InMemoryKey:   "docker:" + dockerMetricID,
+			SQLResourceID: dockerMetricID,
+		}},
+		7*24*time.Hour,
+	)
+	cpuPoints := workloadMetrics[dockerMetricID]["cpu"]
+	memoryPoints := workloadMetrics[dockerMetricID]["memory"]
+	if got := len(cpuPoints); got < 300 {
+		t.Fatalf("expected seeded docker app cpu history, got %d points for %q", got, dockerMetricID)
+	}
+	if got := len(memoryPoints); got < 300 {
+		t.Fatalf("expected seeded docker app memory history, got %d points for %q", got, dockerMetricID)
+	}
+}
+
+func keysDiskCharts(charts map[string]DiskChartEntry) []string {
+	keys := make([]string, 0, len(charts))
+	for key := range charts {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
 func TestGenerateSeededSeries_Deterministic(t *testing.T) {
 	seed := HashSeed("node", "deterministic", "cpu")
 	seriesA := GenerateSeededSeries(57.3, 240, seed, 0, 100, styleSpiky)
@@ -613,5 +819,104 @@ func TestGenerateSeededSeries_SpikyProducesSpikes(t *testing.T) {
 	}
 	if spikeCount < 3 {
 		t.Fatalf("expected some spike events above 40; only got %d", spikeCount)
+	}
+}
+
+func TestGenerateSeededSeriesForTimestamps_StableAcrossOverlappingWindows(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	seed := HashSeed("dockerContainer", "orion-2-f54579833f9c", "memory")
+
+	fullWindow := make([]time.Time, 0, 25)
+	for ts := now.Add(-24 * time.Hour); !ts.After(now); ts = ts.Add(time.Hour) {
+		fullWindow = append(fullWindow, ts)
+	}
+	recentWindow := append([]time.Time(nil), fullWindow[len(fullWindow)-7:]...)
+
+	fullSeries := GenerateSeededSeriesForTimestamps(51.9, fullWindow, seed, 0, 100, stylePlateau)
+	recentSeries := GenerateSeededSeriesForTimestamps(51.9, recentWindow, seed, 0, 100, stylePlateau)
+
+	if len(recentSeries) != len(recentWindow) {
+		t.Fatalf("expected %d recent points, got %d", len(recentWindow), len(recentSeries))
+	}
+
+	offset := len(fullSeries) - len(recentSeries)
+	for i := range recentSeries {
+		if fullSeries[offset+i] != recentSeries[i] {
+			t.Fatalf(
+				"overlapping timestamp mismatch at index %d: full=%f recent=%f",
+				i,
+				fullSeries[offset+i],
+				recentSeries[i],
+			)
+		}
+	}
+}
+
+func TestGenerateSeededMetricSeriesForTimestamps_StableAcrossOverlappingWindows(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	seed := HashSeed("dockerContainer", "nebula-1", "netin")
+
+	fullWindow := make([]time.Time, 0, 25)
+	for ts := now.Add(-24 * time.Hour); !ts.After(now); ts = ts.Add(time.Hour) {
+		fullWindow = append(fullWindow, ts)
+	}
+	recentWindow := append([]time.Time(nil), fullWindow[len(fullWindow)-7:]...)
+
+	fullSeries := GenerateSeededMetricSeriesForTimestamps(320, fullWindow, seed, 0, 1200, "netin", styleSpiky)
+	recentSeries := GenerateSeededMetricSeriesForTimestamps(320, recentWindow, seed, 0, 1200, "netin", styleSpiky)
+
+	if len(recentSeries) != len(recentWindow) {
+		t.Fatalf("expected %d recent points, got %d", len(recentWindow), len(recentSeries))
+	}
+
+	offset := len(fullSeries) - len(recentSeries)
+	for i := range recentSeries {
+		if fullSeries[offset+i] != recentSeries[i] {
+			t.Fatalf(
+				"overlapping metric timestamp mismatch at index %d: full=%f recent=%f",
+				i,
+				fullSeries[offset+i],
+				recentSeries[i],
+			)
+		}
+	}
+}
+
+func TestGenerateSeededMetricSeriesForTimestamps_UsesSameTimelineAsMockRuntime(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	timestamps := make([]time.Time, 0, 25)
+	for ts := now.Add(-24 * time.Hour); !ts.After(now); ts = ts.Add(time.Hour) {
+		timestamps = append(timestamps, ts)
+	}
+
+	cases := []struct {
+		resourceType string
+		resourceID   string
+		metricType   string
+		style        SeriesStyle
+	}{
+		{resourceType: "dockerContainer", resourceID: "orion-2-f54579833f9c", metricType: "memory", style: stylePlateau},
+		{resourceType: "disk", resourceID: "SERIAL-LOCAL-1", metricType: "smart_temp", style: styleFlat},
+	}
+
+	for _, tc := range cases {
+		min, max := mock.MetricBounds(tc.resourceType, tc.metricType)
+		current := mock.SampleMetric(tc.resourceType, tc.resourceID, tc.metricType, now)
+		seed := mock.MetricSeed(tc.resourceType, tc.resourceID, tc.metricType)
+		series := GenerateSeededMetricSeriesForTimestamps(current, timestamps, seed, min, max, tc.metricType, tc.style)
+
+		for i, ts := range timestamps {
+			want := mock.SampleMetric(tc.resourceType, tc.resourceID, tc.metricType, ts)
+			if diff := math.Abs(series[i] - want); diff > 1e-9 {
+				t.Fatalf(
+					"expected seeded %s/%s series to match runtime timeline at index %d: got=%f want=%f",
+					tc.resourceType,
+					tc.metricType,
+					i,
+					series[i],
+					want,
+				)
+			}
+		}
 	}
 }

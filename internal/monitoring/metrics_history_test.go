@@ -135,6 +135,19 @@ func TestAppendMetric(t *testing.T) {
 			wantFirst: 30.0,
 			wantLast:  30.0,
 		},
+		{
+			name:          "same timestamp replaces latest point",
+			maxDataPoints: 10,
+			retentionTime: time.Hour,
+			existing: []MetricPoint{
+				{Value: 10.0, Timestamp: now.Add(-5 * time.Minute)},
+				{Value: 20.0, Timestamp: now},
+			},
+			newPoint:  MetricPoint{Value: 30.0, Timestamp: now},
+			wantLen:   2,
+			wantFirst: 10.0,
+			wantLast:  30.0,
+		},
 	}
 
 	for _, tt := range tests {

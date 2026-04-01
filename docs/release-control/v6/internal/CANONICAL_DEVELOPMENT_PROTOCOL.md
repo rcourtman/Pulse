@@ -38,6 +38,8 @@ These rules are retrospective.
 When an existing lane is touched, reviewed, or reopened, judge it against the
 same modernization bar as new lane work rather than assuming earlier work
 closed it permanently.
+If a superseded or obsolete internal path remains in the primary governed
+surface, that is drift. Retire it or record the exception.
 
 ## Required Operating Files
 

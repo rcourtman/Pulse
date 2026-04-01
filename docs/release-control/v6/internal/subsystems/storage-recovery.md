@@ -215,6 +215,12 @@ recovery surfaces. Mock summary cards, seeded history, and provider-backed
 storage/recovery counts must come from the same canonical fixture graph so
 storage and recovery demos show realistic healthy-versus-attention balance
 instead of blank history, stale provider context, or page-local fixture drift.
+That same adjacent chart boundary now also assumes seeded and live mock
+storage timelines are one continuous series. Disk-temperature, pool-usage,
+used-capacity, and available-space cards may consume shaped chart payloads for
+presentation, but those payloads must still reflect one canonical mock metric
+timeline instead of a seeded seven-day sparkline with a second live tail
+stitched on afterward.
 That same shared `internal/api/` dependency also assumes auth-persistence
 teardown is synchronous when recovery-adjacent runtimes reinitialize. Session,
 CSRF, and recovery-token workers may not leave stale background goroutines or

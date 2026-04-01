@@ -11,6 +11,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	unifiedresources "github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
@@ -85,6 +86,28 @@ func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 				t.Fatalf("%s must not depend on legacy mock partial helper %q", name, snippet)
 			}
 		}
+	}
+}
+
+func TestMockOwnedUnifiedMetricSyncSkipsProviderWriters(t *testing.T) {
+	previous := mock.IsMockEnabled()
+	mock.SetEnabled(true)
+	t.Cleanup(func() { mock.SetEnabled(previous) })
+
+	if !shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceTrueNAS},
+	}) {
+		t.Fatal("expected TrueNAS mock-owned resources to skip generic unified metric sync")
+	}
+	if !shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceVMware},
+	}) {
+		t.Fatal("expected VMware mock-owned resources to skip generic unified metric sync")
+	}
+	if shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+	}) {
+		t.Fatal("expected non-provider mock resources to keep generic unified metric sync")
 	}
 }
 

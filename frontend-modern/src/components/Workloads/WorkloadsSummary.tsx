@@ -93,7 +93,7 @@ const WORKLOAD_COLORS = [
 ];
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
-const WORKLOADS_SUMMARY_CACHE_VERSION = 3;
+const WORKLOADS_SUMMARY_CACHE_VERSION = 5;
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
 const WORKLOADS_SUMMARY_CACHE_MAX_CHARS = 900_000;
@@ -407,7 +407,8 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const selectedRange = createMemo<TimeRange>(() => props.timeRange || '1h');
   const selectedNodeScope = createMemo(() => props.selectedNodeId?.trim() || '');
   const activeScopeKey = createMemo(
-    () => `${orgScope()}::${selectedRange()}::${selectedNodeScope()}`,
+    () =>
+      `${WORKLOADS_SUMMARY_CACHE_VERSION}::${orgScope()}::${selectedRange()}::${selectedNodeScope()}`,
   );
   const hasCurrentRangeData = createMemo(() => loadedScopeKey() === activeScopeKey());
 

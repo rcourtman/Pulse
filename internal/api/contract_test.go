@@ -88,6 +88,21 @@ func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testin
 	}
 }
 
+func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
+	pointTime := time.Date(2026, time.March, 31, 12, 0, 0, 987_000_000, time.UTC)
+
+	converted := monitorPointsToAPI([]monitoring.MetricPoint{{
+		Timestamp: pointTime,
+		Value:     42,
+	}})
+	if len(converted) != 1 {
+		t.Fatalf("expected one converted point, got %d", len(converted))
+	}
+	if converted[0].Timestamp != pointTime.UnixMilli() {
+		t.Fatalf("expected millisecond timestamp %d, got %d", pointTime.UnixMilli(), converted[0].Timestamp)
+	}
+}
+
 func TestContract_TrueNASConnectionsDisabledMessageIsExplicit(t *testing.T) {
 	setTrueNASFeatureForTest(t, false)
 	handler, _, _ := newTrueNASHandlersForTest(t, nil)
@@ -577,6 +592,59 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 	}
 	if recentCount > 20 {
 		t.Fatalf("expected day-proportional summary buckets, got %d recent p50 points", recentCount)
+	}
+}
+
+func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T) {
+	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC).UnixMilli()
+
+	coarse := generateStyledMockSeries(
+		now,
+		time.Hour,
+		7,
+		51.9,
+		0,
+		100,
+		"history-mock",
+		"orion-2-f54579833f9c",
+		"memory",
+	)
+	fine := generateStyledMockSeries(
+		now,
+		time.Hour,
+		13,
+		51.9,
+		0,
+		100,
+		"history-mock",
+		"orion-2-f54579833f9c",
+		"memory",
+	)
+
+	if len(coarse) != 7 || len(fine) != 13 {
+		t.Fatalf("unexpected synthetic series lengths coarse=%d fine=%d", len(coarse), len(fine))
+	}
+
+	for i, point := range coarse {
+		fineIndex := i * 2
+		if fine[fineIndex].Timestamp != point.Timestamp {
+			t.Fatalf(
+				"expected shared timestamp at coarse[%d]=%d to match fine[%d]=%d",
+				i,
+				point.Timestamp,
+				fineIndex,
+				fine[fineIndex].Timestamp,
+			)
+		}
+		if fine[fineIndex].Value != point.Value {
+			t.Fatalf(
+				"expected shared timestamp value at coarse[%d]=%f to match fine[%d]=%f",
+				i,
+				point.Value,
+				fineIndex,
+				fine[fineIndex].Value,
+			)
+		}
 	}
 }
 
