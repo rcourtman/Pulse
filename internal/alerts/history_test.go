@@ -195,6 +195,54 @@ func TestUpdateAlertLastSeenForAlertMatchesCanonicalState(t *testing.T) {
 	}
 }
 
+func TestMigrateActiveAlertMatchesCanonicalState(t *testing.T) {
+	hm := newTestHistoryManager(t)
+
+	start := time.Now().Add(-10 * time.Minute)
+	oldResourceID := BuildGuestKey("pve1", "node1", 101)
+	newResourceID := BuildGuestKey("pve1", "node2", 101)
+	specID := canonicalMetricSpecID(oldResourceID, "cpu")
+	oldState := buildCanonicalStateID(oldResourceID, specID)
+	newState := buildCanonicalStateID(newResourceID, specID)
+
+	hm.history = []HistoryEntry{
+		{
+			Alert: Alert{
+				ID:              oldState,
+				Type:            "cpu",
+				ResourceID:      oldResourceID,
+				CanonicalSpecID: specID,
+				CanonicalState:  oldState,
+				Node:            "node1",
+				Instance:        "pve1",
+				StartTime:       start,
+			},
+			Timestamp: start,
+		},
+	}
+
+	hm.MigrateActiveAlert(oldState, Alert{
+		ID:              newState,
+		Type:            "cpu",
+		ResourceID:      newResourceID,
+		CanonicalSpecID: specID,
+		CanonicalState:  newState,
+		Node:            "node2",
+		Instance:        "pve1",
+		StartTime:       start,
+	})
+
+	if hm.history[0].Alert.ID != newState {
+		t.Fatalf("history alert ID = %q, want %q", hm.history[0].Alert.ID, newState)
+	}
+	if hm.history[0].Alert.ResourceID != newResourceID {
+		t.Fatalf("history resource ID = %q, want %q", hm.history[0].Alert.ResourceID, newResourceID)
+	}
+	if hm.history[0].Alert.Node != "node2" {
+		t.Fatalf("history node = %q, want node2", hm.history[0].Alert.Node)
+	}
+}
+
 func TestOnAlert(t *testing.T) {
 	// t.Parallel()
 

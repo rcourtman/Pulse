@@ -188,6 +188,32 @@ func (hm *HistoryManager) UpdateAlertLastSeenForAlert(alert *Alert, lastSeen tim
 	}
 }
 
+// MigrateActiveAlert updates the most recent history entry for an in-flight
+// alert when its canonical runtime identity changes, such as a guest metric
+// alert moving from one node-scoped resource key to another after a VM move.
+func (hm *HistoryManager) MigrateActiveAlert(oldTrackingKey string, updated Alert) {
+	if oldTrackingKey == "" {
+		return
+	}
+
+	updatedAlert := updated.Clone()
+	if updatedAlert == nil {
+		return
+	}
+	backfillCanonicalIdentity(updatedAlert)
+
+	hm.mu.Lock()
+	defer hm.mu.Unlock()
+
+	for i := len(hm.history) - 1; i >= 0; i-- {
+		entry := hm.history[i].Alert.Clone()
+		if historyIdentityKey(entry) == oldTrackingKey || hm.history[i].Alert.ID == oldTrackingKey {
+			hm.history[i].Alert = *updatedAlert
+			return
+		}
+	}
+}
+
 // GetHistory returns alert history within the specified time range
 func (hm *HistoryManager) GetHistory(since time.Time, limit int) []Alert {
 	hm.mu.RLock()

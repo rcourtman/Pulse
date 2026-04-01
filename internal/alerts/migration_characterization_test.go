@@ -549,6 +549,131 @@ func TestAlertCharacterizationResolvedLookupByCanonicalStateAlias(t *testing.T) 
 	}
 }
 
+func TestAlertCharacterizationGuestMetricAlertMigratesAcrossNodeMove(t *testing.T) {
+	oldResourceID := BuildGuestKey("pve1", "node1", 101)
+	newResourceID := BuildGuestKey("pve1", "node2", 101)
+	oldState := canonicalMetricStateID(oldResourceID, "cpu")
+	newState := canonicalMetricStateID(newResourceID, "cpu")
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.CheckGuest(testVM(oldResourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
+
+	if err := m.AcknowledgeAlert(oldState, "alice"); err != nil {
+		t.Fatalf("AcknowledgeAlert(%q) error = %v", oldState, err)
+	}
+
+	m.mu.Lock()
+	m.suppressedUntil[oldState] = time.Now().Add(time.Hour)
+	m.alertRateLimit[oldState] = []time.Time{time.Now()}
+	m.flappingHistory[oldState] = []time.Time{time.Now()}
+	m.flappingActive[oldState] = true
+	m.mu.Unlock()
+
+	m.CheckGuest(testVM(newResourceID, 101, "app01", "node2", "pve1", "running", 0.92), "pve1")
+
+	assertAlertMissing(t, m, oldState)
+	alert := activeAlert(t, m, newState)
+	if alert.ResourceID != newResourceID {
+		t.Fatalf("ResourceID = %q, want %q", alert.ResourceID, newResourceID)
+	}
+	if alert.Node != "node2" {
+		t.Fatalf("Node = %q, want node2", alert.Node)
+	}
+	if !alert.Acknowledged || alert.AckUser != "alice" {
+		t.Fatalf("expected acknowledgment to follow migrated alert, got acknowledged=%t user=%q", alert.Acknowledged, alert.AckUser)
+	}
+
+	m.mu.RLock()
+	_, oldAck := m.ackStateByCanonical[oldState]
+	record, newAck := m.ackStateByCanonical[newState]
+	_, oldSuppression := m.suppressedUntil[oldState]
+	_, newSuppression := m.suppressedUntil[newState]
+	_, oldRate := m.alertRateLimit[oldState]
+	_, newRate := m.alertRateLimit[newState]
+	_, oldFlapping := m.flappingHistory[oldState]
+	_, newFlapping := m.flappingHistory[newState]
+	m.mu.RUnlock()
+
+	if oldAck || !newAck || !record.acknowledged || record.user != "alice" {
+		t.Fatalf("expected canonical ack record to migrate, old=%t new=%t record=%+v", oldAck, newAck, record)
+	}
+	if oldSuppression || !newSuppression || oldRate || !newRate || oldFlapping || !newFlapping {
+		t.Fatalf(
+			"expected tracking state to migrate, suppression old=%t new=%t rate old=%t new=%t flapping old=%t new=%t",
+			oldSuppression,
+			newSuppression,
+			oldRate,
+			newRate,
+			oldFlapping,
+			newFlapping,
+		)
+	}
+
+	history := m.GetAlertHistory(5)
+	if len(history) != 1 || history[0].ID != newState {
+		t.Fatalf("expected migrated history entry under %q, got %#v", newState, history)
+	}
+}
+
+func TestAlertCharacterizationGuestMetricResolutionUsesCurrentNodeIdentityAfterMove(t *testing.T) {
+	oldResourceID := BuildGuestKey("pve1", "node1", 101)
+	newResourceID := BuildGuestKey("pve1", "node2", 101)
+	newState := canonicalMetricStateID(newResourceID, "cpu")
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.CheckGuest(testVM(oldResourceID, 101, "app01", "node1", "pve1", "running", 0.95), "pve1")
+	m.CheckGuest(testVM(newResourceID, 101, "app01", "node2", "pve1", "running", 0.70), "pve1")
+
+	assertAlertMissing(t, m, canonicalMetricStateID(oldResourceID, "cpu"))
+	assertAlertMissing(t, m, newState)
+
+	resolved := m.GetResolvedAlert(newState)
+	if resolved == nil || resolved.Alert == nil {
+		t.Fatalf("expected resolved alert lookup by migrated canonical state %q", newState)
+	}
+	if resolved.Alert.ResourceID != newResourceID {
+		t.Fatalf("resolved alert resource ID = %q, want %q", resolved.Alert.ResourceID, newResourceID)
+	}
+
+	history := m.GetAlertHistory(5)
+	if len(history) != 1 || history[0].ID != newState {
+		t.Fatalf("expected resolved history entry under %q, got %#v", newState, history)
+	}
+}
+
+func TestAlertCharacterizationGuestPerDiskMetricAlertMigratesAcrossNodeMove(t *testing.T) {
+	oldResourceID := BuildGuestKey("pve1", "node1", 101) + "-disk-root"
+	newResourceID := BuildGuestKey("pve1", "node2", 101) + "-disk-root"
+
+	threshold := &HysteresisThreshold{Trigger: 90, Clear: 85}
+	oldSpec, err := buildCanonicalMetricSpec(oldResourceID, "app01", unifiedresources.ResourceTypeVM, "disk", threshold)
+	if err != nil {
+		t.Fatalf("buildCanonicalMetricSpec(oldResourceID) error = %v", err)
+	}
+	newSpec, err := buildCanonicalMetricSpec(newResourceID, "app01", unifiedresources.ResourceTypeVM, "disk", threshold)
+	if err != nil {
+		t.Fatalf("buildCanonicalMetricSpec(newResourceID) error = %v", err)
+	}
+
+	oldState := buildCanonicalStateID(oldResourceID, oldSpec.ID)
+	newState := buildCanonicalStateID(newResourceID, newSpec.ID)
+
+	m := newCharacterizationManager(t, characterizationBaseConfig())
+	m.checkMetricWithCanonicalSpec(oldSpec, "app01", "node1", "pve1", "VM", 95, threshold, &metricOptions{Message: "VM disk (/root) at 95%"})
+	m.checkMetricWithCanonicalSpec(newSpec, "app01", "node2", "pve1", "VM", 95, threshold, &metricOptions{Message: "VM disk (/root) at 95%"})
+
+	assertAlertMissing(t, m, oldState)
+	alert := activeAlert(t, m, newState)
+	if alert.ResourceID != newResourceID {
+		t.Fatalf("ResourceID = %q, want %q", alert.ResourceID, newResourceID)
+	}
+
+	history := m.GetAlertHistory(5)
+	if len(history) != 1 || history[0].ID != newState {
+		t.Fatalf("expected per-disk history entry under %q, got %#v", newState, history)
+	}
+}
+
 func TestAlertCharacterizationManualClearRemovesCanonicalTrackingState(t *testing.T) {
 	resourceID := BuildGuestKey("pve1", "node1", 101)
 	specID := canonicalMetricSpecID(resourceID, "cpu")

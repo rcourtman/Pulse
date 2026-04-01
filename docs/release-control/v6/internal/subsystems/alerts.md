@@ -75,6 +75,13 @@ operator-facing alert routing behavior for live runtime alerts.
 Canonical alert identity and evaluation are the live runtime model. Remaining
 legacy references should exist only in explicit migration or negative test
 boundaries.
+Guest metric canonical state remains resource-backed and therefore node-scoped
+for Proxmox guests, so node moves must not strand active alert state on the
+previous resource ID. When a guest metric alert survives a node move, alerts
+runtime must migrate the active alert, history entry, acknowledgment record,
+suppression/rate-limit/flapping tracking, and guest per-disk metric identity
+to the current canonical state instead of reopening a duplicate alert or
+resolving only the stale node-scoped identity.
 
 Alert history persistence is also part of that canonical boundary. The history
 manager may choose the owned runtime data directory, but it must normalize that

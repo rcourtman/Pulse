@@ -85,9 +85,22 @@ func (m *Manager) evaluateCanonicalMetricAlert(spec alertspecs.ResourceAlertSpec
 	observedAt := time.Now()
 
 	m.mu.Lock()
+	migratedAlertIdentity := false
+	defer func() {
+		if migratedAlertIdentity {
+			asyncSaveActiveAlerts("canonical guest metric node move", m.SaveActiveAlerts)
+		}
+	}()
 	defer m.mu.Unlock()
 
 	existingAlert, exists := m.getActiveAlertNoLock(storageKey)
+	if !exists {
+		if migrated := m.migrateGuestMetricAlertNoLock(storageKey, spec.ID, string(spec.Kind), spec.ResourceID, resourceName, node, instance, resourceType); migrated != nil {
+			existingAlert = migrated
+			exists = true
+			migratedAlertIdentity = true
+		}
+	}
 	monitorOnly := opts != nil && opts.MonitorOnly
 
 	if suppressUntil, suppressed := m.suppressedUntil[trackingKey]; suppressed && time.Now().Before(suppressUntil) {

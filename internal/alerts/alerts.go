@@ -6848,11 +6848,24 @@ func (m *Manager) checkMetric(resourceID, resourceName, node, instance, resource
 		Msg("Checking metric threshold")
 
 	m.mu.Lock()
+	migratedAlertIdentity := false
+	defer func() {
+		if migratedAlertIdentity {
+			asyncSaveActiveAlerts("guest metric node move", m.SaveActiveAlerts)
+		}
+	}()
 	defer m.mu.Unlock()
 
 	existingAlert, exists := m.getActiveAlertNoLock(alertID)
 	if !exists && canonicalStateID != "" {
 		existingAlert, exists = m.getActiveAlertNoLock(canonicalStateID)
+	}
+	if !exists && canonicalStateID != "" {
+		if migrated := m.migrateGuestMetricAlertNoLock(canonicalStateID, canonicalSpecID, string(alertspecs.AlertSpecKindMetricThreshold), resourceID, resourceName, node, instance, resourceType); migrated != nil {
+			existingAlert = migrated
+			exists = true
+			migratedAlertIdentity = true
+		}
 	}
 	trackingKey := canonicalTrackingKeyOrFallback(existingAlert, canonicalStateID)
 	if trackingKey == "" {

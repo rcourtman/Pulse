@@ -214,6 +214,102 @@ func TestReevaluateActiveAlertsUsesStableClusterGuestOverrideAcrossNodeMove(t *t
 	}
 }
 
+func TestCheckMetricMigratesGuestAlertAcrossNodeMove(t *testing.T) {
+	manager := newTestManager(t)
+	manager.ClearActiveAlerts()
+
+	oldResourceID := BuildGuestKey("pve1", "node1", 101)
+	newResourceID := BuildGuestKey("pve1", "node2", 101)
+	oldState := canonicalMetricStateID(oldResourceID, "cpu")
+	newState := canonicalMetricStateID(newResourceID, "cpu")
+	start := time.Now().Add(-10 * time.Minute)
+	ackTime := start.Add(time.Minute)
+
+	alert := &Alert{
+		ID:              oldState,
+		Type:            "cpu",
+		Level:           AlertLevelWarning,
+		ResourceID:      oldResourceID,
+		CanonicalSpecID: canonicalMetricSpecID(oldResourceID, "cpu"),
+		CanonicalKind:   "metric-threshold",
+		CanonicalState:  oldState,
+		ResourceName:    "vm101",
+		Node:            "node1",
+		Instance:        "pve1",
+		Message:         "VM cpu at 95%",
+		Value:           95,
+		Threshold:       80,
+		StartTime:       start,
+		LastSeen:        start.Add(5 * time.Minute),
+		Acknowledged:    true,
+		AckUser:         "tester",
+		AckTime:         &ackTime,
+	}
+
+	manager.mu.Lock()
+	manager.setActiveAlertNoLock(oldState, alert)
+	manager.recentAlerts[oldState] = alert
+	manager.suppressedUntil[oldState] = start.Add(2 * time.Minute)
+	manager.alertRateLimit[oldState] = []time.Time{start.Add(30 * time.Second)}
+	manager.ackStateByCanonical[oldState] = ackRecord{
+		acknowledged: true,
+		user:         "tester",
+		time:         ackTime,
+	}
+	manager.flappingHistory[oldState] = []time.Time{start.Add(45 * time.Second)}
+	manager.flappingActive[oldState] = true
+	manager.historyManager.AddAlert(*alert)
+	manager.mu.Unlock()
+
+	manager.checkMetric(newResourceID, "vm101", "node2", "pve1", "VM", "cpu", 92, &HysteresisThreshold{Trigger: 80, Clear: 70}, nil)
+
+	manager.mu.RLock()
+	migrated, exists := manager.activeAlerts[newState]
+	_, oldExists := manager.activeAlerts[oldState]
+	_, oldAckExists := manager.ackStateByCanonical[oldState]
+	newAck, newAckExists := manager.ackStateByCanonical[newState]
+	_, oldSuppressed := manager.suppressedUntil[oldState]
+	_, newSuppressed := manager.suppressedUntil[newState]
+	_, oldRateLimit := manager.alertRateLimit[oldState]
+	_, newRateLimit := manager.alertRateLimit[newState]
+	_, oldFlapping := manager.flappingHistory[oldState]
+	_, newFlapping := manager.flappingHistory[newState]
+	manager.mu.RUnlock()
+
+	if oldExists {
+		t.Fatal("expected old node-scoped alert to be removed")
+	}
+	if !exists {
+		t.Fatal("expected alert to migrate to the current node-scoped canonical state")
+	}
+	if migrated.Node != "node2" || migrated.ResourceID != newResourceID {
+		t.Fatalf("expected migrated alert to target node2, got node=%q resource=%q", migrated.Node, migrated.ResourceID)
+	}
+	if !migrated.Acknowledged || migrated.AckUser != "tester" {
+		t.Fatalf("expected migrated alert acknowledgment to be preserved, got %#v", migrated)
+	}
+	if migrated.StartTime != start {
+		t.Fatalf("expected migrated alert start time to be preserved, got %v want %v", migrated.StartTime, start)
+	}
+	if oldAckExists || !newAckExists || !newAck.acknowledged {
+		t.Fatalf("expected canonical ack state to move to new alert ID, old=%v new=%v", oldAckExists, newAckExists)
+	}
+	if oldSuppressed || !newSuppressed {
+		t.Fatalf("expected suppression window to move to new alert ID, old=%v new=%v", oldSuppressed, newSuppressed)
+	}
+	if oldRateLimit || !newRateLimit {
+		t.Fatalf("expected rate limit state to move to new alert ID, old=%v new=%v", oldRateLimit, newRateLimit)
+	}
+	if oldFlapping || !newFlapping {
+		t.Fatalf("expected flapping state to move to new alert ID, old=%v new=%v", oldFlapping, newFlapping)
+	}
+
+	history := manager.GetAlertHistory(1)
+	if len(history) != 1 || history[0].ID != newState {
+		t.Fatalf("expected history entry to follow migrated alert ID, got %#v", history)
+	}
+}
+
 // TestReevaluateActiveAlertsStillAboveThreshold tests that alerts stay active if still above threshold
 func TestReevaluateActiveAlertsStillAboveThreshold(t *testing.T) {
 	manager := NewManager()
