@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/rsa"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"encoding/xml"
@@ -12,7 +11,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -74,14 +72,7 @@ func NewSAMLService(ctx context.Context, providerID string, cfg *config.SAMLProv
 }
 
 func newSAMLHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   30 * time.Second,
-	}
+	return newSSOHTTPClient(30*time.Second, nil)
 }
 
 // loadIDPMetadata loads Identity Provider metadata from URL or XML
@@ -122,7 +113,7 @@ func (s *SAMLService) loadIDPMetadata(ctx context.Context) error {
 }
 
 func (s *SAMLService) fetchIDPMetadataFromURL(ctx context.Context, metadataURL string) (*saml.EntityDescriptor, error) {
-	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(metadataURL)
+	targetURL, err := validateSSOFetchURL(ctx, metadataURL)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +225,7 @@ func (s *SAMLService) addIDPCertificate(metadata *saml.EntityDescriptor) error {
 	var err error
 
 	if s.config.IDPCertFile != "" {
-		certData, err = os.ReadFile(s.config.IDPCertFile)
+		certData, err = readSSORegularFile(s.config.IDPCertFile)
 		if err != nil {
 			return fmt.Errorf("failed to read idp certificate file: %w", err)
 		}
@@ -348,7 +339,7 @@ func (s *SAMLService) loadSPCredentials() (*x509.Certificate, *rsa.PrivateKey, e
 
 	// Load certificate
 	if s.config.SPCertFile != "" {
-		certData, err = os.ReadFile(s.config.SPCertFile)
+		certData, err = readSSORegularFile(s.config.SPCertFile)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read sp certificate file: %w", err)
 		}
@@ -360,7 +351,7 @@ func (s *SAMLService) loadSPCredentials() (*x509.Certificate, *rsa.PrivateKey, e
 
 	// Load private key
 	if s.config.SPKeyFile != "" {
-		keyData, err = os.ReadFile(s.config.SPKeyFile)
+		keyData, err = readSSORegularFile(s.config.SPKeyFile)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to read sp private key file: %w", err)
 		}

@@ -122,6 +122,24 @@ func TestFetchIDPMetadataFromURL_NonOK(t *testing.T) {
 	}
 }
 
+func TestFetchIDPMetadataFromURL_RejectsCrossOriginRedirect(t *testing.T) {
+	target := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(testSAMLMetadata))
+	}))
+	defer target.Close()
+
+	origin := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	service := &SAMLService{httpClient: newSAMLHTTPClient()}
+	if _, err := service.fetchIDPMetadataFromURL(context.Background(), origin.URL+"/metadata"); err == nil || !strings.Contains(err.Error(), "same origin") {
+		t.Fatalf("expected same-origin redirect rejection, got %v", err)
+	}
+}
+
 func TestAddIDPCertificate_InvalidPEM(t *testing.T) {
 	service := &SAMLService{config: &config.SAMLProviderConfig{IDPCertificate: "not-pem"}}
 	metadata := &saml.EntityDescriptor{

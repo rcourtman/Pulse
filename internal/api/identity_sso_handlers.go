@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -1216,18 +1215,11 @@ func (r *Router) handleMetadataPreview(w http.ResponseWriter, req *http.Request)
 // ============================================================================
 
 func newTestHTTPClient() *http.Client {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = &tls.Config{
-		MinVersion: tls.VersionTLS12,
-	}
-	return &http.Client{
-		Transport: transport,
-		Timeout:   testConnectionTimeout,
-	}
+	return newSSOHTTPClient(testConnectionTimeout, nil)
 }
 
 func fetchSAMLMetadataFromURL(ctx context.Context, client *http.Client, metadataURL string) ([]byte, *saml.EntityDescriptor, error) {
-	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(metadataURL)
+	targetURL, err := validateSSOFetchURL(ctx, metadataURL)
 	if err != nil {
 		return nil, nil, err
 	}

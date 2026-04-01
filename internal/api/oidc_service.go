@@ -17,6 +17,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 )
@@ -348,20 +349,11 @@ func (s *OIDCService) RefreshToken(ctx context.Context, refreshToken string) (*O
 }
 
 func newOIDCHTTPClient(caBundle string) (*http.Client, string, error) {
-	transport, ok := http.DefaultTransport.(*http.Transport)
-	var clone *http.Transport
-	if ok && transport != nil {
-		clone = transport.Clone()
-	} else {
-		clone = &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-		}
-	}
 	if strings.TrimSpace(caBundle) == "" {
-		return &http.Client{Transport: clone}, "", nil
+		return newSSOHTTPClient(0, nil), "", nil
 	}
 
-	caData, err := os.ReadFile(caBundle)
+	caData, err := readSSORegularFile(caBundle)
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to read OIDC CA bundle: %w", err)
 	}
@@ -375,16 +367,14 @@ func newOIDCHTTPClient(caBundle string) (*http.Client, string, error) {
 		return nil, "", fmt.Errorf("OIDC CA bundle does not contain any certificates")
 	}
 
-	if clone.TLSClientConfig == nil {
-		clone.TLSClientConfig = &tls.Config{}
+	tlsConfig := &tls.Config{
+		RootCAs: pool,
 	}
-	clone.TLSClientConfig.MinVersion = tls.VersionTLS12
-	clone.TLSClientConfig.RootCAs = pool
 
 	sum := sha256.Sum256(caData)
 	caHash := fmt.Sprintf("%x", sum[:])
 
-	return &http.Client{Transport: clone}, caHash, nil
+	return securityutil.NewRestrictedOutboundHTTPClient(0, ssoOutboundHTTPOptions(tlsConfig)), caHash, nil
 }
 
 func hashCABundle(path string) (string, error) {

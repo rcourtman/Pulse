@@ -1280,6 +1280,117 @@ func TestContract_SSOTestOIDCDiscoveryKeepsIssuerBasePath(t *testing.T) {
 	}
 }
 
+func TestContract_SSOTestRejectsCrossOriginSAMLMetadataRedirect(t *testing.T) {
+	targetCalled := make(chan struct{}, 1)
+	target := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case targetCalled <- struct{}{}:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/xml")
+		w.Write([]byte(testSAMLMetadata))
+	}))
+	defer target.Close()
+
+	origin := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	reqBody := SSOTestRequest{
+		Type: "saml",
+		SAML: &SAMLTestConfig{
+			IDPMetadataURL: origin.URL + "/metadata",
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setTestIP(req)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleTestSSOProvider(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	select {
+	case <-targetCalled:
+		t.Fatal("expected cross-origin SAML redirect to be rejected before fetching the target origin")
+	default:
+	}
+}
+
+func TestContract_SSOTestRejectsCrossOriginOIDCDiscoveryRedirect(t *testing.T) {
+	targetCalled := make(chan struct{}, 1)
+	var targetURL string
+	target := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		select {
+		case targetCalled <- struct{}{}:
+		default:
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{
+			"issuer": %q,
+			"authorization_endpoint": %q,
+			"token_endpoint": %q,
+			"userinfo_endpoint": %q,
+			"jwks_uri": %q,
+			"scopes_supported": ["openid", "profile", "email"]
+		}`, targetURL, targetURL+"/auth", targetURL+"/token", targetURL+"/userinfo", targetURL+"/jwks")
+	}))
+	defer target.Close()
+	targetURL = target.URL
+
+	origin := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	reqBody := SSOTestRequest{
+		Type: "oidc",
+		OIDC: &OIDCTestConfig{
+			IssuerURL: origin.URL,
+		},
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		t.Fatalf("marshal request: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setTestIP(req)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleTestSSOProvider(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusBadRequest, rec.Body.String())
+	}
+
+	select {
+	case <-targetCalled:
+		t.Fatal("expected cross-origin OIDC redirect to be rejected before fetching the target origin")
+	default:
+	}
+}
+
 func TestContract_SSOLocalRedirectTargetsStayCanonical(t *testing.T) {
 	if got := buildLocalRedirectTarget("https://evil.example.com/pwn", map[string]string{
 		"oidc": "error",

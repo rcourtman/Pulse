@@ -335,7 +335,10 @@ URL handling. SAML test/preview metadata fetches and OIDC issuer discovery
 must normalize absolute HTTP(S) inputs through shared helpers, reject
 userinfo-bearing URLs before any outbound request, and append the OIDC
 well-known path relative to the issuer base instead of resetting discovery to
-the origin root.
+the origin root. Runtime SAML metadata refresh, runtime OIDC discovery, and
+admin-side SSO test/preview fetches must all use that same restricted outbound
+transport policy, including same-origin redirect validation and checked
+regular-file loads for any configured SSO credential or CA-bundle path.
 That same SSO boundary also owns manual SAML endpoint validation payloads.
 `internal/api/identity_sso_handlers.go`, `internal/api/saml_service.go`, and
 `internal/api/contract_test.go` must preserve both `idpSsoUrl` and optional

@@ -253,6 +253,47 @@ func TestHandleTestSSOProvider_OIDCSuccess(t *testing.T) {
 	}
 }
 
+func TestHandleTestSSOProvider_OIDCRedirectRejected(t *testing.T) {
+	target := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(testOIDCDiscovery))
+	}))
+	defer target.Close()
+
+	origin := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/.well-known/openid-configuration" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	reqBody := SSOTestRequest{
+		Type: "oidc",
+		OIDC: &OIDCTestConfig{
+			IssuerURL: origin.URL,
+		},
+	}
+	body, _ := json.Marshal(reqBody)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/security/sso/providers/test", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	setTestIP(req)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleTestSSOProvider(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusBadRequest, rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleTestSSOProvider_OIDCFetchError(t *testing.T) {
 	reqBody := SSOTestRequest{
 		Type: "oidc",

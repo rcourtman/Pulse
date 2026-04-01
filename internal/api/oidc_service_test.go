@@ -5,6 +5,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -90,6 +91,32 @@ func TestNewOIDCHTTPClient_InvalidPEMData(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "does not contain any certificates") {
 		t.Errorf("expected 'does not contain any certificates' error, got: %v", err)
+	}
+}
+
+func TestNewOIDCHTTPClient_BlocksCrossOriginRedirects(t *testing.T) {
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer target.Close()
+
+	origin := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+r.URL.Path, http.StatusFound)
+	}))
+	defer origin.Close()
+
+	client, _, err := newOIDCHTTPClient("")
+	if err != nil {
+		t.Fatalf("newOIDCHTTPClient() error = %v", err)
+	}
+	client.Timeout = testHTTPTimeout
+
+	resp, err := client.Get(origin.URL)
+	if resp != nil {
+		resp.Body.Close()
+	}
+	if err == nil || !strings.Contains(err.Error(), "same origin") {
+		t.Fatalf("expected same-origin redirect rejection, got %v", err)
 	}
 }
 
