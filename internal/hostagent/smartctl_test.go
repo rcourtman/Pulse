@@ -1,6 +1,7 @@
 package hostagent
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -384,6 +385,123 @@ func TestParseSMARTAttributes_NVMeZeroValuesWhenLogPresent(t *testing.T) {
 	}
 	if attrs.UnsafeShutdowns == nil || *attrs.UnsafeShutdowns != 0 {
 		t.Errorf("UnsafeShutdowns: got %v, want 0", attrs.UnsafeShutdowns)
+	}
+}
+
+func TestParseSMARTOutputStandbyPowerMode(t *testing.T) {
+	payload := smartctlJSON{
+		ModelName:    "WDC WD40EFRX",
+		SerialNumber: "WD-123",
+		PowerMode:    "STANDBY",
+	}
+	payload.Device.Protocol = "ATA"
+
+	out, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	result, err := parseSMARTOutput(out, smartctlTarget{Path: "/dev/ada0"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if !result.Standby {
+		t.Fatalf("expected standby result, got %#v", result)
+	}
+	if result.Model != "WDC WD40EFRX" || result.Serial != "WD-123" {
+		t.Fatalf("expected model/serial to be preserved, got %#v", result)
+	}
+}
+
+func TestParseSMARTOutputUsesATASCTTemperature(t *testing.T) {
+	payload := smartctlJSON{
+		ModelName:    "WDC WD40EFRX",
+		SerialNumber: "WD-456",
+	}
+	payload.Device.Protocol = "ATA"
+	payload.SmartStatus = &struct {
+		Passed bool `json:"passed"`
+	}{Passed: true}
+	payload.ATASCTStatus.Current.Value = 41
+
+	out, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	result, err := parseSMARTOutput(out, smartctlTarget{Path: "/dev/ada0"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Temperature != 41 {
+		t.Fatalf("expected SCT temperature 41, got %#v", result)
+	}
+}
+
+func TestParseSMARTOutputFallsBackToOriginalTextTemperature(t *testing.T) {
+	payload := smartctlJSON{
+		ModelName:    "WDC WD40EFRX",
+		SerialNumber: "WD-789",
+	}
+	payload.Device.Protocol = "ATA"
+	payload.SmartStatus = &struct {
+		Passed bool `json:"passed"`
+	}{Passed: true}
+	payload.Smartctl.Output = []string{
+		"=== START OF READ SMART DATA SECTION ===",
+		"194 Temperature_Celsius     0x0022   120   099   000    Old_age   Always       -       37 (Min/Max 20/45)",
+	}
+
+	out, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload: %v", err)
+	}
+
+	result, err := parseSMARTOutput(out, smartctlTarget{Path: "/dev/ada0"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Temperature != 37 {
+		t.Fatalf("expected text-fallback temperature 37, got %#v", result)
+	}
+	if result.Model != "WDC WD40EFRX" || result.Serial != "WD-789" || result.Health != "PASSED" {
+		t.Fatalf("expected model/serial/health to be preserved, got %#v", result)
+	}
+}
+
+func TestParseSMARTOutputFallsBackToPlainTextOutput(t *testing.T) {
+	output := []byte(`
+=== START OF INFORMATION SECTION ===
+Device Model:     WDC WD40EFRX
+Serial Number:    WD-123
+SMART overall-health self-assessment test result: PASSED
+Current Temperature:                    39 C
+`)
+
+	result, err := parseSMARTOutput(output, smartctlTarget{Path: "/dev/ada0"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result")
+	}
+	if result.Model != "WDC WD40EFRX" || result.Serial != "WD-123" {
+		t.Fatalf("expected text model/serial, got %#v", result)
+	}
+	if result.Health != "PASSED" || result.Temperature != 39 {
+		t.Fatalf("expected text-fallback health/temp, got %#v", result)
+	}
+	if result.Type != "sata" {
+		t.Fatalf("expected sata fallback type, got %#v", result)
 	}
 }
 

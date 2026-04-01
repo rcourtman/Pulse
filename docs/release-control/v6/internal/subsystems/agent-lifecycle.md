@@ -124,6 +124,15 @@ management, and fleet control surfaces.
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
+   That runtime-side ownership includes local disk telemetry collection in
+   `internal/hostagent/smartctl.go`. Linux SMART discovery must prefer
+   `smartctl --scan-open` typed targets before generic block-device fallback so
+   controller-backed disks keep their canonical SMART and wearout coverage.
+   FreeBSD SMART probing must retry through the canonical typed and untyped
+   device modes and the SCT temperature status path before settling on standby
+   or no-data results, and partial or plain-text smartctl output must still
+   preserve model, serial, health, and temperature data through the same
+   host-agent runtime boundary instead of leaving monitoring to guess.
 4. Keep shared `internal/api/` helper edits isolated from agent lifecycle semantics: Patrol-specific status transport or alert-trigger wiring changes in shared handlers must not bleed into auto-register, installer, or fleet-control behavior unless this contract moves in the same slice.
    The same isolation rule applies to AI settings payload work in `internal/api/ai_handlers.go`: provider auth fields, masked-secret echoes, and provider-test model selection remain AI/runtime plus API-contract ownership and must not be reinterpreted as lifecycle setup or registration semantics just because they share backend helper layers.
 4. Keep legacy Unified Agent compatibility names explicitly secondary when touching shared `internal/api/` runtime helpers: the legacy host-route family and `host-agent:*` scope names may remain as ingress or migration aliases, but they must not retake primary ownership in router state, live runtime scope checks, handler commentary, or operator-facing guidance.

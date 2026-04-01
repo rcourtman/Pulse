@@ -241,4 +241,47 @@ func TestBuildReport(t *testing.T) {
 		}
 		mc.smartLocalFn = nil
 	})
+
+	t.Run("SMART collection preserves typed controller-backed attributes", func(t *testing.T) {
+		used := 6
+		spare := 94
+		mc.smartLocalFn = func(_ context.Context, _ []string) ([]DiskSMART, error) {
+			return []DiskSMART{
+				{
+					Device: "/dev/sda [megaraid,7]",
+					Model:  "RAID SSD",
+					Type:   "nvme",
+					Health: "PASSED",
+					Attributes: &SMARTAttributes{
+						PercentageUsed: &used,
+						AvailableSpare: &spare,
+					},
+				},
+			}, nil
+		}
+		mc.goos = "linux"
+
+		report, err := agent.buildReport(context.Background())
+		if err != nil {
+			t.Fatalf("buildReport failed: %v", err)
+		}
+		if len(report.Sensors.SMART) != 1 {
+			t.Fatalf("Expected 1 SMART disk, got %d", len(report.Sensors.SMART))
+		}
+
+		disk := report.Sensors.SMART[0]
+		if disk.Device != "/dev/sda [megaraid,7]" {
+			t.Fatalf("Expected typed controller-backed device label, got %s", disk.Device)
+		}
+		if disk.Attributes == nil {
+			t.Fatal("expected SMART attributes to be preserved")
+		}
+		if disk.Attributes.PercentageUsed == nil || *disk.Attributes.PercentageUsed != used {
+			t.Fatalf("expected PercentageUsed=%d, got %#v", used, disk.Attributes.PercentageUsed)
+		}
+		if disk.Attributes.AvailableSpare == nil || *disk.Attributes.AvailableSpare != spare {
+			t.Fatalf("expected AvailableSpare=%d, got %#v", spare, disk.Attributes.AvailableSpare)
+		}
+		mc.smartLocalFn = nil
+	})
 }
