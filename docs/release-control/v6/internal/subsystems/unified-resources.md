@@ -990,6 +990,12 @@ discovery, while Docker-native action fields such as `containerId` stay
 separate and are only consumed by Docker-specific controls. API-backed
 platforms such as TrueNAS must not regress that path back to runtime-native
 container ids just because they expose Docker-compatible runtime metadata.
+That same workload-state boundary also owns summary-chart identity for
+provider-backed workloads. Unified-resource VM and system-container views may
+surface `MetricsTarget` only as the history lookup target, while workload
+chart transport and hover/focus selection must keep using the canonical
+workload row ID so provider-backed workloads such as VMware VMs stay aligned
+with `/workloads` rows and summary cards.
 The drawer's discovery mapper also reuses that helper for pod fallback agent
 IDs, so the resource-detail path and the dashboard path stay aligned on the
 same cluster-name source of truth.

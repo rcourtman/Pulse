@@ -305,6 +305,11 @@ Docker-native runtime IDs stay in a separate action-only field for Docker
 controls like image updates. Performance work must not collapse API-backed
 platforms back onto runtime-native container IDs or derive fake node scopes
 from typed canonical resource IDs.
+That same summary hot path must also keep workload hover identity canonical
+across provider-backed history. Row hover and focus plus top-card isolation on
+`/workloads` must resolve against the same canonical workload ID even when the
+backing history is stored under a provider metrics target, so provider-backed
+VM rows do not silently drop out of summary emphasis.
 The shared infrastructure table hot path now also treats operator-facing
 resource identity as a protected boundary: sorting, searching, summary-series
 matching, and row titles on the infrastructure page must use the canonical

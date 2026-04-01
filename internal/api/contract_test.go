@@ -568,6 +568,102 @@ func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
 	}
 }
 
+func TestContract_WorkloadChartsUseCanonicalWorkloadIDsForProviderBackedVMs(t *testing.T) {
+	monitor, state, history := newTestMonitor(t)
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	metricID := "vc-1:vm:vm-201"
+
+	history.AddGuestMetric(metricID, "cpu", 51, now.Add(-10*time.Minute))
+	history.AddGuestMetric(metricID, "memory", 64, now.Add(-5*time.Minute))
+	history.AddGuestMetric(metricID, "disk", 43, now.Add(-3*time.Minute))
+	history.AddGuestMetric(metricID, "netin", 1200, now.Add(-2*time.Minute))
+	history.AddGuestMetric(metricID, "netout", 800, now.Add(-2*time.Minute))
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSnapshotAndSupplemental(state.GetSnapshot(), map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: {
+			{
+				SourceID: metricID,
+				Resource: unifiedresources.Resource{
+					ID:       "vm-vmware-contract",
+					Type:     unifiedresources.ResourceTypeVM,
+					Name:     "warehouse-api-01",
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: now,
+					MetricsTarget: &unifiedresources.MetricsTarget{
+						ResourceType: "vm",
+						ResourceID:   metricID,
+					},
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						EntityType:      "vm",
+						ManagedObjectID: "vm-201",
+					},
+				},
+			},
+		},
+	})
+	setTestUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil || len(readState.VMs()) != 1 || readState.VMs()[0] == nil {
+		t.Fatalf("expected one provider-backed VM in read state, got %+v", readState)
+	}
+	resourceID, _, ok := vmChartRequest(readState.VMs()[0])
+	if !ok {
+		t.Fatal("expected canonical vm chart request")
+	}
+
+	router := &Router{monitor: monitor}
+
+	workloadReq := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=1h", nil)
+	workloadRec := httptest.NewRecorder()
+	router.handleWorkloadCharts(workloadRec, workloadReq)
+
+	if workloadRec.Code != http.StatusOK {
+		t.Fatalf("expected workload charts 200, got %d: %s", workloadRec.Code, workloadRec.Body.String())
+	}
+
+	var workloadDecoded WorkloadChartsResponse
+	if err := json.Unmarshal(workloadRec.Body.Bytes(), &workloadDecoded); err != nil {
+		t.Fatalf("unmarshal workload charts response: %v", err)
+	}
+	if _, ok := workloadDecoded.ChartData[resourceID]; !ok {
+		t.Fatalf("expected workload charts keyed by canonical workload id %q, got %v", resourceID, workloadDecoded.ChartData)
+	}
+	if _, ok := workloadDecoded.ChartData[metricID]; ok {
+		t.Fatalf("expected provider metrics target %q to stay out of workload chart response keys", metricID)
+	}
+	if workloadDecoded.GuestTypes[resourceID] != "vm" {
+		t.Fatalf("expected vm guest type for %q, got %q", resourceID, workloadDecoded.GuestTypes[resourceID])
+	}
+
+	summaryReq := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=1h", nil)
+	summaryRec := httptest.NewRecorder()
+	router.handleWorkloadsSummaryCharts(summaryRec, summaryReq)
+
+	if summaryRec.Code != http.StatusOK {
+		t.Fatalf("expected workloads summary 200, got %d: %s", summaryRec.Code, summaryRec.Body.String())
+	}
+
+	var summaryDecoded WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(summaryRec.Body.Bytes(), &summaryDecoded); err != nil {
+		t.Fatalf("unmarshal workloads summary response: %v", err)
+	}
+	if summaryDecoded.GuestCounts.Total != 1 || summaryDecoded.GuestCounts.Running != 1 {
+		t.Fatalf("expected stable provider-backed guest counts, got %+v", summaryDecoded.GuestCounts)
+	}
+	if len(summaryDecoded.TopContributors.CPU) == 0 {
+		t.Fatal("expected provider-backed cpu top contributor")
+	}
+	if summaryDecoded.TopContributors.CPU[0].ID != resourceID {
+		t.Fatalf("expected workloads summary contributor id %q, got %+v", resourceID, summaryDecoded.TopContributors.CPU[0])
+	}
+	if summaryDecoded.TopContributors.CPU[0].ID == metricID {
+		t.Fatalf("expected workloads summary contributor id to avoid raw metrics target %q", metricID)
+	}
+}
+
 func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testing.T) {
 	store := newTestMetricsStore(t)
 	monitor, state, _ := newTestMonitor(t)

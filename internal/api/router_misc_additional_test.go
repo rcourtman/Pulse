@@ -774,6 +774,42 @@ func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
 		}},
 	}}
 
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		t.Fatal("expected unified read state")
+	}
+
+	vmResponseKey := ""
+	containerResponseKey := ""
+	excludedResponseKey := ""
+	for _, vm := range readState.VMs() {
+		if vm == nil {
+			continue
+		}
+		switch vm.Name() {
+		case "vm-101":
+			vmResponseKey, _, _ = vmChartRequest(vm)
+		case "vm-202":
+			excludedResponseKey, _, _ = vmChartRequest(vm)
+		}
+	}
+	for _, ct := range readState.Containers() {
+		if ct == nil {
+			continue
+		}
+		if ct.Name() == "ct-301" {
+			containerResponseKey, _, _ = systemContainerChartRequest(ct)
+		}
+	}
+	if vmResponseKey == "" || containerResponseKey == "" || excludedResponseKey == "" {
+		t.Fatalf(
+			"expected canonical response keys for vm/container test fixtures, got vm=%q ct=%q excluded=%q",
+			vmResponseKey,
+			containerResponseKey,
+			excludedResponseKey,
+		)
+	}
+
 	router := &Router{monitor: monitor}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=5m", nil)
@@ -804,13 +840,14 @@ func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
 	if len(decoded.DockerData) != 1 {
 		t.Fatalf("expected 1 docker chart entry, got %d", len(decoded.DockerData))
 	}
-	if decoded.GuestTypes["vm-101"] != "vm" {
-		t.Fatalf("expected vm guest type for vm-101, got %q", decoded.GuestTypes["vm-101"])
+	if decoded.GuestTypes[vmResponseKey] != "vm" {
+		t.Fatalf("expected vm guest type for %s, got %q", vmResponseKey, decoded.GuestTypes[vmResponseKey])
 	}
-	if decoded.GuestTypes["ct-301"] != "system-container" {
+	if decoded.GuestTypes[containerResponseKey] != "system-container" {
 		t.Fatalf(
-			"expected system-container guest type for ct-301, got %q",
-			decoded.GuestTypes["ct-301"],
+			"expected system-container guest type for %s, got %q",
+			containerResponseKey,
+			decoded.GuestTypes[containerResponseKey],
 		)
 	}
 	if decoded.Stats.PointCounts.Total <= 0 {
@@ -838,11 +875,165 @@ func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
 	if len(scoped.ChartData) != 2 {
 		t.Fatalf("expected 2 scoped workload chart entries, got %d", len(scoped.ChartData))
 	}
-	if _, ok := scoped.ChartData["vm-202"]; ok {
-		t.Fatalf("expected vm-202 to be excluded by node scope")
+	if _, ok := scoped.ChartData[excludedResponseKey]; ok {
+		t.Fatalf("expected %s to be excluded by node scope", excludedResponseKey)
 	}
 	if len(scoped.DockerData) != 1 {
 		t.Fatalf("expected 1 scoped docker chart entry, got %d", len(scoped.DockerData))
+	}
+}
+
+func TestHandleWorkloadCharts_UsesCanonicalWorkloadIDsForVMwareVMs(t *testing.T) {
+	monitor, state, history := newTestMonitor(t)
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	metricID := "vc-1:vm:vm-201"
+	resourceID := "vm-vmware-1"
+
+	history.AddGuestMetric(metricID, "cpu", 37, now.Add(-10*time.Minute))
+	history.AddGuestMetric(metricID, "memory", 62, now.Add(-5*time.Minute))
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSnapshotAndSupplemental(state.GetSnapshot(), map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: {
+			{
+				SourceID: metricID,
+				Resource: unifiedresources.Resource{
+					ID:       resourceID,
+					Type:     unifiedresources.ResourceTypeVM,
+					Name:     "warehouse-api-01",
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: now,
+					MetricsTarget: &unifiedresources.MetricsTarget{
+						ResourceType: "vm",
+						ResourceID:   metricID,
+					},
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						EntityType:      "vm",
+						ManagedObjectID: "vm-201",
+					},
+				},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil || len(readState.VMs()) != 1 || readState.VMs()[0] == nil {
+		t.Fatalf("expected one VMware VM in unified read state, got %+v", readState)
+	}
+	resourceID, _, ok := vmChartRequest(readState.VMs()[0])
+	if !ok {
+		t.Fatal("expected canonical VMware vm chart request")
+	}
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads?range=1h", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var decoded WorkloadChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadChartsResponse: %v", err)
+	}
+
+	series, ok := decoded.ChartData[resourceID]
+	if !ok {
+		t.Fatalf("expected VMware workload chart keyed by canonical workload id %q, got %v", resourceID, decoded.ChartData)
+	}
+	if _, ok := decoded.ChartData[metricID]; ok {
+		t.Fatalf("expected VMware metrics target id %q to stay out of workload chart response keys", metricID)
+	}
+	if decoded.GuestTypes[resourceID] != "vm" {
+		t.Fatalf("expected guest type vm for %q, got %q", resourceID, decoded.GuestTypes[resourceID])
+	}
+	if len(series["cpu"]) == 0 {
+		t.Fatalf("expected VMware cpu series for %q", resourceID)
+	}
+	if got := series["cpu"][len(series["cpu"])-1].Value; got != 37 {
+		t.Fatalf("expected latest VMware cpu value 37, got %v", got)
+	}
+}
+
+func TestHandleWorkloadsSummaryCharts_UsesCanonicalWorkloadIDsForVMwareVMs(t *testing.T) {
+	monitor, state, history := newTestMonitor(t)
+	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	metricID := "vc-1:vm:vm-201"
+	resourceID := "vm-vmware-1"
+
+	history.AddGuestMetric(metricID, "cpu", 51, now.Add(-10*time.Minute))
+	history.AddGuestMetric(metricID, "memory", 64, now.Add(-5*time.Minute))
+	history.AddGuestMetric(metricID, "disk", 43, now.Add(-3*time.Minute))
+	history.AddGuestMetric(metricID, "netin", 1200, now.Add(-2*time.Minute))
+	history.AddGuestMetric(metricID, "netout", 800, now.Add(-2*time.Minute))
+
+	adapter := unifiedresources.NewMonitorAdapter(nil)
+	adapter.PopulateSnapshotAndSupplemental(state.GetSnapshot(), map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: {
+			{
+				SourceID: metricID,
+				Resource: unifiedresources.Resource{
+					ID:       resourceID,
+					Type:     unifiedresources.ResourceTypeVM,
+					Name:     "warehouse-api-01",
+					Status:   unifiedresources.StatusOnline,
+					LastSeen: now,
+					MetricsTarget: &unifiedresources.MetricsTarget{
+						ResourceType: "vm",
+						ResourceID:   metricID,
+					},
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						EntityType:      "vm",
+						ManagedObjectID: "vm-201",
+					},
+				},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(adapter))
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil || len(readState.VMs()) != 1 || readState.VMs()[0] == nil {
+		t.Fatalf("expected one VMware VM in unified read state, got %+v", readState)
+	}
+	resourceID, _, ok := vmChartRequest(readState.VMs()[0])
+	if !ok {
+		t.Fatal("expected canonical VMware vm chart request")
+	}
+
+	router := &Router{monitor: monitor}
+	req := httptest.NewRequest(http.MethodGet, "/api/charts/workloads-summary?range=1h", nil)
+	rec := httptest.NewRecorder()
+	router.handleWorkloadsSummaryCharts(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	var decoded WorkloadsSummaryChartsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal WorkloadsSummaryChartsResponse: %v", err)
+	}
+
+	if decoded.GuestCounts.Total != 1 || decoded.GuestCounts.Running != 1 {
+		t.Fatalf("expected guestCounts total/running = 1/1, got %+v", decoded.GuestCounts)
+	}
+	if len(decoded.TopContributors.CPU) == 0 {
+		t.Fatal("expected at least one cpu top contributor")
+	}
+	if decoded.TopContributors.CPU[0].ID != resourceID {
+		t.Fatalf("expected cpu top contributor id %q, got %+v", resourceID, decoded.TopContributors.CPU[0])
+	}
+	if decoded.TopContributors.CPU[0].ID == metricID {
+		t.Fatalf("expected workloads summary contributor id to avoid raw metrics target %q", metricID)
+	}
+	if got := decoded.TopContributors.CPU[0].Name; got != "warehouse-api-01" {
+		t.Fatalf("expected cpu top contributor name warehouse-api-01, got %q", got)
 	}
 }
 

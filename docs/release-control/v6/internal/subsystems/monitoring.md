@@ -150,6 +150,12 @@ through the resolved unified-resource metrics target, so seeded history,
 runtime writes, storage summary hover selection, and detail charts all extend
 one series instead of splitting between canonical resource IDs and
 source-native metric IDs.
+That same chart boundary also owns provider-backed workload bridging.
+Workload-chart consumers may query VM and system-container history through the
+resolved unified-resource metrics target, but the emitted series identity must
+stay on the canonical workload row ID, so VMware-backed workloads participate
+in summary hover and focus without leaking provider-native metric IDs into the
+UI contract.
 That same summary owner also owns VMware partial-success classification.
 Optional VI JSON or Automation enrichment reads that fail after base
 host/VM/datastore inventory succeeds must not collapse the whole poll into a

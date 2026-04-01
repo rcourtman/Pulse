@@ -127,6 +127,14 @@ async function hoverRowUntilSummaryHighlights(
   throw new Error("Unable to find a row that maps to summary highlight state");
 }
 
+async function dispatchRowHover(
+  row: import("@playwright/test").Locator,
+): Promise<void> {
+  await row.dispatchEvent("mouseenter");
+  await row.dispatchEvent("mouseover");
+  await row.dispatchEvent("focusin");
+}
+
 async function hoverSummaryChartUntilActiveId(
   page: import("@playwright/test").Page,
   summary: import("@playwright/test").Locator,
@@ -293,6 +301,19 @@ test.describe.serial("Summary hover selection", () => {
       4,
     );
     expect(workloadRowId).not.toBe("");
+    await expectActiveIsolatedLineCards(workloadsSummary, 2);
+
+    const vmwareWorkloadRow = page
+      .locator('tr[data-guest-id^="vm-"]', { hasText: "warehouse-api-01" })
+      .first();
+    await expect(vmwareWorkloadRow).toBeVisible();
+    const vmwareWorkloadId = await readSummarySeriesId(
+      vmwareWorkloadRow,
+      "data-guest-id",
+    );
+    expect(vmwareWorkloadId).not.toBe("");
+    await dispatchRowHover(vmwareWorkloadRow);
+    await expectSummaryHighlightCount(workloadsSummary, vmwareWorkloadId, 4);
     await expectActiveIsolatedLineCards(workloadsSummary, 2);
 
     await page.goto("/storage", { waitUntil: "domcontentloaded" });

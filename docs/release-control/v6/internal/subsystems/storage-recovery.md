@@ -169,6 +169,11 @@ querying, and the operator-facing storage health presentation layer.
     chart highlighting so pool-only cards demote cleanly during disk focus and
     disk-temperature cards demote cleanly during pool focus, instead of
     leaving stale row-local IDs or storage-local hover branches on the page.
+14. Keep cross-surface workload handoffs on canonical IDs too. Shared workload
+    chart transport may look up provider-backed VM history through unified
+    metrics targets, but infrastructure/workloads/storage/recovery navigation
+    and focus handoffs must stay on canonical workload IDs instead of
+    provider-native metric keys.
 
 ## Current State
 

@@ -5525,6 +5525,77 @@ func appContainerChartRequest(container *unifiedresources.DockerContainerView) (
 	}, true
 }
 
+func canonicalGuestResponseKey(resourceID, instance, node string, vmid int) string {
+	trimmedInstance := strings.TrimSpace(instance)
+	trimmedNode := strings.TrimSpace(node)
+	if trimmedInstance != "" && trimmedNode != "" && vmid > 0 {
+		return fmt.Sprintf("%s:%s:%d", trimmedInstance, trimmedNode, vmid)
+	}
+	return strings.TrimSpace(resourceID)
+}
+
+func vmChartMetricID(vm *unifiedresources.VMView) string {
+	if vm == nil {
+		return ""
+	}
+
+	if target := vm.MetricsTarget(); target != nil {
+		if metricID := strings.TrimSpace(target.ResourceID); metricID != "" {
+			return metricID
+		}
+	}
+
+	return strings.TrimSpace(vm.SourceID())
+}
+
+func vmChartRequest(vm *unifiedresources.VMView) (string, monitoring.GuestChartRequest, bool) {
+	if vm == nil {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	responseKey := canonicalGuestResponseKey(vm.ID(), vm.Instance(), vm.Node(), vm.VMID())
+	metricID := vmChartMetricID(vm)
+	if responseKey == "" || metricID == "" {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	return responseKey, monitoring.GuestChartRequest{
+		InMemoryKey:   metricID,
+		SQLResourceID: metricID,
+	}, true
+}
+
+func systemContainerChartMetricID(container *unifiedresources.ContainerView) string {
+	if container == nil {
+		return ""
+	}
+
+	if target := container.MetricsTarget(); target != nil {
+		if metricID := strings.TrimSpace(target.ResourceID); metricID != "" {
+			return metricID
+		}
+	}
+
+	return strings.TrimSpace(container.SourceID())
+}
+
+func systemContainerChartRequest(container *unifiedresources.ContainerView) (string, monitoring.GuestChartRequest, bool) {
+	if container == nil {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	responseKey := canonicalGuestResponseKey(container.ID(), container.Instance(), container.Node(), container.VMID())
+	metricID := systemContainerChartMetricID(container)
+	if responseKey == "" || metricID == "" {
+		return "", monitoring.GuestChartRequest{}, false
+	}
+
+	return responseKey, monitoring.GuestChartRequest{
+		InMemoryKey:   metricID,
+		SQLResourceID: metricID,
+	}, true
+}
+
 func capMetricPointSeriesByIndex(points []MetricPoint, maxPoints int) []MetricPoint {
 	if len(points) <= maxPoints || maxPoints <= 0 {
 		return points
@@ -6155,6 +6226,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 	guestTypes := make(map[string]string)
 
 	vmList := make([]*unifiedresources.VMView, 0)
+	vmResponseKeys := make([]string, 0)
 	vmRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, vm := range readState.VMs() {
 		if vm == nil {
@@ -6164,19 +6236,21 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			continue
 		}
 
-		sourceID := strings.TrimSpace(vm.SourceID())
-		if sourceID == "" {
+		responseKey, request, ok := vmChartRequest(vm)
+		if !ok {
 			continue
 		}
 
 		vmList = append(vmList, vm)
-		vmRequests = append(vmRequests, monitoring.GuestChartRequest{InMemoryKey: sourceID, SQLResourceID: sourceID})
+		vmResponseKeys = append(vmResponseKeys, responseKey)
+		vmRequests = append(vmRequests, request)
 	}
 	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration)
-	for _, vm := range vmList {
-		sourceID := strings.TrimSpace(vm.SourceID())
-		series := convertMetricsForChart(vmBatchMetrics[sourceID], &oldestTimestamp, maxPoints)
-		guestTypes[sourceID] = "vm"
+	for idx, vm := range vmList {
+		responseKey := vmResponseKeys[idx]
+		metricID := vmRequests[idx].SQLResourceID
+		series := convertMetricsForChart(vmBatchMetrics[metricID], &oldestTimestamp, maxPoints)
+		guestTypes[responseKey] = "vm"
 
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: vm.CPUPercent()}}
@@ -6186,10 +6260,11 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: vm.NetOut()}}
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[sourceID] = series
+		chartData[responseKey] = series
 	}
 
 	containerList := make([]*unifiedresources.ContainerView, 0)
+	containerResponseKeys := make([]string, 0)
 	containerRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, ct := range readState.Containers() {
 		if ct == nil {
@@ -6199,19 +6274,21 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			continue
 		}
 
-		sourceID := strings.TrimSpace(ct.SourceID())
-		if sourceID == "" {
+		responseKey, request, ok := systemContainerChartRequest(ct)
+		if !ok {
 			continue
 		}
 
 		containerList = append(containerList, ct)
-		containerRequests = append(containerRequests, monitoring.GuestChartRequest{InMemoryKey: sourceID, SQLResourceID: sourceID})
+		containerResponseKeys = append(containerResponseKeys, responseKey)
+		containerRequests = append(containerRequests, request)
 	}
 	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration)
-	for _, ct := range containerList {
-		sourceID := strings.TrimSpace(ct.SourceID())
-		series := convertMetricsForChart(containerBatchMetrics[sourceID], &oldestTimestamp, maxPoints)
-		guestTypes[sourceID] = "system-container"
+	for idx, ct := range containerList {
+		responseKey := containerResponseKeys[idx]
+		metricID := containerRequests[idx].SQLResourceID
+		series := convertMetricsForChart(containerBatchMetrics[metricID], &oldestTimestamp, maxPoints)
+		guestTypes[responseKey] = "system-container"
 
 		if len(series["cpu"]) == 0 {
 			series["cpu"] = []MetricPoint{{Timestamp: currentTime, Value: ct.CPUPercent()}}
@@ -6221,7 +6298,7 @@ func (r *Router) handleWorkloadCharts(w http.ResponseWriter, req *http.Request) 
 			series["netout"] = []MetricPoint{{Timestamp: currentTime, Value: ct.NetOut()}}
 		}
 		updateOldestTimestampFromSeries(series, &oldestTimestamp)
-		chartData[sourceID] = series
+		chartData[responseKey] = series
 	}
 
 	podList := make([]*unifiedresources.PodView, 0)
@@ -7176,6 +7253,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	}
 
 	vmList := make([]*unifiedresources.VMView, 0)
+	vmResponseKeys := make([]string, 0)
 	vmRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, vm := range readState.VMs() {
 		if vm == nil {
@@ -7184,16 +7262,18 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		if !matchesSelectedNode(vm.Instance(), vm.Node()) {
 			continue
 		}
-		sourceID := strings.TrimSpace(vm.SourceID())
-		if sourceID == "" {
+		responseKey, request, ok := vmChartRequest(vm)
+		if !ok {
 			continue
 		}
 		vmList = append(vmList, vm)
-		vmRequests = append(vmRequests, monitoring.GuestChartRequest{InMemoryKey: sourceID, SQLResourceID: sourceID})
+		vmResponseKeys = append(vmResponseKeys, responseKey)
+		vmRequests = append(vmRequests, request)
 	}
 	vmBatchMetrics := monitor.GetGuestMetricsForChartBatch("vm", vmRequests, duration)
-	for _, vm := range vmList {
-		sourceID := strings.TrimSpace(vm.SourceID())
+	for idx, vm := range vmList {
+		responseKey := vmResponseKeys[idx]
+		metricID := vmRequests[idx].SQLResourceID
 		guestCounts.Total++
 		if workloadSummaryStatusIsRunning("", vm.Status()) {
 			guestCounts.Running++
@@ -7202,7 +7282,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		}
 
 		snapshot := workloadsSummarySnapshot{
-			id:      sourceID,
+			id:      responseKey,
 			name:    strings.TrimSpace(vm.Name()),
 			cpu:     clampWorkloadPercent(vm.CPUPercent()),
 			memory:  clampWorkloadPercent(vm.MemoryPercent()),
@@ -7210,10 +7290,10 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			network: clampNonNegativeWorkloadValue(vm.NetIn() + vm.NetOut()),
 		}
 		if snapshot.name == "" {
-			snapshot.name = sourceID
+			snapshot.name = responseKey
 		}
 
-		metrics := vmBatchMetrics[sourceID]
+		metrics := vmBatchMetrics[metricID]
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
 			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: vm.CPUPercent()}}
@@ -7248,6 +7328,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 	}
 
 	containerList := make([]*unifiedresources.ContainerView, 0)
+	containerResponseKeys := make([]string, 0)
 	containerRequests := make([]monitoring.GuestChartRequest, 0)
 	for _, ct := range readState.Containers() {
 		if ct == nil {
@@ -7256,16 +7337,18 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		if !matchesSelectedNode(ct.Instance(), ct.Node()) {
 			continue
 		}
-		sourceID := strings.TrimSpace(ct.SourceID())
-		if sourceID == "" {
+		responseKey, request, ok := systemContainerChartRequest(ct)
+		if !ok {
 			continue
 		}
 		containerList = append(containerList, ct)
-		containerRequests = append(containerRequests, monitoring.GuestChartRequest{InMemoryKey: sourceID, SQLResourceID: sourceID})
+		containerResponseKeys = append(containerResponseKeys, responseKey)
+		containerRequests = append(containerRequests, request)
 	}
 	containerBatchMetrics := monitor.GetGuestMetricsForChartBatch("container", containerRequests, duration)
-	for _, ct := range containerList {
-		sourceID := strings.TrimSpace(ct.SourceID())
+	for idx, ct := range containerList {
+		responseKey := containerResponseKeys[idx]
+		metricID := containerRequests[idx].SQLResourceID
 		guestCounts.Total++
 		if workloadSummaryStatusIsRunning("", ct.Status()) {
 			guestCounts.Running++
@@ -7274,7 +7357,7 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 		}
 
 		snapshot := workloadsSummarySnapshot{
-			id:      sourceID,
+			id:      responseKey,
 			name:    strings.TrimSpace(ct.Name()),
 			cpu:     clampWorkloadPercent(ct.CPUPercent()),
 			memory:  clampWorkloadPercent(ct.MemoryPercent()),
@@ -7282,10 +7365,10 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 			network: clampNonNegativeWorkloadValue(ct.NetIn() + ct.NetOut()),
 		}
 		if snapshot.name == "" {
-			snapshot.name = sourceID
+			snapshot.name = responseKey
 		}
 
-		metrics := containerBatchMetrics[sourceID]
+		metrics := containerBatchMetrics[metricID]
 		cpuPoints := metrics["cpu"]
 		if len(cpuPoints) == 0 {
 			cpuPoints = []monitoring.MetricPoint{{Timestamp: currentTimeTime, Value: ct.CPUPercent()}}

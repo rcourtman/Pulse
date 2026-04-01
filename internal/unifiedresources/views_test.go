@@ -265,6 +265,32 @@ func TestView_VMViewAccessors(t *testing.T) {
 	})
 }
 
+func TestView_VMViewMetricsTargetAccessor(t *testing.T) {
+	r := &Resource{
+		ID:   "vm-metrics",
+		Type: ResourceTypeVM,
+		Name: "provider-vm",
+		MetricsTarget: &MetricsTarget{
+			ResourceType: "vm",
+			ResourceID:   "vc-1:vm:vm-201",
+		},
+	}
+
+	v := NewVMView(r)
+	target := v.MetricsTarget()
+	if target == nil {
+		t.Fatal("expected vm metrics target")
+	}
+	if target.ResourceType != "vm" || target.ResourceID != "vc-1:vm:vm-201" {
+		t.Fatalf("unexpected vm metrics target %+v", target)
+	}
+
+	target.ResourceID = "mutated"
+	if got := v.MetricsTarget(); got == nil || got.ResourceID != "vc-1:vm:vm-201" {
+		t.Fatalf("expected cloned vm metrics target, got %+v", got)
+	}
+}
+
 func TestView_ContainerViewAccessors(t *testing.T) {
 	now := time.Date(2026, 2, 10, 12, 1, 0, 0, time.UTC)
 	lastBackup := time.Date(2026, 2, 9, 9, 0, 0, 0, time.UTC)
@@ -435,6 +461,32 @@ func TestView_ContainerViewAccessors(t *testing.T) {
 			t.Fatalf("expected DiskRead/DiskWrite=0 when metric fields are nil, got %v/%v", v.DiskRead(), v.DiskWrite())
 		}
 	})
+}
+
+func TestView_ContainerViewMetricsTargetAccessor(t *testing.T) {
+	r := &Resource{
+		ID:   "ct-metrics",
+		Type: ResourceTypeSystemContainer,
+		Name: "provider-ct",
+		MetricsTarget: &MetricsTarget{
+			ResourceType: "system-container",
+			ResourceID:   "lab:pve-1:201",
+		},
+	}
+
+	v := NewContainerView(r)
+	target := v.MetricsTarget()
+	if target == nil {
+		t.Fatal("expected container metrics target")
+	}
+	if target.ResourceType != "system-container" || target.ResourceID != "lab:pve-1:201" {
+		t.Fatalf("unexpected container metrics target %+v", target)
+	}
+
+	target.ResourceID = "mutated"
+	if got := v.MetricsTarget(); got == nil || got.ResourceID != "lab:pve-1:201" {
+		t.Fatalf("expected cloned container metrics target, got %+v", got)
+	}
 }
 
 func TestView_NodeViewAccessors(t *testing.T) {

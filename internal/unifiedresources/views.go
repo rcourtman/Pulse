@@ -110,6 +110,13 @@ func (v VMView) SourceID() string {
 	return strings.TrimSpace(v.r.Proxmox.SourceID)
 }
 
+func (v VMView) MetricsTarget() *MetricsTarget {
+	if v.r == nil {
+		return nil
+	}
+	return cloneMetricsTarget(v.r.MetricsTarget)
+}
+
 func (v VMView) Node() string {
 	if v.r == nil || v.r.Proxmox == nil {
 		return ""
@@ -361,6 +368,13 @@ func (v ContainerView) SourceID() string {
 		return ""
 	}
 	return strings.TrimSpace(v.r.Proxmox.SourceID)
+}
+
+func (v ContainerView) MetricsTarget() *MetricsTarget {
+	if v.r == nil {
+		return nil
+	}
+	return cloneMetricsTarget(v.r.MetricsTarget)
 }
 
 func (v ContainerView) Node() string {

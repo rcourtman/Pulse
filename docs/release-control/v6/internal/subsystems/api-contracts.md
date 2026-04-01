@@ -178,6 +178,7 @@ Own canonical runtime payload shapes between backend and frontend.
 25. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
 26. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
 27. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
+28. Keep workload-chart response identity canonical on that same shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload summary consumers must emit provider-backed VM and system-container series under the same canonical workload IDs that workloads page rows use, while resolving history through the unified `MetricsTarget.ResourceID`, so hover and focus selection do not fall off for provider-backed rows.
 
 ## Forbidden Paths
 
@@ -1359,6 +1360,12 @@ continuity semantics: when `/api/auto-register` receives the same
 canonical node name together with the deterministic Pulse-managed token ID for
 that node, it must update the existing PVE or PBS entry in place even if the
 host IP has changed, rather than duplicating the node under a second endpoint.
+That same `/api/auto-register` payload contract must now also accept ordered
+`candidateHosts` from runtime-side Proxmox callers and treat `host` as the
+preferred candidate, not an untouchable answer. The backend must normalize the
+candidate list, ignore invalid alternates, and persist the first candidate it
+can actually reach for TLS fingerprint capture from Pulse's own network view so
+registration payloads do not lock in an endpoint the server cannot later poll.
 The unified-agent install endpoints now also carry an exact-release fallback
 contract: when `/install.sh` or `/install.ps1` cannot be served locally, the
 backend must proxy the install script asset from the exact GitHub release that

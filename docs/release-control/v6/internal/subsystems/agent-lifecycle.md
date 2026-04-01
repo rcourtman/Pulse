@@ -591,6 +591,10 @@ That same shared router boundary must treat infrastructure summary chart
 normalization as summary-only presentation transport: long-range chart bucket
 shaping may improve operator-facing summary readability, but it must not be
 reused as lifecycle freshness, heartbeat, or enrollment-state authority.
+That same shared chart boundary may resolve provider-backed workload history
+through unified metrics targets, but emitted workload IDs must stay on the
+canonical `/workloads` row contract so lifecycle settings, reporting, and
+handoff surfaces never depend on provider-native metric keys.
 That same lifecycle-owned settings slice now also owns the shared VMware
 summary and handoff framing. `InfrastructurePlatformConnectionsSummaryCard.tsx`,
 `InfrastructureReportingPanel.tsx`, `useInfrastructureSettingsState.ts`, and
