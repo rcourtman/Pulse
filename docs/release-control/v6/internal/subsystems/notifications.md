@@ -119,6 +119,11 @@ normalization. Server URLs must be validated as absolute HTTP(S) endpoints
 without userinfo before request construction, and the `/notify` plus optional
 config-key path must append to the canonical server base instead of being
 rebuilt through raw string concatenation in local delivery code.
+That same Apprise boundary also treats `ServerURL` as a canonical base URL,
+not a request URL template. The owned runtime must reject query or fragment
+state on that base, preserve any mounted base path, and resolve `/notify`
+plus the optional config-key segment through shared URL helpers so delivery
+cannot silently drop subpaths or reinterpret appended path segments.
 That same delivery boundary also owns SMTP mailbox normalization. `From`,
 recipient, and `Reply-To` inputs must be parsed as canonical mailboxes before
 headers or SMTP envelope commands are constructed, so notification delivery

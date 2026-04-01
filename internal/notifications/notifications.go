@@ -1487,6 +1487,17 @@ func (n *NotificationManager) sendAppriseViaCLI(cfg AppriseConfig, title, body s
 	return nil
 }
 
+func (n *NotificationManager) validatedWebhookBaseURL(rawURL string) (*url.URL, error) {
+	baseURL, err := securityutil.NormalizeHTTPBaseURL(rawURL, "")
+	if err != nil {
+		return nil, err
+	}
+	if err := n.ValidateWebhookURL(baseURL.String()); err != nil {
+		return nil, err
+	}
+	return baseURL, nil
+}
+
 func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body, notifyType string) error {
 	if cfg.ServerURL == "" {
 		return fmt.Errorf("apprise server URL is not configured")
@@ -1498,8 +1509,8 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		return fmt.Errorf("apprise server URL must start with http or https: %s", serverURL)
 	}
 
-	// Validate Apprise server URL to prevent SSRF
-	if err := n.ValidateWebhookURL(serverURL); err != nil {
+	validatedBaseURL, err := n.validatedWebhookBaseURL(serverURL)
+	if err != nil {
 		log.Error().
 			Err(err).
 			Str("serverURL", serverURL).
@@ -1515,8 +1526,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 		notifyEndpoint = "/notify/" + url.PathEscape(cfg.ConfigKey)
 	}
 
-	requestURL := strings.TrimRight(serverURL, "/") + notifyEndpoint
-	targetURL, err := securityutil.NormalizeAbsoluteHTTPURL(requestURL)
+	targetURL, err := securityutil.ResolveRelativeURL(validatedBaseURL, notifyEndpoint)
 	if err != nil {
 		return fmt.Errorf("apprise server URL validation failed: %w", err)
 	}
@@ -1554,7 +1564,7 @@ func (n *NotificationManager) sendAppriseViaHTTP(cfg AppriseConfig, title, body,
 
 	client := n.createSecureWebhookClientWithTLS(
 		time.Duration(cfg.TimeoutSeconds)*time.Second,
-		strings.HasPrefix(lowerURL, "https://") && cfg.SkipTLSVerify,
+		validatedBaseURL.Scheme == "https" && cfg.SkipTLSVerify,
 	)
 
 	resp, err := client.Do(req)

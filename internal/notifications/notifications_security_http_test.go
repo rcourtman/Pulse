@@ -23,7 +23,7 @@ func TestSendAppriseViaHTTPInvalidScheme(t *testing.T) {
 	defer nm.Stop()
 
 	err := nm.sendAppriseViaHTTP(AppriseConfig{ServerURL: "ftp://example.com", TimeoutSeconds: 1}, "title", "body", "info")
-	if err == nil || !strings.Contains(err.Error(), "must start with http or https") {
+	if err == nil || !strings.Contains(err.Error(), "http or https") {
 		t.Fatalf("expected scheme validation error, got %v", err)
 	}
 }
@@ -65,6 +65,64 @@ func TestSendAppriseViaHTTPRejectsUserinfoServerURL(t *testing.T) {
 	case <-called:
 		t.Fatal("expected userinfo-bearing Apprise URL to be rejected before outbound delivery")
 	default:
+	}
+}
+
+func TestSendAppriseViaHTTPRejectsQueryOrFragmentInServerURL(t *testing.T) {
+	tests := []struct {
+		name      string
+		serverURL func(string) string
+		wantErr   string
+	}{
+		{
+			name: "query",
+			serverURL: func(base string) string {
+				return base + "/apprise/api?token=secret"
+			},
+			wantErr: "base URL must not include query or fragment",
+		},
+		{
+			name: "fragment",
+			serverURL: func(base string) string {
+				return base + "/apprise/api#notify"
+			},
+			wantErr: "base URL must not include query or fragment",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			nm := NewNotificationManager("")
+			defer nm.Stop()
+
+			called := make(chan struct{}, 1)
+			server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				select {
+				case called <- struct{}{}:
+				default:
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+			defer server.Close()
+
+			if err := nm.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+				t.Fatalf("allowlist: %v", err)
+			}
+
+			err := nm.sendAppriseViaHTTP(AppriseConfig{
+				ServerURL:      tt.serverURL(server.URL),
+				TimeoutSeconds: 2,
+			}, "title", "body", "info")
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Fatalf("expected %q validation error, got %v", tt.wantErr, err)
+			}
+
+			select {
+			case <-called:
+				t.Fatal("expected query/fragment-bearing Apprise base URL to be rejected before outbound delivery")
+			default:
+			}
+		})
 	}
 }
 
@@ -176,8 +234,8 @@ func TestSendAppriseViaHTTPIncludesTargetsAndCustomHeader(t *testing.T) {
 		if got := r.Header.Get("X-Test-Key"); got != "secret" {
 			t.Fatalf("expected custom API key header, got %q", got)
 		}
-		if !strings.Contains(r.URL.Path, "/notify/") {
-			t.Fatalf("expected notify path, got %q", r.URL.Path)
+		if got := r.URL.EscapedPath(); got != "/apprise/api/notify/config%20key" {
+			t.Fatalf("expected base path to be preserved, got %q", got)
 		}
 		var p payload
 		if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
@@ -199,7 +257,7 @@ func TestSendAppriseViaHTTPIncludesTargetsAndCustomHeader(t *testing.T) {
 	}
 
 	err := nm.sendAppriseViaHTTP(AppriseConfig{
-		ServerURL:      server.URL,
+		ServerURL:      server.URL + "/apprise/api/",
 		ConfigKey:      "config key",
 		APIKey:         "secret",
 		APIKeyHeader:   "X-Test-Key",
