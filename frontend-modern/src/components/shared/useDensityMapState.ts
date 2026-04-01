@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   buildDensityMapChartData,
+  buildDensityMapFocusDetail,
   getDensityMapExternalSeriesIndex,
   buildDensityMapHoveredState,
   buildDensityMapSynchronizedHoveredState,
@@ -43,6 +44,13 @@ export function useDensityMapState(props: DensityMapProps) {
   const activeHoveredState = createMemo<DensityMapHoveredState | null>(() => {
     return hoveredState() ?? synchronizedHoveredState();
   });
+  const focusDetail = createMemo(() =>
+    buildDensityMapFocusDetail({
+      activeHoveredState: activeHoveredState(),
+      data: chartData(),
+      highlightSeriesId: props.highlightSeriesId,
+    }),
+  );
 
   const formatValue = (value: number) => formatDensityMapValue(value, props.formatValue);
 
@@ -78,17 +86,21 @@ export function useDensityMapState(props: DensityMapProps) {
       activeSeriesIndex !== null && activeSeriesIndex >= 0 && activeSeriesIndex < data.series.length
         ? data.series[activeSeriesIndex]
         : null;
+    const hasActiveSeries = activeSeriesIndex !== null;
 
     for (let row = 0; row < rows; row += 1) {
       const cellY = row * cellHeight;
-      const isDimmed = activeSeriesIndex !== null && row !== activeSeriesIndex;
+      const isActiveRow = activeSeriesIndex === row;
+      const rowOpacity = !hasActiveSeries ? 1 : isActiveRow ? 1 : 0.42;
       for (let column = 0; column < DENSITY_MAP_COLUMNS; column += 1) {
         const cellX = column * cellWidth;
         const value = data.grid[row][column];
 
         if (value <= 0) {
-          context.globalAlpha = (isDimmed ? 0.08 : 1) * interactionOpacity;
-          context.fillStyle = 'rgba(128, 128, 128, 0.05)';
+          context.globalAlpha = rowOpacity * interactionOpacity;
+          context.fillStyle = isActiveRow
+            ? 'rgba(148, 163, 184, 0.08)'
+            : 'rgba(148, 163, 184, 0.04)';
           context.fillRect(
             cellX + DENSITY_MAP_PADDING_X / 2,
             cellY + DENSITY_MAP_PADDING_Y / 2,
@@ -99,9 +111,7 @@ export function useDensityMapState(props: DensityMapProps) {
         }
 
         context.globalAlpha =
-          getDensityMapCellOpacity(value, data.globalMax) *
-          (isDimmed ? 0.05 : 1) *
-          interactionOpacity;
+          getDensityMapCellOpacity(value, data.globalMax) * rowOpacity * interactionOpacity;
         context.fillStyle = data.series[row].color;
         if (context.roundRect) {
           context.beginPath();
@@ -141,10 +151,10 @@ export function useDensityMapState(props: DensityMapProps) {
       context.lineWidth = 1.25;
       if (context.roundRect) {
         context.beginPath();
-        context.roundRect(0.5, highlightY+0.5, width-1, Math.max(cellHeight-1, 1), 4);
+        context.roundRect(0.5, highlightY + 0.5, width - 1, Math.max(cellHeight - 1, 1), 4);
         context.stroke();
       } else {
-        context.strokeRect(0.5, highlightY+0.5, width-1, Math.max(cellHeight-1, 1));
+        context.strokeRect(0.5, highlightY + 0.5, width - 1, Math.max(cellHeight - 1, 1));
       }
       context.restore();
     }
@@ -201,6 +211,7 @@ export function useDensityMapState(props: DensityMapProps) {
     activeHoveredState,
     chartData,
     externalSeriesIndex,
+    focusDetail,
     formatValue,
     handleMouseLeave,
     handleMouseMove,

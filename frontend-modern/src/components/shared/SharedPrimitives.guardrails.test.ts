@@ -158,11 +158,13 @@ describe('shared primitive guardrails', () => {
     expect(generalSettingsPanelSource).toContain('variant="prominent"');
     expect(generalSettingsPanelSource).not.toContain("props.themePreference() === 'light'");
     expect(generalSettingsPanelSource).not.toContain("temperatureStore.unit() === 'celsius'");
-    expect(generalSettingsPanelSource).not.toContain("props.pvePollingSelection() === option.value");
+    expect(generalSettingsPanelSource).not.toContain(
+      'props.pvePollingSelection() === option.value',
+    );
     expect(reportingPanelSource.match(/<FilterButtonGroup/g) ?? []).toHaveLength(2);
     expect(reportingPanelSource).toContain('variant="prominent"');
     expect(reportingPanelSource).not.toContain('getReportingToggleButtonClass');
-    expect(reportingPanelSource).not.toContain("<For each={REPORTING_RANGE_OPTIONS}>");
+    expect(reportingPanelSource).not.toContain('<For each={REPORTING_RANGE_OPTIONS}>');
   });
 
   it('routes selectable settings cards through SelectionCardGroup', () => {
@@ -217,9 +219,7 @@ describe('shared primitive guardrails', () => {
     expect(activeUseTrialNudgeSource).not.toContain('localStorage');
     expect(activeUseTrialNudgeSource).not.toContain('setInterval');
 
-    expect(activeUseTrialNudgeStateSource).toContain(
-      'export function useActiveUseTrialNudgeState',
-    );
+    expect(activeUseTrialNudgeStateSource).toContain('export function useActiveUseTrialNudgeState');
     expect(activeUseTrialNudgeStateSource).toContain('createSignal');
     expect(activeUseTrialNudgeStateSource).toContain('createMemo');
     expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
@@ -243,7 +243,9 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps contextual row focus on one shared helper across summary consumers', () => {
-    expect(contextualFocusSource).toContain('export const preserveScrollableAncestorVerticalOffset');
+    expect(contextualFocusSource).toContain(
+      'export const preserveScrollableAncestorVerticalOffset',
+    );
     expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
     expect(contextualFocusSource).toContain('chartHoveredSeriesId');
     expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
@@ -255,7 +257,9 @@ describe('shared primitive guardrails', () => {
 
     expect(infrastructureSummaryStateSource).toContain('useSummaryContextualFocusState');
     expect(infrastructureSummaryStateSource).toContain('chartHoverSync');
-    expect(infrastructureSummaryStateSource).not.toContain('const interactiveResourceIds = createMemo');
+    expect(infrastructureSummaryStateSource).not.toContain(
+      'const interactiveResourceIds = createMemo',
+    );
 
     expect(storageSummarySource).toContain('useSummaryContextualFocusState');
     expect(storageSummarySource).toContain('chartHoverSync');
@@ -408,14 +412,12 @@ describe('shared primitive guardrails', () => {
       'rounded-md border border-blue-200 bg-blue-50 px-4 py-3',
     );
     expect(reportingPanelSource).toContain('CalloutCard');
-    expect(reportingPanelSource).not.toContain(
-      'rounded-md border border-blue-200 bg-blue-50 p-6',
-    );
+    expect(reportingPanelSource).not.toContain('rounded-md border border-blue-200 bg-blue-50 p-6');
   });
 
   it('keeps shared fleet limit banner copy on the monitored-system commercial term', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      "@/utils/monitoredSystemPresentation",
+      '@/utils/monitoredSystemPresentation',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'formatMonitoredSystemLimitSummary',
@@ -433,9 +435,7 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
       'do not count toward Unified Agents.',
     );
-    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
-      'Install v6 Unified Agents',
-    );
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 Unified Agents');
   });
 
   it('keeps monitored system limit warning banner on shell, runtime, and model owners', () => {
@@ -496,7 +496,9 @@ describe('shared primitive guardrails', () => {
 
     expect(infrastructureSummaryTableStateSource).toContain('useWebSocket');
     expect(infrastructureSummaryTableStateSource).toContain('useAlertsActivation');
-    expect(infrastructureSummaryTableStateSource).toContain('export function useInfrastructureSummaryTableState');
+    expect(infrastructureSummaryTableStateSource).toContain(
+      'export function useInfrastructureSummaryTableState',
+    );
     expect(infrastructureSummaryTableStateSource).toContain('createSignal');
 
     expect(infrastructureSummaryTableModelSource).toContain('getNormalizedIdentityLookupVariants');
@@ -544,7 +546,9 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
     expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
 
-    expect(interactiveSparklineStateSource).toContain('export function useInteractiveSparklineState');
+    expect(interactiveSparklineStateSource).toContain(
+      'export function useInteractiveSparklineState',
+    );
     expect(interactiveSparklineStateSource).toContain('activeSeriesDisplay');
     expect(interactiveSparklineStateSource).toContain('shouldRenderSeries');
     expect(interactiveSparklineStateSource).toContain('renderedSeriesCount');
@@ -570,6 +574,7 @@ describe('shared primitive guardrails', () => {
     expect(densityMapStateSource).toContain('window.addEventListener');
 
     expect(densityMapModelSource).toContain('buildDensityMapChartData');
+    expect(densityMapModelSource).toContain('buildDensityMapFocusDetail');
     expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
     expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
     expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
@@ -702,9 +707,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(infrastructureDetailsDrawerSource).not.toContain('createSignal');
     expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureMetadataId');
-    expect(infrastructureDetailsDrawerSource).not.toContain(
-      'getInfrastructureDiscoveryHostname',
-    );
+    expect(infrastructureDetailsDrawerSource).not.toContain('getInfrastructureDiscoveryHostname');
 
     expect(infrastructureDetailsDrawerStateSource).toContain(
       'export function useInfrastructureDetailsDrawerState',
@@ -721,9 +724,7 @@ describe('shared primitive guardrails', () => {
       'resolveInfrastructureDetailsDrawerDiscoveryHostname',
     );
     expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureMetadataId');
-    expect(infrastructureDetailsDrawerModelSource).toContain(
-      'getInfrastructureDiscoveryHostname',
-    );
+    expect(infrastructureDetailsDrawerModelSource).toContain('getInfrastructureDiscoveryHostname');
   });
 
   it('keeps mobile nav on shell, runtime, and model owners', () => {
@@ -766,7 +767,9 @@ describe('shared primitive guardrails', () => {
   it('keeps search field on shell, runtime, and model owners', () => {
     expect(searchFieldSource).toContain('useSearchFieldState');
     expect(searchFieldSource).not.toContain('let inputEl: HTMLInputElement');
-    expect(searchFieldSource).not.toContain("if (props.hasTrailingControls) return 'pr-14 sm:pr-20'");
+    expect(searchFieldSource).not.toContain(
+      "if (props.hasTrailingControls) return 'pr-14 sm:pr-20'",
+    );
     expect(searchFieldSource).not.toContain("if (e.key === 'Escape'");
 
     expect(searchFieldStateSource).toContain('export function useSearchFieldState');
@@ -875,7 +878,7 @@ describe('shared primitive guardrails', () => {
 
     expect(summaryMetricCardSource).toContain("density?: 'default' | 'compact'");
     expect(summaryMetricCardSource).toContain("props.density === 'compact'");
-    expect(summaryMetricCardSource).toContain("!p-1.5 sm:!p-2");
+    expect(summaryMetricCardSource).toContain('!p-1.5 sm:!p-2');
     expect(summaryMetricCardSource).not.toContain('Recovery Posture');
     expect(summaryMetricCardSource).not.toContain('Freshness');
   });

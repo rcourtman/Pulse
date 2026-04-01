@@ -44,90 +44,90 @@ work extends shared components instead of creating new local variants.
 22. `frontend-modern/src/components/Settings/DiagnosticsResultsPanel.tsx`
 23. `frontend-modern/src/components/Settings/OperationsPanel.tsx`
 24. `frontend-modern/src/utils/diagnosticsPresentation.ts`
-24. `frontend-modern/src/utils/discoveryPresentation.ts`
-24. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
-25. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
-26. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
-27. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
-28. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
-29. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
-30. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
-30. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
-31. `frontend-modern/src/components/Settings/useAISettingsState.ts`
-32. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
-33. `frontend-modern/src/components/Settings/useSettingsShellState.ts`
-34. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
-35. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
-36. `frontend-modern/src/utils/ssoProviderPresentation.ts`
-37. `frontend-modern/src/utils/systemSettingsPresentation.ts`
-38. `frontend-modern/src/utils/aiSettingsPresentation.ts`
-39. `frontend-modern/src/utils/settingsShellPresentation.ts`
-40. `frontend-modern/src/utils/textPresentation.ts`
-37. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
-38. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
-39. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
-40. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
-41. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
-42. `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts`
-43. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
-44. `frontend-modern/src/utils/reportingPresentation.ts`
-45. `frontend-modern/src/utils/updatesPresentation.ts`
-44. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
-45. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
-46. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
-47. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
-48. `frontend-modern/src/features/`
-49. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
-50. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-50. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
-51. `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
-52. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
-53. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
-54. `frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx`
-55. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
-56. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
-57. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
-58. `frontend-modern/src/utils/systemLogsPresentation.ts`
-59. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
-60. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
-61. `frontend-modern/src/features/operations/operationsPageModel.ts`
-62. `frontend-modern/src/pages/Operations.tsx`
-63. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
-64. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
-65. `frontend-modern/src/utils/reportableResourceTypes.ts`
-66. `frontend-modern/src/utils/reportingResourceTypes.ts`
-67. `frontend-modern/src/utils/problemResourcePresentation.ts`
-68. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
-69. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
-70. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
-71. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
-72. `frontend-modern/src/components/Toast/Toast.tsx`
-73. `frontend-modern/src/utils/toast.ts`
-74. `frontend-modern/src/utils/semanticTonePresentation.ts`
-75. `frontend-modern/src/utils/emptyStatePresentation.ts`
-76. `frontend-modern/src/utils/typeColumnPresentation.ts`
-77. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
-78. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
-79. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
-80. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
-81. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
-82. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
-83. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
-84. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
-85. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-86. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
-87. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
-88. `frontend-modern/src/components/Settings/settingsRouting.ts`
-89. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
-90. `frontend-modern/src/components/Settings/settingsTypes.ts`
-91. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
-92. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
-93. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
-94. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
-95. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
-96. `frontend-modern/src/utils/environmentLockPresentation.ts`
-97. `frontend-modern/src/utils/docsLinks.ts`
-98. `tests/integration/tests/20-local-doc-links.spec.ts`
+25. `frontend-modern/src/utils/discoveryPresentation.ts`
+26. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
+27. `frontend-modern/src/components/Settings/NetworkSettingsPanel.tsx`
+28. `frontend-modern/src/components/Settings/RecoverySettingsPanel.tsx`
+29. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx`
+30. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx`
+31. `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`
+32. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
+33. `frontend-modern/src/components/Settings/SSOProvidersPanel.tsx`
+34. `frontend-modern/src/components/Settings/useAISettingsState.ts`
+35. `frontend-modern/src/components/Settings/useDiagnosticsPanelState.ts`
+36. `frontend-modern/src/components/Settings/useSettingsShellState.ts`
+37. `frontend-modern/src/components/Settings/useSSOProvidersState.ts`
+38. `frontend-modern/src/components/Settings/ssoProvidersModel.ts`
+39. `frontend-modern/src/utils/ssoProviderPresentation.ts`
+40. `frontend-modern/src/utils/systemSettingsPresentation.ts`
+41. `frontend-modern/src/utils/aiSettingsPresentation.ts`
+42. `frontend-modern/src/utils/settingsShellPresentation.ts`
+43. `frontend-modern/src/utils/textPresentation.ts`
+44. `frontend-modern/src/components/Settings/UpdateInstallGuide.tsx`
+45. `frontend-modern/src/components/Settings/updatesSettingsModel.ts`
+46. `frontend-modern/src/components/Settings/UpdatesSettingsPanel.tsx`
+47. `frontend-modern/src/components/Settings/ReportingPanel.tsx`
+48. `frontend-modern/src/components/Settings/reportingPanelModel.ts`
+49. `frontend-modern/src/components/Settings/reportingInventoryExportModel.ts`
+50. `frontend-modern/src/components/Settings/useReportingPanelState.ts`
+51. `frontend-modern/src/utils/reportingPresentation.ts`
+52. `frontend-modern/src/utils/updatesPresentation.ts`
+53. `frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts`
+54. `tests/integration/tests/15-settings-shell-consistency.spec.ts`
+55. `frontend-modern/src/components/shared/PageControls.guardrails.test.ts`
+56. `frontend-modern/src/components/shared/TypeColumn.guardrails.test.ts`
+57. `frontend-modern/src/features/`
+58. `frontend-modern/src/components/SetupWizard/SetupWizard.tsx`
+59. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+60. `frontend-modern/src/components/SetupWizard/SetupCompletionPreview.tsx`
+61. `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
+62. `frontend-modern/src/components/SetupWizard/__tests__/SetupWizard.test.tsx`
+63. `frontend-modern/src/components/SetupWizard/__tests__/SetupCompletionPreview.test.tsx`
+64. `frontend-modern/src/components/SetupWizard/__tests__/WelcomeStep.test.tsx`
+65. `frontend-modern/src/components/shared/MonitoredSystemLimitWarningBanner.tsx`
+66. `frontend-modern/src/components/Settings/SystemLogsPanel.tsx`
+67. `frontend-modern/src/components/Settings/useSystemLogsPanelState.ts`
+68. `frontend-modern/src/utils/systemLogsPresentation.ts`
+69. `frontend-modern/src/components/Settings/__tests__/SystemLogsPanel.test.tsx`
+70. `frontend-modern/src/features/operations/OperationsPageSurface.tsx`
+71. `frontend-modern/src/features/operations/operationsPageModel.ts`
+72. `frontend-modern/src/pages/Operations.tsx`
+73. `frontend-modern/src/components/Settings/ResourcePicker.tsx`
+74. `frontend-modern/src/components/Settings/reportingResourceTypes.ts`
+75. `frontend-modern/src/utils/reportableResourceTypes.ts`
+76. `frontend-modern/src/utils/reportingResourceTypes.ts`
+77. `frontend-modern/src/utils/problemResourcePresentation.ts`
+78. `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`
+79. `frontend-modern/src/utils/dashboardGuestPresentation.ts`
+80. `frontend-modern/src/utils/dashboardKpiPresentation.ts`
+81. `frontend-modern/src/utils/dashboardTrendPresentation.ts`
+82. `frontend-modern/src/components/Toast/Toast.tsx`
+83. `frontend-modern/src/utils/toast.ts`
+84. `frontend-modern/src/utils/semanticTonePresentation.ts`
+85. `frontend-modern/src/utils/emptyStatePresentation.ts`
+86. `frontend-modern/src/utils/typeColumnPresentation.ts`
+87. `frontend-modern/src/pages/__tests__/Operations.helpers.test.ts`
+88. `frontend-modern/src/components/Settings/NetworkDiscoverySection.tsx`
+89. `frontend-modern/src/components/Settings/NetworkBoundarySettingsSection.tsx`
+90. `frontend-modern/src/components/Settings/networkSettingsModel.ts`
+91. `frontend-modern/src/components/Settings/useDiscoverySettingsState.ts`
+92. `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`
+93. `frontend-modern/src/components/Settings/settingsPanelRegistryContext.tsx`
+94. `frontend-modern/src/components/Settings/settingsPanelRegistryLoaders.ts`
+95. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+96. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`
+97. `frontend-modern/src/components/Settings/settingsNavVisibility.ts`
+98. `frontend-modern/src/components/Settings/settingsRouting.ts`
+99. `frontend-modern/src/components/Settings/settingsTabSaveBehavior.ts`
+100. `frontend-modern/src/components/Settings/settingsTypes.ts`
+101. `frontend-modern/src/components/Settings/useSettingsNavigation.ts`
+102. `frontend-modern/src/components/Settings/useSettingsPanelRegistry.tsx`
+103. `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx`
+104. `frontend-modern/src/components/Settings/DockerRuntimeSettingsCard.tsx`
+105. `frontend-modern/src/components/shared/EnvironmentLockBadge.tsx`
+106. `frontend-modern/src/utils/environmentLockPresentation.ts`
+107. `frontend-modern/src/utils/docsLinks.ts`
+108. `tests/integration/tests/20-local-doc-links.spec.ts`
 
 ## Shared Boundaries
 
@@ -200,86 +200,87 @@ work extends shared components instead of creating new local variants.
     must keep a route-owned canonical option visible in shared selects like
     `LabeledFilterSelect` even when current results do not contain that
     option, so provider-scoped handoffs do not flash back to `All`.
-10. Keep the first welcome screen in
-   `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
-   explicit about operator context. The shell must explain that the bootstrap
-   token only unlocks first-run setup, state where the command should run, and
-   adapt command/help text to detected Docker or containerized deployments
-   instead of assuming the operator already knows which host or container owns
-   the Pulse install.
-11. Keep the settings-shell infrastructure landing path aligned with that same
-   first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
-   must treat `/settings` and the infrastructure settings tab as the canonical
-   path to `/settings/infrastructure/install`, not to reporting/control, so
-   the shell does not send first-time operators to the wrong infrastructure
-   subview by default.
-12. Keep dashboard onboarding copy on the shared presentation owner in
-   `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
-   infrastructure empty state and the dashboard route's no-resources state
-   must name the canonical install workspace explicitly, keep `Platform
-   connections` visible as the API-backed alternative for Proxmox and
-   TrueNAS, and expose the same first-host next step instead of falling back
-   to passive “nothing here yet” wording.
-13. Keep cross-surface investigation handoffs on shared route ownership.
-14. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
+11. Keep the first welcome screen in
+    `frontend-modern/src/components/SetupWizard/steps/WelcomeStep.tsx`
+    explicit about operator context. The shell must explain that the bootstrap
+    token only unlocks first-run setup, state where the command should run, and
+    adapt command/help text to detected Docker or containerized deployments
+    instead of assuming the operator already knows which host or container owns
+    the Pulse install.
+12. Keep the settings-shell infrastructure landing path aligned with that same
+    first-session story. `frontend-modern/src/components/Settings/settingsNavigationModel.ts`
+    must treat `/settings` and the infrastructure settings tab as the canonical
+    path to `/settings/infrastructure/install`, not to reporting/control, so
+    the shell does not send first-time operators to the wrong infrastructure
+    subview by default.
+13. Keep dashboard onboarding copy on the shared presentation owner in
+    `frontend-modern/src/utils/dashboardEmptyStatePresentation.ts`. Both the
+    infrastructure empty state and the dashboard route's no-resources state
+    must name the canonical install workspace explicitly, keep `Platform
+connections` visible as the API-backed alternative for Proxmox and
+    TrueNAS, and expose the same first-host next step instead of falling back
+    to passive “nothing here yet” wording.
+14. Keep cross-surface investigation handoffs on shared route ownership.
     Feature shells such as Alerts and Patrol may decide which governed
     destination chips to render, but canonical href, label, dedupe, and
     infrastructure-fallback truth must stay in
     `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
     route strings or provider-local link builders inside feature panels.
-15. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
-14. Keep shared infrastructure/resource selectors on the canonical agent-facet
+15. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
+16. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and layer focused-entity detail inside the same card instead of swapping the card into a single-series chart or dimming the rest of the map into unusable background noise.
+17. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
+18. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
     top-level TrueNAS appliances as agent-facet infrastructure via shared
     helper ownership instead of reviving a direct `resource.type === 'truenas'`
     branch inside page shells, selectors, or reporting-resource type helpers.
-15. Keep shared feature-shell Patrol run fixtures on the canonical run-record
+19. Keep shared feature-shell Patrol run fixtures on the canonical run-record
     contract. When `frontend-modern/src/features/patrol/` consumes Patrol run
     history, the shared normalized record must preserve provider-backed counts
     such as `truenas_checked` instead of letting feature-local fixtures or
     fallback objects collapse API-backed TrueNAS systems back into generic
     agent-host presentation.
-16. Keep the authenticated app root aligned with that same first-session path.
-That same shared-primitive ownership now includes contextual row focus.
-`frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
-owner for interactive-series filtering, focused-label lookup, active-series
-resolution, and nearest-scrollable-ancestor preservation across page-scoped
-summary surfaces. Dashboard row focus, infrastructure summary emphasis,
-storage summary emphasis, and workloads summary emphasis must all route through
-that helper instead of maintaining page-local copies of the same hover/focus
-rules.
+20. Keep the authenticated app root aligned with that same first-session path.
+    That same shared-primitive ownership now includes contextual row focus.
+    `frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
+    owner for interactive-series filtering, focused-label lookup, active-series
+    resolution, and nearest-scrollable-ancestor preservation across page-scoped
+    summary surfaces. Dashboard row focus, infrastructure summary emphasis,
+    storage summary emphasis, and workloads summary emphasis must all route through
+    that helper instead of maintaining page-local copies of the same hover/focus
+    rules.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to
     `/infrastructure` that drifts from the rest of the onboarding contract.
-17. Keep relay settings shell copy on the shared presentation owner in
+21. Keep relay settings shell copy on the shared presentation owner in
     `frontend-modern/src/utils/relayPresentation.ts`. The route metadata in
     `settingsHeaderMeta.ts` and the leading `SettingsPanel` in
     `RelaySettingsPanel.tsx` must reuse the same description and availability
     copy instead of drifting into separate rollout or pairing wording.
-15. Keep shared settings-shell legal and docs referrals on
+22. Keep shared settings-shell legal and docs referrals on
     `frontend-modern/src/utils/docsLinks.ts`. Shared settings surfaces such as
     `AIRuntimeControlsSection.tsx` must not hardcode GitHub `main` doc URLs for
     privacy, security, proxy-auth, scope-reference, or Terms-of-Service links.
-16. Keep shared settings-shell telemetry transparency controls on the governed
+23. Keep shared settings-shell telemetry transparency controls on the governed
     general settings panel. Preview/reset affordances for anonymous telemetry
     must stay rendered inside
     `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx`
     instead of drifting into route-local modals, hidden dev tools, or shell
     chrome that operators would not naturally inspect.
-15. Keep the short telemetry/privacy summary copy on that same shared surface
+24. Keep the short telemetry/privacy summary copy on that same shared surface
     accurate to the governed privacy doc. If the trust boundary depends on a
     specific retention window or on “IP addresses are not stored” rather than
     “IPs are never seen,” the summary copy in
     `GeneralSettingsPanel.tsx` must state those facts plainly instead of
     reverting to a stronger but inaccurate shorthand.
-16. Keep shared storage-route feature presentation on neutral capability truth.
+25. Keep shared storage-route feature presentation on neutral capability truth.
     Reusable mappers and presenters in `frontend-modern/src/features/storageBackups/`
     must distinguish inventory datastores from backup repositories so VMware
     rows on the shared storage route stay canonical to the admitted phase-1 floor instead of
     reviving backup-target, protected-target, or recovery-local semantics on a
     shared page.
-16. Keep infrastructure settings-shell API alternatives on the shared shell
+26. Keep infrastructure settings-shell API alternatives on the shared shell
     contract. `frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx`,
     `frontend-modern/src/components/Settings/settingsHeaderMeta.ts`,
     `frontend-modern/src/components/Settings/settingsNavigationModel.ts`, and
@@ -287,7 +288,7 @@ rules.
     present `Platform connections` as the canonical API-backed alternative for
     Proxmox, TrueNAS, and future provider integrations instead of reviving
     top-level `Direct Proxmox` wording or shell-local provider routes.
-17. Keep the infrastructure settings platform-connections summary and provider
+27. Keep the infrastructure settings platform-connections summary and provider
     workspaces on one shared state source. `frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts`,
     `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`,
     `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`,
@@ -295,14 +296,14 @@ rules.
     derive TrueNAS connection counts and availability from the shared
     infrastructure settings state instead of letting the reporting summary and
     the provider-specific panel issue separate connection fetches.
-18. Keep alert-history feature composition on the current owned state contract.
+28. Keep alert-history feature composition on the current owned state contract.
     `frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` must react to the
     shared `alertData()` history state instead of reviving deleted aliases, and
     it must pass unified-resource resolution through to
     `frontend-modern/src/features/alerts/AlertResourceIncidentsPanel.tsx` so
     the panel can render shared route chips without creating another page-local
     resource lookup or provider-specific handoff layer.
-19. Keep the alert-thresholds containers surface on the canonical shared owner.
+29. Keep the alert-thresholds containers surface on the canonical shared owner.
     `alertOverridesModel.ts`, `useAlertOverridesState.ts`, and
     `useAlertsConfigurationState.ts` must surface API-backed `app-container`
     parents such as TrueNAS as first-class `Container Runtimes`, while

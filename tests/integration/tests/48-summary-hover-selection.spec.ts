@@ -172,7 +172,9 @@ async function hoverSummaryChartUntilActiveId(
                 (node) =>
                   node.getAttribute("data-highlight-series-active") === "true",
               )
-              .map((node) => node.getAttribute("data-highlight-series-id") || "")
+              .map(
+                (node) => node.getAttribute("data-highlight-series-id") || "",
+              )
               .filter(Boolean),
           ),
         ),
@@ -203,6 +205,47 @@ async function expectActiveIsolatedLineCards(
         ),
     )
     .toBe(expectedCount);
+}
+
+async function expectActiveDensityMapsPreserveOverview(
+  summary: import("@playwright/test").Locator,
+  resourceId: string,
+  expectedCount: number,
+): Promise<void> {
+  await expect
+    .poll(async () =>
+      summary
+        .locator('[data-summary-chart-kind="density-map"]')
+        .evaluateAll((nodes, expectedId) => {
+          const activeNodes = nodes.filter(
+            (node) =>
+              node.getAttribute("data-highlight-series-id") === expectedId &&
+              node.getAttribute("data-highlight-series-active") === "true",
+          );
+          return {
+            activeCount: activeNodes.length,
+            focusDetailCount: activeNodes.filter((node) => {
+              const detail = node.querySelector(
+                '[data-density-map-focus-detail="true"]',
+              );
+              return (
+                detail?.getAttribute("data-density-map-focus-series-id") ===
+                expectedId
+              );
+            }).length,
+            preservedOverview: activeNodes.every(
+              (node) =>
+                Number(node.getAttribute("data-rendered-series-count") || "0") >
+                1,
+            ),
+          };
+        }, resourceId),
+    )
+    .toEqual({
+      activeCount: expectedCount,
+      focusDetailCount: expectedCount,
+      preservedOverview: true,
+    });
 }
 
 async function readSummarySeriesId(
@@ -265,16 +308,14 @@ test.describe.serial("Summary hover selection", () => {
     );
     const firstInfrastructureRow = infrastructureRows.first();
     await expect(firstInfrastructureRow).toBeVisible();
-    const {
-      index: infrastructureRowIndex,
-      resourceId: infrastructureRowId,
-    } = await hoverRowUntilSummaryHighlights(
-      page,
-      infrastructureRows,
-      infrastructureSummary,
-      "data-row-id",
-      4,
-    );
+    const { index: infrastructureRowIndex, resourceId: infrastructureRowId } =
+      await hoverRowUntilSummaryHighlights(
+        page,
+        infrastructureRows,
+        infrastructureSummary,
+        "data-row-id",
+        4,
+      );
     const infrastructureRow = infrastructureRows.nth(infrastructureRowIndex);
     expect(infrastructureRowId).not.toBe("");
     await expectActiveIsolatedLineCards(infrastructureSummary, 2);
@@ -286,6 +327,11 @@ test.describe.serial("Summary hover selection", () => {
       4,
     );
     await expectActiveIsolatedLineCards(infrastructureSummary, 2);
+    await expectActiveDensityMapsPreserveOverview(
+      infrastructureSummary,
+      infrastructureRowId,
+      2,
+    );
 
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
     const workloadsSummary = page.getByTestId("workloads-summary");
@@ -302,6 +348,11 @@ test.describe.serial("Summary hover selection", () => {
     );
     expect(workloadRowId).not.toBe("");
     await expectActiveIsolatedLineCards(workloadsSummary, 2);
+    await expectActiveDensityMapsPreserveOverview(
+      workloadsSummary,
+      workloadRowId,
+      2,
+    );
 
     const vmwareWorkloadRow = page
       .locator('tr[data-guest-id^="vm-"]', { hasText: "warehouse-api-01" })
@@ -315,6 +366,11 @@ test.describe.serial("Summary hover selection", () => {
     await dispatchRowHover(vmwareWorkloadRow);
     await expectSummaryHighlightCount(workloadsSummary, vmwareWorkloadId, 4);
     await expectActiveIsolatedLineCards(workloadsSummary, 2);
+    await expectActiveDensityMapsPreserveOverview(
+      workloadsSummary,
+      vmwareWorkloadId,
+      2,
+    );
 
     await page.goto("/storage", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
@@ -330,13 +386,14 @@ test.describe.serial("Summary hover selection", () => {
     const storagePoolRows = page.locator("tr[data-row-id]");
     const firstStoragePoolRow = storagePoolRows.first();
     await expect(firstStoragePoolRow).toBeVisible();
-    const { resourceId: storagePoolRowId } = await hoverRowUntilSummaryHighlights(
-      page,
-      storagePoolRows,
-      storageSummary,
-      "data-row-id",
-      3,
-    );
+    const { resourceId: storagePoolRowId } =
+      await hoverRowUntilSummaryHighlights(
+        page,
+        storagePoolRows,
+        storageSummary,
+        "data-row-id",
+        3,
+      );
     expect(storagePoolRowId).not.toBe("");
     await expectActiveIsolatedLineCards(storageSummary, 3);
 
@@ -344,13 +401,14 @@ test.describe.serial("Summary hover selection", () => {
     const storageDiskRows = page.locator("tr[data-row-id]");
     const firstStorageDiskRow = storageDiskRows.first();
     await expect(firstStorageDiskRow).toBeVisible();
-    const { resourceId: storageDiskRowId } = await hoverRowUntilSummaryHighlights(
-      page,
-      storageDiskRows,
-      storageSummary,
-      "data-row-id",
-      1,
-    );
+    const { resourceId: storageDiskRowId } =
+      await hoverRowUntilSummaryHighlights(
+        page,
+        storageDiskRows,
+        storageSummary,
+        "data-row-id",
+        1,
+      );
     expect(storageDiskRowId).not.toBe("");
     await expectActiveIsolatedLineCards(storageSummary, 1);
 
@@ -377,7 +435,9 @@ test.describe.serial("Summary hover selection", () => {
     const infrastructureChartId = await hoverSummaryChartUntilActiveId(
       page,
       infrastructureSummary,
-      infrastructureSummary.locator('[data-active-series-display="isolate"]').first(),
+      infrastructureSummary
+        .locator('[data-active-series-display="isolate"]')
+        .first(),
     );
     expect(infrastructureChartId).not.toBe("");
     await expectSummaryHighlightCount(
@@ -386,6 +446,11 @@ test.describe.serial("Summary hover selection", () => {
       4,
     );
     await expectActiveIsolatedLineCards(infrastructureSummary, 2);
+    await expectActiveDensityMapsPreserveOverview(
+      infrastructureSummary,
+      infrastructureChartId,
+      2,
+    );
 
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
     const workloadsSummary = page.getByTestId("workloads-summary");
@@ -393,11 +458,18 @@ test.describe.serial("Summary hover selection", () => {
     const workloadChartId = await hoverSummaryChartUntilActiveId(
       page,
       workloadsSummary,
-      workloadsSummary.locator('[data-active-series-display="isolate"]').first(),
+      workloadsSummary
+        .locator('[data-active-series-display="isolate"]')
+        .first(),
     );
     expect(workloadChartId).not.toBe("");
     await expectSummaryHighlightCount(workloadsSummary, workloadChartId, 4);
     await expectActiveIsolatedLineCards(workloadsSummary, 2);
+    await expectActiveDensityMapsPreserveOverview(
+      workloadsSummary,
+      workloadChartId,
+      2,
+    );
 
     await page.goto("/storage", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");

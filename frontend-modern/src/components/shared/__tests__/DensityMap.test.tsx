@@ -6,6 +6,7 @@ import densityMapStateSource from '@/components/shared/useDensityMapState.ts?raw
 import { DensityMap } from '@/components/shared/DensityMap';
 import {
   buildDensityMapChartData,
+  buildDensityMapFocusDetail,
   getDensityMapExternalSeriesIndex,
 } from '@/components/shared/densityMapModel';
 
@@ -15,6 +16,8 @@ HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
   scale: vi.fn(),
   beginPath: vi.fn(),
   roundRect: vi.fn(),
+  save: vi.fn(),
+  restore: vi.fn(),
   stroke: vi.fn(),
   strokeRect: vi.fn(),
   fill: vi.fn(),
@@ -38,6 +41,7 @@ describe('DensityMap', () => {
     expect(densityMapStateSource).toContain('export function useDensityMapState');
 
     expect(densityMapModelSource).toContain('buildDensityMapChartData');
+    expect(densityMapModelSource).toContain('buildDensityMapFocusDetail');
     expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
     expect(densityMapModelSource).toContain('getDensityMapExternalSeriesIndex');
     expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
@@ -164,5 +168,89 @@ describe('DensityMap', () => {
 
     expect(chartData.series.map((entry) => entry.id)).toContain('series-24');
     expect(getDensityMapExternalSeriesIndex(chartData, 'series-24')).not.toBeNull();
+  });
+
+  it('builds focused detail from the active density-map series without replacing the overview model', () => {
+    const now = Date.now();
+    const chartData = buildDensityMapChartData({
+      now,
+      timeRange: '1h',
+      highlightSeriesId: 'alpha',
+      series: [
+        {
+          id: 'alpha',
+          name: 'Alpha',
+          color: '#10b981',
+          data: [
+            { timestamp: now - 40_000, value: 12 },
+            { timestamp: now - 10_000, value: 32 },
+          ],
+        },
+        {
+          id: 'beta',
+          name: 'Beta',
+          color: '#3b82f6',
+          data: [
+            { timestamp: now - 30_000, value: 18 },
+            { timestamp: now - 5_000, value: 24 },
+          ],
+        },
+      ],
+    });
+
+    const detail = buildDensityMapFocusDetail({
+      data: chartData,
+      highlightSeriesId: 'alpha',
+    });
+
+    expect(chartData.series).toHaveLength(2);
+    expect(detail).toMatchObject({
+      seriesId: 'alpha',
+      seriesName: 'Alpha',
+      currentValue: 32,
+      peakValue: 32,
+    });
+    expect(detail?.sparklinePath).toContain('M');
+  });
+
+  it('renders focused detail while keeping the density-map overview series count intact', () => {
+    const now = Date.now();
+    const { container } = render(() => (
+      <DensityMap
+        timeRange="1h"
+        highlightSeriesId="alpha"
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#10b981',
+            data: [
+              { timestamp: now - 40_000, value: 12 },
+              { timestamp: now - 10_000, value: 32 },
+            ],
+          },
+          {
+            id: 'beta',
+            name: 'Beta',
+            color: '#3b82f6',
+            data: [
+              { timestamp: now - 30_000, value: 18 },
+              { timestamp: now - 5_000, value: 24 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const root = container.firstElementChild;
+    expect(root?.getAttribute('data-summary-chart-kind')).toBe('density-map');
+    expect(root?.getAttribute('data-rendered-series-count')).toBe('2');
+    expect(screen.getByText('Alpha')).toBeInTheDocument();
+    expect(screen.getByText('Latest')).toBeInTheDocument();
+    expect(screen.getByText('Peak')).toBeInTheDocument();
+    expect(screen.getAllByText('32.0')).toHaveLength(2);
+    const overlay = container.querySelector('[data-density-map-focus-detail="true"]');
+    expect(overlay).not.toBeNull();
+    expect(overlay).toHaveAttribute('data-density-map-focus-series-id', 'alpha');
   });
 });

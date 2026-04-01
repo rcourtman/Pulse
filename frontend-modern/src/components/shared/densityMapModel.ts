@@ -27,6 +27,18 @@ export interface DensityMapHoveredState {
   seriesIndex: number;
 }
 
+export interface DensityMapFocusDetail {
+  currentValue: number | null;
+  currentTimestamp: number | null;
+  hoveredValue: number | null;
+  hoveredTimestamp: number | null;
+  peakValue: number | null;
+  seriesColor: string;
+  seriesId: string;
+  seriesName: string;
+  sparklinePath: string | null;
+}
+
 export interface DensityMapChartData {
   series: InteractiveSparklineSeries[];
   grid: number[][];
@@ -224,3 +236,84 @@ export function buildDensityMapSynchronizedHoveredState(options: {
     seriesIndex,
   };
 }
+
+export function buildDensityMapFocusDetail(options: {
+  activeHoveredState?: DensityMapHoveredState | null;
+  data: DensityMapChartData;
+  highlightSeriesId?: string | null;
+}): DensityMapFocusDetail | null {
+  const activeHoveredState = options.activeHoveredState ?? null;
+  const seriesIndex =
+    activeHoveredState?.seriesIndex ??
+    getDensityMapExternalSeriesIndex(options.data, options.highlightSeriesId);
+  if (seriesIndex === null || seriesIndex < 0 || seriesIndex >= options.data.series.length) {
+    return null;
+  }
+
+  const series = options.data.series[seriesIndex];
+  const seriesId = series.id?.trim() || '';
+  if (!seriesId) {
+    return null;
+  }
+
+  const windowEnd = options.data.windowStart + options.data.rangeMs;
+  const points = series.data.filter(
+    (point) => point.timestamp >= options.data.windowStart && point.timestamp <= windowEnd,
+  );
+  const currentPoint = points.length > 0 ? points[points.length - 1] : null;
+  let peakValue: number | null = null;
+  for (const point of points) {
+    peakValue = peakValue === null ? point.value : Math.max(peakValue, point.value);
+  }
+
+  const sparklinePath = buildDensityMapFocusSparklinePath({
+    points,
+    rangeMs: options.data.rangeMs,
+    windowStart: options.data.windowStart,
+  });
+
+  return {
+    currentValue: currentPoint?.value ?? null,
+    currentTimestamp: currentPoint?.timestamp ?? null,
+    hoveredValue: activeHoveredState?.value ?? null,
+    hoveredTimestamp: activeHoveredState?.timestamp ?? null,
+    peakValue,
+    seriesColor: series.color,
+    seriesId,
+    seriesName: series.name || 'Unknown',
+    sparklinePath,
+  };
+}
+
+const buildDensityMapFocusSparklinePath = (options: {
+  points: Array<{ timestamp: number; value: number }>;
+  rangeMs: number;
+  windowStart: number;
+}): string | null => {
+  const { points, rangeMs, windowStart } = options;
+  if (points.length < 2 || rangeMs <= 0) {
+    return null;
+  }
+
+  const width = 64;
+  const height = 22;
+  let maxValue = 0;
+  for (const point of points) {
+    if (point.value > maxValue) {
+      maxValue = point.value;
+    }
+  }
+  if (maxValue <= 0) {
+    return null;
+  }
+
+  const commands: string[] = [];
+  for (let index = 0; index < points.length; index += 1) {
+    const point = points[index];
+    const x = clampDensityMapValue((point.timestamp - windowStart) / rangeMs, 0, 1) * width;
+    const y = height - clampDensityMapValue(point.value / maxValue, 0, 1) * height;
+    commands.push(`${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`);
+  }
+
+  return commands.join(' ');
+};

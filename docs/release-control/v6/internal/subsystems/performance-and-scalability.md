@@ -90,35 +90,35 @@ regression protection.
 68. `frontend-modern/src/components/Infrastructure/UnifiedResourcePBSTableSection.tsx`
 69. `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`
 70. `frontend-modern/src/utils/throughputPresentation.ts`
-69. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
-70. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
-71. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
-72. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
-73. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
-74. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
-75. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
-76. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
-77. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
-78. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
-79. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
-80. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
-81. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
-82. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
-83. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
-84. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
-85. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
-86. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
-87. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
-88. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
-89. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
-90. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
-91. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
-92. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
-93. `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
-94. `frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx`
-95. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
-96. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
-97. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
+71. `frontend-modern/src/components/Infrastructure/UnifiedResourcePMGTableSection.tsx`
+72. `frontend-modern/src/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx`
+73. `frontend-modern/src/components/Infrastructure/unifiedResourceTableModel.ts`
+74. `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
+75. `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`
+76. `frontend-modern/src/components/Dashboard/__tests__/Dashboard.performance.contract.test.tsx`
+77. `frontend-modern/src/components/Dashboard/__tests__/DashboardFilter.test.tsx`
+78. `frontend-modern/src/components/Dashboard/__tests__/useDashboardFilterState.test.ts`
+79. `frontend-modern/src/components/Dashboard/__tests__/useDashboardSelectionState.test.ts`
+80. `frontend-modern/src/components/Dashboard/MetricBar.test.tsx`
+81. `frontend-modern/src/components/Dashboard/__tests__/useMetricBarState.test.tsx`
+82. `frontend-modern/src/components/Dashboard/__tests__/EnhancedCPUBar.test.tsx`
+83. `frontend-modern/src/components/Dashboard/__tests__/useEnhancedCPUBarState.test.tsx`
+84. `frontend-modern/src/components/Dashboard/ThresholdSlider.test.tsx`
+85. `frontend-modern/src/components/Dashboard/__tests__/useThresholdSliderState.test.ts`
+86. `frontend-modern/src/components/Dashboard/__tests__/StackedDiskBar.test.tsx`
+87. `frontend-modern/src/components/Dashboard/__tests__/useStackedDiskBarState.test.tsx`
+88. `frontend-modern/src/components/Dashboard/StackedMemoryBar.test.tsx`
+89. `frontend-modern/src/components/Dashboard/__tests__/useStackedMemoryBarState.test.tsx`
+90. `frontend-modern/src/components/Dashboard/__tests__/DiskList.test.tsx`
+91. `frontend-modern/src/components/Dashboard/__tests__/GuestRow.test.tsx`
+92. `frontend-modern/src/components/Dashboard/GuestDrawer.test.tsx`
+93. `frontend-modern/src/components/Dashboard/__tests__/useGroupedTableWindowing.test.ts`
+94. `frontend-modern/src/components/Infrastructure/__tests__/UnifiedResourceTable.performance.contract.test.tsx`
+95. `frontend-modern/src/components/Dashboard/useDashboardWorkloadViewportSync.ts`
+96. `frontend-modern/src/components/Dashboard/__tests__/useDashboardWorkloadViewportSync.test.tsx`
+97. `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+98. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+99. `frontend-modern/src/components/Infrastructure/infrastructureSummaryModel.ts`
 
 ## Shared Boundaries
 
@@ -167,7 +167,7 @@ regression protection.
 25. Extend dashboard workload table shell ownership through `frontend-modern/src/components/Dashboard/WorkloadTableHeader.tsx` and `frontend-modern/src/components/Dashboard/WorkloadPanel.tsx` rather than rebuilding sortable header markup, grouped node rows, row expansion, or guest-drawer rendering inside `frontend-modern/src/components/Dashboard/DashboardWorkloadTable.tsx`
 26. Keep long-range workload chart capping time-proportional across `frontend-modern/src/components/Workloads/WorkloadsSummary.tsx`, `frontend-modern/src/api/charts.ts`, and `internal/api/router.go`: when the workload hot path caps mixed-cadence history for top cards, it must bucket by time window rather than raw point index so 7-day and 30-day workload cards stay visually even without relaxing the protected payload budget.
 27. Keep summary hover/focus and sticky-card behavior on shared hot paths: infrastructure, workloads, and storage summary shells must reuse one focused-series model plus `frontend-modern/src/components/shared/StickySummarySection.tsx` inside the app scroll shell instead of per-page scroll listeners or per-card hover derivations, so row scrubbing highlights all cards without multiplying render or scroll work.
-28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards.
+28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 
 ## Forbidden Paths
 
@@ -214,8 +214,11 @@ same-path route-state scheduler so opening a focused workload preserves scroll
 and does not look like a full page reload, and the governed infrastructure and
 workloads summary surfaces must keep the summary page-scoped while that focus
 reuses the shared highlight contract; density maps may retain page-level
-context, but line-card isolation must still flow through the shared sparkline
-runtime instead of a page-local focus overlay.
+context, but they must now also surface focused-entity detail inside the same
+card instead of dimming the rest of the map into unusable background noise or
+swapping the hot path into a transient single-series chart. Line-card
+isolation must still flow through the shared sparkline runtime instead of a
+page-local focus overlay.
 That same hot-path rule now has one shared runtime boundary. Interactive-series
 filtering, active-series derivation, focused-label lookup, and local
 scroll-preserving row focus must extend
