@@ -132,6 +132,81 @@ func TestSendGroupedWebhookGeneric(t *testing.T) {
 	}
 }
 
+func TestSendGroupedWebhookDiscordEscapesSpecialCharacters(t *testing.T) {
+	var gotBody []byte
+
+	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		gotBody = body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	manager := NewNotificationManager("https://pulse.example")
+	defer manager.Stop()
+	manager.webhookClient = server.Client()
+	if err := manager.UpdateAllowedPrivateCIDRs("127.0.0.1/32"); err != nil {
+		t.Fatalf("failed to allowlist localhost: %v", err)
+	}
+
+	alert := &alerts.Alert{
+		ID:           "alert-1",
+		Type:         "cpu",
+		Level:        alerts.AlertLevelWarning,
+		ResourceID:   "vm-100",
+		ResourceName: `db "primary"`,
+		Node:         `node\01`,
+		Message:      "CPU spike on \"db\"\nPath C:\\temp",
+		Value:        92.3,
+		Threshold:    80,
+		StartTime:    time.Now().Add(-5 * time.Minute),
+	}
+
+	webhook := WebhookConfig{
+		Name:    "discord-test",
+		URL:     server.URL,
+		Enabled: true,
+		Service: "discord",
+	}
+
+	if err := manager.sendGroupedWebhook(webhook, []*alerts.Alert{alert}); err != nil {
+		t.Fatalf("sendGroupedWebhook error: %v", err)
+	}
+
+	var payload map[string]interface{}
+	if err := json.Unmarshal(gotBody, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+
+	embeds, ok := payload["embeds"].([]interface{})
+	if !ok || len(embeds) == 0 {
+		t.Fatalf("expected embeds in payload, got: %v", payload)
+	}
+
+	embed, ok := embeds[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected embed object, got %T", embeds[0])
+	}
+
+	description, _ := embed["description"].(string)
+	if description != alert.Message {
+		t.Fatalf("expected description %q, got %q", alert.Message, description)
+	}
+
+	fields, ok := embed["fields"].([]interface{})
+	if !ok || len(fields) == 0 {
+		t.Fatalf("expected fields in embed, got: %v", embed)
+	}
+
+	resourceField, ok := fields[0].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected first field object, got %T", fields[0])
+	}
+	if resourceField["value"] != alert.ResourceName {
+		t.Fatalf("expected resource field %q, got %v", alert.ResourceName, resourceField["value"])
+	}
+}
+
 func TestSendResolvedWebhookHTTP(t *testing.T) {
 	var gotBody []byte
 	server := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -2502,6 +2502,31 @@ func TestGeneratePayloadFromTemplateWithService(t *testing.T) {
 		}
 	})
 
+	t.Run("template with jsonString helper escapes special characters", func(t *testing.T) {
+		nm := &NotificationManager{}
+		data := WebhookPayloadData{
+			ResourceName: `db "primary"`,
+			Message:      "Line1\nLine2 with \"quotes\" and C:\\temp",
+		}
+		template := `{"resource":"{{.ResourceName | jsonString}}","message":"{{.Message | jsonString}}"}`
+
+		result, err := nm.generatePayloadFromTemplateWithService(template, data, "generic")
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(result, &parsed); err != nil {
+			t.Fatalf("result is not valid JSON: %v", err)
+		}
+		if parsed["resource"] != data.ResourceName {
+			t.Fatalf("expected resource %q, got %v", data.ResourceName, parsed["resource"])
+		}
+		if parsed["message"] != data.Message {
+			t.Fatalf("expected message %q, got %v", data.Message, parsed["message"])
+		}
+	})
+
 	t.Run("telegram service validates JSON", func(t *testing.T) {
 		nm := &NotificationManager{}
 		data := WebhookPayloadData{

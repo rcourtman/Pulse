@@ -84,6 +84,14 @@ template registry instead of keeping a second hardcoded service list. Mention
 field visibility plus mention-placeholder/help copy for supported services
 must also come from the same backend registry so the editor does not carry a
 second service-specific presentation map.
+That same template-registry boundary owns JSON-safe string rendering for the
+built-in webhook providers. Canonical JSON templates must render runtime
+strings through the shared notification template helper that JSON-escapes
+quoted, multi-line, and path-like alert content before validation, instead of
+injecting raw alert fields directly into JSON bodies. Custom user templates
+may still choose their own formatting, but the shipped provider templates may
+not rely on callers to pre-sanitize alert text or resource names just to keep
+their JSON payloads valid.
 Email single-alert, grouped, resolved, and HTML send paths must follow that
 same ownership rule: they may expose different calling surfaces, but they must
 all route through one canonical enhanced email executor instead of rebuilding

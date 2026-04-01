@@ -2478,6 +2478,16 @@ func templateFuncMap() template.FuncMap {
 			}
 			return strings.ToUpper(s[:1]) + strings.ToLower(s[1:])
 		},
+		"jsonString": func(v interface{}) string {
+			encoded, err := json.Marshal(v)
+			if err != nil {
+				return ""
+			}
+			if len(encoded) >= 2 && encoded[0] == '"' && encoded[len(encoded)-1] == '"' {
+				return string(encoded[1 : len(encoded)-1])
+			}
+			return string(encoded)
+		},
 		"upper":     strings.ToUpper,
 		"lower":     strings.ToLower,
 		"printf":    fmt.Sprintf,

@@ -31,20 +31,20 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
-				{{if .Mention}}"content": "{{.Mention}}",{{end}}
+				{{if .Mention}}"content": "{{.Mention | jsonString}}",{{end}}
 				"embeds": [{
-					"title": "Pulse Alert: {{.Level | title}}",
-					"description": "{{.Message}}",
+					"title": "Pulse Alert: {{.Level | title | jsonString}}",
+					"description": "{{.Message | jsonString}}",
 					"color": {{if eq .Level "critical"}}15158332{{else if eq .Level "warning"}}15105570{{else}}3447003{{end}},
 					"fields": [
-						{"name": "Resource", "value": "{{.ResourceName}}", "inline": true},
-						{"name": "Node", "value": "{{.Node}}", "inline": true},
-						{"name": "Type", "value": "{{.Type | title}}", "inline": true},
+						{"name": "Resource", "value": "{{.ResourceName | jsonString}}", "inline": true},
+						{"name": "Node", "value": "{{.Node | jsonString}}", "inline": true},
+						{"name": "Type", "value": "{{.Type | title | jsonString}}", "inline": true},
 						{"name": "Value", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}", "inline": true},
 						{"name": "Threshold", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}", "inline": true},
-						{"name": "Duration", "value": "{{.Duration}}", "inline": true}
+						{"name": "Duration", "value": "{{.Duration | jsonString}}", "inline": true}
 					],
-					"timestamp": "{{.Timestamp}}",
+					"timestamp": "{{.Timestamp | jsonString}}",
 					"footer": {
 						"text": "Pulse Monitoring"
 					}
@@ -53,17 +53,17 @@ func GetWebhookTemplates() []WebhookTemplate {
 			ResolvedPayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"embeds": [{
-					"title": "Resolved: {{.ResourceName}}",
-					"description": "{{.Message}}",
+					"title": "Resolved: {{.ResourceName | jsonString}}",
+					"description": "{{.Message | jsonString}}",
 					"color": 3066993,
 					"fields": [
-						{"name": "Resource", "value": "{{.ResourceName}}", "inline": true},
-						{"name": "Node", "value": "{{.Node}}", "inline": true},
-						{"name": "Type", "value": "{{.Type | title}}", "inline": true},
-						{"name": "Duration", "value": "{{.Duration}}", "inline": true},
-						{"name": "Resolved At", "value": "{{.ResolvedAt}}", "inline": true}
+						{"name": "Resource", "value": "{{.ResourceName | jsonString}}", "inline": true},
+						{"name": "Node", "value": "{{.Node | jsonString}}", "inline": true},
+						{"name": "Type", "value": "{{.Type | title | jsonString}}", "inline": true},
+						{"name": "Duration", "value": "{{.Duration | jsonString}}", "inline": true},
+						{"name": "Resolved At", "value": "{{.ResolvedAt | jsonString}}", "inline": true}
 					],
-					"timestamp": "{{.Timestamp}}",
+					"timestamp": "{{.Timestamp | jsonString}}",
 					"footer": {
 						"text": "Pulse Monitoring"
 					}
@@ -80,14 +80,14 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:      "POST",
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"chat_id": "{{.ChatID}}",
-				"text": "*Pulse Alert: {{.Level | title}}*\n\n{{.Message}}\n\n*Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}\n\n[View in Pulse]({{.Instance}})",
+				"chat_id": "{{.ChatID | jsonString}}",
+				"text": "*Pulse Alert: {{.Level | title | jsonString}}*\n\n{{.Message | jsonString}}\n\n*Details:*\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | jsonString}}\n\n[View in Pulse]({{.Instance | jsonString}})",
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
 			ResolvedPayloadTemplate: `{
-				"chat_id": "{{.ChatID}}",
-				"text": "*Resolved: {{.ResourceName}}*\n\n{{.Message}}\n\n*Details:*\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Duration: {{.Duration}}\n• Resolved At: {{.ResolvedAt}}",
+				"chat_id": "{{.ChatID | jsonString}}",
+				"text": "*Resolved: {{.ResourceName | jsonString}}*\n\n{{.Message | jsonString}}\n\n*Details:*\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Duration: {{.Duration | jsonString}}\n• Resolved At: {{.ResolvedAt | jsonString}}",
 				"parse_mode": "Markdown",
 				"disable_web_page_preview": true
 			}`,
@@ -104,20 +104,20 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:             "POST",
 			Headers:            map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"text": "{{if .Mention}}{{.Mention}} {{end}}Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
+				"text": "{{if .Mention}}{{.Mention | jsonString}} {{end}}Pulse Alert: {{.Level | title | jsonString}} - {{.ResourceName | jsonString}}",
 				"blocks": [
 					{{if .Mention}}{
 						"type": "section",
 						"text": {
 							"type": "mrkdwn",
-							"text": "{{.Mention}}"
+							"text": "{{.Mention | jsonString}}"
 						}
 					},{{end}}
 					{
 						"type": "header",
 						"text": {
 							"type": "plain_text",
-							"text": "Pulse Alert: {{.Level | title}}",
+							"text": "Pulse Alert: {{.Level | title | jsonString}}",
 							"emoji": true
 						}
 					},
@@ -125,18 +125,18 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"type": "section",
 						"text": {
 							"type": "mrkdwn",
-							"text": "{{.Message}}"
+							"text": "{{.Message | jsonString}}"
 						}
 					},
 					{
 						"type": "section",
 						"fields": [
-							{"type": "mrkdwn", "text": "*Resource:*\n{{.ResourceName}}"},
-							{"type": "mrkdwn", "text": "*Node:*\n{{.Node}}"},
-							{"type": "mrkdwn", "text": "*Type:*\n{{.Type | title}}"},
+							{"type": "mrkdwn", "text": "*Resource:*\n{{.ResourceName | jsonString}}"},
+							{"type": "mrkdwn", "text": "*Node:*\n{{.Node | jsonString}}"},
+							{"type": "mrkdwn", "text": "*Type:*\n{{.Type | title | jsonString}}"},
 							{"type": "mrkdwn", "text": "*Value:*\n{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}"},
 							{"type": "mrkdwn", "text": "*Threshold:*\n{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}"},
-							{"type": "mrkdwn", "text": "*Duration:*\n{{.Duration}}"}
+							{"type": "mrkdwn", "text": "*Duration:*\n{{.Duration | jsonString}}"}
 						]
 					},
 					{
@@ -144,20 +144,20 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"elements": [
 							{
 								"type": "mrkdwn",
-								"text": "View in <{{.Instance}}|Proxmox> | Alert Identifier: {{.ID}}"
+								"text": "View in <{{.Instance | jsonString}}|Proxmox> | Alert Identifier: {{.ID | jsonString}}"
 							}
 						]
 					}
 				]
 			}`,
 			ResolvedPayloadTemplate: `{
-				"text": "Resolved: {{.ResourceName}}",
+				"text": "Resolved: {{.ResourceName | jsonString}}",
 				"blocks": [
 					{
 						"type": "header",
 						"text": {
 							"type": "plain_text",
-							"text": "Resolved: {{.ResourceName}}",
+							"text": "Resolved: {{.ResourceName | jsonString}}",
 							"emoji": true
 						}
 					},
@@ -165,17 +165,17 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"type": "section",
 						"text": {
 							"type": "mrkdwn",
-							"text": "{{.Message}}"
+							"text": "{{.Message | jsonString}}"
 						}
 					},
 					{
 						"type": "section",
 						"fields": [
-							{"type": "mrkdwn", "text": "*Resource:*\n{{.ResourceName}}"},
-							{"type": "mrkdwn", "text": "*Node:*\n{{.Node}}"},
-							{"type": "mrkdwn", "text": "*Type:*\n{{.Type | title}}"},
-							{"type": "mrkdwn", "text": "*Duration:*\n{{.Duration}}"},
-							{"type": "mrkdwn", "text": "*Resolved At:*\n{{.ResolvedAt}}"}
+							{"type": "mrkdwn", "text": "*Resource:*\n{{.ResourceName | jsonString}}"},
+							{"type": "mrkdwn", "text": "*Node:*\n{{.Node | jsonString}}"},
+							{"type": "mrkdwn", "text": "*Type:*\n{{.Type | title | jsonString}}"},
+							{"type": "mrkdwn", "text": "*Duration:*\n{{.Duration | jsonString}}"},
+							{"type": "mrkdwn", "text": "*Resolved At:*\n{{.ResolvedAt | jsonString}}"}
 						]
 					},
 					{
@@ -183,7 +183,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 						"elements": [
 							{
 								"type": "mrkdwn",
-								"text": "Alert Identifier: {{.ID}}"
+								"text": "Alert Identifier: {{.ID | jsonString}}"
 							}
 						]
 					}
@@ -205,19 +205,19 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"@type": "MessageCard",
 				"@context": "http://schema.org/extensions",
 				"themeColor": "{{if eq .Level "critical"}}FF0000{{else if eq .Level "warning"}}FFA500{{else}}00FF00{{end}}",
-				"summary": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
-				{{if .Mention}}"text": "{{.Mention}}",{{end}}
+				"summary": "Pulse Alert: {{.Level | title | jsonString}} - {{.ResourceName | jsonString}}",
+				{{if .Mention}}"text": "{{.Mention | jsonString}}",{{end}}
 				"sections": [{
-					"activityTitle": "Pulse Alert: {{.Level | title}}",
-					"activitySubtitle": "{{.Message}}",
+					"activityTitle": "Pulse Alert: {{.Level | title | jsonString}}",
+					"activitySubtitle": "{{.Message | jsonString}}",
 					"facts": [
-						{"name": "Resource", "value": "{{.ResourceName}}"},
-						{"name": "Node", "value": "{{.Node}}"},
-						{"name": "Type", "value": "{{.Type | title}}"},
+						{"name": "Resource", "value": "{{.ResourceName | jsonString}}"},
+						{"name": "Node", "value": "{{.Node | jsonString}}"},
+						{"name": "Type", "value": "{{.Type | title | jsonString}}"},
 						{"name": "Value", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}"},
 						{"name": "Threshold", "value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}"},
-						{"name": "Duration", "value": "{{.Duration}}"},
-						{"name": "Instance", "value": "{{.Instance}}"}
+						{"name": "Duration", "value": "{{.Duration | jsonString}}"},
+						{"name": "Instance", "value": "{{.Instance | jsonString}}"}
 					],
 					"markdown": true
 				}],
@@ -226,7 +226,7 @@ func GetWebhookTemplates() []WebhookTemplate {
 					"name": "View in Proxmox",
 					"targets": [{
 						"os": "default",
-						"uri": "{{.Instance}}"
+						"uri": "{{.Instance | jsonString}}"
 					}]
 				}]
 			}`,
@@ -234,16 +234,16 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"@type": "MessageCard",
 				"@context": "http://schema.org/extensions",
 				"themeColor": "2DC72D",
-				"summary": "Resolved: {{.ResourceName}}",
+				"summary": "Resolved: {{.ResourceName | jsonString}}",
 				"sections": [{
-					"activityTitle": "Resolved: {{.ResourceName}}",
-					"activitySubtitle": "{{.Message}}",
+					"activityTitle": "Resolved: {{.ResourceName | jsonString}}",
+					"activitySubtitle": "{{.Message | jsonString}}",
 					"facts": [
-						{"name": "Resource", "value": "{{.ResourceName}}"},
-						{"name": "Node", "value": "{{.Node}}"},
-						{"name": "Type", "value": "{{.Type | title}}"},
-						{"name": "Duration", "value": "{{.Duration}}"},
-						{"name": "Resolved At", "value": "{{.ResolvedAt}}"}
+						{"name": "Resource", "value": "{{.ResourceName | jsonString}}"},
+						{"name": "Node", "value": "{{.Node | jsonString}}"},
+						{"name": "Type", "value": "{{.Type | title | jsonString}}"},
+						{"name": "Duration", "value": "{{.Duration | jsonString}}"},
+						{"name": "Resolved At", "value": "{{.ResolvedAt | jsonString}}"}
 					],
 					"markdown": true
 				}]
@@ -262,37 +262,37 @@ func GetWebhookTemplates() []WebhookTemplate {
 				"Accept":       "application/vnd.pagerduty+json;version=2",
 			},
 			PayloadTemplate: `{
-				"routing_key": "{{.CustomFields.routing_key}}",
+				"routing_key": "{{.CustomFields.routing_key | jsonString}}",
 				"event_action": "trigger",
-				"dedup_key": "{{.ID}}",
+				"dedup_key": "{{.ID | jsonString}}",
 				"payload": {
-					"summary": "{{.Message}}",
-					"timestamp": "{{.Timestamp}}",
+					"summary": "{{.Message | jsonString}}",
+					"timestamp": "{{.Timestamp | jsonString}}",
 					"severity": "{{if eq .Level "critical"}}critical{{else if eq .Level "warning"}}warning{{else}}info{{end}}",
-					"source": "{{.Node}}",
-					"component": "{{.ResourceName}}",
-					"group": "{{.Type}}",
-					"class": "{{.Type}}",
+					"source": "{{.Node | jsonString}}",
+					"component": "{{.ResourceName | jsonString}}",
+					"group": "{{.Type | jsonString}}",
+					"class": "{{.Type | jsonString}}",
 					"custom_details": {
-						"alert_identifier": "{{.ID}}",
-						"resource_type": "{{.Type}}",
+						"alert_identifier": "{{.ID | jsonString}}",
+						"resource_type": "{{.Type | jsonString}}",
 						"current_value": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}",
 						"threshold": "{{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}",
-						"duration": "{{.Duration}}",
-						"instance": "{{.Instance}}"
+						"duration": "{{.Duration | jsonString}}",
+						"instance": "{{.Instance | jsonString}}"
 					}
 				},
 				"client": "Pulse Monitoring",
-				"client_url": "{{.Instance}}",
+				"client_url": "{{.Instance | jsonString}}",
 				"links": [{
-					"href": "{{.Instance}}",
+					"href": "{{.Instance | jsonString}}",
 					"text": "View in Proxmox"
 				}]
 			}`,
 			ResolvedPayloadTemplate: `{
-				"routing_key": "{{.CustomFields.routing_key}}",
+				"routing_key": "{{.CustomFields.routing_key | jsonString}}",
 				"event_action": "resolve",
-				"dedup_key": "{{.ID}}"
+				"dedup_key": "{{.ID | jsonString}}"
 			}`,
 			Instructions: "1. In PagerDuty, go to Configuration > Services\n2. Add an integration > Events API V2\n3. Copy the Integration Key\n4. Add the key as a custom field named 'routing_key'\n\nNote: PagerDuty recommends using Events API v2 for new integrations.",
 		},
@@ -324,27 +324,27 @@ func GetWebhookTemplates() []WebhookTemplate {
 							},
 							{
 								"type": "TextBlock",
-								"text": "{{.Message}}",
+								"text": "{{.Message | jsonString}}",
 								"wrap": true,
 								"spacing": "Small"
 							},
 							{
 								"type": "FactSet",
 								"facts": [
-									{"title": "Resource", "value": "{{.ResourceName}}"},
-									{"title": "Node", "value": "{{.Node}}"},
-									{"title": "Type", "value": "{{.Type | title}}"},
+									{"title": "Resource", "value": "{{.ResourceName | jsonString}}"},
+									{"title": "Node", "value": "{{.Node | jsonString}}"},
+									{"title": "Type", "value": "{{.Type | title | jsonString}}"},
 									{"title": "Current Value", "value": "{{printf "%.1f" .Value}}%"},
 									{"title": "Threshold", "value": "{{printf "%.0f" .Threshold}}%"},
-									{"title": "Duration", "value": "{{.Duration}}"},
-									{"title": "Alert Identifier", "value": "{{.ID}}"}
+									{"title": "Duration", "value": "{{.Duration | jsonString}}"},
+									{"title": "Alert Identifier", "value": "{{.ID | jsonString}}"}
 								]
 							}
 						],
 						"actions": [{
 							"type": "Action.OpenUrl",
 							"title": "View in Proxmox",
-							"url": "{{.Instance}}"
+							"url": "{{.Instance | jsonString}}"
 						}]
 					}
 				}]
@@ -367,19 +367,19 @@ func GetWebhookTemplates() []WebhookTemplate {
 							},
 							{
 								"type": "TextBlock",
-								"text": "{{.Message}}",
+								"text": "{{.Message | jsonString}}",
 								"wrap": true,
 								"spacing": "Small"
 							},
 							{
 								"type": "FactSet",
 								"facts": [
-									{"title": "Resource", "value": "{{.ResourceName}}"},
-									{"title": "Node", "value": "{{.Node}}"},
-									{"title": "Type", "value": "{{.Type | title}}"},
-									{"title": "Duration", "value": "{{.Duration}}"},
-									{"title": "Resolved At", "value": "{{.ResolvedAt}}"},
-									{"title": "Alert Identifier", "value": "{{.ID}}"}
+									{"title": "Resource", "value": "{{.ResourceName | jsonString}}"},
+									{"title": "Node", "value": "{{.Node | jsonString}}"},
+									{"title": "Type", "value": "{{.Type | title | jsonString}}"},
+									{"title": "Duration", "value": "{{.Duration | jsonString}}"},
+									{"title": "Resolved At", "value": "{{.ResolvedAt | jsonString}}"},
+									{"title": "Alert Identifier", "value": "{{.ID | jsonString}}"}
 								]
 							}
 						]
@@ -397,23 +397,23 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:      "POST",
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"token": "{{.CustomFields.token}}",
-				"user": "{{.CustomFields.user}}",
-				"title": "Pulse Alert: {{.Level | title}} - {{.ResourceName}}",
-				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration}}",
+				"token": "{{.CustomFields.token | jsonString}}",
+				"user": "{{.CustomFields.user | jsonString}}",
+				"title": "Pulse Alert: {{.Level | title | jsonString}} - {{.ResourceName | jsonString}}",
+				"message": "{{.Message | jsonString}}\n\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Value: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n• Threshold: {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n• Duration: {{.Duration | jsonString}}",
 				"priority": {{if .CustomFields.priority}}{{.CustomFields.priority}}{{else}}{{if eq .Level "critical"}}1{{else if eq .Level "warning"}}0{{else}}-1{{end}}{{end}},
-				"sound": "{{if .CustomFields.sound}}{{.CustomFields.sound}}{{else}}{{if eq .Level "critical"}}siren{{else if eq .Level "warning"}}tugboat{{else}}pushover{{end}}{{end}}",
-				"device": "{{if .CustomFields.device}}{{.CustomFields.device}}{{else}}{{.ResourceName}}{{end}}",
-				"timestamp": "{{.Timestamp}}"
+				"sound": "{{if .CustomFields.sound}}{{.CustomFields.sound | jsonString}}{{else}}{{if eq .Level "critical"}}siren{{else if eq .Level "warning"}}tugboat{{else}}pushover{{end}}{{end}}",
+				"device": "{{if .CustomFields.device}}{{.CustomFields.device | jsonString}}{{else}}{{.ResourceName | jsonString}}{{end}}",
+				"timestamp": "{{.Timestamp | jsonString}}"
 			}`,
 			ResolvedPayloadTemplate: `{
-				"token": "{{.CustomFields.token}}",
-				"user": "{{.CustomFields.user}}",
-				"title": "Resolved: {{.ResourceName}}",
-				"message": "{{.Message}}\n\n• Resource: {{.ResourceName}}\n• Node: {{.Node}}\n• Type: {{.Type | title}}\n• Duration: {{.Duration}}\n• Resolved At: {{.ResolvedAt}}",
+				"token": "{{.CustomFields.token | jsonString}}",
+				"user": "{{.CustomFields.user | jsonString}}",
+				"title": "Resolved: {{.ResourceName | jsonString}}",
+				"message": "{{.Message | jsonString}}\n\n• Resource: {{.ResourceName | jsonString}}\n• Node: {{.Node | jsonString}}\n• Type: {{.Type | title | jsonString}}\n• Duration: {{.Duration | jsonString}}\n• Resolved At: {{.ResolvedAt | jsonString}}",
 				"priority": -1,
 				"sound": "pushover",
-				"timestamp": "{{.Timestamp}}"
+				"timestamp": "{{.Timestamp | jsonString}}"
 			}`,
 			Instructions: "1. Create an application at https://pushover.net/apps\n2. Copy your Application Token\n3. Get your User Key from your Pushover dashboard\n4. URL: https://api.pushover.net/1/messages.json\n5. Add custom fields:\n   • token: YOUR_APP_TOKEN (required)\n   • user: YOUR_USER_KEY (required)\n   • sound: notification sound (optional, e.g., spacealarm, siren, tugboat)\n   • priority: -2 to 2 (optional, overrides level-based default)\n   • device: specific device name (optional, overrides ResourceName)",
 		},
@@ -426,41 +426,41 @@ func GetWebhookTemplates() []WebhookTemplate {
 			Method:      "POST",
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
-				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration}}\n- **Alert Identifier:** {{.ID}}\n\n[View in Pulse]({{.Instance}})",
-				"title": "{{.ResourceName}} - {{.Type | title}} {{.Level | upper}} Alert",
+				"message": "**{{if eq .Level "critical"}}CRITICAL{{else if eq .Level "warning"}}WARNING{{else}}INFO{{end}}**: **{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n**Alert Details:**\n- **Resource:** {{.ResourceName | jsonString}}\n- **Node:** {{.Node | jsonString}}\n- **Type:** {{.Type | title | jsonString}}\n- **Current:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}}\n- **Threshold:** {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}}\n- **Duration:** {{.Duration | jsonString}}\n- **Alert Identifier:** {{.ID | jsonString}}\n\n[View in Pulse]({{.Instance | jsonString}})",
+				"title": "{{.ResourceName | jsonString}} - {{.Type | title | jsonString}} {{.Level | upper | jsonString}} Alert",
 				"priority": {{if eq .Level "critical"}}10{{else if eq .Level "warning"}}5{{else}}2{{end}},
 				"extras": {
 					"client::display": {
 						"contentType": "text/markdown"
 					},
 					"pulse::alert": {
-						"id": "{{.ID}}",
-						"level": "{{.Level}}",
-						"type": "{{.Type}}",
-						"resource_name": "{{.ResourceName}}",
-						"node": "{{.Node}}",
+						"id": "{{.ID | jsonString}}",
+						"level": "{{.Level | jsonString}}",
+						"type": "{{.Type | jsonString}}",
+						"resource_name": "{{.ResourceName | jsonString}}",
+						"node": "{{.Node | jsonString}}",
 						"value": {{.Value}},
 						"threshold": {{.Threshold}},
-						"duration": "{{.Duration}}",
-						"instance": "{{.Instance}}"
+						"duration": "{{.Duration | jsonString}}",
+						"instance": "{{.Instance | jsonString}}"
 					}
 				}
 			}`,
 			ResolvedPayloadTemplate: `{
-				"message": "**RESOLVED**: **{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n**Details:**\n- **Resource:** {{.ResourceName}}\n- **Node:** {{.Node}}\n- **Type:** {{.Type | title}}\n- **Duration:** {{.Duration}}\n- **Resolved At:** {{.ResolvedAt}}\n- **Alert Identifier:** {{.ID}}",
-				"title": "Resolved: {{.ResourceName}} - {{.Type | title}}",
+				"message": "**RESOLVED**: **{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n**Details:**\n- **Resource:** {{.ResourceName | jsonString}}\n- **Node:** {{.Node | jsonString}}\n- **Type:** {{.Type | title | jsonString}}\n- **Duration:** {{.Duration | jsonString}}\n- **Resolved At:** {{.ResolvedAt | jsonString}}\n- **Alert Identifier:** {{.ID | jsonString}}",
+				"title": "Resolved: {{.ResourceName | jsonString}} - {{.Type | title | jsonString}}",
 				"priority": 2,
 				"extras": {
 					"client::display": {
 						"contentType": "text/markdown"
 					},
 					"pulse::alert": {
-						"id": "{{.ID}}",
+						"id": "{{.ID | jsonString}}",
 						"event": "resolved",
-						"resource_name": "{{.ResourceName}}",
-						"node": "{{.Node}}",
-						"duration": "{{.Duration}}",
-						"resolved_at": "{{.ResolvedAt}}"
+						"resource_name": "{{.ResourceName | jsonString}}",
+						"node": "{{.Node | jsonString}}",
+						"duration": "{{.Duration | jsonString}}",
+						"resolved_at": "{{.ResolvedAt | jsonString}}"
 					}
 				}
 			}`,
@@ -507,12 +507,12 @@ View in Pulse: {{.Instance}}`,
 			PayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration}} |\n| Alert Identifier | {{.ID}} |\n\n[View in Pulse]({{.Instance}})"
+				"text": "{{if eq .Level "critical"}}:rotating_light: **CRITICAL ALERT**{{else if eq .Level "warning"}}:warning: **WARNING ALERT**{{else}}:information_source: **INFO**{{end}}\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Current | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.1f" .Value}} MB/s{{else}}{{printf "%.1f" .Value}}%{{end}} |\n| Threshold | {{if or (eq .Type "diskRead") (eq .Type "diskWrite")}}{{printf "%.0f" .Threshold}} MB/s{{else}}{{printf "%.0f" .Threshold}}%{{end}} |\n| Duration | {{.Duration | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |\n\n[View in Pulse]({{.Instance | jsonString}})"
 			}`,
 			ResolvedPayloadTemplate: `{
 				"username": "Pulse Monitoring",
 				"icon_url": "https://raw.githubusercontent.com/rcourtman/Pulse/main/frontend-modern/public/android-chrome-192x192.png",
-				"text": ":white_check_mark: **RESOLVED**\n\n**{{.ResourceName}}** on **{{.Node}}**\n\n{{.Message}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName}} |\n| Node | {{.Node}} |\n| Type | {{.Type | title}} |\n| Duration | {{.Duration}} |\n| Resolved At | {{.ResolvedAt}} |\n| Alert Identifier | {{.ID}} |"
+				"text": ":white_check_mark: **RESOLVED**\n\n**{{.ResourceName | jsonString}}** on **{{.Node | jsonString}}**\n\n{{.Message | jsonString}}\n\n| Detail | Value |\n|:-------|:------|\n| Resource | {{.ResourceName | jsonString}} |\n| Node | {{.Node | jsonString}} |\n| Type | {{.Type | title | jsonString}} |\n| Duration | {{.Duration | jsonString}} |\n| Resolved At | {{.ResolvedAt | jsonString}} |\n| Alert Identifier | {{.ID | jsonString}} |"
 			}`,
 			Instructions: "1. In Mattermost, go to Integrations > Incoming Webhooks\n2. Create a new webhook and select the channel\n3. Copy the webhook URL and paste it here\n\nNote: This template uses Markdown formatting which is fully supported by Mattermost.",
 		},
@@ -526,33 +526,33 @@ View in Pulse: {{.Instance}}`,
 			Headers:     map[string]string{"Content-Type": "application/json"},
 			PayloadTemplate: `{
 				"alert": {
-					"id": "{{.ID}}",
-					"level": "{{.Level}}",
-					"type": "{{.Type}}",
-					"resource_name": "{{.ResourceName}}",
-					"node": "{{.Node}}",
-					"message": "{{.Message}}",
+					"id": "{{.ID | jsonString}}",
+					"level": "{{.Level | jsonString}}",
+					"type": "{{.Type | jsonString}}",
+					"resource_name": "{{.ResourceName | jsonString}}",
+					"node": "{{.Node | jsonString}}",
+					"message": "{{.Message | jsonString}}",
 					"value": {{.Value}},
 					"threshold": {{.Threshold}},
-					"start_time": "{{.StartTime}}",
-					"duration": "{{.Duration}}"
+					"start_time": "{{.StartTime | jsonString}}",
+					"duration": "{{.Duration | jsonString}}"
 				},
-				"timestamp": "{{.Timestamp}}",
+				"timestamp": "{{.Timestamp | jsonString}}",
 				"source": "pulse-monitoring"
 			}`,
 			ResolvedPayloadTemplate: `{
 				"event": "resolved",
 				"alert": {
-					"id": "{{.ID}}",
-					"type": "{{.Type}}",
-					"resource_name": "{{.ResourceName}}",
-					"node": "{{.Node}}",
-					"message": "{{.Message}}",
-					"start_time": "{{.StartTime}}",
-					"duration": "{{.Duration}}"
+					"id": "{{.ID | jsonString}}",
+					"type": "{{.Type | jsonString}}",
+					"resource_name": "{{.ResourceName | jsonString}}",
+					"node": "{{.Node | jsonString}}",
+					"message": "{{.Message | jsonString}}",
+					"start_time": "{{.StartTime | jsonString}}",
+					"duration": "{{.Duration | jsonString}}"
 				},
-				"resolved_at": "{{.ResolvedAt}}",
-				"timestamp": "{{.Timestamp}}",
+				"resolved_at": "{{.ResolvedAt | jsonString}}",
+				"timestamp": "{{.Timestamp | jsonString}}",
 				"source": "pulse-monitoring"
 			}`,
 			Instructions: "Configure with your custom webhook endpoint",
