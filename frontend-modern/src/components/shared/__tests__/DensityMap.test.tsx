@@ -92,7 +92,7 @@ describe('DensityMap', () => {
     expect(screen.getByText('Current')).toBeInTheDocument();
     expect(screen.getByText('Peak')).toBeInTheDocument();
     expect(document.querySelector('[data-density-map-tooltip="true"]')).not.toBeNull();
-    expect(document.querySelector('[data-density-map-tooltip-sparkline="true"]')).not.toBeNull();
+    expect(document.querySelector('[data-density-map-tooltip-sparkline="true"]')).toBeNull();
   });
 
   it('publishes synchronized hover identity and clears it on leave', () => {
@@ -214,7 +214,6 @@ describe('DensityMap', () => {
       seriesName: 'Alpha',
       peakValue: 32,
     });
-    expect(detail?.sparklinePath).toContain('M');
   });
 
   it('keeps the density-map card free of persistent focus chrome while preserving overview count', () => {

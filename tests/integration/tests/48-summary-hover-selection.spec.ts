@@ -797,7 +797,7 @@ test.describe.serial("Summary hover selection", () => {
       .toEqual(resolvedBaselineCounts);
   });
 
-  test("keeps density-map detail inside the hover tooltip instead of card chrome", async ({
+  test("keeps density-map detail inside the hover tooltip without extra chart chrome", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -826,6 +826,6 @@ test.describe.serial("Summary hover selection", () => {
     await expect(tooltip).toContainText("Peak");
     await expect(
       tooltip.locator('[data-density-map-tooltip-sparkline="true"]'),
-    ).toBeVisible();
+    ).toHaveCount(0);
   });
 });

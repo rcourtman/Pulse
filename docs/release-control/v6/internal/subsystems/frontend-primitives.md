@@ -1227,6 +1227,12 @@ should present alert-triggered and anomaly-triggered Patrol toggles as distinct
 controls, and `frontend-modern/src/components/patrol/PatrolStatusBar.tsx`
 should render compact activity breakdown and scoped-trigger-state copy from the
 shared transport rather than leaving busy Patrol periods as unexplained noise.
+On the main Patrol page, though, that same governed activity context belongs
+inside `frontend-modern/src/features/patrol/PatrolIntelligenceSummary.tsx`
+alongside the verification readout rather than as a second full-width band
+above the findings workspace. If `PatrolStatusBar.tsx` is reused elsewhere, it
+must stay a compact factual support surface and must not reintroduce a parallel
+page-level verdict strip once the summary shell already owns that explanation.
 
 Shared primitive consumers that split status-dot tone and status-text tone
 must now keep both values routed through the same exported presentation helper.

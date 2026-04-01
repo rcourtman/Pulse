@@ -651,13 +651,11 @@ describe('shared primitive guardrails', () => {
     expect(densityMapSource).not.toContain('Top activity overview');
     expect(densityMapSource).not.toContain('detail().currentValue');
     expect(densityMapSource).toContain('data-density-map-tooltip="true"');
-    expect(densityMapSource).toContain('data-density-map-tooltip-sparkline="true"');
+    expect(densityMapSource).not.toContain('data-density-map-tooltip-sparkline="true"');
     expect(densityMapSource).toContain('grid-cols-[auto_minmax(0,1fr)_auto]');
     expect(densityMapSource).not.toContain('max-w-[94px]');
     expect(densityMapSource).toContain('whitespace-nowrap text-[11px] font-semibold text-emerald-400');
     expect(densityMapSource).toContain('whitespace-nowrap text-[11px] font-semibold text-base-content');
-    expect(densityMapSource).toContain('mt-1 flex justify-end');
-    expect(densityMapSource).toContain('w-[72px] overflow-visible');
     expect(densityMapSource).not.toContain('timeRangeToMs');
     expect(densityMapSource).not.toContain('createSignal');
     expect(densityMapSource).not.toContain('ctx.fillRect');
@@ -673,6 +671,8 @@ describe('shared primitive guardrails', () => {
     expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
     expect(densityMapModelSource).toContain('getDensityMapColumnIndexForTimestamp');
     expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
+    expect(densityMapModelSource).not.toContain('buildDensityMapFocusSparklinePath');
+    expect(densityMapModelSource).not.toContain('sparklinePath: string | null;');
     expect(densityMapModelSource).not.toContain('currentValue:');
     expect(densityMapModelSource).not.toContain('hoveredValue:');
   });

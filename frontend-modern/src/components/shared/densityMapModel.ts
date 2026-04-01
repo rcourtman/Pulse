@@ -33,7 +33,6 @@ export interface DensityMapFocusDetail {
   seriesColor: string;
   seriesId: string;
   seriesName: string;
-  sparklinePath: string | null;
 }
 
 export interface DensityMapChartData {
@@ -281,54 +280,14 @@ export function buildDensityMapFocusDetail(options: {
     peakValue = peakValue === null ? point.value : Math.max(peakValue, point.value);
   }
 
-  const sparklinePath = buildDensityMapFocusSparklinePath({
-    points,
-    rangeMs: options.data.rangeMs,
-    windowStart: options.data.windowStart,
-  });
-
   return {
     peakValue,
     seriesColor: series.color,
     seriesId,
     seriesName: series.name || 'Unknown',
-    sparklinePath,
   };
 }
 
 export function hasDensityMapFocusActivity(detail: DensityMapFocusDetail): boolean {
   return detail.peakValue !== null;
 }
-
-const buildDensityMapFocusSparklinePath = (options: {
-  points: Array<{ timestamp: number; value: number }>;
-  rangeMs: number;
-  windowStart: number;
-}): string | null => {
-  const { points, rangeMs, windowStart } = options;
-  if (points.length < 2 || rangeMs <= 0) {
-    return null;
-  }
-
-  const width = 64;
-  const height = 22;
-  let maxValue = 0;
-  for (const point of points) {
-    if (point.value > maxValue) {
-      maxValue = point.value;
-    }
-  }
-  if (maxValue <= 0) {
-    return null;
-  }
-
-  const commands: string[] = [];
-  for (let index = 0; index < points.length; index += 1) {
-    const point = points[index];
-    const x = clampDensityMapValue((point.timestamp - windowStart) / rangeMs, 0, 1) * width;
-    const y = height - clampDensityMapValue(point.value / maxValue, 0, 1) * height;
-    commands.push(`${index === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`);
-  }
-
-  return commands.join(' ');
-};
