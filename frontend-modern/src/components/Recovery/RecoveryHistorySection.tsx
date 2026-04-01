@@ -18,6 +18,7 @@ import type { RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { getRecoveryFilterPanelClearClass } from '@/utils/recoveryActionPresentation';
 import { getRecoveryArtifactModePresentation, type RecoveryArtifactMode } from '@/utils/recoveryArtifactModePresentation';
+import { getRecoveryFilterChipPresentation } from '@/utils/recoveryFilterChipPresentation';
 import {
   getRecoveryItemTypePresentation,
   normalizeRecoveryItemTypeQueryValue,
@@ -58,9 +59,11 @@ interface RecoveryHistorySectionProps {
   availableOutcomes: readonly ('all' | 'success' | 'warning' | 'failed' | 'running')[];
   clusterFilter: Accessor<string>;
   clusterOptions: Accessor<string[]>;
+  clearFocusedRollup: () => void;
   currentPage: Accessor<number>;
   groupedByDay: Accessor<RecoveryPointGroup[]>;
   hasActiveArtifactFilters: Accessor<boolean>;
+  hasFocusedRollup: Accessor<boolean>;
   historyOutcomeFilter: Accessor<'all' | RecoveryOutcome>;
   itemTypeFilter: Accessor<string>;
   itemTypeOptions: Accessor<string[]>;
@@ -80,6 +83,7 @@ interface RecoveryHistorySectionProps {
   resetAllArtifactFilters: () => void;
   resourcesById: Accessor<Map<string, Resource>>;
   scopeFilter: Accessor<'all' | 'workload'>;
+  selectedHistoryItemLabel: Accessor<string | null>;
   setClusterFilter: (value: string) => void;
   setCurrentPage: (value: number) => void;
   setHistoryOutcomeFilter: (value: 'all' | RecoveryOutcome) => void;
@@ -116,6 +120,7 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
   } = useRecoveryHistorySectionState({
     clusterFilter: props.clusterFilter,
     currentPage: props.currentPage,
+    hasFocusedRollup: props.hasFocusedRollup,
     historyOutcomeFilter: props.historyOutcomeFilter,
     itemTypeFilter: props.itemTypeFilter,
     modeFilter: props.modeFilter,
@@ -127,6 +132,35 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
     verificationFilter: props.verificationFilter,
   });
 
+  const focusedRollupFilter = () => {
+    const chip = getRecoveryFilterChipPresentation('focused-item');
+    return (
+      <div
+        data-testid="recovery-history-focused-filter"
+        class={`${chip.className} max-w-full shrink-0`}
+      >
+        <span class="font-medium uppercase tracking-wide">{chip.label}</span>
+        <span
+          class="max-w-[18rem] truncate font-mono text-[10px]"
+          title={props.selectedHistoryItemLabel() ?? undefined}
+        >
+          {props.selectedHistoryItemLabel()}
+        </span>
+        <button
+          type="button"
+          onClick={() => {
+            props.clearFocusedRollup();
+            props.setCurrentPage(1);
+          }}
+          class={chip.clearButtonClass}
+          aria-label="Clear focused item filter"
+        >
+          Clear
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div class="flex flex-col gap-2">
       <Show when={!props.kioskMode}>
@@ -135,6 +169,9 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
             <PageControls
               role="group"
               aria-label="Recovery events controls"
+              mobileLeading={
+                props.isMobile && props.hasFocusedRollup() ? focusedRollupFilter() : undefined
+              }
               search={
                 <SearchInput
                   value={props.queryFilter}
@@ -346,6 +383,10 @@ export const RecoveryHistorySection: Component<RecoveryHistorySectionProps> = (p
               showFilters={!props.isMobile || historyFiltersOpen()}
               toolbarClass="lg:flex-nowrap"
             >
+              <Show when={!props.isMobile && props.hasFocusedRollup()}>
+                {focusedRollupFilter()}
+              </Show>
+
               <LabeledFilterSelect
                 id="recovery-item-type-filter-history"
                 label="Item type"

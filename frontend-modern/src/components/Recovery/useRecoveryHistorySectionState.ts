@@ -10,6 +10,7 @@ type VerificationFilter = 'all' | 'verified' | 'unverified' | 'unknown';
 interface UseRecoveryHistorySectionStateParams {
   clusterFilter: Accessor<string>;
   currentPage: Accessor<number>;
+  hasFocusedRollup: Accessor<boolean>;
   historyOutcomeFilter: Accessor<'all' | RecoveryOutcome>;
   itemTypeFilter: Accessor<string>;
   modeFilter: Accessor<'all' | ArtifactMode>;
@@ -32,6 +33,7 @@ export function useRecoveryHistorySectionState(
 
   const historyActiveFilterCount = createMemo(() => {
     let count = 0;
+    if (params.hasFocusedRollup()) count += 1;
     if (params.queryFilter().trim() !== '') count += 1;
     if (params.platformFilter() !== 'all') count += 1;
     if (params.itemTypeFilter() !== 'all') count += 1;
@@ -47,6 +49,7 @@ export function useRecoveryHistorySectionState(
 
   createEffect(() => {
     params.currentPage();
+    params.hasFocusedRollup();
     params.platformFilter();
     params.itemTypeFilter();
     params.historyOutcomeFilter();

@@ -1,4 +1,4 @@
-import { Show, createEffect, createMemo } from 'solid-js';
+import { Show, batch, createEffect, createMemo } from 'solid-js';
 import type { Component } from 'solid-js';
 
 import { RecoveryActivitySection } from '@/components/Recovery/RecoveryActivitySection';
@@ -54,7 +54,6 @@ type RecoverySummaryRange = '7d' | '30d' | '90d' | '365d';
 const Recovery: Component = () => {
   const kioskMode = useKioskMode();
   const { isMobile } = useBreakpoint();
-  let historySectionRef: HTMLDivElement | undefined;
 
   const {
     chartRangeDays,
@@ -188,10 +187,7 @@ const Recovery: Component = () => {
     const staleThreshold = nowMs - STALE_ISSUE_THRESHOLD_MS;
 
     return baseRollups().filter((rollup) => {
-      if (
-        selectedOutcome !== 'all' &&
-        normalizeOutcome(rollup.lastOutcome) !== selectedOutcome
-      ) {
+      if (selectedOutcome !== 'all' && normalizeOutcome(rollup.lastOutcome) !== selectedOutcome) {
         return false;
       }
       if (!staleOnly) return true;
@@ -265,7 +261,11 @@ const Recovery: Component = () => {
         let tone: 'recent' | 'default' = 'default';
         if (key !== 'unknown') {
           const date = parseRecoveryDateKey(key);
-          const dayTimestamp = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+          const dayTimestamp = new Date(
+            date.getFullYear(),
+            date.getMonth(),
+            date.getDate(),
+          ).getTime();
           if (dayTimestamp === today) {
             label = `Today (${getRecoveryFullDateLabel(key)})`;
             tone = 'recent';
@@ -295,12 +295,27 @@ const Recovery: Component = () => {
 
   const artifactColumns: ColumnDef[] = [
     { id: 'time', label: 'Time' },
-    { ...createVisibleCanonicalTypeColumn(), label: getRecoveryArtifactColumnLabel('type', 'Type') },
+    {
+      ...createVisibleCanonicalTypeColumn(),
+      label: getRecoveryArtifactColumnLabel('type', 'Type'),
+    },
     { id: 'item', label: getRecoveryArtifactColumnLabel('item', 'Item') },
     { id: 'entityId', label: 'ID', toggleable: true },
-    { id: 'cluster', label: getRecoveryArtifactColumnLabel('cluster', 'Cluster'), toggleable: true },
-    { id: 'nodeAgent', label: getRecoveryArtifactColumnLabel('nodeAgent', 'Node/Agent'), toggleable: true },
-    { id: 'namespace', label: getRecoveryArtifactColumnLabel('namespace', 'Namespace'), toggleable: true },
+    {
+      id: 'cluster',
+      label: getRecoveryArtifactColumnLabel('cluster', 'Cluster'),
+      toggleable: true,
+    },
+    {
+      id: 'nodeAgent',
+      label: getRecoveryArtifactColumnLabel('nodeAgent', 'Node/Agent'),
+      toggleable: true,
+    },
+    {
+      id: 'namespace',
+      label: getRecoveryArtifactColumnLabel('namespace', 'Namespace'),
+      toggleable: true,
+    },
     { id: 'platform', label: getRecoveryArtifactColumnLabel('platform', 'Platform') },
     { id: 'verified', label: 'Verified', toggleable: true },
     { id: 'size', label: 'Size', toggleable: true },
@@ -418,6 +433,7 @@ const Recovery: Component = () => {
 
   const hasActiveArtifactFilters = createMemo(
     () =>
+      rollupId().trim() !== '' ||
       queryFilter().trim() !== '' ||
       platformFilter() !== 'all' ||
       itemTypeFilter() !== 'all' ||
@@ -444,39 +460,41 @@ const Recovery: Component = () => {
   });
 
   const resetAdvancedArtifactFilters = () => {
-    setScopeFilter('all');
-    setModeFilter('all');
-    setVerificationFilter('all');
-    setClusterFilter('all');
-    setNodeFilter('all');
-    setNamespaceFilter('all');
-    setCurrentPage(1);
+    batch(() => {
+      setScopeFilter('all');
+      setModeFilter('all');
+      setVerificationFilter('all');
+      setClusterFilter('all');
+      setNodeFilter('all');
+      setNamespaceFilter('all');
+      setCurrentPage(1);
+    });
   };
 
   const resetAllArtifactFilters = () => {
-    setQueryFilter('');
-    setPlatformFilter('all');
-    setItemTypeFilter('all');
-    setClusterFilter('all');
-    setModeFilter('all');
-    setHistoryOutcomeFilter('all');
-    setScopeFilter('all');
-    setNodeFilter('all');
-    setNamespaceFilter('all');
-    setVerificationFilter('all');
-    setChartRangeDays(30);
-    setSelectedDateKey(null);
-    setCurrentPage(1);
+    batch(() => {
+      setRollupId('');
+      setQueryFilter('');
+      setPlatformFilter('all');
+      setItemTypeFilter('all');
+      setClusterFilter('all');
+      setModeFilter('all');
+      setHistoryOutcomeFilter('all');
+      setScopeFilter('all');
+      setNodeFilter('all');
+      setNamespaceFilter('all');
+      setVerificationFilter('all');
+      setChartRangeDays(30);
+      setSelectedDateKey(null);
+      setCurrentPage(1);
+    });
   };
 
   const handleSelectRollup = (nextRollupId: string) => {
-    setWorkspaceView('events');
-    setRollupId(nextRollupId);
-    requestAnimationFrame(() =>
-      historySectionRef && typeof historySectionRef.scrollIntoView === 'function'
-        ? historySectionRef.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        : undefined,
-    );
+    batch(() => {
+      setWorkspaceView('events');
+      setRollupId(nextRollupId);
+    });
   };
 
   const workspaceControls = () => (
@@ -510,7 +528,6 @@ const Recovery: Component = () => {
         setClusterFilter('all');
         setCurrentPage(1);
       }}
-      clearFocusedRollup={() => setRollupId('')}
       clearItemTypeFilter={() => {
         setItemTypeFilter('all');
         setCurrentPage(1);
@@ -527,18 +544,18 @@ const Recovery: Component = () => {
         setSelectedDateKey(null);
         setCurrentPage(1);
       }}
-      hasFocusedRollup={() => rollupId().trim().length > 0}
       isMobile={isMobile()}
       loading={() => recoverySeries.response.loading}
       overallRollupsSummary={overallRollupsSummary}
       selectedDateKey={selectedDateKey}
       selectedDateLabel={selectedDateLabel}
-      selectedHistoryItemLabel={selectedHistoryItemLabel}
       timeline={timeline}
       toggleSelectedDate={(key) => {
-        setWorkspaceView('events');
-        setSelectedDateKey((previous) => (previous === key ? null : key));
-        setCurrentPage(1);
+        batch(() => {
+          setWorkspaceView('events');
+          setSelectedDateKey((previous) => (previous === key ? null : key));
+          setCurrentPage(1);
+        });
       }}
     />
   );
@@ -557,7 +574,7 @@ const Recovery: Component = () => {
 
       {workspaceControls()}
 
-      <div ref={historySectionRef} class="flex flex-col gap-2">
+      <div class="flex flex-col gap-2">
         {(() => {
           return (
             <>
@@ -592,12 +609,17 @@ const Recovery: Component = () => {
                 {eventsActivity()}
 
                 <Show when={!recoveryPoints.response.loading && recoveryPoints.response.error}>
-                  <Card padding="none" tone="card" class="overflow-hidden border-border-subtle bg-surface">
+                  <Card
+                    padding="none"
+                    tone="card"
+                    class="overflow-hidden border-border-subtle bg-surface"
+                  >
                     <div class="p-6">
                       <EmptyState
                         title={getRecoveryPointsFailureState().title}
                         description={String(
-                          (recoveryPoints.response.error as Error)?.message || recoveryPoints.response.error,
+                          (recoveryPoints.response.error as Error)?.message ||
+                            recoveryPoints.response.error,
                         )}
                       />
                     </div>
@@ -611,9 +633,11 @@ const Recovery: Component = () => {
                     availableOutcomes={['all', 'success', 'warning', 'failed', 'running']}
                     clusterFilter={clusterFilter}
                     clusterOptions={clusterOptions}
+                    clearFocusedRollup={() => setRollupId('')}
                     currentPage={currentPage}
                     groupedByDay={groupedByDay}
                     hasActiveArtifactFilters={hasActiveArtifactFilters}
+                    hasFocusedRollup={() => rollupId().trim().length > 0}
                     historyOutcomeFilter={historyOutcomeFilter}
                     isMobile={isMobile()}
                     kioskMode={kioskMode()}
@@ -633,6 +657,7 @@ const Recovery: Component = () => {
                     resetAllArtifactFilters={resetAllArtifactFilters}
                     resourcesById={resourcesById}
                     scopeFilter={scopeFilter}
+                    selectedHistoryItemLabel={selectedHistoryItemLabel}
                     setClusterFilter={setClusterFilter}
                     setCurrentPage={setCurrentPage}
                     setHistoryOutcomeFilter={setHistoryOutcomeFilter}

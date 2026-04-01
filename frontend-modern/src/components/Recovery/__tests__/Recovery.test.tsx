@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Recovery from '@/components/Recovery/Recovery';
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
 import { STORAGE_KEYS } from '@/utils/localStorage';
+import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
 let mockLocationSearch = '';
 let mockLocationPath = '/recovery';
@@ -182,7 +183,9 @@ describe('Recovery', () => {
         if (from && to) {
           const fromDate = new Date(from);
           const toDate = new Date(to);
-          const daySpan = Math.round((toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000));
+          const daySpan = Math.round(
+            (toDate.getTime() - fromDate.getTime()) / (24 * 60 * 60 * 1000),
+          );
           if (daySpan >= 300) {
             return {
               data: Array.from({ length: 365 }, (_, index) => {
@@ -233,27 +236,33 @@ describe('Recovery', () => {
     expect(summaryPanel).toBeInTheDocument();
     expect(screen.getByText('Posture')).toBeInTheDocument();
     const workspaceTablist = await screen.findByRole('tablist', { name: /recovery data view/i });
-    expect(within(workspaceTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
-    expect(within(workspaceTablist).getByRole('tab', { name: 'Recovery events' })).toBeInTheDocument();
-    expect(within(workspaceTablist).queryByRole('tab', { name: /protected items \d/i })).not.toBeInTheDocument();
-    expect(within(workspaceTablist).queryByRole('tab', { name: /recovery events \d/i })).not.toBeInTheDocument();
+    expect(
+      within(workspaceTablist).getByRole('tab', { name: 'Protected items' }),
+    ).toBeInTheDocument();
+    expect(
+      within(workspaceTablist).getByRole('tab', { name: 'Recovery events' }),
+    ).toBeInTheDocument();
+    expect(
+      within(workspaceTablist).queryByRole('tab', { name: /protected items \d/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(workspaceTablist).queryByRole('tab', { name: /recovery events \d/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText('Focused drill-in')).not.toBeInTheDocument();
     await screen.findByText('VM 123');
     const inventoryControls = screen.getByRole('group', { name: /protected items controls/i });
-    const protectedSearch = within(inventoryControls).getByPlaceholderText('Search protected items...');
+    const protectedSearch = within(inventoryControls).getByPlaceholderText(
+      'Search protected items...',
+    );
     expect(protectedSearch).toBeInTheDocument();
     expect(protectedSearch.closest('div.relative')?.className).toContain('w-full');
     expect(within(inventoryControls).queryByText(/^\d+ stale$/i)).not.toBeInTheDocument();
     expect(within(inventoryControls).queryByText(/never succeeded/i)).not.toBeInTheDocument();
     expect(
-      within(workspaceTablist)
-        .getByRole('tab', { name: 'Protected items' })
-        .className,
+      within(workspaceTablist).getByRole('tab', { name: 'Protected items' }).className,
     ).toContain('border-b-2');
     expect(
-      within(workspaceTablist)
-        .getByRole('tab', { name: 'Protected items' })
-        .className,
+      within(workspaceTablist).getByRole('tab', { name: 'Protected items' }).className,
     ).not.toContain('rounded-md');
     expect(screen.queryByText('Protected inventory')).not.toBeInTheDocument();
     expect(screen.queryByText('Needs Attention')).not.toBeInTheDocument();
@@ -277,14 +286,17 @@ describe('Recovery', () => {
       summaryPanel.compareDocumentPosition(workspaceTablist) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(
-      workspaceTablist.compareDocumentPosition(inventoryControls) & Node.DOCUMENT_POSITION_FOLLOWING,
+      workspaceTablist.compareDocumentPosition(inventoryControls) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(
       inventoryControls.compareDocumentPosition(inventoryTable) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(inventoryControls.closest('.rounded-md')).not.toBeNull();
     expect(inventoryTable.closest('.rounded-md')).not.toBeNull();
-    expect(inventoryControls.closest('.rounded-md')).not.toBe(inventoryTable.closest('.rounded-md'));
+    expect(inventoryControls.closest('.rounded-md')).not.toBe(
+      inventoryTable.closest('.rounded-md'),
+    );
     expect(within(inventoryTable).getByText('Item')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Item Type')).toBeInTheDocument();
     expect(within(inventoryTable).getByText('Platform')).toBeInTheDocument();
@@ -359,20 +371,24 @@ describe('Recovery', () => {
     expect(historyTable.closest('.rounded-md')).not.toBeNull();
     expect(activityHeading.closest('.rounded-md')).not.toBe(historyControls.closest('.rounded-md'));
     expect(historyControls.closest('.rounded-md')).not.toBe(historyTable.closest('.rounded-md'));
-    const historySearch = within(historyControls).getByPlaceholderText('Search recovery history...');
+    const historySearch = within(historyControls).getByPlaceholderText(
+      'Search recovery history...',
+    );
     expect(historySearch).toBeInTheDocument();
     expect(historySearch.closest('div.relative')?.className).toContain('w-full');
-    expect(within(historyTablist).getByRole('tab', { name: 'Protected items' })).toBeInTheDocument();
-    expect(within(historyTablist).getByRole('tab', { name: 'Recovery events' })).toBeInTheDocument();
     expect(
-      within(inventoryControls).getByLabelText('Item Type').className,
-    ).not.toContain('min-w-[');
+      within(historyTablist).getByRole('tab', { name: 'Protected items' }),
+    ).toBeInTheDocument();
     expect(
-      within(inventoryControls).getByLabelText('Platform').className,
-    ).not.toContain('min-w-[');
-    expect(
-      within(inventoryControls).getByLabelText('Latest status').className,
-    ).not.toContain('min-w-[');
+      within(historyTablist).getByRole('tab', { name: 'Recovery events' }),
+    ).toBeInTheDocument();
+    expect(within(inventoryControls).getByLabelText('Item Type').className).not.toContain(
+      'min-w-[',
+    );
+    expect(within(inventoryControls).getByLabelText('Platform').className).not.toContain('min-w-[');
+    expect(within(inventoryControls).getByLabelText('Latest status').className).not.toContain(
+      'min-w-[',
+    );
     expect(screen.getAllByText(/^1 event$/i)).toHaveLength(1);
     expect(within(historyControls).queryByText(/day group/i)).not.toBeInTheDocument();
     expect(within(historyControls).getByLabelText('Item type').className).not.toContain('min-w-[');
@@ -413,7 +429,10 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('tab', { name: /recovery events/i }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
   });
 
@@ -482,9 +501,10 @@ describe('Recovery', () => {
       fireEvent.click(item);
 
       await waitFor(() => {
-        expect(navigateSpy).toHaveBeenCalledWith('/recovery?rollupId=res%3Avm-404', {
-          replace: true,
-        });
+        expect(navigateSpy).toHaveBeenCalledWith(
+          '/recovery?rollupId=res%3Avm-404',
+          ROUTE_STATE_REPLACE_OPTIONS,
+        );
       });
 
       const tables = await screen.findAllByRole('table');
@@ -661,14 +681,20 @@ describe('Recovery', () => {
       const detailsPanel = await screen.findByText('Recovery Point Details');
       const detailsCell = detailsPanel.closest('td');
       expect(detailsCell).not.toBeNull();
-      expect(within(detailsCell as HTMLTableCellElement).getByText('Item Type')).toBeInTheDocument();
+      expect(
+        within(detailsCell as HTMLTableCellElement).getByText('Item Type'),
+      ).toBeInTheDocument();
       expect(within(detailsCell as HTMLTableCellElement).getByText('PVC')).toBeInTheDocument();
       expect(
         within(detailsCell as HTMLTableCellElement).getByText('Namespace / Group'),
       ).toBeInTheDocument();
       expect(within(detailsCell as HTMLTableCellElement).getByText('default')).toBeInTheDocument();
-      expect(within(detailsCell as HTMLTableCellElement).queryByText('Item Ref')).not.toBeInTheDocument();
-      expect(within(detailsCell as HTMLTableCellElement).queryByText('Target Ref')).not.toBeInTheDocument();
+      expect(
+        within(detailsCell as HTMLTableCellElement).queryByText('Item Ref'),
+      ).not.toBeInTheDocument();
+      expect(
+        within(detailsCell as HTMLTableCellElement).queryByText('Target Ref'),
+      ).not.toBeInTheDocument();
     } finally {
       rollupsPayload.pop();
       delete pointsByRollupId['res:pvc-1'];
@@ -716,13 +742,19 @@ describe('Recovery', () => {
     fireEvent.click(item);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?rollupId=res%3Avm-123', {
-        replace: true,
-      });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?rollupId=res%3Avm-123',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
 
-    expect(await screen.findByText('Focused Item')).toBeInTheDocument();
-    expect(screen.getAllByText('VM 123').length).toBeGreaterThan(0);
+    const controls = await screen.findByRole('group', { name: /recovery events controls/i });
+    const focusedFilter = within(controls).getByTestId('recovery-history-focused-filter');
+    expect(focusedFilter).toHaveTextContent('Focused Item');
+    expect(focusedFilter).toHaveTextContent('VM 123');
+    expect(
+      within(controls).getByRole('button', { name: /clear focused item filter/i }),
+    ).toBeInTheDocument();
     await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
     const tables = await screen.findAllByRole('table');
     const table = tables[tables.length - 1];
@@ -745,9 +777,15 @@ describe('Recovery', () => {
     expect(
       within(detailsPanel as HTMLTableCellElement).getByText('Namespace / Group'),
     ).toBeInTheDocument();
-    expect(within(detailsPanel as HTMLTableCellElement).getByText('Target Ref')).toBeInTheDocument();
-    expect(within(detailsPanel as HTMLTableCellElement).getByText('Lab Cluster')).toBeInTheDocument();
-    expect(within(detailsPanel as HTMLTableCellElement).getAllByText('pve-01').length).toBeGreaterThan(0);
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Target Ref'),
+    ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getByText('Lab Cluster'),
+    ).toBeInTheDocument();
+    expect(
+      within(detailsPanel as HTMLTableCellElement).getAllByText('pve-01').length,
+    ).toBeGreaterThan(0);
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Finance')).toBeInTheDocument();
   });
 
@@ -783,7 +821,10 @@ describe('Recovery', () => {
     fireEvent.change(screen.getByLabelText('Platform'), { target: { value: 'truenas' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?platform=truenas', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?platform=truenas',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
     });
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
@@ -838,6 +879,24 @@ describe('Recovery', () => {
     });
   });
 
+  it('treats the focused rollup as part of the recovery events filter surface', async () => {
+    render(() => <Recovery />);
+
+    fireEvent.click(await screen.findByText('VM 123'));
+    await screen.findByText(/Showing 1 - 1 of 1 recovery points/i);
+
+    const controls = await screen.findByRole('group', { name: /recovery events controls/i });
+    expect(within(controls).getByTestId('recovery-history-focused-filter')).toBeInTheDocument();
+
+    fireEvent.click(within(controls).getByRole('button', { name: 'Reset all' }));
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events', ROUTE_STATE_REPLACE_OPTIONS);
+      expect(screen.queryByTestId('recovery-history-focused-filter')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reset all' })).not.toBeInTheDocument();
+    });
+  });
+
   it('keeps recovery filter surfaces on canonical platform vocabulary', async () => {
     render(() => <Recovery />);
 
@@ -857,7 +916,10 @@ describe('Recovery', () => {
     fireEvent.change(screen.getByLabelText('Item Type'), { target: { value: 'dataset' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?itemType=dataset', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?itemType=dataset',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
       expect(screen.queryByText('VM 123')).not.toBeInTheDocument();
     });
     expect(screen.getByText('tank/apps')).toBeInTheDocument();
@@ -887,7 +949,7 @@ describe('Recovery', () => {
     fireEvent.input(protectedSearch, { target: { value: 'tank' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?q=tank', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?q=tank', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     await waitFor(() => {
@@ -920,7 +982,10 @@ describe('Recovery', () => {
     fireEvent.change(protectedStatus, { target: { value: 'failed' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?status=failed', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?status=failed',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
 
     await waitFor(() => {
@@ -1011,7 +1076,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?stale=1', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery?stale=1', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     expect(screen.getByRole('button', { name: 'Stale only' })).toHaveAttribute(
@@ -1025,9 +1090,10 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?platform=proxmox-pve', {
-        replace: true,
-      });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?platform=proxmox-pve',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
   });
 
@@ -1037,7 +1103,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     await waitFor(() => {
@@ -1051,7 +1117,8 @@ describe('Recovery', () => {
       );
       expect(
         filteredUrls.some(
-          (url) => url.includes('platform=custom-provider') || url.includes('provider=custom-provider'),
+          (url) =>
+            url.includes('platform=custom-provider') || url.includes('provider=custom-provider'),
         ),
       ).toBe(false);
     });
@@ -1069,9 +1136,10 @@ describe('Recovery', () => {
     fireEvent.change(clusterSelect, { target: { value: 'dev-cluster' } });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&cluster=dev-cluster', {
-        replace: true,
-      });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events&cluster=dev-cluster',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
 
     await waitFor(() => {
@@ -1099,7 +1167,7 @@ describe('Recovery', () => {
     render(() => <Recovery />);
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
     });
 
     await waitFor(() => {
@@ -1156,7 +1224,7 @@ describe('Recovery', () => {
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
         '/recovery?view=events&namespace=tenant-a&node=node-agent-1',
-        { replace: true },
+        ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
 
@@ -1327,7 +1395,7 @@ describe('Recovery', () => {
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
         expect.stringContaining('day=2026-02-13'),
-        { replace: true },
+        ROUTE_STATE_REPLACE_OPTIONS,
       );
     });
   });
@@ -1395,9 +1463,10 @@ describe('Recovery', () => {
     });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?range=7&day=2026-02-13', {
-        replace: true,
-      });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?range=7&day=2026-02-13',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
   });
 
@@ -1416,9 +1485,10 @@ describe('Recovery', () => {
     fireEvent.click(await screen.findByRole('button', { name: '7d' }));
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery?view=events&range=7', {
-        replace: true,
-      });
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?view=events&range=7',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
     });
   });
 
@@ -1484,7 +1554,7 @@ describe('Recovery', () => {
     fireEvent.keyDown(document, { key: 'Escape' });
 
     await waitFor(() => {
-      expect(navigateSpy).toHaveBeenCalledWith('/recovery', { replace: true });
+      expect(navigateSpy).toHaveBeenCalledWith('/recovery', ROUTE_STATE_REPLACE_OPTIONS);
     });
   });
 });

@@ -118,7 +118,7 @@ querying, and the operator-facing storage health presentation layer.
 13. Letting visible protected-item filters fall out of shared recovery links; the protected `Stale only` toggle must restore from the canonical recovery URL and rewrite to one owned `stale=1` route form instead of disappearing on refresh or copy/paste
 14. Reintroducing stacked full-width recovery tables as the primary desktop layout; the governed recovery surface must expose one primary data region at a time with explicit protected-items versus recovery-events view switching so Pulse stays inventory-first for Proxmox operators without collapsing the page back into a single-platform backup screen
 15. Letting the primary recovery workspace tabs drift out of canonical route state; when operators explicitly switch between protected items and recovery events, the shared recovery link builder and page model must preserve that selection in route state unless the active `rollupId` or `day` context already implies the default workspace
-16. Hiding the active recovery rollup reset behind header-only breadcrumb copy; when a protected-item row focuses recovery history, the governed activity surface must surface that focus in the shared active-filter chip row with an explicit clear action so operators can return to the full history set without guessing at incidental header text
+16. Treating a selected protected-item rollup as header-only state instead of a canonical history filter; when a protected-item row focuses recovery history, the governed recovery events controls must surface that focus inside the shared filter surface, count it with the rest of the active filters, and let the same filter reset path clear it
 
 ## Completion Obligations
 
