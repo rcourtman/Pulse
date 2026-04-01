@@ -184,7 +184,7 @@ func (m *Monitor) resolveGuestStatusMemory(
 	}
 
 	if memAvailable == 0 {
-		if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, node, vmid); rrdErr == nil && rrdAvailable > 0 {
+		if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, node, vmid); rrdErr == nil && rrdAvailable > 0 {
 			memAvailable = rrdAvailable
 			memorySource = "rrd-memavailable"
 			if guestRaw != nil {
@@ -204,6 +204,23 @@ func (m *Monitor) resolveGuestStatusMemory(
 				Str("vm", guestName).
 				Int("vmid", vmid).
 				Msg("RRD memory data unavailable for VM, using status/cluster resources values")
+		}
+	}
+
+	if memAvailable == 0 && status.Agent.Value > 0 {
+		if agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid); agentErr == nil && agentAvailable > 0 {
+			memAvailable = agentAvailable
+			memorySource = "guest-agent-meminfo"
+			if guestRaw != nil {
+				guestRaw.GuestAgentMemAvailable = memAvailable
+			}
+			log.Debug().
+				Str("vm", guestName).
+				Str("node", node).
+				Int("vmid", vmid).
+				Uint64("total", memTotal).
+				Uint64("available", memAvailable).
+				Msg("QEMU memory: using guest agent /proc/meminfo fallback (excludes reclaimable cache)")
 		}
 	}
 

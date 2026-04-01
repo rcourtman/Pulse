@@ -934,9 +934,10 @@ type Monitor struct {
 	diagMu                     sync.RWMutex                               // Protects diagnostic snapshot maps
 	nodeSnapshots              map[string]NodeMemorySnapshot
 	guestSnapshots             map[string]GuestMemorySnapshot
-	rrdCacheMu                 sync.RWMutex // Protects RRD memavailable cache
+	rrdCacheMu                 sync.RWMutex // Protects short-lived guest memory caches.
 	nodeRRDMemCache            map[string]rrdMemCacheEntry
 	vmRRDMemCache              map[string]rrdMemCacheEntry
+	vmAgentMemCache            map[string]agentMemCacheEntry
 	removedDockerHosts         map[string]time.Time // Track deliberately removed Docker hosts (ID -> removal time)
 	dockerTokenBindings        map[string]string    // Track token ID -> agent ID bindings to enforce uniqueness
 	removedKubernetesClusters  map[string]time.Time // Track deliberately removed Kubernetes clusters (ID -> removal time)
@@ -1167,12 +1168,12 @@ func (m *Monitor) getNodeRRDMetrics(ctx context.Context, client PVEClientInterfa
 // getVMRRDMetrics fetches Proxmox RRD memavailable for a single VM with a
 // short-lived cache to avoid a live API call on every poll for VMs that
 // consistently lack guest-agent memory data (e.g. Windows VMs).
-func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, node string, vmid int) (uint64, error) {
+func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {
 	if client == nil || node == "" || vmid <= 0 {
 		return 0, fmt.Errorf("invalid arguments for VM RRD lookup")
 	}
 
-	cacheKey := fmt.Sprintf("%s/%d", node, vmid)
+	cacheKey := guestMemoryCacheKey(instanceName, node, vmid)
 	now := time.Now()
 
 	m.rrdCacheMu.RLock()
@@ -1461,6 +1462,7 @@ func New(cfg *config.Config) (*Monitor, error) {
 		guestSnapshots:             make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache:            make(map[string]rrdMemCacheEntry),
 		vmRRDMemCache:              make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache:            make(map[string]agentMemCacheEntry),
 		removedDockerHosts:         make(map[string]time.Time),
 		dockerTokenBindings:        make(map[string]string),
 		removedKubernetesClusters:  make(map[string]time.Time),

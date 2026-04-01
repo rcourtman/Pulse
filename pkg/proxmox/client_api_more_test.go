@@ -337,3 +337,30 @@ func TestClientStatusAndResources(t *testing.T) {
 		t.Fatalf("unexpected container interfaces: %+v", ifaces)
 	}
 }
+
+func TestClientGetVMMemAvailableFromAgent(t *testing.T) {
+	client := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api2/json/nodes/node1/qemu/100/agent/file-read":
+			if got := r.URL.Query().Get("file"); got != "/proc/meminfo" {
+				t.Fatalf("unexpected file query = %q", got)
+			}
+			writeJSON(t, w, map[string]interface{}{
+				"data": map[string]interface{}{
+					"content": "MemTotal:       8163488 kB\nMemAvailable:   5242880 kB\n",
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	ctx := context.Background()
+	available, err := client.GetVMMemAvailableFromAgent(ctx, "node1", 100)
+	if err != nil {
+		t.Fatalf("GetVMMemAvailableFromAgent error: %v", err)
+	}
+	if available != 5242880*1024 {
+		t.Fatalf("available = %d, want %d", available, uint64(5242880*1024))
+	}
+}

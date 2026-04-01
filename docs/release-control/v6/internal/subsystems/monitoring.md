@@ -130,12 +130,37 @@ That same demo-owned mock boundary also owns chart continuity. Seeded mock
 history and runtime mock sampling must be projections of the same canonical
 metric timeline, so changing chart ranges feels like zooming one history
 window instead of stitching a second live tail onto the end of seeded
-sparklines. Monitoring must not let provider-owned mock resources receive a
+sparklines. Monitoring must not let any mock-owned resource receive a
 duplicate generic unified-resource writer that appends a divergent recent tail
 after the canonical mock sampler has already seeded and extended that series.
 The seed path must therefore include the canonical terminal `now` sample on
-its tiered timeline instead of generating history only up to before `now` and
-then appending a separately anchored current-value tail afterward.
+its tiered timeline and anchor seeded series to the canonical metric model at
+that timestamp instead of to mutable state fields, so historical charts match
+the exact runtime history that would have been recorded live.
+That means seeded history must sample the shared canonical mock runtime metric
+function at every historical timestamp for every mock-owned resource class.
+Monitoring must not approximate the past from snapshot/current values and then
+switch to the canonical sampler only for recent live ticks, because that still
+creates a visible seam even when the identities and timestamps are correct.
+Seeded history and subsequent live mock writes must also record on the same
+canonical chart-time grid. Monitoring must not seed on one wall-clock phase
+and append live ticks on another `time.Now()` phase, because the canonical
+sampler is dynamic enough that off-grid recent points still look like a
+different tail.
+Runtime mock tick writers must also sample the canonical metric model at the
+recorded chart timestamp instead of copying mutable state fields directly,
+because graph refresh cadence and state rounding can otherwise append a recent
+tail that looks like a different generator even when the underlying mock
+resource identity has not changed. Provider-backed fixture refresh paths must
+derive their live host, workload, storage, and disk-history writes from that
+same canonical sampler instead of replaying snapshot values. Native polling
+lanes and unified sync must not append duplicate mock history once the
+canonical mock sampler owns that resource class.
+That same ownership rule applies by default whenever mock mode is enabled.
+Real client initialization, native pollers, and async agent-origin metric
+writers are support-only opt-ins, not the normal demo path, and they must not
+append chart-history or persistent metric-store points onto mock-owned
+timelines while the canonical mock sampler is active.
 That same chart boundary also owns role-shaped realism. Seeded history,
 synthetic summary fallbacks, and runtime mock writes must derive their bounds
 and curve shape from the same canonical resource-role registry, so database,
@@ -385,6 +410,14 @@ selector. When cache-aware availability is unavailable, the shared selector in
 against the effective balloon total and prefer that fallback over `status-mem`
 when Proxmox reports a saturated or materially inconsistent used figure, so
 Windows and ballooned guests do not get pinned to false 100% usage samples.
+That same guest-memory boundary also owns fallback order and cache scoping for
+Proxmox VMs when `MemInfo` is absent. Monitoring must try instance-scoped RRD
+`memavailable`, then guest-agent `/proc/meminfo` via the shared Proxmox
+client, and only then linked host-agent memory as the final fallback. Both RRD
+and guest-agent fallback caches must key on `(instance, node, vmid)` instead
+of raw `node/vmid`, so separate Proxmox instances cannot leak stale or foreign
+memory evidence into each other just because they reuse the same node name and
+VMID.
 That compatibility boundary also applies to historical snapshot labels that may
 still exist in tests, live in-memory state, or pre-canonical diagnostic paths:
 legacy aliases such as `rrd-available`, `rrd-data`, `node-status-available`,

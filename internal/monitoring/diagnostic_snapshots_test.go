@@ -304,13 +304,14 @@ func TestNodeMemoryRaw_Fields(t *testing.T) {
 
 func TestVMMemoryRaw_Fields(t *testing.T) {
 	raw := VMMemoryRaw{
-		ListingMem:    2000000000,
-		ListingMaxMem: 4000000000,
-		StatusMem:     2100000000,
-		StatusMaxMem:  4000000000,
-		Balloon:       3000000000,
-		BalloonMin:    1000000000,
-		Agent:         1,
+		ListingMem:             2000000000,
+		ListingMaxMem:          4000000000,
+		StatusMem:              2100000000,
+		StatusMaxMem:           4000000000,
+		Balloon:                3000000000,
+		BalloonMin:             1000000000,
+		GuestAgentMemAvailable: 1500000000,
+		Agent:                  1,
 	}
 
 	if raw.ListingMem != 2000000000 {
@@ -330,6 +331,9 @@ func TestVMMemoryRaw_Fields(t *testing.T) {
 	}
 	if raw.BalloonMin != 1000000000 {
 		t.Errorf("BalloonMin = %d, want 1000000000", raw.BalloonMin)
+	}
+	if raw.GuestAgentMemAvailable != 1500000000 {
+		t.Errorf("GuestAgentMemAvailable = %d, want 1500000000", raw.GuestAgentMemAvailable)
 	}
 	if raw.Agent != 1 {
 		t.Errorf("Agent = %d, want 1", raw.Agent)
@@ -1119,10 +1123,10 @@ func TestGetDiagnosticSnapshots(t *testing.T) {
 		}
 
 		m.guestSnapshots[makeGuestSnapshotKey("pve1", "qemu", "node1", 100)] = GuestMemorySnapshot{
-			Instance: "pve1",
-			Node:     "node1",
-			GuestType:"qemu",
-			VMID:     100,
+			Instance:  "pve1",
+			Node:      "node1",
+			GuestType: "qemu",
+			VMID:      100,
 		}
 
 		result := m.GetDiagnosticSnapshots()

@@ -88,6 +88,7 @@ func TestMonitor_Cleanup_Extra(t *testing.T) {
 		nodeSnapshots:   make(map[string]NodeMemorySnapshot),
 		guestSnapshots:  make(map[string]GuestMemorySnapshot),
 		nodeRRDMemCache: make(map[string]rrdMemCacheEntry),
+		vmAgentMemCache: make(map[string]agentMemCacheEntry),
 	}
 
 	now := time.Now()
@@ -118,6 +119,8 @@ func TestMonitor_Cleanup_Extra(t *testing.T) {
 	m.rrdCacheMu.Lock()
 	m.nodeRRDMemCache["stale"] = rrdMemCacheEntry{fetchedAt: stale}
 	m.nodeRRDMemCache["fresh"] = rrdMemCacheEntry{fetchedAt: fresh}
+	m.vmAgentMemCache["stale"] = agentMemCacheEntry{negative: true, fetchedAt: stale.Add(-vmAgentMemNegativeTTL)}
+	m.vmAgentMemCache["fresh"] = agentMemCacheEntry{available: 42, fetchedAt: fresh}
 	m.rrdCacheMu.Unlock()
 
 	m.cleanupRRDCache(now)
@@ -127,6 +130,12 @@ func TestMonitor_Cleanup_Extra(t *testing.T) {
 	}
 	if _, ok := m.nodeRRDMemCache["fresh"]; !ok {
 		t.Error("Fresh RRD cache entry removed")
+	}
+	if _, ok := m.vmAgentMemCache["stale"]; ok {
+		t.Error("Stale guest agent memory cache entry not removed")
+	}
+	if _, ok := m.vmAgentMemCache["fresh"]; !ok {
+		t.Error("Fresh guest agent memory cache entry removed")
 	}
 }
 

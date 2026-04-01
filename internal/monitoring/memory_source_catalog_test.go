@@ -48,6 +48,14 @@ func TestDescribeMemorySourceCanonicalizesAliases(t *testing.T) {
 			wantDefaultFallback: "rrd-memavailable",
 		},
 		{
+			name:                "guest agent meminfo fallback",
+			source:              "guest-agent-meminfo",
+			wantCanonical:       "guest-agent-meminfo",
+			wantTrust:           "fallback",
+			wantFallback:        true,
+			wantDefaultFallback: "guest-agent-meminfo",
+		},
+		{
 			name:                "legacy rrd data alias",
 			source:              "rrd-data",
 			wantCanonical:       "rrd-memused",

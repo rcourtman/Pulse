@@ -110,6 +110,47 @@ func TestGuestMemoryFallbackUsesCanonicalLowTrustSelector(t *testing.T) {
 	}
 }
 
+func TestProxmoxGuestMemoryFallbackUsesInstanceScopedCachesAndAgentMeminfo(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"guest_memory_agent.go": {
+			"func guestMemoryCacheKey(instanceName, node string, vmid int) string {",
+			"return fmt.Sprintf(\"%s/%s/%d\", instanceName, node, vmid)",
+			"func (m *Monitor) getVMAgentMemAvailable(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {",
+			"requestCtx, cancel := context.WithTimeout(ctx, vmAgentMemRequestTTL)",
+			"ttl := vmAgentMemCacheTTL",
+			"ttl = vmAgentMemNegativeTTL",
+		},
+		"guest_memory_sources.go": {
+			"if rrdAvailable, rrdErr := m.getVMRRDMetrics(ctx, client, instanceName, node, vmid); rrdErr == nil && rrdAvailable > 0 {",
+			"if agentAvailable, agentErr := m.getVMAgentMemAvailable(ctx, client, instanceName, node, vmid); agentErr == nil && agentAvailable > 0 {",
+			`memorySource = "guest-agent-meminfo"`,
+			"guestRaw.GuestAgentMemAvailable = memAvailable",
+		},
+		"monitor.go": {
+			"func (m *Monitor) getVMRRDMetrics(ctx context.Context, client PVEClientInterface, instanceName, node string, vmid int) (uint64, error) {",
+			"cacheKey := guestMemoryCacheKey(instanceName, node, vmid)",
+			"vmAgentMemCache            map[string]agentMemCacheEntry",
+		},
+		"monitor_agents.go": {
+			"for key, entry := range m.vmAgentMemCache {",
+			"if now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge {",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	forbiddenSnippets := []string{
 		"mock.GetMockState(",
@@ -126,7 +167,7 @@ func TestMonitoringRuntimeAvoidsLegacyMockPartialHelpers(t *testing.T) {
 	}
 }
 
-func TestMockOwnedUnifiedMetricSyncSkipsProviderWriters(t *testing.T) {
+func TestMockOwnedUnifiedMetricSyncDefersToCanonicalSamplerInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
 	mock.SetEnabled(true)
 	t.Cleanup(func() { mock.SetEnabled(previous) })
@@ -141,10 +182,17 @@ func TestMockOwnedUnifiedMetricSyncSkipsProviderWriters(t *testing.T) {
 	}) {
 		t.Fatal("expected VMware mock-owned resources to skip generic unified metric sync")
 	}
+	if !shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
+		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
+	}) {
+		t.Fatal("expected all mock-owned resources to defer to the canonical mock sampler")
+	}
+
+	mock.SetEnabled(false)
 	if shouldSkipMockOwnedUnifiedMetricSync(unifiedresources.Resource{
 		Sources: []unifiedresources.DataSource{unifiedresources.SourceDocker},
 	}) {
-		t.Fatal("expected non-provider mock resources to keep generic unified metric sync")
+		t.Fatal("expected unified metric sync to remain available outside mock mode")
 	}
 }
 
@@ -256,6 +304,7 @@ func TestLegacyMemorySourceAliasesRemainCanonicalized(t *testing.T) {
 	}{
 		{source: "avail-field", canonical: "available-field"},
 		{source: "meminfo-available", canonical: "available-field"},
+		{source: "guest-agent-meminfo", canonical: "guest-agent-meminfo"},
 		{source: "node-status-available", canonical: "available-field"},
 		{source: "meminfo-derived", canonical: "derived-free-buffers-cached"},
 		{source: "calculated", canonical: "derived-free-buffers-cached"},
@@ -503,6 +552,118 @@ func TestUnifiedVMMetricsUseCanonicalVMHistoryPath(t *testing.T) {
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(source, snippet) {
 			t.Fatalf("monitor.go must contain %q", snippet)
+		}
+	}
+}
+
+func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
+	cases := []struct {
+		file     string
+		snippets []string
+	}{
+		{
+			file: "monitor.go",
+			snippets: []string{
+				"func shouldSkipNativeMockStateMetricWrites() bool {",
+				"return mock.IsMockEnabled()",
+			},
+		},
+		{
+			file: "monitor.go",
+			snippets: []string{
+				"func keepRealPollingInMockMode() bool {",
+				"case \"\", \"0\", \"false\", \"no\", \"off\":",
+				"return false",
+			},
+		},
+		{
+			file: "monitor.go",
+			snippets: []string{
+				"func shouldSkipMockOwnedUnifiedMetricSync(resource unifiedresources.Resource) bool {",
+				"if !mock.IsMockEnabled() {",
+				"return true",
+			},
+		},
+		{
+			file: "monitor_polling_vm.go",
+			snippets: []string{
+				"if !shouldSkipNativeMockStateMetricWrites() {",
+				`m.metricsStore.Write("vm", vm.ID, "cpu", vm.CPU*100, now)`,
+			},
+		},
+		{
+			file: "monitor_polling_containers.go",
+			snippets: []string{
+				"if !shouldSkipNativeMockStateMetricWrites() {",
+				`m.metricsStore.Write("container", ct.ID, "cpu", ct.CPU*100, now)`,
+			},
+		},
+		{
+			file: "monitor_pve_guest_helpers.go",
+			snippets: []string{
+				"func (m *Monitor) recordGuestMetric(",
+				"if m == nil || shouldSkipNativeMockStateMetricWrites() {",
+				`m.metricsStore.Write(resourceType, resourceID, "memory", memory, now)`,
+			},
+		},
+		{
+			file: "kubernetes_agents.go",
+			snippets: []string{
+				"if shouldSkipNativeMockStateMetricWrites() {",
+				`m.metricsStore.Write("k8s", metricID, "cpu", pod.UsageCPUPercent, timestamp)`,
+			},
+		},
+		{
+			file: "monitor_polling_storage.go",
+			snippets: []string{
+				"if m.metricsHistory != nil && !shouldSkipNativeMockStateMetricWrites() {",
+				`m.metricsStore.Write("storage", storage.ID, "usage", storage.Usage, timestamp)`,
+			},
+		},
+		{
+			file: "monitor_metrics.go",
+			snippets: []string{
+				"func (m *Monitor) nativePhysicalDiskTemperatureHistory(duration time.Duration) map[string][]MetricPoint {",
+				"if mock.IsMockEnabled() {",
+				"return nil",
+			},
+		},
+		{
+			file: "mock_metrics_history.go",
+			snippets: []string{
+				`cpu := mock.SampleMetric("k8s", metricID, "cpu", ts)`,
+				`memory := mock.SampleMetric("k8s", metricID, "memory", ts)`,
+				`ms.Write("k8s", metricID, "memory", memory, ts)`,
+			},
+		},
+		{
+			file: "monitor_agents.go",
+			snippets: []string{
+				"if !shouldSkipNativeMockStateMetricWrites() {",
+				`m.metricsStore.Write("dockerHost", host.ID, "cpu", host.CPUUsage, now)`,
+				`m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)`,
+			},
+		},
+		{
+			file: "monitor.go",
+			snippets: []string{
+				"func (m *Monitor) writeSMARTMetrics(disk models.PhysicalDisk, now time.Time) {",
+				"if shouldSkipNativeMockStateMetricWrites() {",
+				"return",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		data, err := os.ReadFile(tc.file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", tc.file, err)
+		}
+		source := string(data)
+		for _, snippet := range tc.snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", tc.file, snippet)
+			}
 		}
 	}
 }

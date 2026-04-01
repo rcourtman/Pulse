@@ -2144,6 +2144,48 @@ func vmNetworkInterfaceHasUsefulData(iface VMNetworkInterface) bool {
 		iface.HasIp6Gateway
 }
 
+// GetVMMemAvailableFromAgent reads /proc/meminfo via the QEMU guest agent's
+// file-read endpoint and returns MemAvailable in bytes.
+func (c *Client) GetVMMemAvailableFromAgent(ctx context.Context, node string, vmid int) (uint64, error) {
+	fileParam := url.QueryEscape("/proc/meminfo")
+	resp, err := c.get(ctx, fmt.Sprintf("/nodes/%s/qemu/%d/agent/file-read?file=%s", node, vmid, fileParam))
+	if err != nil {
+		return 0, fmt.Errorf("guest agent file-read /proc/meminfo: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Data struct {
+			Content   string `json:"content"`
+			Truncated *bool  `json:"truncated,omitempty"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return 0, fmt.Errorf("decode file-read response: %w", err)
+	}
+
+	for _, line := range strings.Split(result.Data.Content, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "MemAvailable:") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		kB, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("parse MemAvailable value %q: %w", fields[1], err)
+		}
+		if kB > math.MaxUint64/1024 {
+			return 0, fmt.Errorf("MemAvailable value %d kB overflows uint64", kB)
+		}
+		return kB * 1024, nil
+	}
+
+	return 0, fmt.Errorf("MemAvailable not found in /proc/meminfo")
+}
+
 // GetVMStatus returns detailed VM status including balloon info
 func (c *Client) GetVMStatus(ctx context.Context, node string, vmid int) (*VMStatus, error) {
 	// Note: Proxmox 9.x removed support for the "full" parameter

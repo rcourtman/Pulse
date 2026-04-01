@@ -24,6 +24,7 @@ var memorySourceCatalog = map[string]MemorySourceDescriptor{
 	"calculated":                  {Canonical: "derived-free-buffers-cached", Trust: "derived"},
 	"derived-total-minus-used":    {Canonical: "derived-total-minus-used", Trust: "derived", Fallback: true, DefaultFallbackReason: "derived-total-minus-used"},
 	"meminfo-total-minus-used":    {Canonical: "derived-total-minus-used", Trust: "derived", Fallback: true, DefaultFallbackReason: "derived-total-minus-used"},
+	"guest-agent-meminfo":         {Canonical: "guest-agent-meminfo", Trust: "fallback", Fallback: true, DefaultFallbackReason: "guest-agent-meminfo"},
 	"rrd-memavailable":            {Canonical: "rrd-memavailable", Trust: "fallback", Fallback: true, DefaultFallbackReason: "rrd-memavailable"},
 	"rrd-available":               {Canonical: "rrd-memavailable", Trust: "fallback", Fallback: true, DefaultFallbackReason: "rrd-memavailable"},
 	"rrd-memused":                 {Canonical: "rrd-memused", Trust: "fallback", Fallback: true, DefaultFallbackReason: "rrd-memused"},

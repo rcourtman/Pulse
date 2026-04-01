@@ -2372,8 +2372,8 @@ func (m *Monitor) cleanupDiagnosticSnapshots(now time.Time) {
 }
 
 // cleanupRRDCache removes stale RRD memory cache entries.
-// Entries older than 2x the cache TTL (1 minute) are removed to prevent unbounded growth
-// when nodes are removed from the cluster.
+// Entries older than their short-lived TTL windows are removed to prevent
+// unbounded growth when nodes or guests disappear from the poll set.
 func (m *Monitor) cleanupRRDCache(now time.Time) {
 	const maxAge = 2 * nodeRRDCacheTTL // 1 minute
 
@@ -2393,6 +2393,12 @@ func (m *Monitor) cleanupRRDCache(now time.Time) {
 	for key, entry := range m.vmRRDMemCache {
 		if now.Sub(entry.fetchedAt) > maxAge {
 			delete(m.vmRRDMemCache, key)
+		}
+	}
+
+	for key, entry := range m.vmAgentMemCache {
+		if now.Sub(entry.fetchedAt) > vmAgentMemCleanupMaxAge {
+			delete(m.vmAgentMemCache, key)
 		}
 	}
 }
