@@ -67,6 +67,7 @@ vi.mock('@/components/shared/DensityMap', () => ({
 }));
 
 const now = Date.now();
+const singlePointSeries = [{ timestamp: now, value: 12 }];
 const twoPointSeries = [
   { timestamp: now - 60_000, value: 12 },
   { timestamp: now, value: 18 },
@@ -309,6 +310,57 @@ describe('WorkloadsSummary performance behavior', () => {
       for (const sparkline of sparklines) {
         expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadId);
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
+      }
+    });
+  });
+
+  it('ignores focused workload ids that do not have interactive history', async () => {
+    const interactiveWorkloadId = 'cluster-a:pve1:101';
+    const nonInteractiveWorkloadId = 'cluster-a:pve1:102';
+    mockGetWorkloadCharts.mockResolvedValueOnce({
+      data: {
+        [interactiveWorkloadId]: {
+          cpu: twoPointSeries,
+          memory: twoPointSeries,
+          disk: twoPointSeries,
+          diskread: twoPointSeries,
+          diskwrite: twoPointSeries,
+          netin: twoPointSeries,
+          netout: twoPointSeries,
+        },
+        [nonInteractiveWorkloadId]: {
+          cpu: singlePointSeries,
+          memory: singlePointSeries,
+          disk: singlePointSeries,
+          diskread: singlePointSeries,
+          diskwrite: singlePointSeries,
+          netin: singlePointSeries,
+          netout: singlePointSeries,
+        },
+      },
+      dockerData: {},
+      guestTypes: {},
+      timestamp: now,
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    render(() => (
+      <WorkloadsSummary
+        timeRange="1h"
+        fallbackGuestCounts={{ total: 2, running: 2, stopped: 0 }}
+        fallbackSnapshots={makeSnapshots([interactiveWorkloadId, nonInteractiveWorkloadId])}
+        focusedWorkloadId={nonInteractiveWorkloadId}
+      />
+    ));
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(4);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe('');
+        expect(sparkline.getAttribute('data-interaction-state')).toBe('default');
       }
     });
   });

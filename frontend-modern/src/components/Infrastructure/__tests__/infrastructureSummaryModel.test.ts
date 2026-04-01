@@ -63,6 +63,30 @@ describe('infrastructureSummaryModel', () => {
     expect(getFocusedInfrastructureResourceName(allSeries, 'host-2')).toBe('Host 2');
   });
 
+  it('keeps page-scoped metric series on canonical resource ids while focused highlight resolves separately', () => {
+    const allSeries = [
+      makeSeries('host-1', {
+        name: 'Host 1',
+        cpu: [{ timestamp: 1, value: 20 }],
+      }),
+      makeSeries('host-2', {
+        name: 'Host 2',
+        cpu: [{ timestamp: 2, value: 40 }],
+      }),
+    ];
+
+    expect(buildInfrastructureMetricSeries(buildInfrastructureDisplaySeries(allSeries, null), 'cpu')).toEqual([
+      { id: 'host-1', data: [{ timestamp: 1, value: 20 }], color: '#00aaff', name: 'Host 1' },
+      { id: 'host-2', data: [{ timestamp: 2, value: 40 }], color: '#00aaff', name: 'Host 2' },
+    ]);
+    expect(
+      resolveSummaryActiveSeriesId({
+        hoveredSeriesId: null,
+        focusedSeriesId: 'host-2',
+      }),
+    ).toBe('host-2');
+  });
+
   it('keeps first-sample waiting logic on canonical summary inputs', () => {
     const onlineResource = makeResource({ lastSeen: 5_000 });
 

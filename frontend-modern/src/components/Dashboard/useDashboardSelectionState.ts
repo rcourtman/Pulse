@@ -1,6 +1,7 @@
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
+import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import type { WorkloadGuest } from '@/types/workloads';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
@@ -34,24 +35,8 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   };
 
   const setSelectedGuestIdState = (id: string | null) => {
-    let scroller: HTMLElement | null = tableRef ?? null;
-    while (scroller) {
-      const { overflowY } = getComputedStyle(scroller);
-      if (
-        (overflowY === 'auto' || overflowY === 'scroll') &&
-        scroller.scrollHeight > scroller.clientHeight
-      ) {
-        break;
-      }
-      scroller = scroller.parentElement;
-    }
-
-    const scrollTop = scroller?.scrollTop ?? 0;
-    setSelectedGuestIdRaw(id);
-
-    if (scroller) scroller.scrollTop = scrollTop;
-    requestAnimationFrame(() => {
-      if (scroller) scroller.scrollTop = scrollTop;
+    preserveScrollableAncestorVerticalOffset(tableRef, () => {
+      setSelectedGuestIdRaw(id);
     });
   };
 

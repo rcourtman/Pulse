@@ -222,6 +222,12 @@ the shared summary contract so pool usage, used capacity, and available space
 cards can isolate the active row through the shared sparkline primitive while
 non-matching cards such as disk temperature demote to inactive context instead
 of rebuilding a row-local summary surface.
+That same storage summary contract now uses the shared contextual-focus owner.
+`frontend-modern/src/components/Storage/StorageSummary.tsx` must route
+interactive-series filtering, focused-label lookup, and active-series
+resolution through `frontend-modern/src/components/shared/contextualFocus.ts`
+so storage keeps the same page-scoped focus semantics as infrastructure and
+workloads instead of preserving a storage-local hover/focus branch.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,

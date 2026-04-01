@@ -55,6 +55,7 @@ import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
+import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
 import infrastructureSelectorModelSource from '@/components/shared/infrastructureSelectorModel.ts?raw';
@@ -99,6 +100,10 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
+import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
+import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
+import workloadsSummarySource from '@/components/Workloads/WorkloadsSummary.tsx?raw';
 import resourceDetailDrawerOverviewSource from '@/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx?raw';
 import aiSettingsDialogsSource from '@/components/Settings/AISettingsDialogs.tsx?raw';
 import generalSettingsPanelSource from '@/components/Settings/GeneralSettingsPanel.tsx?raw';
@@ -234,6 +239,23 @@ describe('shared primitive guardrails', () => {
     expect(subtabsSource).toContain('subtabsShellClass');
     expect(subtabsSource).toContain('subtabsListClass');
     expect(subtabsSource).toContain('subtabButtonClass');
+  });
+
+  it('keeps contextual row focus on one shared helper across summary consumers', () => {
+    expect(contextualFocusSource).toContain('export const preserveScrollableAncestorVerticalOffset');
+    expect(contextualFocusSource).toContain('export function useSummaryContextualFocusState');
+
+    expect(dashboardSelectionStateSource).toContain('preserveScrollableAncestorVerticalOffset');
+    expect(dashboardSelectionStateSource).not.toContain('const scrollTop = scroller?.scrollTop');
+
+    expect(infrastructureSummaryStateSource).toContain('useSummaryContextualFocusState');
+    expect(infrastructureSummaryStateSource).not.toContain('const interactiveResourceIds = createMemo');
+
+    expect(storageSummarySource).toContain('useSummaryContextualFocusState');
+    expect(storageSummarySource).not.toContain('resolveSummaryActiveSeriesId');
+
+    expect(workloadsSummarySource).toContain('useSummaryContextualFocusState');
+    expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
   });
 
   it('keeps trial banner on shell, runtime, and model owners', () => {

@@ -1,12 +1,9 @@
 import { Component, Show, createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import { InteractiveSparkline } from '@/components/shared/InteractiveSparkline';
 import type { InteractiveSparklineSeries } from '@/components/shared/InteractiveSparkline';
+import { useSummaryContextualFocusState } from '@/components/shared/contextualFocus';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
-import {
-  resolveSummaryActiveSeriesId,
-  resolveSummaryCardInteractionState,
-} from '@/components/shared/summaryCardInteraction';
 import {
   ChartsAPI,
   type MetricPoint,
@@ -171,12 +168,6 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   // Series builders
   // ---------------------------------------------------------------------------
 
-  const getFocusedSeriesName = (series: InteractiveSparklineSeries[]): string | null => {
-    const focusedId = effectiveFocusedResourceId();
-    if (!focusedId) return null;
-    return series.find((entry) => entry.id === focusedId)?.name ?? null;
-  };
-
   const poolUsageSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
     if (!d?.pools) return [];
@@ -232,31 +223,17 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
         data: disk.temperature as MetricPoint[],
       }));
   });
-  const interactiveResourceIds = createMemo(() => {
-    const ids = new Set<string>();
-    for (const series of [
+  const interactiveSummarySeries = createMemo<InteractiveSparklineSeries[]>(() => [
       ...poolUsageSeries(),
       ...poolUsedSeries(),
       ...poolAvailSeries(),
       ...diskTempSeries(),
-    ]) {
-      ids.add(series.id);
-    }
-    return ids;
+  ]);
+  const summaryFocus = useSummaryContextualFocusState({
+    interactiveSeries: interactiveSummarySeries,
+    hoveredSeriesId: () => props.hoveredResourceId,
+    focusedSeriesId: () => props.focusedResourceId,
   });
-
-  const isInteractiveResourceId = (value: string | null | undefined): value is string => {
-    const normalized = value?.trim() || '';
-    return normalized !== '' && interactiveResourceIds().has(normalized);
-  };
-
-  const effectiveHoveredResourceId = createMemo<string | null>(() =>
-    isInteractiveResourceId(props.hoveredResourceId) ? props.hoveredResourceId : null,
-  );
-
-  const effectiveFocusedResourceId = createMemo<string | null>(() =>
-    isInteractiveResourceId(props.focusedResourceId) ? props.focusedResourceId : null,
-  );
 
   const hasPoolUsage = () => poolUsageSeries().length > 0;
   const hasDiskTemp = () => diskTempSeries().length > 0;
@@ -270,22 +247,13 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   const formatTemp = (value: number) => `${value.toFixed(0)}°C`;
 
   const showComponent = () => props.poolCount > 0 || props.diskCount > 0;
+  const getFocusedSeriesName = (series: InteractiveSparklineSeries[]): string | null =>
+    summaryFocus.getFocusedSeriesName(series);
   const focusedLabel = (series: InteractiveSparklineSeries[]) => {
     const name = getFocusedSeriesName(series);
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
-  const activeSeriesId = () =>
-    resolveSummaryActiveSeriesId({
-      hoveredSeriesId: effectiveHoveredResourceId(),
-      focusedSeriesId: effectiveFocusedResourceId(),
-    });
-  const interactionStateFor = (series: InteractiveSparklineSeries[]) =>
-    resolveSummaryCardInteractionState({
-      series,
-      hoveredSeriesId: effectiveHoveredResourceId(),
-      focusedSeriesId: effectiveFocusedResourceId(),
-    });
 
   return (
     <Show when={showComponent()}>
@@ -313,7 +281,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasPoolUsage()}
             emptyMessage={emptyLabel()}
-            interactionState={interactionStateFor(poolUsageSeries())}
+            interactionState={summaryFocus.interactionStateFor(poolUsageSeries())}
           >
             <InteractiveSparkline
               series={poolUsageSeries()}
@@ -322,8 +290,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               activeSeriesDisplay="isolate"
               yMode="percent"
               highlightNearestSeriesOnHover
-              highlightSeriesId={activeSeriesId()}
-              interactionState={interactionStateFor(poolUsageSeries())}
+              highlightSeriesId={summaryFocus.activeSeriesId()}
+              interactionState={summaryFocus.interactionStateFor(poolUsageSeries())}
             />
           </SummaryMetricCard>
 
@@ -333,7 +301,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasDiskTemp()}
             emptyMessage={emptyLabel()}
-            interactionState={interactionStateFor(diskTempSeries())}
+            interactionState={summaryFocus.interactionStateFor(diskTempSeries())}
           >
             <InteractiveSparkline
               series={diskTempSeries()}
@@ -344,8 +312,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={formatTemp}
               formatTopLabel={(max) => `${max.toFixed(0)}°C`}
               highlightNearestSeriesOnHover
-              highlightSeriesId={activeSeriesId()}
-              interactionState={interactionStateFor(diskTempSeries())}
+              highlightSeriesId={summaryFocus.activeSeriesId()}
+              interactionState={summaryFocus.interactionStateFor(diskTempSeries())}
             />
           </SummaryMetricCard>
 
@@ -355,7 +323,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasPoolUsed()}
             emptyMessage={emptyLabel()}
-            interactionState={interactionStateFor(poolUsedSeries())}
+            interactionState={summaryFocus.interactionStateFor(poolUsedSeries())}
           >
             <InteractiveSparkline
               series={poolUsedSeries()}
@@ -366,8 +334,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
-              highlightSeriesId={activeSeriesId()}
-              interactionState={interactionStateFor(poolUsedSeries())}
+              highlightSeriesId={summaryFocus.activeSeriesId()}
+              interactionState={summaryFocus.interactionStateFor(poolUsedSeries())}
             />
           </SummaryMetricCard>
 
@@ -377,7 +345,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
             loaded={loaded()}
             hasData={hasPoolAvail()}
             emptyMessage={emptyLabel()}
-            interactionState={interactionStateFor(poolAvailSeries())}
+            interactionState={summaryFocus.interactionStateFor(poolAvailSeries())}
           >
             <InteractiveSparkline
               series={poolAvailSeries()}
@@ -388,8 +356,8 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
               formatValue={(v) => formatBytes(v)}
               formatTopLabel={(max) => formatBytes(max)}
               highlightNearestSeriesOnHover
-              highlightSeriesId={activeSeriesId()}
-              interactionState={interactionStateFor(poolAvailSeries())}
+              highlightSeriesId={summaryFocus.activeSeriesId()}
+              interactionState={summaryFocus.interactionStateFor(poolAvailSeries())}
             />
           </SummaryMetricCard>
         </SummaryPanel>

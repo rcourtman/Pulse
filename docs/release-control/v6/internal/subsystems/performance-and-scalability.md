@@ -213,6 +213,12 @@ workloads summary surfaces must keep the summary page-scoped while that focus
 reuses the shared highlight contract; density maps may retain page-level
 context, but line-card isolation must still flow through the shared sparkline
 runtime instead of a page-local focus overlay.
+That same hot-path rule now has one shared runtime boundary. Interactive-series
+filtering, active-series derivation, focused-label lookup, and local
+scroll-preserving row focus must extend
+`frontend-modern/src/components/shared/contextualFocus.ts` instead of
+rebuilding page-local `Set` scans or scroll repair logic in dashboard,
+infrastructure, or workloads hot paths.
 That same hot-path rule now applies to infrastructure summary resource
 filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 must include API-backed systems such as top-level TrueNAS appliances through

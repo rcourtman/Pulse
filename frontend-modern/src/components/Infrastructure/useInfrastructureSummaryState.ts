@@ -1,6 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import type { ChartData, TimeRange } from '@/api/charts';
 import { useResources } from '@/hooks/useResources';
+import { useSummaryContextualFocusState } from '@/components/shared/contextualFocus';
 import {
   fetchInfrastructureSummaryAndCache,
   readInfrastructureSummaryCache,
@@ -19,7 +20,6 @@ import {
   buildInfrastructureResourceCounts,
   buildInfrastructureSummarySeries,
   buildInfrastructureWorkloadStats,
-  getFocusedInfrastructureResourceName,
   getAverageDiskCapacity,
   getSingleDisplayedOnlineInfrastructureResource,
   hasInfrastructureSeriesData,
@@ -228,37 +228,23 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
       ? buildInfrastructureSummarySeries(props.resources, chartMap(), agentResources())
       : buildInfrastructureSummarySeries(props.resources, new Map(), agentResources()),
   );
+  const summaryFocus = useSummaryContextualFocusState({
+    interactiveSeries: resourceSeries,
+    hoveredSeriesId: () => props.hoveredResourceId,
+    focusedSeriesId: () => props.focusedResourceId,
+    isSeriesInteractive: (series) =>
+      series.cpu.length >= 1 ||
+      series.memory.length >= 1 ||
+      series.diskio.length >= 1 ||
+      series.network.length >= 1,
+  });
 
   const displaySeries = createMemo(() => {
     return buildInfrastructureDisplaySeries(resourceSeries(), null);
   });
 
-  const interactiveResourceIds = createMemo(() => {
-    const ids = new Set<string>();
-    for (const series of resourceSeries()) {
-      if (
-        series.cpu.length >= 1 ||
-        series.memory.length >= 1 ||
-        series.diskio.length >= 1 ||
-        series.network.length >= 1
-      ) {
-        ids.add(series.id);
-      }
-    }
-    return ids;
-  });
-
-  const hasInteractiveResourceId = (value: string | null | undefined): value is string => {
-    const normalized = value?.trim() || '';
-    return normalized !== '' && interactiveResourceIds().has(normalized);
-  };
-
-  const effectiveFocusedResourceId = createMemo<string | null>(() => {
-    return hasInteractiveResourceId(props.focusedResourceId) ? props.focusedResourceId : null;
-  });
-
   const focusedResourceName = createMemo(() => {
-    return getFocusedInfrastructureResourceName(resourceSeries(), effectiveFocusedResourceId());
+    return summaryFocus.getFocusedSeriesName(resourceSeries());
   });
 
   const singleDisplayedOnlineResource = createMemo(() => {
@@ -308,9 +294,11 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
     isCurrentRangeLoaded,
     emptyHistoryLabel,
     emptyMessage,
-    effectiveFocusedResourceId,
+    activeSeriesId: summaryFocus.activeSeriesId,
+    effectiveFocusedResourceId: summaryFocus.effectiveFocusedSeriesId,
     focusedResourceName,
-    hasInteractiveResourceId,
+    hasInteractiveResourceId: summaryFocus.hasInteractiveSeriesId,
+    interactionStateFor: summaryFocus.interactionStateFor,
     resourceCounts,
     workloadStats,
     avgDiskCapacity,

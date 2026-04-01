@@ -232,6 +232,13 @@ may vary card presentation, but the active sparkline or density-map series must
 still resolve through the shared resource ID already emitted by unified
 resources so table hover, focused detail state, and summary highlight all point
 to the same resource identity.
+That same unified-resource boundary now also applies to infrastructure
+contextual focus plumbing. `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for
+interactive-series filtering, focused-resource naming, and active-series
+resolution so the infrastructure summary stays page-scoped while still
+highlighting the same canonical resource IDs used by the unified-resource
+table and route state.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
 fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`

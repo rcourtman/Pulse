@@ -3,13 +3,10 @@ import {
   InteractiveSparkline,
   type InteractiveSparklineSeries,
 } from '@/components/shared/InteractiveSparkline';
+import { useSummaryContextualFocusState } from '@/components/shared/contextualFocus';
 import { DensityMap } from '@/components/shared/DensityMap';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
-import {
-  resolveSummaryActiveSeriesId,
-  resolveSummaryCardInteractionState,
-} from '@/components/shared/summaryCardInteraction';
 import {
   ChartsAPI,
   type ChartData,
@@ -650,41 +647,18 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   });
 
   const displaySeries = createMemo(() => workloadSeries());
-
-  const interactiveWorkloadIds = createMemo(() => {
-    const ids = new Set<string>();
-    for (const series of workloadSeries()) {
-      if (
-        series.cpu.length >= 2 ||
-        series.memory.length >= 2 ||
-        series.diskio.length >= 2 ||
-        series.network.length >= 2
-      ) {
-        ids.add(series.id);
-      }
-    }
-    return ids;
+  const summaryFocus = useSummaryContextualFocusState({
+    interactiveSeries: workloadSeries,
+    hoveredSeriesId: () => props.hoveredWorkloadId,
+    focusedSeriesId: () => props.focusedWorkloadId,
+    isSeriesInteractive: (series) =>
+      series.cpu.length >= 2 ||
+      series.memory.length >= 2 ||
+      series.diskio.length >= 2 ||
+      series.network.length >= 2,
   });
 
-  const isInteractiveWorkloadId = (value: string | null | undefined): value is string => {
-    const normalized = value?.trim() || '';
-    return normalized !== '' && interactiveWorkloadIds().has(normalized);
-  };
-
-  const effectiveHoveredWorkloadId = createMemo<string | null>(() =>
-    isInteractiveWorkloadId(props.hoveredWorkloadId) ? props.hoveredWorkloadId : null,
-  );
-
-  const effectiveFocusedWorkloadId = createMemo<string | null>(() =>
-    isInteractiveWorkloadId(props.focusedWorkloadId) ? props.focusedWorkloadId : null,
-  );
-
-  const focusedWorkloadName = createMemo(() => {
-    const focused = effectiveFocusedWorkloadId();
-    if (!focused) return null;
-    const match = workloadSeries().find((s) => s.id === focused);
-    return match?.name || null;
-  });
+  const focusedWorkloadName = createMemo(() => summaryFocus.getFocusedSeriesName(workloadSeries()));
 
   const cpuSeries = createMemo<InteractiveSparklineSeries[]>(() =>
     displaySeries().map((series) => ({
@@ -740,17 +714,6 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
     if (!name) return undefined;
     return <span class="text-xs text-muted ml-1.5 truncate">&mdash; {name}</span>;
   };
-  const activeSeriesId = () =>
-    resolveSummaryActiveSeriesId({
-      hoveredSeriesId: effectiveHoveredWorkloadId(),
-      focusedSeriesId: effectiveFocusedWorkloadId(),
-    });
-  const interactionStateFor = (series: InteractiveSparklineSeries[]) =>
-    resolveSummaryCardInteractionState({
-      series,
-      hoveredSeriesId: effectiveHoveredWorkloadId(),
-      focusedSeriesId: effectiveFocusedWorkloadId(),
-    });
 
   return (
     <SummaryPanel
@@ -778,7 +741,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasCpuData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
-        interactionState={interactionStateFor(cpuSeries())}
+        interactionState={summaryFocus.interactionStateFor(cpuSeries())}
       >
         <InteractiveSparkline
           series={cpuSeries()}
@@ -789,8 +752,8 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           sortTooltipByValue
           maxTooltipRows={8}
           highlightNearestSeriesOnHover
-          highlightSeriesId={activeSeriesId()}
-          interactionState={interactionStateFor(cpuSeries())}
+          highlightSeriesId={summaryFocus.activeSeriesId()}
+          interactionState={summaryFocus.interactionStateFor(cpuSeries())}
         />
       </SummaryMetricCard>
 
@@ -800,7 +763,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasMemoryData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
-        interactionState={interactionStateFor(memorySeries())}
+        interactionState={summaryFocus.interactionStateFor(memorySeries())}
       >
         <InteractiveSparkline
           series={memorySeries()}
@@ -811,8 +774,8 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           sortTooltipByValue
           maxTooltipRows={8}
           highlightNearestSeriesOnHover
-          highlightSeriesId={activeSeriesId()}
-          interactionState={interactionStateFor(memorySeries())}
+          highlightSeriesId={summaryFocus.activeSeriesId()}
+          interactionState={summaryFocus.interactionStateFor(memorySeries())}
         />
       </SummaryMetricCard>
 
@@ -822,15 +785,15 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasDiskIOData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
-        interactionState={interactionStateFor(diskioSeries())}
+        interactionState={summaryFocus.interactionStateFor(diskioSeries())}
       >
         <DensityMap
           series={diskioSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
-          highlightSeriesId={activeSeriesId()}
-          interactionState={interactionStateFor(diskioSeries())}
+          highlightSeriesId={summaryFocus.activeSeriesId()}
+          interactionState={summaryFocus.interactionStateFor(diskioSeries())}
         />
       </SummaryMetricCard>
 
@@ -840,15 +803,15 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
         loaded={!isLoading()}
         hasData={hasNetworkData()}
         emptyMessage={fallbackTrendMessage() ?? undefined}
-        interactionState={interactionStateFor(networkSeries())}
+        interactionState={summaryFocus.interactionStateFor(networkSeries())}
       >
         <DensityMap
           series={networkSeries()}
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
-          highlightSeriesId={activeSeriesId()}
-          interactionState={interactionStateFor(networkSeries())}
+          highlightSeriesId={summaryFocus.activeSeriesId()}
+          interactionState={summaryFocus.interactionStateFor(networkSeries())}
         />
       </SummaryMetricCard>
     </SummaryPanel>

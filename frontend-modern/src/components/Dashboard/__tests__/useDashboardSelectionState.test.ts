@@ -35,6 +35,7 @@ describe('useDashboardSelectionState', () => {
   afterEach(() => {
     vi.runOnlyPendingTimers();
     vi.useRealTimers();
+    document.body.innerHTML = '';
     vi.unstubAllGlobals();
   });
 
@@ -110,6 +111,46 @@ describe('useDashboardSelectionState', () => {
     );
 
     result.setSelectedGuestId('app-container:truenas-main:nextcloud');
+    vi.runAllTimers();
+
+    expect(navigateSpy).toHaveBeenCalledWith(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
+  });
+
+  it('preserves the nearest scrollable ancestor when row focus changes locally', () => {
+    locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        setSelectedNode: vi.fn(),
+      }),
+    );
+
+    const scroller = document.createElement('div');
+    scroller.style.overflowY = 'auto';
+    Object.defineProperty(scroller, 'scrollHeight', {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(scroller, 'clientHeight', {
+      configurable: true,
+      value: 200,
+    });
+    scroller.scrollTop = 140;
+
+    const tableWrapper = document.createElement('div');
+    scroller.appendChild(tableWrapper);
+    document.body.appendChild(scroller);
+
+    result.setTableWrapperRef(tableWrapper as HTMLDivElement);
+    result.setSelectedGuestId('app-container:truenas-main:nextcloud');
+
+    expect(scroller.scrollTop).toBe(140);
+
     vi.runAllTimers();
 
     expect(navigateSpy).toHaveBeenCalledWith(

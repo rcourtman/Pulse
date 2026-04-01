@@ -147,6 +147,7 @@ work extends shared components instead of creating new local variants.
 7. Keep top-of-page summary interaction on shared primitives. Infrastructure, workloads, and storage summary cards must route sticky-shell behavior through `frontend-modern/src/components/shared/StickySummarySection.tsx` and route row-hover or focused-series rendering through shared chart primitives such as `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/DensityMap.tsx`, rather than page-local sticky wrappers or metric-card-specific hover logic.
 8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose hover- or focus-driven chart emphasis must derive the active series ID through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass the same resolved ID into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source.
 9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
+10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, and local scroll preservation instead of rebuilding page-local `Set` filters, focused-label scans, or ad hoc scroll restoration in each surface.
 
 ## Forbidden Paths
 
@@ -226,6 +227,7 @@ work extends shared components instead of creating new local variants.
     infrastructure-fallback truth must stay in
     `frontend-modern/src/routing/resourceLinks.ts` instead of freezing raw
     route strings or provider-local link builders inside feature panels.
+15. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 14. Keep shared infrastructure/resource selectors on the canonical agent-facet
     truth. Shared primitives and settings-facing selector helpers must treat
     top-level TrueNAS appliances as agent-facet infrastructure via shared
@@ -238,6 +240,14 @@ work extends shared components instead of creating new local variants.
     fallback objects collapse API-backed TrueNAS systems back into generic
     agent-host presentation.
 16. Keep the authenticated app root aligned with that same first-session path.
+That same shared-primitive ownership now includes contextual row focus.
+`frontend-modern/src/components/shared/contextualFocus.ts` is the canonical
+owner for interactive-series filtering, focused-label lookup, active-series
+resolution, and nearest-scrollable-ancestor preservation across page-scoped
+summary surfaces. Dashboard row focus, infrastructure summary emphasis,
+storage summary emphasis, and workloads summary emphasis must all route through
+that helper instead of maintaining page-local copies of the same hover/focus
+rules.
     `frontend-modern/src/App.tsx` must land `/` on the dashboard shell and let
     the governed dashboard empty state route first-time operators into
     Infrastructure Install, instead of preserving a separate root-only jump to

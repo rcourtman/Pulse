@@ -915,6 +915,7 @@ describe('Storage', () => {
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
         ).length,
       ).toBe(1);
+      expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(3);
       expect(
         screen
           .getByText('Used Capacity')
@@ -927,6 +928,12 @@ describe('Storage', () => {
           .closest('[data-summary-card-state]')
           ?.textContent?.includes('No history yet'),
       ).toBe(false);
+      expect(
+        screen
+          .getByText('Pool Usage')
+          .closest('[data-summary-card-state]')
+          ?.getAttribute('data-summary-card-state'),
+      ).toBe('active');
     });
 
     storageSummarySpy.mockRestore();
