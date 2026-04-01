@@ -153,6 +153,23 @@ func TestEventCorrelator_GetCorrelations(t *testing.T) {
 	}
 }
 
+func TestEventCorrelator_GetCorrelationsCapsToConfiguredLimit(t *testing.T) {
+	cfg := DefaultEventCorrelatorConfig()
+	cfg.MaxCorrelations = 2
+	correlator := NewEventCorrelator(cfg)
+
+	correlator.correlations = []EventCorrelation{
+		{ID: "one"},
+		{ID: "two"},
+		{ID: "three"},
+	}
+
+	correlations := correlator.GetCorrelations(1000)
+	if len(correlations) != 2 {
+		t.Fatalf("expected 2 correlations, got %d", len(correlations))
+	}
+}
+
 func TestEventCorrelator_FormatForPatrol(t *testing.T) {
 	correlator := NewEventCorrelator(DefaultEventCorrelatorConfig())
 

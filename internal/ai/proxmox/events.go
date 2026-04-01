@@ -86,6 +86,25 @@ type OperationWindow struct {
 	ExpectedMetrics   []string         `json:"expected_metrics"` // Metrics expected to be affected
 }
 
+func clampCorrelationCount(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func normalizeCorrelationLimit(requested, configMax, available int) int {
+	if requested <= 0 {
+		requested = DefaultEventCorrelatorConfig().MaxCorrelations
+	}
+	requested = clampCorrelationCount(requested, 0, DefaultEventCorrelatorConfig().MaxCorrelations)
+	requested = clampCorrelationCount(requested, 0, configMax)
+	return clampCorrelationCount(requested, 0, available)
+}
+
 // EventCorrelatorConfig configures the event correlator
 type EventCorrelatorConfig struct {
 	DataDir           string
@@ -403,9 +422,7 @@ func (c *EventCorrelator) GetCorrelations(limit int) []EventCorrelation {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	if limit <= 0 || limit > len(c.correlations) {
-		limit = len(c.correlations)
-	}
+	limit = normalizeCorrelationLimit(limit, c.config.MaxCorrelations, len(c.correlations))
 
 	// Return most recent
 	start := len(c.correlations) - limit

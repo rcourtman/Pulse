@@ -2,6 +2,7 @@ package ai
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -263,6 +264,27 @@ func TestPatrolHistoryPersistenceAdapter_NormalizesAlertIdentity(t *testing.T) {
 	}
 	if loaded[0].AlertIdentifier != "instance:node:100::metric/cpu" {
 		t.Fatalf("expected canonical alert identifier after load, got %q", loaded[0].AlertIdentifier)
+	}
+}
+
+func TestPatrolHistoryPersistenceAdapter_LoadPatrolRunHistoryCapsRuns(t *testing.T) {
+	records := make([]config.PatrolRunRecord, MaxPatrolRunHistory+10)
+	for i := range records {
+		records[i] = config.PatrolRunRecord{ID: fmt.Sprintf("run-%d", i)}
+	}
+
+	persistence := config.NewConfigPersistence(t.TempDir())
+	if err := persistence.SavePatrolRunHistory(records); err != nil {
+		t.Fatalf("SavePatrolRunHistory failed: %v", err)
+	}
+
+	adapter := NewPatrolHistoryPersistenceAdapter(persistence)
+	loaded, err := adapter.LoadPatrolRunHistory()
+	if err != nil {
+		t.Fatalf("LoadPatrolRunHistory failed: %v", err)
+	}
+	if len(loaded) != MaxPatrolRunHistory {
+		t.Fatalf("expected %d runs, got %d", MaxPatrolRunHistory, len(loaded))
 	}
 }
 

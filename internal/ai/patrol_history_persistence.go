@@ -87,8 +87,9 @@ func (a *PatrolHistoryPersistenceAdapter) LoadPatrolRunHistory() ([]PatrolRunRec
 	}
 
 	// Convert from config.PatrolRunRecord to ai.PatrolRunRecord
-	runs := make([]PatrolRunRecord, len(data.Runs))
-	for i, r := range data.Runs {
+	runCount := clampHistoryCount(len(data.Runs), 0, MaxPatrolRunHistory)
+	runs := make([]PatrolRunRecord, runCount)
+	for i, r := range data.Runs[:runCount] {
 		runs[i] = normalizePatrolRunRecord(PatrolRunRecord{
 			ID:                        r.ID,
 			StartedAt:                 r.StartedAt,
@@ -191,6 +192,25 @@ type PatrolRunHistoryStore struct {
 	onSaveError   func(err error)
 }
 
+func clampHistoryCount(value, minValue, maxValue int) int {
+	if value < minValue {
+		return minValue
+	}
+	if value > maxValue {
+		return maxValue
+	}
+	return value
+}
+
+func normalizeHistoryRequestCount(requested, storeMax, available int) int {
+	if requested <= 0 {
+		requested = MaxPatrolRunHistory
+	}
+	requested = clampHistoryCount(requested, 0, MaxPatrolRunHistory)
+	requested = clampHistoryCount(requested, 0, storeMax)
+	return clampHistoryCount(requested, 0, available)
+}
+
 // NewPatrolRunHistoryStore creates a new patrol run history store
 func NewPatrolRunHistoryStore(maxRuns int) *PatrolRunHistoryStore {
 	if maxRuns <= 0 {
@@ -216,12 +236,11 @@ func (s *PatrolRunHistoryStore) SetPersistence(p PatrolHistoryPersistence) error
 			return err
 		}
 		if len(runs) > 0 {
+			if len(runs) > s.maxRuns {
+				runs = runs[:s.maxRuns]
+			}
 			s.mu.Lock()
 			s.runs = runs
-			// Trim to max if loaded more than maxRuns
-			if len(s.runs) > s.maxRuns {
-				s.runs = s.runs[:s.maxRuns]
-			}
 			s.mu.Unlock()
 			log.Info().Int("count", len(runs)).Msg("loaded patrol run history from disk")
 		}
@@ -268,9 +287,7 @@ func (s *PatrolRunHistoryStore) GetRecent(n int) []PatrolRunRecord {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	if n <= 0 || n > len(s.runs) {
-		n = len(s.runs)
-	}
+	n = normalizeHistoryRequestCount(n, s.maxRuns, len(s.runs))
 
 	result := make([]PatrolRunRecord, n)
 	copy(result, s.runs[:n])

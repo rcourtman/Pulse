@@ -87,6 +87,15 @@ governed floor is ready.
 `internal/ai/` is the live backend AI engine. It owns chat execution, Patrol
 orchestration, findings generation, investigation support, quickstart and
 provider selection, remediation flow, and cost persistence.
+That same backend runtime ownership also includes bounded Patrol and
+investigation read models. `internal/ai/patrol_history_persistence.go` and
+`internal/ai/proxmox/events.go` must cap persisted-history loads and
+caller-requested read limits at the canonical runtime maxima instead of
+allocating directly from raw on-disk counts or transport-supplied limits.
+Callers may request fewer records, but AI runtime storage and correlation
+surfaces remain responsible for enforcing the governed ceilings that protect
+memory and keep Patrol/history behavior stable under malformed or oversized
+inputs.
 That same backend runtime ownership includes `internal/config/ai.go`, because
 provider auth, base URLs, provider-scoped model defaults, and other persisted
 runtime AI selection rules must stay canonical in the shared AI config model
