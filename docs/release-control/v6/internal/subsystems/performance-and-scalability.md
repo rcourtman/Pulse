@@ -200,13 +200,19 @@ and workloads summary cards must treat hover and focus as one shared active-seri
 contract so time-range switches and row scrubbing reuse one existing chart path
 instead of repainting page-local “selected row” overlays on top of already
 downsampled summary history.
+For shared line charts on that hot path, the shared sparkline primitive may
+isolate the selected series inside the existing render budget, but that
+isolation must still reuse the same summary series set and timeline data rather
+than triggering a second page-local chart recomputation.
 That same hot-path rule now covers contextual row focus on those pages.
 `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts` must
 write workload selection back into the workloads route through the shared
 same-path route-state scheduler so opening a focused workload preserves scroll
 and does not look like a full page reload, and the governed infrastructure and
-workloads summary surfaces must keep rendering the page-level series set while
-that focus only changes the emphasized label and active-series highlight.
+workloads summary surfaces must keep the summary page-scoped while that focus
+reuses the shared highlight contract; density maps may retain page-level
+context, but line-card isolation must still flow through the shared sparkline
+runtime instead of a page-local focus overlay.
 That same hot-path rule now applies to infrastructure summary resource
 filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 must include API-backed systems such as top-level TrueNAS appliances through

@@ -177,6 +177,7 @@ Own canonical runtime payload shapes between backend and frontend.
 24. Keep long-range workload chart transport time-proportional on the shared API surface: `internal/api/router.go`, `internal/api/contract_test.go`, and workload chart consumers must cap mixed-cadence workload history by equal-time buckets rather than raw point index for the per-workload and aggregate workload chart APIs, so 7-day and 30-day workload cards do not bunch recent samples at the right edge just because recent telemetry is stored more densely.
 25. Keep chart timestamp precision canonical on that same shared API surface: when `internal/api/router.go` serializes monitoring history into infrastructure or workload chart payloads, it must preserve canonical millisecond timestamps from the shared monitoring timeline instead of rounding through whole-second conversion, so seeded mock history and live appends collapse onto one operator-visible timeline instead of appearing as duplicated tail samples.
 26. Keep storage chart identity canonical on that same shared API surface: the shared storage charts endpoint must key pool and physical-disk series by the resolved unified-resource `MetricsTarget.ResourceID`, not by canonical resource IDs or page-local aliases, so storage rows, focused summary cards, sticky summary shells, and detail charts all address the same history series in live and mock mode.
+27. Keep synthetic summary-chart fallback identity canonical on that same shared API surface: when `internal/api/router.go` has to synthesize mock summary history for infrastructure, workloads, or storage cards, it must derive the fallback from canonical `resourceType`, `resourceID`, and `metricType` ownership instead of raw min/max seed-prefix helpers, so range changes and runtime mock updates stay on one governed timeline.
 
 ## Forbidden Paths
 
@@ -1664,6 +1665,12 @@ aggregate workload charts must preserve stable guest counts while batching
 store-backed metric reads across workload types, with no payload shape change.
 That endpoint now also carries an explicit API p95 budget under the same
 store-backed mixed-workload fixture used to verify the batched hot path.
+That same summary-chart contract now also owns synthetic mock fallback
+identity. When `internal/api/router.go` needs to synthesize summary history
+for workloads, infrastructure, or storage cards, it must key those series by
+canonical `resourceType`, `resourceID`, and `metricType` instead of ad hoc
+seed-prefix bounds, so all time ranges and runtime mock samples stay on one
+governed timeline.
 Frontend AI API clients now also normalize `402 Payment Required` responses for
 optional paywalled collections into explicit empty states, so Pulse Pro gating
 does not become a transport error path during page bootstrap.

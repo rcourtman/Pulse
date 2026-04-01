@@ -478,12 +478,12 @@ func TestSeedMockMetricsHistory_SeedsTrueNASMetricsStore(t *testing.T) {
 		t.Fatal("expected metrics store to have seeded canonical TrueNAS agent cpu points")
 	}
 
-	datasetPoints, err := store.Query("dataset", fixtures.Datasets[0].Name, "disk", now.Add(-7*24*time.Hour), now, 3600)
+	datasetPoints, err := store.Query("storage", "dataset:"+fixtures.Datasets[0].Name, "usage", now.Add(-7*24*time.Hour), now, 3600)
 	if err != nil {
-		t.Fatalf("failed to query TrueNAS dataset disk metrics: %v", err)
+		t.Fatalf("failed to query canonical TrueNAS dataset usage metrics: %v", err)
 	}
 	if len(datasetPoints) == 0 {
-		t.Fatal("expected metrics store to have seeded TrueNAS dataset disk points")
+		t.Fatal("expected metrics store to have seeded canonical TrueNAS dataset usage points")
 	}
 
 	poolUsedPoints, err := store.Query("storage", "pool:"+fixtures.Pools[0].Name, "used", now.Add(-7*24*time.Hour), now, 3600)
@@ -900,10 +900,15 @@ func TestGenerateSeededMetricSeriesForTimestamps_UsesSameTimelineAsMockRuntime(t
 	}
 
 	for _, tc := range cases {
-		min, max := mock.MetricBounds(tc.resourceType, tc.metricType)
 		current := mock.SampleMetric(tc.resourceType, tc.resourceID, tc.metricType, now)
-		seed := mock.MetricSeed(tc.resourceType, tc.resourceID, tc.metricType)
-		series := GenerateSeededMetricSeriesForTimestamps(current, timestamps, seed, min, max, tc.metricType, tc.style)
+		series := GenerateSeededResourceMetricSeriesForTimestamps(
+			current,
+			timestamps,
+			tc.resourceType,
+			tc.resourceID,
+			tc.metricType,
+			tc.style,
+		)
 
 		for i, ts := range timestamps {
 			want := mock.SampleMetric(tc.resourceType, tc.resourceID, tc.metricType, ts)

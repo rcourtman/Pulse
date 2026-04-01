@@ -5909,13 +5909,10 @@ func generateStyledMockSeries(
 	duration time.Duration,
 	numPoints int,
 	current float64,
-	min float64,
-	max float64,
-	seedPrefix string,
+	resourceType string,
 	resourceID string,
 	metricType string,
 ) []MetricPoint {
-	seed := monitoring.HashSeed(seedPrefix, resourceID, metricType)
 	style := mockMetricStyle(metricType)
 
 	durationMillis := int64(duration / time.Millisecond)
@@ -5931,7 +5928,14 @@ func generateStyledMockSeries(
 	for i := 0; i < numPoints; i++ {
 		timestamps[i] = time.UnixMilli(startMillis + int64(i)*step)
 	}
-	values := monitoring.GenerateSeededMetricSeriesForTimestamps(current, timestamps, seed, min, max, metricType, style)
+	values := monitoring.GenerateSeededResourceMetricSeriesForTimestamps(
+		current,
+		timestamps,
+		resourceType,
+		resourceID,
+		metricType,
+		style,
+	)
 	points := make([]MetricPoint, numPoints)
 	for i := 0; i < numPoints; i++ {
 		points[i] = MetricPoint{
@@ -5959,20 +5963,16 @@ func buildSyntheticMetricHistorySeries(
 	now time.Time,
 	duration time.Duration,
 	maxPoints int,
+	resourceType string,
 	resourceID string,
 	metricType string,
 	current float64,
 ) []monitoring.MetricPoint {
-	var min float64
-	var max float64
-
 	switch metricType {
 	case "smart_temp":
 		if current <= 0 {
 			return nil
 		}
-		min = 25
-		max = 95
 	default:
 		return nil
 	}
@@ -5980,8 +5980,7 @@ func buildSyntheticMetricHistorySeries(
 	numPoints := targetMockSeriesPoints(duration, maxPoints)
 	series := generateStyledMockSeries(
 		now.UnixMilli(), duration, numPoints,
-		current, min, max,
-		"history-mock", resourceID, metricType,
+		current, resourceType, resourceID, metricType,
 	)
 
 	converted := make([]monitoring.MetricPoint, len(series))
@@ -5999,20 +5998,14 @@ func buildMockWorkloadMetricHistorySeries(
 	now time.Time,
 	duration time.Duration,
 	maxPoints int,
+	resourceType string,
 	resourceID string,
 	metricType string,
 	current float64,
 ) []monitoring.MetricPoint {
-	var min float64
-	var max float64
-
 	switch metricType {
 	case "cpu", "memory", "disk":
-		min = 0
-		max = 100
 	case "diskread", "diskwrite", "netin", "netout":
-		min = 0
-		max = math.Max(current*1.8, 1)
 	default:
 		return nil
 	}
@@ -6020,8 +6013,7 @@ func buildMockWorkloadMetricHistorySeries(
 	numPoints := targetMockSeriesPoints(duration, maxPoints)
 	series := generateStyledMockSeries(
 		now.UnixMilli(), duration, numPoints,
-		current, min, max,
-		"history-mock", resourceID, metricType,
+		current, resourceType, resourceID, metricType,
 	)
 
 	converted := make([]monitoring.MetricPoint, len(series))
@@ -7398,19 +7390,19 @@ func (r *Router) handleWorkloadsSummaryCharts(w http.ResponseWriter, req *http.R
 
 		if mockModeEnabled {
 			if len(cpuPoints) < mockWorkloadMinSeriesPoints {
-				cpuPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "cpu", snapshot.cpu)
+				cpuPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, "k8s", metricKey, "cpu", snapshot.cpu)
 			}
 			if len(memoryPoints) < mockWorkloadMinSeriesPoints {
-				memoryPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "memory", snapshot.memory)
+				memoryPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, "k8s", metricKey, "memory", snapshot.memory)
 			}
 			if len(diskPoints) < mockWorkloadMinSeriesPoints {
-				diskPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "disk", snapshot.disk)
+				diskPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, "k8s", metricKey, "disk", snapshot.disk)
 			}
 			if len(netInPoints) < mockWorkloadMinSeriesPoints {
-				netInPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netin", pod.NetInRate())
+				netInPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, "k8s", metricKey, "netin", pod.NetInRate())
 			}
 			if len(netOutPoints) < mockWorkloadMinSeriesPoints {
-				netOutPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, metricKey, "netout", pod.NetOutRate())
+				netOutPoints = buildMockWorkloadMetricHistorySeries(currentTimeTime, duration, 0, "k8s", metricKey, "netout", pod.NetOutRate())
 			}
 		}
 
@@ -8330,6 +8322,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					end,
 					duration,
 					historyMaxPoints,
+					"disk",
 					resourceID,
 					metricType,
 					float64(disk.PhysicalDisk.Temperature),
@@ -8609,6 +8602,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					end,
 					duration,
 					historyMaxPoints,
+					"disk",
 					resourceID,
 					metricType,
 					current,

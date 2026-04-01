@@ -61,7 +61,7 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`}
         style={{ ...props.rowStyle, ...STORAGE_POOL_ROW_STYLE }}
         onClick={props.onToggleExpand}
-        onMouseEnter={() => props.onHoverChange?.(props.record.id)}
+        onMouseEnter={() => props.onHoverChange?.(props.summarySeriesId)}
         onMouseLeave={() => props.onHoverChange?.(null)}
         data-summary-series-id={props.summarySeriesId}
         {...props.alertDataAttrs}

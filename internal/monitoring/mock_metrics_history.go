@@ -314,6 +314,42 @@ func GenerateSeededMetricSeriesForTimestamps(
 	metricType string,
 	style SeriesStyle,
 ) []float64 {
+	return GenerateSeededMetricSeriesForTimestampsWithRole(current, timestamps, seed, min, max, metricType, style, "")
+}
+
+func GenerateSeededResourceMetricSeriesForTimestamps(
+	current float64,
+	timestamps []time.Time,
+	resourceType string,
+	resourceID string,
+	metricType string,
+	style SeriesStyle,
+) []float64 {
+	min, max := mock.MetricBoundsForResource(resourceType, resourceID, metricType)
+	seed := mock.MetricSeed(resourceType, resourceID, metricType)
+	role := mock.MetricRole(resourceType, resourceID)
+	return GenerateSeededMetricSeriesForTimestampsWithRole(
+		current,
+		timestamps,
+		seed,
+		min,
+		max,
+		metricType,
+		style,
+		role,
+	)
+}
+
+func GenerateSeededMetricSeriesForTimestampsWithRole(
+	current float64,
+	timestamps []time.Time,
+	seed uint64,
+	min float64,
+	max float64,
+	metricType string,
+	style SeriesStyle,
+	role string,
+) []float64 {
 	var mappedStyle mockmodel.SeriesStyle
 	switch style {
 	case stylePlateau:
@@ -323,7 +359,7 @@ func GenerateSeededMetricSeriesForTimestamps(
 	default:
 		mappedStyle = mockmodel.StyleSpiky
 	}
-	return mockmodel.SeriesForMetricTimestamps(current, timestamps, seed, min, max, metricType, mappedStyle)
+	return mockmodel.SeriesForMetricTimestampsWithRole(current, timestamps, seed, min, max, metricType, mappedStyle, role)
 }
 
 // generateSpikySeries produces a low baseline with occasional sharp spikes —
@@ -533,9 +569,6 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 	seedTimestamps := buildTieredTimestamps(now, seedDuration)
 	const seedBatchSize = 5000
 	numPoints := len(seedTimestamps)
-	generateSeries := func(metricType string, current float64, seed uint64, min, max float64, style SeriesStyle) []float64 {
-		return GenerateSeededMetricSeriesForTimestamps(current, seedTimestamps, seed, min, max, metricType, style)
-	}
 	var seedBatch []metrics.WriteMetric
 	queueMetric := func(resourceType, resourceID, metricType string, value float64, ts time.Time) {
 		if ms == nil {
@@ -570,11 +603,12 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		series := mockmodel.StorageCapacitySeriesForTimestamps(
+		series := mockmodel.StorageCapacitySeriesForTimestampsWithRole(
 			currentUsed,
 			currentTotal,
 			seedTimestamps,
 			mock.MetricSeed("storage", storageID, "usage"),
+			mock.MetricRole("storage", storageID),
 		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
@@ -604,12 +638,13 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		cpuMin, cpuMax := mock.MetricBounds("node", "cpu")
-		memMin, memMax := mock.MetricBounds("node", "memory")
-		diskMin, diskMax := mock.MetricBounds("node", "disk")
-		cpuSeries := generateSeries("cpu", node.CPU*100, mock.MetricSeed("node", node.ID, "cpu"), cpuMin, cpuMax, styleSpiky)
-		memSeries := generateSeries("memory", node.Memory.Usage, mock.MetricSeed("node", node.ID, "memory"), memMin, memMax, stylePlateau)
-		diskSeries := generateSeries("disk", node.Disk.Usage, mock.MetricSeed("node", node.ID, "disk"), diskMin, diskMax, styleFlat)
+		role := mock.MetricRole("node", node.ID)
+		cpuMin, cpuMax := mock.MetricBoundsForResource("node", node.ID, "cpu")
+		memMin, memMax := mock.MetricBoundsForResource("node", node.ID, "memory")
+		diskMin, diskMax := mock.MetricBoundsForResource("node", node.ID, "disk")
+		cpuSeries := GenerateSeededMetricSeriesForTimestampsWithRole(node.CPU*100, seedTimestamps, mock.MetricSeed("node", node.ID, "cpu"), cpuMin, cpuMax, "cpu", styleSpiky, role)
+		memSeries := GenerateSeededMetricSeriesForTimestampsWithRole(node.Memory.Usage, seedTimestamps, mock.MetricSeed("node", node.ID, "memory"), memMin, memMax, "memory", stylePlateau, role)
+		diskSeries := GenerateSeededMetricSeriesForTimestampsWithRole(node.Disk.Usage, seedTimestamps, mock.MetricSeed("node", node.ID, "disk"), diskMin, diskMax, "disk", styleFlat, role)
 
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
@@ -657,27 +692,28 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			return
 		}
 
-		cpuMin, cpuMax := mock.MetricBounds(storeType, "cpu")
-		memMin, memMax := mock.MetricBounds(storeType, "memory")
-		diskMin, diskMax := mock.MetricBounds(storeType, "disk")
-		readMin, readMax := mock.MetricBounds(storeType, "diskread")
-		writeMin, writeMax := mock.MetricBounds(storeType, "diskwrite")
-		netInMin, netInMax := mock.MetricBounds(storeType, "netin")
-		netOutMin, netOutMax := mock.MetricBounds(storeType, "netout")
-		cpuSeries := generateSeries("cpu", cpuPercent, mock.MetricSeed(storeType, storeID, "cpu"), cpuMin, cpuMax, styleSpiky)
-		memSeries := generateSeries("memory", memPercent, mock.MetricSeed(storeType, storeID, "memory"), memMin, memMax, stylePlateau)
+		role := mock.MetricRole(storeType, storeID)
+		cpuMin, cpuMax := mock.MetricBoundsForResource(storeType, storeID, "cpu")
+		memMin, memMax := mock.MetricBoundsForResource(storeType, storeID, "memory")
+		diskMin, diskMax := mock.MetricBoundsForResource(storeType, storeID, "disk")
+		readMin, readMax := mock.MetricBoundsForResource(storeType, storeID, "diskread")
+		writeMin, writeMax := mock.MetricBoundsForResource(storeType, storeID, "diskwrite")
+		netInMin, netInMax := mock.MetricBoundsForResource(storeType, storeID, "netin")
+		netOutMin, netOutMax := mock.MetricBoundsForResource(storeType, storeID, "netout")
+		cpuSeries := GenerateSeededMetricSeriesForTimestampsWithRole(cpuPercent, seedTimestamps, mock.MetricSeed(storeType, storeID, "cpu"), cpuMin, cpuMax, "cpu", styleSpiky, role)
+		memSeries := GenerateSeededMetricSeriesForTimestampsWithRole(memPercent, seedTimestamps, mock.MetricSeed(storeType, storeID, "memory"), memMin, memMax, "memory", stylePlateau, role)
 		var diskSeries []float64
 		if includeDisk {
-			diskSeries = generateSeries("disk", diskPercent, mock.MetricSeed(storeType, storeID, "disk"), diskMin, diskMax, styleFlat)
+			diskSeries = GenerateSeededMetricSeriesForTimestampsWithRole(diskPercent, seedTimestamps, mock.MetricSeed(storeType, storeID, "disk"), diskMin, diskMax, "disk", styleFlat, role)
 		}
 		var diskReadSeries, diskWriteSeries, netInSeries, netOutSeries []float64
 		if includeDiskIO {
-			diskReadSeries = generateSeries("diskread", diskRead, mock.MetricSeed(storeType, storeID, "diskread"), readMin, readMax, styleSpiky)
-			diskWriteSeries = generateSeries("diskwrite", diskWrite, mock.MetricSeed(storeType, storeID, "diskwrite"), writeMin, writeMax, styleSpiky)
+			diskReadSeries = GenerateSeededMetricSeriesForTimestampsWithRole(diskRead, seedTimestamps, mock.MetricSeed(storeType, storeID, "diskread"), readMin, readMax, "diskread", styleSpiky, role)
+			diskWriteSeries = GenerateSeededMetricSeriesForTimestampsWithRole(diskWrite, seedTimestamps, mock.MetricSeed(storeType, storeID, "diskwrite"), writeMin, writeMax, "diskwrite", styleSpiky, role)
 		}
 		if includeNetwork {
-			netInSeries = generateSeries("netin", netIn, mock.MetricSeed(storeType, storeID, "netin"), netInMin, netInMax, styleSpiky)
-			netOutSeries = generateSeries("netout", netOut, mock.MetricSeed(storeType, storeID, "netout"), netOutMin, netOutMax, styleSpiky)
+			netInSeries = GenerateSeededMetricSeriesForTimestampsWithRole(netIn, seedTimestamps, mock.MetricSeed(storeType, storeID, "netin"), netInMin, netInMax, "netin", styleSpiky, role)
+			netOutSeries = GenerateSeededMetricSeriesForTimestampsWithRole(netOut, seedTimestamps, mock.MetricSeed(storeType, storeID, "netout"), netOutMin, netOutMax, "netout", styleSpiky, role)
 		}
 
 		for i := 0; i < numPoints; i++ {
@@ -868,8 +904,17 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
-		tempMin, tempMax := mock.MetricBounds("disk", "smart_temp")
-		tempSeries := generateSeries("smart_temp", float64(disk.Temperature), mock.MetricSeed("disk", resourceID, "smart_temp"), tempMin, tempMax, styleFlat)
+		tempMin, tempMax := mock.MetricBoundsForResource("disk", resourceID, "smart_temp")
+		tempSeries := GenerateSeededMetricSeriesForTimestampsWithRole(
+			float64(disk.Temperature),
+			seedTimestamps,
+			mock.MetricSeed("disk", resourceID, "smart_temp"),
+			tempMin,
+			tempMax,
+			"smart_temp",
+			styleFlat,
+			mock.MetricRole("disk", resourceID),
+		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
@@ -894,7 +939,16 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
-		usageSeries := generateSeries("usage", cluster.UsagePercent, mock.MetricSeed("ceph", cephID, "usage"), 0, 100, styleFlat)
+		usageSeries := GenerateSeededMetricSeriesForTimestampsWithRole(
+			cluster.UsagePercent,
+			seedTimestamps,
+			mock.MetricSeed("ceph", cephID, "usage"),
+			0,
+			100,
+			"usage",
+			styleFlat,
+			mock.MetricRole("ceph", cephID),
+		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			queueMetric("ceph", cephID, "usage", usageSeries[i], ts)
@@ -1010,14 +1064,23 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if pool.TotalBytes > 0 {
 			diskPercent = float64(pool.UsedBytes) / float64(pool.TotalBytes) * 100
 		}
-		diskSeries := generateSeries("usage", diskPercent, mock.MetricSeed("pool", pool.Name, "disk"), 0, 100, styleFlat)
+		diskSeries := GenerateSeededMetricSeriesForTimestampsWithRole(
+			diskPercent,
+			seedTimestamps,
+			mock.MetricSeed("storage", poolKey, "usage"),
+			0,
+			100,
+			"usage",
+			styleFlat,
+			mock.MetricRole("storage", poolKey),
+		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddGuestMetric(poolKey, "disk", diskSeries[i], ts)
-			queueMetric("pool", pool.Name, "disk", diskSeries[i], ts)
+			queueMetric("storage", poolKey, "usage", diskSeries[i], ts)
 		}
 		mh.AddGuestMetric(poolKey, "disk", diskPercent, now)
-		queueMetric("pool", pool.Name, "disk", diskPercent, now)
+		queueMetric("storage", poolKey, "usage", diskPercent, now)
 		recordStorageTimeline(poolKey, float64(pool.UsedBytes), float64(pool.TotalBytes))
 	}
 
@@ -1028,14 +1091,23 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		if totalBytes > 0 {
 			diskPercent = float64(dataset.UsedBytes) / float64(totalBytes) * 100
 		}
-		diskSeries := generateSeries("usage", diskPercent, mock.MetricSeed("dataset", dataset.Name, "disk"), 0, 100, styleFlat)
+		diskSeries := GenerateSeededMetricSeriesForTimestampsWithRole(
+			diskPercent,
+			seedTimestamps,
+			mock.MetricSeed("storage", dsKey, "usage"),
+			0,
+			100,
+			"usage",
+			styleFlat,
+			mock.MetricRole("storage", dsKey),
+		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddGuestMetric(dsKey, "disk", diskSeries[i], ts)
-			queueMetric("dataset", dataset.Name, "disk", diskSeries[i], ts)
+			queueMetric("storage", dsKey, "usage", diskSeries[i], ts)
 		}
 		mh.AddGuestMetric(dsKey, "disk", diskPercent, now)
-		queueMetric("dataset", dataset.Name, "disk", diskPercent, now)
+		queueMetric("storage", dsKey, "usage", diskPercent, now)
 		recordStorageTimeline(dsKey, float64(dataset.UsedBytes), float64(totalBytes))
 	}
 
@@ -1048,7 +1120,17 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 			continue
 		}
 
-		tempSeries := generateSeries("smart_temp", float64(disk.Temperature), mock.MetricSeed("disk", resourceID, "smart_temp"), 25, 95, styleFlat)
+		tempMin, tempMax := mock.MetricBoundsForResource("disk", resourceID, "smart_temp")
+		tempSeries := GenerateSeededMetricSeriesForTimestampsWithRole(
+			float64(disk.Temperature),
+			seedTimestamps,
+			mock.MetricSeed("disk", resourceID, "smart_temp"),
+			tempMin,
+			tempMax,
+			"smart_temp",
+			styleFlat,
+			mock.MetricRole("disk", resourceID),
+		)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)

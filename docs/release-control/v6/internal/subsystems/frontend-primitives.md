@@ -576,6 +576,12 @@ and `frontend-modern/src/components/shared/interactiveSparklineModel.ts` owns
 sparkline downsampling, gap segmentation, axis-tick math, and hover-selection
 policy. Future sparkline work should extend those owners instead of pushing
 canvas scheduling or chart-shape math back into the shared component shell.
+That same shared sparkline boundary now also owns active-series isolation
+metadata. The shell may expose `data-active-series-display` and
+`data-rendered-series-count` for proof and inspection, but only the shared
+runtime/model owners may decide whether a hovered or focused series is merely
+emphasized or fully isolated; feature shells must not fork their own row-hover
+line filtering.
 The dashboard overview trend cards now also have an explicit shared-shell
 obligation: `frontend-modern/src/features/dashboardOverview/TrendCharts.tsx`
 must treat missing infrastructure history as a governed empty state rather than

@@ -216,6 +216,12 @@ ID for shared summary emphasis, but `frontend-modern/src/components/Storage/Stor
 must keep the storage summary page-scoped instead of collapsing its sparklines
 to the single expanded row or replacing the page overview with row-local empty
 states.
+That same page-scoped summary contract now also owns canonical hover-isolation
+behavior. Pool and disk rows must publish the resolved metrics-target ID into
+the shared summary contract so pool usage, used capacity, and available space
+cards can isolate the active row through the shared sparkline primitive while
+non-matching cards such as disk temperature demote to inactive context instead
+of rebuilding a row-local summary surface.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,

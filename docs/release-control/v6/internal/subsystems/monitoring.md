@@ -131,6 +131,12 @@ window instead of stitching a second live tail onto the end of seeded
 sparklines. Monitoring must not let provider-owned mock resources receive a
 duplicate generic unified-resource writer that appends a divergent recent tail
 after the canonical mock sampler has already seeded and extended that series.
+That same chart boundary also owns role-shaped realism. Seeded history,
+synthetic summary fallbacks, and runtime mock writes must derive their bounds
+and curve shape from the same canonical resource-role registry, so database,
+cache, backup, web, and storage workloads keep believable long-range behavior
+instead of switching from one generic seeded pattern to a different recent
+runtime pattern.
 That same chart boundary also owns storage-series identity. Monitoring and
 `ReadState` consumers must address storage pool and physical-disk history
 through the resolved unified-resource metrics target, so seeded history,

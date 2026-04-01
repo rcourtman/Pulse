@@ -31,6 +31,7 @@ func buildFixtureGraph(cfg MockConfig, now time.Time) FixtureGraph {
 	}
 	graph.UpdateMetrics(cfg, now)
 	graph.AlertHistory = buildAlertHistory(graph.State.Nodes, graph.State.VMs, graph.State.Containers)
+	syncMetricRoleRegistryFromGraph(graph)
 	return graph
 }
 

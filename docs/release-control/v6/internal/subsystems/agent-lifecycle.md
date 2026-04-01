@@ -279,6 +279,11 @@ That same lifecycle-adjacent mock path must stay graph-first at the shared
 platform inventory or recovery context, they must consume
 `internal/mock/fixture_graph.go` and its graph-owned projections instead of
 reintroducing snapshot-only or platform-only helper exports.
+Lifecycle-adjacent summary chart consumers may still depend on shared
+`internal/api/router.go` transport, but any synthetic mock series on that path
+must resolve through canonical `resourceType` and `resourceID` identities
+rather than lifecycle-local seed prefixes, so platform handoff surfaces do not
+see a different recent tail than the runtime mock inventory they describe.
 That same hosted continuity contract also applies to the older direct tenant
 magic-link path. Lifecycle-adjacent control-plane redirects through
 `/auth/cloud-handoff` must preserve canonical account/user/role identity in the

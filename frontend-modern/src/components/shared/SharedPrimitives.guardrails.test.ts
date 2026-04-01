@@ -507,12 +507,17 @@ describe('shared primitive guardrails', () => {
 
   it('keeps interactive sparkline on shell, runtime, and model owners', () => {
     expect(interactiveSparklineSource).toContain('useInteractiveSparklineState');
+    expect(interactiveSparklineSource).toContain('data-active-series-display');
+    expect(interactiveSparklineSource).toContain('data-rendered-series-count');
     expect(interactiveSparklineSource).not.toContain('createEffect');
     expect(interactiveSparklineSource).not.toContain('createSignal');
     expect(interactiveSparklineSource).not.toContain('scheduleSparkline');
     expect(interactiveSparklineSource).not.toContain('downsampleLTTB');
 
     expect(interactiveSparklineStateSource).toContain('export function useInteractiveSparklineState');
+    expect(interactiveSparklineStateSource).toContain('activeSeriesDisplay');
+    expect(interactiveSparklineStateSource).toContain('shouldRenderSeries');
+    expect(interactiveSparklineStateSource).toContain('renderedSeriesCount');
     expect(interactiveSparklineStateSource).toContain('createSignal');
     expect(interactiveSparklineStateSource).toContain('scheduleSparkline');
     expect(interactiveSparklineStateSource).toContain('computeInteractiveSparklineHoverState');

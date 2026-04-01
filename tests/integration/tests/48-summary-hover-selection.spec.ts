@@ -62,13 +62,37 @@ async function expectSummaryHighlightCount(
 ): Promise<void> {
   await expect
     .poll(async () =>
-      summary.locator("[data-highlight-series-id]").evaluateAll((nodes, expectedId) =>
-        nodes.filter(
-          (node) =>
-            node.getAttribute("data-highlight-series-id") === expectedId &&
-            node.getAttribute("data-highlight-series-active") === "true",
-        ).length,
-      resourceId),
+      summary
+        .locator("[data-highlight-series-id]")
+        .evaluateAll(
+          (nodes, expectedId) =>
+            nodes.filter(
+              (node) =>
+                node.getAttribute("data-highlight-series-id") === expectedId &&
+                node.getAttribute("data-highlight-series-active") === "true",
+            ).length,
+          resourceId,
+        ),
+    )
+    .toBe(expectedCount);
+}
+
+async function expectActiveIsolatedLineCards(
+  summary: import("@playwright/test").Locator,
+  expectedCount: number,
+): Promise<void> {
+  await expect
+    .poll(async () =>
+      summary
+        .locator('[data-active-series-display="isolate"]')
+        .evaluateAll(
+          (nodes) =>
+            nodes.filter(
+              (node) =>
+                node.getAttribute("data-highlight-series-active") === "true" &&
+                node.getAttribute("data-rendered-series-count") === "1",
+            ).length,
+        ),
     )
     .toBe(expectedCount);
 }
@@ -141,6 +165,15 @@ test.describe.serial("Summary hover selection", () => {
       infrastructureRowId,
       4,
     );
+    await expectActiveIsolatedLineCards(infrastructureSummary, 2);
+    await infrastructureRow.click();
+    await infrastructureSummary.hover();
+    await expectSummaryHighlightCount(
+      infrastructureSummary,
+      infrastructureRowId,
+      4,
+    );
+    await expectActiveIsolatedLineCards(infrastructureSummary, 2);
 
     await page.goto("/workloads", { waitUntil: "domcontentloaded" });
     const workloadsSummary = page.getByTestId("workloads-summary");
@@ -152,6 +185,7 @@ test.describe.serial("Summary hover selection", () => {
     expect(workloadRowId).not.toBe("");
     await workloadRow.hover();
     await expectSummaryHighlightCount(workloadsSummary, workloadRowId, 4);
+    await expectActiveIsolatedLineCards(workloadsSummary, 2);
 
     await page.goto("/storage", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
@@ -173,6 +207,7 @@ test.describe.serial("Summary hover selection", () => {
     expect(storagePoolRowId).not.toBe("");
     await storagePoolRow.hover();
     await expectSummaryHighlightCount(storageSummary, storagePoolRowId, 3);
+    await expectActiveIsolatedLineCards(storageSummary, 3);
 
     await page.getByRole("tab", { name: "Physical Disks" }).click();
     const storageDiskRow = page.locator("tr[data-row-id]").first();
@@ -184,6 +219,7 @@ test.describe.serial("Summary hover selection", () => {
     expect(storageDiskRowId).not.toBe("");
     await storageDiskRow.hover();
     await expectSummaryHighlightCount(storageSummary, storageDiskRowId, 1);
+    await expectActiveIsolatedLineCards(storageSummary, 1);
 
     await scrollPrimaryViewportToBottom(page);
     await page.waitForTimeout(250);

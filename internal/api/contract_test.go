@@ -688,9 +688,7 @@ func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T)
 		time.Hour,
 		7,
 		51.9,
-		0,
-		100,
-		"history-mock",
+		"dockerContainer",
 		"orion-2-f54579833f9c",
 		"memory",
 	)
@@ -699,9 +697,7 @@ func TestContract_GenerateStyledMockSeries_UsesTimestampBasedCurve(t *testing.T)
 		time.Hour,
 		13,
 		51.9,
-		0,
-		100,
-		"history-mock",
+		"dockerContainer",
 		"orion-2-f54579833f9c",
 		"memory",
 	)

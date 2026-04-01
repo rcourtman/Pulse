@@ -15,6 +15,7 @@ export interface InteractiveSparklineProps {
   rangeLabel?: string;
   timeRange?: TimeRange;
   renderMode?: 'auto' | 'svg' | 'canvas';
+  activeSeriesDisplay?: 'emphasize' | 'isolate';
   yMode?: 'percent' | 'auto';
   size?: 'sm' | 'md' | 'lg';
   bridgeLeadingGap?: boolean;
@@ -370,10 +371,7 @@ export const buildInteractiveSparklineTopLabel = ({
   return formatTopLabel ? formatTopLabel(scaleMax) : scaleMax.toFixed(1);
 };
 
-export const buildInteractiveSparklineAxisTicks = (
-  yMode: 'percent' | 'auto',
-  topLabel: string,
-) => {
+export const buildInteractiveSparklineAxisTicks = (yMode: 'percent' | 'auto', topLabel: string) => {
   if (yMode === 'percent') {
     return [
       { label: '100%', top: '0%', anchor: 'top' as const },
@@ -391,10 +389,7 @@ export const buildInteractiveSparklineAxisTicks = (
   ];
 };
 
-export const buildInteractiveSparklineGridLineY = (
-  yMode: 'percent' | 'auto',
-  vbH: number,
-) => {
+export const buildInteractiveSparklineGridLineY = (yMode: 'percent' | 'auto', vbH: number) => {
   if (yMode === 'percent') {
     return [vbH * 0.2, vbH * 0.4, vbH * 0.6, vbH * 0.8];
   }

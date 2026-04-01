@@ -452,6 +452,11 @@ describe('Storage', () => {
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
         ).length,
       ).toBe(3);
+      expect(
+        summary.querySelectorAll(
+          '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"][data-active-series-display="isolate"][data-rendered-series-count="1"]',
+        ).length,
+      ).toBe(3);
       expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(1);
     });
 

@@ -34,6 +34,7 @@ export function useInteractiveSparklineState(
   const tooltipEstimatedWidth = 190;
   const maxRows = () => props.maxTooltipRows ?? 6;
   const yMode = () => props.yMode ?? 'percent';
+  const activeSeriesDisplay = () => props.activeSeriesDisplay ?? 'emphasize';
   const shouldUseCanvas = createMemo(() =>
     getInteractiveSparklineShouldUseCanvas(props.series, props.renderMode),
   );
@@ -161,6 +162,56 @@ export function useInteractiveSparklineState(
       externalSeriesIndex: externalSeriesIndex(),
     }),
   );
+  const shouldIsolateActiveSeries = createMemo(
+    () => activeSeriesDisplay() === 'isolate' && activeEmphasisSeriesIndex() !== null,
+  );
+  const shouldRenderSeries = (seriesIndex: number) => {
+    const active = activeEmphasisSeriesIndex();
+    if (active === null) {
+      return true;
+    }
+    if (shouldIsolateActiveSeries()) {
+      return active === seriesIndex;
+    }
+    return true;
+  };
+  const renderedSeriesCount = createMemo(() => {
+    const active = activeEmphasisSeriesIndex();
+    if (active === null) {
+      return chartData().validSeries.length;
+    }
+    if (shouldIsolateActiveSeries()) {
+      return 1;
+    }
+    return chartData().validSeries.length;
+  });
+  const lineWidthForSeries = (seriesIndex: number) => {
+    const active = activeEmphasisSeriesIndex();
+    const isLg = props.size === 'lg';
+    if (active === null) {
+      return isLg ? 2 : 1.5;
+    }
+    if (active === seriesIndex) {
+      return isLg ? 4 : 3.2;
+    }
+    if (shouldIsolateActiveSeries()) {
+      return 0;
+    }
+    return isLg ? 0.7 : 0.6;
+  };
+  const opacityForSeries = (seriesIndex: number) => {
+    const active = activeEmphasisSeriesIndex();
+    if (active === null) {
+      return 0.75 * interactionOpacityMultiplier();
+    }
+    if (active === seriesIndex) {
+      return interactionOpacityMultiplier();
+    }
+    if (shouldIsolateActiveSeries()) {
+      return 0;
+    }
+    return 0.05 * interactionOpacityMultiplier();
+  };
 
   const drawCanvas = () => {
     const canvas = refs.getCanvas();
@@ -210,23 +261,12 @@ export function useInteractiveSparklineState(
     const valueToY = createInteractiveSparklineValueToY(yMode(), computed.scaleMax, height);
 
     for (let seriesIndex = 0; seriesIndex < computed.validSeries.length; seriesIndex++) {
+      if (!shouldRenderSeries(seriesIndex)) {
+        continue;
+      }
       const series = computed.validSeries[seriesIndex];
-      const isLg = props.size === 'lg';
-      const lineWidth =
-        active === null
-          ? isLg
-            ? 2
-            : 1.5
-          : active === seriesIndex
-            ? isLg
-              ? 4
-              : 3.2
-            : isLg
-              ? 0.7
-              : 0.6;
-      const opacity =
-        (active === null ? 0.75 : active === seriesIndex ? 1 : 0.05) *
-        interactionOpacityMultiplier();
+      const lineWidth = lineWidthForSeries(seriesIndex);
+      const opacity = opacityForSeries(seriesIndex);
 
       ctx.save();
       ctx.globalAlpha = opacity;
@@ -364,6 +404,7 @@ export function useInteractiveSparklineState(
 
   return {
     activeEmphasisSeriesIndex,
+    activeSeriesDisplay,
     axisTicks,
     chartData,
     externalSeriesIndex,
@@ -374,7 +415,11 @@ export function useInteractiveSparklineState(
     handleMouseLeave,
     handleMouseMove,
     hoveredState,
+    lineWidthForSeries,
+    opacityForSeries,
+    renderedSeriesCount,
     shouldUseCanvas,
+    shouldRenderSeries,
     vbH,
     vbW,
     xAxisBandPx,

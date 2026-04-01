@@ -374,4 +374,48 @@ describe('InteractiveSparkline hover behavior', () => {
     const paths = container.querySelectorAll('path[vector-effect="non-scaling-stroke"]');
     expect(paths.length).toBe(1);
   });
+
+  it('renders only the active series when isolate mode is enabled', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-02T00:00:00Z'));
+    const now = Date.now();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        activeSeriesDisplay="isolate"
+        highlightSeriesId="beta"
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30 * 60_000, value: 30 },
+              { timestamp: now - 5 * 60_000, value: 45 },
+            ],
+          },
+          {
+            id: 'beta',
+            name: 'Beta',
+            color: '#00ff00',
+            data: [
+              { timestamp: now - 30 * 60_000, value: 70 },
+              { timestamp: now - 5 * 60_000, value: 80 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    await Promise.resolve();
+
+    const root = container.firstElementChild as HTMLElement | null;
+    expect(root).not.toBeNull();
+    expect(root?.getAttribute('data-active-series-display')).toBe('isolate');
+    expect(root?.getAttribute('data-rendered-series-count')).toBe('1');
+
+    const paths = container.querySelectorAll('path[vector-effect="non-scaling-stroke"]');
+    expect(paths.length).toBe(1);
+  });
 });

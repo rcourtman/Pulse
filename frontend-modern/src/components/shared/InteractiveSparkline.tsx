@@ -34,6 +34,8 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       }`.trim()}
       data-highlight-series-id={props.highlightSeriesId ?? ''}
       data-highlight-series-active={sparkline.externalSeriesIndex() !== null ? 'true' : 'false'}
+      data-active-series-display={sparkline.activeSeriesDisplay()}
+      data-rendered-series-count={sparkline.renderedSeriesCount()}
       data-summary-chart-state={interactionState()}
     >
       <div class="relative flex-1 min-h-0">
@@ -134,42 +136,34 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
 
                 <For each={sparkline.chartData().paths}>
                   {(pathData) => (
-                    <g>
-                      <Show when={pathData.areaPath}>
-                        <path d={pathData.areaPath} fill="url(#single-series-area)" stroke="none" />
-                      </Show>
-                      <path
-                        d={pathData.path}
-                        fill="none"
-                        stroke={(() => {
-                          const active = sparkline.activeEmphasisSeriesIndex();
-                          if (active !== null && active !== pathData.seriesIndex) {
-                            return inactiveSeriesColor();
-                          }
-                          return pathData.color;
-                        })()}
-                        stroke-width={(() => {
-                          const active = sparkline.activeEmphasisSeriesIndex();
-                          if (active === null) {
-                            return '1.5';
-                          }
-                          return active === pathData.seriesIndex ? '3.2' : '0.7';
-                        })()}
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        opacity={(() => {
-                          const active = sparkline.activeEmphasisSeriesIndex();
-                          const interactionOpacity =
-                            interactionState() === 'inactive' ? 0.35 : 1;
-                          if (active === null) {
-                            return `${0.75 * interactionOpacity}`;
-                          }
-                          return `${(active === pathData.seriesIndex ? 1 : 0.05) * interactionOpacity}`;
-                        })()}
-                        style={{ transition: 'opacity 90ms linear, stroke-width 90ms linear' }}
-                        vector-effect="non-scaling-stroke"
-                      />
-                    </g>
+                    <Show when={sparkline.shouldRenderSeries(pathData.seriesIndex)}>
+                      <g>
+                        <Show when={pathData.areaPath}>
+                          <path
+                            d={pathData.areaPath}
+                            fill="url(#single-series-area)"
+                            stroke="none"
+                          />
+                        </Show>
+                        <path
+                          d={pathData.path}
+                          fill="none"
+                          stroke={(() => {
+                            const active = sparkline.activeEmphasisSeriesIndex();
+                            if (active !== null && active !== pathData.seriesIndex) {
+                              return inactiveSeriesColor();
+                            }
+                            return pathData.color;
+                          })()}
+                          stroke-width={sparkline.lineWidthForSeries(pathData.seriesIndex)}
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          opacity={sparkline.opacityForSeries(pathData.seriesIndex)}
+                          style={{ transition: 'opacity 90ms linear, stroke-width 90ms linear' }}
+                          vector-effect="non-scaling-stroke"
+                        />
+                      </g>
+                    </Show>
                   )}
                 </For>
               </svg>

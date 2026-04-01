@@ -3449,7 +3449,7 @@ func normalizeMockBlendWeight(weight float64, step, reference time.Duration) flo
 
 func sampleNaturalMetric(resourceClass, resourceID, metric string, min, max float64, speed float64, at time.Time) float64 {
 	seed := MetricSeed(resourceClass, resourceID, metric)
-	return mockmodel.ValueAtMetric(seed, min, max, metric, speed, at)
+	return mockmodel.ValueAtMetricWithRole(seed, min, max, metric, speed, MetricRole(resourceClass, resourceID), at)
 }
 
 func applyMemoryUsage(memory *models.Memory, usage float64) {
