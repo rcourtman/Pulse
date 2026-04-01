@@ -1030,7 +1030,7 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 
 	// Query pending/sending notifications
 	query := `
-		SELECT id, alerts
+		SELECT id, type, alerts
 		FROM notification_queue
 		WHERE status IN ('pending', 'sending')
 	`
@@ -1048,13 +1048,17 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 
 	for rows.Next() {
 		var notifID string
+		var notifType string
 		var alertsJSON []byte
-		if err := rows.Scan(&notifID, &alertsJSON); err != nil {
+		if err := rows.Scan(&notifID, &notifType, &alertsJSON); err != nil {
 			log.Error().
 				Err(err).
 				Str("component", "notification_queue").
 				Str("action", "cancel_scan_notification").
 				Msg("Failed to scan notification for cancellation")
+			continue
+		}
+		if !queueTypeCancelableOnAlertResolution(notifType) {
 			continue
 		}
 
@@ -1112,6 +1116,11 @@ func (nq *NotificationQueue) CancelByAlertIdentifiers(alertIdentifiers []string)
 	}
 
 	return nil
+}
+
+func queueTypeCancelableOnAlertResolution(notifType string) bool {
+	_, event := normalizeQueueType(notifType)
+	return event != eventResolved
 }
 
 // CancelByTypes marks queued notifications of the given types as cancelled.

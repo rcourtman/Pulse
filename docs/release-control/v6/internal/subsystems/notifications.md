@@ -143,6 +143,11 @@ That same queue ownership also governs persistent queue storage roots. The
 notifications queue database must normalize its owned data directory and
 resolve the fixed `notification_queue.db` leaf through the shared storage-path
 helper instead of joining raw caller-provided directory strings.
+That same queue owner also governs alert-resolution cancellation policy.
+Cancelling queued work by alert identifier must remove outstanding firing
+deliveries for that alert, but it must preserve already-queued resolved
+notifications so recovery deliveries cannot be dropped just because the alert
+was resolved before the queue drained.
 
 `internal/api/notifications.go` and
 `frontend-modern/src/api/notifications.ts` are shared boundaries with

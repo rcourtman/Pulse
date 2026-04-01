@@ -561,6 +561,61 @@ func TestCancelByAlertIdentifiers_MatchingNotificationCancelled(t *testing.T) {
 	}
 }
 
+func TestCancelByAlertIdentifiers_PreservesResolvedNotifications(t *testing.T) {
+	tempDir := t.TempDir()
+	nq, err := NewNotificationQueue(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to create notification queue: %v", err)
+	}
+	defer func() { _ = nq.Stop() }()
+
+	futureRetry := time.Now().Add(1 * time.Hour)
+	firing := &QueuedNotification{
+		ID:          "notif-firing",
+		Type:        "webhook",
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+	resolved := &QueuedNotification{
+		ID:          "notif-resolved",
+		Type:        "webhook" + queueTypeSuffixResolved,
+		Status:      QueueStatusPending,
+		MaxAttempts: 3,
+		Config:      []byte(`{}`),
+		NextRetryAt: &futureRetry,
+		Alerts:      []*alerts.Alert{{ID: "alert-1"}},
+	}
+
+	for _, notif := range []*QueuedNotification{firing, resolved} {
+		if err := nq.Enqueue(notif); err != nil {
+			t.Fatalf("Failed to enqueue %s: %v", notif.ID, err)
+		}
+	}
+
+	if err := nq.CancelByAlertIdentifiers([]string{"alert-1"}); err != nil {
+		t.Fatalf("CancelByAlertIdentifiers returned error: %v", err)
+	}
+
+	var statusFiring NotificationQueueStatus
+	if err := nq.db.QueryRow(`SELECT status FROM notification_queue WHERE id = ?`, firing.ID).Scan(&statusFiring); err != nil {
+		t.Fatalf("failed to read firing notification status: %v", err)
+	}
+	if statusFiring != QueueStatusCancelled {
+		t.Fatalf("expected firing notification to be cancelled, got %s", statusFiring)
+	}
+
+	var statusResolved NotificationQueueStatus
+	if err := nq.db.QueryRow(`SELECT status FROM notification_queue WHERE id = ?`, resolved.ID).Scan(&statusResolved); err != nil {
+		t.Fatalf("failed to read resolved notification status: %v", err)
+	}
+	if statusResolved != QueueStatusPending {
+		t.Fatalf("expected resolved notification to remain pending, got %s", statusResolved)
+	}
+}
+
 func TestCancelByAlertIdentifiers_MultipleAlertsPartialMatch(t *testing.T) {
 	tempDir := t.TempDir()
 	nq, err := NewNotificationQueue(tempDir)
