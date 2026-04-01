@@ -68,12 +68,26 @@ func validateURL(urlStr string, allowedSchemes []string) bool {
 	if err != nil {
 		return false
 	}
+	schemeAllowed := false
 	for _, scheme := range allowedSchemes {
 		if strings.EqualFold(parsed.Scheme, scheme) {
-			return true
+			schemeAllowed = true
+			break
 		}
 	}
-	return false
+	if !schemeAllowed {
+		return false
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+		_, err := securityutil.NormalizeAbsoluteHTTPURL(urlStr)
+		return err == nil
+	case "data":
+		return parsed.Opaque != ""
+	default:
+		return false
+	}
 }
 
 // SSOProviderResponse represents an SSO provider for API responses
@@ -313,6 +327,10 @@ func (r *Router) handleCreateSSOProvider(w http.ResponseWriter, req *http.Reques
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid SAML SSO URL", nil)
 			return
 		}
+		if provider.SAML.IDPSLOURL != "" && !validateURL(provider.SAML.IDPSLOURL, []string{"https", "http"}) {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid SAML SLO URL", nil)
+			return
+		}
 	}
 
 	// Security: Validate icon URL if provided
@@ -429,6 +447,10 @@ func (r *Router) handleUpdateSSOProvider(w http.ResponseWriter, req *http.Reques
 		}
 		if updated.SAML.IDPSSOURL != "" && !validateURL(updated.SAML.IDPSSOURL, []string{"https", "http"}) {
 			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid SAML SSO URL", nil)
+			return
+		}
+		if updated.SAML.IDPSLOURL != "" && !validateURL(updated.SAML.IDPSLOURL, []string{"https", "http"}) {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "Invalid SAML SLO URL", nil)
 			return
 		}
 	}
@@ -833,6 +855,13 @@ func (r *Router) testSAMLConnection(ctx context.Context, cfg *SAMLTestConfig) SS
 			return SSOTestResponse{
 				Success: false,
 				Message: "Invalid SSO URL format",
+				Error:   "invalid_url",
+			}
+		}
+		if cfg.IDPSLOURL != "" && !validateURL(cfg.IDPSLOURL, []string{"https", "http"}) {
+			return SSOTestResponse{
+				Success: false,
+				Message: "Invalid SLO URL format",
 				Error:   "invalid_url",
 			}
 		}

@@ -711,6 +711,21 @@ func TestValidateSAMLProvider(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "rejects SSO URL with embedded credentials",
+			cfg: &SAMLProviderConfig{
+				IDPSSOURL: "https://user:pass@idp.example.com/sso",
+			},
+			wantErr: true,
+		},
+		{
+			name: "rejects invalid SLO URL",
+			cfg: &SAMLProviderConfig{
+				IDPSSOURL: "https://idp.example.com/sso",
+				IDPSLOURL: "https://user:pass@idp.example.com/slo",
+			},
+			wantErr: true,
+		},
+		{
 			name: "signing enabled without cert",
 			cfg: &SAMLProviderConfig{
 				IDPMetadataURL: "https://idp.example.com/metadata",

@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/crewjam/saml"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
@@ -100,6 +101,17 @@ func TestBuildManualMetadataAndCertificate(t *testing.T) {
 	}
 	if len(metadata.IDPSSODescriptors[0].KeyDescriptors) == 0 {
 		t.Fatal("expected key descriptor with certificate")
+	}
+
+	cfg.IDPSSOURL = "https://user:pass@idp.example.com/sso"
+	if _, err := service.buildManualMetadata(); err == nil {
+		t.Fatal("expected error for idp sso URL with embedded credentials")
+	}
+
+	cfg.IDPSSOURL = "https://idp.example.com/sso"
+	cfg.IDPSLOURL = "https://user:pass@idp.example.com/slo"
+	if _, err := service.buildManualMetadata(); err == nil {
+		t.Fatal("expected error for idp slo URL with embedded credentials")
 	}
 }
 
@@ -189,6 +201,24 @@ func TestSAMLServiceBasicFlows(t *testing.T) {
 	}
 	if err := service.RefreshMetadata(context.Background()); err == nil {
 		t.Fatal("expected refresh error without url")
+	}
+}
+
+func TestValidateSAMLRedirectTarget(t *testing.T) {
+	allowed := []saml.Endpoint{
+		{Location: "https://idp.example.com/sso"},
+	}
+
+	got, err := validateSAMLRedirectTarget("https://idp.example.com/sso?SAMLRequest=test", allowed)
+	if err != nil {
+		t.Fatalf("validate redirect: %v", err)
+	}
+	if !strings.Contains(got, "SAMLRequest=test") {
+		t.Fatalf("unexpected validated redirect: %s", got)
+	}
+
+	if _, err := validateSAMLRedirectTarget("https://evil.example.com/sso?SAMLRequest=test", allowed); err == nil {
+		t.Fatal("expected error for unexpected redirect target")
 	}
 }
 

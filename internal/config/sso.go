@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/rcourtman/pulse-go-rewrite/internal/securityutil"
 )
 
 // SSOProviderType defines the type of SSO provider
@@ -298,14 +300,20 @@ func validateSAMLProvider(cfg *SAMLProviderConfig) error {
 	}
 
 	if cfg.IDPMetadataURL != "" {
-		if _, err := url.ParseRequestURI(cfg.IDPMetadataURL); err != nil {
-			return fmt.Errorf("invalid idp metadata url: %w", err)
+		if err := validateAbsoluteHTTPURL("idp metadata url", cfg.IDPMetadataURL); err != nil {
+			return err
 		}
 	}
 
 	if cfg.IDPSSOURL != "" {
-		if _, err := url.ParseRequestURI(cfg.IDPSSOURL); err != nil {
-			return fmt.Errorf("invalid idp sso url: %w", err)
+		if err := validateAbsoluteHTTPURL("idp sso url", cfg.IDPSSOURL); err != nil {
+			return err
+		}
+	}
+
+	if cfg.IDPSLOURL != "" {
+		if err := validateAbsoluteHTTPURL("idp slo url", cfg.IDPSLOURL); err != nil {
+			return err
 		}
 	}
 
@@ -318,6 +326,13 @@ func validateSAMLProvider(cfg *SAMLProviderConfig) error {
 		}
 	}
 
+	return nil
+}
+
+func validateAbsoluteHTTPURL(fieldName, raw string) error {
+	if _, err := securityutil.NormalizeAbsoluteHTTPURL(raw); err != nil {
+		return fmt.Errorf("invalid %s: %w", fieldName, err)
+	}
 	return nil
 }
 

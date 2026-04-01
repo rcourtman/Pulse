@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -171,7 +170,7 @@ func (s *SAMLService) buildManualMetadata() (*saml.EntityDescriptor, error) {
 		return nil, errors.New("idp sso url is required for manual configuration")
 	}
 
-	ssoURL, err := url.Parse(s.config.IDPSSOURL)
+	ssoURL, err := securityutil.NormalizeAbsoluteHTTPURL(s.config.IDPSSOURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid idp sso url: %w", err)
 	}
@@ -181,7 +180,7 @@ func (s *SAMLService) buildManualMetadata() (*saml.EntityDescriptor, error) {
 		entityID = s.config.IDPIssuer
 	}
 	if entityID == "" {
-		entityID = s.config.IDPSSOURL
+		entityID = ssoURL.String()
 	}
 
 	metadata := &saml.EntityDescriptor{
@@ -209,14 +208,15 @@ func (s *SAMLService) buildManualMetadata() (*saml.EntityDescriptor, error) {
 
 	// Add SLO endpoint if configured
 	if s.config.IDPSLOURL != "" {
-		sloURL, err := url.Parse(s.config.IDPSLOURL)
-		if err == nil {
-			metadata.IDPSSODescriptors[0].SingleLogoutServices = []saml.Endpoint{
-				{
-					Binding:  saml.HTTPRedirectBinding,
-					Location: sloURL.String(),
-				},
-			}
+		sloURL, err := securityutil.NormalizeAbsoluteHTTPURL(s.config.IDPSLOURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid idp slo url: %w", err)
+		}
+		metadata.IDPSSODescriptors[0].SingleLogoutServices = []saml.Endpoint{
+			{
+				Binding:  saml.HTTPRedirectBinding,
+				Location: sloURL.String(),
+			},
 		}
 	}
 
@@ -422,6 +422,10 @@ func (s *SAMLService) MakeAuthRequest(relayState string) (string, error) {
 	if relayState == "" {
 		relayState = "/"
 	}
+	if len(s.idpMetadata.IDPSSODescriptors) == 0 ||
+		len(s.idpMetadata.IDPSSODescriptors[0].SingleSignOnServices) == 0 {
+		return "", errors.New("idp does not support single sign-on")
+	}
 
 	// Use the simple redirect method
 	redirectURL, err := s.sp.MakeRedirectAuthenticationRequest(relayState)
@@ -434,7 +438,11 @@ func (s *SAMLService) MakeAuthRequest(relayState string) (string, error) {
 		Str("redirect_url", redirectURL.String()).
 		Msg("Created SAML AuthnRequest")
 
-	return redirectURL.String(), nil
+	validatedURL, err := validateSAMLRedirectTarget(redirectURL.String(), s.idpMetadata.IDPSSODescriptors[0].SingleSignOnServices)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate auth redirect: %w", err)
+	}
+	return validatedURL, nil
 }
 
 // ProcessResponse processes a SAML response and extracts user information
@@ -570,7 +578,26 @@ func (s *SAMLService) MakeLogoutRequest(nameID, sessionIdx string) (string, erro
 	// Build redirect URL
 	redirectURL := req.Redirect("")
 
-	return redirectURL.String(), nil
+	return validateSAMLRedirectTarget(redirectURL.String(), s.idpMetadata.IDPSSODescriptors[0].SingleLogoutServices)
+}
+
+func validateSAMLRedirectTarget(rawURL string, allowedEndpoints []saml.Endpoint) (string, error) {
+	validatedURL, err := securityutil.NormalizeAbsoluteHTTPURL(rawURL)
+	if err != nil {
+		return "", err
+	}
+	for _, endpoint := range allowedEndpoints {
+		endpointURL, err := securityutil.NormalizeAbsoluteHTTPURL(endpoint.Location)
+		if err != nil {
+			continue
+		}
+		if strings.EqualFold(validatedURL.Scheme, endpointURL.Scheme) &&
+			strings.EqualFold(validatedURL.Host, endpointURL.Host) &&
+			validatedURL.Path == endpointURL.Path {
+			return validatedURL.String(), nil
+		}
+	}
+	return "", fmt.Errorf("redirect target does not match configured SAML endpoint")
 }
 
 // RefreshMetadata reloads IdP metadata (useful for key rotation)

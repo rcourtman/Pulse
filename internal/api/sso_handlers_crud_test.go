@@ -41,7 +41,9 @@ func TestValidateURL(t *testing.T) {
 	}{
 		{"https://example.com", []string{"https"}, true},
 		{"http://example.com", []string{"https"}, false},
+		{"https://user:pass@example.com", []string{"https"}, false},
 		{"ftp://example.com", []string{"http", "https"}, false},
+		{"data:image/png;base64,abc", []string{"data"}, true},
 		{"not-a-url", []string{"https"}, false},
 		{"", []string{"https"}, false},
 	}
