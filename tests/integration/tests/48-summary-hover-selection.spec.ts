@@ -248,6 +248,28 @@ async function expectActiveDensityMapsPreserveOverview(
     });
 }
 
+async function expectSummaryHoverTimestampsAligned(
+  summary: import("@playwright/test").Locator,
+  expectedCount: number,
+): Promise<void> {
+  await expect
+    .poll(async () =>
+      summary.locator("[data-active-hover-timestamp]").evaluateAll((nodes) => {
+        const timestamps = nodes
+          .map((node) => node.getAttribute("data-active-hover-timestamp") || "")
+          .filter(Boolean);
+        return {
+          count: timestamps.length,
+          uniqueCount: new Set(timestamps).size,
+        };
+      }),
+    )
+    .toEqual({
+      count: expectedCount,
+      uniqueCount: 1,
+    });
+}
+
 async function readSummarySeriesId(
   row: import("@playwright/test").Locator,
   fallbackAttribute: string,
@@ -445,6 +467,7 @@ test.describe.serial("Summary hover selection", () => {
       infrastructureChartId,
       4,
     );
+    await expectSummaryHoverTimestampsAligned(infrastructureSummary, 4);
     await expectActiveIsolatedLineCards(infrastructureSummary, 2);
     await expectActiveDensityMapsPreserveOverview(
       infrastructureSummary,
@@ -464,6 +487,7 @@ test.describe.serial("Summary hover selection", () => {
     );
     expect(workloadChartId).not.toBe("");
     await expectSummaryHighlightCount(workloadsSummary, workloadChartId, 4);
+    await expectSummaryHoverTimestampsAligned(workloadsSummary, 4);
     await expectActiveIsolatedLineCards(workloadsSummary, 2);
     await expectActiveDensityMapsPreserveOverview(
       workloadsSummary,
@@ -481,6 +505,7 @@ test.describe.serial("Summary hover selection", () => {
     );
     expect(storageChartId).not.toBe("");
     await expectSummaryHighlightCount(storageSummary, storageChartId, 3);
+    await expectSummaryHoverTimestampsAligned(storageSummary, 4);
     await expectActiveIsolatedLineCards(storageSummary, 3);
   });
 });

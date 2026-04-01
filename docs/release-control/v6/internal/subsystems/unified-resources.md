@@ -184,6 +184,13 @@ assembly branch.
     shared route-state scheduler, and keep `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
     rendering the full page-level series set while only the focused label and
     highlight state change.
+11. Keep infrastructure summary hover scope on canonical unified-resource ids
+    even when one metric is empty. Shared chart hover may synchronize one
+    timestamp across all four infrastructure cards, but the active emphasis
+    must still resolve through the same unified-resource id that powers the
+    table row, line charts, density maps, and drawer route state instead of
+    dropping the highlight or inventing a metric-local summary identity when
+    disk or network data is missing in range.
 
 ## Current State
 

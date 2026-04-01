@@ -432,6 +432,26 @@ export const getInteractiveSparklineExternalSeriesIndex = (
   return index >= 0 ? index : null;
 };
 
+export const getInteractiveSparklineCursorXForTimestamp = ({
+  chartData,
+  timestamp,
+  vbW,
+}: {
+  chartData: InteractiveSparklineChartData;
+  timestamp: number | null | undefined;
+  vbW: number;
+}): number | null => {
+  if (timestamp === null || timestamp === undefined || chartData.rangeMs <= 0) {
+    return null;
+  }
+  const clampedTimestamp = clampInteractiveSparklineValue(
+    timestamp,
+    chartData.windowStart,
+    chartData.windowStart + chartData.rangeMs,
+  );
+  return ((clampedTimestamp - chartData.windowStart) / chartData.rangeMs) * vbW;
+};
+
 export const getInteractiveSparklineActiveEmphasisSeriesIndex = ({
   highlightNearestSeriesOnHover,
   lockedSeriesIndex,

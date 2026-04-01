@@ -3,6 +3,7 @@ import { scheduleSparkline, setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import {
   buildInteractiveSparklineAxisTicks,
   buildInteractiveSparklineChartData,
+  getInteractiveSparklineCursorXForTimestamp,
   buildInteractiveSparklineGridLineX,
   buildInteractiveSparklineGridLineY,
   buildInteractiveSparklineSynchronizedHoverState,
@@ -195,9 +196,29 @@ export function useInteractiveSparklineState(
       yMode: yMode(),
     });
   });
+  const synchronizedHoverTimestamp = createMemo<number | null>(() => {
+    const hoverSync = props.hoverSync;
+    if (!hoverSync) {
+      return null;
+    }
+    if (props.hoverSourceKey && hoverSync.sourceKey === props.hoverSourceKey) {
+      return null;
+    }
+    return hoverSync.timestamp;
+  });
   const activeHoverState = createMemo<InteractiveSparklineHoverState | null>(() => {
     return hoveredState() ?? synchronizedHoverState();
   });
+  const activeHoverTimestamp = createMemo<number | null>(() => {
+    return hoveredState()?.timestamp ?? synchronizedHoverTimestamp();
+  });
+  const activeHoverCursorX = createMemo<number | null>(() =>
+    getInteractiveSparklineCursorXForTimestamp({
+      chartData: chartData(),
+      timestamp: activeHoverTimestamp(),
+      vbW,
+    }),
+  );
   const activeEmphasisSeriesIndex = createMemo(() =>
     getInteractiveSparklineActiveEmphasisSeriesIndex({
       highlightNearestSeriesOnHover: props.highlightNearestSeriesOnHover === true,
@@ -385,11 +406,13 @@ export function useInteractiveSparklineState(
       ctx.restore();
     }
 
+    const cursorX = activeHoverCursorX();
+    if (cursorX === null) return;
     const hover = activeHoverState();
-    if (!hover) return;
     ctx.save();
-    const x = (hover.x / vbW) * width;
-    const hoverLineGradient = ctx.createLinearGradient(0, Math.max(0, hover.minY - 4), 0, height);
+    const x = (cursorX / vbW) * width;
+    const lineStartY = hover ? Math.max(0, hover.minY - 4) : 0;
+    const hoverLineGradient = ctx.createLinearGradient(0, lineStartY, 0, height);
     hoverLineGradient.addColorStop(0, 'transparent');
     hoverLineGradient.addColorStop(0.1, hoverLineColor);
     hoverLineGradient.addColorStop(1, hoverLineColor);
@@ -397,7 +420,7 @@ export function useInteractiveSparklineState(
     ctx.lineWidth = 1;
     ctx.setLineDash([3, 3]);
     ctx.beginPath();
-    ctx.moveTo(x, Math.max(0, hover.minY - 4));
+    ctx.moveTo(x, lineStartY);
     ctx.lineTo(x, height);
     ctx.stroke();
     ctx.restore();
@@ -423,6 +446,7 @@ export function useInteractiveSparklineState(
     void chartData();
     void activeEmphasisSeriesIndex();
     void activeHoverState();
+    void activeHoverCursorX();
     queueCanvasDraw();
   });
 
@@ -449,6 +473,8 @@ export function useInteractiveSparklineState(
   return {
     activeEmphasisSeriesIndex,
     activeHoverState,
+    activeHoverCursorX,
+    activeHoverTimestamp,
     activeSeriesDisplay,
     axisTicks,
     chartData,

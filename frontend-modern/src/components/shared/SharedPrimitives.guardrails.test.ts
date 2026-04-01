@@ -558,6 +558,7 @@ describe('shared primitive guardrails', () => {
 
     expect(interactiveSparklineModelSource).toContain('buildInteractiveSparklineChartData');
     expect(interactiveSparklineModelSource).toContain('computeInteractiveSparklineHoverState');
+    expect(interactiveSparklineModelSource).toContain('getInteractiveSparklineCursorXForTimestamp');
     expect(interactiveSparklineModelSource).toContain('downsampleLTTB');
     expect(interactiveSparklineModelSource).toContain('findNearestMetricPoint');
   });
@@ -577,6 +578,7 @@ describe('shared primitive guardrails', () => {
     expect(densityMapModelSource).toContain('buildDensityMapFocusDetail');
     expect(densityMapModelSource).toContain('buildDensityMapHoveredState');
     expect(densityMapModelSource).toContain('formatDensityMapHoverTime');
+    expect(densityMapModelSource).toContain('getDensityMapColumnIndexForTimestamp');
     expect(densityMapModelSource).toContain('getDensityMapCellOpacity');
   });
 

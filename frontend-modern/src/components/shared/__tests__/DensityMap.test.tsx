@@ -244,6 +244,7 @@ describe('DensityMap', () => {
 
     const root = container.firstElementChild;
     expect(root?.getAttribute('data-summary-chart-kind')).toBe('density-map');
+    expect(root?.getAttribute('data-active-hover-timestamp')).toBe('');
     expect(root?.getAttribute('data-rendered-series-count')).toBe('2');
     expect(screen.getByText('Alpha')).toBeInTheDocument();
     expect(screen.getByText('Latest')).toBeInTheDocument();
@@ -252,5 +253,40 @@ describe('DensityMap', () => {
     const overlay = container.querySelector('[data-density-map-focus-detail="true"]');
     expect(overlay).not.toBeNull();
     expect(overlay).toHaveAttribute('data-density-map-focus-series-id', 'alpha');
+  });
+
+  it('shows an intentional empty-state pill when the focused series has no activity in range', () => {
+    const now = Date.now();
+    const { container } = render(() => (
+      <DensityMap
+        timeRange="1h"
+        highlightSeriesId="alpha"
+        focusEmptyStateLabel="No disk activity in range"
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#10b981',
+            data: [],
+          },
+          {
+            id: 'beta',
+            name: 'Beta',
+            color: '#3b82f6',
+            data: [
+              { timestamp: now - 30_000, value: 18 },
+              { timestamp: now - 5_000, value: 24 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const overlay = container.querySelector('[data-density-map-focus-detail="true"]');
+    expect(overlay).not.toBeNull();
+    expect(overlay).toHaveAttribute('data-density-map-focus-empty', 'true');
+    expect(screen.getByText('No disk activity in range')).toBeInTheDocument();
+    expect(screen.queryByText('Latest')).toBeNull();
+    expect(screen.queryByText('Peak')).toBeNull();
   });
 });

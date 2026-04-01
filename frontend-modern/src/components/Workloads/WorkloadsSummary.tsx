@@ -811,6 +811,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
+          focusEmptyStateLabel="No disk activity in range"
           hoverSourceKey="diskio"
           hoverSync={chartHoverSync()}
           highlightSeriesId={summaryFocus.activeSeriesId()}
@@ -832,6 +833,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
           rangeLabel={selectedRange()}
           timeRange={selectedRange()}
           formatValue={formatThroughputRate}
+          focusEmptyStateLabel="No network activity in range"
           hoverSourceKey="network"
           hoverSync={chartHoverSync()}
           highlightSeriesId={summaryFocus.activeSeriesId()}

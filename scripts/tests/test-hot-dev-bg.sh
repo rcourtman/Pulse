@@ -650,6 +650,28 @@ test_playwright_defaults_prefer_managed_hot_dev_runtime() {
   assert_contains "playwright config delegates base url to shared helper" "${output}" "baseURL: preferredBrowserBaseURL(),"
 }
 
+test_root_playwright_wrapper_prefers_managed_browser_runtime() {
+  local test_dir runtime_state output
+  test_dir="$(mktemp -d)"
+  temp_dirs+=("${test_dir}")
+  runtime_state="${test_dir}/runtime-state.json"
+
+  cat > "${runtime_state}" <<'EOF'
+{
+  "baseURL": "http://127.0.0.1:5173"
+}
+EOF
+
+  output="$(
+    cd "${ROOT_DIR}" && \
+      PULSE_E2E_RUNTIME_STATE_PATH="${runtime_state}" \
+      npx tsx --eval "import config from './playwright.config.ts'; console.log(config.use?.baseURL || '');"
+  )"
+
+  assert_contains "root playwright wrapper prefers runtime-state browser url" "${output}" "http://127.0.0.1:5173"
+  assert_not_contains "root playwright wrapper no longer falls back to embedded frontend by default" "${output}" "http://localhost:7655"
+}
+
 test_integration_helpers_prefer_managed_hot_dev_runtime() {
   local output
   output="$(cat "${ROOT_DIR}/tests/integration/tests/helpers.ts")"
@@ -911,6 +933,7 @@ main() {
   test_hot_dev_bg_script_advertises_managed_entrypoint
   test_hot_dev_bg_usage_prefers_managed_wrappers
   test_integration_readme_uses_managed_backend_restart_wrapper
+  test_root_playwright_wrapper_prefers_managed_browser_runtime
   test_clean_mock_alerts_prefers_managed_runtime
   test_dev_check_uses_managed_runtime_status
   test_backend_restart_requires_managed_runtime

@@ -129,6 +129,41 @@ describe('InteractiveSparkline hover behavior', () => {
     expect(onHoverSyncChange).toHaveBeenLastCalledWith(null);
   });
 
+  it('keeps a synchronized hover timestamp visible even when the synced series is absent locally', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));
+    const now = Date.now();
+
+    const { container } = render(() => (
+      <InteractiveSparkline
+        timeRange="1h"
+        hoverSourceKey="memory"
+        hoverSync={{
+          sourceKey: 'cpu',
+          seriesId: 'missing-series',
+          timestamp: now - 10_000,
+        }}
+        series={[
+          {
+            id: 'alpha',
+            name: 'Alpha',
+            color: '#ff0000',
+            data: [
+              { timestamp: now - 30_000, value: 40 },
+              { timestamp: now - 10_000, value: 50 },
+            ],
+          },
+        ]}
+      />
+    ));
+
+    const root = container.firstElementChild;
+    expect(root?.getAttribute('data-active-hover-timestamp')).toBe(String(now - 10_000));
+    const svg = container.querySelector('svg');
+    expect(svg?.querySelector('line[stroke-dasharray="3 3"]')).toBeInTheDocument();
+    expect(screen.queryByText('Alpha')).toBeNull();
+  });
+
   it('limits tooltip rows and shows the "+N more series" affordance', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2024-01-01T12:00:00Z'));

@@ -2,8 +2,9 @@ import { createEffect, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   buildDensityMapChartData,
   buildDensityMapFocusDetail,
-  getDensityMapExternalSeriesIndex,
   buildDensityMapHoveredState,
+  getDensityMapColumnIndexForTimestamp,
+  getDensityMapExternalSeriesIndex,
   buildDensityMapSynchronizedHoveredState,
   formatDensityMapValue,
   getDensityMapCellOpacity,
@@ -41,9 +42,25 @@ export function useDensityMapState(props: DensityMapProps) {
       hoverSync,
     });
   });
+  const synchronizedHoverTimestamp = createMemo<number | null>(() => {
+    const hoverSync = props.hoverSync;
+    if (!hoverSync) {
+      return null;
+    }
+    if (props.hoverSourceKey && hoverSync.sourceKey === props.hoverSourceKey) {
+      return null;
+    }
+    return hoverSync.timestamp;
+  });
   const activeHoveredState = createMemo<DensityMapHoveredState | null>(() => {
     return hoveredState() ?? synchronizedHoveredState();
   });
+  const activeHoverTimestamp = createMemo<number | null>(() => {
+    return hoveredState()?.timestamp ?? synchronizedHoverTimestamp();
+  });
+  const activeColumnIndex = createMemo<number | null>(() =>
+    getDensityMapColumnIndexForTimestamp(chartData(), activeHoverTimestamp()),
+  );
   const focusDetail = createMemo(() =>
     buildDensityMapFocusDetail({
       activeHoveredState: activeHoveredState(),
@@ -81,6 +98,7 @@ export function useDensityMapState(props: DensityMapProps) {
     const cellHeight = height / rows;
     const interactionOpacity = props.interactionState === 'inactive' ? 0.35 : 1;
     const hover = activeHoveredState();
+    const highlightColumnIndex = activeColumnIndex();
     const activeSeriesIndex = hover?.seriesIndex ?? externalSeriesIndex();
     const activeSeries =
       activeSeriesIndex !== null && activeSeriesIndex >= 0 && activeSeriesIndex < data.series.length
@@ -137,8 +155,8 @@ export function useDensityMapState(props: DensityMapProps) {
     if (activeSeries !== null && activeSeriesIndex !== null) {
       const highlightY = activeSeriesIndex * cellHeight;
       context.save();
-      if (hover) {
-        const highlightX = hover.columnIndex * cellWidth;
+      if (highlightColumnIndex !== null) {
+        const highlightX = highlightColumnIndex * cellWidth;
         context.globalAlpha = 0.12 * interactionOpacity;
         context.fillStyle = activeSeries.color;
         context.fillRect(highlightX, 0, Math.max(cellWidth, 1), height);
@@ -156,6 +174,15 @@ export function useDensityMapState(props: DensityMapProps) {
       } else {
         context.strokeRect(0.5, highlightY + 0.5, width - 1, Math.max(cellHeight - 1, 1));
       }
+      context.restore();
+    }
+
+    if (activeSeries === null && highlightColumnIndex !== null) {
+      context.save();
+      const highlightX = highlightColumnIndex * cellWidth;
+      context.globalAlpha = 0.12 * interactionOpacity;
+      context.fillStyle = 'rgba(148, 163, 184, 0.75)';
+      context.fillRect(highlightX, 0, Math.max(cellWidth, 1), height);
       context.restore();
     }
 
@@ -209,6 +236,8 @@ export function useDensityMapState(props: DensityMapProps) {
 
   return {
     activeHoveredState,
+    activeColumnIndex,
+    activeHoverTimestamp,
     chartData,
     externalSeriesIndex,
     focusDetail,

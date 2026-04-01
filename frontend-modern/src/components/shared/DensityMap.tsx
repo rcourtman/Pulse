@@ -1,6 +1,10 @@
 import { Component, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { formatDensityMapHoverTime, type DensityMapProps } from './densityMapModel';
+import {
+  formatDensityMapHoverTime,
+  hasDensityMapFocusActivity,
+  type DensityMapProps,
+} from './densityMapModel';
 import { useDensityMapState } from './useDensityMapState';
 
 export type { DensityMapProps } from './densityMapModel';
@@ -17,6 +21,7 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
         interactionState() === 'inactive' ? 'opacity-35' : 'opacity-100'
       }`.trim()}
       data-summary-chart-kind="density-map"
+      data-active-hover-timestamp={densityMap.activeHoverTimestamp() ?? ''}
       data-highlight-series-id={props.highlightSeriesId ?? ''}
       data-highlight-series-active={densityMap.externalSeriesIndex() !== null ? 'true' : 'false'}
       data-rendered-series-count={densityMap.chartData().series.length}
@@ -35,6 +40,7 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
             <div
               class="flex w-full min-w-0 items-center gap-2 text-[10px]"
               data-density-map-focus-detail="true"
+              data-density-map-focus-empty={hasDensityMapFocusActivity(detail()) ? 'false' : 'true'}
               data-density-map-focus-series-id={detail().seriesId}
             >
               <div class="flex min-w-0 flex-1 items-center gap-1.5">
@@ -64,24 +70,33 @@ export const DensityMap: Component<DensityMapProps> = (props) => {
                   )}
                 </Show>
               </div>
-              <div class="flex shrink-0 items-center gap-3 leading-none">
-                <div class="flex flex-col items-start">
-                  <span class="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Latest
-                  </span>
-                  <span class="mt-0.5 font-semibold text-slate-900 dark:text-slate-50">
-                    {formatDetailValue(detail().currentValue)}
-                  </span>
+              <Show
+                when={hasDensityMapFocusActivity(detail())}
+                fallback={
+                  <div class="shrink-0 rounded-full bg-slate-100 px-2 py-1 text-[9px] font-medium uppercase tracking-[0.08em] text-slate-500 dark:bg-slate-800 dark:text-slate-300">
+                    {props.focusEmptyStateLabel ?? 'No activity in range'}
+                  </div>
+                }
+              >
+                <div class="flex shrink-0 items-center gap-3 leading-none">
+                  <div class="flex flex-col items-start">
+                    <span class="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Latest
+                    </span>
+                    <span class="mt-0.5 font-semibold text-slate-900 dark:text-slate-50">
+                      {formatDetailValue(detail().currentValue)}
+                    </span>
+                  </div>
+                  <div class="flex flex-col items-start">
+                    <span class="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
+                      Peak
+                    </span>
+                    <span class="mt-0.5 font-semibold text-slate-900 dark:text-slate-50">
+                      {formatDetailValue(detail().peakValue)}
+                    </span>
+                  </div>
                 </div>
-                <div class="flex flex-col items-start">
-                  <span class="text-[9px] uppercase tracking-wide text-slate-500 dark:text-slate-400">
-                    Peak
-                  </span>
-                  <span class="mt-0.5 font-semibold text-slate-900 dark:text-slate-50">
-                    {formatDetailValue(detail().peakValue)}
-                  </span>
-                </div>
-              </div>
+              </Show>
             </div>
           )}
         </Show>

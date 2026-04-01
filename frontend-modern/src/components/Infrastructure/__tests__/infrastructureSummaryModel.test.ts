@@ -172,6 +172,37 @@ describe('infrastructureSummaryModel', () => {
     ]);
   });
 
+  it('keeps the same canonical resource id on empty metric series so shared hover can stay page-scoped', () => {
+    const displayedSeries = buildInfrastructureDisplaySeries(
+      [
+        makeSeries('host-1', {
+          name: 'Host 1',
+          cpu: [{ timestamp: 1, value: 20 }],
+          memory: [{ timestamp: 1, value: 35 }],
+          network: [],
+          diskio: [],
+        }),
+        makeSeries('host-2', {
+          name: 'Host 2',
+          cpu: [{ timestamp: 2, value: 40 }],
+          memory: [{ timestamp: 2, value: 55 }],
+          network: [{ timestamp: 2, value: 240 }],
+          diskio: [{ timestamp: 2, value: 90 }],
+        }),
+      ],
+      null,
+    );
+
+    expect(buildInfrastructureMetricSeries(displayedSeries, 'network')).toEqual([
+      { id: 'host-1', data: [], color: '#00aaff', name: 'Host 1' },
+      { id: 'host-2', data: [{ timestamp: 2, value: 240 }], color: '#00aaff', name: 'Host 2' },
+    ]);
+    expect(buildInfrastructureMetricSeries(displayedSeries, 'diskio')).toEqual([
+      { id: 'host-1', data: [], color: '#00aaff', name: 'Host 1' },
+      { id: 'host-2', data: [{ timestamp: 2, value: 90 }], color: '#00aaff', name: 'Host 2' },
+    ]);
+  });
+
   it('uses one canonical active series id across hover and focused summary selection', () => {
     expect(
       resolveSummaryActiveSeriesId({

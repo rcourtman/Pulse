@@ -93,6 +93,13 @@ server-side update execution surfaces.
    canonical dev reset route, and any helper changes that rely on hot-dev
    browser/backend behavior must keep a managed-runtime recovery proof updated
    in the same slice.
+5. Keep root-level Playwright wrapper routing on the canonical managed browser
+   truth. `playwright.config.ts`, `tests/integration/playwright.config.ts`,
+   and `tests/integration/tests/runtime-defaults.ts` must resolve the same
+   browser base URL precedence so repo-root browser proofs attach to the live
+   managed hot-dev shell or runtime-state browser URL instead of silently
+   falling back to the embedded `:7655` frontend when a managed browser shell
+   is already the active truth.
 
 ## Current State
 

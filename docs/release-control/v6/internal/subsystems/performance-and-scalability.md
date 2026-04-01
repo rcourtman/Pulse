@@ -202,7 +202,9 @@ chart cross-highlighting reuse one existing chart path instead of repainting
 page-local “selected row” overlays on top of already downsampled summary
 history. Hovering a sparkline or density map for one entity must promote that
 entity into the shared active series so sibling cards highlight the same object
-at once rather than maintaining chart-local hover state.
+at once rather than maintaining chart-local hover state, and the synchronized
+hover timestamp must remain visible across those sibling cards even when the
+active entity has no samples for one metric in the current range.
 For shared line charts on that hot path, the shared sparkline primitive may
 isolate the selected series inside the existing render budget, but that
 isolation must still reuse the same summary series set and timeline data rather

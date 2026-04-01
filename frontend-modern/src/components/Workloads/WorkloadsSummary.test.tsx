@@ -27,12 +27,14 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
     interactionState?: string;
     activeSeriesDisplay?: string;
     hoverSourceKey?: string;
-    hoverSync?: { seriesId: string } | null;
-    onHoverSyncChange?: (value: {
-      sourceKey: string;
-      seriesId: string;
-      timestamp: number;
-    } | null) => void;
+    hoverSync?: { seriesId: string; timestamp?: number } | null;
+    onHoverSyncChange?: (
+      value: {
+        sourceKey: string;
+        seriesId: string;
+        timestamp: number;
+      } | null,
+    ) => void;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
@@ -63,6 +65,9 @@ vi.mock('@/components/shared/InteractiveSparkline', () => ({
           data-highlight-series-id={props.highlightSeriesId || ''}
           data-hover-source-key={props.hoverSourceKey || ''}
           data-hover-sync-series-id={props.hoverSync?.seriesId || ''}
+          data-hover-sync-timestamp={
+            props.hoverSync?.timestamp ? String(props.hoverSync.timestamp) : ''
+          }
           data-interaction-state={props.interactionState || 'default'}
           data-active-series-display={props.activeSeriesDisplay || ''}
         />
@@ -77,12 +82,14 @@ vi.mock('@/components/shared/DensityMap', () => ({
     highlightSeriesId?: string | null;
     interactionState?: string;
     hoverSourceKey?: string;
-    hoverSync?: { seriesId: string } | null;
-    onHoverSyncChange?: (value: {
-      sourceKey: string;
-      seriesId: string;
-      timestamp: number;
-    } | null) => void;
+    hoverSync?: { seriesId: string; timestamp?: number } | null;
+    onHoverSyncChange?: (
+      value: {
+        sourceKey: string;
+        seriesId: string;
+        timestamp: number;
+      } | null,
+    ) => void;
   }) => {
     const series = props.series ?? [];
     const maxPoints = series.reduce((max, current) => Math.max(max, current.data?.length ?? 0), 0);
@@ -113,6 +120,9 @@ vi.mock('@/components/shared/DensityMap', () => ({
           data-highlight-series-id={props.highlightSeriesId || ''}
           data-hover-source-key={props.hoverSourceKey || ''}
           data-hover-sync-series-id={props.hoverSync?.seriesId || ''}
+          data-hover-sync-timestamp={
+            props.hoverSync?.timestamp ? String(props.hoverSync.timestamp) : ''
+          }
           data-interaction-state={props.interactionState || 'default'}
         />
       </>
@@ -389,9 +399,14 @@ describe('WorkloadsSummary performance behavior', () => {
     await waitFor(() => {
       const sparklines = screen.getAllByTestId('sparkline');
       expect(sparklines).toHaveLength(4);
+      const timestamps = new Set(
+        sparklines.map((sparkline) => sparkline.getAttribute('data-hover-sync-timestamp')),
+      );
+      expect(timestamps.size).toBe(1);
       for (const sparkline of sparklines) {
         expect(sparkline.getAttribute('data-highlight-series-id')).toBe(workloadIds[0]);
         expect(sparkline.getAttribute('data-hover-sync-series-id')).toBe(workloadIds[0]);
+        expect(sparkline.getAttribute('data-hover-sync-timestamp')).not.toBe('');
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
     });

@@ -9,6 +9,7 @@ export interface DensityMapProps {
   rangeLabel?: string;
   timeRange?: TimeRange;
   formatValue?: (value: number) => string;
+  focusEmptyStateLabel?: string;
   hoverSourceKey?: string;
   hoverSync?: SummaryChartHoverSync | null;
   onHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
@@ -167,6 +168,25 @@ export function getDensityMapExternalSeriesIndex(
   return index >= 0 ? index : null;
 }
 
+export function getDensityMapColumnIndexForTimestamp(
+  data: DensityMapChartData,
+  timestamp: number | null | undefined,
+): number | null {
+  if (timestamp === null || timestamp === undefined || data.rangeMs <= 0) {
+    return null;
+  }
+  const clampedTimestamp = clampDensityMapValue(
+    timestamp,
+    data.windowStart,
+    data.windowStart + data.rangeMs,
+  );
+  return clampDensityMapValue(
+    Math.floor(((clampedTimestamp - data.windowStart) / data.rangeMs) * DENSITY_MAP_COLUMNS),
+    0,
+    DENSITY_MAP_COLUMNS - 1,
+  );
+}
+
 export function buildDensityMapHoveredState(options: {
   clientX: number;
   clientY: number;
@@ -283,6 +303,10 @@ export function buildDensityMapFocusDetail(options: {
     seriesName: series.name || 'Unknown',
     sparklinePath,
   };
+}
+
+export function hasDensityMapFocusActivity(detail: DensityMapFocusDetail): boolean {
+  return detail.currentValue !== null || detail.peakValue !== null;
 }
 
 const buildDensityMapFocusSparklinePath = (options: {

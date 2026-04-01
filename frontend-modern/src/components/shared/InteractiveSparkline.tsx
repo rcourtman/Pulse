@@ -34,6 +34,7 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
       }`.trim()}
       data-highlight-series-id={props.highlightSeriesId ?? ''}
       data-highlight-series-active={sparkline.externalSeriesIndex() !== null ? 'true' : 'false'}
+      data-active-hover-timestamp={sparkline.activeHoverTimestamp() ?? ''}
       data-active-series-display={sparkline.activeSeriesDisplay()}
       data-rendered-series-count={sparkline.renderedSeriesCount()}
       data-summary-chart-state={interactionState()}
@@ -118,12 +119,12 @@ export const InteractiveSparkline: Component<InteractiveSparklineProps> = (props
                   )}
                 </For>
 
-                <Show when={sparkline.activeHoverState()}>
-                  {(hover) => (
+                <Show when={sparkline.activeHoverCursorX() !== null}>
+                  {(cursorX) => (
                     <line
-                      x1={hover().x}
-                      y1={Math.max(0, hover().minY - 4)}
-                      x2={hover().x}
+                      x1={cursorX()}
+                      y1={Math.max(0, (sparkline.activeHoverState()?.minY ?? 4) - 4)}
+                      x2={cursorX()}
                       y2={sparkline.vbH}
                       stroke="currentColor"
                       stroke-opacity="0.45"
