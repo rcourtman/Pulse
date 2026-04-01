@@ -219,10 +219,11 @@ describe('WorkloadsSummary performance behavior', () => {
     });
   });
 
-  it('ignores stale cache versions while waiting for live fetch', async () => {
+  it('ignores and purges stale cache versions on failed live fetch', async () => {
     const staleWorkloadId = 'cluster-a:pve1:stale';
+    const cacheKey = 'pulse.workloadsSummaryCharts.default::1h::__all__';
     localStorage.setItem(
-      'pulse.workloadsSummaryCharts.default::1h::__all__',
+      cacheKey,
       JSON.stringify({
         version: 0,
         range: '1h',
@@ -232,7 +233,7 @@ describe('WorkloadsSummary performance behavior', () => {
         dockerData: {},
       }),
     );
-    mockGetWorkloadCharts.mockImplementationOnce(() => new Promise(() => {}));
+    mockGetWorkloadCharts.mockRejectedValueOnce(new Error('network down'));
 
     render(() => (
       <WorkloadsSummary
@@ -246,8 +247,11 @@ describe('WorkloadsSummary performance behavior', () => {
       expect(mockGetWorkloadCharts).toHaveBeenCalledTimes(1);
     });
 
-    expect(screen.queryByTestId('sparkline')).not.toBeInTheDocument();
-    expect(screen.getAllByTestId('sparkline-skeleton')).toHaveLength(4);
+    await waitFor(() => {
+      expect(screen.queryByTestId('sparkline')).not.toBeInTheDocument();
+      expect(screen.getAllByText('Trend data unavailable')).toHaveLength(4);
+      expect(localStorage.getItem(cacheKey)).toBeNull();
+    });
   });
 
   it('requests fewer chart points for large workload sets', async () => {

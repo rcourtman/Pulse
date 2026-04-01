@@ -102,7 +102,7 @@ const WORKLOAD_COLORS = [
 ];
 
 const WORKLOADS_SUMMARY_CACHE_PREFIX = 'pulse.workloadsSummaryCharts.';
-const WORKLOADS_SUMMARY_CACHE_VERSION = 5;
+const WORKLOADS_SUMMARY_CACHE_VERSION = 6;
 const WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS = 5 * 60_000;
 const WORKLOADS_SUMMARY_CACHE_MAX_POINTS_PER_SERIES = 360;
 const WORKLOADS_SUMMARY_CACHE_MAX_CHARS = 900_000;
@@ -233,6 +233,7 @@ const readWorkloadsSummaryCache = (
       parsed.nodeScope !== nodeScope ||
       typeof parsed.cachedAt !== 'number'
     ) {
+      window.localStorage.removeItem(cacheKeyFor(range, nodeScope, orgScope));
       return null;
     }
     if (Date.now() - parsed.cachedAt > WORKLOADS_SUMMARY_CACHE_MAX_AGE_MS) {

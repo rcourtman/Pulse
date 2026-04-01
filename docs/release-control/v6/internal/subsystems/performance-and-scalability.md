@@ -238,6 +238,12 @@ scroll-preserving row focus must extend
 `frontend-modern/src/components/shared/contextualFocus.ts` instead of
 rebuilding page-local `Set` scans or scroll repair logic in dashboard,
 infrastructure, or workloads hot paths.
+That same hot-path ownership now includes summary cache invalidation.
+Infrastructure and workload summary caches may hydrate charts for fast remounts,
+but when the summary chart timeline contract changes, the cache version must
+advance and stale payloads must be purged on read so long-lived browser sessions
+cannot keep rendering pre-fix sparkline shapes after the backend timeline model
+has been corrected.
 That same hot-path rule now applies to infrastructure summary resource
 filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 must include API-backed systems such as top-level TrueNAS appliances through
