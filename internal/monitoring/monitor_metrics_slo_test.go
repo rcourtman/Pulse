@@ -302,6 +302,42 @@ func TestSLO_GetPhysicalDiskTemperatureCharts_WithNativeHistoryFallback(t *testi
 	}
 }
 
+func TestSLO_GetDiskMetricsForChart_WithNativeStoreFallback(t *testing.T) {
+	skipMonitoringSLOUnderRace(t)
+	suppressMonitoringTestLogs(t)
+
+	monitor := newChartFallbackTestMonitor(t)
+	now := time.Now().UTC().Truncate(time.Second)
+	duration := 4 * time.Hour
+
+	writeRawMetricBatch(t, monitor.metricsStore, "disk", "SERIAL-DISK-IO-1", "diskread", []MetricPoint{
+		{Timestamp: now.Add(-2 * time.Hour), Value: 1.25 * 1024 * 1024},
+		{Timestamp: now.Add(-1 * time.Hour), Value: 2.5 * 1024 * 1024},
+		{Timestamp: now, Value: 3.75 * 1024 * 1024},
+	})
+
+	sanity := monitor.GetDiskMetricsForChart("SERIAL-DISK-IO-1", "diskread", duration)
+	if got := len(sanity); got != 3 {
+		t.Fatalf("sanity: expected native diskread history, got %+v", sanity)
+	}
+
+	latencies := measureMonitoringLatencies(t, func() {
+		result := monitor.GetDiskMetricsForChart("SERIAL-DISK-IO-1", "diskread", duration)
+		if got := len(result); got != 3 {
+			t.Fatalf("expected native diskread history, got %+v", result)
+		}
+	})
+
+	target := effectiveMonitoringSLOTarget(SLOPhysicalDiskChartFallbackP95, SLOPhysicalDiskChartFallbackGHA)
+	p95 := monitoringPercentile(latencies, 0.95)
+	t.Logf("GetDiskMetricsForChart(native-store fallback) p50=%v p95=%v p99=%v SLO=%v",
+		monitoringPercentile(latencies, 0.50), p95, monitoringPercentile(latencies, 0.99), target)
+
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
+	}
+}
+
 func TestSLO_GetGuestMetricsForChart_WithNativeHistoryFallback(t *testing.T) {
 	skipMonitoringSLOUnderRace(t)
 	suppressMonitoringTestLogs(t)

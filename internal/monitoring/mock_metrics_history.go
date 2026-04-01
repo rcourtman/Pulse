@@ -684,10 +684,19 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		}
 
 		tempSeries := canonicalMetricSeries("disk", resourceID, "smart_temp", seedTimestamps)
+		busySeries := canonicalMetricSeries("disk", resourceID, "disk", seedTimestamps)
+		diskReadSeries := canonicalMetricSeries("disk", resourceID, "diskread", seedTimestamps)
+		diskWriteSeries := canonicalMetricSeries("disk", resourceID, "diskwrite", seedTimestamps)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
+			mh.AddDiskMetric(resourceID, "disk", busySeries[i], ts)
+			mh.AddDiskMetric(resourceID, "diskread", diskReadSeries[i], ts)
+			mh.AddDiskMetric(resourceID, "diskwrite", diskWriteSeries[i], ts)
 			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
+			queueMetric("disk", resourceID, "disk", busySeries[i], ts)
+			queueMetric("disk", resourceID, "diskread", diskReadSeries[i], ts)
+			queueMetric("disk", resourceID, "diskwrite", diskWriteSeries[i], ts)
 		}
 
 	}
@@ -810,10 +819,19 @@ func seedMockMetricsHistory(mh *MetricsHistory, ms *metrics.Store, graph mock.Fi
 		}
 
 		tempSeries := canonicalMetricSeries("disk", resourceID, "smart_temp", seedTimestamps)
+		busySeries := canonicalMetricSeries("disk", resourceID, "disk", seedTimestamps)
+		diskReadSeries := canonicalMetricSeries("disk", resourceID, "diskread", seedTimestamps)
+		diskWriteSeries := canonicalMetricSeries("disk", resourceID, "diskwrite", seedTimestamps)
 		for i := 0; i < numPoints; i++ {
 			ts := seedTimestamps[i]
 			mh.AddDiskMetric(resourceID, "smart_temp", tempSeries[i], ts)
+			mh.AddDiskMetric(resourceID, "disk", busySeries[i], ts)
+			mh.AddDiskMetric(resourceID, "diskread", diskReadSeries[i], ts)
+			mh.AddDiskMetric(resourceID, "diskwrite", diskWriteSeries[i], ts)
 			queueMetric("disk", resourceID, "smart_temp", tempSeries[i], ts)
+			queueMetric("disk", resourceID, "disk", busySeries[i], ts)
+			queueMetric("disk", resourceID, "diskread", diskReadSeries[i], ts)
+			queueMetric("disk", resourceID, "diskwrite", diskWriteSeries[i], ts)
 		}
 	}
 
@@ -981,10 +999,19 @@ func recordTrueNASFixturesMetrics(mh *MetricsHistory, ms *metrics.Store, fixture
 			continue
 		}
 		temp := mock.SampleMetric("disk", resourceID, "smart_temp", ts)
+		busy := mock.SampleMetric("disk", resourceID, "disk", ts)
+		diskRead := mock.SampleMetric("disk", resourceID, "diskread", ts)
+		diskWrite := mock.SampleMetric("disk", resourceID, "diskwrite", ts)
 
 		mh.AddDiskMetric(resourceID, "smart_temp", temp, ts)
+		mh.AddDiskMetric(resourceID, "disk", busy, ts)
+		mh.AddDiskMetric(resourceID, "diskread", diskRead, ts)
+		mh.AddDiskMetric(resourceID, "diskwrite", diskWrite, ts)
 		if ms != nil {
 			ms.Write("disk", resourceID, "smart_temp", temp, ts)
+			ms.Write("disk", resourceID, "disk", busy, ts)
+			ms.Write("disk", resourceID, "diskread", diskRead, ts)
+			ms.Write("disk", resourceID, "diskwrite", diskWrite, ts)
 		}
 	}
 
@@ -1334,10 +1361,19 @@ func recordMockStateToMetricsHistory(mh *MetricsHistory, ms *metrics.Store, grap
 			continue
 		}
 		temp := mock.SampleMetric("disk", resourceID, "smart_temp", ts)
+		busy := mock.SampleMetric("disk", resourceID, "disk", ts)
+		diskRead := mock.SampleMetric("disk", resourceID, "diskread", ts)
+		diskWrite := mock.SampleMetric("disk", resourceID, "diskwrite", ts)
 
 		mh.AddDiskMetric(resourceID, "smart_temp", temp, ts)
+		mh.AddDiskMetric(resourceID, "disk", busy, ts)
+		mh.AddDiskMetric(resourceID, "diskread", diskRead, ts)
+		mh.AddDiskMetric(resourceID, "diskwrite", diskWrite, ts)
 		if ms != nil {
 			ms.Write("disk", resourceID, "smart_temp", temp, ts)
+			ms.Write("disk", resourceID, "disk", busy, ts)
+			ms.Write("disk", resourceID, "diskread", diskRead, ts)
+			ms.Write("disk", resourceID, "diskwrite", diskWrite, ts)
 		}
 	}
 

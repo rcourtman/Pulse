@@ -9,6 +9,7 @@ import (
 var (
 	mockGuestChartMetricTypes = []string{"cpu", "memory", "disk", "diskread", "diskwrite", "netin", "netout"}
 	mockNodeChartMetricTypes  = []string{"cpu", "memory", "disk", "netin", "netout"}
+	mockDiskChartMetricTypes  = []string{"disk", "diskread", "diskwrite", "smart_temp"}
 )
 
 func normalizeMockChartResourceType(resourceType string) string {
@@ -94,6 +95,23 @@ func mockNodeMetricsForChart(nodeID string, metricTypes []string, duration time.
 	result := make(map[string][]MetricPoint, len(metricTypes))
 	for _, metricType := range metricTypes {
 		result[metricType] = mockCanonicalMetricSeries("node", nodeID, metricType, timestamps)
+	}
+	return result
+}
+
+func mockDiskMetricsForChart(resourceID string, metricTypes []string, duration time.Duration) map[string][]MetricPoint {
+	resourceID = strings.TrimSpace(resourceID)
+	if resourceID == "" {
+		return map[string][]MetricPoint{}
+	}
+	if len(metricTypes) == 0 {
+		metricTypes = mockDiskChartMetricTypes
+	}
+
+	timestamps := mockChartTimestamps(duration)
+	result := make(map[string][]MetricPoint, len(metricTypes))
+	for _, metricType := range metricTypes {
+		result[metricType] = mockCanonicalMetricSeries("disk", resourceID, metricType, timestamps)
 	}
 	return result
 }

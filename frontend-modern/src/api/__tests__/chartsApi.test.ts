@@ -80,6 +80,21 @@ describe('ChartsAPI', () => {
     );
   });
 
+  it('builds canonical physical-disk history queries for 30m live I/O charts', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({} as any);
+
+    await ChartsAPI.getMetricsHistory({
+      resourceType: 'disk',
+      resourceId: 'SERIAL884006359727',
+      metric: 'diskread',
+      range: '30m',
+    });
+
+    expect(apiFetchJSONMock).toHaveBeenCalledWith(
+      '/api/metrics-store/history?resourceType=disk&resourceId=SERIAL884006359727&metric=diskread&range=30m',
+    );
+  });
+
   it('passes through agent metrics history requests', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({} as any);
 

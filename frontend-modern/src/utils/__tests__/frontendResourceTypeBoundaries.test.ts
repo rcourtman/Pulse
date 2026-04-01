@@ -1780,7 +1780,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(diskDetailSource).not.toContain('class="relative"');
     expect(useDiskDetailModelSource).toContain('extractPhysicalDiskPresentationData');
-    expect(useDiskDetailModelSource).toContain('resolvePhysicalDiskMetricResourceId');
+    expect(useDiskDetailModelSource).toContain('resolvePhysicalDiskHistoryResourceId');
     expect(diskLiveMetricSource).toContain('useDiskLiveMetricModel');
     expect(diskLiveMetricSource).not.toContain('const latestMetric = createMemo(() => {');
     expect(diskLiveMetricSource).not.toContain('const formatted = createMemo(() => {');

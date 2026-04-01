@@ -43,7 +43,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [data, setData] = createSignal(props.data ?? []);
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
-  const [source, setSource] = createSignal<'store' | 'memory' | 'live' | null>(null);
+  const [source, setSource] = createSignal<'store' | 'memory' | 'live' | 'mock_synthetic' | null>(null);
   const [maxPoints, setMaxPoints] = createSignal<number | null>(null);
   const [refreshTick, setRefreshTick] = createSignal(0);
   const [hasLoadedOnce, setHasLoadedOnce] = createSignal(false);

@@ -329,6 +329,13 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+The shared metrics-history contract now also owns physical-disk live I/O
+windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
+`30m` as a valid compact live range, and resolve `disk`, `diskread`,
+`diskwrite`, and `smart_temp` against the canonical disk
+`MetricsTarget.ResourceID` that unified resources already expose, instead of
+leaving storage drawers or other callers to fork a disk-local history route or
+invent an alternate disk identity.
 The Pulse Account commercial shell now also owns a dedicated bootstrap
 contract in `internal/cloudcp/portal/page.go`, `internal/cloudcp/portal/handlers.go`,
 and `internal/cloudcp/portal/handlers_test.go`. `/api/portal/bootstrap` and
@@ -2294,3 +2301,11 @@ alongside `proxmox`, `pbs`, and `pmg`, and the settings reporting/install
 surfaces must keep those platform-managed rows navigable back to platform
 connections instead of presenting host uninstall or stop-monitoring actions
 that only apply to `agent`, `docker`, and `kubernetes`.
+That same shared metrics-history contract now also owns physical-disk live I/O
+windows. `internal/api/router.go` must accept `resourceType=disk` on
+`/api/metrics-store/history`, keep `30m` as a valid compact live range, and
+resolve `disk`, `diskread`, `diskwrite`, and `smart_temp` against the
+canonical disk `MetricsTarget.ResourceID` the unified resource already
+exposes. Storage drawers and other consumers must not fork a disk-local live
+history route, alternate query identity, or feature-specific fallback payload
+when the governed chart API already owns that transport.

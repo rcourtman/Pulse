@@ -33,6 +33,9 @@ type StorageMetrics struct {
 // DiskMetrics holds historical metrics for a single physical disk.
 type DiskMetrics struct {
 	Temperature []MetricPoint `json:"smart_temp"`
+	Utilization []MetricPoint `json:"disk"`
+	DiskRead    []MetricPoint `json:"diskread"`
+	DiskWrite   []MetricPoint `json:"diskwrite"`
 }
 
 // MetricsHistory maintains historical metrics for guests, nodes, storage, and disks.
@@ -339,6 +342,12 @@ func (mh *MetricsHistory) AddDiskMetric(resourceID string, metricType string, va
 	point := MetricPoint{Value: value, Timestamp: timestamp}
 
 	switch metricType {
+	case "disk":
+		metrics.Utilization = mh.appendMetric(metrics.Utilization, point)
+	case "diskread":
+		metrics.DiskRead = mh.appendMetric(metrics.DiskRead, point)
+	case "diskwrite":
+		metrics.DiskWrite = mh.appendMetric(metrics.DiskWrite, point)
 	case "smart_temp":
 		metrics.Temperature = mh.appendMetric(metrics.Temperature, point)
 	}
@@ -357,6 +366,12 @@ func (mh *MetricsHistory) GetDiskMetrics(resourceID string, metricType string, d
 	cutoffTime := time.Now().Add(-duration)
 
 	switch metricType {
+	case "disk":
+		return filterMetricsByTime(metrics.Utilization, cutoffTime)
+	case "diskread":
+		return filterMetricsByTime(metrics.DiskRead, cutoffTime)
+	case "diskwrite":
+		return filterMetricsByTime(metrics.DiskWrite, cutoffTime)
 	case "smart_temp":
 		return filterMetricsByTime(metrics.Temperature, cutoffTime)
 	default:
@@ -419,9 +434,15 @@ func (mh *MetricsHistory) Cleanup() {
 		}
 	}
 
+	// Cleanup physical disk metrics and remove empty entries
 	for key, metrics := range mh.diskMetrics {
 		metrics.Temperature = mh.cleanupMetrics(metrics.Temperature, cutoffTime)
-		if len(metrics.Temperature) == 0 {
+		metrics.Utilization = mh.cleanupMetrics(metrics.Utilization, cutoffTime)
+		metrics.DiskRead = mh.cleanupMetrics(metrics.DiskRead, cutoffTime)
+		metrics.DiskWrite = mh.cleanupMetrics(metrics.DiskWrite, cutoffTime)
+
+		if len(metrics.Temperature) == 0 && len(metrics.Utilization) == 0 &&
+			len(metrics.DiskRead) == 0 && len(metrics.DiskWrite) == 0 {
 			delete(mh.diskMetrics, key)
 			disksRemoved++
 		}

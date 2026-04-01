@@ -68,6 +68,7 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('setupCanvasDPR');
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
+    expect(historyChartStateSource).toContain("'mock_synthetic' | null");
     expect(historyChartStateSource).toContain('return ent.trial_eligible !== false;');
     expect(historyChartStateSource).toContain('runStartProTrialAction({');
     expect(historyChartStateSource).not.toContain('startProTrial()');

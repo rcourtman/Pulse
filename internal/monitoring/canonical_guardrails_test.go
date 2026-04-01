@@ -670,6 +670,27 @@ func TestUnifiedVMMetricsUseCanonicalVMHistoryPath(t *testing.T) {
 	}
 }
 
+func TestHostPhysicalDiskIOMetricsUseCanonicalDiskHistoryPath(t *testing.T) {
+	data, err := os.ReadFile("monitor_agents.go")
+	if err != nil {
+		t.Fatalf("failed to read monitor_agents.go: %v", err)
+	}
+	source := string(data)
+	requiredSnippets := []string{
+		"m.writeHostPhysicalDiskIOMetrics(host, now)",
+		"func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {",
+		`resourceID := unifiedresources.HostSMARTDiskSourceID(host, disk)`,
+		`m.metricsHistory.AddDiskMetric(resourceID, "diskread", readRate, now)`,
+		`m.metricsStore.Write("disk", resourceID, "diskwrite", writeRate, now)`,
+		`m.metricsStore.Write("disk", resourceID, "disk", busyPct, now)`,
+	}
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(source, snippet) {
+			t.Fatalf("monitor_agents.go must contain %q", snippet)
+		}
+	}
+}
+
 func TestMockNativePollersDeferToCanonicalMockSampler(t *testing.T) {
 	cases := []struct {
 		file     string

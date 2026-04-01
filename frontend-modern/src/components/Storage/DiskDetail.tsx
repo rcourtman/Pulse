@@ -49,12 +49,8 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
     attributeCards,
     historyCharts,
     metricResourceId,
-    readData,
-    writeData,
-    ioData,
   } = useDiskDetailModel({
     disk: () => props.disk,
-    nodes: () => props.nodes,
   });
 
   return (
@@ -122,18 +118,18 @@ export const DiskDetail: Component<DiskDetailProps> = (props) => {
               {(chart) => (
                 <div class={STORAGE_DETAIL_CARD_CLASS}>
                   <HistoryChart
-                    resourceType="agent"
-                    resourceId="dummy"
-                    metric={chart.metric}
+                    resourceType="disk"
+                    resourceId={metricResourceId()!}
+                    metric={
+                      chart.series === 'read'
+                        ? 'diskread'
+                        : chart.series === 'write'
+                          ? 'diskwrite'
+                          : 'disk'
+                    }
                     label={chart.label}
                     unit={chart.unit}
-                    data={
-                      chart.series === 'read'
-                        ? readData()
-                        : chart.series === 'write'
-                          ? writeData()
-                          : ioData()
-                    }
+                    range="30m"
                     hideSelector
                     hideLock
                     height={120}

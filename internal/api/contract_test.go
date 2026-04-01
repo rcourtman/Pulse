@@ -5810,6 +5810,56 @@ func TestContract_MetricsHistoryLiveFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MetricsHistoryPhysicalDiskIOLiveWindowUsesCanonicalDiskTarget(t *testing.T) {
+	mh := monitoring.NewMetricsHistory(1000, time.Hour)
+	now := time.Now().UTC().Truncate(time.Second)
+	resourceID := "SERIAL884006359727"
+	for i, value := range []float64{1.5, 2.25, 3.0} {
+		mh.AddDiskMetric(resourceID, "diskread", value*1024*1024, now.Add(time.Duration(i-2)*10*time.Minute))
+	}
+
+	router := &Router{
+		monitor: &monitoring.Monitor{},
+	}
+	setUnexportedField(t, router.monitor, "metricsHistory", mh)
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=disk&resourceId="+resourceID+"&metric=diskread&range=30m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body=%s", rec.Code, rec.Body.String())
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.ResourceType != "disk" {
+		t.Fatalf("expected resourceType disk, got %q", resp.ResourceType)
+	}
+	if resp.ResourceId != resourceID {
+		t.Fatalf("expected canonical disk resource id %q, got %q", resourceID, resp.ResourceId)
+	}
+	if resp.Metric != "diskread" {
+		t.Fatalf("expected metric diskread, got %q", resp.Metric)
+	}
+	if resp.Range != "30m" {
+		t.Fatalf("expected range 30m, got %q", resp.Range)
+	}
+	if resp.Source != "memory" {
+		t.Fatalf("expected source memory, got %q", resp.Source)
+	}
+	if len(resp.Points) != 3 {
+		t.Fatalf("expected 3 diskread points, got %d", len(resp.Points))
+	}
+}
+
 func TestContract_PatrolStatusResponseJSONSnapshot(t *testing.T) {
 	lastPatrolAt := time.Date(2026, 3, 12, 9, 30, 0, 0, time.UTC)
 	lastActivityAt := lastPatrolAt.Add(5 * time.Minute)

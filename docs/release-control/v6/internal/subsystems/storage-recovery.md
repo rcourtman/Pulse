@@ -238,6 +238,13 @@ querying, and the operator-facing storage health presentation layer.
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
 engine stop hiding inside broader monitoring and E2E buckets.
+Physical-disk live I/O drawers now also sit on the canonical storage surface.
+Storage disk drawers may show read, write, busy, and SMART history, but every
+chart must route through the shared `HistoryChart` API contract using the disk
+resource's canonical history target. Storage must not keep a drawer-local live
+metrics collector, agent-id/device fallback stream, or separate real-time
+history store once monitoring and `/api/metrics-store/history` already own the
+disk timeline.
 
 Storage and recovery still consume the shared unified-resource contract, but
 they do not own the timeline store itself. The canonical resource-change

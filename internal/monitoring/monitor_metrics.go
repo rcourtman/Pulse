@@ -144,6 +144,40 @@ func (m *Monitor) GetStorageMetrics(storageID string, duration time.Duration) ma
 	return m.metricsHistory.GetAllStorageMetrics(storageID, duration)
 }
 
+// GetDiskMetrics returns historical metrics for a physical disk.
+func (m *Monitor) GetDiskMetrics(resourceID string, metricType string, duration time.Duration) []MetricPoint {
+	if m == nil || m.metricsHistory == nil {
+		return nil
+	}
+	return m.metricsHistory.GetDiskMetrics(resourceID, metricType, duration)
+}
+
+// GetDiskMetricsForChart returns physical-disk metrics optimized for chart
+// display, preferring in-memory data for freshness and falling back to the
+// persistent store when coverage is shallow.
+func (m *Monitor) GetDiskMetricsForChart(resourceID string, metricType string, duration time.Duration) []MetricPoint {
+	if mock.IsMockEnabled() {
+		if synthetic := mockDiskMetricsForChart(resourceID, []string{metricType}, duration); len(synthetic) > 0 {
+			return synthetic[metricType]
+		}
+		return m.GetDiskMetrics(resourceID, metricType, duration)
+	}
+
+	inMemoryPoints := m.GetDiskMetrics(resourceID, metricType, duration)
+	if hasSufficientChartSeriesCoverage(inMemoryPoints, duration) {
+		return inMemoryPoints
+	}
+
+	best := cloneMetricSeries(inMemoryPoints)
+	if converted, ok := m.queryStoreMetricMapWithGapFill("disk", resourceID, duration); ok {
+		if candidate := converted[metricType]; shouldPreferMetricSeries(best, candidate, duration) {
+			best = cloneMetricSeries(candidate)
+		}
+	}
+
+	return best
+}
+
 // GetStorageMetricsForChart returns storage metrics, falling back to SQLite +
 // LTTB for longer ranges.
 func (m *Monitor) GetStorageMetricsForChart(storageID string, duration time.Duration) map[string][]MetricPoint {

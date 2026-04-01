@@ -1762,15 +1762,18 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 		totalTXBytes += nic.TXBytes
 	}
 	var totalDiskReadBytes, totalDiskWriteBytes uint64
+	var totalDiskBusyMs uint64
 	for _, d := range host.DiskIO {
 		totalDiskReadBytes += d.ReadBytes
 		totalDiskWriteBytes += d.WriteBytes
+		totalDiskBusyMs += d.IOTime
 	}
 
 	hostRateKey := fmt.Sprintf("agent:%s", host.ID)
 	currentMetrics := IOMetrics{
 		DiskRead:   int64(totalDiskReadBytes),
 		DiskWrite:  int64(totalDiskWriteBytes),
+		DiskBusy:   int64(totalDiskBusyMs),
 		NetworkIn:  int64(totalRXBytes),
 		NetworkOut: int64(totalTXBytes),
 		Timestamp:  now,
@@ -1843,6 +1846,8 @@ func (m *Monitor) ApplyHostReport(report agentshost.Report, tokenRecord *config.
 				m.metricsHistory.AddGuestMetric(hostMetricKey, "diskwrite", diskWriteRate, now)
 			}
 		}
+
+		m.writeHostPhysicalDiskIOMetrics(host, now)
 
 		if m.metricsStore != nil {
 			m.metricsStore.Write("agent", host.ID, "cpu", host.CPUUsage, now)
@@ -1919,6 +1924,83 @@ func (m *Monitor) writeHostSMARTMetrics(host models.Host, now time.Time) {
 		}
 		if attrs.UnsafeShutdowns != nil {
 			m.metricsStore.Write("disk", resourceID, "smart_unsafe_shutdowns", float64(*attrs.UnsafeShutdowns), now)
+		}
+	}
+}
+
+func normalizeHostDiskDevice(device string) string {
+	return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(device), "/dev/"))
+}
+
+func hostDiskIOMetricResourceID(host models.Host, io models.DiskIO) string {
+	device := normalizeHostDiskDevice(io.Device)
+	if device == "" {
+		return ""
+	}
+
+	for _, disk := range host.Sensors.SMART {
+		if disk.Standby {
+			continue
+		}
+		if strings.EqualFold(normalizeHostDiskDevice(disk.Device), device) {
+			return unifiedresources.HostSMARTDiskSourceID(host, disk)
+		}
+	}
+
+	return ""
+}
+
+func (m *Monitor) writeHostPhysicalDiskIOMetrics(host models.Host, now time.Time) {
+	if shouldSkipNativeMockStateMetricWrites() || (m.metricsHistory == nil && m.metricsStore == nil) {
+		return
+	}
+	if len(host.DiskIO) == 0 || len(host.Sensors.SMART) == 0 {
+		return
+	}
+
+	seenResourceIDs := make(map[string]struct{}, len(host.DiskIO))
+	for _, io := range host.DiskIO {
+		resourceID := hostDiskIOMetricResourceID(host, io)
+		if resourceID == "" {
+			continue
+		}
+		if _, seen := seenResourceIDs[resourceID]; seen {
+			continue
+		}
+		seenResourceIDs[resourceID] = struct{}{}
+
+		trackerKey := fmt.Sprintf("disk:%s:%s", host.ID, normalizeHostDiskDevice(io.Device))
+		current := IOMetrics{
+			DiskRead:  int64(io.ReadBytes),
+			DiskWrite: int64(io.WriteBytes),
+			DiskBusy:  int64(io.IOTime),
+			Timestamp: now,
+		}
+		readRate, writeRate, busyPct, _, _ := m.rateTracker.CalculateRatesWithBusy(trackerKey, current)
+
+		if readRate >= 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddDiskMetric(resourceID, "diskread", readRate, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("disk", resourceID, "diskread", readRate, now)
+			}
+		}
+		if writeRate >= 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddDiskMetric(resourceID, "diskwrite", writeRate, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("disk", resourceID, "diskwrite", writeRate, now)
+			}
+		}
+		if busyPct >= 0 {
+			if m.metricsHistory != nil {
+				m.metricsHistory.AddDiskMetric(resourceID, "disk", busyPct, now)
+			}
+			if m.metricsStore != nil {
+				m.metricsStore.Write("disk", resourceID, "disk", busyPct, now)
+			}
 		}
 	}
 }

@@ -186,6 +186,12 @@ regression protection.
 
 This lane already has strong evidence and guardrails, but it still trails on
 score because critical hot paths need more complete protection and verification.
+Compact physical-disk drawer charts now also belong to the protected hot path.
+Thirty-minute storage detail charts must query the same in-memory plus
+store-backed disk history path as longer-term disk charts, with the backend
+owning range selection and fallback. Feature-local polling loops or
+browser-side disk ring buffers are forbidden because they duplicate live
+sampling work and drift out of sync with the governed history timeline.
 
 All governed performance-owned runtime files now require explicit registry
 path-policy coverage, so new protected hot paths must be mapped to a concrete

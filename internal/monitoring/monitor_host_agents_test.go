@@ -670,6 +670,109 @@ func TestApplyHostReportPersistsSMARTMetricsForAgentDisksWithFallbackID(t *testi
 	}
 }
 
+func TestApplyHostReportPersistsPhysicalDiskIOMetricsForAgentDisks(t *testing.T) {
+	t.Helper()
+
+	storeCfg := metrics.DefaultConfig(t.TempDir())
+	storeCfg.WriteBufferSize = 1
+	store, err := metrics.NewStore(storeCfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer store.Close()
+
+	monitor := &Monitor{
+		state:             models.NewState(),
+		alertManager:      alerts.NewManager(),
+		hostTokenBindings: make(map[string]string),
+		config:            &config.Config{},
+		rateTracker:       NewRateTracker(),
+		metricsHistory:    NewMetricsHistory(1000, 24*time.Hour),
+		metricsStore:      store,
+	}
+	t.Cleanup(func() { monitor.alertManager.Stop() })
+
+	baseReport := agentshost.Report{
+		Agent: agentshost.AgentInfo{
+			ID:              "agent-pve2",
+			Version:         "1.0.0",
+			IntervalSeconds: 30,
+		},
+		Host: agentshost.HostInfo{
+			ID:        "host-pve2",
+			Hostname:  "pve2",
+			MachineID: "machine-pve2",
+		},
+		Metrics: agentshost.Metrics{
+			Memory: agentshost.MemoryMetric{TotalBytes: 1024, UsedBytes: 512, FreeBytes: 512, Usage: 50},
+		},
+		Sensors: agentshost.Sensors{
+			SMART: []agentshost.DiskSMART{
+				{
+					Device:      "/dev/nvme2",
+					Model:       "Samsung 980 PRO 2TB",
+					Serial:      "SERIAL884006359727",
+					Temperature: 46,
+				},
+			},
+		},
+		DiskIO: []agentshost.DiskIO{
+			{
+				Device:     "nvme2",
+				ReadBytes:  1_000_000,
+				WriteBytes: 2_000_000,
+				ReadOps:    100,
+				WriteOps:   200,
+				IOTime:     10_000,
+			},
+		},
+		Timestamp: time.Now().UTC(),
+	}
+
+	if _, err := monitor.ApplyHostReport(baseReport, nil); err != nil {
+		t.Fatalf("ApplyHostReport initial: %v", err)
+	}
+
+	nextReport := baseReport
+	nextReport.Timestamp = baseReport.Timestamp.Add(30 * time.Second)
+	nextReport.DiskIO = []agentshost.DiskIO{
+		{
+			Device:     "nvme2",
+			ReadBytes:  4_000_000,
+			WriteBytes: 5_000_000,
+			ReadOps:    250,
+			WriteOps:   350,
+			IOTime:     22_000,
+		},
+	}
+
+	if _, err := monitor.ApplyHostReport(nextReport, nil); err != nil {
+		t.Fatalf("ApplyHostReport second: %v", err)
+	}
+	store.Flush()
+
+	readPoints := waitForStoredDiskMetric(t, store, "SERIAL884006359727", "diskread")
+	writePoints := waitForStoredDiskMetric(t, store, "SERIAL884006359727", "diskwrite")
+	busyPoints := waitForStoredDiskMetric(t, store, "SERIAL884006359727", "disk")
+
+	if got := readPoints[len(readPoints)-1].Value; got <= 0 {
+		t.Fatalf("expected persisted diskread rate > 0, got %+v", readPoints)
+	}
+	if got := writePoints[len(writePoints)-1].Value; got <= 0 {
+		t.Fatalf("expected persisted diskwrite rate > 0, got %+v", writePoints)
+	}
+	if got := busyPoints[len(busyPoints)-1].Value; got <= 0 || got > 100 {
+		t.Fatalf("expected persisted disk busy percent within (0,100], got %+v", busyPoints)
+	}
+
+	if got := monitor.metricsHistory.GetDiskMetrics("SERIAL884006359727", "diskread", time.Hour); len(got) == 0 {
+		t.Fatal("expected in-memory diskread history for physical disk")
+	}
+	if got := monitor.metricsHistory.GetDiskMetrics("SERIAL884006359727", "disk", time.Hour); len(got) == 0 {
+		t.Fatal("expected in-memory busy history for physical disk")
+	}
+}
+
 func TestApplyHostReportSkipsMetricsAndSMARTWritesInMockMode(t *testing.T) {
 	previous := mock.IsMockEnabled()
 	mock.SetEnabled(true)

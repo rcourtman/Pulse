@@ -160,6 +160,30 @@ func TestSeedMockMetricsHistory_PopulatesSeries(t *testing.T) {
 	if got, want := diskTemps[len(diskTemps)-1].Value, mock.SampleMetric("disk", "SERIAL-LOCAL-1", "smart_temp", diskTemps[len(diskTemps)-1].Timestamp); math.Abs(got-want) > 1e-9 {
 		t.Fatalf("expected last disk temp point to match canonical sampler, got=%v want=%v", got, want)
 	}
+
+	diskRead := mh.GetDiskMetrics("SERIAL-LOCAL-1", "diskread", time.Hour)
+	if len(diskRead) < 10 {
+		t.Fatalf("expected seeded disk read history, got %d points", len(diskRead))
+	}
+	if got, want := diskRead[len(diskRead)-1].Value, mock.SampleMetric("disk", "SERIAL-LOCAL-1", "diskread", diskRead[len(diskRead)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last disk read point to match canonical sampler, got=%v want=%v", got, want)
+	}
+
+	diskWrite := mh.GetDiskMetrics("SERIAL-LOCAL-1", "diskwrite", time.Hour)
+	if len(diskWrite) < 10 {
+		t.Fatalf("expected seeded disk write history, got %d points", len(diskWrite))
+	}
+	if got, want := diskWrite[len(diskWrite)-1].Value, mock.SampleMetric("disk", "SERIAL-LOCAL-1", "diskwrite", diskWrite[len(diskWrite)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last disk write point to match canonical sampler, got=%v want=%v", got, want)
+	}
+
+	diskBusy := mh.GetDiskMetrics("SERIAL-LOCAL-1", "disk", time.Hour)
+	if len(diskBusy) < 10 {
+		t.Fatalf("expected seeded disk busy history, got %d points", len(diskBusy))
+	}
+	if got, want := diskBusy[len(diskBusy)-1].Value, mock.SampleMetric("disk", "SERIAL-LOCAL-1", "disk", diskBusy[len(diskBusy)-1].Timestamp); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("expected last disk busy point to match canonical sampler, got=%v want=%v", got, want)
+	}
 }
 
 func TestSeedMockMetricsHistory_AppendsSingleTerminalNowPoint(t *testing.T) {

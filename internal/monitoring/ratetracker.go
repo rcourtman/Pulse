@@ -59,6 +59,7 @@ type RateTracker struct {
 type RateCache struct {
 	DiskReadRate  float64
 	DiskWriteRate float64
+	DiskBusyPct   float64
 	NetInRate     float64
 	NetOutRate    float64
 }
@@ -74,6 +75,18 @@ func NewRateTracker() *RateTracker {
 // CalculateRates calculates I/O rates for a guest
 // Returns -1 for rates that don't have enough data yet (will be converted to null in JSON)
 func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, netInRate, netOutRate float64) {
+	diskReadRate, diskWriteRate, _, netInRate, netOutRate = rt.calculateRates(guestID, current)
+	return
+}
+
+// CalculateRatesWithBusy calculates disk/network rates plus disk busy percent
+// from cumulative counters. Returns -1 for metrics that do not yet have enough
+// data to produce a rate.
+func (rt *RateTracker) CalculateRatesWithBusy(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, diskBusyPct, netInRate, netOutRate float64) {
+	return rt.calculateRates(guestID, current)
+}
+
+func (rt *RateTracker) calculateRates(guestID string, current IOMetrics) (diskReadRate, diskWriteRate, diskBusyPct, netInRate, netOutRate float64) {
 	rt.mu.Lock()
 	defer rt.mu.Unlock()
 
@@ -84,7 +97,7 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 		ring = &counterRing{}
 		ring.add(current)
 		rt.history[guestID] = ring
-		return -1, -1, -1, -1
+		return -1, -1, -1, -1, -1
 	}
 
 	prev := ring.newest()
@@ -93,14 +106,15 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	// If all cumulative values are the same, we're getting cached data from Proxmox
 	if current.DiskRead == prev.DiskRead &&
 		current.DiskWrite == prev.DiskWrite &&
+		current.DiskBusy == prev.DiskBusy &&
 		current.NetworkIn == prev.NetworkIn &&
 		current.NetworkOut == prev.NetworkOut {
 		// Data hasn't changed - return last known good rates
 		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
-			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.NetInRate, lastRate.NetOutRate
+			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.DiskBusyPct, lastRate.NetInRate, lastRate.NetOutRate
 		}
 		// No last rates available, return 0
-		return 0, 0, 0, 0
+		return 0, 0, 0, 0, 0
 	}
 
 	// Data has changed, add to ring buffer
@@ -114,9 +128,9 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	if timeDiff <= 0 {
 		// Return last known rates if time hasn't advanced
 		if lastRate, hasRate := rt.lastRates[guestID]; hasRate {
-			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.NetInRate, lastRate.NetOutRate
+			return lastRate.DiskReadRate, lastRate.DiskWriteRate, lastRate.DiskBusyPct, lastRate.NetInRate, lastRate.NetOutRate
 		}
-		return 0, 0, 0, 0
+		return 0, 0, 0, 0, 0
 	}
 
 	// Calculate rates (bytes per second) over the window
@@ -125,6 +139,15 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	}
 	if current.DiskWrite >= oldest.DiskWrite {
 		diskWriteRate = float64(current.DiskWrite-oldest.DiskWrite) / timeDiff
+	}
+	if current.DiskBusy >= oldest.DiskBusy {
+		diskBusyPct = (float64(current.DiskBusy-oldest.DiskBusy) / (timeDiff * 1000)) * 100
+		if diskBusyPct < 0 {
+			diskBusyPct = 0
+		}
+		if diskBusyPct > 100 {
+			diskBusyPct = 100
+		}
 	}
 	if current.NetworkIn >= oldest.NetworkIn {
 		netInRate = float64(current.NetworkIn-oldest.NetworkIn) / timeDiff
@@ -137,6 +160,7 @@ func (rt *RateTracker) CalculateRates(guestID string, current IOMetrics) (diskRe
 	rt.lastRates[guestID] = RateCache{
 		DiskReadRate:  diskReadRate,
 		DiskWriteRate: diskWriteRate,
+		DiskBusyPct:   diskBusyPct,
 		NetInRate:     netInRate,
 		NetOutRate:    netOutRate,
 	}

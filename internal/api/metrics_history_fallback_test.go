@@ -141,6 +141,49 @@ func TestMetricsHistoryFallbackMockDiskSynthesizesSeries(t *testing.T) {
 	}
 }
 
+func TestMetricsHistoryDiskIOMetricsUseMemoryFallback(t *testing.T) {
+	mh := monitoring.NewMetricsHistory(1000, time.Hour)
+	now := time.Now().UTC().Truncate(time.Second)
+	resourceID := "SERIAL884006359727"
+	for i, value := range []float64{12.5, 14.0, 11.0, 16.2} {
+		mh.AddDiskMetric(resourceID, "diskread", value*1024*1024, now.Add(time.Duration(i-3)*10*time.Minute))
+		mh.AddDiskMetric(resourceID, "diskwrite", value*512*1024, now.Add(time.Duration(i-3)*10*time.Minute))
+		mh.AddDiskMetric(resourceID, "disk", 20+value, now.Add(time.Duration(i-3)*10*time.Minute))
+	}
+
+	monitor := &monitoring.Monitor{}
+	setUnexportedField(t, monitor, "metricsHistory", mh)
+
+	router := &Router{monitor: monitor}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/api/metrics-store/history?resourceType=disk&resourceId="+resourceID+"&metric=diskread&range=30m",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+	router.handleMetricsHistory(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", rec.Code)
+	}
+
+	var resp metricsHistoryResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if resp.Source != "memory" {
+		t.Fatalf("expected source memory, got %q", resp.Source)
+	}
+	if resp.Metric != "diskread" {
+		t.Fatalf("expected metric diskread, got %q", resp.Metric)
+	}
+	if len(resp.Points) < 2 {
+		t.Fatalf("expected diskread history points, got %d", len(resp.Points))
+	}
+}
+
 func TestMetricsHistoryStorageDiskAliasUsesMemory(t *testing.T) {
 	state := models.NewState()
 	state.UpdateStorageForInstance("pve1", []models.Storage{

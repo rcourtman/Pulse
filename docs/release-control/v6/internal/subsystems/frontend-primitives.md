@@ -334,6 +334,12 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+Storage disk drawers now also sit on that same shared-primitives floor.
+`frontend-modern/src/components/Storage/DiskDetail.tsx` must render physical-
+disk read, write, and busy charts through `HistoryChart` plus
+`useHistoryChartState`, using the canonical physical-disk history resource id,
+instead of reviving `diskMetricsHistory`, a page-local ring buffer, or another
+storage-only live chart primitive for the same telemetry.
 
 The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table

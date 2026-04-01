@@ -128,7 +128,7 @@ export interface WorkloadsSummaryChartsResponse {
 }
 
 // Persistent metrics history types (SQLite-backed, longer retention)
-export type HistoryTimeRange = '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d';
+export type HistoryTimeRange = '30m' | '1h' | '6h' | '12h' | '24h' | '7d' | '30d' | '90d';
 type MetricsHistoryAPIResourceType =
   | 'vm'
   | 'system-container'
@@ -252,7 +252,7 @@ export interface SingleMetricHistoryResponse {
   start: number; // Unix timestamp in milliseconds
   end: number; // Unix timestamp in milliseconds
   points: AggregatedMetricPoint[];
-  source?: 'store' | 'memory' | 'live';
+  source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
 }
 
 export interface AllMetricsHistoryResponse {
@@ -262,7 +262,7 @@ export interface AllMetricsHistoryResponse {
   start: number; // Unix timestamp in milliseconds
   end: number; // Unix timestamp in milliseconds
   metrics: Record<string, AggregatedMetricPoint[]>;
-  source?: 'store' | 'memory' | 'live';
+  source?: 'store' | 'memory' | 'live' | 'mock_synthetic';
 }
 
 export type TimeRange = '5m' | '15m' | '30m' | '1h' | '4h' | '12h' | '24h' | '7d' | '30d';

@@ -652,3 +652,12 @@ shared guest metadata cache must keep VM network and identity metadata alive
 long enough to survive short Proxmox status failures, while incomplete
 guest-agent metadata stays on a short retry cadence instead of freezing
 partial VM summary data for minutes.
+That same monitoring boundary now also owns physical-disk I/O history as a
+first-class canonical metric stream. `internal/monitoring/monitor_agents.go`
+must project host per-device I/O counters onto the same SMART-resolved disk
+resource id that unified resources expose, `internal/monitoring/metrics_history.go`
+must retain `disk`, `diskread`, `diskwrite`, and `smart_temp` on one shared
+disk history model, and mock seeding plus live mock ticks in
+`internal/monitoring/mock_metrics_history.go` must append to that same disk
+timeline instead of creating a second drawer-only or mock-only disk history
+path.

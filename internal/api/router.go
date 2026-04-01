@@ -6040,6 +6040,7 @@ func buildSyntheticMetricHistorySeries(
 	current float64,
 ) []monitoring.MetricPoint {
 	switch metricType {
+	case "disk", "diskread", "diskwrite":
 	case "smart_temp":
 		if current <= 0 {
 			return nil
@@ -7918,6 +7919,8 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 	var stepSecs int64 = 0 // Default to no downsampling (use tier resolution)
 
 	switch timeRange {
+	case "30m":
+		duration = 30 * time.Minute
 	case "1h":
 		duration = time.Hour
 	case "6h":
@@ -8234,7 +8237,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			disk := &physicalDisks[i]
 			serial := strings.TrimSpace(disk.PhysicalDisk.Serial)
 			wwn := strings.TrimSpace(disk.PhysicalDisk.WWN)
+			metricsTargetID := ""
+			if disk.MetricsTarget != nil {
+				metricsTargetID = strings.TrimSpace(disk.MetricsTarget.ResourceID)
+			}
 			if strings.EqualFold(disk.ID, target) ||
+				(metricsTargetID != "" && strings.EqualFold(metricsTargetID, target)) ||
 				(serial != "" && strings.EqualFold(serial, target)) ||
 				(wwn != "" && strings.EqualFold(wwn, target)) {
 				return disk
@@ -8399,8 +8407,12 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			return nil, "", false
 		}
 
-		if mock.IsMockEnabled() && runtimeResourceType == "disk" && metricType == "smart_temp" {
-			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
+		if mock.IsMockEnabled() && runtimeResourceType == "disk" {
+			current := 0.0
+			if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && metricType == "smart_temp" {
+				current = float64(disk.PhysicalDisk.Temperature)
+			}
+			if current > 0 || metricType == "disk" || metricType == "diskread" || metricType == "diskwrite" {
 				series := buildSyntheticMetricHistorySeries(
 					end,
 					duration,
@@ -8408,7 +8420,7 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 					"disk",
 					resourceID,
 					metricType,
-					float64(disk.PhysicalDisk.Temperature),
+					current,
 				)
 				if len(series) > 0 {
 					return buildHistoryPoints(series, stepSecs), historySourceMock, true
@@ -8485,6 +8497,16 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 				return nil, "", false
 			}
 			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
+		case "disk":
+			points := monitor.GetDiskMetricsForChart(resourceID, queryMetric, duration)
+			if len(points) == 0 {
+				livePoints := liveMetricPoints(runtimeResourceType, resourceID)
+				if live, ok := livePoints[metricType]; ok {
+					return buildHistoryPoints([]monitoring.MetricPoint{live}, 0), historySourceLive, true
+				}
+				return nil, "", false
+			}
+			return buildHistoryPoints(points, stepSecs), historySourceMemory, true
 		default:
 			livePoints := liveMetricPoints(runtimeResourceType, resourceID)
 			if live, ok := livePoints[metricType]; ok {
@@ -8518,6 +8540,13 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			metrics = monitor.GetGuestMetrics(fmt.Sprintf("docker:%s", resourceID), duration)
 		case "storage":
 			metrics = monitor.GetStorageMetrics(resourceID, duration)
+		case "disk":
+			metrics = map[string][]monitoring.MetricPoint{
+				"disk":       monitor.GetDiskMetricsForChart(resourceID, "disk", duration),
+				"diskread":   monitor.GetDiskMetricsForChart(resourceID, "diskread", duration),
+				"diskwrite":  monitor.GetDiskMetricsForChart(resourceID, "diskwrite", duration),
+				"smart_temp": monitor.GetDiskMetricsForChart(resourceID, "smart_temp", duration),
+			}
 		default:
 			if runtimeResourceType == "node" {
 				metrics = map[string][]monitoring.MetricPoint{
@@ -8674,33 +8703,38 @@ func (r *Router) handleMetricsHistory(w http.ResponseWriter, req *http.Request) 
 			}
 		}
 
-		if response == nil && mock.IsMockEnabled() && runtimeResourceType == "disk" && metricType == "smart_temp" {
+		if response == nil && mock.IsMockEnabled() && runtimeResourceType == "disk" &&
+			(metricType == "smart_temp" || metricType == "disk" || metricType == "diskread" || metricType == "diskwrite") {
 			targetPoints := targetMockSeriesPoints(duration, historyMaxPoints)
 			if len(points) > 0 && len(points) < targetPoints {
 				current := points[len(points)-1].Value
-				if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
-					current = float64(disk.PhysicalDisk.Temperature)
+				if metricType == "smart_temp" {
+					if disk := findDisk(resourceID); disk != nil && disk.PhysicalDisk != nil && disk.PhysicalDisk.Temperature > 0 {
+						current = float64(disk.PhysicalDisk.Temperature)
+					}
 				}
-				series := buildSyntheticMetricHistorySeries(
-					end,
-					duration,
-					historyMaxPoints,
-					"disk",
-					resourceID,
-					metricType,
-					current,
-				)
-				if len(series) > len(points) {
-					source = historySourceMock
-					response = map[string]interface{}{
-						"resourceType": responseResourceType,
-						"resourceId":   resourceID,
-						"metric":       metricType,
-						"range":        timeRange,
-						"start":        start.UnixMilli(),
-						"end":          end.UnixMilli(),
-						"points":       buildHistoryPoints(series, stepSecs),
-						"source":       source,
+				if metricType != "smart_temp" || current > 0 {
+					series := buildSyntheticMetricHistorySeries(
+						end,
+						duration,
+						historyMaxPoints,
+						"disk",
+						resourceID,
+						metricType,
+						current,
+					)
+					if len(series) > len(points) {
+						source = historySourceMock
+						response = map[string]interface{}{
+							"resourceType": responseResourceType,
+							"resourceId":   resourceID,
+							"metric":       metricType,
+							"range":        timeRange,
+							"start":        start.UnixMilli(),
+							"end":          end.UnixMilli(),
+							"points":       buildHistoryPoints(series, stepSecs),
+							"source":       source,
+						}
 					}
 				}
 			}

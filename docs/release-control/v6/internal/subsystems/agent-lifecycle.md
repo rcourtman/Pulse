@@ -259,6 +259,13 @@ This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
 management, and fleet safety stop hiding inside architecture, migration, or
 monitoring work.
+Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
+physical-disk history transport. When agent-backed disk telemetry is rendered
+through shared drawers or lifecycle-adjacent resource context, those reads
+must flow through the canonical `/api/metrics-store/history` boundary and the
+disk `MetricsTarget.ResourceID` that monitoring projects for the resource,
+rather than reviving a browser-local collector or a lifecycle-only
+agent/device identity.
 That shared `internal/api/` dependency now also assumes hosted tenant AI and
 relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup
@@ -1738,3 +1745,10 @@ they must not assume a displayed relay pairing token is disposable once
 `lastUsedAt` is set. Shared helper changes that refresh, hide, or replace a
 pairing credential must preserve used-token continuity instead of deleting a
 credential that an already paired device still depends on.
+That same shared `internal/api/` boundary now also owns agent-derived
+physical-disk history transport. Lifecycle-adjacent storage drawers and fleet
+resource surfaces may show host SMART-backed disk telemetry through the shared
+`/api/metrics-store/history` route, but they must read the canonical disk
+metrics target that monitoring projects for the resource instead of reviving a
+browser-local disk collector, agent/device concatenation scheme, or other
+surface-local history identity.

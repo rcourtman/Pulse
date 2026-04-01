@@ -12,6 +12,7 @@ type MetricPoint struct {
 type IOMetrics struct {
 	DiskRead   int64     `json:"diskRead"`
 	DiskWrite  int64     `json:"diskWrite"`
+	DiskBusy   int64     `json:"diskBusy,omitempty"`
 	NetworkIn  int64     `json:"networkIn"`
 	NetworkOut int64     `json:"networkOut"`
 	Timestamp  time.Time `json:"timestamp"`
