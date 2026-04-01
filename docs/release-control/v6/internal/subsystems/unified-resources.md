@@ -216,6 +216,12 @@ canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the
 shared VMware signal-metadata and `resource-incident` timeline vocabulary that
 canonical resources expose to alerts, AI, and frontend consumers.
+That shared consumer ownership now includes same-tab summary hydration too.
+`frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+may keep an in-memory remount cache for canonical resource charts, but the key
+must carry an explicit summary contract version so a long-lived browser tab
+cannot resurrect older unified-resource summary shapes after the chart model or
+identity mapping changes.
 VMware vSphere now follows the same admission rule. In the admitted phase-1
 direction, vCenter is the connection authority but not a
 top-level unified resource: ESXi hosts must project as canonical `agent`

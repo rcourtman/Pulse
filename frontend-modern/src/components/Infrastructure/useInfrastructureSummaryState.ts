@@ -35,10 +35,11 @@ import {
 // downsampling artifacts that localStorage cache introduces.
 // Capped at MAX_IN_MEMORY_INFRA_ENTRIES to prevent unbounded growth.
 const MAX_IN_MEMORY_INFRA_ENTRIES = 20;
+const INFRA_SUMMARY_IN_MEMORY_CACHE_VERSION = 1;
 const inMemoryChartCache = new Map<string, Map<string, ChartData>>();
 
 function inMemoryCacheKey(range: TimeRange): string {
-  return `${normalizeOrgScope(getOrgID())}::${range}`;
+  return `${INFRA_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}`;
 }
 
 /** @internal Test-only reset for in-memory chart cache. */

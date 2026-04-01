@@ -182,4 +182,5 @@ describe('StorageSummary', () => {
       expect(diskTempCard?.getAttribute('data-interaction-state')).toBe('inactive');
     });
   });
+
 });

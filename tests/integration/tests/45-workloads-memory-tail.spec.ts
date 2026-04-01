@@ -97,6 +97,23 @@ function memoryTailDeltas(payload: WorkloadChartsResponse): number[] {
     .sort((a, b) => a - b);
 }
 
+function memoryAdjacentJumps(payload: WorkloadChartsResponse): number[] {
+  return [
+    ...Object.values(payload.data || {}).map((chartData) => chartData.memory || []),
+    ...Object.values(payload.dockerData || {}).map((chartData) => chartData.memory || []),
+  ]
+    .map((points) => points.slice().sort((a, b) => a.timestamp - b.timestamp))
+    .filter((points) => points.length >= 3)
+    .map((points) => {
+      let worst = 0;
+      for (let index = 1; index < points.length; index++) {
+        worst = Math.max(worst, Math.abs(points[index].value - points[index - 1].value));
+      }
+      return worst;
+    })
+    .sort((a, b) => a - b);
+}
+
 function percentile(sortedValues: number[], ratio: number): number {
   if (sortedValues.length === 0) return 0;
   const boundedRatio = Math.min(1, Math.max(0, ratio));
@@ -151,8 +168,11 @@ test.describe.serial('Workloads memory tail', () => {
 
     const payload = (await response.json()) as WorkloadChartsResponse;
     const tailDeltas = memoryTailDeltas(payload);
+    const adjacentJumps = memoryAdjacentJumps(payload);
     expect(percentile(tailDeltas, 0.95)).toBeLessThan(6);
     expect(tailDeltas[tailDeltas.length - 1]).toBeLessThan(8);
+    expect(percentile(adjacentJumps, 0.95)).toBeLessThan(4);
+    expect(adjacentJumps[adjacentJumps.length - 1]).toBeLessThan(6);
 
     fs.mkdirSync(path.dirname(WORKLOADS_SCREENSHOT_PATH), { recursive: true });
     await page.getByTestId('workloads-summary').screenshot({ path: WORKLOADS_SCREENSHOT_PATH });

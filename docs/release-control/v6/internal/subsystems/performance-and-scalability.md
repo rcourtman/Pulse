@@ -244,6 +244,11 @@ but when the summary chart timeline contract changes, the cache version must
 advance and stale payloads must be purged on read so long-lived browser sessions
 cannot keep rendering pre-fix sparkline shapes after the backend timeline model
 has been corrected.
+That same cache contract also applies to same-tab in-memory hydration on the
+protected summary hot path. Infrastructure and workload summary shells must
+version their module-scoped remount caches alongside the chart contract so a
+hot-reloaded or long-lived browser tab cannot immediately rehydrate an older
+summary series set before the next live fetch completes.
 That same hot-path rule now applies to infrastructure summary resource
 filtering: `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 must include API-backed systems such as top-level TrueNAS appliances through

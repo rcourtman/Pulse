@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
+import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
@@ -1398,5 +1399,12 @@ describe('Storage', () => {
     const params = new URLSearchParams(path.split('?')[1] || '');
     expect(params.get('source')).toBe('proxmox-pve');
     expect(params.get('status')).toBe('warning');
+  });
+
+  it('versions same-tab storage summary cache keys with the summary contract', () => {
+    expect(storageSummarySource).toContain('const STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION = 1;');
+    expect(storageSummarySource).toContain(
+      "return `${STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}::${nodeId || '__all__'}`;",
+    );
   });
 });

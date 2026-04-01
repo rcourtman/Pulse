@@ -2,6 +2,7 @@ import { batch, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildStoragePath } from '@/routing/resourceLinks';
 import { useStorageRouteState } from '@/components/Storage/useStorageRouteState';
+import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
 describe('useStorageRouteState', () => {
   beforeEach(() => {
@@ -146,9 +147,10 @@ describe('useStorageRouteState', () => {
     vi.runAllTimers();
 
     expect(ctx.navigate).toHaveBeenCalledTimes(1);
-    expect(ctx.navigate).toHaveBeenCalledWith('/storage?tab=disks&source=proxmox-pbs', {
-      replace: true,
-    });
+    expect(ctx.navigate).toHaveBeenCalledWith(
+      '/storage?tab=disks&source=proxmox-pbs',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
 
     ctx.dispose();
   });

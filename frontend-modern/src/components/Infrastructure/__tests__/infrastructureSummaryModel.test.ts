@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import useInfrastructureSummaryStateSource from '../useInfrastructureSummaryState.ts?raw';
 
 import type { Resource } from '@/types/resource';
 import type { InfrastructureSummarySeries } from '@/components/Infrastructure/infrastructureSummaryModel';
@@ -246,5 +247,14 @@ describe('infrastructureSummaryModel', () => {
         }),
       ]),
     ).toBe(false);
+  });
+
+  it('versions same-tab infrastructure summary cache keys', () => {
+    expect(useInfrastructureSummaryStateSource).toContain(
+      'const INFRA_SUMMARY_IN_MEMORY_CACHE_VERSION = 1;',
+    );
+    expect(useInfrastructureSummaryStateSource).toContain(
+      'return `${INFRA_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}`;',
+    );
   });
 });

@@ -115,4 +115,5 @@ describe('useInfrastructureSummaryState', () => {
     });
     expect(result.hasInteractiveResourceId('host-1')).toBe(true);
   });
+
 });

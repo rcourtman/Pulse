@@ -1,5 +1,6 @@
 import { Accessor, createEffect, onCleanup, untrack } from 'solid-js';
 import { STORAGE_QUERY_PARAMS, parseStorageLinkSearch } from '@/routing/resourceLinks';
+import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import { areSearchParamsEquivalent } from '@/utils/searchParams';
 
 export type StorageManagedQueryKey =
@@ -54,23 +55,11 @@ const MANAGED_QUERY_KEYS: StorageManagedQueryKey[] = [
 const isEnabled = (predicate?: () => boolean) => (predicate ? predicate() : true);
 
 export const useStorageRouteState = (config: StorageRouteStateConfig): void => {
-  let pendingNavigateHandle: number | null = null;
-  let pendingNavigatePath: string | null = null;
-
-  const scheduleNavigate = (nextPath: string) => {
-    pendingNavigatePath = nextPath;
-    if (pendingNavigateHandle !== null) return;
-
-    pendingNavigateHandle = window.setTimeout(() => {
-      pendingNavigateHandle = null;
-      const target = pendingNavigatePath;
-      pendingNavigatePath = null;
-      if (!target) return;
-      const currentPath = `${untrack(() => config.location.pathname)}${untrack(() => config.location.search) || ''}`;
-      if (currentPath === target) return;
-      config.navigate(target, { replace: true });
-    }, 0);
-  };
+  const routeStateNavigate = createRouteStateNavigateScheduler(
+    config.navigate,
+    () =>
+      `${untrack(() => config.location.pathname)}${untrack(() => config.location.search) || ''}`,
+  );
 
   createEffect(() => {
     if (!isEnabled(config.isReadEnabled)) return;
@@ -119,14 +108,10 @@ export const useStorageRouteState = (config: StorageRouteStateConfig): void => {
       ? config.location.pathname
       : managedPath.split('?')[0];
     const nextPath = nextSearch ? `${basePath}?${nextSearch}` : basePath;
-    scheduleNavigate(nextPath);
+    routeStateNavigate.schedule(nextPath);
   });
 
   onCleanup(() => {
-    if (pendingNavigateHandle !== null) {
-      window.clearTimeout(pendingNavigateHandle);
-      pendingNavigateHandle = null;
-      pendingNavigatePath = null;
-    }
+    routeStateNavigate.cleanup();
   });
 };

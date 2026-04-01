@@ -9,9 +9,8 @@ import {
 } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import type { ViewMode } from '@/types/workloads';
-import {
-  WORKLOADS_PATH,
-} from '@/routing/resourceLinks';
+import { WORKLOADS_PATH } from '@/routing/resourceLinks';
+import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import type { DashboardWorkloadNodeOption } from './dashboardWorkloadRouteModel';
 import {
   parseDashboardWorkloadUrlParams,
@@ -47,6 +46,10 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   const location = useLocation();
   const isWorkloadsRoute = () => location.pathname === WORKLOADS_PATH;
   const workloadUrlParams = createMemo(() => parseDashboardWorkloadUrlParams(location.search));
+  const routeStateNavigate = createRouteStateNavigateScheduler(
+    navigate,
+    () => `${untrack(() => location.pathname)}${untrack(() => location.search)}`,
+  );
 
   const [handledTypeParam, setHandledTypeParam] = createSignal('');
   const [handledRuntimeParam, setHandledRuntimeParam] = createSignal('');
@@ -55,27 +58,8 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
   const [handledAgentParam, setHandledAgentParam] = createSignal('');
   const [handledPlatformParam, setHandledPlatformParam] = createSignal('');
 
-  let pendingUrlSyncHandle: number | null = null;
-  let pendingUrlSyncPath: string | null = null;
-  const scheduleUrlSyncNavigate = (nextPath: string) => {
-    pendingUrlSyncPath = nextPath;
-    if (pendingUrlSyncHandle !== null) return;
-    pendingUrlSyncHandle = window.setTimeout(() => {
-      pendingUrlSyncHandle = null;
-      const target = pendingUrlSyncPath;
-      pendingUrlSyncPath = null;
-      if (!target) return;
-      const current = `${untrack(() => location.pathname)}${untrack(() => location.search)}`;
-      if (current === target) return;
-      navigate(target, { replace: true });
-    }, 0);
-  };
   onCleanup(() => {
-    if (pendingUrlSyncHandle !== null) {
-      window.clearTimeout(pendingUrlSyncHandle);
-      pendingUrlSyncHandle = null;
-      pendingUrlSyncPath = null;
-    }
+    routeStateNavigate.cleanup();
   });
 
   createEffect(() => {
@@ -305,7 +289,7 @@ export function useDashboardWorkloadUrlSync(options: DashboardWorkloadUrlSyncOpt
       selectedPlatform: options.selectedPlatform(),
     });
     if (nextPath) {
-      scheduleUrlSyncNavigate(nextPath);
+      routeStateNavigate.schedule(nextPath);
     }
   });
 

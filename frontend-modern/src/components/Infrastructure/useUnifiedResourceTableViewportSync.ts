@@ -39,6 +39,9 @@ export function useUnifiedResourceTableViewportSync(
     hostWindowing.endIndex();
     const row = rowRefs.get(selectedId);
     if (row) {
+      const rect = row.getBoundingClientRect();
+      const fullyVisible = rect.top >= 0 && rect.bottom <= window.innerHeight;
+      if (fullyVisible) return;
       row.scrollIntoView({ block: 'center', behavior: 'smooth' });
     }
   });

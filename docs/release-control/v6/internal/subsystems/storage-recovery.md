@@ -219,6 +219,13 @@ querying, and the operator-facing storage health presentation layer.
     that retained-value behavior must stay route-owned and filter-owned through
     the canonical recovery state model instead of recreating page-local
     suspense escape hatches in `Recovery.tsx` or the recovery sections.
+18. Keep storage route writes on the shared route-state scheduler. Storage page
+    filter and tab updates may still own their query keys locally, but
+    `frontend-modern/src/components/Storage/useStorageRouteState.ts` must route
+    same-route replace navigation through the shared
+    `createRouteStateNavigateScheduler` helper so back-to-back storage filter
+    changes coalesce against the current location instead of reintroducing a
+    storage-local timeout queue.
 
 ## Current State
 

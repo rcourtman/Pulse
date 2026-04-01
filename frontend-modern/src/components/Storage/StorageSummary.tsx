@@ -29,10 +29,11 @@ import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 // ---------------------------------------------------------------------------
 
 const POLL_INTERVAL_MS = 30_000;
+const STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION = 1;
 const inMemoryCache = new Map<string, StorageSummaryChartsResponse>();
 
 function inMemoryCacheKey(range: TimeRange, nodeId?: string): string {
-  return `${normalizeOrgScope(getOrgID())}::${range}::${nodeId || '__all__'}`;
+  return `${STORAGE_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}::${nodeId || '__all__'}`;
 }
 
 // Clear in-memory cache on org switch to prevent cross-org data leakage.
