@@ -82,7 +82,9 @@ describe('PricingV6', () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText('AI Patrol (BYOK)')).toBeInTheDocument();
-    expect(screen.getByText('Patrol quickstart: 25 runs, no API key')).toBeInTheDocument();
+    expect(
+      screen.getByText('Patrol quickstart after activation or trial: 25 runs, no API key'),
+    ).toBeInTheDocument();
     expect(screen.getByText('8 monitored systems · 14-day history')).toBeInTheDocument();
     expect(screen.getByText('15 monitored systems')).toBeInTheDocument();
     expect(screen.getByText('50 monitored systems')).toBeInTheDocument();

@@ -91,6 +91,28 @@ describe('patrol api', () => {
     });
   });
 
+  it('preserves activation-gated quickstart status without inventing inventory', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      runtime_state: 'blocked',
+      blocked_reason:
+        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+      healthy: false,
+      quickstart_credits_total: 0,
+      quickstart_credits_remaining: 0,
+      using_quickstart: false,
+    } as any);
+
+    await expect(getPatrolStatus()).resolves.toMatchObject({
+      runtime_state: 'blocked',
+      blocked_reason:
+        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+      healthy: false,
+      quickstart_credits_total: 0,
+      quickstart_credits_remaining: 0,
+      using_quickstart: false,
+    });
+  });
+
   it('preserves the canonical patrol quickstart transport fields', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'active',

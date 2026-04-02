@@ -52,7 +52,7 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
       'Real-time monitoring',
       '7-day metric history',
       'AI Patrol (BYOK)',
-      'Patrol quickstart: 25 runs, no API key',
+      'Patrol quickstart after activation or trial: 25 runs, no API key',
       'Update alerts',
       'Basic SSO (OIDC)',
       'Community support',

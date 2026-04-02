@@ -19,9 +19,10 @@ align with this document. If there is a conflict, this document wins.
 1. **Free attracts, paid converts.** The free tier must be good enough to get users in the
    door, but constrained enough that serious users feel upgrade pressure naturally.
 2. **Gate on action, not information.** Self-hosted AI Patrol is BYOK in steady state,
-   with one Patrol-only quickstart allowance for first-run activation. We never cap how
-   many times users can run Patrol through their own API keys. The paid gate is on
-   auto-execution of fixes, not on analysis or suggestions.
+   with one Patrol-only quickstart allowance for activated or trial-backed installs during
+   first-run activation. We never cap how many times users can run Patrol through their
+   own API keys. The paid gate is on auto-execution of fixes, not on analysis or
+   suggestions.
 3. **Smooth upgrade ladder.** No large price gaps. Every step up has a clear reason.
 4. **Simple to understand.** A homelabber should know which tier is right for them in
    under 10 seconds.
@@ -100,8 +101,8 @@ long-term commercial model. The canonical v6 destination is monitored-system cou
 | SSO | Basic OIDC |
 | Update notifications | Yes |
 | Metrics history | **7 days** |
-| AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK, with Patrol quickstart for new workspaces) |
-| AI Quickstart Credits | **25 hosted Patrol runs** (no API key needed, Patrol only, powered by MiniMax 2.5M) |
+| AI Patrol | Monitor + root-cause summaries + fix suggestions (BYOK by default, with Patrol quickstart on activated or trial-backed installs) |
+| AI Quickstart Credits | **25 hosted Patrol runs** (activated or trial-backed installs only; no API key needed, Patrol only, powered by MiniMax 2.5M) |
 | AI Auto-Fix | **No** (must apply fixes manually) |
 | AI Alert Analysis | No |
 | Relay | No |
@@ -115,12 +116,13 @@ long-term commercial model. The canonical v6 destination is monitored-system cou
 
 **AI Patrol in free tier:** Two modes of operation:
 
-1. **Quickstart Credits (Patrol only, no API key needed):** Every new workspace gets 25
-   hosted Patrol runs powered by MiniMax 2.5M. This gives users a bounded way to try
-   Patrol before adding a provider. After credits are exhausted, users connect their own
-   API key to continue self-hosted Patrol. Quickstart is activation support only: it is
-   not a general hosted chat entitlement and it does not replace BYOK for ongoing
-   self-hosted AI use.
+1. **Quickstart Credits (Patrol only, no API key needed):** Activated or trial-backed
+   installs with the server-verified installation identity get 25 hosted Patrol runs
+   powered by MiniMax 2.5M. This gives users a bounded way to try Patrol before adding a
+   provider. Unactivated Community installs start a trial, activate, or use their own API
+   key instead. After credits are exhausted, users connect their own API key to continue
+   self-hosted Patrol. Quickstart is activation support only: it is not a general hosted
+   chat entitlement and it does not replace BYOK for ongoing self-hosted AI use.
 
 2. **BYOK (after credits or by choice):** Users provide their own API key
    (OpenAI/Anthropic/etc.). No commercial quota — it's their API key, their money. Only
@@ -303,11 +305,11 @@ must apply manually. Pro users see the same information with an "Apply Fix" butt
 Patrol finding is a conversion moment.
 
 ### 3. AI Quickstart Credits (25 hosted Patrol runs)
-Every new workspace gets 25 Patrol runs powered by MiniMax 2.5M with no API key setup.
-This gives users one bounded Patrol-first activation path. After credits run out, self-hosted
-users connect their own key (BYOK, stays free). Upgrading later unlocks auto-fix, alert
-analysis, and other paid operations features; it does not replace BYOK for self-hosted AI
-runtime. Cost: ~$0.002–0.01 per run.
+Activated or trial-backed installs get 25 Patrol runs powered by MiniMax 2.5M with no API
+key setup. This gives users one bounded Patrol-first activation path. Unactivated Community
+installs activate, start a trial, or connect their own key (BYOK, stays free). Upgrading
+later unlocks auto-fix, alert analysis, and other paid operations features; it does not
+replace BYOK for self-hosted AI runtime. Cost: ~$0.002–0.01 per run.
 
 ### 4. Relay as impulse buy ($39/yr)
 Fills the $0 → Pro gap. Relay is not the automation tier; it is the cheap convenience and

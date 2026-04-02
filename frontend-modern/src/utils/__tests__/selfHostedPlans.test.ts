@@ -68,7 +68,13 @@ describe('selfHostedPlans', () => {
 
   it('keeps Community quickstart copy scoped to Patrol activation support', () => {
     expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
-      expect.arrayContaining(['AI Patrol (BYOK)', 'Patrol quickstart: 25 runs, no API key']),
+      expect.arrayContaining([
+        'AI Patrol (BYOK)',
+        'Patrol quickstart after activation or trial: 25 runs, no API key',
+      ]),
+    );
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).not.toContain(
+      'Patrol quickstart: 25 runs, no API key',
     );
   });
 });

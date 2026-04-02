@@ -10,7 +10,10 @@ import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
-import { getAIQuickstartCreditsPresentation } from '@/utils/aiQuickstartPresentation';
+import {
+  getAIQuickstartCreditsPresentation,
+  isPatrolQuickstartExhaustedReason,
+} from '@/utils/aiQuickstartPresentation';
 import { buildPatrolScheduleOptions } from '@/utils/aiPatrolSchedulePresentation';
 import { getPatrolRuntimePresentation } from '@/utils/patrolRuntimePresentation';
 import { getPatrolRecencyPresentation } from '@/utils/patrolSummaryPresentation';
@@ -44,11 +47,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
     const patrolStatus = state.patrolStatus();
     if (!patrolStatus) return false;
     if (patrolStatus.using_quickstart) return true;
-    return (
-      state.runtimeState() === 'blocked' &&
-      (patrolStatus.quickstart_credits_total ?? 0) > 0 &&
-      (patrolStatus.quickstart_credits_remaining ?? 0) <= 0
-    );
+    return state.runtimeState() === 'blocked' && isPatrolQuickstartExhaustedReason(state.blockedReason());
   });
   const patrolModelStale = createMemo(() => {
     const model = state.patrolModel();

@@ -764,6 +764,34 @@ describe('AIIntelligence entitlement gating', () => {
     expect(screen.getByText(/Health A · 100\/100/)).toBeInTheDocument();
   });
 
+  it('shows the activation-or-byok path from the server when quickstart is unavailable on an unactivated install', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        runtime_state: 'blocked',
+        using_quickstart: false,
+        quickstart_credits_total: 25,
+        quickstart_credits_remaining: 0,
+        blocked_reason:
+          'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+      }),
+    );
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(
+        screen.getAllByText(
+          'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+        ).length,
+      ).toBeGreaterThan(0);
+    });
+
+    expect(screen.queryByText('Patrol quickstart exhausted')).not.toBeInTheDocument();
+  });
+
   it('shows the active Patrol quickstart chip only when runtime is actually using quickstart', async () => {
     hasFeatureMock.mockReturnValue(true);
     licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
@@ -810,7 +838,7 @@ describe('AIIntelligence entitlement gating', () => {
       expect(getPatrolStatusMock).toHaveBeenCalled();
       expect(
         screen.getByTitle(
-          '12 of 25 free Patrol quickstart runs remaining. No API key needed for Patrol.',
+          '12 of 25 Patrol quickstart runs remaining on this activated or trial-backed install. No API key needed for initial Patrol quickstart.',
         ),
       ).toBeInTheDocument();
     });

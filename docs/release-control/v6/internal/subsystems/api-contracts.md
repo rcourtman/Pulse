@@ -243,8 +243,9 @@ Own canonical runtime payload shapes between backend and frontend.
    quickstart block reason for Patrol and AI settings enablement rather than
    silently attempting anonymous bootstrap
    and the public interpretation rule, so those fields describe Patrol-only
-   quickstart inventory and active runtime source rather than a generic hosted
-   AI quota or full-chat entitlement
+   quickstart inventory and active runtime source on activated or trial-backed
+   installs rather than a generic hosted AI quota, anonymous Community
+   entitlement, or full-chat entitlement
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed
@@ -1820,8 +1821,9 @@ force a blocked or exhausted operator presentation while Patrol is active on a
 configured non-quickstart provider path.
 Those same transport fields now also define the only public quickstart promise:
 when pricing, README, or Patrol header copy references them, it must describe
-Patrol-only quickstart runs and no-key Patrol activation rather than generic
-AI credits or hosted-chat access.
+Patrol-only quickstart runs and no-key Patrol activation on activated or
+trial-backed installs rather than generic AI credits, anonymous bootstrap, or
+hosted-chat access.
 Hosted billing-state payloads now also carry the canonical quickstart grant
 metadata used by hosted bootstrap and refresh flows. Billing reads and contract
 proofs must preserve `quickstart_credits_granted`,

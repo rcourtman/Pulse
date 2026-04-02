@@ -506,6 +506,11 @@ Patrol-scoped as well: the badge copy should talk about Patrol quickstart runs
 or Patrol quickstart exhaustion on activated or trial-backed installs rather
 than generic AI credits, anonymous free hosted AI, or broad hosted AI
 availability.
+The same shared shell rule applies to activation-gated availability copy: when
+Patrol is blocked because quickstart lacks a server-verified install identity,
+shared feature shells must preserve the backend activation-or-BYOK guidance
+instead of translating that state into an exhausted-credit badge or a generic
+hosted-AI upgrade message.
 That same route-owned presentation rule also governs Patrol findings empty
 states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone

@@ -46,7 +46,7 @@ Power-user shortcuts:
 
 ### AI-Powered
 - **Chat Assistant (BYOK)**: Ask questions about your infrastructure in natural language
-- **Patrol**: Background health checks that generate findings on a schedule. New workspaces get 25 Patrol quickstart runs with no API key; ongoing self-hosted use is BYOK.
+- **Patrol**: Background health checks that generate findings on a schedule. Activated or trial-backed installs can use 25 Patrol quickstart runs with no API key for initial Patrol setup; otherwise self-hosted use is BYOK.
 - **Alert Analysis (Pro/Pro+/Cloud)**: Optional AI analysis when alerts fire
 - **Cost Tracking**: Track usage and costs per provider/model
 
@@ -150,9 +150,11 @@ Self-hosted tiers:
 
 Pulse counts top-level monitored systems once no matter how they are collected. VMs, containers, pods, disks, backups, and other child resources under that system are included rather than counted separately.
 
-Community includes Patrol quickstart for first-run activation: every new workspace gets 25
-Patrol runs with no API key. After that, self-hosted Patrol continues with your configured
-provider. Relay remains the convenience tier, and Pro/Pro+ are the paid operations tiers.
+Community keeps Patrol available with BYOK. Activated or trial-backed installs can also use
+Patrol quickstart for first-run activation: 25 Patrol runs with no API key on a
+server-verified install. Without activation, self-hosted Patrol continues with your
+configured provider. Relay remains the convenience tier, and Pro/Pro+ are the paid
+operations tiers.
 
 Runtime-aligned capability summary:
 
@@ -180,9 +182,10 @@ Pulse Patrol runs on your schedule (every 10 minutes to every 7 days, default 6 
 - Container health check failures
 
 On self-hosted installs, Pulse Patrol's steady-state path uses your configured provider
-(BYOK) from your Pulse server. The one hosted exception is Patrol quickstart: every new
-workspace gets 25 Patrol runs through the managed quickstart proxy so you can try Patrol
-before adding an API key. Chat Assistant remains BYOK.
+(BYOK) from your Pulse server. The one hosted exception is Patrol quickstart: activated or
+trial-backed installs get 25 Patrol runs through the managed quickstart proxy so you can
+try Patrol before adding an API key. Unactivated Community installs should activate, start
+a trial, or use BYOK. Chat Assistant remains BYOK.
 
 Technical highlights:
 - Cross-system context (nodes, VMs, backups, containers, and metrics history)

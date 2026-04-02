@@ -254,9 +254,9 @@ cache files may memoize the returned token and counts but may not treat those
 cached counts as commercial authority.
 That quickstart allowance is therefore activation support, not the main
 commercial pitch: self-hosted pricing and docs may promise Patrol-only
-quickstart runs with no API key for first use, but they must not market that
-bootstrap as a general hosted chat plan while Relay and Pro carry the paid
-story.
+quickstart runs with no API key for activated or trial-backed installs, but
+they must not market that bootstrap as anonymous Community entitlement or a
+general hosted chat plan while Relay and Pro carry the paid story.
 The self-hosted commercial counted unit is now also locked to monitored
 systems rather than agent installs. `max_monitored_systems` is the live
 runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are
