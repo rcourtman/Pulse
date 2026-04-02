@@ -11,25 +11,25 @@ interface SummaryScopeBarProps {
   onReset?: () => void;
 }
 
-const badgeClassForMode = (mode: SummaryScopePresentation['mode']) => {
+const leadClassForMode = (mode: SummaryScopePresentation['mode']) => {
   switch (mode) {
     case 'preview':
-      return 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300';
+      return 'text-amber-700 dark:text-amber-300';
     case 'pinned':
-      return 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300';
+      return 'text-sky-700 dark:text-sky-300';
     default:
-      return 'border-border bg-surface text-muted';
+      return 'text-muted';
   }
 };
 
-const labelForMode = (mode: SummaryScopePresentation['mode']) => {
+const leadLabelForMode = (mode: SummaryScopePresentation['mode']) => {
   switch (mode) {
     case 'preview':
-      return 'Preview';
+      return 'Previewing';
     case 'pinned':
-      return 'Pinned';
+      return 'Pinned to';
     default:
-      return 'All';
+      return 'Showing';
   }
 };
 
@@ -50,33 +50,39 @@ export const SummaryScopeBar: Component<SummaryScopeBarProps> = (props) => {
   return (
     <div
       data-testid={props.testId}
-      class={`rounded-md border border-border-subtle bg-surface-alt/60 px-3 py-2 ${props.class ?? ''}`.trim()}
+      data-summary-scope-mode={props.active.mode}
+      class={`flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 px-1 py-1 ${props.class ?? ''}`.trim()}
     >
-      <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span class="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
-          Scope
-        </span>
-        <span
-          class={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${badgeClassForMode(props.active.mode)}`.trim()}
+      <span
+        class={`shrink-0 text-[11px] font-semibold tracking-[0.01em] ${leadClassForMode(props.active.mode)}`.trim()}
+      >
+        {leadLabelForMode(props.active.mode)}
+      </span>
+      <span class="min-w-0 truncate text-sm font-medium text-base-content" title={props.active.label}>
+        {props.active.label}
+      </span>
+      <Show when={helperText()}>
+        {(text) => (
+          <>
+            <span aria-hidden="true" class="shrink-0 text-xs text-muted/70">
+              •
+            </span>
+            <span class="min-w-0 truncate text-xs text-muted" title={text()}>
+              {text()}
+            </span>
+          </>
+        )}
+      </Show>
+      <Show when={props.onReset}>
+        <button
+          type="button"
+          aria-label={props.resetLabel ?? 'Reset pinned scope'}
+          class="ml-auto shrink-0 text-xs font-medium text-muted transition-colors hover:text-base-content focus-visible:text-base-content"
+          onClick={() => props.onReset?.()}
         >
-          {labelForMode(props.active.mode)}
-        </span>
-        <span class="min-w-0 truncate text-sm font-medium text-base-content">
-          {props.active.label}
-        </span>
-        <Show when={helperText()}>
-          {(text) => <span class="min-w-0 truncate text-xs text-muted">{text()}</span>}
-        </Show>
-        <Show when={props.onReset}>
-          <button
-            type="button"
-            class="ml-auto inline-flex items-center rounded-md border border-border px-2 py-1 text-xs font-medium text-base-content transition-colors hover:bg-surface"
-            onClick={() => props.onReset?.()}
-          >
-            {props.resetLabel ?? 'Reset pinned scope'}
-          </button>
-        </Show>
-      </div>
+          Reset
+        </button>
+      </Show>
     </div>
   );
 };

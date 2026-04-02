@@ -342,8 +342,12 @@ describe('shared primitive guardrails', () => {
     expect(summaryScopePresentationSource).toContain('buildSummaryScopePresentation');
     expect(summaryScopePresentationSource).toContain("mode: 'all'");
     expect(summaryScopeBarSource).toContain('SummaryScopeBar');
+    expect(summaryScopeBarSource).toContain('Previewing');
+    expect(summaryScopeBarSource).toContain('Showing');
     expect(summaryScopeBarSource).toContain('Pinned to');
     expect(summaryScopeBarSource).toContain('Reset pinned scope');
+    expect(summaryScopeBarSource).not.toContain('rounded-full');
+    expect(summaryScopeBarSource).not.toContain('bg-surface-alt/60');
     expect(summaryScopeBarSource).not.toContain('useLocation(');
     expect(summaryScopeBarSource).not.toContain('useNavigate(');
   });
