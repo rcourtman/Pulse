@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
@@ -49,7 +48,6 @@ type PersistentQuickstartCreditManager struct {
 	client      quickstartBootstrapClient
 	now         func() time.Time
 	hostname    func() (string, error)
-	newID       func() string
 	state       *config.QuickstartState
 }
 
@@ -88,7 +86,6 @@ func NewPersistentQuickstartCreditManagerWithClient(
 		client:      client,
 		now:         func() time.Time { return time.Now().UTC() },
 		hostname:    os.Hostname,
-		newID:       uuid.NewString,
 	}
 }
 
@@ -107,11 +104,15 @@ func (m *PersistentQuickstartCreditManager) EnsureBootstrap(ctx context.Context)
 	if err != nil {
 		return err
 	}
+	bearerToken, fingerprint, err := m.secureBootstrapIdentityLocked()
+	if err != nil {
+		return err
+	}
 	if !m.bootstrapNeededLocked(state, m.now()) {
 		return nil
 	}
 
-	bearerToken, req, err := m.bootstrapRequestLocked(state)
+	req, err := m.bootstrapRequestLocked(fingerprint)
 	if err != nil {
 		return err
 	}
@@ -134,21 +135,64 @@ func (m *PersistentQuickstartCreditManager) EnsureBootstrap(ctx context.Context)
 }
 
 func (m *PersistentQuickstartCreditManager) HasCredits() bool {
-	state := m.stateSnapshot()
-	return state != nil && state.QuickstartCreditsRemaining > 0
+	if m == nil {
+		return false
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state, err := m.loadStateLocked()
+	if err != nil {
+		log.Warn().Err(err).Str("orgID", m.orgID).Msg("Quickstart: failed to read cached state")
+		return false
+	}
+	if state == nil || state.QuickstartCreditsRemaining <= 0 {
+		return false
+	}
+	_, _, err = m.secureBootstrapIdentityLocked()
+	return err == nil
 }
 
 func (m *PersistentQuickstartCreditManager) CreditsRemaining() int {
-	state := m.stateSnapshot()
+	if m == nil {
+		return 0
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state, err := m.loadStateLocked()
+	if err != nil {
+		log.Warn().Err(err).Str("orgID", m.orgID).Msg("Quickstart: failed to read cached state")
+		return 0
+	}
 	if state == nil {
+		return 0
+	}
+	if _, _, err := m.secureBootstrapIdentityLocked(); err != nil {
 		return 0
 	}
 	return state.QuickstartCreditsRemaining
 }
 
 func (m *PersistentQuickstartCreditManager) CreditsTotal() int {
-	state := m.stateSnapshot()
+	if m == nil {
+		return 0
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	state, err := m.loadStateLocked()
+	if err != nil {
+		log.Warn().Err(err).Str("orgID", m.orgID).Msg("Quickstart: failed to read cached state")
+		return 0
+	}
 	if state == nil {
+		return 0
+	}
+	if _, _, err := m.secureBootstrapIdentityLocked(); err != nil {
 		return 0
 	}
 	return state.QuickstartCreditsTotal
@@ -179,6 +223,9 @@ func (m *PersistentQuickstartCreditManager) GetProvider() providers.Provider {
 		return nil
 	}
 	if state == nil || state.QuickstartCreditsRemaining <= 0 {
+		return nil
+	}
+	if _, _, err := m.secureBootstrapIdentityLocked(); err != nil {
 		return nil
 	}
 	if strings.TrimSpace(state.QuickstartToken) == "" || state.TokenExpired(m.now()) {
@@ -241,49 +288,17 @@ func (m *PersistentQuickstartCreditManager) bootstrapNeededLocked(state *config.
 	return now.Unix()-*state.LastSyncedAt >= int64(quickstartBootstrapRefreshWindow/time.Second)
 }
 
-func (m *PersistentQuickstartCreditManager) bootstrapRequestLocked(state *config.QuickstartState) (string, pkglicensing.QuickstartBootstrapRequest, error) {
-	if state == nil {
-		return "", pkglicensing.QuickstartBootstrapRequest{}, fmt.Errorf("quickstart: missing state")
-	}
-
+func (m *PersistentQuickstartCreditManager) bootstrapRequestLocked(fingerprint string) (pkglicensing.QuickstartBootstrapRequest, error) {
 	instanceName := ""
 	if hostname, err := m.hostname(); err == nil {
 		instanceName = strings.TrimSpace(hostname)
 	}
 
-	req := pkglicensing.QuickstartBootstrapRequest{
-		InstanceName: instanceName,
-		UseCase:      quickstartBootstrapUseCase,
-	}
-
-	if m.persistence == nil {
-		return "", req, fmt.Errorf("quickstart: persistence unavailable")
-	}
-
-	licensePersistence, err := pkglicensing.NewPersistence(m.persistence.GetConfigDir())
-	if err != nil {
-		return "", req, fmt.Errorf("quickstart: load license persistence: %w", err)
-	}
-	activationState, err := licensePersistence.LoadActivationState()
-	if err != nil {
-		return "", req, fmt.Errorf("quickstart: load activation state: %w", err)
-	}
-
-	if activationState != nil && strings.TrimSpace(activationState.InstallationToken) != "" {
-		req.InstanceFingerprint = strings.TrimSpace(activationState.InstanceFingerprint)
-		return strings.TrimSpace(activationState.InstallationToken), req, nil
-	}
-
-	if strings.TrimSpace(state.ClientInstallationID) == "" {
-		state.ClientInstallationID = m.newID()
-		if err := m.persistence.SaveQuickstartState(*config.NormalizeQuickstartState(state)); err != nil {
-			return "", req, fmt.Errorf("quickstart: persist client installation id: %w", err)
-		}
-	}
-
-	req.ClientInstallationID = state.ClientInstallationID
-	req.InstanceFingerprint = state.ClientInstallationID
-	return "", req, nil
+	return pkglicensing.QuickstartBootstrapRequest{
+		InstanceFingerprint: strings.TrimSpace(fingerprint),
+		InstanceName:        instanceName,
+		UseCase:             quickstartBootstrapUseCase,
+	}, nil
 }
 
 func (m *PersistentQuickstartCreditManager) applyBootstrapLocked(state *config.QuickstartState, resp *pkglicensing.QuickstartBootstrapResponse) {
@@ -361,12 +376,40 @@ func (m *PersistentQuickstartCreditManager) invalidateToken() {
 	}
 }
 
+func (m *PersistentQuickstartCreditManager) secureBootstrapIdentityLocked() (string, string, error) {
+	if m.persistence == nil {
+		return "", "", fmt.Errorf("quickstart: persistence unavailable")
+	}
+
+	licensePersistence, err := pkglicensing.NewPersistence(m.persistence.SharedInstallationDataDir())
+	if err != nil {
+		return "", "", fmt.Errorf("quickstart: load license persistence: %w", err)
+	}
+	activationState, err := licensePersistence.LoadActivationState()
+	if err != nil {
+		return "", "", fmt.Errorf("quickstart: load activation state: %w", err)
+	}
+	if activationState == nil {
+		return "", "", quickstartActivationRequiredError()
+	}
+
+	installationToken := strings.TrimSpace(activationState.InstallationToken)
+	instanceFingerprint := strings.TrimSpace(activationState.InstanceFingerprint)
+	if installationToken == "" || instanceFingerprint == "" {
+		return "", "", quickstartActivationRequiredError()
+	}
+
+	return installationToken, instanceFingerprint, nil
+}
+
 func quickstartBlockedReasonFromError(err error) string {
 	switch {
 	case err == nil:
 		return ""
 	case providers.IsQuickstartCreditsExhausted(err), quickstartBootstrapCreditsExhausted(err):
 		return patrolQuickstartCreditsExhaustedReason
+	case quickstartBootstrapActivationRequired(err):
+		return patrolQuickstartActivationRequiredReason
 	case providers.IsQuickstartUnavailable(err), quickstartBootstrapUnavailable(err):
 		return patrolQuickstartUnavailableReason
 	default:
@@ -387,6 +430,21 @@ func QuickstartUnavailableReason() string {
 	return patrolQuickstartUnavailableReason
 }
 
+// QuickstartActivationRequiredReason returns the canonical Patrol quickstart
+// availability message shown when the install is not activated or trial-backed.
+func QuickstartActivationRequiredReason() string {
+	return patrolQuickstartActivationRequiredReason
+}
+
+func quickstartActivationRequiredError() error {
+	return &pkglicensing.LicenseServerError{
+		StatusCode: http.StatusUnauthorized,
+		Code:       "activation_required",
+		Message:    "Quickstart bootstrap requires an activated or trial-backed installation",
+		Retryable:  false,
+	}
+}
+
 func quickstartBootstrapCreditsExhausted(err error) bool {
 	var serverErr *pkglicensing.LicenseServerError
 	if !errors.As(err, &serverErr) {
@@ -396,6 +454,24 @@ func quickstartBootstrapCreditsExhausted(err error) bool {
 		return true
 	}
 	return strings.EqualFold(strings.TrimSpace(serverErr.Code), "quickstart_credits_exhausted")
+}
+
+func quickstartBootstrapActivationRequired(err error) bool {
+	var serverErr *pkglicensing.LicenseServerError
+	if !errors.As(err, &serverErr) {
+		return false
+	}
+	switch serverErr.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return true
+	}
+
+	switch strings.ToLower(strings.TrimSpace(serverErr.Code)) {
+	case "activation_required", "installation_required", "invalid_installation_token", "invalid_token":
+		return true
+	default:
+		return false
+	}
 }
 
 func quickstartBootstrapUnavailable(err error) bool {

@@ -11,7 +11,6 @@ import (
 // QuickstartState is the machine-owned local cache for the server-authoritative
 // quickstart bootstrap contract.
 type QuickstartState struct {
-	ClientInstallationID       string `json:"client_installation_id,omitempty"`
 	QuickstartToken            string `json:"quickstart_token,omitempty"`
 	QuickstartTokenExpiresAt   *int64 `json:"quickstart_token_expires_at,omitempty"`
 	QuickstartCreditsTotal     int    `json:"quickstart_credits_total,omitempty"`
@@ -27,7 +26,6 @@ func NormalizeQuickstartState(state *QuickstartState) *QuickstartState {
 
 	cp := *state
 	normalized := &cp
-	normalized.ClientInstallationID = strings.TrimSpace(normalized.ClientInstallationID)
 	normalized.QuickstartToken = strings.TrimSpace(normalized.QuickstartToken)
 	normalized.QuickstartTokenExpiresAt = cloneQuickstartInt64Ptr(state.QuickstartTokenExpiresAt)
 	normalized.LastSyncedAt = cloneQuickstartInt64Ptr(state.LastSyncedAt)

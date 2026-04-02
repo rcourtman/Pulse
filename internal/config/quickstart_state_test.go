@@ -14,7 +14,6 @@ func TestQuickstartStateSaveAndLoad(t *testing.T) {
 	expiresAt := int64(1774449000)
 	lastSyncedAt := int64(1774448000)
 	state := QuickstartState{
-		ClientInstallationID:       "community-install-1",
 		QuickstartToken:            "qst_live_test_123",
 		QuickstartTokenExpiresAt:   &expiresAt,
 		QuickstartCreditsTotal:     25,
@@ -29,9 +28,6 @@ func TestQuickstartStateSaveAndLoad(t *testing.T) {
 	loaded, err := persistence.LoadQuickstartState()
 	if err != nil {
 		t.Fatalf("LoadQuickstartState: %v", err)
-	}
-	if loaded.ClientInstallationID != state.ClientInstallationID {
-		t.Fatalf("ClientInstallationID = %q, want %q", loaded.ClientInstallationID, state.ClientInstallationID)
 	}
 	if loaded.QuickstartToken != state.QuickstartToken {
 		t.Fatalf("QuickstartToken = %q, want %q", loaded.QuickstartToken, state.QuickstartToken)
@@ -68,7 +64,7 @@ func TestLoadQuickstartState_MissingReturnsEmptyState(t *testing.T) {
 	if loaded == nil {
 		t.Fatal("expected empty quickstart state, got nil")
 	}
-	if loaded.QuickstartToken != "" || loaded.QuickstartCreditsRemaining != 0 || loaded.ClientInstallationID != "" {
+	if loaded.QuickstartToken != "" || loaded.QuickstartCreditsRemaining != 0 {
 		t.Fatalf("expected zero-value quickstart state, got %#v", loaded)
 	}
 }

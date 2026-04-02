@@ -238,6 +238,10 @@ Own canonical runtime payload shapes between backend and frontend.
    than from local grant counters, and shared handlers must not invent
    client-authored commercial identity or synthetic credits when the quickstart
    server is unavailable
+   and the activation-gated availability rule, so missing installation
+   activation/trial identity must surface as the canonical activation-required
+   quickstart block reason for Patrol and AI settings enablement rather than
+   silently attempting anonymous bootstrap
    and the public interpretation rule, so those fields describe Patrol-only
    quickstart inventory and active runtime source rather than a generic hosted
    AI quota or full-chat entitlement

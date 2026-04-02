@@ -89,8 +89,9 @@ const (
 )
 
 const (
-	patrolQuickstartCreditsExhaustedReason = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
-	patrolQuickstartUnavailableReason      = "Quickstart credits require internet access. Connect your API key for offline AI Patrol."
+	patrolQuickstartCreditsExhaustedReason   = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+	patrolQuickstartActivationRequiredReason = "Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key."
+	patrolQuickstartUnavailableReason        = "Quickstart credits require internet access. Connect your API key for offline AI Patrol."
 )
 
 type PatrolStatus struct {

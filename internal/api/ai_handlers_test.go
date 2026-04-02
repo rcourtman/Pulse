@@ -17,6 +17,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/aicontracts"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -74,6 +75,18 @@ func useTestQuickstartBootstrapServer(t *testing.T, assertRequest func(*http.Req
 	}))
 	t.Cleanup(server.Close)
 	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+}
+
+func persistQuickstartActivationState(t *testing.T, persistence *config.ConfigPersistence) {
+	t.Helper()
+
+	licensePersistence, err := pkglicensing.NewPersistence(persistence.GetConfigDir())
+	require.NoError(t, err)
+	require.NoError(t, licensePersistence.SaveActivationState(&pkglicensing.ActivationState{
+		InstallationID:      "inst_live_test",
+		InstallationToken:   "pit_live_test",
+		InstanceFingerprint: "fp-live-test",
+	}))
 }
 
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
@@ -227,11 +240,9 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		assert.Empty(t, strings.TrimSpace(r.Header.Get("Authorization")))
-		clientInstallationID, _ := reqBody["client_installation_id"].(string)
+		assert.Equal(t, "Bearer pit_live_test", strings.TrimSpace(r.Header.Get("Authorization")))
 		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
-		assert.NotEmpty(t, clientInstallationID)
-		assert.Equal(t, clientInstallationID, instanceFingerprint)
+		assert.Equal(t, "fp-live-test", instanceFingerprint)
 		assert.Equal(t, "patrol", reqBody["use_case"])
 	})
 
@@ -241,6 +252,7 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 	require.NoError(t, err)
 
 	seedHostedAIBillingState(t, mtp, "default")
+	persistQuickstartActivationState(t, persistence)
 
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}
@@ -265,11 +277,9 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingState(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		assert.Empty(t, strings.TrimSpace(r.Header.Get("Authorization")))
-		clientInstallationID, _ := reqBody["client_installation_id"].(string)
+		assert.Equal(t, "Bearer pit_live_test", strings.TrimSpace(r.Header.Get("Authorization")))
 		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
-		assert.NotEmpty(t, clientInstallationID)
-		assert.Equal(t, clientInstallationID, instanceFingerprint)
+		assert.Equal(t, "fp-live-test", instanceFingerprint)
 		assert.Equal(t, "patrol", reqBody["use_case"])
 	})
 
@@ -277,8 +287,11 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	mtp := config.NewMultiTenantPersistence(tmp)
 	persistence, err := mtp.GetPersistence("t-tenant")
 	require.NoError(t, err)
+	defaultPersistence, err := mtp.GetPersistence("default")
+	require.NoError(t, err)
 
 	seedHostedAIBillingState(t, mtp, "default")
+	persistQuickstartActivationState(t, defaultPersistence)
 
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}
@@ -299,6 +312,28 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
 	assert.True(t, resp.QuickstartCreditsAvailable)
 	assert.True(t, persistence.HasAIConfig())
+}
+
+func TestAISettingsHandler_UpdateSettings_QuickstartRequiresActivationBeforeEnable(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
+		persistence,
+		"default",
+		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
+	))
+
+	body, _ := json.Marshal(AISettingsUpdateRequest{
+		Enabled: ptr(true),
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusConflict, rec.Code, "body=%s", rec.Body.String())
+	assert.Contains(t, rec.Body.String(), ai.QuickstartActivationRequiredReason())
 }
 
 func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnable(t *testing.T) {

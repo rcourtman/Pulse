@@ -109,8 +109,8 @@ querying, and the operator-facing storage health presentation layer.
     `quickstart_credits_total`, `using_quickstart`, and cached bearer-token
     state exposed through shared AI handlers are transport facts owned by the
     AI/runtime plus API-contract lanes, and storage/recovery surfaces must not
-    reintroduce local quickstart accounting, token lifecycle, or commercial
-    identity rules.
+    reintroduce local quickstart accounting, token lifecycle, anonymous
+    bootstrap identity, or commercial identity rules.
 21. Keep provider-backed recovery onboarding on the adjacent platform-connections contract. When `internal/api/` grows or changes TrueNAS connection CRUD, masked-secret preservation, saved-connection retest routes, edit-form saved-test payload overlays, or similar provider setup flows, storage and recovery may consume the resulting recovery points but must not absorb that connection-management ownership into storage/recovery-local handlers or page flows.
 22. Keep backend-native platform actions on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app control for Assistant, storage and recovery may consume the refreshed recovery points afterward, but they must not grow a parallel recovery-local action transport or action-specific payload shape.
 23. Keep backend-native platform diagnostics on the adjacent AI/runtime and platform contracts. When `internal/api/` wires native TrueNAS app log reads for Assistant, storage and recovery may use those diagnostics during investigation, but they must not grow a parallel recovery-local log transport or diagnostic payload shape.

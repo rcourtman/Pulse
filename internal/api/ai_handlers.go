@@ -2530,7 +2530,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 					}
 				}
 				if !hasQuickstart {
-					if strings.TrimSpace(ai.QuickstartBlockedReasonForError(bootstrapErr)) == ai.QuickstartUnavailableReason() {
+					blockedReason := strings.TrimSpace(ai.QuickstartBlockedReasonForError(bootstrapErr))
+					switch blockedReason {
+					case ai.QuickstartActivationRequiredReason():
+						http.Error(w, blockedReason, http.StatusConflict)
+						return
+					case ai.QuickstartUnavailableReason():
 						http.Error(w, ai.QuickstartUnavailableReason(), http.StatusBadGateway)
 						return
 					}

@@ -245,11 +245,13 @@ That same license-server transport boundary now owns Patrol quickstart
 bootstrap. `pkg/licensing/license_server_client.go` and
 `pkg/licensing/quickstart_bootstrap.go` must treat
 `POST /v1/quickstart/bootstrap` as the canonical exchange for a server-issued
-quickstart token plus the authoritative quickstart credit snapshot. Activated
-installs authenticate that bootstrap with the installation token, community
-installs send a stable `client_installation_id`, and local runtime cache files
-may memoize the returned token and counts but may not treat those cached counts
-as commercial authority.
+quickstart token plus the authoritative quickstart credit snapshot. The Pulse
+runtime must authenticate that bootstrap with the installation token from the
+installation-scoped activation state, whether the install is activated
+self-hosted or hosted/trial-backed, and there is no anonymous
+`client_installation_id` fallback in the v6 runtime contract. Local runtime
+cache files may memoize the returned token and counts but may not treat those
+cached counts as commercial authority.
 That quickstart allowance is therefore activation support, not the main
 commercial pitch: self-hosted pricing and docs may promise Patrol-only
 quickstart runs with no API key for first use, but they must not market that

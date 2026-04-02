@@ -87,3 +87,28 @@ func TestServiceLoadConfig_TracksQuickstartBootstrapFailure(t *testing.T) {
 		t.Fatal("expected AI service to remain disabled when bootstrap failed and no BYOK exists")
 	}
 }
+
+func TestServiceLoadConfig_TracksQuickstartActivationRequirement(t *testing.T) {
+	dir := t.TempDir()
+	persistence := config.NewConfigPersistence(dir)
+	cfg := config.NewDefaultAIConfig()
+	cfg.Enabled = true
+	if err := persistence.SaveAIConfig(*cfg); err != nil {
+		t.Fatalf("SaveAIConfig(): %v", err)
+	}
+
+	svc := NewService(persistence, nil)
+	svc.SetQuickstartCredits(&stubServiceQuickstartManager{
+		ensureErr: &pkglicensing.LicenseServerError{StatusCode: http.StatusUnauthorized, Code: "activation_required", Message: "activation required", Retryable: false},
+	})
+
+	if err := svc.LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig(): %v", err)
+	}
+	if svc.QuickstartBlockedReason() != patrolQuickstartActivationRequiredReason {
+		t.Fatalf("QuickstartBlockedReason() = %q, want %q", svc.QuickstartBlockedReason(), patrolQuickstartActivationRequiredReason)
+	}
+	if svc.IsEnabled() {
+		t.Fatal("expected AI service to remain disabled when activation is required and no BYOK exists")
+	}
+}

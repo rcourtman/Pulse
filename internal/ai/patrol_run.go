@@ -1597,6 +1597,7 @@ func (p *PatrolService) GetStatus() PatrolStatus {
 	if quickstartReason != "" {
 		status.BlockedReason = quickstartReason
 	} else if strings.TrimSpace(status.BlockedReason) == patrolQuickstartCreditsExhaustedReason ||
+		strings.TrimSpace(status.BlockedReason) == patrolQuickstartActivationRequiredReason ||
 		strings.TrimSpace(status.BlockedReason) == patrolQuickstartUnavailableReason {
 		status.BlockedReason = ""
 	}

@@ -121,16 +121,19 @@ surface that lives behind the public license API rather than a tenant-local or
 mobile-local adapter.
 That same Patrol quickstart boundary is now server-authoritative end to end.
 `internal/ai/quickstart.go` must bootstrap before the first Patrol-only
-quickstart use, prefer installation identity from `activation.enc` when an
-activation token exists, and otherwise persist one stable community
-`client_installation_id` plus the returned token snapshot under
-`quickstart.enc` through the shared `internal/config/persistence.go` and
-`internal/config/quickstart_state.go` helpers. `internal/ai/providers/quickstart.go`
-must authenticate Patrol proxy calls with `Authorization: Bearer <quickstart_token>`,
-sync `credits_remaining` / `credits_total` back into that cache on every server
-response, and invalidate the cached token on auth rejection instead of reviving
-local counter truth. Explicit BYOK provider credentials still outrank Patrol
-quickstart whenever both are present.
+quickstart use, resolve installation identity from the installation-scoped
+`activation.enc` path even when Patrol runs under a tenant-local persistence
+directory, and refuse bootstrap entirely when no valid installation token is
+available. `quickstart.enc` may cache only the server-issued token snapshot
+and latest server-reported inventory through the shared
+`internal/config/persistence.go` and `internal/config/quickstart_state.go`
+helpers; it must not persist anonymous bootstrap identity or revive local
+counter truth. `internal/ai/providers/quickstart.go` must authenticate Patrol
+proxy calls with `Authorization: Bearer <quickstart_token>`, sync
+`credits_remaining` / `credits_total` back into that cache on every server
+response, and invalidate the cached token on auth rejection. Explicit BYOK
+provider credentials still outrank Patrol quickstart whenever both are
+present.
 Public-facing copy that reflects those runtime fields must therefore speak in
 Patrol quickstart runs and Patrol-only no-key activation, not in generic AI
 credits or a promise of full hosted chat.

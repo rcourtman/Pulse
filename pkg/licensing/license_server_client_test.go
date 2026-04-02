@@ -392,40 +392,29 @@ func TestClientBootstrapQuickstart(t *testing.T) {
 		}
 	})
 
-	t.Run("uses community installation id when no auth token is present", func(t *testing.T) {
-		var seenAuthorization string
-		var seenRequest QuickstartBootstrapRequest
-
+	t.Run("requires installation bearer token", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			seenAuthorization = r.Header.Get("Authorization")
-			if err := json.NewDecoder(r.Body).Decode(&seenRequest); err != nil {
-				t.Fatalf("decode request: %v", err)
-			}
-			json.NewEncoder(w).Encode(QuickstartBootstrapResponse{
-				QuickstartToken:  "qst_live_community",
-				CreditsRemaining: 25,
-				CreditsTotal:     25,
-			})
+			t.Fatal("bootstrap request should not reach the server without an installation token")
 		}))
 		defer server.Close()
 
 		client := NewLicenseServerClient(server.URL)
-		resp, err := client.BootstrapQuickstart(context.Background(), "", QuickstartBootstrapRequest{
-			ClientInstallationID: "community-install-1",
-			InstanceFingerprint:  "community-install-1",
-			UseCase:              "patrol",
+		_, err := client.BootstrapQuickstart(context.Background(), "", QuickstartBootstrapRequest{
+			InstanceFingerprint: "fp-123",
+			UseCase:             "patrol",
 		})
-		if err != nil {
-			t.Fatalf("BootstrapQuickstart failed: %v", err)
+		if err == nil {
+			t.Fatal("expected missing installation token error")
 		}
-		if seenAuthorization != "" {
-			t.Fatalf("Authorization = %q, want empty", seenAuthorization)
+		apiErr, ok := err.(*LicenseServerError)
+		if !ok {
+			t.Fatalf("expected *LicenseServerError, got %T", err)
 		}
-		if seenRequest.ClientInstallationID != "community-install-1" {
-			t.Fatalf("ClientInstallationID = %q, want community-install-1", seenRequest.ClientInstallationID)
+		if apiErr.StatusCode != http.StatusUnauthorized {
+			t.Fatalf("StatusCode = %d, want %d", apiErr.StatusCode, http.StatusUnauthorized)
 		}
-		if resp.QuickstartToken != "qst_live_community" {
-			t.Fatalf("QuickstartToken = %q, want qst_live_community", resp.QuickstartToken)
+		if apiErr.Code != "activation_required" {
+			t.Fatalf("Code = %q, want activation_required", apiErr.Code)
 		}
 	})
 }

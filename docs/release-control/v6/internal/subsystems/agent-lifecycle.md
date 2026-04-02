@@ -129,7 +129,10 @@ management, and fleet control surfaces.
    may be invoked by lifecycle-adjacent surfaces, but server-issued
    quickstart tokens, Patrol quickstart credit snapshots, and AI runtime auth
    remain `ai-runtime` plus `api-contracts` concerns rather than install-token
-   or lifecycle credential state.
+   or lifecycle credential state. Installation activation remains the only
+   authority for Patrol quickstart bootstrap, so lifecycle flows must not
+   reintroduce anonymous bootstrap identity or tenant-local commercial-owner
+   surrogates when they traverse those shared handlers.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.

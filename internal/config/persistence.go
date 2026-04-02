@@ -295,6 +295,20 @@ func (c *ConfigPersistence) DataDir() string {
 	return c.configDir
 }
 
+// SharedInstallationDataDir returns the installation-scoped config directory
+// that owns activation and licensing identity. Tenant config directories live
+// under <base>/orgs/<org>, but activation remains rooted at <base>.
+func (c *ConfigPersistence) SharedInstallationDataDir() string {
+	if c == nil {
+		return ""
+	}
+	sharedDir, err := resolveSharedInstallationDataDir(c.configDir)
+	if err != nil {
+		return c.configDir
+	}
+	return sharedDir
+}
+
 // GetConfigDir returns the configuration directory path (alias for DataDir to match interface expectations)
 func (c *ConfigPersistence) GetConfigDir() string {
 	return c.configDir
