@@ -1114,9 +1114,14 @@ test.describe.serial("Summary hover selection", () => {
         )
         .toBe(true);
       await expect(scopeBar).toHaveCount(1);
-      await expect(scopeBar).toContainText("Scoped to");
+      await expect(scopeBar).toContainText("Pinned to");
 
-      await scopeBar.getByRole("button", { name: "Clear pinned scope" }).click();
+      await page
+        .locator("[data-summary-clear-surface]")
+        .first()
+        .evaluate((element) => {
+          element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBeNull();
@@ -1240,11 +1245,14 @@ test.describe.serial("Summary hover selection", () => {
       )
       .toBe(true);
     await expect(storageScopeBar).toHaveCount(1);
-    await expect(storageScopeBar).toContainText("Scoped to");
+    await expect(storageScopeBar).toContainText("Pinned to");
 
-    await storageScopeBar
-      .getByRole("button", { name: "Clear pinned scope" })
-      .click();
+    await page
+      .locator("[data-summary-clear-surface]")
+      .first()
+      .evaluate((element) => {
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
     await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))

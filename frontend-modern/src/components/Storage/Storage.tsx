@@ -69,6 +69,14 @@ const Storage: Component = () => {
     shouldShowPinnedSummaryScopeFallback,
     shouldShowJumpToActiveStorageRow,
   } = useStoragePageModel();
+  const pinnedScopeFallback = () =>
+    hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback() ? (
+      <SummaryScopeBar
+        testId="storage-summary-scope"
+        scope={pinnedSummaryScopePresentation()}
+        onReset={clearPinnedSummaryScope}
+      />
+    ) : undefined;
 
   return (
     <div class="space-y-4">
@@ -102,6 +110,7 @@ const Storage: Component = () => {
         setView={setView}
         search={search}
         setSearch={setSearch}
+        searchTrailing={pinnedScopeFallback()}
         groupBy={groupBy}
         setGroupBy={setGroupBy}
         sortKey={sortKey}
@@ -117,17 +126,10 @@ const Storage: Component = () => {
         selectedNodeId={selectedNodeId}
         setSelectedNodeId={setSelectedNodeId}
         storageFilterGroupBy={storageFilterGroupBy}
+        mobileTrailing={pinnedScopeFallback()}
       />
 
       <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
-
-      <Show when={hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()}>
-        <SummaryScopeBar
-          testId="storage-summary-scope"
-          scope={pinnedSummaryScopePresentation()}
-          onClear={clearPinnedSummaryScope}
-        />
-      </Show>
 
       <StorageContentCard
         view={view}

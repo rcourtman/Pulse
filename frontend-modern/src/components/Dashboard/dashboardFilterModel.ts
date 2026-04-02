@@ -1,5 +1,6 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
 import type { ViewMode, WorkloadGuest } from '@/types/workloads';
+import type { JSX } from 'solid-js';
 
 export type DashboardStatusMode = 'all' | 'running' | 'degraded' | 'stopped';
 export type DashboardGroupingMode = 'grouped' | 'flat';
@@ -42,6 +43,9 @@ export interface DashboardFilterProps {
   containerRuntimeFilter?: DashboardToolbarFilterConfig;
   chartsCollapsed?: () => boolean;
   onChartsToggle?: () => void;
+  searchTrailing?: JSX.Element;
+  utilityActions?: JSX.Element;
+  mobileTrailing?: JSX.Element;
 }
 
 export interface CountActiveDashboardFiltersOptions {

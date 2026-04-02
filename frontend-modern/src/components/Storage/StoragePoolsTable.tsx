@@ -66,7 +66,7 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
             <div class={STORAGE_POOLS_EMPTY_STATE_CLASS}>{getStorageEmptyStateMessage()}</div>
           }
         >
-          <div class={STORAGE_POOLS_SCROLL_WRAP_CLASS}>
+          <div class={STORAGE_POOLS_SCROLL_WRAP_CLASS} data-summary-clear-surface>
             <Table class={STORAGE_POOLS_TABLE_CLASS}>
               <TableHeader>
                 <TableRow class={STORAGE_POOLS_HEADER_ROW_CLASS}>

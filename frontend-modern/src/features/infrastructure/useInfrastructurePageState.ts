@@ -103,7 +103,15 @@ export function useInfrastructurePageState() {
     }
     return null;
   });
+  const clearPinnedSummaryScope = () => {
+    capturePendingAppShellRestoreTop();
+    preserveTableScrollAnchor(() => {
+      routeState.setExpandedResourceId(null);
+      routeState.setFocusedResourceGroupId(null);
+    });
+  };
   const summaryInteraction = useSummaryPageInteractionState({
+    clearPinnedScope: clearPinnedSummaryScope,
     hoveredSeriesId: routeState.hoveredResourceId,
     hoveredGroupScope: hoveredResourceGroupScope,
     focusedSeriesId: routeState.expandedResourceId,
@@ -137,14 +145,6 @@ export function useInfrastructurePageState() {
     capturePendingAppShellRestoreTop();
     preserveTableScrollAnchor(() => {
       routeState.setFocusedResourceGroupId(groupId);
-    });
-  };
-
-  const clearPinnedSummaryScope = () => {
-    capturePendingAppShellRestoreTop();
-    preserveTableScrollAnchor(() => {
-      routeState.setExpandedResourceId(null);
-      routeState.setFocusedResourceGroupId(null);
     });
   };
 

@@ -226,4 +226,49 @@ describe('useSummaryPageInteractionState', () => {
 
     expect(result.shouldShowPinnedScopeFallback()).toBe(true);
   });
+
+  it('clears pinned scope when operators click table whitespace on a clear surface', () => {
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
+    const clearPinnedScope = vi.fn();
+    const root = document.createElement('div');
+    root.setAttribute('data-summary-clear-surface', '');
+    const filler = document.createElement('div');
+    root.appendChild(filler);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        clearPinnedScope,
+        focusedSeriesId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    filler.click();
+
+    expect(clearPinnedScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear pinned scope when operators click an active summary row', () => {
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
+    const clearPinnedScope = vi.fn();
+    const root = document.createElement('div');
+    root.setAttribute('data-summary-clear-surface', '');
+    const row = document.createElement('div');
+    row.setAttribute('data-summary-series-id', 'workload-a');
+    root.appendChild(row);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        clearPinnedScope,
+        focusedSeriesId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    row.click();
+
+    expect(clearPinnedScope).not.toHaveBeenCalled();
+  });
 });

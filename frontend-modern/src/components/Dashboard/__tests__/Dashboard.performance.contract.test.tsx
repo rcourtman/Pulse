@@ -720,9 +720,15 @@ describe('Dashboard performance contract', () => {
 
     it('keeps dashboard filter state in canonical dashboard filter owners', () => {
       expect(dashboardFilterSource).toContain('useDashboardFilterState');
+      expect(dashboardSource).toContain('SummaryScopeBar');
+      expect(dashboardSource).toContain('mobileTrailing={pinnedScopeFallback()}');
+      expect(dashboardSource).toContain('searchTrailing={pinnedScopeFallback()}');
+      expect(dashboardSource).not.toContain('<Show when={state.hasPinnedSummaryScope()');
       expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
       expect(dashboardFilterSource).not.toContain('useBreakpoint');
       expect(dashboardFilterSource).not.toContain("props.setSortKey('name')");
+      expect(dashboardFilterSource).toContain('searchTrailing={props.searchTrailing}');
+      expect(dashboardFilterSource).toContain('mobileTrailing={props.mobileTrailing}');
       expect(dashboardFilterStateSource).toContain('countActiveDashboardFilters');
       expect(dashboardFilterStateSource).not.toContain('props.containerRuntimeFilter?.onChange');
       expect(dashboardFilterStateSource).toContain('useBreakpoint');
@@ -730,6 +736,9 @@ describe('Dashboard performance contract', () => {
       expect(dashboardFilterModelSource).toContain('export const countActiveDashboardFilters');
       expect(dashboardFilterModelSource).toContain('export const hasActiveDashboardFilters');
       expect(dashboardFilterModelSource).toContain("DEFAULT_DASHBOARD_SORT_KEY: DashboardSortKey = 'type'");
+      expect(dashboardFilterModelSource).toContain('searchTrailing?: JSX.Element;');
+      expect(dashboardFilterModelSource).toContain('utilityActions?: JSX.Element;');
+      expect(dashboardFilterModelSource).toContain('mobileTrailing?: JSX.Element;');
       expect(dashboardStateSource).toContain('useDashboardWorkloadRouteState');
       expect(dashboardStateSource).toContain('filterWorkloads(params)');
       expect(dashboardStateSource).not.toContain('const containerRuntimeFilterConfig = createMemo');

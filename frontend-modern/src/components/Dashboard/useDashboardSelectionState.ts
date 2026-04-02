@@ -51,7 +51,24 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     return options.summaryGroupScopes().get(selectedGroupId) ?? null;
   });
 
+  const clearPinnedSummaryScope = () => {
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
+      setSelectedGuestIdRaw(null);
+      setSelectedWorkloadGroupIdRaw(null);
+    });
+    const nextPath = resolveDashboardSelectionNavigateTarget({
+      pathname: location.pathname,
+      search: location.search,
+      resourceId: null,
+      summaryGroupId: null,
+    });
+    if (nextPath) {
+      routeStateNavigate.schedule(nextPath);
+    }
+  };
+
   const summaryInteraction = useSummaryPageInteractionState({
+    clearPinnedScope: clearPinnedSummaryScope,
     hoveredSeriesId: hoveredWorkloadId,
     hoveredGroupScope: hoveredWorkloadGroupScope,
     focusedSeriesId: selectedGuestId,
@@ -112,22 +129,6 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
       search: location.search,
       resourceId: nextSelectedGuestId,
       summaryGroupId: nextGroupId,
-    });
-    if (nextPath) {
-      routeStateNavigate.schedule(nextPath);
-    }
-  };
-
-  const clearPinnedSummaryScope = () => {
-    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
-      setSelectedGuestIdRaw(null);
-      setSelectedWorkloadGroupIdRaw(null);
-    });
-    const nextPath = resolveDashboardSelectionNavigateTarget({
-      pathname: location.pathname,
-      search: location.search,
-      resourceId: null,
-      summaryGroupId: null,
     });
     if (nextPath) {
       routeStateNavigate.schedule(nextPath);

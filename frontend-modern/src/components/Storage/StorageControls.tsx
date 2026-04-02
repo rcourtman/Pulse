@@ -20,6 +20,7 @@ type StorageControlsProps = {
   onViewChange: (value: StorageView) => void;
   search: () => string;
   setSearch: (value: string) => void;
+  searchTrailing?: JSX.Element;
   groupBy?: () => StorageGroupByFilter;
   setGroupBy?: (value: StorageGroupByFilter) => void;
   sortKey: () => StorageSortKey;
@@ -35,6 +36,8 @@ type StorageControlsProps = {
   nodeFilterOptions: Array<{ value: string; label: string }>;
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
+  mobileTrailing?: JSX.Element;
+  utilityActions?: JSX.Element;
 };
 
 export const StorageControls: Component<StorageControlsProps> = (props) => {
@@ -72,6 +75,7 @@ export const StorageControls: Component<StorageControlsProps> = (props) => {
       <StorageFilter
         search={props.search}
         setSearch={props.setSearch}
+        searchTrailing={props.searchTrailing}
         groupBy={props.groupBy}
         setGroupBy={props.setGroupBy}
         sortKey={props.sortKey}
@@ -86,6 +90,8 @@ export const StorageControls: Component<StorageControlsProps> = (props) => {
         setSourceFilter={props.setSourceFilter}
         sourceOptions={props.sourceOptions}
         leadingFilters={leadingFilters()}
+        mobileTrailing={props.mobileTrailing}
+        utilityActions={props.utilityActions}
       />
     </>
   );

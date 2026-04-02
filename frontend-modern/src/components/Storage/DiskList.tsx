@@ -144,6 +144,7 @@ export const DiskList: Component<DiskListProps> = (props) => {
         <Card padding="none" tone="card" class="overflow-hidden">
           <div
             class={PHYSICAL_DISK_TABLE_SCROLL_CLASS}
+            data-summary-clear-surface
             style={{ '-webkit-overflow-scrolling': 'touch' }}
           >
             <Table class={PHYSICAL_DISK_TABLE_CLASS}>

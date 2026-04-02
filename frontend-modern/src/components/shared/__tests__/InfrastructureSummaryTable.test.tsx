@@ -160,6 +160,19 @@ describe('InfrastructureSummaryTable', () => {
     ).toBe(true);
   });
 
+  it('keeps the shared horizontal-scroll wrapper around the table shell', () => {
+    const { container } = render(() => (
+      <InfrastructureSummaryTable
+        nodes={[makeNode()]}
+        selectedNode={null}
+        currentTab="dashboard"
+        onNodeClick={vi.fn()}
+      />
+    ));
+
+    expect(container.querySelector('div.overflow-x-auto > table')).toBeTruthy();
+  });
+
   it('matches drawer agents by shared linked-agent aliases', () => {
     infrastructureDetailsDrawerMock.mockClear();
 

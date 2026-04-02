@@ -79,6 +79,14 @@ export function InfrastructurePageSurface() {
     setSummaryTableRootRef,
     shouldShowJumpToActiveResourceRow,
   } = useInfrastructurePageState();
+  const pinnedScopeFallback = () =>
+    hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback() ? (
+      <SummaryScopeBar
+        testId="infrastructure-summary-scope"
+        scope={pinnedSummaryScopePresentation()}
+        onReset={clearPinnedSummaryScope}
+      />
+    ) : undefined;
 
   const infrastructureEmptyState = () => getInfrastructureEmptyState();
   const infrastructureFilterEmptyState = () => getInfrastructureFilterEmptyState();
@@ -187,6 +195,8 @@ export function InfrastructurePageSurface() {
                       onToggle: () => setFiltersOpen((o) => !o),
                       count: activeFilterCount(),
                     }}
+                    searchTrailing={pinnedScopeFallback()}
+                    mobileTrailing={pinnedScopeFallback()}
                     resetAction={{
                       show: hasActiveFilters(),
                       onClick: clearFilters,
@@ -325,13 +335,6 @@ export function InfrastructurePageSurface() {
                 }
               >
                 <div class="space-y-3">
-                  <Show when={hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()}>
-                    <SummaryScopeBar
-                      testId="infrastructure-summary-scope"
-                      scope={pinnedSummaryScopePresentation()}
-                      onClear={clearPinnedSummaryScope}
-                    />
-                  </Show>
                   <UnifiedResourceTable
                     resources={filteredResources()}
                     expandedResourceId={expandedResourceId()}

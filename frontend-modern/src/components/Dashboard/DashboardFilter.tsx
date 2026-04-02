@@ -35,11 +35,13 @@ export const DashboardFilter: Component<DashboardFilterProps> = (props) => {
             history={{ storageKey: STORAGE_KEYS.DASHBOARD_SEARCH_HISTORY }}
           />
         }
+        searchTrailing={props.searchTrailing}
         mobileFilters={{
           enabled: isMobile(),
           onToggle: toggleFilters,
           count: activeFilterCount(),
         }}
+        mobileTrailing={props.mobileTrailing}
         columnVisibility={pageControlsColumnVisibility()}
         resetAction={{
           show: showReset(),

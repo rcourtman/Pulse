@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component, JSX, Show } from 'solid-js';
 import StorageControls from '@/components/Storage/StorageControls';
 import type { StorageView } from './storagePageState';
 import type { StorageGroupKey, StorageSortKey } from './useStorageModel';
@@ -12,6 +12,7 @@ type StoragePageControlsProps = {
   setView: (value: StorageView) => void;
   search: () => string;
   setSearch: (value: string) => void;
+  searchTrailing?: JSX.Element;
   groupBy: () => StorageGroupKey;
   setGroupBy: (value: StorageGroupKey) => void;
   sortKey: () => StorageSortKey;
@@ -27,6 +28,8 @@ type StoragePageControlsProps = {
   selectedNodeId: () => string;
   setSelectedNodeId: (value: string) => void;
   storageFilterGroupBy: () => StorageGroupByFilter;
+  mobileTrailing?: JSX.Element;
+  utilityActions?: JSX.Element;
 };
 
 export const StoragePageControls: Component<StoragePageControlsProps> = (props) => {
@@ -45,6 +48,7 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         onViewChange={props.setView}
         search={props.search}
         setSearch={props.setSearch}
+        searchTrailing={props.searchTrailing}
         groupBy={model.groupBy()}
         setGroupBy={model.setGroupBy()}
         sortKey={props.sortKey}
@@ -60,6 +64,8 @@ export const StoragePageControls: Component<StoragePageControlsProps> = (props) 
         nodeFilterOptions={props.nodeFilterOptions}
         selectedNodeId={props.selectedNodeId}
         setSelectedNodeId={props.setSelectedNodeId}
+        mobileTrailing={props.mobileTrailing}
+        utilityActions={props.utilityActions}
       />
     </Show>
   );

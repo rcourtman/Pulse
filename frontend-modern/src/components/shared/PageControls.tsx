@@ -32,6 +32,7 @@ interface PageControlsMobileFilters {
 
 interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
   searchLeading?: JSX.Element;
+  searchTrailing?: JSX.Element;
   search: JSX.Element;
   showFilters: boolean;
   children: JSX.Element;
@@ -50,6 +51,7 @@ interface PageControlsProps extends JSX.HTMLAttributes<HTMLDivElement> {
 export const PageControls: Component<PageControlsProps> = (props) => {
   const [local, divProps] = splitProps(props, [
     'searchLeading',
+    'searchTrailing',
     'search',
     'showFilters',
     'children',
@@ -73,27 +75,31 @@ export const PageControls: Component<PageControlsProps> = (props) => {
       />
     </Show>
   );
+  const mobileControlsEnabled = () => local.mobileFilters?.enabled === true;
+  const activeMobileTrailing = () => (mobileControlsEnabled() ? local.mobileTrailing : undefined);
+  const activeUtilityActions = () => (mobileControlsEnabled() ? undefined : local.utilityActions);
+  const activeSearchTrailing = () => (mobileControlsEnabled() ? undefined : local.searchTrailing);
 
   return (
     <FilterHeader
       {...divProps}
       searchLeading={local.searchLeading}
       search={local.search}
-        searchAccessory={mobileSearchAccessory()}
+      searchAccessory={activeSearchTrailing() ?? mobileSearchAccessory()}
       showFilters={local.showFilters}
       contentClass={local.contentClass}
       searchRowClass={local.searchRowClass}
       toolbarClass={local.toolbarClass}
       mobileRowClass={local.mobileRowClass}
       mobileLeading={local.mobileLeading}
-      mobileTrailing={local.mobileTrailing}
+      mobileTrailing={activeMobileTrailing()}
       class={local.class}
     >
       {local.children}
 
-      <Show when={local.utilityActions}>
+      <Show when={activeUtilityActions()}>
         <FilterDivider />
-        {local.utilityActions}
+        {activeUtilityActions()}
       </Show>
 
       <Show

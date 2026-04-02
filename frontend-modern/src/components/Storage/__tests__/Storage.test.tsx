@@ -798,6 +798,37 @@ describe('Storage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('clears pinned storage group scope from table whitespace', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node&summaryGroup=storage%3Anode%3Apve1';
+    navigateSpy.mockImplementation((nextPath: string) => {
+      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
+    });
+
+    render(() => <Storage />);
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('tr[data-summary-group-id="storage:node:pve1"]'),
+      ).toBeTruthy();
+    });
+
+    const clearSurface = document.querySelector('[data-summary-clear-surface]') as HTMLElement | null;
+    expect(clearSurface).not.toBeNull();
+    if (!clearSurface) {
+      return;
+    }
+
+    fireEvent.click(clearSurface);
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith('/storage?group=node', ROUTE_STATE_REPLACE_OPTIONS);
+    });
+  });
+
   it('uses shared preview and pinned group-member emphasis for storage pool rows', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Node-Store', 'pve1'),

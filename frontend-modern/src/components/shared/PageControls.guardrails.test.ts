@@ -22,6 +22,12 @@ describe('page controls guardrails', () => {
     expect(pageControlsSource).toContain('splitProps');
     expect(pageControlsSource).toContain('<FilterHeader');
     expect(pageControlsSource).toContain('{...divProps}');
+    expect(pageControlsSource).toContain('searchTrailing?: JSX.Element;');
+    expect(pageControlsSource).toContain('const mobileControlsEnabled = () => local.mobileFilters?.enabled === true;');
+    expect(pageControlsSource).toContain('const activeMobileTrailing = () => (mobileControlsEnabled() ? local.mobileTrailing : undefined);');
+    expect(pageControlsSource).toContain('const activeUtilityActions = () => (mobileControlsEnabled() ? undefined : local.utilityActions);');
+    expect(pageControlsSource).toContain('const activeSearchTrailing = () => (mobileControlsEnabled() ? undefined : local.searchTrailing);');
+    expect(pageControlsSource).toContain('searchAccessory={activeSearchTrailing() ?? mobileSearchAccessory()}');
 
     expect(dashboardFilterSource).toContain('PageControls');
     expect(dashboardFilterSource).not.toContain('<FilterHeader');
@@ -111,7 +117,8 @@ describe('page controls guardrails', () => {
     expect(recoveryPageSource).not.toContain('variant="control"');
     expect(recoveryPageSource).not.toContain('listClass=');
     expect(recoveryPageSource).not.toContain('tabClass=');
-    expect(recoveryPageSource).toContain('class="w-full"');
+    expect(recoveryPageSource).toContain('const workspaceControls = () => (');
+    expect(recoveryPageSource).toContain('<Subtabs');
     expect(recoveryPageSource).not.toContain('Focused drill-in');
   });
 });

@@ -329,6 +329,7 @@ export const useStoragePageModel = () => {
     setExpandedPoolId,
   });
   const summaryInteraction = useSummaryPageInteractionState({
+    clearPinnedScope: clearPinnedSummaryScope,
     hoveredGroupScope: hoveredStorageGroupScope,
     hoveredSeriesId: hoveredStorageResourceId,
     focusedGroupScope: focusedStorageGroupScope,

@@ -12,6 +12,14 @@ import { useDashboardState, type DashboardProps } from './useDashboardState';
 
 export function Dashboard(props: DashboardProps) {
   const state = useDashboardState(props);
+  const pinnedScopeFallback = () =>
+    state.hasPinnedSummaryScope() && state.shouldShowPinnedSummaryScopeFallback() ? (
+      <SummaryScopeBar
+        testId="workloads-summary-scope"
+        scope={state.pinnedSummaryScopePresentation()}
+        onReset={state.clearPinnedSummaryScope}
+      />
+    ) : undefined;
 
   return (
     <div class="space-y-3">
@@ -90,23 +98,10 @@ export function Dashboard(props: DashboardProps) {
           }
           containerRuntimeFilter={state.containerRuntimeFilterConfig()}
           hostFilter={state.hostFilterConfig()}
+          mobileTrailing={pinnedScopeFallback()}
           namespaceFilter={state.namespaceFilterConfig()}
           platformFilter={state.platformFilterConfig()}
-        />
-      </Show>
-
-      <Show
-        when={
-          state.surfaceConnected() &&
-          state.surfaceInitialDataReceived() &&
-          state.hasPinnedSummaryScope() &&
-          state.shouldShowPinnedSummaryScopeFallback()
-        }
-      >
-        <SummaryScopeBar
-          testId="workloads-summary-scope"
-          scope={state.pinnedSummaryScopePresentation()}
-          onClear={state.clearPinnedSummaryScope}
+          searchTrailing={pinnedScopeFallback()}
         />
       </Show>
 

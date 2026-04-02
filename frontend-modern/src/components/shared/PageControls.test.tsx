@@ -44,4 +44,38 @@ describe('PageControls', () => {
     fireEvent.click(screen.getByLabelText('Subject'));
     expect(onToggleColumn).toHaveBeenCalledWith('subject');
   });
+
+  it('renders at most one scope utility slot for the active breakpoint', () => {
+    const { unmount } = render(() => (
+      <PageControls
+        search={<div data-testid="search">Search</div>}
+        showFilters={true}
+        mobileFilters={{ enabled: false, count: 0, onToggle: vi.fn() }}
+        mobileTrailing={<div data-testid="scope-slot">mobile scope</div>}
+        utilityActions={<div data-testid="scope-slot">desktop scope</div>}
+      >
+        <div>Filters</div>
+      </PageControls>
+    ));
+
+    expect(screen.getAllByTestId('scope-slot')).toHaveLength(1);
+    expect(screen.getByTestId('scope-slot')).toHaveTextContent('desktop scope');
+
+    unmount();
+
+    render(() => (
+      <PageControls
+        search={<div data-testid="search">Search</div>}
+        showFilters={true}
+        mobileFilters={{ enabled: true, count: 0, onToggle: vi.fn() }}
+        mobileTrailing={<div data-testid="scope-slot">mobile scope</div>}
+        utilityActions={<div data-testid="scope-slot">desktop scope</div>}
+      >
+        <div>Filters</div>
+      </PageControls>
+    ));
+
+    expect(screen.getAllByTestId('scope-slot')).toHaveLength(1);
+    expect(screen.getByTestId('scope-slot')).toHaveTextContent('mobile scope');
+  });
 });

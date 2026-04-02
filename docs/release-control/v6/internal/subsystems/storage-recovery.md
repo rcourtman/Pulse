@@ -204,9 +204,12 @@ querying, and the operator-facing storage health presentation layer.
     interaction must stay row-first and only fall back to the shared
     `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus
     `frontend-modern/src/components/shared/summaryScopePresentation.ts`
-    contract once the pinned row or group scrolls off-screen, so touch users
-    and mouse users keep the same explicit, reversible scope state without
-    adding an always-on storage-local banner. When that scope is a storage
+    contract once the pinned row or group scrolls off-screen, with that
+    fallback embedded in the existing storage controls search row or mobile
+    trailing slot rather than a separate strip, so touch users and mouse
+    users keep the same explicit, reversible scope state without adding an
+    always-on storage-local banner.
+    When that scope is a storage
     pool group, member pool rows should expose shared
     `data-summary-group-member-active="preview|pinned"` state so the grouped
     block reads as one scoped set without adding storage-local outlines, pill

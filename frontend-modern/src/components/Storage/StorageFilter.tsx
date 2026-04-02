@@ -39,6 +39,7 @@ export type StorageGroupByFilter = 'node' | 'type' | 'status' | 'none';
 interface StorageFilterProps {
   search: () => string;
   setSearch: (value: string) => void;
+  searchTrailing?: JSX.Element;
   groupBy?: () => StorageGroupByFilter;
   setGroupBy?: (value: StorageGroupByFilter) => void;
   sortKey: () => string;
@@ -61,6 +62,8 @@ interface StorageFilterProps {
     toggle: (id: string) => void;
     resetToDefaults: () => void;
   };
+  mobileTrailing?: JSX.Element;
+  utilityActions?: JSX.Element;
 }
 
 export const StorageFilter: Component<StorageFilterProps> = (props) => {
@@ -121,11 +124,13 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
             }}
           />
         }
+        searchTrailing={props.searchTrailing}
         mobileFilters={{
           enabled: isMobile(),
           onToggle: () => setFiltersOpen((o) => !o),
           count: activeFilterCount(),
         }}
+        mobileTrailing={props.mobileTrailing}
         columnVisibility={props.columnVisibility}
         resetAction={{
           show: showReset(),
@@ -150,6 +155,7 @@ export const StorageFilter: Component<StorageFilterProps> = (props) => {
         }}
         showFilters={!isMobile() || filtersOpen()}
         toolbarClass="gap-x-1.5 gap-y-2 sm:gap-x-2"
+        utilityActions={props.utilityActions}
       >
         {props.leadingFilters}
 

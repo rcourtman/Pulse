@@ -219,7 +219,8 @@ assembly branch.
     state while it is on-screen, and the shared
     `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus
     `frontend-modern/src/components/shared/summaryScopePresentation.ts`
-    contract should appear only as the compact off-screen fallback when that
+    contract should appear only as the compact off-screen fallback inside the
+    existing page-controls search row or mobile trailing slot when that
     pinned cluster scrolls away. Cluster headers themselves should stay
     header-like: use the row as the deliberate pin target and do not add a
     second scope/pinned pill button inside the cluster row chrome.

@@ -54,6 +54,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()');
     expect(infrastructurePageSurfaceSource).toContain('scope={pinnedSummaryScopePresentation()}');
     expect(infrastructurePageSurfaceSource).toContain('clearPinnedSummaryScope');
+    expect(infrastructurePageSurfaceSource).toContain('searchTrailing={pinnedScopeFallback()}');
+    expect(infrastructurePageSurfaceSource).toContain('mobileTrailing={pinnedScopeFallback()}');
     expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
 
     expect(infrastructurePageStateSource).toContain('useSummaryPageInteractionState');

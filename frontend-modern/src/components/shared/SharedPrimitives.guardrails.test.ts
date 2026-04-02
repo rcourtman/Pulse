@@ -314,6 +314,8 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
     expect(summaryTableFocusSource).toContain('MutationObserver');
+    expect(summaryTableFocusSource).toContain('clearPinnedScope?: () => void;');
+    expect(summaryTableFocusSource).toContain("target.closest('[data-summary-clear-surface]')");
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
     expect(summaryTableFocusSource).toContain(
       "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",
@@ -343,12 +345,14 @@ describe('shared primitive guardrails', () => {
     expect(summaryScopePresentationSource).toContain('buildSummaryScopePresentation');
     expect(summaryScopePresentationSource).toContain("mode: 'all'");
     expect(summaryScopeBarSource).toContain('SummaryScopeBar');
-    expect(summaryScopeBarSource).toContain('Scoped to');
-    expect(summaryScopeBarSource).toContain('Clear pinned scope');
+    expect(summaryScopeBarSource).toContain('Pinned to');
+    expect(summaryScopeBarSource).toContain('Reset pinned scope');
+    expect(summaryScopeBarSource).toContain('data-summary-scope-variant="inline"');
+    expect(summaryScopeBarSource).toContain('inline-flex min-w-0 max-w-full items-center');
     expect(summaryScopeBarSource).not.toContain('Previewing');
     expect(summaryScopeBarSource).not.toContain('Showing');
-    expect(summaryScopeBarSource).not.toContain('Pinned to');
-    expect(summaryScopeBarSource).not.toContain('Reset pinned scope');
+    expect(summaryScopeBarSource).not.toContain('Scoped to');
+    expect(summaryScopeBarSource).not.toContain('Clear pinned scope');
     expect(summaryScopeBarSource).not.toContain('rounded-full');
     expect(summaryScopeBarSource).not.toContain('bg-surface-alt/60');
     expect(summaryScopeBarSource).not.toContain('useLocation(');

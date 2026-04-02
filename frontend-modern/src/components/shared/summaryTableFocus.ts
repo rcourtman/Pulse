@@ -17,6 +17,22 @@ const normalizeSeriesId = (value: string | null | undefined): string => value?.t
 const escapeAttributeSelectorValue = (value: string): string =>
   value.split('\\').join('\\\\').split('"').join('\\"');
 
+const SUMMARY_CLEAR_IGNORE_SELECTOR = [
+  'button',
+  'a',
+  'input',
+  'select',
+  'textarea',
+  'label',
+  'summary',
+  '[role="button"]',
+  '[role="link"]',
+  '[role="menuitem"]',
+  '[data-summary-series-id]',
+  '[data-summary-group-id]',
+  '[data-inline-detail-for]',
+].join(', ');
+
 const isElementVisibleWithinViewport = (element: HTMLElement): boolean => {
   const rect = element.getBoundingClientRect();
   if (rect.height <= 0 || rect.width <= 0) {
@@ -52,6 +68,7 @@ export interface UseSummaryTableFocusBridgeOptions {
   activeSeriesId: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
   focusedGroupId?: Accessor<string | null | undefined>;
+  clearPinnedScope?: () => void;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
@@ -134,6 +151,35 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
       Boolean(normalizeSeriesId(focusedSeriesId()) || normalizeSeriesId(focusedGroupId())) &&
       !isPinnedScopeVisible()
     );
+  });
+
+  createEffect(() => {
+    const root = tableRoot();
+    if (!root || !options.clearPinnedScope) {
+      return;
+    }
+
+    const handleRootClick = (event: MouseEvent) => {
+      if (!normalizeSeriesId(focusedSeriesId()) && !normalizeSeriesId(focusedGroupId())) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof HTMLElement) || !root.contains(target)) {
+        return;
+      }
+      if (!target.closest('[data-summary-clear-surface]')) {
+        return;
+      }
+      if (target.closest(SUMMARY_CLEAR_IGNORE_SELECTOR)) {
+        return;
+      }
+      options.clearPinnedScope?.();
+    };
+
+    root.addEventListener('click', handleRootClick);
+    onCleanup(() => {
+      root.removeEventListener('click', handleRootClick);
+    });
   });
 
   const jumpToActiveRow = () => {
@@ -300,6 +346,7 @@ export interface UseSummaryPageInteractionStateOptions {
   focusedGroupId?: Accessor<string | null | undefined>;
   hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
+  clearPinnedScope?: () => void;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
@@ -340,6 +387,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
 
   const tableFocus = useSummaryTableFocusBridge({
     activeSeriesId,
+    clearPinnedScope: options.clearPinnedScope,
     focusedSeriesId,
     focusedGroupId,
     revealActiveSeries: options.revealActiveSeries,
