@@ -34,6 +34,10 @@ import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
+import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
 } from './useUnifiedResourceTableState';
@@ -161,9 +165,14 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         nextScope && tableProps.focusedSummaryGroupId === nextScope.id ? null : nextScope?.id ?? null,
                       );
                     };
+                    const groupRowInteraction = createSummaryInteractiveRowHandlers({
+                      onPreview: () => handleGroupHoverChange(groupSummaryScope()),
+                      onPreviewClear: () => handleGroupHoverChange(null),
+                      onToggle: handleGroupFocusToggle,
+                    });
                     return (
                       <TableRow
-                        class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                        class={`bg-surface-alt transition-colors duration-150 hover:bg-surface-hover ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
                         data-summary-group-id={groupSummaryScope()?.id ?? undefined}
                         data-summary-group-series-count={String(
                           groupSummaryScope()?.seriesIds.length ?? 0,
@@ -171,8 +180,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
                         aria-pressed={tableProps.focusedSummaryGroupId === groupSummaryScope()?.id}
                         onClick={handleGroupFocusToggle}
-                        onMouseEnter={() => handleGroupHoverChange(groupSummaryScope())}
-                        onMouseLeave={() => handleGroupHoverChange(null)}
+                        {...groupRowInteraction}
                       >
                         <TableCell
                           colspan={9}
@@ -286,6 +294,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     getResourcePolicyTableBadges(resource.policy),
                   );
                   const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
+                  const resourceRowInteraction = createSummaryInteractiveRowHandlers({
+                    onPreview: () => tableProps.onHoverChange?.(resource.id),
+                    onPreviewClear: () => tableProps.onHoverChange?.(null),
+                    onToggle: () => table.toggleExpand(resource.id),
+                  });
 
                   return (
                     <>
@@ -298,11 +311,10 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             ? 'true'
                             : 'false'
                         }
-                        class={rowClass()}
+                        class={`${rowClass()} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
                         style={{ 'min-height': '32px' }}
                         onClick={() => table.toggleExpand(resource.id)}
-                        onMouseEnter={() => tableProps.onHoverChange?.(resource.id)}
-                        onMouseLeave={() => tableProps.onHoverChange?.(null)}
+                        {...resourceRowInteraction}
                       >
                         <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                           <div class="flex items-center gap-1.5 min-w-0">

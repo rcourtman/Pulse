@@ -1,5 +1,9 @@
 import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
 import { resolvePhysicalDiskMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import {
   Table,
@@ -171,6 +175,11 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     const summarySeriesId = resolvePhysicalDiskMetricResourceId(disk);
                     const isSummaryHighlighted = () =>
                       props.highlightedSummarySeriesId === summarySeriesId;
+                    const interactiveRowHandlers = createSummaryInteractiveRowHandlers({
+                      onPreview: () => props.onHoverChange?.(disk.id),
+                      onPreviewClear: () => props.onHoverChange?.(null),
+                      onToggle: () => model.toggleSelectedDisk(disk),
+                    });
 
                     return (
                       <>
@@ -184,11 +193,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             isSelected()
                               ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS
                               : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
-                          }`}
+                          } ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
                           style={PHYSICAL_DISK_TABLE_ROW_STYLE}
-                          onMouseEnter={() => props.onHoverChange?.(disk.id)}
-                          onMouseLeave={() => props.onHoverChange?.(null)}
                           onClick={() => model.toggleSelectedDisk(disk)}
+                          {...interactiveRowHandlers}
                         >
                           <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
                             <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>

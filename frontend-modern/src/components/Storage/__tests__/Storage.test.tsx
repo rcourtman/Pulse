@@ -447,12 +447,12 @@ describe('Storage', () => {
     expect(alphaRow).toHaveAttribute('data-summary-series-id', 'pool:alpha');
     expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');
 
-    fireEvent.mouseEnter(alphaRow);
+    fireEvent.pointerEnter(alphaRow, { pointerType: 'mouse' });
 
     await waitFor(() => {
       expect(alphaRow).toHaveAttribute('data-summary-row-active', 'true');
       expect(alphaRow.className).not.toContain('bg-sky-50');
-      expect(alphaRow.className).not.toContain('ring-sky-400');
+      expect(alphaRow.className).not.toContain('ring-sky-400/25');
       expect(
         summary.querySelectorAll(
           '[data-highlight-series-active="true"][data-highlight-series-id="pool:alpha"]',
@@ -466,7 +466,7 @@ describe('Storage', () => {
       expect(summary.querySelectorAll('[data-summary-card-state="inactive"]').length).toBe(1);
     });
 
-    fireEvent.mouseLeave(alphaRow);
+    fireEvent.pointerLeave(alphaRow, { pointerType: 'mouse' });
 
     await waitFor(() => {
       expect(alphaRow).toHaveAttribute('data-summary-row-active', 'false');

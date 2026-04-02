@@ -91,8 +91,16 @@ describe('StorageGroupRow', () => {
       return;
     }
 
-    fireEvent.mouseEnter(row);
+    expect(row).toHaveAttribute('tabindex', '0');
+
+    fireEvent.pointerEnter(row, { pointerType: 'mouse' });
     expect(onHoverChange).toHaveBeenCalledWith(scope);
+
+    fireEvent.focusIn(row);
+    expect(onHoverChange).toHaveBeenLastCalledWith(scope);
+
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(onFocusChange).toHaveBeenCalledWith(scope);
 
     fireEvent.click(row);
     expect(onFocusChange).toHaveBeenCalledWith(scope);
@@ -102,7 +110,7 @@ describe('StorageGroupRow', () => {
     fireEvent.click(toggleButton);
     expect(onToggle).toHaveBeenCalledTimes(1);
 
-    fireEvent.mouseLeave(row);
+    fireEvent.pointerLeave(row, { pointerType: 'mouse' });
     expect(onHoverChange).toHaveBeenLastCalledWith(null);
   });
 });

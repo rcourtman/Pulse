@@ -18,6 +18,10 @@ import { TagBadges } from '@/components/shared/TagBadges';
 import { resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
+import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
 import { getDashboardGuestDiskStatusMessage } from '@/utils/dashboardGuestPresentation';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
@@ -89,18 +93,25 @@ export function GuestRow(props: GuestRowProps) {
     const vm = props.guest as VM;
     return getDashboardGuestDiskStatusMessage(vm.diskStatusReason);
   };
+  const interactiveRowHandlers =
+    props.onClick || props.onHoverChange
+      ? createSummaryInteractiveRowHandlers({
+          onPreview: () => props.onHoverChange?.(guestId()),
+          onPreviewClear: () => props.onHoverChange?.(null),
+          onToggle: props.onClick,
+        })
+      : {};
 
   return (
     <>
       <tr
-        class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''}`}
+        class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
         style={rowStyle()}
         data-guest-id={guestId()}
         data-summary-series-id={guestId()}
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
         onClick={props.onClick}
-        onMouseEnter={() => props.onHoverChange?.(guestId())}
-        onMouseLeave={() => props.onHoverChange?.(null)}
+        {...interactiveRowHandlers}
       >
         {/* Name - always visible */}
         <td

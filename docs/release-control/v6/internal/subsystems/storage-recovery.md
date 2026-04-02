@@ -217,7 +217,13 @@ querying, and the operator-facing storage health presentation layer.
     expose that state through `data-summary-row-active` and let the shared row
     presentation owned by `frontend-modern/src/index.css` render the emphasis,
     rather than carrying storage-local sky fill classes that drift from the
-    rest of the product or obscure inline capacity bars.
+    rest of the product or obscure inline capacity bars. Storage pool rows,
+    physical-disk rows, and storage group headers must also route pointer,
+    focus, and keyboard preview/toggle behavior through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts` so touch
+    users do not inherit synthetic hover branches and keyboard users can pin or
+    clear scope through the same shared row interaction contract as mouse
+    users.
 17. Keep recovery transport refreshes inside the recovery-owned feature state.
     `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
     recovery data hooks may retain the last fulfilled rollups, points, facets,

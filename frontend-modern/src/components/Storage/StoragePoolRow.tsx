@@ -34,6 +34,10 @@ import {
 import type { Resource } from '@/types/resource';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
+import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
 
 interface StoragePoolRowProps {
   record: StorageRecord;
@@ -55,15 +59,19 @@ interface StoragePoolRowProps {
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const row = createMemo(() => buildStoragePoolRowModel(props.record));
+  const interactiveRowHandlers = createSummaryInteractiveRowHandlers({
+    onPreview: () => props.onHoverChange?.(props.summarySeriesId),
+    onPreviewClear: () => props.onHoverChange?.(null),
+    onToggle: props.onToggleExpand,
+  });
 
   return (
     <>
       <tr
-        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`}
+        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
         style={{ ...props.rowStyle, ...STORAGE_POOL_ROW_STYLE }}
         onClick={props.onToggleExpand}
-        onMouseEnter={() => props.onHoverChange?.(props.summarySeriesId)}
-        onMouseLeave={() => props.onHoverChange?.(null)}
+        {...interactiveRowHandlers}
         data-summary-series-id={props.summarySeriesId}
         data-summary-row-active={props.summaryHighlighted && !props.expanded ? 'true' : 'false'}
         {...props.alertDataAttrs}

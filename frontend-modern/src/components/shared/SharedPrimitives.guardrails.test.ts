@@ -61,6 +61,7 @@ import interactiveSparklineModelSource from '@/components/shared/interactiveSpar
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
+import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import summaryScopeBarSource from '@/components/shared/SummaryScopeBar.tsx?raw';
 import summaryScopePresentationSource from '@/components/shared/summaryScopePresentation.ts?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
@@ -109,6 +110,7 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import workloadPanelSource from '@/components/Dashboard/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
@@ -116,6 +118,8 @@ import infrastructureSummaryStateSource from '@/components/Infrastructure/useInf
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
+import nodeGroupHeaderSource from '@/components/shared/NodeGroupHeader.tsx?raw';
+import storageGroupRowSource from '@/components/Storage/StorageGroupRow.tsx?raw';
 import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
 import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
@@ -393,6 +397,30 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
       expect(source).not.toContain('ring-blue-300 dark:ring-blue-600');
     }
+  });
+
+  it('keeps summary-linked row input semantics on the shared interaction helper', () => {
+    expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowHandlers');
+    expect(summaryInteractionA11ySource).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
+    expect(summaryInteractionA11ySource).toContain("event.key === 'Enter' || event.key === ' '");
+    expect(summaryInteractionA11ySource).toContain("event.key === 'Escape'");
+    expect(summaryInteractionA11ySource).toContain("window.matchMedia('(pointer: fine)')");
+
+    for (const source of [
+      workloadPanelSource,
+      guestRowSource,
+      storageGroupRowSource,
+      storagePoolRowSource,
+      diskListSource,
+      unifiedResourceHostTableCardSource,
+      unifiedResourcePBSTableSectionSource,
+      unifiedResourcePMGTableSectionSource,
+    ]) {
+      expect(source).toContain('createSummaryInteractiveRowHandlers');
+      expect(source).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
+    }
+
+    expect(nodeGroupHeaderSource).toContain('event.stopPropagation()');
   });
 
   it('keeps trial banner on shell, runtime, and model owners', () => {

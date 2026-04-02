@@ -223,6 +223,12 @@ assembly branch.
     `data-summary-row-active` and rely on the shared row presentation owned by
     `frontend-modern/src/index.css` instead of provider-specific background
     classes that drift across resource tables or hide inline metric bars.
+    Summary-linked infrastructure rows and cluster headers must also route
+    pointer preview, focus preview, and keyboard activation through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts` so the
+    unified-resource table does not fork mouse-only hover logic, touch-hostile
+    synthetic hover, or provider-specific key handling across host, PBS, and
+    PMG sections.
 15. Keep infrastructure search aligned with the governed display label. Shared
     infrastructure filtering through
     `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`

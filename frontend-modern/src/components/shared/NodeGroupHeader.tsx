@@ -36,6 +36,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
         rel="noopener noreferrer"
         class="transition-colors duration-150 hover:text-sky-600 dark:hover:text-sky-400"
         title={`Open ${props.node.name} web interface`}
+        onClick={(event) => event.stopPropagation()}
       >
         {displayName()}
       </a>

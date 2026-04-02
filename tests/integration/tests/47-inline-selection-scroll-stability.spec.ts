@@ -300,6 +300,46 @@ test.describe.serial("Inline selection scroll stability", () => {
     }
   });
 
+  test("supports keyboard open-close for workload rows without leaking filter state", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only keyboard interaction proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    const row = page.locator("tr[data-guest-id]").first();
+    await expect(row).toBeVisible();
+    const workloadId = (await row.getAttribute("data-guest-id")) ?? "";
+    expect(workloadId).not.toBe("");
+
+    await row.focus();
+    await expect(row).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(page).toHaveURL(/\/workloads\?(?:.*&)?resource=/);
+    {
+      const openedUrl = new URL(page.url());
+      expect(openedUrl.searchParams.get("resource")).toBe(workloadId);
+      expect(openedUrl.searchParams.has("agent")).toBe(false);
+    }
+
+    const detailRow = row.locator("xpath=following-sibling::tr[1]");
+    await expect(detailRow).toContainText("Overview");
+
+    await row.focus();
+    await page.keyboard.press(" ");
+    await expect.poll(() => page.url()).not.toContain("resource=");
+    {
+      const closedUrl = new URL(page.url());
+      expect(closedUrl.searchParams.has("resource")).toBe(false);
+      expect(closedUrl.searchParams.has("agent")).toBe(false);
+    }
+  });
+
   test("reveals storage inline detail without hard-centering the selected row", async ({
     page,
   }, testInfo) => {

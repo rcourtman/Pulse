@@ -3,6 +3,10 @@ import type { Component } from 'solid-js';
 import { formatUptime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
+import {
   Table,
   TableBody,
   TableCell,
@@ -145,6 +149,11 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
 
                   return className;
                 });
+                const resourceRowInteraction = createSummaryInteractiveRowHandlers({
+                  onPreview: () => tableProps.onHoverChange?.(resource.id),
+                  onPreviewClear: () => tableProps.onHoverChange?.(null),
+                  onToggle: () => table.toggleExpand(resource.id),
+                });
 
                 return (
                   <>
@@ -156,11 +165,10 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                           ? 'true'
                           : 'false'
                       }
-                      class={rowClass()}
+                      class={`${rowClass()} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
                       style={{ 'min-height': '32px' }}
                       onClick={() => table.toggleExpand(resource.id)}
-                      onMouseEnter={() => tableProps.onHoverChange?.(resource.id)}
-                      onMouseLeave={() => tableProps.onHoverChange?.(null)}
+                      {...resourceRowInteraction}
                     >
                       <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                         <div class="flex items-center gap-1.5 min-w-0">

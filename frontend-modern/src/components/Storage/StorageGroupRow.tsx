@@ -3,6 +3,10 @@ import { EnhancedStorageBar } from './EnhancedStorageBar';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
+import {
   buildStorageGroupRowPresentation,
   STORAGE_GROUP_ROW_CELL_CLASS,
   STORAGE_GROUP_ROW_CLASS,
@@ -32,10 +36,15 @@ interface StorageGroupRowProps {
 
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   const row = () => buildStorageGroupRowPresentation(props.group);
+  const interactiveRowHandlers = createSummaryInteractiveRowHandlers({
+    onPreview: () => props.onHoverChange?.(props.summaryGroupScope),
+    onPreviewClear: () => props.onHoverChange?.(null),
+    onToggle: () => props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope),
+  });
 
   return (
     <tr
-      class={STORAGE_GROUP_ROW_CLASS}
+      class={`${STORAGE_GROUP_ROW_CLASS} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
       data-summary-group-id={props.summaryGroupScope?.id ?? undefined}
       data-summary-group-series-count={String(props.summaryGroupScope?.seriesIds.length ?? 0)}
       data-summary-row-active={props.summaryActive ? 'true' : 'false'}
@@ -45,8 +54,7 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
           props.summaryFocused ? null : props.summaryGroupScope,
         )
       }
-      onMouseEnter={() => props.onHoverChange?.(props.summaryGroupScope)}
-      onMouseLeave={() => props.onHoverChange?.(null)}
+      {...interactiveRowHandlers}
     >
       <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
         <div class={STORAGE_GROUP_ROW_CONTENT_CLASS}>

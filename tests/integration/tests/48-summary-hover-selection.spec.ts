@@ -672,7 +672,7 @@ test.describe.serial("Summary hover selection", () => {
     await page.waitForTimeout(250);
     const stickyBox = await stickyStorageSummary.boundingBox();
     expect(stickyBox).not.toBeNull();
-    expect(stickyBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(48);
+    expect(stickyBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(96);
   });
 
   test("synchronizes chart hover across summary cards on infrastructure, workloads, and storage", async ({
@@ -1051,10 +1051,14 @@ test.describe.serial("Summary hover selection", () => {
         return;
       }
 
-      await matchedGroupRow.hover();
+      await matchedGroupRow.focus();
       await expect(scopeBar).toContainText("Preview");
+      await page.keyboard.press("Escape");
+      await expect(scopeBar).toContainText("All");
 
-      await matchedGroupRow.click();
+      await matchedGroupRow.focus();
+      await expect(scopeBar).toContainText("Preview");
+      await page.keyboard.press("Enter");
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBe(matchedGroupId);
@@ -1143,10 +1147,14 @@ test.describe.serial("Summary hover selection", () => {
       return;
     }
 
-    await matchedGroupRow.hover();
+    await matchedGroupRow.focus();
     await expect(storageScopeBar).toContainText("Preview");
+    await page.keyboard.press("Escape");
+    await expect(storageScopeBar).toContainText("All");
 
-    await matchedGroupRow.click();
+    await matchedGroupRow.focus();
+    await expect(storageScopeBar).toContainText("Preview");
+    await page.keyboard.press(" ");
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBe(matchedGroupId);

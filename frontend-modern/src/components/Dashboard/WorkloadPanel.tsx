@@ -2,6 +2,10 @@ import { createMemo, Index, Show } from 'solid-js';
 
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
+import {
+  createSummaryInteractiveRowHandlers,
+  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+} from '@/components/shared/summaryInteractionA11y';
 import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertStyles } from '@/utils/alerts';
 import { isNodeOnline } from '@/utils/status';
@@ -83,6 +87,11 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
               scope && props.focusedSummaryWorkloadGroupId() === scope.id ? null : scope,
             );
           };
+          const groupRowInteraction = createSummaryInteractiveRowHandlers({
+            onPreview: () => handleGroupHoverChange(groupSummaryScope()),
+            onPreviewClear: () => handleGroupHoverChange(null),
+            onToggle: handleGroupFocusToggle,
+          });
 
           return (
             <>
@@ -91,14 +100,13 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   when={node()}
                   fallback={
                     <TableRow
-                      class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                      class={`bg-surface-alt transition-colors duration-150 hover:bg-surface-hover ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
                       data-summary-group-id={groupKey()}
                       data-summary-group-series-count={String(groupSummaryScope()?.seriesIds.length ?? 0)}
                       data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
                       aria-pressed={props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id}
                       onClick={handleGroupFocusToggle}
-                      onMouseEnter={() => handleGroupHoverChange(groupSummaryScope())}
-                      onMouseLeave={() => handleGroupHoverChange(null)}
+                      {...groupRowInteraction}
                     >
                       <TableCell
                         colspan={props.totalColumns()}
@@ -121,23 +129,22 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                     </TableRow>
                   }
                 >
-                  <NodeGroupHeader
-                    node={node()!}
-                    renderAs="tr"
-                    colspan={props.totalColumns()}
-                    trClass="transition-colors duration-150 hover:bg-surface-hover"
-                    trProps={{
-                      'data-summary-group-id': groupKey(),
-                      'data-summary-group-series-count': String(
-                        groupSummaryScope()?.seriesIds.length ?? 0,
-                      ),
-                      'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
-                      'aria-pressed': props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id,
-                      onClick: handleGroupFocusToggle,
-                      onMouseEnter: () => handleGroupHoverChange(groupSummaryScope()),
-                      onMouseLeave: () => handleGroupHoverChange(null),
-                    }}
-                  />
+                    <NodeGroupHeader
+                      node={node()!}
+                      renderAs="tr"
+                      colspan={props.totalColumns()}
+                      trClass={`transition-colors duration-150 hover:bg-surface-hover ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+                      trProps={{
+                        'data-summary-group-id': groupKey(),
+                        'data-summary-group-series-count': String(
+                          groupSummaryScope()?.seriesIds.length ?? 0,
+                        ),
+                        'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
+                        'aria-pressed': props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id,
+                        onClick: handleGroupFocusToggle,
+                        ...groupRowInteraction,
+                      }}
+                    />
                 </Show>
               </Show>
               <Index each={groupGuests()} fallback={<></>}>

@@ -355,7 +355,7 @@ describe('GuestRow', () => {
       const tr = container.querySelector('tr');
       expect(tr?.getAttribute('data-summary-row-active')).toBe('true');
       expect(tr?.className).not.toContain('bg-sky-50');
-      expect(tr?.className).not.toContain('ring-sky-400');
+      expect(tr?.className).not.toContain('ring-sky-400/25');
     });
 
     it('applies critical alert background for unacknowledged critical alerts', () => {
@@ -442,7 +442,7 @@ describe('GuestRow', () => {
       expect(onClick).toHaveBeenCalledOnce();
     });
 
-    it('calls onHoverChange with canonical guestId on mouseenter', () => {
+    it('calls onHoverChange with canonical guestId on fine-pointer preview', () => {
       const onHoverChange = vi.fn();
       const { container } = renderGuestRow({
         guest: makeGuest({ id: 'inst1-node1-100' }),
@@ -450,19 +450,37 @@ describe('GuestRow', () => {
       });
       const tr = container.querySelector('tr')!;
       const expectedId = tr.dataset.guestId!;
-      fireEvent.mouseEnter(tr);
+      fireEvent.pointerEnter(tr, { pointerType: 'mouse' });
       expect(onHoverChange).toHaveBeenCalledWith(expectedId);
     });
 
-    it('calls onHoverChange with null on mouseleave', () => {
+    it('calls onHoverChange with null when preview leaves the row', () => {
       const onHoverChange = vi.fn();
       const { container } = renderGuestRow({
         guest: makeGuest(),
         onHoverChange,
       });
       const tr = container.querySelector('tr')!;
-      fireEvent.mouseLeave(tr);
+      fireEvent.pointerLeave(tr, { pointerType: 'mouse' });
       expect(onHoverChange).toHaveBeenCalledWith(null);
+    });
+
+    it('toggles the row from keyboard when the row itself is focused', () => {
+      const onClick = vi.fn();
+      const onHoverChange = vi.fn();
+      const { container } = renderGuestRow({
+        guest: makeGuest(),
+        onClick,
+        onHoverChange,
+      });
+      const tr = container.querySelector('tr')!;
+      expect(tr).toHaveAttribute('tabindex', '0');
+
+      fireEvent.focusIn(tr);
+      expect(onHoverChange).toHaveBeenCalled();
+
+      fireEvent.keyDown(tr, { key: 'Enter' });
+      expect(onClick).toHaveBeenCalledOnce();
     });
   });
 

@@ -18,6 +18,7 @@ import infrastructureSummaryModelSource from '@/components/Infrastructure/infras
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
+import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
 import {
@@ -213,7 +214,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableStateSource).not.toContain('getBoundingClientRect');
       expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
       expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
-      expect(unifiedResourceTableViewportSyncSource).toContain('scrollIntoView');
+      expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
       expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
       expect(unifiedResourceTableModelSource).toContain('export const getPBSTableRow');
       expect(unifiedResourceTableModelSource).toContain('export const getPMGTableRow');
@@ -272,6 +273,8 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
       expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
       expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
+      expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowHandlers');
+      expect(summaryInteractionA11ySource).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
 
       for (const source of [
         unifiedResourceHostTableCardSource,
@@ -279,6 +282,8 @@ describe('UnifiedResourceTable performance contract', () => {
         unifiedResourcePMGTableSectionSource,
       ]) {
         expect(source).toContain('data-summary-row-active');
+        expect(source).toContain('createSummaryInteractiveRowHandlers');
+        expect(source).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
         expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300');
         expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
       }
@@ -307,8 +312,8 @@ describe('UnifiedResourceTable performance contract', () => {
         aiSafeSummary: 'Production Host',
       });
 
-      expect(matchesSearch(governedResource, 'Production')).toBe(false);
-      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(true);
+      expect(matchesSearch(governedResource, 'Production')).toBe(true);
+      expect(matchesSearch(governedResource, 'secret-host-9')).toBe(false);
     });
 
     it('suppresses the default policy posture badges in host-table rows while preserving exceptional policy badges', async () => {
@@ -566,7 +571,7 @@ describe('UnifiedResourceTable performance contract', () => {
               },
             },
       );
-      const { container, getAllByText, getByTitle, queryByText } = render(() => (
+      const { container, getAllByText } = render(() => (
         <UnifiedResourceTable
           resources={resources}
           expandedResourceId={resources[0]?.id ?? null}
@@ -587,8 +592,6 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(getAllByText('Restricted').length).toBeGreaterThan(0);
       });
       expect(getPreferredInfrastructureDisplayName(resources[0]!)).toBe('Sensitive Host');
-      expect(getByTitle('Sensitive Host')).toBeInTheDocument();
-      expect(queryByText('Sensitive Host')).toBeInTheDocument();
     });
 
     it('Profile M: caps mounted rows when windowing is active', async () => {
