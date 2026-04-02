@@ -84,10 +84,6 @@ export const RECOVERY_QUERY_PARAMS = {
   query: 'q',
 } as const;
 
-export const GLOBAL_CONTEXT_QUERY_PARAMS = {
-  resource: 'contextResource',
-} as const;
-
 const normalizeQueryValue = (value: string | null | undefined): string => (value || '').trim();
 const normalizeQueryBooleanFlag = (value: string | null | undefined): string => {
   const normalized = normalizeQueryValue(value).toLowerCase();
@@ -195,31 +191,6 @@ export const parseWorkloadsLinkSearch = (search: string) => {
     summaryGroup: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.summaryGroup)),
   };
 };
-
-export const parseGlobalResourceContextSearch = (search: string) => {
-  const params = new URLSearchParams(search);
-  return {
-    resource: normalizeQueryValue(params.get(GLOBAL_CONTEXT_QUERY_PARAMS.resource)),
-  };
-};
-
-export const buildPathWithGlobalResourceContext = (
-  path: string,
-  resourceId: string | null | undefined,
-): string => {
-  const url = new URL(path, 'http://pulse.local');
-  const normalizedResourceId = normalizeQueryValue(resourceId);
-  if (normalizedResourceId) {
-    url.searchParams.set(GLOBAL_CONTEXT_QUERY_PARAMS.resource, normalizedResourceId);
-  } else {
-    url.searchParams.delete(GLOBAL_CONTEXT_QUERY_PARAMS.resource);
-  }
-  const nextSearch = url.searchParams.toString();
-  return `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}`;
-};
-
-export const stripGlobalResourceContextFromPath = (path: string): string =>
-  buildPathWithGlobalResourceContext(path, null);
 
 export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string => {
   const params = new URLSearchParams();
@@ -506,16 +477,6 @@ export const buildStorageHrefForResource = (resource: Resource): string | null =
     });
   }
 
-  if (
-    resource.type === 'agent' &&
-    (source === 'proxmox-pve' || source === 'proxmox-pbs' || source === 'truenas')
-  ) {
-    return buildStoragePath({
-      source,
-      node: resource.id,
-    });
-  }
-
   return null;
 };
 
@@ -557,16 +518,6 @@ export const buildRecoveryHrefForResource = (resource: Resource): string | null 
   if (platform === 'truenas' && isTrueNASSystemResource(resource)) {
     return buildRecoveryPath({
       platform: 'truenas',
-      node: resource.id,
-    });
-  }
-
-  if (
-    (resource.type === 'agent' || resource.type === 'pbs') &&
-    (platform === 'proxmox-pve' || platform === 'proxmox-pbs')
-  ) {
-    return buildRecoveryPath({
-      platform,
       node: resource.id,
     });
   }

@@ -244,15 +244,6 @@ assembly branch.
     provider-reported storage `pool` metadata alongside path and ZFS health so
     storage consumers do not have to recover backing-pool identity from names
     or path heuristics.
-17. Keep global app context on canonical unified-resource IDs. When an
-    operator deliberately pins a resource into the shared shell context,
-    `frontend-modern/src/routing/resourceLinks.ts`,
-    `frontend-modern/src/features/globalResourceContext/globalResourceContextModel.ts`,
-    infrastructure route state, and any cross-surface handoff must preserve
-    that scope as `contextResource=<canonical-resource-id>` and derive page
-    scoping from the same unified-resource identity plus governed display
-    label, rather than provider-native node names, hostnames, or page-local
-    aliases.
 
 ## Current State
 

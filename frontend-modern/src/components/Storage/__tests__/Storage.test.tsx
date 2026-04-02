@@ -3,8 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import StorageSummary from '@/components/Storage/StorageSummary';
 import storageSummarySource from '@/components/Storage/StorageSummary.tsx?raw';
-import storagePoolRowSource from '@/components/Storage/StoragePoolRow.tsx?raw';
-import diskListSource from '@/components/Storage/DiskList.tsx?raw';
 import type { Alert } from '@/types/api';
 import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
@@ -380,15 +378,6 @@ describe('Storage', () => {
 
     expect(screen.getByText('Local-LVM-PVE1')).toBeInTheDocument();
     expect(screen.queryByText('Local-LVM-PVE2')).not.toBeInTheDocument();
-  });
-
-  it('keeps storage global resource pinning on the shared row action contract', () => {
-    expect(storagePoolRowSource).toContain('useGlobalResourceContext');
-    expect(storagePoolRowSource).toContain('SummaryRowActionButton');
-    expect(storagePoolRowSource).toContain('kind="context"');
-    expect(diskListSource).toContain('useGlobalResourceContext');
-    expect(diskListSource).toContain('SummaryRowActionButton');
-    expect(diskListSource).toContain('kind="context"');
   });
 
   it('routes hovered pool rows into the shared summary highlight contract and keeps the summary sticky', async () => {

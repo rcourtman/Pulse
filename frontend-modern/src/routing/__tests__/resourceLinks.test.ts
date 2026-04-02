@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkloadGuest } from '@/types/workloads';
 import {
-  GLOBAL_CONTEXT_QUERY_PARAMS,
   PMG_THRESHOLDS_PATH,
   RECOVERY_QUERY_PARAMS,
-  buildPathWithGlobalResourceContext,
   buildInfrastructureResourceLink,
   buildInfrastructureHrefForWorkload,
   buildRecoveryPath,
@@ -17,13 +15,11 @@ import {
   buildStoragePath,
   buildWorkloadsHrefForResource,
   buildWorkloadsPath,
-  parseGlobalResourceContextSearch,
   parseRecoveryLinkSearch,
   INFRASTRUCTURE_QUERY_PARAMS,
   parseStorageLinkSearch,
   parseInfrastructureLinkSearch,
   parseWorkloadsLinkSearch,
-  stripGlobalResourceContextFromPath,
   STORAGE_QUERY_PARAMS,
   WORKLOADS_QUERY_PARAMS,
 } from '@/routing/resourceLinks';
@@ -86,16 +82,6 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.agent).toBe('agent');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
     expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
-  });
-
-  it('builds and parses the canonical global resource context query param', () => {
-    const scoped = buildPathWithGlobalResourceContext('/workloads?type=vm', 'agent:pve1');
-    expect(scoped).toBe('/workloads?type=vm&contextResource=agent%3Apve1');
-    expect(parseGlobalResourceContextSearch(scoped.slice('/workloads'.length))).toEqual({
-      resource: 'agent:pve1',
-    });
-    expect(stripGlobalResourceContextFromPath(scoped)).toBe('/workloads?type=vm');
-    expect(GLOBAL_CONTEXT_QUERY_PARAMS.resource).toBe('contextResource');
   });
 
   it('canonicalizes legacy workloads type aliases when building links', () => {
@@ -343,22 +329,6 @@ describe('resource link routing contract', () => {
     expect(href).toBe('/storage?source=truenas&node=truenas-main');
   });
 
-  it('builds storage deep links for proxmox agent resources', () => {
-    const href = buildStorageHrefForResource({
-      id: 'pve-1',
-      type: 'agent',
-      name: 'pve1',
-      displayName: 'pve1',
-      platformId: 'pve-1',
-      platformType: 'proxmox-pve',
-      sourceType: 'agent',
-      status: 'online',
-      lastSeen: Date.now(),
-    } as any);
-
-    expect(href).toBe('/storage?source=proxmox-pve&node=pve-1');
-  });
-
   it('builds storage deep links for hybrid agent resources with merged truenas sources', () => {
     const href = buildStorageHrefForResource({
       id: 'truenas-main',
@@ -411,22 +381,6 @@ describe('resource link routing contract', () => {
     } as any);
 
     expect(href).toBe('/recovery?platform=truenas&node=truenas-main');
-  });
-
-  it('builds recovery deep links for proxmox agent resources', () => {
-    const href = buildRecoveryHrefForResource({
-      id: 'pve-1',
-      type: 'agent',
-      name: 'pve1',
-      displayName: 'pve1',
-      platformId: 'pve-1',
-      platformType: 'proxmox-pve',
-      sourceType: 'agent',
-      status: 'online',
-      lastSeen: Date.now(),
-    } as any);
-
-    expect(href).toBe('/recovery?platform=proxmox-pve&node=pve-1');
   });
 
   it('builds canonical shared surface links for top-level truenas systems', () => {

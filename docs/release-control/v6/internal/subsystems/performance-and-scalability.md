@@ -176,15 +176,6 @@ regression protection.
     branches, focusable-row toggles, or touch-hostile synthetic hover behavior
     inside individual row renderers.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
-29. Keep deliberate global resource pinning off the hot-path filter model.
-    Infrastructure summary-linked rows may expose a deliberate global-context
-    pin through `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`,
-    but that pin must route through the shell-owned `contextResource`
-    contract instead of becoming another per-page selector or hot-path table
-    filter. Infrastructure row renderers should reuse the shared action
-    control plus app-shell context owner rather than introducing provider-
-    local pin buttons or route writes that add extra hover/focus work to the
-    hot table path.
 
 ## Forbidden Paths
 

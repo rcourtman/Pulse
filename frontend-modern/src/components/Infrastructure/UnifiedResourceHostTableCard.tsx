@@ -38,7 +38,6 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
-import { useGlobalResourceContext } from '@/features/globalResourceContext/GlobalResourceContext';
 import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
@@ -55,7 +54,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
   props,
 ) => {
   const { table, tableProps } = props;
-  const globalContext = useGlobalResourceContext();
 
   return (
     <Show when={table.showHostTable()}>
@@ -307,12 +305,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     getResourcePolicyTableBadges(resource.policy),
                   );
                   const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
-                  const supportsGlobalContext = createMemo(() =>
-                    globalContext.canPinResource(resource),
-                  );
-                  const isGlobalContextPinned = createMemo(() =>
-                    globalContext.isPinnedGlobalResource(resource.id),
-                  );
                   const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
                     onPreview: () => tableProps.onHoverChange?.(resource.id),
                     onPreviewClear: () => tableProps.onHoverChange?.(null),
@@ -344,19 +336,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                               onAction={() => table.toggleExpand(resource.id)}
                               onPreviewClear={() => tableProps.onHoverChange?.(null)}
                             />
-                            <Show when={supportsGlobalContext()}>
-                              <SummaryRowActionButton
-                                kind="context"
-                                subjectLabel={displayName()}
-                                pressed={isGlobalContextPinned()}
-                                onAction={() =>
-                                  globalContext.setGlobalResourceContext(
-                                    isGlobalContextPinned() ? null : resource,
-                                  )
-                                }
-                                onPreviewClear={() => tableProps.onHoverChange?.(null)}
-                              />
-                            </Show>
                             <StatusDot
                               variant={statusIndicator().variant}
                               title={statusIndicator().label}

@@ -7,7 +7,6 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
-import { useGlobalResourceContext } from '@/features/globalResourceContext/GlobalResourceContext';
 import {
   Table,
   TableBody,
@@ -43,7 +42,6 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
   props,
 ) => {
   const { table, tableProps } = props;
-  const globalContext = useGlobalResourceContext();
 
   return (
     <Show when={table.sortedPMGResources().length > 0}>
@@ -159,12 +157,6 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                   onPreview: () => tableProps.onHoverChange?.(resource.id),
                   onPreviewClear: () => tableProps.onHoverChange?.(null),
                 });
-                const supportsGlobalContext = createMemo(() =>
-                  globalContext.canPinResource(resource),
-                );
-                const isGlobalContextPinned = createMemo(() =>
-                  globalContext.isPinnedGlobalResource(resource.id),
-                );
 
                 return (
                   <>
@@ -191,19 +183,6 @@ export const UnifiedResourcePMGTableSection: Component<UnifiedResourcePMGTableSe
                             onAction={() => table.toggleExpand(resource.id)}
                             onPreviewClear={() => tableProps.onHoverChange?.(null)}
                           />
-                          <Show when={supportsGlobalContext()}>
-                            <SummaryRowActionButton
-                              kind="context"
-                              subjectLabel={displayName()}
-                              pressed={isGlobalContextPinned()}
-                              onAction={() =>
-                                globalContext.setGlobalResourceContext(
-                                  isGlobalContextPinned() ? null : resource,
-                                )
-                              }
-                              onPreviewClear={() => tableProps.onHoverChange?.(null)}
-                            />
-                          </Show>
                           <StatusDot
                             variant={statusIndicator().variant}
                             title={statusIndicator().label}

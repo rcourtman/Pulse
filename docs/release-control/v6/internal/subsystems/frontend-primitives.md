@@ -133,10 +133,6 @@ work extends shared components instead of creating new local variants.
 111. `frontend-modern/src/components/shared/summaryScopePresentation.ts`
 112. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 113. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
-114. `frontend-modern/src/features/globalResourceContext/GlobalResourceContext.tsx`
-115. `frontend-modern/src/features/globalResourceContext/GlobalResourceContextBar.tsx`
-116. `frontend-modern/src/features/globalResourceContext/globalResourceContextModel.ts`
-117. `frontend-modern/src/features/globalResourceContext/__tests__/globalResourceContextModel.test.ts`
 
 ## Shared Boundaries
 
@@ -342,19 +338,6 @@ connections` visible as the API-backed alternative for Proxmox and
     props that can collapse functions on the live Solid surface. Docker-only
     controls in `ThresholdsTableDockerTab.tsx` must remain gated to real
     `docker-host` resources instead of leaking onto platform-managed runtimes.
-31. Keep deliberate cross-page resource scope on one shell-owned context
-    contract. Hover preview and page-local group scope must stay local to the
-    active surface, but an explicitly pinned resource may promote into the
-    shared app-shell `contextResource` route state through
-    `frontend-modern/src/features/globalResourceContext/GlobalResourceContext.tsx`,
-    `frontend-modern/src/features/globalResourceContext/globalResourceContextModel.ts`,
-    `frontend-modern/src/features/globalResourceContext/GlobalResourceContextBar.tsx`,
-    `frontend-modern/src/AppLayout.tsx`, and
-    `frontend-modern/src/routing/resourceLinks.ts`. That shell-owned context
-    must render once in shared chrome, survive tab navigation, refresh,
-    copy-paste, and back/forward navigation, and clear through one canonical
-    action instead of reviving per-page scope badges, page-local query names,
-    or hidden route-only filters.
 
 ## Current State
 
@@ -377,16 +360,6 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
-The app shell now also owns one explicit global pinned-resource context.
-`frontend-modern/src/features/globalResourceContext/GlobalResourceContext.tsx`,
-`frontend-modern/src/features/globalResourceContext/GlobalResourceContextBar.tsx`,
-`frontend-modern/src/features/globalResourceContext/globalResourceContextModel.ts`,
-`frontend-modern/src/AppLayout.tsx`, and
-`frontend-modern/src/routing/resourceLinks.ts` must keep that context limited
-to deliberate resource pins, visible once in shared chrome, and preserved
-across platform navigation. Page-local hover preview and group scope remain
-local interaction state; they must not silently escalate into shell-wide
-context.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,
