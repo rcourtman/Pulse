@@ -116,6 +116,7 @@ async function findNeutralClearPoint(
         'input',
         'select',
         'textarea',
+        'th',
         'label',
         'summary',
         '[role="button"]',
@@ -128,7 +129,9 @@ async function findNeutralClearPoint(
       ].join(', ');
 
       const surfaceRect = surface.getBoundingClientRect();
-      for (let y = surfaceRect.top + 12; y <= surfaceRect.bottom - 12; y += 12) {
+      const tableRect = table.getBoundingClientRect();
+      const startY = Math.max(surfaceRect.top + 12, tableRect.top + 12);
+      for (let y = startY; y <= surfaceRect.bottom - 12; y += 12) {
         for (let x = surfaceRect.left + 12; x <= surfaceRect.right - 12; x += 12) {
           const target = document.elementFromPoint(x, y);
           if (!(target instanceof HTMLElement) || !surface.contains(target)) {
@@ -1056,14 +1059,14 @@ test.describe.serial("Summary hover selection", () => {
       {
         path: "/workloads",
         summaryTestId: "workloads-summary",
-        interactionSurfaceTestId: "workloads-interaction-surface",
+        interactionSurfaceTestId: "workloads-page",
         tableSurfaceTestId: "workloads-table-surface",
         tableRowSelector: "tr[data-guest-id]",
       },
       {
         path: "/infrastructure",
         summaryTestId: "infrastructure-summary",
-        interactionSurfaceTestId: "infrastructure-interaction-surface",
+        interactionSurfaceTestId: "infrastructure-page",
         tableSurfaceTestId: "infrastructure-table-surface",
         tableRowSelector: "tr[data-summary-series-id]",
       },
@@ -1187,6 +1190,21 @@ test.describe.serial("Summary hover selection", () => {
       await expect
         .poll(() => readRenderedSeriesCounts(summary))
         .toEqual(baselineCounts);
+
+      await matchedGroupRow.scrollIntoViewIfNeeded();
+      await matchedGroupRow.click();
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+        .toBe(matchedGroupId);
+      await page.keyboard.press("Escape");
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+        .toBeNull();
+      await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
+      await page.mouse.move(1, 1);
+      await expect
+        .poll(() => readRenderedSeriesCounts(summary))
+        .toEqual(baselineCounts);
     }
   });
 
@@ -1202,7 +1220,7 @@ test.describe.serial("Summary hover selection", () => {
 
     await page.goto("/storage?group=node", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
-    const storageInteractionSurface = page.getByTestId("storage-interaction-surface");
+    const storageInteractionSurface = page.getByTestId("storage-page");
     await expect(storageSummary).toBeVisible();
     await expect(page.getByText("Pinned to")).toHaveCount(0);
 
@@ -1304,7 +1322,7 @@ test.describe.serial("Summary hover selection", () => {
 
     const clearPoint = await findNeutralClearPoint(
       page,
-      "storage-interaction-surface",
+      "storage-page",
       "storage-content-surface",
     );
     await expect(storageInteractionSurface).toBeVisible();
@@ -1314,6 +1332,21 @@ test.describe.serial("Summary hover selection", () => {
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBeNull();
     await expect(page.getByText("Pinned to")).toHaveCount(0);
+    await page.mouse.move(1, 1);
+    await expect
+      .poll(() => readRenderedSeriesCounts(storageSummary))
+      .toEqual(baselineCounts);
+
+    await matchedGroupRow.scrollIntoViewIfNeeded();
+    await matchedGroupRow.click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+      .toBe(matchedGroupId);
+    await page.keyboard.press("Escape");
+    await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+      .toBeNull();
     await page.mouse.move(1, 1);
     await expect
       .poll(() => readRenderedSeriesCounts(storageSummary))

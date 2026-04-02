@@ -80,7 +80,11 @@ export function InfrastructurePageSurface() {
   const infrastructureLoadFailureState = () => getInfrastructureLoadFailureState();
 
   return (
-    <div data-testid="infrastructure-page" class="space-y-4">
+    <div
+      ref={setSummaryClearSurfaceRootRef}
+      data-testid="infrastructure-page"
+      class="space-y-4"
+    >
       <Show
         when={!loading() || initialLoadComplete()}
         fallback={
@@ -161,11 +165,7 @@ export function InfrastructurePageSurface() {
                 </StickySummarySection>
               </Show>
 
-              <div
-                ref={setSummaryClearSurfaceRootRef}
-                class="space-y-3"
-                data-testid="infrastructure-interaction-surface"
-              >
+              <div class="space-y-3" data-testid="infrastructure-interaction-surface">
               <Show when={!kioskMode()}>
                 <div data-summary-clear-ignore>
                 <Card padding="sm" class="mb-4">

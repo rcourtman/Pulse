@@ -119,6 +119,7 @@ export function useDashboardState(props: DashboardProps) {
     isSearchLocked,
     mobileVisibleColumnIds,
     mobileVisibleColumns,
+    resetDashboardControls,
     search,
     setGroupingMode,
     setSearch,
@@ -135,13 +136,6 @@ export function useDashboardState(props: DashboardProps) {
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
   } = useDashboardControlsState({
-    containerRuntime,
-    resetWorkloadRouteFilters,
-    selectedHostHint,
-    selectedPlatform,
-    selectedKubernetesContext,
-    selectedKubernetesNamespace,
-    selectedNode,
     setShowFilters,
     showFilters,
     viewMode,
@@ -231,6 +225,10 @@ export function useDashboardState(props: DashboardProps) {
     shouldShowJumpToActiveWorkloadRow,
     tableBodyRef,
   } = useDashboardSelectionState({
+    clearAdditionalPageStateOnEscape: () => {
+      resetDashboardControls();
+      resetWorkloadRouteFilters();
+    },
     filteredGuests,
     summaryGroupScopes,
   });

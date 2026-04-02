@@ -313,9 +313,10 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
     expect(summaryTableFocusSource).toContain('MutationObserver');
     expect(summaryTableFocusSource).toContain('clearPinnedScope?: () => void;');
+    expect(summaryTableFocusSource).toContain('onEscapeClear?: () => void;');
     expect(summaryTableFocusSource).toContain('setClearSurfaceRootRef');
     expect(summaryTableFocusSource).toContain('[data-summary-clear-ignore]');
-    expect(summaryTableFocusSource).toContain("target.closest('[data-summary-clear-surface]')");
+    expect(summaryTableFocusSource).toContain("event.key !== 'Escape'");
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
     expect(summaryTableFocusSource).toContain(
       "row.scrollIntoView({ behavior: 'smooth', block: 'center' })",

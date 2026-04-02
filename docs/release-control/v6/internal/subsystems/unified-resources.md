@@ -217,9 +217,10 @@ assembly branch.
     same route-backed summary contract as row focus. Infrastructure must stay
     row-first here: the pinned cluster header remains the visible scoped
     state, and clearing belongs to governed neutral interaction-surface
-    whitespace rather than a search-row fallback widget or a second
-    scope/pinned pill inside the cluster row chrome, with infrastructure
-    owning a broader clear-surface root separately from the table row-lookup
+    whitespace plus the shared `Escape` reset path rather than a search-row
+    fallback widget or a second scope/pinned pill inside the cluster row
+    chrome, with infrastructure owning a broader clear-surface root
+    separately from the table row-lookup
     root.
 14. Keep infrastructure row emphasis on the shared frontend presentation
     contract. Host, PBS, and PMG table sections may decide whether a resource

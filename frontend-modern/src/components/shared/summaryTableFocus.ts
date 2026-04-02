@@ -23,6 +23,7 @@ const SUMMARY_CLEAR_IGNORE_SELECTOR = [
   'input',
   'select',
   'textarea',
+  'th',
   'label',
   'summary',
   '[role="button"]',
@@ -70,6 +71,7 @@ export interface UseSummaryTableFocusBridgeOptions {
   focusedSeriesId?: Accessor<string | null | undefined>;
   focusedGroupId?: Accessor<string | null | undefined>;
   clearPinnedScope?: () => void;
+  onEscapeClear?: () => void;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
@@ -149,8 +151,14 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
       if (target.closest(SUMMARY_CLEAR_IGNORE_SELECTOR)) {
         return;
       }
-      if (lookupRoot.contains(target) && !target.closest('[data-summary-clear-surface]')) {
-        return;
+      if (!lookupRoot.contains(target)) {
+        const lookupRect = lookupRoot.getBoundingClientRect();
+        const targetRect = target.getBoundingClientRect();
+        const targetCenterY =
+          targetRect.height > 0 ? targetRect.top + targetRect.height / 2 : event.clientY;
+        if (targetCenterY < lookupRect.top) {
+          return;
+        }
       }
       options.clearPinnedScope?.();
     };
@@ -158,6 +166,38 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     root.addEventListener('click', handleRootClick);
     onCleanup(() => {
       root.removeEventListener('click', handleRootClick);
+    });
+  });
+
+  createEffect(() => {
+    if (typeof document === 'undefined' || !options.onEscapeClear) {
+      return;
+    }
+
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        target.closest('[role="dialog"], [aria-modal="true"]')
+      ) {
+        return;
+      }
+      options.onEscapeClear?.();
+    };
+
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    onCleanup(() => {
+      document.removeEventListener('keydown', handleDocumentKeyDown);
     });
   });
 
@@ -361,6 +401,7 @@ export interface UseSummaryPageInteractionStateOptions {
   hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   clearPinnedScope?: () => void;
+  onEscapeClear?: () => void;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
@@ -404,6 +445,10 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
     clearPinnedScope: options.clearPinnedScope,
     focusedSeriesId,
     focusedGroupId,
+    onEscapeClear: () => {
+      setChartHoverSync(null);
+      options.onEscapeClear?.();
+    },
     revealActiveSeries: options.revealActiveSeries,
   });
 

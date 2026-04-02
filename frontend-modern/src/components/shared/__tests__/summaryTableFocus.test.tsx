@@ -228,4 +228,74 @@ describe('useSummaryPageInteractionState', () => {
 
     expect(clearPinnedScope).not.toHaveBeenCalled();
   });
+
+  it('clears pinned scope when operators click neutral whitespace inside the table root', () => {
+    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const clearPinnedScope = vi.fn();
+    const clearRoot = document.createElement('div');
+    const root = document.createElement('div');
+    const neutral = document.createElement('div');
+    root.appendChild(neutral);
+    clearRoot.appendChild(root);
+    document.body.appendChild(clearRoot);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        clearPinnedScope,
+        focusedGroupId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    result.setClearSurfaceRootRef(clearRoot);
+    neutral.click();
+
+    expect(clearPinnedScope).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear pinned scope when page-shell clicks land above the table root', () => {
+    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const clearPinnedScope = vi.fn();
+    const clearRoot = document.createElement('div');
+    const root = document.createElement('div');
+    const summary = document.createElement('div');
+    clearRoot.append(summary, root);
+    document.body.appendChild(clearRoot);
+
+    Object.defineProperty(root, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => buildRect(200, 120),
+    });
+    Object.defineProperty(summary, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => buildRect(40, 80),
+    });
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        clearPinnedScope,
+        focusedGroupId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    result.setClearSurfaceRootRef(clearRoot);
+    summary.dispatchEvent(new MouseEvent('click', { bubbles: true, clientY: 80 }));
+
+    expect(clearPinnedScope).not.toHaveBeenCalled();
+  });
+
+  it('routes Escape through the shared page-clear owner', () => {
+    const onEscapeClear = vi.fn();
+
+    renderHook(() =>
+      useSummaryPageInteractionState({
+        onEscapeClear,
+      }),
+    );
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+    expect(onEscapeClear).toHaveBeenCalledTimes(1);
+  });
 });

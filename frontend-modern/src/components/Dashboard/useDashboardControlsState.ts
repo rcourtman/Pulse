@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, type Accessor } from 'solid-js';
+import { createMemo, createSignal, type Accessor } from 'solid-js';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useColumnVisibility } from '@/hooks/useColumnVisibility';
@@ -20,13 +20,6 @@ import {
 } from './dashboardFilterModel';
 
 interface DashboardControlsStateOptions {
-  containerRuntime: Accessor<string>;
-  resetWorkloadRouteFilters: () => void;
-  selectedHostHint: Accessor<string | null>;
-  selectedPlatform: Accessor<string | null>;
-  selectedKubernetesContext: Accessor<string | null>;
-  selectedKubernetesNamespace: Accessor<string | null>;
-  selectedNode: Accessor<string | null>;
   setShowFilters: (value: boolean | ((current: boolean) => boolean)) => void;
   showFilters: Accessor<boolean>;
   viewMode: Accessor<ViewMode>;
@@ -129,40 +122,14 @@ export function useDashboardControlsState(options: DashboardControlsStateOptions
     }
   };
 
-  createEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-
-      const hasActiveFilters =
-        search().trim() ||
-        sortKey() !== DEFAULT_DASHBOARD_SORT_KEY ||
-        sortDirection() !== DEFAULT_DASHBOARD_SORT_DIRECTION ||
-        options.selectedNode() !== null ||
-        options.selectedHostHint() !== null ||
-        options.selectedPlatform() !== null ||
-        options.selectedKubernetesContext() !== null ||
-        options.selectedKubernetesNamespace() !== null ||
-        options.containerRuntime().trim() !== '' ||
-        options.viewMode() !== 'all' ||
-        statusMode() !== DEFAULT_DASHBOARD_STATUS_MODE;
-
-      if (!hasActiveFilters) {
-        options.setShowFilters(!options.showFilters());
-        return;
-      }
-
-      setSearch('');
-      setIsSearchLocked(false);
-      setSortKey(DEFAULT_DASHBOARD_SORT_KEY);
-      setSortDirection(DEFAULT_DASHBOARD_SORT_DIRECTION);
-      options.resetWorkloadRouteFilters();
-      setStatusMode(DEFAULT_DASHBOARD_STATUS_MODE);
-      blurFocusedTypeToSearch();
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  });
+  const resetDashboardControls = () => {
+    setSearch('');
+    setIsSearchLocked(false);
+    setSortKey(DEFAULT_DASHBOARD_SORT_KEY);
+    setSortDirection(DEFAULT_DASHBOARD_SORT_DIRECTION);
+    setStatusMode(DEFAULT_DASHBOARD_STATUS_MODE);
+    blurFocusedTypeToSearch();
+  };
 
   const handleBeforeAutoFocus = () => {
     if (aiChatStore.focusInput()) return true;
@@ -226,6 +193,7 @@ export function useDashboardControlsState(options: DashboardControlsStateOptions
     isSearchLocked,
     mobileVisibleColumnIds,
     mobileVisibleColumns,
+    resetDashboardControls,
     search,
     setGroupingMode,
     setSearch,

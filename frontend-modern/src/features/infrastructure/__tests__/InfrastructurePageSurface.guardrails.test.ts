@@ -52,6 +52,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setSummaryClearSurfaceRootRef');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
+    expect(infrastructurePageSurfaceSource).toContain('data-testid="infrastructure-page"');
+    expect(infrastructurePageSurfaceSource).toContain('ref={setSummaryClearSurfaceRootRef}');
     expect(infrastructurePageSurfaceSource).toContain('data-testid="infrastructure-interaction-surface"');
     expect(infrastructurePageSurfaceSource).toContain('data-summary-clear-ignore');
     expect(infrastructurePageSurfaceSource).not.toContain('SummaryScopeBar');
@@ -64,6 +66,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).toContain('activeSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('focusedSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('clearPinnedSummaryScope');
+    expect(infrastructurePageStateSource).toContain('clearAllPageStateOnEscape');
+    expect(infrastructurePageStateSource).toContain('onEscapeClear: clearAllPageStateOnEscape');
     expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('setSummaryClearSurfaceRootRef');

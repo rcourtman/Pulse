@@ -20,7 +20,11 @@ import { useStoragePageFilters } from './useStoragePageFilters';
 import { useStoragePageResources } from './useStoragePageResources';
 import { useStoragePageStatus } from './useStoragePageStatus';
 import { useStorageResourceHighlight } from './useStorageResourceHighlight';
-import { isStorageRecordCeph } from './storagePageState';
+import {
+  DEFAULT_STORAGE_SELECTED_NODE_ID,
+  DEFAULT_STORAGE_SOURCE_FILTER,
+  isStorageRecordCeph,
+} from './storagePageState';
 import { buildStorageSummaryGroupScopeMap } from './storageSummaryGroups';
 
 export const useStoragePageModel = () => {
@@ -208,6 +212,16 @@ export const useStoragePageModel = () => {
     setSelectedDiskId(null);
     clearFocusedStorageGroup();
   };
+  const clearStorageFilters = () => {
+    setSearch('');
+    setSourceFilter(DEFAULT_STORAGE_SOURCE_FILTER);
+    setStorageFilterStatus('all');
+    setSelectedNodeId(DEFAULT_STORAGE_SELECTED_NODE_ID);
+  };
+  const clearAllPageStateOnEscape = () => {
+    clearPinnedSummaryScope();
+    clearStorageFilters();
+  };
 
   const setExpandedPoolId = (
     value: string | null | ((current: string | null) => string | null),
@@ -333,6 +347,7 @@ export const useStoragePageModel = () => {
     focusedGroupScope: focusedStorageGroupScope,
     focusedGroupId: selectedStorageGroupId,
     focusedSeriesId: focusedStorageResourceId,
+    onEscapeClear: clearAllPageStateOnEscape,
     revealActiveSeries: (seriesId) => {
       if (physicalDiskSeriesIds().has(seriesId)) {
         if (view() !== 'disks') {

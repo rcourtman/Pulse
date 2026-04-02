@@ -13,7 +13,11 @@ export function Dashboard(props: DashboardProps) {
   const state = useDashboardState(props);
 
   return (
-    <div class="space-y-3" data-testid="workloads-page">
+    <div
+      ref={state.setClearSurfaceRootRef}
+      class="space-y-3"
+      data-testid="workloads-page"
+    >
       <Show when={state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}>
         <StickySummarySection>
           <WorkloadsSummary
@@ -60,11 +64,7 @@ export function Dashboard(props: DashboardProps) {
         workloads={state.workloads}
       />
 
-      <div
-        ref={state.setClearSurfaceRootRef}
-        class="space-y-3"
-        data-testid="workloads-interaction-surface"
-      >
+      <div class="space-y-3" data-testid="workloads-interaction-surface">
         <Show
           when={
             !state.kioskMode() &&

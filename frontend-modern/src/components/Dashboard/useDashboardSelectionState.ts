@@ -18,6 +18,7 @@ import {
 } from './dashboardSelectionModel';
 
 interface UseDashboardSelectionStateOptions {
+  clearAdditionalPageStateOnEscape?: () => void;
   filteredGuests: Accessor<WorkloadGuest[]>;
   summaryGroupScopes: Accessor<Map<string, SummarySeriesGroupScope>>;
 }
@@ -74,6 +75,10 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     focusedSeriesId: selectedGuestId,
     focusedGroupId: selectedWorkloadGroupId,
     focusedGroupScope: focusedWorkloadGroupScope,
+    onEscapeClear: () => {
+      clearPinnedSummaryScope();
+      options.clearAdditionalPageStateOnEscape?.();
+    },
     revealActiveSeries: setRevealedGuestId,
   });
 

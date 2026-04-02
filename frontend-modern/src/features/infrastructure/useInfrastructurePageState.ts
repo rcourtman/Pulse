@@ -107,6 +107,10 @@ export function useInfrastructurePageState() {
       routeState.setFocusedResourceGroupId(null);
     });
   };
+  const clearAllPageStateOnEscape = () => {
+    clearPinnedSummaryScope();
+    clearFilters();
+  };
   const summaryInteraction = useSummaryPageInteractionState({
     clearPinnedScope: clearPinnedSummaryScope,
     hoveredSeriesId: routeState.hoveredResourceId,
@@ -114,6 +118,7 @@ export function useInfrastructurePageState() {
     focusedSeriesId: routeState.expandedResourceId,
     focusedGroupId: routeState.focusedResourceGroupId,
     focusedGroupScope: focusedResourceGroupScope,
+    onEscapeClear: clearAllPageStateOnEscape,
     revealActiveSeries: routeState.setRevealedResourceId,
   });
   const setSummaryTableRootRef = (element: HTMLDivElement | undefined) => {

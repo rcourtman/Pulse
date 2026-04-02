@@ -815,7 +815,7 @@ describe('Storage', () => {
       ).toBeTruthy();
     });
 
-    const clearSurface = screen.getByTestId('storage-interaction-surface');
+    const clearSurface = screen.getByTestId('storage-page');
     expect(clearSurface).not.toBeNull();
 
     fireEvent.click(clearSurface);

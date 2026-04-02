@@ -153,6 +153,30 @@ describe('useDashboardSelectionState', () => {
     );
   });
 
+  it('routes Escape through workload scope clearing and additional page reset work', () => {
+    locationSearch =
+      '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud&summaryGroup=docker-host%3Atruenas-main';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+    const clearAdditionalPageStateOnEscape = vi.fn();
+
+    renderHook(() =>
+      useDashboardSelectionState({
+        clearAdditionalPageStateOnEscape,
+        filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
+      }),
+    );
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    vi.runAllTimers();
+
+    expect(clearAdditionalPageStateOnEscape).toHaveBeenCalledTimes(1);
+    expect(navigateSpy).toHaveBeenCalledWith(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
+  });
+
   it('preserves the nearest scrollable ancestor when row focus changes locally', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);

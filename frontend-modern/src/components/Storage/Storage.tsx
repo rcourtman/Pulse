@@ -67,7 +67,11 @@ const Storage: Component = () => {
   } = useStoragePageModel();
 
   return (
-    <div class="space-y-4" data-testid="storage-page">
+    <div
+      ref={setClearSurfaceRootRef}
+      class="space-y-4"
+      data-testid="storage-page"
+    >
       <StickySummarySection desktopOnly={false}>
         <StoragePageSummary
           filteredRecordCount={() => filteredRecords().length}
@@ -92,11 +96,7 @@ const Storage: Component = () => {
         isCephRecord={isStorageRecordCeph}
       />
 
-      <div
-        ref={setClearSurfaceRootRef}
-        class="space-y-4"
-        data-testid="storage-interaction-surface"
-      >
+      <div class="space-y-4" data-testid="storage-interaction-surface">
         <div data-summary-clear-ignore>
           <StoragePageControls
             kioskMode={kioskMode}
