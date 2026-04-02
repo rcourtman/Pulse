@@ -85,6 +85,10 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     summaryInteraction.setTableRootRef(element);
   };
 
+  const setClearSurfaceRootRef = (element: HTMLDivElement | undefined) => {
+    summaryInteraction.setClearSurfaceRootRef(element);
+  };
+
   const setSelectedGuestIdState = (id: string | null) => {
     preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
       setSelectedGuestIdRaw(id);
@@ -228,6 +232,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     revealedGuestId,
     selectedGuestId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setClearSurfaceRootRef,
     setFocusedWorkloadGroupScope,
     setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,

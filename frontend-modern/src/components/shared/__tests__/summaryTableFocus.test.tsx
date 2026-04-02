@@ -156,11 +156,12 @@ describe('useSummaryPageInteractionState', () => {
   it('clears pinned scope when operators click table whitespace on a clear surface', () => {
     const [focusedSeriesId] = createSignal<string | null>('workload-a');
     const clearPinnedScope = vi.fn();
+    const clearRoot = document.createElement('div');
     const root = document.createElement('div');
     root.setAttribute('data-summary-clear-surface', '');
     const filler = document.createElement('div');
-    root.appendChild(filler);
-    document.body.appendChild(root);
+    clearRoot.append(root, filler);
+    document.body.appendChild(clearRoot);
 
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
@@ -170,6 +171,7 @@ describe('useSummaryPageInteractionState', () => {
     );
 
     result.setTableRootRef(root);
+    result.setClearSurfaceRootRef(clearRoot);
     filler.click();
 
     expect(clearPinnedScope).toHaveBeenCalledTimes(1);
@@ -178,12 +180,14 @@ describe('useSummaryPageInteractionState', () => {
   it('does not clear pinned scope when operators click an active summary row', () => {
     const [focusedSeriesId] = createSignal<string | null>('workload-a');
     const clearPinnedScope = vi.fn();
+    const clearRoot = document.createElement('div');
     const root = document.createElement('div');
     root.setAttribute('data-summary-clear-surface', '');
     const row = document.createElement('div');
     row.setAttribute('data-summary-series-id', 'workload-a');
+    clearRoot.append(root);
     root.appendChild(row);
-    document.body.appendChild(root);
+    document.body.appendChild(clearRoot);
 
     const { result } = renderHook(() =>
       useSummaryPageInteractionState({
@@ -193,7 +197,34 @@ describe('useSummaryPageInteractionState', () => {
     );
 
     result.setTableRootRef(root);
+    result.setClearSurfaceRootRef(clearRoot);
     row.click();
+
+    expect(clearPinnedScope).not.toHaveBeenCalled();
+  });
+
+  it('does not clear pinned scope when operators click ignored controls inside the clear root', () => {
+    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const clearPinnedScope = vi.fn();
+    const clearRoot = document.createElement('div');
+    const root = document.createElement('div');
+    const controls = document.createElement('div');
+    const input = document.createElement('input');
+    controls.setAttribute('data-summary-clear-ignore', '');
+    controls.appendChild(input);
+    clearRoot.append(controls, root);
+    document.body.appendChild(clearRoot);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        clearPinnedScope,
+        focusedGroupId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    result.setClearSurfaceRootRef(clearRoot);
+    input.click();
 
     expect(clearPinnedScope).not.toHaveBeenCalled();
   });

@@ -723,7 +723,10 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).not.toContain('SummaryScopeBar');
       expect(dashboardSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
       expect(dashboardSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
+      expect(dashboardSource).toContain('setClearSurfaceRootRef');
       expect(dashboardSource).toContain('setTableRootRef={state.setTableRootRef}');
+      expect(dashboardSource).toContain('data-testid="workloads-interaction-surface"');
+      expect(dashboardSource).toContain('data-summary-clear-ignore');
       expect(dashboardWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(dashboardWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');

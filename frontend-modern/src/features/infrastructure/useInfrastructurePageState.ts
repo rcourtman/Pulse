@@ -121,6 +121,10 @@ export function useInfrastructurePageState() {
     summaryInteraction.setTableRootRef(element);
   };
 
+  const setSummaryClearSurfaceRootRef = (element: HTMLDivElement | undefined) => {
+    summaryInteraction.setClearSurfaceRootRef(element);
+  };
+
   const preserveTableScrollAnchor = (apply: () => void) => {
     preserveScrollableAncestorVerticalOffset(tableRootRef(), apply);
   };
@@ -245,6 +249,7 @@ export function useInfrastructurePageState() {
     setExpandedResourceId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredResourceGroupScope,
+    setSummaryClearSurfaceRootRef,
     setSummaryTableRootRef,
     shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
     setFocusedResourceGroupId,

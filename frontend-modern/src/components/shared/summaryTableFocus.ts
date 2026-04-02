@@ -28,6 +28,7 @@ const SUMMARY_CLEAR_IGNORE_SELECTOR = [
   '[role="button"]',
   '[role="link"]',
   '[role="menuitem"]',
+  '[data-summary-clear-ignore]',
   '[data-summary-series-id]',
   '[data-summary-group-id]',
   '[data-inline-detail-for]',
@@ -74,6 +75,7 @@ export interface UseSummaryTableFocusBridgeOptions {
 
 export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOptions) {
   const [tableRoot, setTableRoot] = createSignal<HTMLElement | null>(null);
+  const [clearSurfaceRoot, setClearSurfaceRoot] = createSignal<HTMLElement | null>(null);
   const [viewportVersion, setViewportVersion] = createSignal(0);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
   const focusedGroupId = options.focusedGroupId ?? (() => null);
@@ -130,8 +132,9 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
   });
 
   createEffect(() => {
-    const root = tableRoot();
-    if (!root || !options.clearPinnedScope) {
+    const root = clearSurfaceRoot() ?? tableRoot();
+    const lookupRoot = tableRoot();
+    if (!root || !lookupRoot || !options.clearPinnedScope) {
       return;
     }
 
@@ -143,10 +146,10 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
       if (!(target instanceof HTMLElement) || !root.contains(target)) {
         return;
       }
-      if (!target.closest('[data-summary-clear-surface]')) {
+      if (target.closest(SUMMARY_CLEAR_IGNORE_SELECTOR)) {
         return;
       }
-      if (target.closest(SUMMARY_CLEAR_IGNORE_SELECTOR)) {
+      if (lookupRoot.contains(target) && !target.closest('[data-summary-clear-surface]')) {
         return;
       }
       options.clearPinnedScope?.();
@@ -345,6 +348,7 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     activeRow,
     isActiveRowVisible,
     jumpToActiveRow,
+    setClearSurfaceRootRef: (element: HTMLElement | undefined) => setClearSurfaceRoot(element ?? null),
     setTableRootRef: (element: HTMLElement | undefined) => setTableRoot(element ?? null),
     shouldShowJumpToActiveRow,
   } as const;
@@ -409,6 +413,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
     activeSeriesId,
     chartHoverSync,
     jumpToActiveRow: tableFocus.jumpToActiveRow,
+    setClearSurfaceRootRef: tableFocus.setClearSurfaceRootRef,
     setChartHoverSync,
     setTableRootRef: tableFocus.setTableRootRef,
     shouldShowJumpToActiveRow: tableFocus.shouldShowJumpToActiveRow,

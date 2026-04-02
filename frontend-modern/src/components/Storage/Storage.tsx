@@ -57,6 +57,7 @@ const Storage: Component = () => {
     jumpToActiveStorageRow,
     selectedDiskId,
     setChartHoverSync,
+    setClearSurfaceRootRef,
     setFocusedStorageGroupScope,
     setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
@@ -66,7 +67,7 @@ const Storage: Component = () => {
   } = useStoragePageModel();
 
   return (
-    <div class="space-y-4">
+    <div class="space-y-4" data-testid="storage-page">
       <StickySummarySection desktopOnly={false}>
         <StoragePageSummary
           filteredRecordCount={() => filteredRecords().length}
@@ -91,60 +92,68 @@ const Storage: Component = () => {
         isCephRecord={isStorageRecordCeph}
       />
 
-      <StoragePageControls
-        kioskMode={kioskMode}
-        view={view}
-        setView={setView}
-        search={search}
-        setSearch={setSearch}
-        groupBy={groupBy}
-        setGroupBy={setGroupBy}
-        sortKey={sortKey}
-        setSortKey={setSortKey}
-        sortDirection={sortDirection}
-        setSortDirection={setSortDirection}
-        statusFilter={storageFilterStatus}
-        setStatusFilter={setStorageFilterStatus}
-        sourceFilter={sourceFilter}
-        setSourceFilter={setSourceFilter}
-        sourceOptions={sourceFilterOptions}
-        nodeFilterOptions={nodeFilterOptions()}
-        selectedNodeId={selectedNodeId}
-        setSelectedNodeId={setSelectedNodeId}
-        storageFilterGroupBy={storageFilterGroupBy}
-      />
+      <div
+        ref={setClearSurfaceRootRef}
+        class="space-y-4"
+        data-testid="storage-interaction-surface"
+      >
+        <div data-summary-clear-ignore>
+          <StoragePageControls
+            kioskMode={kioskMode}
+            view={view}
+            setView={setView}
+            search={search}
+            setSearch={setSearch}
+            groupBy={groupBy}
+            setGroupBy={setGroupBy}
+            sortKey={sortKey}
+            setSortKey={setSortKey}
+            sortDirection={sortDirection}
+            setSortDirection={setSortDirection}
+            statusFilter={storageFilterStatus}
+            setStatusFilter={setStorageFilterStatus}
+            sourceFilter={sourceFilter}
+            setSourceFilter={setSourceFilter}
+            sourceOptions={sourceFilterOptions}
+            nodeFilterOptions={nodeFilterOptions()}
+            selectedNodeId={selectedNodeId}
+            setSelectedNodeId={setSelectedNodeId}
+            storageFilterGroupBy={storageFilterGroupBy}
+          />
+        </div>
 
-      <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
+        <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
 
-      <StorageContentCard
-        view={view}
-        physicalDisks={physicalDisks}
-        nodes={nodes}
-        selectedNodeId={selectedNodeId}
-        search={search}
-        groupedRecords={groupedRecords}
-        groupBy={groupBy}
-        expandedGroups={expandedGroups}
-        toggleGroup={toggleGroup}
-        expandedPoolId={expandedPoolId}
-        setExpandedPoolId={setExpandedPoolId}
-        nodeOnlineByLabel={nodeOnlineByLabel}
-        highlightedRecordId={highlightedRecordId}
-        getRecordAlertState={getRecordAlertState}
-        isLoadingPools={isLoadingPools}
-        activeSummaryGroupScope={activeSummaryStorageGroupScope}
-        hoveredSummaryGroupScope={hoveredSummaryStorageGroupScope}
-        focusedSummaryGroupScope={focusedSummaryStorageGroupScope}
-        focusedSummaryGroupId={focusedSummaryStorageGroupId}
-        onGroupFocusChange={setFocusedStorageGroupScope}
-        onGroupHoverChange={setHoveredStorageGroupScope}
-        highlightedSummaryResourceId={activeSummaryStorageResourceId}
-        hoveredStorageResourceId={hoveredStorageResourceId}
-        setTableRootRef={setSummaryTableRootRef}
-        setHoveredStorageResourceId={setHoveredStorageResourceId}
-        selectedDiskId={selectedDiskId}
-        setSelectedDiskId={setSelectedDiskId}
-      />
+        <StorageContentCard
+          view={view}
+          physicalDisks={physicalDisks}
+          nodes={nodes}
+          selectedNodeId={selectedNodeId}
+          search={search}
+          groupedRecords={groupedRecords}
+          groupBy={groupBy}
+          expandedGroups={expandedGroups}
+          toggleGroup={toggleGroup}
+          expandedPoolId={expandedPoolId}
+          setExpandedPoolId={setExpandedPoolId}
+          nodeOnlineByLabel={nodeOnlineByLabel}
+          highlightedRecordId={highlightedRecordId}
+          getRecordAlertState={getRecordAlertState}
+          isLoadingPools={isLoadingPools}
+          activeSummaryGroupScope={activeSummaryStorageGroupScope}
+          hoveredSummaryGroupScope={hoveredSummaryStorageGroupScope}
+          focusedSummaryGroupScope={focusedSummaryStorageGroupScope}
+          focusedSummaryGroupId={focusedSummaryStorageGroupId}
+          onGroupFocusChange={setFocusedStorageGroupScope}
+          onGroupHoverChange={setHoveredStorageGroupScope}
+          highlightedSummaryResourceId={activeSummaryStorageResourceId}
+          hoveredStorageResourceId={hoveredStorageResourceId}
+          setTableRootRef={setSummaryTableRootRef}
+          setHoveredStorageResourceId={setHoveredStorageResourceId}
+          selectedDiskId={selectedDiskId}
+          setSelectedDiskId={setSelectedDiskId}
+        />
+      </div>
     </div>
   );
 };

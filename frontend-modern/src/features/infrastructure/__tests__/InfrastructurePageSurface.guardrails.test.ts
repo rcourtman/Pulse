@@ -50,7 +50,10 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('hoveredSummaryGroupScope={hoveredSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
+    expect(infrastructurePageSurfaceSource).toContain('setSummaryClearSurfaceRootRef');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
+    expect(infrastructurePageSurfaceSource).toContain('data-testid="infrastructure-interaction-surface"');
+    expect(infrastructurePageSurfaceSource).toContain('data-summary-clear-ignore');
     expect(infrastructurePageSurfaceSource).not.toContain('SummaryScopeBar');
     expect(infrastructurePageSurfaceSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
     expect(infrastructurePageSurfaceSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
@@ -63,6 +66,7 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).toContain('clearPinnedSummaryScope');
     expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
+    expect(infrastructurePageStateSource).toContain('setSummaryClearSurfaceRootRef');
     expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');
     expect(infrastructurePageStateSource).toContain('shouldShowJumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('preserveScrollableAncestorVerticalOffset');

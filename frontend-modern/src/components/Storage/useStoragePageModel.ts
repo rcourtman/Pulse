@@ -410,6 +410,7 @@ export const useStoragePageModel = () => {
     hoveredSummaryStorageGroupScope: hoveredStorageGroupScope,
     selectedDiskId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setClearSurfaceRootRef: summaryInteraction.setClearSurfaceRootRef,
     setFocusedStorageGroupScope,
     setHoveredStorageGroupScope,
     setHoveredStorageResourceId,

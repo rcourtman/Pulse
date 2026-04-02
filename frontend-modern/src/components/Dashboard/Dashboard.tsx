@@ -13,7 +13,7 @@ export function Dashboard(props: DashboardProps) {
   const state = useDashboardState(props);
 
   return (
-    <div class="space-y-3">
+    <div class="space-y-3" data-testid="workloads-page">
       <Show when={state.isWorkloadsRoute() && !state.workloadsSummaryCollapsed()}>
         <StickySummarySection>
           <WorkloadsSummary
@@ -60,88 +60,96 @@ export function Dashboard(props: DashboardProps) {
         workloads={state.workloads}
       />
 
-      <Show
-        when={
-          !state.kioskMode() &&
-          state.surfaceConnected() &&
-          state.surfaceInitialDataReceived() &&
-          state.allGuests().length > 0
-        }
+      <div
+        ref={state.setClearSurfaceRootRef}
+        class="space-y-3"
+        data-testid="workloads-interaction-surface"
       >
-        <DashboardFilter
-          search={state.search}
-          setSearch={state.setSearch}
-          viewMode={state.viewMode}
-          setViewMode={state.setViewMode}
-          statusMode={state.statusMode}
-          setStatusMode={state.setStatusMode}
-          groupingMode={state.groupingMode}
-          setGroupingMode={state.setGroupingMode}
-          setSortKey={state.setSortKey}
-          setSortDirection={state.setSortDirection}
-          onBeforeAutoFocus={state.handleBeforeAutoFocus}
-          columnVisibility={state.dashboardFilterColumnVisibility()}
-          chartsCollapsed={state.isWorkloadsRoute() ? state.workloadsSummaryCollapsed : undefined}
-          onChartsToggle={
-            state.isWorkloadsRoute()
-              ? () => state.setWorkloadsSummaryCollapsed((collapsed) => !collapsed)
-              : undefined
+        <Show
+          when={
+            !state.kioskMode() &&
+            state.surfaceConnected() &&
+            state.surfaceInitialDataReceived() &&
+            state.allGuests().length > 0
           }
-          containerRuntimeFilter={state.containerRuntimeFilterConfig()}
-          hostFilter={state.hostFilterConfig()}
-          namespaceFilter={state.namespaceFilterConfig()}
-          platformFilter={state.platformFilterConfig()}
-        />
-      </Show>
+        >
+          <div data-summary-clear-ignore>
+            <DashboardFilter
+              search={state.search}
+              setSearch={state.setSearch}
+              viewMode={state.viewMode}
+              setViewMode={state.setViewMode}
+              statusMode={state.statusMode}
+              setStatusMode={state.setStatusMode}
+              groupingMode={state.groupingMode}
+              setGroupingMode={state.setGroupingMode}
+              setSortKey={state.setSortKey}
+              setSortDirection={state.setSortDirection}
+              onBeforeAutoFocus={state.handleBeforeAutoFocus}
+              columnVisibility={state.dashboardFilterColumnVisibility()}
+              chartsCollapsed={state.isWorkloadsRoute() ? state.workloadsSummaryCollapsed : undefined}
+              onChartsToggle={
+                state.isWorkloadsRoute()
+                  ? () => state.setWorkloadsSummaryCollapsed((collapsed) => !collapsed)
+                  : undefined
+              }
+              containerRuntimeFilter={state.containerRuntimeFilterConfig()}
+              hostFilter={state.hostFilterConfig()}
+              namespaceFilter={state.namespaceFilterConfig()}
+              platformFilter={state.platformFilterConfig()}
+            />
+          </div>
+        </Show>
 
-      <Show
-        when={
-          state.surfaceConnected() &&
-          state.surfaceInitialDataReceived() &&
-          state.filteredGuests().length > 0
-        }
-      >
-        <DashboardWorkloadTable
-          activeAlerts={state.activeAlerts}
-          alertsEnabled={state.alertsEnabled}
-          bottomSpacerHeight={state.bottomSpacerHeight}
-          getGroupLabel={state.getGroupLabel}
-          groupedGuests={state.groupedGuests}
-          groupedWindowing={state.groupedWindowing}
-          guestMetadata={state.guestMetadata}
-          guestParentNodeMap={state.guestParentNodeMap}
-          groupingMode={state.groupingMode}
-          handleCustomUrlUpdate={state.handleCustomUrlUpdate}
-          handleSort={state.handleSort}
-          handleTagClick={state.handleTagClick}
-          activeSummaryWorkloadGroupScope={state.activeSummaryWorkloadGroupScope}
-          activeSummaryWorkloadId={state.activeSummaryWorkloadId}
-          focusedSummaryWorkloadGroupScope={state.focusedSummaryWorkloadGroupScope}
-          focusedSummaryWorkloadGroupId={state.focusedSummaryWorkloadGroupId}
-          hoveredSummaryWorkloadGroupScope={state.hoveredSummaryWorkloadGroupScope}
-          isMobile={state.isMobile}
-          mobileVisibleColumnIds={state.mobileVisibleColumnIds}
-          mobileVisibleColumns={state.mobileVisibleColumns}
-          nodeByInstance={state.nodeByInstance}
-          search={state.search}
-          selectedGuestId={state.selectedGuestId}
-          setFocusedWorkloadGroupScope={state.setFocusedWorkloadGroupScope}
-          setHoveredWorkloadGroupScope={state.setHoveredWorkloadGroupScope}
-          setHoveredWorkloadId={state.setHoveredWorkloadId}
-          setSelectedGuestId={state.setSelectedGuestId}
-          setTableRootRef={state.setTableRootRef}
-          setTableBodyRef={state.setTableBodyRef}
-          setTableWrapperRef={state.setTableWrapperRef}
-          sortDirection={state.sortDirection}
-          sortKey={state.sortKey}
-          topSpacerHeight={state.topSpacerHeight}
-          totalColumns={state.totalColumns}
-          visibleColumns={state.visibleColumns}
-          visibleGroupKeys={state.visibleGroupKeys}
-          windowedGroupedGuests={state.windowedGroupedGuests}
-          workloadIOEmphasis={state.workloadIOEmphasis}
-        />
-      </Show>
+        <Show
+          when={
+            state.surfaceConnected() &&
+            state.surfaceInitialDataReceived() &&
+            state.filteredGuests().length > 0
+          }
+        >
+          <DashboardWorkloadTable
+            activeAlerts={state.activeAlerts}
+            alertsEnabled={state.alertsEnabled}
+            bottomSpacerHeight={state.bottomSpacerHeight}
+            getGroupLabel={state.getGroupLabel}
+            groupedGuests={state.groupedGuests}
+            groupedWindowing={state.groupedWindowing}
+            guestMetadata={state.guestMetadata}
+            guestParentNodeMap={state.guestParentNodeMap}
+            groupingMode={state.groupingMode}
+            handleCustomUrlUpdate={state.handleCustomUrlUpdate}
+            handleSort={state.handleSort}
+            handleTagClick={state.handleTagClick}
+            activeSummaryWorkloadGroupScope={state.activeSummaryWorkloadGroupScope}
+            activeSummaryWorkloadId={state.activeSummaryWorkloadId}
+            focusedSummaryWorkloadGroupScope={state.focusedSummaryWorkloadGroupScope}
+            focusedSummaryWorkloadGroupId={state.focusedSummaryWorkloadGroupId}
+            hoveredSummaryWorkloadGroupScope={state.hoveredSummaryWorkloadGroupScope}
+            isMobile={state.isMobile}
+            mobileVisibleColumnIds={state.mobileVisibleColumnIds}
+            mobileVisibleColumns={state.mobileVisibleColumns}
+            nodeByInstance={state.nodeByInstance}
+            search={state.search}
+            selectedGuestId={state.selectedGuestId}
+            setFocusedWorkloadGroupScope={state.setFocusedWorkloadGroupScope}
+            setHoveredWorkloadGroupScope={state.setHoveredWorkloadGroupScope}
+            setHoveredWorkloadId={state.setHoveredWorkloadId}
+            setSelectedGuestId={state.setSelectedGuestId}
+            setTableRootRef={state.setTableRootRef}
+            setTableBodyRef={state.setTableBodyRef}
+            setTableWrapperRef={state.setTableWrapperRef}
+            sortDirection={state.sortDirection}
+            sortKey={state.sortKey}
+            topSpacerHeight={state.topSpacerHeight}
+            totalColumns={state.totalColumns}
+            visibleColumns={state.visibleColumns}
+            visibleGroupKeys={state.visibleGroupKeys}
+            windowedGroupedGuests={state.windowedGroupedGuests}
+            workloadIOEmphasis={state.workloadIOEmphasis}
+          />
+        </Show>
+      </div>
 
       <DashboardStatsStrip
         connected={state.surfaceConnected}

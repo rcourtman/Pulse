@@ -71,6 +71,7 @@ export function InfrastructurePageSurface() {
     filteredResources,
     hasFilteredResources,
     setChartHoverSync,
+    setSummaryClearSurfaceRootRef,
     setSummaryTableRootRef,
     shouldShowJumpToActiveResourceRow,
   } = useInfrastructurePageState();
@@ -160,7 +161,13 @@ export function InfrastructurePageSurface() {
                 </StickySummarySection>
               </Show>
 
+              <div
+                ref={setSummaryClearSurfaceRootRef}
+                class="space-y-3"
+                data-testid="infrastructure-interaction-surface"
+              >
               <Show when={!kioskMode()}>
+                <div data-summary-clear-ignore>
                 <Card padding="sm" class="mb-4">
                   <PageControls
                     search={
@@ -293,6 +300,7 @@ export function InfrastructurePageSurface() {
                     />
                   </PageControls>
                 </Card>
+                </div>
               </Show>
 
               <Show
@@ -339,6 +347,7 @@ export function InfrastructurePageSurface() {
                   />
                 </div>
               </Show>
+              </div>
             </div>
           </Show>
         </Show>

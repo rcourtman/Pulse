@@ -202,9 +202,10 @@ querying, and the operator-facing storage health presentation layer.
     leaving stale row-local IDs or storage-local hover branches on the page.
     Any page, group, or entity scope that becomes pinned through storage
     interaction must stay row-first: the pinned row or group remains the
-    visible scoped state, and clearing belongs to the governed storage content
-    surface root via `data-summary-clear-surface` rather than an extra storage-
-    local strip or search-row widget.
+    visible scoped state, and clearing belongs to governed neutral
+    interaction-surface whitespace rather than an extra storage-local strip or
+    search-row widget, with storage owning a broader clear-surface root
+    separately from the content-card row-lookup root.
     When that scope is a storage
     pool group, member pool rows should expose shared
     `data-summary-group-member-active="preview|pinned"` state so the grouped

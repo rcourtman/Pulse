@@ -216,9 +216,11 @@ assembly branch.
     query state, so pinned scope is shareable, reversible, and owned by the
     same route-backed summary contract as row focus. Infrastructure must stay
     row-first here: the pinned cluster header remains the visible scoped
-    state, and clearing belongs to the governed infrastructure table surface
-    root via `data-summary-clear-surface` rather than a search-row fallback
-    widget or a second scope/pinned pill inside the cluster row chrome.
+    state, and clearing belongs to governed neutral interaction-surface
+    whitespace rather than a search-row fallback widget or a second
+    scope/pinned pill inside the cluster row chrome, with infrastructure
+    owning a broader clear-surface root separately from the table row-lookup
+    root.
 14. Keep infrastructure row emphasis on the shared frontend presentation
     contract. Host, PBS, and PMG table sections may decide whether a resource
     is contextually active, but they must expose that state through
