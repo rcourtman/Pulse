@@ -224,11 +224,13 @@ assembly branch.
     `frontend-modern/src/index.css` instead of provider-specific background
     classes that drift across resource tables or hide inline metric bars.
     Summary-linked infrastructure rows and cluster headers must also route
-    pointer preview, focus preview, and keyboard activation through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts` so the
-    unified-resource table does not fork mouse-only hover logic, touch-hostile
-    synthetic hover, or provider-specific key handling across host, PBS, and
-    PMG sections.
+    pointer preview and focus preview through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, while
+    deliberate expand/scope ownership must route through
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, so the
+    unified-resource table does not fork mouse-only hover logic, focusable-row
+    button shims, touch-hostile synthetic hover, or provider-specific control
+    handling across host, PBS, and PMG sections.
 15. Keep infrastructure search aligned with the governed display label. Shared
     infrastructure filtering through
     `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`

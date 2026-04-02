@@ -34,9 +34,10 @@ import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
-  createSummaryInteractiveRowHandlers,
-  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+  buildSummaryDisclosureControlsId,
+  createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
@@ -165,20 +166,18 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                         nextScope && tableProps.focusedSummaryGroupId === nextScope.id ? null : nextScope?.id ?? null,
                       );
                     };
-                    const groupRowInteraction = createSummaryInteractiveRowHandlers({
+                    const groupRowInteraction = createSummaryInteractiveRowPreviewHandlers({
                       onPreview: () => handleGroupHoverChange(groupSummaryScope()),
                       onPreviewClear: () => handleGroupHoverChange(null),
-                      onToggle: handleGroupFocusToggle,
                     });
                     return (
                       <TableRow
-                        class={`bg-surface-alt transition-colors duration-150 hover:bg-surface-hover ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+                        class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
                         data-summary-group-id={groupSummaryScope()?.id ?? undefined}
                         data-summary-group-series-count={String(
                           groupSummaryScope()?.seriesIds.length ?? 0,
                         )}
                         data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
-                        aria-pressed={tableProps.focusedSummaryGroupId === groupSummaryScope()?.id}
                         onClick={handleGroupFocusToggle}
                         {...groupRowInteraction}
                       >
@@ -187,6 +186,15 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"
                         >
                           <div class="flex items-center gap-2">
+                            <SummaryRowActionButton
+                              kind="scope"
+                              subjectLabel={group.cluster || 'Standalone'}
+                              pressed={
+                                tableProps.focusedSummaryGroupId === groupSummaryScope()?.id
+                              }
+                              onAction={handleGroupFocusToggle}
+                              onPreviewClear={() => handleGroupHoverChange(null)}
+                            />
                             <Show
                               when={group.cluster}
                               fallback={<span class="text-muted">Standalone</span>}
@@ -226,6 +234,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     getAgentStatusIndicator({ status: resource.status }),
                   );
                   const metricsKey = createMemo(() => buildMetricKeyForUnifiedResource(resource));
+                  const detailControlsId = createMemo(() =>
+                    buildSummaryDisclosureControlsId(resource.id),
+                  );
 
                   const cpuPercentValue = createMemo(() =>
                     resource.cpu ? Math.round(getCpuPercent(resource)) : null,
@@ -294,10 +305,9 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     getResourcePolicyTableBadges(resource.policy),
                   );
                   const workloadsHref = createMemo(() => buildWorkloadsHref(resource));
-                  const resourceRowInteraction = createSummaryInteractiveRowHandlers({
+                  const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
                     onPreview: () => tableProps.onHoverChange?.(resource.id),
                     onPreviewClear: () => tableProps.onHoverChange?.(null),
-                    onToggle: () => table.toggleExpand(resource.id),
                   });
 
                   return (
@@ -311,30 +321,21 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                             ? 'true'
                             : 'false'
                         }
-                        class={`${rowClass()} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+                        class={rowClass()}
                         style={{ 'min-height': '32px' }}
                         onClick={() => table.toggleExpand(resource.id)}
                         {...resourceRowInteraction}
                       >
                         <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                           <div class="flex items-center gap-1.5 min-w-0">
-                            <div
-                              class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                            >
-                              <svg
-                                class="w-3.5 h-3.5 text-muted group-hover:text-base-content"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M9 5l7 7-7 7"
-                                />
-                              </svg>
-                            </div>
+                            <SummaryRowActionButton
+                              kind="disclosure"
+                              subjectLabel={displayName()}
+                              expanded={isExpanded()}
+                              controlsId={detailControlsId()}
+                              onAction={() => table.toggleExpand(resource.id)}
+                              onPreviewClear={() => tableProps.onHoverChange?.(null)}
+                            />
                             <StatusDot
                               variant={statusIndicator().variant}
                               title={statusIndicator().label}
@@ -640,6 +641,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                       <Show when={isExpanded()}>
                         <TableRow data-inline-detail-for={resource.id}>
                           <TableCell
+                            id={detailControlsId()}
                             colspan={9}
                             class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
                           >

@@ -3,9 +3,10 @@ import type { Component } from 'solid-js';
 import { formatUptime } from '@/utils/format';
 import { StatusDot } from '@/components/shared/StatusDot';
 import {
-  createSummaryInteractiveRowHandlers,
-  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+  buildSummaryDisclosureControlsId,
+  createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import {
   Table,
   TableBody,
@@ -132,10 +133,12 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
 
                   return className;
                 });
-                const resourceRowInteraction = createSummaryInteractiveRowHandlers({
+                const detailControlsId = createMemo(() =>
+                  buildSummaryDisclosureControlsId(resource.id),
+                );
+                const resourceRowInteraction = createSummaryInteractiveRowPreviewHandlers({
                   onPreview: () => tableProps.onHoverChange?.(resource.id),
                   onPreviewClear: () => tableProps.onHoverChange?.(null),
-                  onToggle: () => table.toggleExpand(resource.id),
                 });
 
                 return (
@@ -148,30 +151,21 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                           ? 'true'
                           : 'false'
                       }
-                      class={`${rowClass()} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+                      class={rowClass()}
                       style={{ 'min-height': '32px' }}
                       onClick={() => table.toggleExpand(resource.id)}
                       {...resourceRowInteraction}
                     >
                       <TableCell class="pr-1.5 sm:pr-2 py-0.5 align-middle overflow-hidden pl-2 sm:pl-3">
                         <div class="flex items-center gap-1.5 min-w-0">
-                          <div
-                            class={`shrink-0 transition-transform duration-200 ${isExpanded() ? 'rotate-90' : ''}`}
-                          >
-                            <svg
-                              class="w-3.5 h-3.5 text-muted group-hover:text-base-content"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                            >
-                              <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M9 5l7 7-7 7"
-                              />
-                            </svg>
-                          </div>
+                          <SummaryRowActionButton
+                            kind="disclosure"
+                            subjectLabel={displayName()}
+                            expanded={isExpanded()}
+                            controlsId={detailControlsId()}
+                            onAction={() => table.toggleExpand(resource.id)}
+                            onPreviewClear={() => tableProps.onHoverChange?.(null)}
+                          />
                           <StatusDot
                             variant={statusIndicator().variant}
                             title={statusIndicator().label}
@@ -303,6 +297,7 @@ export const UnifiedResourcePBSTableSection: Component<UnifiedResourcePBSTableSe
                     <Show when={isExpanded()}>
                       <TableRow data-inline-detail-for={resource.id}>
                         <TableCell
+                          id={detailControlsId()}
                           colspan={7}
                           class="bg-surface-alt px-4 py-4 border-b border-border-subtle shadow-inner"
                         >

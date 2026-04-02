@@ -74,7 +74,6 @@ export const PHYSICAL_DISK_TABLE_ROW_CLASS = 'cursor-pointer transition-colors';
 export const PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS = 'bg-blue-50 dark:bg-blue-900';
 export const PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS = 'hover:bg-surface-hover';
 export const PHYSICAL_DISK_TABLE_ROW_STYLE = { height: '38px' } as const;
-export const PHYSICAL_DISK_EXPAND_BUTTON_CLASS = 'rounded p-1 hover:bg-surface-hover transition-colors';
 export const PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS =
   'border-b border-border-subtle bg-surface-alt px-4 py-4 shadow-inner';
 export const PHYSICAL_DISK_HEADER_DISK_CLASS =
@@ -92,7 +91,6 @@ export const PHYSICAL_DISK_HEADER_TEMP_CLASS =
   'hidden md:table-cell px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[72px]';
 export const PHYSICAL_DISK_HEADER_SIZE_CLASS =
   'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider w-[96px]';
-export const PHYSICAL_DISK_HEADER_EXPAND_CLASS = 'px-1.5 py-1 w-10';
 export const PHYSICAL_DISK_CELL_DISK_CLASS = 'px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[220px]';
 export const PHYSICAL_DISK_CELL_SOURCE_CLASS = 'px-1.5 sm:px-2 py-1 align-middle text-xs w-[72px]';
 export const PHYSICAL_DISK_CELL_HOST_CLASS = 'px-1.5 sm:px-2 py-1 align-middle text-xs md:min-w-[120px]';
@@ -103,8 +101,7 @@ export const PHYSICAL_DISK_CELL_TEMP_CLASS =
   'hidden md:table-cell px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[72px]';
 export const PHYSICAL_DISK_CELL_SIZE_CLASS =
   'px-1.5 sm:px-2 py-1 align-middle text-xs whitespace-nowrap w-[96px]';
-export const PHYSICAL_DISK_CELL_EXPAND_CLASS = 'px-1.5 py-1 align-middle text-right';
-export const PHYSICAL_DISK_NAME_WRAP_CLASS = 'flex min-w-0 items-center whitespace-nowrap';
+export const PHYSICAL_DISK_NAME_WRAP_CLASS = 'flex min-w-0 items-center gap-1.5 whitespace-nowrap';
 export const PHYSICAL_DISK_NAME_TEXT_CLASS = 'block min-w-0 truncate text-[12px] font-semibold text-base-content';
 export const PHYSICAL_DISK_SOURCE_BADGE_CLASS =
   'inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium';
@@ -115,8 +112,6 @@ export const PHYSICAL_DISK_HEALTH_LABEL_CLASS = 'shrink-0 text-[11px] font-semib
 export const PHYSICAL_DISK_HEALTH_SUMMARY_CLASS = 'hidden xl:block truncate text-[11px] text-muted';
 export const PHYSICAL_DISK_TEMPERATURE_CLASS = 'text-[11px] font-medium';
 export const PHYSICAL_DISK_SIZE_VALUE_CLASS = 'text-[11px] text-base-content';
-export const PHYSICAL_DISK_EXPAND_ICON_BASE_CLASS =
-  'h-3.5 w-3.5 text-muted transition-transform duration-150';
 
 const titleize = (value: string | undefined | null): string =>
   (value || '')
@@ -138,10 +133,6 @@ export function getPhysicalDiskSourceBadgePresentation(resource: Resource): {
     label: presentation?.label || getPhysicalDiskPlatformLabel(resource, getSourcePlatformLabel(resource.platformType)),
     className: `${presentation?.tone || 'text-base-content'} ${PHYSICAL_DISK_SOURCE_BADGE_CLASS}`.trim(),
   };
-}
-
-export function getPhysicalDiskExpandIconClass(expanded: boolean): string {
-  return `${PHYSICAL_DISK_EXPAND_ICON_BASE_CLASS} ${expanded ? 'rotate-90' : ''}`.trim();
 }
 
 export function getPhysicalDiskHostLabel(

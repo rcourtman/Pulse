@@ -19,9 +19,10 @@ import { resolveWorkloadType } from '@/utils/workloads';
 import { EnhancedCPUBar } from '@/components/Dashboard/EnhancedCPUBar';
 import { UpdateButton } from '@/components/shared/ContainerUpdateBadge';
 import {
-  createSummaryInteractiveRowHandlers,
-  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+  buildSummaryDisclosureControlsId,
+  createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { getDashboardGuestDiskStatusMessage } from '@/utils/dashboardGuestPresentation';
 import type { GuestRowProps } from './guestRowModel';
 import { useGuestRowState } from './useGuestRowState';
@@ -86,6 +87,7 @@ export function GuestRow(props: GuestRowProps) {
   } = useGuestRowState(props);
 
   const cpuPercent = createMemo(() => (props.guest.cpu || 0) * 100);
+  const detailControlsId = createMemo(() => buildSummaryDisclosureControlsId(guestId()));
 
   const getDiskStatusTooltip = () => {
     if (!isVM(props.guest)) return 'Disk stats unavailable';
@@ -95,17 +97,16 @@ export function GuestRow(props: GuestRowProps) {
   };
   const interactiveRowHandlers =
     props.onClick || props.onHoverChange
-      ? createSummaryInteractiveRowHandlers({
+      ? createSummaryInteractiveRowPreviewHandlers({
           onPreview: () => props.onHoverChange?.(guestId()),
           onPreviewClear: () => props.onHoverChange?.(null),
-          onToggle: props.onClick,
         })
       : {};
 
   return (
     <>
       <tr
-        class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+        class={`${rowClass()} ${props.onClick ? 'cursor-pointer group' : ''}`.trim()}
         style={rowStyle()}
         data-guest-id={guestId()}
         data-summary-series-id={guestId()}
@@ -118,21 +119,16 @@ export function GuestRow(props: GuestRowProps) {
           class={`pr-1.5 sm:pr-2 py-0.5 align-middle whitespace-nowrap ${firstCellIndent()}`}
         >
           <div class="flex items-center gap-2 min-w-0">
-            <div class={`transition-transform duration-200 ${props.isExpanded ? 'rotate-90' : ''}`}>
-              <svg
-                class="w-3.5 h-3.5 text-muted group-hover:text-base-content"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </div>
+            <Show when={props.onClick}>
+              <SummaryRowActionButton
+                kind="disclosure"
+                subjectLabel={props.guest.name}
+                expanded={props.isExpanded}
+                controlsId={detailControlsId()}
+                onAction={() => props.onClick?.()}
+                onPreviewClear={() => props.onHoverChange?.(null)}
+              />
+            </Show>
             <div class="flex items-center gap-1.5 min-w-0">
               <StatusDot
                 variant={guestStatus().variant}

@@ -18,6 +18,7 @@ import infrastructureSummaryModelSource from '@/components/Infrastructure/infras
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
+import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import resourceDetailMappersSource from '@/components/Infrastructure/resourceDetailMappers.ts?raw';
 import resourceDetailDiscoveryModelSource from '@/components/Infrastructure/resourceDetailDiscoveryModel.ts?raw';
@@ -273,8 +274,12 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
       expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
       expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
-      expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowHandlers');
-      expect(summaryInteractionA11ySource).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
+      expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowPreviewHandlers');
+      expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveActionKeydownHandler');
+      expect(summaryRowActionButtonSource).toContain('SummaryRowActionButton');
+      expect(summaryRowActionButtonSource).toContain('aria-controls');
+      expect(summaryRowActionButtonSource).toContain('aria-expanded');
+      expect(summaryRowActionButtonSource).toContain('aria-pressed');
 
       for (const source of [
         unifiedResourceHostTableCardSource,
@@ -282,8 +287,8 @@ describe('UnifiedResourceTable performance contract', () => {
         unifiedResourcePMGTableSectionSource,
       ]) {
         expect(source).toContain('data-summary-row-active');
-        expect(source).toContain('createSummaryInteractiveRowHandlers');
-        expect(source).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
+        expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
+        expect(source).toContain('SummaryRowActionButton');
         expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300');
         expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
       }

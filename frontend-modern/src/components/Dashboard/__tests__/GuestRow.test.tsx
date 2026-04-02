@@ -465,21 +465,23 @@ describe('GuestRow', () => {
       expect(onHoverChange).toHaveBeenCalledWith(null);
     });
 
-    it('toggles the row from keyboard when the row itself is focused', () => {
+    it('toggles the row from the shared disclosure button keyboard path', () => {
       const onClick = vi.fn();
       const onHoverChange = vi.fn();
-      const { container } = renderGuestRow({
-        guest: makeGuest(),
+      const guest = makeGuest();
+      renderGuestRow({
+        guest,
         onClick,
         onHoverChange,
       });
-      const tr = container.querySelector('tr')!;
-      expect(tr).toHaveAttribute('tabindex', '0');
+      const toggleButton = screen.getByRole('button', {
+        name: `Expand ${guest.name}`,
+      });
 
-      fireEvent.focusIn(tr);
+      fireEvent.focusIn(toggleButton);
       expect(onHoverChange).toHaveBeenCalled();
 
-      fireEvent.keyDown(tr, { key: 'Enter' });
+      fireEvent.click(toggleButton);
       expect(onClick).toHaveBeenCalledOnce();
     });
   });
@@ -692,6 +694,7 @@ describe('GuestRow', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         isExpanded: true,
+        onClick: vi.fn(),
       });
       const chevronWrapper = container.querySelector('.rotate-90');
       expect(chevronWrapper).toBeTruthy();
@@ -701,6 +704,7 @@ describe('GuestRow', () => {
       const { container } = renderGuestRow({
         guest: makeGuest(),
         isExpanded: false,
+        onClick: vi.fn(),
       });
       const chevronWrapper = container.querySelector('.rotate-90');
       expect(chevronWrapper).toBeNull();

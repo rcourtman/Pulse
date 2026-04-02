@@ -766,18 +766,23 @@ describe('Storage', () => {
       return;
     }
 
-    fireEvent.click(groupRow);
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Pin summary scope for pve1' }),
+    );
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
         '/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
         ROUTE_STATE_REPLACE_OPTIONS,
       );
-      expect(groupRow.getAttribute('aria-pressed')).toBe('true');
     });
 
     expect(screen.getByTestId('storage-summary-scope')).toHaveTextContent('Pinned');
     expect(screen.getByRole('button', { name: 'Reset pinned scope' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Unpin summary scope for pve1' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
   });
 
   it('shows ceph summary card and pool expand chevron', async () => {
@@ -837,7 +842,7 @@ describe('Storage', () => {
     expect(screen.getByText('Primary Ceph')).toBeInTheDocument();
 
     // All pools now have a toggle details button (not just Ceph)
-    const toggleBtn = screen.getByRole('button', { name: 'Toggle details for Ceph-Pool-1' });
+    const toggleBtn = screen.getByRole('button', { name: 'Expand Ceph-Pool-1' });
     expect(toggleBtn).toBeInTheDocument();
     fireEvent.click(toggleBtn);
   });
@@ -876,7 +881,7 @@ describe('Storage', () => {
 
     render(() => <Storage />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for tank' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand tank' }));
 
     await waitFor(() => {
       expect(metricsHistorySpy).toHaveBeenCalledWith(
@@ -999,7 +1004,7 @@ describe('Storage', () => {
 
     const summary = await screen.findByTestId('storage-summary');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for Alpha-Store' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Alpha-Store' }));
 
     await waitFor(() => {
       expect(
@@ -1151,7 +1156,7 @@ describe('Storage', () => {
     })) as unknown as typeof alphaRow.getBoundingClientRect;
     alphaRow.scrollIntoView = vi.fn();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for Alpha-Store' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Alpha-Store' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: 'Jump to row' })).toBeInTheDocument();
@@ -1262,7 +1267,7 @@ describe('Storage', () => {
     render(() => <Storage />);
 
     await screen.findByTestId('storage-summary');
-    fireEvent.click(screen.getByRole('button', { name: 'Toggle details for Alpha-Store' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Expand Alpha-Store' }));
 
     await waitFor(() => {
       expect(document.querySelector('[data-inline-detail-for="pool:alpha"]')).toBeTruthy();

@@ -51,12 +51,8 @@ export const STORAGE_POOL_ROW_IMPACT_CELL_CLASS =
   'hidden lg:table-cell px-2 py-1 align-middle text-[11px] text-base-content';
 export const STORAGE_POOL_ROW_ISSUE_CELL_CLASS = 'px-2 py-1 align-middle text-[11px]';
 export const STORAGE_POOL_ROW_ISSUE_TEXT_CLASS = 'block truncate text-[11px] font-semibold';
-export const STORAGE_POOL_ROW_EXPAND_CELL_CLASS = 'px-1.5 py-1 align-middle text-right';
-export const STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS = 'rounded p-1 hover:bg-surface-hover transition-colors';
 export const STORAGE_POOL_ROW_PLACEHOLDER_CLASS = 'text-muted';
 export const STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS = 'text-[11px] text-muted';
-export const STORAGE_POOL_ROW_EXPAND_ICON_BASE_CLASS =
-  'h-3.5 w-3.5 text-muted transition-transform duration-150';
 
 export const buildStoragePoolRowModel = (record: StorageRecord): StoragePoolRowModel => {
   const totalBytes = record.capacity.totalBytes || 0;
@@ -81,9 +77,6 @@ export const buildStoragePoolRowModel = (record: StorageRecord): StoragePoolRowM
     compactIssueSummary: getCompactStoragePoolIssueSummary(record),
   };
 };
-
-export const getStoragePoolExpandIconClass = (expanded: boolean): string =>
-  `${STORAGE_POOL_ROW_EXPAND_ICON_BASE_CLASS} ${expanded ? 'rotate-90' : ''}`.trim();
 
 export const getStoragePoolImpactTextClass = (impact: string): string =>
   `${STORAGE_POOL_ROW_TEXT_TRUNCATE_CLASS} ${impact === '—' ? STORAGE_POOL_ROW_PLACEHOLDER_CLASS : ''}`.trim();

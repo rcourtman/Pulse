@@ -132,6 +132,7 @@ work extends shared components instead of creating new local variants.
 110. `frontend-modern/src/components/shared/SummaryScopeBar.tsx`
 111. `frontend-modern/src/components/shared/summaryScopePresentation.ts`
 112. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
+113. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 
 ## Shared Boundaries
 
@@ -153,14 +154,17 @@ work extends shared components instead of creating new local variants.
 9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
 10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
 11. Keep summary-to-table coordination deliberate, explicit, and reversible. Shared summary hover may highlight the matching table row when it is already visible, but transient chart hover must not auto-filter tables, auto-scroll the page, or reshuffle table ordering. When a page/group/entity scope is active on workloads, infrastructure, or storage, the page shell must surface that state through the shared `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus `frontend-modern/src/components/shared/summaryScopePresentation.ts` contract instead of inventing page-local chips, breadcrumbs, or hidden route-only focus. That shared scope bar must distinguish transient preview from pinned focus, keep the current scope visible even when the sticky summary is collapsed or off-screen, and expose a clear reset path for pinned scope so touch-only operators do not depend on hover or “click the same row again” discovery. When the active row is off-screen, page owners must still route through `frontend-modern/src/components/shared/summaryTableFocus.ts` and surface a lightweight `Jump to row` affordance that reveals and scrolls only on explicit user action. Deliberate row focus may reveal inline detail automatically, but that reveal must be drawer-aware: preserve already-good positions, avoid hard centering, and scroll only enough to keep the row header plus the top of the inline detail visible.
-    Shared summary-linked rows and group headers must also route their pointer,
-    focus, and keyboard semantics through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts` so fine
-    pointers get transient preview, focusable rows preview on keyboard
-    navigation, `Enter`/`Space` trigger the same deliberate pin or row-toggle
-    action as click, `Escape` clears preview without mutating pinned route
-    state, and touch surfaces do not inherit fake mouse-hover behavior through
-    page-local event handlers.
+    Shared summary-linked rows and group headers must also route their preview
+    semantics through
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts` and
+    route deliberate pin/open ownership through
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`.
+    Fine pointers may preview from the row, but `aria-expanded`,
+    `aria-controls`, `aria-pressed`, focus treatment, and `Escape` preview
+    clearing belong to the shared leading action control rather than
+    focusable-table-row shims. Workloads, infrastructure, and storage must not
+    rebuild row-as-button keyboard handling or trailing one-off expand columns
+    once the shared action primitive exists.
 12. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer.
 13. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense

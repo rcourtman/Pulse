@@ -3,9 +3,9 @@ import { EnhancedStorageBar } from './EnhancedStorageBar';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
-  createSummaryInteractiveRowHandlers,
-  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+  createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import {
   buildStorageGroupRowPresentation,
   STORAGE_GROUP_ROW_CELL_CLASS,
@@ -19,7 +19,6 @@ import {
   STORAGE_GROUP_ROW_POOL_COUNT_CLASS,
   STORAGE_GROUP_ROW_USAGE_LABEL_CLASS,
   STORAGE_GROUP_ROW_USAGE_WRAP_CLASS,
-  getStorageGroupChevronClass,
 } from '@/features/storageBackups/groupPresentation';
 
 interface StorageGroupRowProps {
@@ -36,19 +35,17 @@ interface StorageGroupRowProps {
 
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   const row = () => buildStorageGroupRowPresentation(props.group);
-  const interactiveRowHandlers = createSummaryInteractiveRowHandlers({
+  const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => props.onHoverChange?.(props.summaryGroupScope),
     onPreviewClear: () => props.onHoverChange?.(null),
-    onToggle: () => props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope),
   });
 
   return (
     <tr
-      class={`${STORAGE_GROUP_ROW_CLASS} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+      class={STORAGE_GROUP_ROW_CLASS}
       data-summary-group-id={props.summaryGroupScope?.id ?? undefined}
       data-summary-group-series-count={String(props.summaryGroupScope?.seriesIds.length ?? 0)}
       data-summary-row-active={props.summaryActive ? 'true' : 'false'}
-      aria-pressed={props.summaryFocused}
       onClick={() =>
         props.onFocusChange?.(
           props.summaryFocused ? null : props.summaryGroupScope,
@@ -58,27 +55,23 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
     >
       <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
         <div class={STORAGE_GROUP_ROW_CONTENT_CLASS}>
-          <button
-            type="button"
-            aria-label={props.expanded ? `Collapse ${row().label}` : `Expand ${row().label}`}
+          <SummaryRowActionButton
+            kind="disclosure"
+            subjectLabel={row().label}
+            expanded={props.expanded}
+            onAction={props.onToggle}
+            onPreviewClear={() => props.onHoverChange?.(null)}
             class="inline-flex items-center justify-center"
-            onClick={(event) => {
-              event.stopPropagation();
-              props.onToggle();
-            }}
-          >
-            <svg
-              class={getStorageGroupChevronClass(props.expanded)}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2.5"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
+          />
+          <SummaryRowActionButton
+            kind="scope"
+            subjectLabel={row().label}
+            pressed={props.summaryFocused}
+            onAction={() =>
+              props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope)
+            }
+            onPreviewClear={() => props.onHoverChange?.(null)}
+          />
 
           {/* Group label */}
           <span class={STORAGE_GROUP_ROW_LABEL_CLASS}>

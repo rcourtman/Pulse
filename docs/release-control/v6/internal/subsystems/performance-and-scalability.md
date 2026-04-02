@@ -169,10 +169,11 @@ regression protection.
 27. Keep summary hover/focus and sticky-card behavior on shared hot paths: infrastructure, workloads, and storage summary shells must reuse one page/group/entity scope model plus `frontend-modern/src/components/shared/StickySummarySection.tsx` inside the app scroll shell instead of per-page scroll listeners or per-card hover derivations, so row scrubbing highlights all cards, workload group headers, infrastructure cluster headers, and storage pool-group headers scope the summary coherently, pinned group focus remains route-backed and reversible, and the hot path does not multiply render or scroll work. The explicit scope affordance for that hot path must also stay shared: `frontend-modern/src/components/shared/SummaryScopeBar.tsx` and `frontend-modern/src/components/shared/summaryScopePresentation.ts` own the visible page/group/entity scope label, preview-vs-pinned distinction, and reset affordance so touch-safe reversibility does not fork per-page banner logic. That same hot path must keep chart-backed summary-card geometry explicit and stable so hover rerenders, synchronized readouts, idle header metadata, or the scope bar itself cannot feed layout loops that grow or shrink the top cards over time. Recovery’s summary rail is not part of this interactive hot path; it may share summary-card framing, but it must remain non-interactive until a separately governed model says otherwise.
     The input path for that hot summary contract must stay shared too:
     `frontend-modern/src/components/shared/summaryInteractionA11y.ts` owns
-    fine-pointer preview, focus-preview continuity, and `Enter`/`Space`
-    deliberate activation for summary-linked rows and group headers, so
+    fine-pointer preview and focus-preview continuity, while
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx` owns
+    deliberate open/pin controls for summary-linked rows and group headers, so
     workloads, infrastructure, and storage do not rebuild mouse-only hover
-    branches, keyboard-only toggles, or touch-hostile synthetic hover behavior
+    branches, focusable-row toggles, or touch-hostile synthetic hover behavior
     inside individual row renderers.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 

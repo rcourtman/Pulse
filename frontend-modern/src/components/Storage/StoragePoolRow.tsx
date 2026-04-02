@@ -6,12 +6,9 @@ import {
 } from '@/features/storageBackups/rowPresentation';
 import {
   buildStoragePoolRowModel,
-  getStoragePoolExpandIconClass,
   getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
   STORAGE_POOL_ROW_EXPANDED_CLASS,
-  STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS,
-  STORAGE_POOL_ROW_EXPAND_CELL_CLASS,
   STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
   STORAGE_POOL_ROW_HOST_CELL_CLASS,
   STORAGE_POOL_ROW_IMPACT_CELL_CLASS,
@@ -35,9 +32,10 @@ import type { Resource } from '@/types/resource';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import { StoragePoolDetail } from './StoragePoolDetail';
 import {
-  createSummaryInteractiveRowHandlers,
-  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+  buildSummaryDisclosureControlsId,
+  createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 
 interface StoragePoolRowProps {
   record: StorageRecord;
@@ -59,16 +57,18 @@ interface StoragePoolRowProps {
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
   const row = createMemo(() => buildStoragePoolRowModel(props.record));
-  const interactiveRowHandlers = createSummaryInteractiveRowHandlers({
+  const detailControlsId = createMemo(() =>
+    buildSummaryDisclosureControlsId(props.summarySeriesId),
+  );
+  const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => props.onHoverChange?.(props.summarySeriesId),
     onPreviewClear: () => props.onHoverChange?.(null),
-    onToggle: props.onToggleExpand,
   });
 
   return (
     <>
       <tr
-        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''} ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+        class={`${STORAGE_POOL_ROW_CLASS} ${props.rowClass} ${props.expanded ? STORAGE_POOL_ROW_EXPANDED_CLASS : ''}`.trim()}
         style={{ ...props.rowStyle, ...STORAGE_POOL_ROW_STYLE }}
         onClick={props.onToggleExpand}
         {...interactiveRowHandlers}
@@ -77,9 +77,19 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
         {...props.alertDataAttrs}
       >
         <td class={STORAGE_POOL_ROW_NAME_CELL_CLASS}>
-          <span class={STORAGE_POOL_ROW_NAME_TEXT_CLASS} title={props.record.name}>
-            {props.record.name}
-          </span>
+          <div class="flex min-w-0 items-center gap-1.5">
+            <SummaryRowActionButton
+              kind="disclosure"
+              subjectLabel={props.record.name}
+              expanded={props.expanded}
+              controlsId={detailControlsId()}
+              onAction={props.onToggleExpand}
+              onPreviewClear={() => props.onHoverChange?.(null)}
+            />
+            <span class={STORAGE_POOL_ROW_NAME_TEXT_CLASS} title={props.record.name}>
+              {props.record.name}
+            </span>
+          </div>
         </td>
 
         <td class={STORAGE_POOL_ROW_SOURCE_CELL_CLASS}>
@@ -154,36 +164,13 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
             </span>
           </Show>
         </td>
-
-        <td class={STORAGE_POOL_ROW_EXPAND_CELL_CLASS}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onToggleExpand();
-            }}
-            class={STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS}
-            aria-label={`Toggle details for ${props.record.name}`}
-          >
-            <svg
-              class={getStoragePoolExpandIconClass(props.expanded)}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              <path d="M9 18l6-6-6-6" />
-            </svg>
-          </button>
-        </td>
       </tr>
       <Show when={props.expanded}>
         <StoragePoolDetail
           record={props.record}
           physicalDisks={props.physicalDisks}
           summarySeriesId={props.summarySeriesId}
+          controlsId={detailControlsId()}
         />
       </Show>
     </>

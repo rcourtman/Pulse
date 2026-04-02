@@ -61,6 +61,7 @@ import interactiveSparklineModelSource from '@/components/shared/interactiveSpar
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
+import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
 import summaryScopeBarSource from '@/components/shared/SummaryScopeBar.tsx?raw';
 import summaryScopePresentationSource from '@/components/shared/summaryScopePresentation.ts?raw';
@@ -400,11 +401,20 @@ describe('shared primitive guardrails', () => {
   });
 
   it('keeps summary-linked row input semantics on the shared interaction helper', () => {
-    expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowHandlers');
-    expect(summaryInteractionA11ySource).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
-    expect(summaryInteractionA11ySource).toContain("event.key === 'Enter' || event.key === ' '");
-    expect(summaryInteractionA11ySource).toContain("event.key === 'Escape'");
+    expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveRowPreviewHandlers');
+    expect(summaryInteractionA11ySource).toContain('createSummaryInteractiveActionKeydownHandler');
+    expect(summaryInteractionA11ySource).toContain('buildSummaryDisclosureControlsId');
+    expect(summaryInteractionA11ySource).toContain("event.key === 'Enter'");
+    expect(summaryInteractionA11ySource).toContain("event.code === 'Space'");
+    expect(summaryInteractionA11ySource).toContain("event.key !== 'Escape'");
     expect(summaryInteractionA11ySource).toContain("window.matchMedia('(pointer: fine)')");
+    expect(summaryRowActionButtonSource).toContain('SummaryRowActionButton');
+    expect(summaryRowActionButtonSource).toContain("kind: 'disclosure'");
+    expect(summaryRowActionButtonSource).toContain("kind: 'scope'");
+    expect(summaryRowActionButtonSource).toContain('aria-controls');
+    expect(summaryRowActionButtonSource).toContain('aria-expanded');
+    expect(summaryRowActionButtonSource).toContain('aria-pressed');
+    expect(summaryRowActionButtonSource).toContain('data-row-action="true"');
 
     for (const source of [
       workloadPanelSource,
@@ -416,8 +426,8 @@ describe('shared primitive guardrails', () => {
       unifiedResourcePBSTableSectionSource,
       unifiedResourcePMGTableSectionSource,
     ]) {
-      expect(source).toContain('createSummaryInteractiveRowHandlers');
-      expect(source).toContain('SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS');
+      expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
+      expect(source).toContain('SummaryRowActionButton');
     }
 
     expect(nodeGroupHeaderSource).toContain('event.stopPropagation()');

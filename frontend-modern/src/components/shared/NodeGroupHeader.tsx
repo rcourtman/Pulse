@@ -7,6 +7,7 @@ import { getNodeStatusIndicator } from '@/utils/status';
 interface NodeGroupHeaderProps {
   node: Node;
   colspan?: number;
+  leadingAction?: JSX.Element;
   renderAs?: 'tr' | 'div';
   trClass?: string;
   trProps?: JSX.HTMLAttributes<HTMLTableRowElement>;
@@ -24,6 +25,7 @@ export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {
       class={`flex flex-wrap items-center gap-3 ${isOnline() ? '' : 'opacity-60'}`}
       title={nodeStatus().label}
     >
+      {props.leadingAction}
       <StatusDot
         variant={nodeStatus().variant}
         title={nodeStatus().label}

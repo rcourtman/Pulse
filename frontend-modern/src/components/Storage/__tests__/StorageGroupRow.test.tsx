@@ -91,15 +91,16 @@ describe('StorageGroupRow', () => {
       return;
     }
 
-    expect(row).toHaveAttribute('tabindex', '0');
-
     fireEvent.pointerEnter(row, { pointerType: 'mouse' });
     expect(onHoverChange).toHaveBeenCalledWith(scope);
 
-    fireEvent.focusIn(row);
+    const scopeButton = screen.getByRole('button', {
+      name: 'Pin summary scope for tower',
+    });
+    fireEvent.focusIn(scopeButton);
     expect(onHoverChange).toHaveBeenLastCalledWith(scope);
 
-    fireEvent.keyDown(row, { key: 'Enter' });
+    fireEvent.click(scopeButton);
     expect(onFocusChange).toHaveBeenCalledWith(scope);
 
     fireEvent.click(row);

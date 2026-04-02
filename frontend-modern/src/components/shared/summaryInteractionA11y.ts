@@ -1,7 +1,7 @@
 import type { JSX } from 'solid-js';
 
-export const SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS =
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70 focus-visible:ring-inset';
+export const SUMMARY_ROW_ACTION_BUTTON_FOCUS_CLASS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70';
 
 const isFinePointerEvent = (event: PointerEvent): boolean => {
   const pointerType = typeof event.pointerType === 'string' ? event.pointerType : '';
@@ -17,22 +17,17 @@ const isFinePointerEvent = (event: PointerEvent): boolean => {
   return true;
 };
 
-const isCurrentTargetKeyboardEvent = (event: KeyboardEvent): boolean =>
-  event.target === event.currentTarget;
-
-interface SummaryInteractiveRowHandlersOptions {
+interface SummaryInteractiveRowPreviewOptions {
   onPreview?: () => void;
   onPreviewClear?: () => void;
-  onToggle?: () => void;
 }
 
-export const createSummaryInteractiveRowHandlers = (
-  options: SummaryInteractiveRowHandlersOptions,
+export const createSummaryInteractiveRowPreviewHandlers = (
+  options: SummaryInteractiveRowPreviewOptions,
 ): Pick<
   JSX.HTMLAttributes<HTMLElement>,
-  'onFocusIn' | 'onFocusOut' | 'onKeyDown' | 'onPointerEnter' | 'onPointerLeave' | 'tabIndex'
+  'onFocusIn' | 'onFocusOut' | 'onPointerEnter' | 'onPointerLeave'
 > => ({
-  tabIndex: 0,
   onPointerEnter: (event) => {
     if (isFinePointerEvent(event)) {
       options.onPreview?.();
@@ -53,21 +48,34 @@ export const createSummaryInteractiveRowHandlers = (
     }
     options.onPreviewClear?.();
   },
-  onKeyDown: (event) => {
-    if (!isCurrentTargetKeyboardEvent(event)) {
-      return;
-    }
-
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault();
-      options.onToggle?.();
-      return;
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      options.onPreviewClear?.();
-      event.currentTarget.blur();
-    }
-  },
 });
+
+interface SummaryInteractiveActionKeydownOptions {
+  onAction?: () => void;
+  onPreviewClear?: () => void;
+}
+
+export const createSummaryInteractiveActionKeydownHandler = (
+  options: SummaryInteractiveActionKeydownOptions,
+): JSX.EventHandlerUnion<HTMLButtonElement, KeyboardEvent> => (event) => {
+  if (
+    event.key === 'Enter' ||
+    event.key === ' ' ||
+    event.key === 'Space' ||
+    event.code === 'Space'
+  ) {
+    event.preventDefault();
+    options.onAction?.();
+    return;
+  }
+
+  if (event.key !== 'Escape') {
+    return;
+  }
+  event.preventDefault();
+  options.onPreviewClear?.();
+  event.currentTarget.blur();
+};
+
+export const buildSummaryDisclosureControlsId = (seriesId: string): string =>
+  `summary-row-detail-${seriesId.replace(/[^a-zA-Z0-9_-]+/g, '-')}`;

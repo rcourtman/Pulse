@@ -316,8 +316,10 @@ test.describe.serial("Inline selection scroll stability", () => {
     const workloadId = (await row.getAttribute("data-guest-id")) ?? "";
     expect(workloadId).not.toBe("");
 
-    await row.focus();
-    await expect(row).toBeFocused();
+    const toggleButton = row.locator("button[aria-controls]").first();
+    await expect(toggleButton).toBeVisible();
+    await toggleButton.focus();
+    await expect(toggleButton).toBeFocused();
     await page.keyboard.press("Enter");
 
     await expect(page).toHaveURL(/\/workloads\?(?:.*&)?resource=/);
@@ -330,8 +332,8 @@ test.describe.serial("Inline selection scroll stability", () => {
     const detailRow = row.locator("xpath=following-sibling::tr[1]");
     await expect(detailRow).toContainText("Overview");
 
-    await row.focus();
-    await page.keyboard.press(" ");
+    await toggleButton.focus();
+    await toggleButton.press("Space");
     await expect.poll(() => page.url()).not.toContain("resource=");
     {
       const closedUrl = new URL(page.url());

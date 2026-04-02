@@ -1,9 +1,10 @@
 import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import {
-  createSummaryInteractiveRowHandlers,
-  SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS,
+  buildSummaryDisclosureControlsId,
+  createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
+import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { resolvePhysicalDiskMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import {
   Table,
@@ -17,7 +18,6 @@ import { formatBytes } from '@/utils/format';
 import { formatTemperature, getTemperatureTextClass } from '@/utils/temperature';
 import {
   PHYSICAL_DISK_CELL_DISK_CLASS,
-  PHYSICAL_DISK_CELL_EXPAND_CLASS,
   PHYSICAL_DISK_CELL_HEALTH_CLASS,
   PHYSICAL_DISK_CELL_HOST_CLASS,
   PHYSICAL_DISK_CELL_PARENT_CLASS,
@@ -35,9 +35,7 @@ import {
   PHYSICAL_DISK_EMPTY_REQUIREMENTS_NOTE_CLASS,
   PHYSICAL_DISK_EMPTY_REQUIREMENTS_TITLE_CLASS,
   PHYSICAL_DISK_EMPTY_TITLE_CLASS,
-  PHYSICAL_DISK_EXPAND_BUTTON_CLASS,
   PHYSICAL_DISK_HEADER_DISK_CLASS,
-  PHYSICAL_DISK_HEADER_EXPAND_CLASS,
   PHYSICAL_DISK_HEADER_HEALTH_CLASS,
   PHYSICAL_DISK_HEADER_HOST_CLASS,
   PHYSICAL_DISK_HEADER_PARENT_CLASS,
@@ -63,7 +61,6 @@ import {
   PHYSICAL_DISK_TABLE_ROW_STYLE,
   PHYSICAL_DISK_TABLE_SCROLL_CLASS,
   getPhysicalDiskEmptyStatePresentation,
-  getPhysicalDiskExpandIconClass,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
   getPhysicalDiskHostLabel,
@@ -160,7 +157,6 @@ export const DiskList: Component<DiskListProps> = (props) => {
                   <TableHead class={PHYSICAL_DISK_HEADER_HEALTH_CLASS}>Health</TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_TEMP_CLASS}>Temp</TableHead>
                   <TableHead class={PHYSICAL_DISK_HEADER_SIZE_CLASS}>Size</TableHead>
-                  <TableHead class={PHYSICAL_DISK_HEADER_EXPAND_CLASS} />
                 </TableRow>
               </TableHeader>
               <TableBody class={PHYSICAL_DISK_TABLE_BODY_CLASS}>
@@ -175,10 +171,10 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     const summarySeriesId = resolvePhysicalDiskMetricResourceId(disk);
                     const isSummaryHighlighted = () =>
                       props.highlightedSummarySeriesId === summarySeriesId;
-                    const interactiveRowHandlers = createSummaryInteractiveRowHandlers({
+                    const detailControlsId = buildSummaryDisclosureControlsId(summarySeriesId);
+                    const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
                       onPreview: () => props.onHoverChange?.(disk.id),
                       onPreviewClear: () => props.onHoverChange?.(null),
-                      onToggle: () => model.toggleSelectedDisk(disk),
                     });
 
                     return (
@@ -193,13 +189,21 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             isSelected()
                               ? PHYSICAL_DISK_TABLE_ROW_SELECTED_CLASS
                               : PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS
-                          } ${SUMMARY_INTERACTIVE_ROW_FOCUS_CLASS}`.trim()}
+                          }`.trim()}
                           style={PHYSICAL_DISK_TABLE_ROW_STYLE}
                           onClick={() => model.toggleSelectedDisk(disk)}
                           {...interactiveRowHandlers}
                         >
                           <TableCell class={PHYSICAL_DISK_CELL_DISK_CLASS}>
                             <div class={PHYSICAL_DISK_NAME_WRAP_CLASS}>
+                              <SummaryRowActionButton
+                                kind="disclosure"
+                                subjectLabel={data.model || 'disk'}
+                                expanded={isSelected()}
+                                controlsId={detailControlsId}
+                                onAction={() => model.toggleSelectedDisk(disk)}
+                                onPreviewClear={() => props.onHoverChange?.(null)}
+                              />
                               <span
                                 class={PHYSICAL_DISK_NAME_TEXT_CLASS}
                                 title={data.devPath || data.model || disk.name || 'Unknown Disk'}
@@ -288,35 +292,14 @@ export const DiskList: Component<DiskListProps> = (props) => {
                             </span>
                           </TableCell>
 
-                          <TableCell class={PHYSICAL_DISK_CELL_EXPAND_CLASS}>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                model.toggleSelectedDisk(disk);
-                              }}
-                              class={PHYSICAL_DISK_EXPAND_BUTTON_CLASS}
-                              aria-label={`Toggle details for ${data.model || 'disk'}`}
-                            >
-                              <svg
-                                class={getPhysicalDiskExpandIconClass(isSelected())}
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
-                              >
-                                <path
-                                  stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M9 5l7 7-7 7"
-                                />
-                              </svg>
-                            </button>
-                          </TableCell>
                         </TableRow>
                         <Show when={isSelected()}>
                           <TableRow data-inline-detail-for={summarySeriesId}>
-                            <TableCell colSpan={9} class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}>
+                            <TableCell
+                              id={detailControlsId}
+                              colSpan={8}
+                              class={PHYSICAL_DISK_DETAIL_ROW_CELL_CLASS}
+                            >
                               <DiskDetail disk={disk} nodes={props.nodes} />
                             </TableCell>
                           </TableRow>

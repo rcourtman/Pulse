@@ -1051,18 +1051,21 @@ test.describe.serial("Summary hover selection", () => {
         return;
       }
 
-      await matchedGroupRow.focus();
+      const scopeButton = matchedGroupRow.getByRole("button", {
+        name: /pin summary scope for/i,
+      });
+      await scopeButton.focus();
       await expect(scopeBar).toContainText("Preview");
       await page.keyboard.press("Escape");
       await expect(scopeBar).toContainText("All");
 
-      await matchedGroupRow.focus();
+      await scopeButton.focus();
       await expect(scopeBar).toContainText("Preview");
       await page.keyboard.press("Enter");
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBe(matchedGroupId);
-      await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "true");
+      await expect(scopeButton).toHaveAttribute("aria-pressed", "true");
       await expect(scopeBar).toContainText("Pinned");
       await expect(
         scopeBar.getByRole("button", { name: "Reset pinned scope" }),
@@ -1147,18 +1150,21 @@ test.describe.serial("Summary hover selection", () => {
       return;
     }
 
-    await matchedGroupRow.focus();
+    const scopeButton = matchedGroupRow.getByRole("button", {
+      name: /pin summary scope for/i,
+    });
+    await scopeButton.focus();
     await expect(storageScopeBar).toContainText("Preview");
     await page.keyboard.press("Escape");
     await expect(storageScopeBar).toContainText("All");
 
-    await matchedGroupRow.focus();
+    await scopeButton.focus();
     await expect(storageScopeBar).toContainText("Preview");
-    await page.keyboard.press(" ");
+    await scopeButton.press("Space");
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBe(matchedGroupId);
-    await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "true");
+    await expect(scopeButton).toHaveAttribute("aria-pressed", "true");
     await expect(storageScopeBar).toContainText("Pinned");
     await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
 

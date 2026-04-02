@@ -60,10 +60,6 @@ export const STORAGE_POOL_TABLE_COLUMNS: readonly StoragePoolTableColumn[] = [
     label: 'Primary Issue',
     className: 'px-1.5 sm:px-2 py-0.5 text-left text-[11px] sm:text-xs font-medium uppercase tracking-wider',
   },
-  {
-    label: '',
-    className: 'px-1.5 sm:px-2 py-0.5 w-10',
-  },
 ];
 
 export const STORAGE_BANNER_ACTION_BUTTON_CLASS =
