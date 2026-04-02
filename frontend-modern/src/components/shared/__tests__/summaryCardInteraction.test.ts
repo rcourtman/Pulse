@@ -9,8 +9,10 @@ import {
   filterSummarySeriesByGroupScope,
   resolveSummaryActiveSeriesId,
   resolveSummaryCardInteractionState,
+  resolveSummaryScopeState,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
+import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 
 describe('summaryCardInteraction', () => {
   beforeEach(() => {
@@ -114,6 +116,103 @@ describe('summaryCardInteraction', () => {
         groupScope,
       ).map((series) => series.id),
     ).toEqual(['alpha', 'beta']);
+  });
+
+  it('resolves preview and pinned scope state through one shared precedence helper', () => {
+    const groupScope: SummarySeriesGroupScope = {
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha', 'beta'],
+    };
+
+    expect(
+      resolveSummaryScopeState({
+        chartHoveredSeriesId: 'beta',
+        hoveredSeriesId: 'alpha',
+        focusedSeriesId: 'alpha',
+        hoveredGroupScope: groupScope,
+        focusedGroupScope: groupScope,
+      }),
+    ).toEqual({
+      groupScope,
+      kind: 'entity',
+      seriesId: 'beta',
+      source: 'preview',
+    });
+
+    expect(
+      resolveSummaryScopeState({
+        focusedGroupScope: groupScope,
+      }),
+    ).toEqual({
+      groupScope,
+      kind: 'group',
+      seriesId: null,
+      source: 'pinned',
+    });
+
+    expect(
+      resolveSummaryScopeState({
+        hoveredSeriesId: 'gamma',
+        focusedGroupScope: groupScope,
+      }),
+    ).toEqual({
+      groupScope,
+      kind: 'group',
+      seriesId: null,
+      source: 'pinned',
+    });
+  });
+
+  it('builds consistent scope-bar presentation for page, group, and entity states', () => {
+    const groupScope: SummarySeriesGroupScope = {
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha', 'beta'],
+    };
+
+    expect(
+      buildSummaryScopePresentation({
+        allLabel: 'All workloads',
+        resolveEntityLabel: (seriesId) => ({ alpha: 'Alpha VM' })[seriesId] ?? seriesId,
+        state: resolveSummaryScopeState({}),
+      }),
+    ).toEqual({
+      contextLabel: null,
+      kind: 'page',
+      label: 'All workloads',
+      mode: 'all',
+    });
+
+    expect(
+      buildSummaryScopePresentation({
+        allLabel: 'All workloads',
+        state: resolveSummaryScopeState({
+          hoveredGroupScope: groupScope,
+        }),
+      }),
+    ).toEqual({
+      contextLabel: null,
+      kind: 'group',
+      label: 'Cluster A (2 workloads)',
+      mode: 'preview',
+    });
+
+    expect(
+      buildSummaryScopePresentation({
+        allLabel: 'All workloads',
+        resolveEntityLabel: (seriesId) => ({ alpha: 'Alpha VM' })[seriesId] ?? seriesId,
+        state: resolveSummaryScopeState({
+          focusedSeriesId: 'alpha',
+          focusedGroupScope: groupScope,
+        }),
+      }),
+    ).toEqual({
+      contextLabel: 'Cluster A (2 workloads)',
+      kind: 'entity',
+      label: 'Alpha VM',
+      mode: 'pinned',
+    });
   });
 
   it('filters contextual focus down to interactive series ids through one shared hook', () => {

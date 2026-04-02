@@ -119,6 +119,22 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     }
   };
 
+  const clearPinnedSummaryScope = () => {
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
+      setSelectedGuestIdRaw(null);
+      setSelectedWorkloadGroupIdRaw(null);
+    });
+    const nextPath = resolveDashboardSelectionNavigateTarget({
+      pathname: location.pathname,
+      search: location.search,
+      resourceId: null,
+      summaryGroupId: null,
+    });
+    if (nextPath) {
+      routeStateNavigate.schedule(nextPath);
+    }
+  };
+
   createEffect(() => {
     const selection = resolveDashboardResourceSelection(location.search);
     if (!selection) {
@@ -242,9 +258,11 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   });
 
   return {
+    activeSummaryScopeState: summaryInteraction.activeScopeState,
     activeSummaryWorkloadGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryWorkloadId: summaryInteraction.activeSeriesId,
     chartHoverSync: summaryInteraction.chartHoverSync,
+    clearPinnedSummaryScope,
     focusedSummaryWorkloadGroupScope: focusedWorkloadGroupScope,
     hoveredWorkloadId,
     hoveredSummaryWorkloadGroupScope: hoveredWorkloadGroupScope,

@@ -7,6 +7,7 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
+import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 import {
   buildInfrastructureSummaryGroupScope,
   groupResources,
@@ -14,8 +15,10 @@ import {
 } from '@/components/Infrastructure/infrastructureSelectors';
 import {
   isSummarySeriesInGroupScope,
+  resolveSummaryScopeState,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
+import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { useInfrastructurePageRouteState } from './useInfrastructurePageRouteState';
 import { buildInfrastructurePageFilterDerivation } from './infrastructurePageModel';
 
@@ -112,6 +115,11 @@ export function useInfrastructurePageState() {
     routeState.setExpandedResourceId(resourceId);
   };
 
+  const clearPinnedSummaryScope = () => {
+    routeState.setExpandedResourceId(null);
+    routeState.setFocusedResourceGroupId(null);
+  };
+
   const clearFilters = () => {
     setSelectedSource('');
     setSelectedStatus('');
@@ -167,6 +175,40 @@ export function useInfrastructurePageState() {
     }
   });
 
+  const resourceNamesById = createMemo(() => {
+    const names = new Map<string, string>();
+    for (const resource of filteredResources()) {
+      if (!resource.id?.trim()) {
+        continue;
+      }
+      names.set(resource.id.trim(), getPreferredInfrastructureDisplayName(resource));
+    }
+    return names;
+  });
+  const pinnedSummaryScopeState = createMemo(() =>
+    resolveSummaryScopeState({
+      focusedSeriesId: routeState.expandedResourceId(),
+      focusedGroupScope: focusedResourceGroupScope(),
+    }),
+  );
+  const summaryScopePresentation = createMemo(() =>
+    buildSummaryScopePresentation({
+      allLabel: 'All resources',
+      resolveEntityLabel: (seriesId) => resourceNamesById().get(seriesId) ?? seriesId,
+      state: summaryInteraction.activeScopeState(),
+    }),
+  );
+  const pinnedSummaryScopePresentation = createMemo(() =>
+    buildSummaryScopePresentation({
+      allLabel: 'All resources',
+      resolveEntityLabel: (seriesId) => resourceNamesById().get(seriesId) ?? seriesId,
+      state: pinnedSummaryScopeState(),
+    }),
+  );
+  const hasPinnedSummaryScope = createMemo(
+    () => pinnedSummaryScopeState().source === 'pinned',
+  );
+
   return {
     loading,
     error,
@@ -185,11 +227,15 @@ export function useInfrastructurePageState() {
     setSummaryCollapsed,
     groupingMode,
     setGroupingMode,
+    activeSummaryScopeState: summaryInteraction.activeScopeState,
     activeSummaryResourceId: summaryInteraction.activeSeriesId,
     activeSummaryResourceGroupScope: summaryInteraction.activeGroupScope,
+    clearPinnedSummaryScope,
     focusedSummaryResourceGroupScope: focusedResourceGroupScope,
     focusedSummaryResourceGroupId: routeState.focusedResourceGroupId,
+    hasPinnedSummaryScope,
     hoveredSummaryResourceGroupScope: hoveredResourceGroupScope,
+    pinnedSummaryScopePresentation,
     ...routeState,
     chartHoverSync: summaryInteraction.chartHoverSync,
     isMobile,
@@ -211,6 +257,7 @@ export function useInfrastructurePageState() {
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredResourceGroupScope,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,
+    summaryScopePresentation,
     shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
   };
 }

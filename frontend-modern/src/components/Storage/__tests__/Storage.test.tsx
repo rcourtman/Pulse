@@ -775,6 +775,9 @@ describe('Storage', () => {
       );
       expect(groupRow.getAttribute('aria-pressed')).toBe('true');
     });
+
+    expect(screen.getByTestId('storage-summary-scope')).toHaveTextContent('Pinned');
+    expect(screen.getByRole('button', { name: 'Reset pinned scope' })).toBeInTheDocument();
   });
 
   it('shows ceph summary card and pool expand chevron', async () => {

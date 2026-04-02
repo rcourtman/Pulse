@@ -6,8 +6,10 @@ import {
 } from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
+import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 import {
   isSummarySeriesInGroupScope,
+  resolveSummaryScopeState,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
@@ -203,6 +205,12 @@ export const useStoragePageModel = () => {
     scheduleStorageSummaryGroupPath(null);
   };
 
+  const clearPinnedSummaryScope = () => {
+    setExpandedPoolIdRaw(null);
+    setSelectedDiskId(null);
+    clearFocusedStorageGroup();
+  };
+
   const setExpandedPoolId = (
     value: string | null | ((current: string | null) => string | null),
   ) => {
@@ -350,9 +358,45 @@ export const useStoragePageModel = () => {
     routeStateNavigate.cleanup();
   });
 
+  const storageNamesByMetricSeriesId = createMemo(() => {
+    const names = new Map<string, string>();
+    for (const record of filteredRecords()) {
+      names.set(resolveStorageRecordMetricResourceId(record), record.name || record.id);
+    }
+    for (const disk of physicalDisks()) {
+      names.set(resolvePhysicalDiskMetricResourceId(disk), disk.name || disk.id);
+    }
+    return names;
+  });
+  const pinnedSummaryScopeState = createMemo(() =>
+    resolveSummaryScopeState({
+      focusedSeriesId: focusedStorageResourceId(),
+      focusedGroupScope: focusedStorageGroupScope(),
+    }),
+  );
+  const summaryScopePresentation = createMemo(() =>
+    buildSummaryScopePresentation({
+      allLabel: 'All storage',
+      resolveEntityLabel: (seriesId) => storageNamesByMetricSeriesId().get(seriesId) ?? seriesId,
+      state: summaryInteraction.activeScopeState(),
+    }),
+  );
+  const pinnedSummaryScopePresentation = createMemo(() =>
+    buildSummaryScopePresentation({
+      allLabel: 'All storage',
+      resolveEntityLabel: (seriesId) => storageNamesByMetricSeriesId().get(seriesId) ?? seriesId,
+      state: pinnedSummaryScopeState(),
+    }),
+  );
+  const hasPinnedSummaryScope = createMemo(
+    () => pinnedSummaryScopeState().source === 'pinned',
+  );
+
   return {
+    activeSummaryScopeState: summaryInteraction.activeScopeState,
     activeSummaryStorageGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryStorageResourceId: summaryInteraction.activeSeriesId,
+    clearPinnedSummaryScope,
     kioskMode,
     reconnect: reconnectSurface,
     selectedNodeId,
@@ -395,9 +439,11 @@ export const useStoragePageModel = () => {
     hoveredStorageResourceId,
     isLoadingPools,
     jumpToActiveStorageRow: summaryInteraction.jumpToActiveRow,
+    hasPinnedSummaryScope,
     focusedSummaryStorageGroupScope: focusedStorageGroupScope,
     focusedSummaryStorageGroupId: selectedStorageGroupId,
     hoveredSummaryStorageGroupScope: hoveredStorageGroupScope,
+    pinnedSummaryScopePresentation,
     selectedDiskId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setFocusedStorageGroupScope,
@@ -405,6 +451,7 @@ export const useStoragePageModel = () => {
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,
+    summaryScopePresentation,
     shouldShowJumpToActiveStorageRow: summaryInteraction.shouldShowJumpToActiveRow,
   };
 };

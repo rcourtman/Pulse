@@ -672,7 +672,7 @@ test.describe.serial("Summary hover selection", () => {
     await page.waitForTimeout(250);
     const stickyBox = await stickyStorageSummary.boundingBox();
     expect(stickyBox).not.toBeNull();
-    expect(stickyBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(24);
+    expect(stickyBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(48);
   });
 
   test("synchronizes chart hover across summary cards on infrastructure, workloads, and storage", async ({
@@ -992,17 +992,21 @@ test.describe.serial("Summary hover selection", () => {
       {
         path: "/workloads",
         summaryTestId: "workloads-summary",
+        scopeBarTestId: "workloads-summary-scope",
         tableRowSelector: "tr[data-guest-id]",
       },
       {
         path: "/infrastructure",
         summaryTestId: "infrastructure-summary",
+        scopeBarTestId: "infrastructure-summary-scope",
         tableRowSelector: "tr[data-summary-series-id]",
       },
     ] as const) {
       await page.goto(surface.path, { waitUntil: "domcontentloaded" });
       const summary = page.getByTestId(surface.summaryTestId);
+      const scopeBar = page.getByTestId(surface.scopeBarTestId);
       await expect(summary).toBeVisible();
+      await expect(scopeBar).toContainText("All");
 
       await expect
         .poll(async () => {
@@ -1047,11 +1051,18 @@ test.describe.serial("Summary hover selection", () => {
         return;
       }
 
+      await matchedGroupRow.hover();
+      await expect(scopeBar).toContainText("Preview");
+
       await matchedGroupRow.click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBe(matchedGroupId);
       await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "true");
+      await expect(scopeBar).toContainText("Pinned");
+      await expect(
+        scopeBar.getByRole("button", { name: "Reset pinned scope" }),
+      ).toBeVisible();
       await expect
         .poll(() => readRenderedSeriesCounts(summary))
         .toEqual(new Array(4).fill(matchedGroupSeriesCount));
@@ -1064,11 +1075,11 @@ test.describe.serial("Summary hover selection", () => {
         .poll(() => readRenderedSeriesCounts(summary))
         .toEqual(new Array(4).fill(matchedGroupSeriesCount));
 
-      await matchedGroupRow.click();
+      await scopeBar.getByRole("button", { name: "Reset pinned scope" }).click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBeNull();
-      await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "false");
+      await expect(scopeBar).toContainText("All");
       await page.mouse.move(1, 1);
       await expect
         .poll(() => readRenderedSeriesCounts(summary))
@@ -1088,7 +1099,9 @@ test.describe.serial("Summary hover selection", () => {
 
     await page.goto("/storage?group=node", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
+    const storageScopeBar = page.getByTestId("storage-summary-scope");
     await expect(storageSummary).toBeVisible();
+    await expect(storageScopeBar).toContainText("All");
 
     await expect
       .poll(async () => {
@@ -1130,11 +1143,15 @@ test.describe.serial("Summary hover selection", () => {
       return;
     }
 
+    await matchedGroupRow.hover();
+    await expect(storageScopeBar).toContainText("Preview");
+
     await matchedGroupRow.click();
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBe(matchedGroupId);
     await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "true");
+    await expect(storageScopeBar).toContainText("Pinned");
     await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
 
     await expect
@@ -1144,11 +1161,13 @@ test.describe.serial("Summary hover selection", () => {
     await page.mouse.move(1, 1);
     await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
 
-    await matchedGroupRow.click();
+    await storageScopeBar
+      .getByRole("button", { name: "Reset pinned scope" })
+      .click();
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBeNull();
-    await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "false");
+    await expect(storageScopeBar).toContainText("All");
     await page.mouse.move(1, 1);
     await expect
       .poll(() => readRenderedSeriesCounts(storageSummary))

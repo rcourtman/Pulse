@@ -61,6 +61,8 @@ import interactiveSparklineModelSource from '@/components/shared/interactiveSpar
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
 import summaryCardInteractionSource from '@/components/shared/summaryCardInteraction.ts?raw';
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
+import summaryScopeBarSource from '@/components/shared/SummaryScopeBar.tsx?raw';
+import summaryScopePresentationSource from '@/components/shared/summaryScopePresentation.ts?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
@@ -284,6 +286,7 @@ describe('shared primitive guardrails', () => {
     expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
     expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
+    expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
     expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
     expect(densityMapModelSource).toContain('onHoverSyncChange');
 
@@ -300,6 +303,7 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('export function useSummaryTableFocusBridge');
     expect(summaryTableFocusSource).toContain('export function useSummaryPageInteractionState');
     expect(summaryTableFocusSource).toContain('resolveSummaryActiveSeriesId');
+    expect(summaryTableFocusSource).toContain('activeScopeState');
     expect(summaryTableFocusSource).toContain('focusedSeriesId');
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
@@ -327,6 +331,16 @@ describe('shared primitive guardrails', () => {
     expect(workloadsSummarySource).toContain('hoveredGroupScope');
     expect(workloadsSummarySource).toContain('filterSeriesForActiveScope');
     expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
+  });
+
+  it('keeps scope-bar presentation on one shared primitive and model', () => {
+    expect(summaryScopePresentationSource).toContain('buildSummaryScopePresentation');
+    expect(summaryScopePresentationSource).toContain("mode: 'all'");
+    expect(summaryScopeBarSource).toContain('SummaryScopeBar');
+    expect(summaryScopeBarSource).toContain('Pinned to');
+    expect(summaryScopeBarSource).toContain('Reset pinned scope');
+    expect(summaryScopeBarSource).not.toContain('useLocation(');
+    expect(summaryScopeBarSource).not.toContain('useNavigate(');
   });
 
   it('keeps synchronized summary values on one shared card/readout contract', () => {

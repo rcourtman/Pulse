@@ -211,7 +211,12 @@ assembly branch.
     route-backed cluster hover state. Deliberate cluster focus must also stay
     on the canonical infrastructure route through the shared `summaryGroup`
     query state, so pinned scope is shareable, reversible, and owned by the
-    same route-backed summary contract as row focus.
+    same route-backed summary contract as row focus. That pinned or previewed
+    scope must be surfaced through the shared
+    `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus
+    `frontend-modern/src/components/shared/summaryScopePresentation.ts`
+    contract so infrastructure does not hide active scope in route params or
+    hover-only table affordances.
 14. Keep infrastructure row emphasis on the shared frontend presentation
     contract. Host, PBS, and PMG table sections may decide whether a resource
     is contextually active, but they must expose that state through

@@ -121,6 +121,38 @@ describe('useDashboardSelectionState', () => {
     );
   });
 
+  it('clears pinned workload scope back to page state without mutating route filters', () => {
+    locationSearch =
+      '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud&summaryGroup=docker-host%3Atruenas-main';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([]);
+    const summaryScopes = () =>
+      new Map<string, SummarySeriesGroupScope>([
+        [
+          'docker-host:truenas-main',
+          {
+            id: 'docker-host:truenas-main',
+            label: 'TrueNAS Main (4 workloads)',
+            seriesIds: ['app-container:truenas-main:nextcloud'],
+          },
+        ],
+      ]);
+
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        summaryGroupScopes: summaryScopes,
+      }),
+    );
+
+    result.clearPinnedSummaryScope();
+    vi.runAllTimers();
+
+    expect(navigateSpy).toHaveBeenCalledWith(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main',
+      ROUTE_STATE_REPLACE_OPTIONS,
+    );
+  });
+
   it('preserves the nearest scrollable ancestor when row focus changes locally', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);

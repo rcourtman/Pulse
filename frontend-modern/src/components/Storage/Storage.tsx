@@ -1,9 +1,10 @@
-import { Component } from 'solid-js';
+import { Component, Show } from 'solid-js';
 import StorageCephSection from '@/components/Storage/StorageCephSection';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
+import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { isStorageRecordCeph } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
@@ -57,11 +58,15 @@ const Storage: Component = () => {
     jumpToActiveStorageRow,
     selectedDiskId,
     setChartHoverSync,
+    clearPinnedSummaryScope,
     setFocusedStorageGroupScope,
     setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef,
+    hasPinnedSummaryScope,
+    pinnedSummaryScopePresentation,
+    summaryScopePresentation,
     shouldShowJumpToActiveStorageRow,
   } = useStoragePageModel();
 
@@ -115,6 +120,16 @@ const Storage: Component = () => {
       />
 
       <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
+
+      <Show when={filteredRecords().length > 0 || physicalDisks().length > 0}>
+        <SummaryScopeBar
+          testId="storage-summary-scope"
+          active={summaryScopePresentation()}
+          pinned={hasPinnedSummaryScope() ? pinnedSummaryScopePresentation() : null}
+          idleHint={groupBy() !== 'none' ? 'Tap a group or row to pin scope.' : 'Tap a row to pin scope.'}
+          onReset={hasPinnedSummaryScope() ? clearPinnedSummaryScope : undefined}
+        />
+      </Show>
 
       <StorageContentCard
         view={view}

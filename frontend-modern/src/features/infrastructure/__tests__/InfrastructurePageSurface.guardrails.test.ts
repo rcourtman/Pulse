@@ -48,12 +48,18 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('activeSummaryGroupScope={activeSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
+    expect(infrastructurePageSurfaceSource).toContain('SummaryScopeBar');
+    expect(infrastructurePageSurfaceSource).toContain('summaryScopePresentation()');
+    expect(infrastructurePageSurfaceSource).toContain('clearPinnedSummaryScope');
     expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
 
     expect(infrastructurePageStateSource).toContain('useSummaryPageInteractionState');
     expect(infrastructurePageStateSource).toContain('hoveredSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('activeSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('focusedSummaryResourceGroupScope');
+    expect(infrastructurePageStateSource).toContain('summaryScopePresentation');
+    expect(infrastructurePageStateSource).toContain('pinnedSummaryScopePresentation');
+    expect(infrastructurePageStateSource).toContain('clearPinnedSummaryScope');
     expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');

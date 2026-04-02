@@ -6,6 +6,7 @@ import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
@@ -44,6 +45,7 @@ export function InfrastructurePageSurface() {
     setGroupingMode,
     activeSummaryResourceId,
     activeSummaryResourceGroupScope,
+    clearPinnedSummaryScope,
     focusedSummaryResourceGroupId,
     focusedSummaryResourceGroupScope,
     expandedResourceId,
@@ -66,6 +68,9 @@ export function InfrastructurePageSurface() {
     kioskMode,
     sourceOptions,
     statusOptions,
+    summaryScopePresentation,
+    pinnedSummaryScopePresentation,
+    hasPinnedSummaryScope,
     hasActiveFilters,
     clearFilters,
     filteredResources,
@@ -319,22 +324,33 @@ export function InfrastructurePageSurface() {
                   </Card>
                 }
               >
-                <UnifiedResourceTable
-                  resources={filteredResources()}
-                  expandedResourceId={expandedResourceId()}
-                  activeSummaryGroupScope={activeSummaryResourceGroupScope()}
-                  focusedSummaryGroupId={focusedSummaryResourceGroupId()}
-                  hoveredResourceId={activeSummaryResourceId()}
-                  highlightedResourceId={highlightedResourceId()}
-                  revealedResourceId={revealedResourceId()}
-                  onExpandedResourceChange={setExpandedResourceId}
-                  onGroupFocusChange={setFocusedResourceGroupId}
-                  onGroupHoverChange={setHoveredResourceGroupScope}
-                  onHoverChange={setHoveredResourceId}
-                  groupingMode={groupingMode()}
-                  onDeployCluster={(id, name) => setDeployCluster({ id, name })}
-                  setTableRootRef={setSummaryTableRootRef}
-                />
+                <div class="space-y-3">
+                  <SummaryScopeBar
+                    testId="infrastructure-summary-scope"
+                    active={summaryScopePresentation()}
+                    pinned={
+                      hasPinnedSummaryScope() ? pinnedSummaryScopePresentation() : null
+                    }
+                    idleHint={isMobile() ? 'Tap a cluster or row to pin scope.' : undefined}
+                    onReset={hasPinnedSummaryScope() ? clearPinnedSummaryScope : undefined}
+                  />
+                  <UnifiedResourceTable
+                    resources={filteredResources()}
+                    expandedResourceId={expandedResourceId()}
+                    activeSummaryGroupScope={activeSummaryResourceGroupScope()}
+                    focusedSummaryGroupId={focusedSummaryResourceGroupId()}
+                    hoveredResourceId={activeSummaryResourceId()}
+                    highlightedResourceId={highlightedResourceId()}
+                    revealedResourceId={revealedResourceId()}
+                    onExpandedResourceChange={setExpandedResourceId}
+                    onGroupFocusChange={setFocusedResourceGroupId}
+                    onGroupHoverChange={setHoveredResourceGroupScope}
+                    onHoverChange={setHoveredResourceId}
+                    groupingMode={groupingMode()}
+                    onDeployCluster={(id, name) => setDeployCluster({ id, name })}
+                    setTableRootRef={setSummaryTableRootRef}
+                  />
+                </div>
               </Show>
             </div>
           </Show>

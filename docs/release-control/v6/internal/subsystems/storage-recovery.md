@@ -194,6 +194,13 @@ querying, and the operator-facing storage health presentation layer.
     chart highlighting so pool-only cards demote cleanly during disk focus and
     disk-temperature cards demote cleanly during pool focus, instead of
     leaving stale row-local IDs or storage-local hover branches on the page.
+    Any page, group, or entity scope that becomes pinned through storage
+    interaction must also surface through the shared
+    `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus
+    `frontend-modern/src/components/shared/summaryScopePresentation.ts`
+    contract so touch users and mouse users see the same explicit, reversible
+    scope state instead of relying on hidden route state or storage-local
+    badges.
 14. Keep storage summary remount caches versioned with the chart contract.
     `frontend-modern/src/components/Storage/StorageSummary.tsx` may keep a
     bounded in-memory cache for same-tab remounts, but its cache key must carry

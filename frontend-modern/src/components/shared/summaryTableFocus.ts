@@ -6,8 +6,10 @@ import {
 } from './contextualFocus';
 import {
   resolveSummaryActiveSeriesId,
+  resolveSummaryScopeState,
   resolveSummaryGroupScope,
   type SummarySeriesGroupScope,
+  type SummaryScopeState,
 } from './summaryCardInteraction';
 
 const normalizeSeriesId = (value: string | null | undefined): string => value?.trim() || '';
@@ -244,6 +246,17 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
     }),
   );
 
+  const activeScopeState = createMemo<SummaryScopeState>(() =>
+    resolveSummaryScopeState({
+      chartHoveredSeriesId: chartHoverSync()?.seriesId ?? null,
+      hoveredSeriesId: hoveredSeriesId(),
+      focusedSeriesId: focusedSeriesId(),
+      hoveredGroupScope: hoveredGroupScope(),
+      focusedGroupScope: focusedGroupScope(),
+      groupScope: activeGroupScope(),
+    }),
+  );
+
   const activeSeriesId = createMemo<string | null>(() =>
     resolveSummaryActiveSeriesId({
       chartHoveredSeriesId: chartHoverSync()?.seriesId ?? null,
@@ -261,6 +274,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
 
   return {
     activeGroupScope,
+    activeScopeState,
     activeSeriesId,
     chartHoverSync,
     jumpToActiveRow: tableFocus.jumpToActiveRow,

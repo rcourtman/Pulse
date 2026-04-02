@@ -3,6 +3,7 @@ import { InfrastructureSelector } from '@/components/shared/InfrastructureSelect
 import { DashboardFilter } from './DashboardFilter';
 import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
+import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { DashboardStateCards } from './DashboardStateCards';
 import { DashboardStatsStrip } from './DashboardStatsStrip';
@@ -91,6 +92,22 @@ export function Dashboard(props: DashboardProps) {
           hostFilter={state.hostFilterConfig()}
           namespaceFilter={state.namespaceFilterConfig()}
           platformFilter={state.platformFilterConfig()}
+        />
+      </Show>
+
+      <Show
+        when={
+          state.surfaceConnected() &&
+          state.surfaceInitialDataReceived() &&
+          state.filteredGuests().length > 0
+        }
+      >
+        <SummaryScopeBar
+          testId="workloads-summary-scope"
+          active={state.summaryScopePresentation()}
+          pinned={state.hasPinnedSummaryScope() ? state.pinnedSummaryScopePresentation() : null}
+          idleHint={state.isMobile() ? 'Tap a group or row to pin scope.' : undefined}
+          onReset={state.hasPinnedSummaryScope() ? state.clearPinnedSummaryScope : undefined}
         />
       </Show>
 

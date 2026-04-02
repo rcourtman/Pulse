@@ -1,4 +1,6 @@
 export type SummaryCardInteractionState = 'default' | 'active' | 'inactive';
+export type SummaryScopeKind = 'page' | 'group' | 'entity';
+export type SummaryScopeSource = 'page' | 'preview' | 'pinned';
 
 type SummarySeriesIdentity = {
   id?: string | null;
@@ -8,6 +10,13 @@ export interface SummarySeriesGroupScope {
   id: string;
   label?: string | null;
   seriesIds: readonly string[];
+}
+
+export interface SummaryScopeState {
+  groupScope: SummarySeriesGroupScope | null;
+  kind: SummaryScopeKind;
+  seriesId: string | null;
+  source: SummaryScopeSource;
 }
 
 const normalizeSeriesId = (value: string | null | undefined): string => value?.trim() || '';
@@ -59,29 +68,86 @@ export const resolveSummaryGroupScope = (options: {
   return normalizeSummarySeriesGroupScope(options.focusedGroupScope);
 };
 
+export const resolveSummaryScopeState = (options: {
+  chartHoveredSeriesId?: string | null;
+  hoveredSeriesId?: string | null;
+  focusedSeriesId?: string | null;
+  hoveredGroupScope?: SummarySeriesGroupScope | null;
+  focusedGroupScope?: SummarySeriesGroupScope | null;
+  groupScope?: SummarySeriesGroupScope | null;
+}): SummaryScopeState => {
+  const groupScope =
+    normalizeSummarySeriesGroupScope(options.groupScope) ??
+    resolveSummaryGroupScope({
+      hoveredGroupScope: options.hoveredGroupScope,
+      focusedGroupScope: options.focusedGroupScope,
+    });
+
+  const chartHoveredSeriesId = normalizeSeriesId(options.chartHoveredSeriesId);
+  if (chartHoveredSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, chartHoveredSeriesId))) {
+    return {
+      groupScope,
+      kind: 'entity',
+      seriesId: chartHoveredSeriesId,
+      source: 'preview',
+    };
+  }
+
+  const hoveredSeriesId = normalizeSeriesId(options.hoveredSeriesId);
+  if (hoveredSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, hoveredSeriesId))) {
+    return {
+      groupScope,
+      kind: 'entity',
+      seriesId: hoveredSeriesId,
+      source: 'preview',
+    };
+  }
+
+  const focusedSeriesId = normalizeSeriesId(options.focusedSeriesId);
+  if (focusedSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, focusedSeriesId))) {
+    return {
+      groupScope,
+      kind: 'entity',
+      seriesId: focusedSeriesId,
+      source: 'pinned',
+    };
+  }
+
+  const hoveredGroupScope = normalizeSummarySeriesGroupScope(options.hoveredGroupScope);
+  if (hoveredGroupScope) {
+    return {
+      groupScope: hoveredGroupScope,
+      kind: 'group',
+      seriesId: null,
+      source: 'preview',
+    };
+  }
+
+  const focusedGroupScope = normalizeSummarySeriesGroupScope(options.focusedGroupScope);
+  if (focusedGroupScope) {
+    return {
+      groupScope: focusedGroupScope,
+      kind: 'group',
+      seriesId: null,
+      source: 'pinned',
+    };
+  }
+
+  return {
+    groupScope: null,
+    kind: 'page',
+    seriesId: null,
+    source: 'page',
+  };
+};
+
 export function resolveSummaryActiveSeriesId(options: {
   chartHoveredSeriesId?: string | null;
   hoveredSeriesId?: string | null;
   focusedSeriesId?: string | null;
   groupScope?: SummarySeriesGroupScope | null;
 }): string | null {
-  const groupScope = normalizeSummarySeriesGroupScope(options.groupScope);
-  const chartHoveredSeriesId = normalizeSeriesId(options.chartHoveredSeriesId);
-  if (chartHoveredSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, chartHoveredSeriesId))) {
-    return chartHoveredSeriesId;
-  }
-
-  const hoveredSeriesId = normalizeSeriesId(options.hoveredSeriesId);
-  if (hoveredSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, hoveredSeriesId))) {
-    return hoveredSeriesId;
-  }
-
-  const focusedSeriesId = normalizeSeriesId(options.focusedSeriesId);
-  if (focusedSeriesId && (!groupScope || isSummarySeriesInGroupScope(groupScope, focusedSeriesId))) {
-    return focusedSeriesId;
-  }
-
-  return null;
+  return resolveSummaryScopeState(options).seriesId;
 }
 
 export function filterSummarySeriesByGroupScope<T extends SummarySeriesIdentity>(

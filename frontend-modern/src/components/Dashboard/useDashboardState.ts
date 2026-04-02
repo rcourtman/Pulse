@@ -7,6 +7,8 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { useKioskMode } from '@/hooks/useKioskMode';
+import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
+import { resolveSummaryScopeState } from '@/components/shared/summaryCardInteraction';
 import {
   getDashboardDisconnectedState,
   getDashboardGuestsEmptyState,
@@ -208,9 +210,11 @@ export function useDashboardState(props: DashboardProps) {
   );
 
   const {
+    activeSummaryScopeState,
     activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     chartHoverSync,
+    clearPinnedSummaryScope,
     focusedSummaryWorkloadGroupScope,
     focusedSummaryWorkloadGroupId,
     hoveredWorkloadId,
@@ -231,6 +235,42 @@ export function useDashboardState(props: DashboardProps) {
     filteredGuests,
     summaryGroupScopes,
   });
+
+  const workloadNamesById = createMemo(() => {
+    const names = new Map<string, string>();
+    for (const guest of filteredGuests()) {
+      const id = getCanonicalWorkloadId(guest);
+      if (!id) {
+        continue;
+      }
+      names.set(id, guest.name || id);
+    }
+    return names;
+  });
+
+  const pinnedSummaryScopeState = createMemo(() =>
+    resolveSummaryScopeState({
+      focusedSeriesId: selectedGuestId(),
+      focusedGroupScope: focusedSummaryWorkloadGroupScope(),
+    }),
+  );
+  const summaryScopePresentation = createMemo(() =>
+    buildSummaryScopePresentation({
+      allLabel: 'All workloads',
+      resolveEntityLabel: (seriesId) => workloadNamesById().get(seriesId) ?? seriesId,
+      state: activeSummaryScopeState(),
+    }),
+  );
+  const pinnedSummaryScopePresentation = createMemo(() =>
+    buildSummaryScopePresentation({
+      allLabel: 'All workloads',
+      resolveEntityLabel: (seriesId) => workloadNamesById().get(seriesId) ?? seriesId,
+      state: pinnedSummaryScopeState(),
+    }),
+  );
+  const hasPinnedSummaryScope = createMemo(
+    () => pinnedSummaryScopeState().source === 'pinned',
+  );
 
   const {
     bottomSpacerHeight,
@@ -264,6 +304,7 @@ export function useDashboardState(props: DashboardProps) {
     allGuests,
     activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
+    clearPinnedSummaryScope,
     bottomSpacerHeight,
     chartHoverSync,
     columnVisibility,
@@ -335,6 +376,9 @@ export function useDashboardState(props: DashboardProps) {
     setViewMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
+    summaryScopePresentation,
+    pinnedSummaryScopePresentation,
+    hasPinnedSummaryScope,
     shouldShowJumpToActiveWorkloadRow,
     sortDirection,
     sortKey,
