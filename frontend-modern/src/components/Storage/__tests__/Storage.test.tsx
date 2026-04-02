@@ -8,6 +8,19 @@ import type { Resource, ResourceType } from '@/types/resource';
 import Storage from '@/components/Storage/Storage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
 
+const buildVisibleRect = (): DOMRect =>
+  ({
+    x: 0,
+    y: 120,
+    width: 960,
+    height: 32,
+    top: 120,
+    bottom: 152,
+    left: 0,
+    right: 960,
+    toJSON: () => ({}),
+  }) as DOMRect;
+
 // Stub ResizeObserver for jsdom (used by HistoryChart in pool detail panels)
 if (typeof globalThis.ResizeObserver === 'undefined') {
   globalThis.ResizeObserver = class ResizeObserver {
@@ -765,6 +778,10 @@ describe('Storage', () => {
     if (!groupRow) {
       return;
     }
+    Object.defineProperty(groupRow, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => buildVisibleRect(),
+    });
 
     fireEvent.click(groupRow);
 
@@ -775,8 +792,7 @@ describe('Storage', () => {
       );
     });
 
-    expect(screen.getByTestId('storage-summary-scope')).toHaveTextContent('Pinned');
-    expect(screen.getByRole('button', { name: 'Reset pinned scope' })).toBeInTheDocument();
+    expect(screen.queryByTestId('storage-summary-scope')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
     ).not.toBeInTheDocument();

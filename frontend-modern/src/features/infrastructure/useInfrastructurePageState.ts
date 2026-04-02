@@ -107,6 +107,7 @@ export function useInfrastructurePageState() {
     hoveredSeriesId: routeState.hoveredResourceId,
     hoveredGroupScope: hoveredResourceGroupScope,
     focusedSeriesId: routeState.expandedResourceId,
+    focusedGroupId: routeState.focusedResourceGroupId,
     focusedGroupScope: focusedResourceGroupScope,
     revealActiveSeries: routeState.setRevealedResourceId,
   });
@@ -218,13 +219,6 @@ export function useInfrastructurePageState() {
       focusedGroupScope: focusedResourceGroupScope(),
     }),
   );
-  const summaryScopePresentation = createMemo(() =>
-    buildSummaryScopePresentation({
-      allLabel: 'All resources',
-      resolveEntityLabel: (seriesId) => resourceNamesById().get(seriesId) ?? seriesId,
-      state: summaryInteraction.activeScopeState(),
-    }),
-  );
   const pinnedSummaryScopePresentation = createMemo(() =>
     buildSummaryScopePresentation({
       allLabel: 'All resources',
@@ -284,7 +278,7 @@ export function useInfrastructurePageState() {
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredResourceGroupScope,
     setSummaryTableRootRef,
-    summaryScopePresentation,
+    shouldShowPinnedSummaryScopeFallback: summaryInteraction.shouldShowPinnedScopeFallback,
     shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
     setFocusedResourceGroupId,
   };

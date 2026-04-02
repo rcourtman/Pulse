@@ -51,7 +51,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
     expect(infrastructurePageSurfaceSource).toContain('SummaryScopeBar');
-    expect(infrastructurePageSurfaceSource).toContain('summaryScopePresentation()');
+    expect(infrastructurePageSurfaceSource).toContain('hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()');
+    expect(infrastructurePageSurfaceSource).toContain('scope={pinnedSummaryScopePresentation()}');
     expect(infrastructurePageSurfaceSource).toContain('clearPinnedSummaryScope');
     expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
 
@@ -59,8 +60,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).toContain('hoveredSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('activeSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('focusedSummaryResourceGroupScope');
-    expect(infrastructurePageStateSource).toContain('summaryScopePresentation');
     expect(infrastructurePageStateSource).toContain('pinnedSummaryScopePresentation');
+    expect(infrastructurePageStateSource).toContain('shouldShowPinnedSummaryScopeFallback');
     expect(infrastructurePageStateSource).toContain('clearPinnedSummaryScope');
     expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');

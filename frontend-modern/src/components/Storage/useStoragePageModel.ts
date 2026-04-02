@@ -332,6 +332,7 @@ export const useStoragePageModel = () => {
     hoveredGroupScope: hoveredStorageGroupScope,
     hoveredSeriesId: hoveredStorageResourceId,
     focusedGroupScope: focusedStorageGroupScope,
+    focusedGroupId: selectedStorageGroupId,
     focusedSeriesId: focusedStorageResourceId,
     revealActiveSeries: (seriesId) => {
       if (physicalDiskSeriesIds().has(seriesId)) {
@@ -372,13 +373,6 @@ export const useStoragePageModel = () => {
     resolveSummaryScopeState({
       focusedSeriesId: focusedStorageResourceId(),
       focusedGroupScope: focusedStorageGroupScope(),
-    }),
-  );
-  const summaryScopePresentation = createMemo(() =>
-    buildSummaryScopePresentation({
-      allLabel: 'All storage',
-      resolveEntityLabel: (seriesId) => storageNamesByMetricSeriesId().get(seriesId) ?? seriesId,
-      state: summaryInteraction.activeScopeState(),
     }),
   );
   const pinnedSummaryScopePresentation = createMemo(() =>
@@ -451,7 +445,7 @@ export const useStoragePageModel = () => {
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,
-    summaryScopePresentation,
+    shouldShowPinnedSummaryScopeFallback: summaryInteraction.shouldShowPinnedScopeFallback,
     shouldShowJumpToActiveStorageRow: summaryInteraction.shouldShowJumpToActiveRow,
   };
 };

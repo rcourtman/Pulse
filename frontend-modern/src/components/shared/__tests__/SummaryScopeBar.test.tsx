@@ -3,67 +3,50 @@ import { describe, expect, it, vi } from 'vitest';
 import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import type { SummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 
-const renderScopeBar = (active: SummaryScopePresentation, options?: {
-  idleHint?: string;
-  onReset?: () => void;
-  pinned?: SummaryScopePresentation | null;
+const renderScopeBar = (scope: SummaryScopePresentation, options?: {
+  onClear?: () => void;
 }) =>
   render(() => (
     <SummaryScopeBar
       testId="summary-scope"
-      active={active}
-      idleHint={options?.idleHint}
-      onReset={options?.onReset}
-      pinned={options?.pinned ?? null}
+      scope={scope}
+      onClear={options?.onClear}
     />
   ));
 
 describe('SummaryScopeBar', () => {
-  it('renders all scope as a quiet context line without a scope badge', () => {
+  it('renders pinned scope as a compact fallback context line', () => {
     renderScopeBar({
-      kind: 'page',
-      label: 'All workloads',
+      kind: 'group',
+      label: 'Production cluster',
       contextLabel: null,
-      mode: 'all',
-    }, {
-      idleHint: 'Tap a group or row to pin scope.',
+      mode: 'pinned',
     });
 
     const scope = screen.getByTestId('summary-scope');
-    expect(scope).toHaveTextContent('Showing');
-    expect(scope).toHaveTextContent('All workloads');
-    expect(scope).toHaveTextContent('Tap a group or row to pin scope.');
-    expect(screen.queryByText('Scope')).not.toBeInTheDocument();
-    expect(scope.querySelector('.rounded-full')).toBeNull();
+    expect(scope).toHaveTextContent('Scoped to');
+    expect(scope).toHaveTextContent('Production cluster');
+    expect(scope).not.toHaveTextContent('Previewing');
+    expect(scope).not.toHaveTextContent('Pinned to');
+    expect(scope).not.toHaveTextContent('Showing');
   });
 
-  it('distinguishes preview from a pinned fallback without reintroducing chrome', () => {
-    renderScopeBar(
-      {
-        kind: 'entity',
-        label: 'finance-jump-01',
-        contextLabel: 'Production cluster',
-        mode: 'preview',
-      },
-      {
-        pinned: {
-          kind: 'group',
-          label: 'Production cluster',
-          contextLabel: null,
-          mode: 'pinned',
-        },
-      },
-    );
+  it('keeps contextual group labels as secondary helper text', () => {
+    renderScopeBar({
+      kind: 'entity',
+      label: 'finance-jump-01',
+      contextLabel: 'Production cluster',
+      mode: 'pinned',
+    });
 
     const scope = screen.getByTestId('summary-scope');
-    expect(scope).toHaveTextContent('Previewing');
+    expect(scope).toHaveTextContent('Scoped to');
     expect(scope).toHaveTextContent('finance-jump-01');
-    expect(scope).toHaveTextContent('Pinned to Production cluster');
-    expect(scope.querySelector('.rounded-full')).toBeNull();
+    expect(scope).toHaveTextContent('Within Production cluster');
   });
 
-  it('keeps the reset affordance explicit but visually quiet', () => {
-    const onReset = vi.fn();
+  it('keeps the clear affordance explicit but quiet', () => {
+    const onClear = vi.fn();
     renderScopeBar(
       {
         kind: 'group',
@@ -71,13 +54,13 @@ describe('SummaryScopeBar', () => {
         contextLabel: null,
         mode: 'pinned',
       },
-      { onReset },
+      { onClear },
     );
 
-    const button = screen.getByRole('button', { name: 'Reset pinned scope' });
-    expect(button).toHaveTextContent('Reset');
+    const button = screen.getByRole('button', { name: 'Clear pinned scope' });
+    expect(button).toHaveTextContent('Clear');
 
     fireEvent.click(button);
-    expect(onReset).toHaveBeenCalledTimes(1);
+    expect(onClear).toHaveBeenCalledTimes(1);
   });
 });

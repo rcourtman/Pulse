@@ -7,8 +7,8 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { useKioskMode } from '@/hooks/useKioskMode';
-import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 import { resolveSummaryScopeState } from '@/components/shared/summaryCardInteraction';
+import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 import {
   getDashboardDisconnectedState,
   getDashboardGuestsEmptyState,
@@ -210,7 +210,6 @@ export function useDashboardState(props: DashboardProps) {
   );
 
   const {
-    activeSummaryScopeState,
     activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     chartHoverSync,
@@ -230,6 +229,7 @@ export function useDashboardState(props: DashboardProps) {
     setTableBodyRef,
     setTableWrapperRef,
     shouldShowJumpToActiveWorkloadRow,
+    shouldShowPinnedSummaryScopeFallback,
     tableBodyRef,
   } = useDashboardSelectionState({
     filteredGuests,
@@ -252,13 +252,6 @@ export function useDashboardState(props: DashboardProps) {
     resolveSummaryScopeState({
       focusedSeriesId: selectedGuestId(),
       focusedGroupScope: focusedSummaryWorkloadGroupScope(),
-    }),
-  );
-  const summaryScopePresentation = createMemo(() =>
-    buildSummaryScopePresentation({
-      allLabel: 'All workloads',
-      resolveEntityLabel: (seriesId) => workloadNamesById().get(seriesId) ?? seriesId,
-      state: activeSummaryScopeState(),
     }),
   );
   const pinnedSummaryScopePresentation = createMemo(() =>
@@ -376,9 +369,9 @@ export function useDashboardState(props: DashboardProps) {
     setViewMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
-    summaryScopePresentation,
     pinnedSummaryScopePresentation,
     hasPinnedSummaryScope,
+    shouldShowPinnedSummaryScopeFallback,
     shouldShowJumpToActiveWorkloadRow,
     sortDirection,
     sortKey,

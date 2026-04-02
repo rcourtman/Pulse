@@ -51,12 +51,15 @@ const isElementVisibleWithinViewport = (element: HTMLElement): boolean => {
 export interface UseSummaryTableFocusBridgeOptions {
   activeSeriesId: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
+  focusedGroupId?: Accessor<string | null | undefined>;
   revealActiveSeries?: (seriesId: string) => void;
 }
 
 export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOptions) {
   const [tableRoot, setTableRoot] = createSignal<HTMLElement | null>(null);
+  const [viewportVersion, setViewportVersion] = createSignal(0);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
+  const focusedGroupId = options.focusedGroupId ?? (() => null);
 
   const normalizedActiveSeriesId = createMemo<string | null>(() => {
     const normalized = normalizeSeriesId(options.activeSeriesId());
@@ -85,7 +88,19 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     );
   };
 
+  const focusedGroupRow = (): HTMLElement | null => {
+    const root = tableRoot();
+    const focusedId = normalizeSeriesId(focusedGroupId());
+    if (!root || !focusedId) {
+      return null;
+    }
+    return root.querySelector<HTMLElement>(
+      `[data-summary-group-id="${escapeAttributeSelectorValue(focusedId)}"]`,
+    );
+  };
+
   const isActiveRowVisible = createMemo<boolean>(() => {
+    viewportVersion();
     const row = activeRow();
     if (!row) {
       return false;
@@ -95,6 +110,30 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
 
   const shouldShowJumpToActiveRow = createMemo<boolean>(() => {
     return Boolean(normalizedActiveSeriesId()) && !isActiveRowVisible();
+  });
+
+  const isPinnedScopeVisible = createMemo<boolean>(() => {
+    viewportVersion();
+    const focusedId = normalizeSeriesId(focusedSeriesId());
+    if (focusedId) {
+      const row = focusedRow();
+      return row ? isElementVisibleWithinViewport(row) : false;
+    }
+
+    const focusedGroup = normalizeSeriesId(focusedGroupId());
+    if (focusedGroup) {
+      const row = focusedGroupRow();
+      return row ? isElementVisibleWithinViewport(row) : false;
+    }
+
+    return false;
+  });
+
+  const shouldShowPinnedScopeFallback = createMemo<boolean>(() => {
+    return (
+      Boolean(normalizeSeriesId(focusedSeriesId()) || normalizeSeriesId(focusedGroupId())) &&
+      !isPinnedScopeVisible()
+    );
   });
 
   const jumpToActiveRow = () => {
@@ -119,6 +158,35 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
 
     attemptScroll(6);
   };
+
+  createEffect(() => {
+    const root = tableRoot();
+    if (!root || typeof window === 'undefined') {
+      return;
+    }
+
+    let rafId: number | undefined;
+    const scheduleViewportRefresh = () => {
+      if (rafId !== undefined) {
+        return;
+      }
+      rafId = window.requestAnimationFrame(() => {
+        rafId = undefined;
+        setViewportVersion((current) => current + 1);
+      });
+    };
+
+    window.addEventListener('scroll', scheduleViewportRefresh, true);
+    window.addEventListener('resize', scheduleViewportRefresh);
+
+    onCleanup(() => {
+      window.removeEventListener('scroll', scheduleViewportRefresh, true);
+      window.removeEventListener('resize', scheduleViewportRefresh);
+      if (rafId !== undefined) {
+        window.cancelAnimationFrame(rafId);
+      }
+    });
+  });
 
   createEffect(() => {
     const focusedId = normalizeSeriesId(focusedSeriesId());
@@ -218,15 +286,18 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
   return {
     activeRow,
     isActiveRowVisible,
+    isPinnedScopeVisible,
     jumpToActiveRow,
     setTableRootRef: (element: HTMLElement | undefined) => setTableRoot(element ?? null),
     shouldShowJumpToActiveRow,
+    shouldShowPinnedScopeFallback,
   } as const;
 }
 
 export interface UseSummaryPageInteractionStateOptions {
   hoveredSeriesId?: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
+  focusedGroupId?: Accessor<string | null | undefined>;
   hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   revealActiveSeries?: (seriesId: string) => void;
@@ -236,6 +307,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
   const [chartHoverSync, setChartHoverSync] = createSignal<SummaryChartHoverSync | null>(null);
   const hoveredSeriesId = options.hoveredSeriesId ?? (() => null);
   const focusedSeriesId = options.focusedSeriesId ?? (() => null);
+  const focusedGroupId = options.focusedGroupId ?? (() => null);
   const hoveredGroupScope = options.hoveredGroupScope ?? (() => null);
   const focusedGroupScope = options.focusedGroupScope ?? (() => null);
 
@@ -269,6 +341,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
   const tableFocus = useSummaryTableFocusBridge({
     activeSeriesId,
     focusedSeriesId,
+    focusedGroupId,
     revealActiveSeries: options.revealActiveSeries,
   });
 
@@ -281,5 +354,6 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
     setChartHoverSync,
     setTableRootRef: tableFocus.setTableRootRef,
     shouldShowJumpToActiveRow: tableFocus.shouldShowJumpToActiveRow,
+    shouldShowPinnedScopeFallback: tableFocus.shouldShowPinnedScopeFallback,
   } as const;
 }

@@ -152,4 +152,78 @@ describe('useSummaryPageInteractionState', () => {
     expect(revealActiveSeries).toHaveBeenCalledWith('workload-a');
     expect(scrollTo).toHaveBeenCalledWith({ top: 456, behavior: 'smooth' });
   });
+
+  it('shows the pinned-scope fallback when a focused row is mounted outside the viewport', () => {
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
+    const root = document.createElement('div');
+    const row = document.createElement('div');
+    row.setAttribute('data-summary-series-id', 'workload-a');
+    Object.defineProperty(row, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => buildRect(1200),
+    });
+    root.appendChild(row);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+
+    expect(result.shouldShowPinnedScopeFallback()).toBe(true);
+  });
+
+  it('keeps the pinned-scope fallback hidden while the focused group row is visible', () => {
+    const [focusedGroupId] = createSignal<string | null>('group-a');
+    const root = document.createElement('div');
+    const row = document.createElement('div');
+    row.setAttribute('data-summary-group-id', 'group-a');
+    Object.defineProperty(row, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => buildRect(120),
+    });
+    root.appendChild(row);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedGroupId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+
+    expect(result.shouldShowPinnedScopeFallback()).toBe(false);
+  });
+
+  it('recomputes pinned-scope fallback visibility when scrolling moves the pinned row off-screen', () => {
+    const [focusedSeriesId] = createSignal<string | null>('workload-a');
+    let top = 120;
+    const root = document.createElement('div');
+    const row = document.createElement('div');
+    row.setAttribute('data-summary-series-id', 'workload-a');
+    Object.defineProperty(row, 'getBoundingClientRect', {
+      configurable: true,
+      value: () => buildRect(top),
+    });
+    root.appendChild(row);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId,
+      }),
+    );
+
+    result.setTableRootRef(root);
+    expect(result.shouldShowPinnedScopeFallback()).toBe(false);
+
+    top = 1200;
+    window.dispatchEvent(new Event('scroll'));
+
+    expect(result.shouldShowPinnedScopeFallback()).toBe(true);
+  });
 });

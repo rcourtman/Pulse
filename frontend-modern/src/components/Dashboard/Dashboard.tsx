@@ -99,15 +99,14 @@ export function Dashboard(props: DashboardProps) {
         when={
           state.surfaceConnected() &&
           state.surfaceInitialDataReceived() &&
-          state.filteredGuests().length > 0
+          state.hasPinnedSummaryScope() &&
+          state.shouldShowPinnedSummaryScopeFallback()
         }
       >
         <SummaryScopeBar
           testId="workloads-summary-scope"
-          active={state.summaryScopePresentation()}
-          pinned={state.hasPinnedSummaryScope() ? state.pinnedSummaryScopePresentation() : null}
-          idleHint={state.isMobile() ? 'Tap a group or row to pin scope.' : undefined}
-          onReset={state.hasPinnedSummaryScope() ? state.clearPinnedSummaryScope : undefined}
+          scope={state.pinnedSummaryScopePresentation()}
+          onClear={state.clearPinnedSummaryScope}
         />
       </Show>
 

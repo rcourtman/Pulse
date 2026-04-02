@@ -55,6 +55,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     hoveredSeriesId: hoveredWorkloadId,
     hoveredGroupScope: hoveredWorkloadGroupScope,
     focusedSeriesId: selectedGuestId,
+    focusedGroupId: selectedWorkloadGroupId,
     focusedGroupScope: focusedWorkloadGroupScope,
     revealActiveSeries: setRevealedGuestId,
   });
@@ -229,6 +230,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     setSelectedGuestId,
     setTableBodyRef,
     setTableWrapperRef,
+    shouldShowPinnedSummaryScopeFallback: summaryInteraction.shouldShowPinnedScopeFallback,
     shouldShowJumpToActiveWorkloadRow: summaryInteraction.shouldShowJumpToActiveRow,
     tableBodyRef,
   } as const;

@@ -356,6 +356,66 @@ describe('useDashboardSelectionState', () => {
     expect(result.activeSummaryWorkloadId()).toBeNull();
   });
 
+  it('shows the pinned-scope fallback only after a pinned workload group scrolls out of view', () => {
+    locationSearch = '?summaryGroup=cluster-a';
+    const [filteredGuests] = createSignal<WorkloadGuest[]>([
+      {
+        id: 'cluster-a:node-1:101',
+        name: 'guest-1',
+        status: 'running',
+        instance: 'cluster-a',
+        node: 'node-1',
+        vmid: 101,
+      } as unknown as WorkloadGuest,
+    ]);
+    const summaryScopes = () =>
+      new Map<string, SummarySeriesGroupScope>([
+        [
+          'cluster-a',
+          {
+            id: 'cluster-a',
+            label: 'Cluster A (1 workload)',
+            seriesIds: ['cluster-a:node-1:101'],
+          },
+        ],
+      ]);
+
+    let top = 120;
+    const { result } = renderHook(() =>
+      useDashboardSelectionState({
+        filteredGuests,
+        summaryGroupScopes: summaryScopes,
+      }),
+    );
+
+    const tableWrapper = document.createElement('div');
+    const groupRow = document.createElement('div');
+    groupRow.dataset.summaryGroupId = 'cluster-a';
+    groupRow.getBoundingClientRect = vi.fn(() => ({
+      top,
+      bottom: top + 40,
+      left: 0,
+      right: 320,
+      width: 320,
+      height: 40,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    })) as unknown as typeof groupRow.getBoundingClientRect;
+    tableWrapper.appendChild(groupRow);
+    document.body.appendChild(tableWrapper);
+
+    result.setTableWrapperRef(tableWrapper as HTMLDivElement);
+
+    expect(result.focusedSummaryWorkloadGroupId()).toBe('cluster-a');
+    expect(result.shouldShowPinnedSummaryScopeFallback()).toBe(false);
+
+    top = window.innerHeight + 120;
+    window.dispatchEvent(new Event('scroll'));
+
+    expect(result.shouldShowPinnedSummaryScopeFallback()).toBe(true);
+  });
+
   it('clears row focus without leaving behind an inferred agent filter', () => {
     locationSearch = '?resource=cluster-a:node-1:101';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([]);

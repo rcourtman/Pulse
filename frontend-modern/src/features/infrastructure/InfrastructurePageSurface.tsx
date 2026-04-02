@@ -68,9 +68,9 @@ export function InfrastructurePageSurface() {
     kioskMode,
     sourceOptions,
     statusOptions,
-    summaryScopePresentation,
     pinnedSummaryScopePresentation,
     hasPinnedSummaryScope,
+    shouldShowPinnedSummaryScopeFallback,
     hasActiveFilters,
     clearFilters,
     filteredResources,
@@ -325,15 +325,13 @@ export function InfrastructurePageSurface() {
                 }
               >
                 <div class="space-y-3">
-                  <SummaryScopeBar
-                    testId="infrastructure-summary-scope"
-                    active={summaryScopePresentation()}
-                    pinned={
-                      hasPinnedSummaryScope() ? pinnedSummaryScopePresentation() : null
-                    }
-                    idleHint={isMobile() ? 'Tap a cluster or row to pin scope.' : undefined}
-                    onReset={hasPinnedSummaryScope() ? clearPinnedSummaryScope : undefined}
-                  />
+                  <Show when={hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()}>
+                    <SummaryScopeBar
+                      testId="infrastructure-summary-scope"
+                      scope={pinnedSummaryScopePresentation()}
+                      onClear={clearPinnedSummaryScope}
+                    />
+                  </Show>
                   <UnifiedResourceTable
                     resources={filteredResources()}
                     expandedResourceId={expandedResourceId()}

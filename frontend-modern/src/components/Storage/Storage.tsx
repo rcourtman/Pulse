@@ -66,7 +66,7 @@ const Storage: Component = () => {
     setSummaryTableRootRef,
     hasPinnedSummaryScope,
     pinnedSummaryScopePresentation,
-    summaryScopePresentation,
+    shouldShowPinnedSummaryScopeFallback,
     shouldShowJumpToActiveStorageRow,
   } = useStoragePageModel();
 
@@ -121,13 +121,11 @@ const Storage: Component = () => {
 
       <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />
 
-      <Show when={filteredRecords().length > 0 || physicalDisks().length > 0}>
+      <Show when={hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()}>
         <SummaryScopeBar
           testId="storage-summary-scope"
-          active={summaryScopePresentation()}
-          pinned={hasPinnedSummaryScope() ? pinnedSummaryScopePresentation() : null}
-          idleHint={groupBy() !== 'none' ? 'Tap a group or row to pin scope.' : 'Tap a row to pin scope.'}
-          onReset={hasPinnedSummaryScope() ? clearPinnedSummaryScope : undefined}
+          scope={pinnedSummaryScopePresentation()}
+          onClear={clearPinnedSummaryScope}
         />
       </Show>
 
