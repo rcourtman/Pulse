@@ -37,6 +37,13 @@ type validationResult struct {
 	Record  *helperTokenRecord `json:"record,omitempty"`
 }
 
+type deleteResult struct {
+	Action  string             `json:"action"`
+	DataDir string             `json:"dataDir"`
+	Deleted bool               `json:"deleted"`
+	Record  *helperTokenRecord `json:"record,omitempty"`
+}
+
 type helperTokenRecord struct {
 	ID       string            `json:"id"`
 	Metadata map[string]string `json:"metadata,omitempty"`
@@ -56,6 +63,8 @@ func usage(message string) {
 	}
 	fmt.Fprintln(os.Stderr, "usage:")
 	fmt.Fprintln(os.Stderr, "  go run ./tests/integration/scripts/relay-mobile-token-helper.go create --data-dir <dir> --org-id <id> [options]")
+	fmt.Fprintln(os.Stderr, "  go run ./tests/integration/scripts/relay-mobile-token-helper.go delete --data-dir <dir> (--token-id <id> | --token <raw-token>)")
+	fmt.Fprintln(os.Stderr, "  go run ./tests/integration/scripts/relay-mobile-token-helper.go validate --data-dir <dir> --token <raw-token>")
 	os.Exit(1)
 }
 
@@ -85,6 +94,60 @@ func pruneExistingProofTokens(tokens []config.APITokenRecord, orgID, issuedVia s
 		filtered = append(filtered, token)
 	}
 	return filtered, pruned
+}
+
+func toHelperTokenRecord(record config.APITokenRecord) helperTokenRecord {
+	return helperTokenRecord{
+		ID:       record.ID,
+		Metadata: record.Metadata,
+		Name:     record.Name,
+		OrgID:    record.OrgID,
+		Scopes:   append([]string{}, record.Scopes...),
+	}
+}
+
+func findTokenRecord(tokens []config.APITokenRecord, tokenID, rawToken string) (*config.APITokenRecord, error) {
+	scopedTokenID := strings.TrimSpace(tokenID)
+	scopedRawToken := strings.TrimSpace(rawToken)
+
+	if scopedTokenID == "" && scopedRawToken == "" {
+		return nil, fmt.Errorf("either token id or raw token is required")
+	}
+
+	if scopedRawToken != "" {
+		cfg := &config.Config{APITokens: tokens}
+		record, ok := cfg.ValidateAPIToken(scopedRawToken)
+		if !ok || record == nil {
+			return nil, nil
+		}
+		scopedTokenID = strings.TrimSpace(record.ID)
+	}
+
+	for idx := range tokens {
+		if strings.TrimSpace(tokens[idx].ID) == scopedTokenID {
+			return &tokens[idx], nil
+		}
+	}
+
+	return nil, nil
+}
+
+func deleteTokenRecord(tokens []config.APITokenRecord, tokenID string) ([]config.APITokenRecord, *config.APITokenRecord) {
+	scopedTokenID := strings.TrimSpace(tokenID)
+	filtered := make([]config.APITokenRecord, 0, len(tokens))
+	var removed *config.APITokenRecord
+
+	for idx := range tokens {
+		record := tokens[idx]
+		if removed == nil && strings.TrimSpace(record.ID) == scopedTokenID {
+			recordCopy := record
+			removed = &recordCopy
+			continue
+		}
+		filtered = append(filtered, record)
+	}
+
+	return filtered, removed
 }
 
 func createRelayMobileToken(args []string) {
@@ -152,17 +215,70 @@ func createRelayMobileToken(args []string) {
 		DataDir:     scopedDataDir,
 		OrgID:       scopedOrgID,
 		PrunedCount: prunedCount,
-		Record: helperTokenRecord{
-			ID:       record.ID,
-			Metadata: record.Metadata,
-			Name:     record.Name,
-			OrgID:    record.OrgID,
-			Scopes:   append([]string{}, record.Scopes...),
-		},
-		Token: rawToken,
+		Record:      toHelperTokenRecord(*record),
+		Token:       rawToken,
 	}); err != nil {
 		fatalf("encode result: %v", err)
 	}
+}
+
+func deleteRelayMobileToken(args []string) {
+	flags := flag.NewFlagSet("delete", flag.ExitOnError)
+	dataDir := flags.String("data-dir", "", "Path to the tenant root data directory that owns api_tokens.json")
+	tokenID := flags.String("token-id", "", "Token record id to delete")
+	rawToken := flags.String("token", "", "Raw token value to resolve and delete")
+	if err := flags.Parse(args); err != nil {
+		fatalf("%v", err)
+	}
+
+	scopedDataDir := strings.TrimSpace(*dataDir)
+	if scopedDataDir == "" {
+		usage("--data-dir is required")
+	}
+
+	persistence := config.NewConfigPersistence(scopedDataDir)
+	tokens, err := persistence.LoadAPITokens()
+	if err != nil {
+		fatalf("load api tokens: %v", err)
+	}
+
+	record, err := findTokenRecord(tokens, *tokenID, *rawToken)
+	if err != nil {
+		fatalf("resolve token: %v", err)
+	}
+	if record == nil {
+		fatalf("token not found")
+	}
+
+	filteredTokens, removed := deleteTokenRecord(tokens, record.ID)
+	if removed == nil {
+		fatalf("token not found")
+	}
+
+	cfg := &config.Config{APITokens: filteredTokens}
+	cfg.SortAPITokens()
+	if err := persistence.SaveAPITokens(cfg.APITokens); err != nil {
+		fatalf("persist api tokens: %v", err)
+	}
+
+	encoder := json.NewEncoder(os.Stdout)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(deleteResult{
+		Action:  "delete",
+		DataDir: scopedDataDir,
+		Deleted: true,
+		Record:  ptrToHelperTokenRecord(removed),
+	}); err != nil {
+		fatalf("encode result: %v", err)
+	}
+}
+
+func ptrToHelperTokenRecord(record *config.APITokenRecord) *helperTokenRecord {
+	if record == nil {
+		return nil
+	}
+	converted := toHelperTokenRecord(*record)
+	return &converted
 }
 
 func validateRelayMobileToken(args []string) {
@@ -196,13 +312,7 @@ func validateRelayMobileToken(args []string) {
 		Found:   ok && record != nil,
 	}
 	if ok && record != nil {
-		result.Record = &helperTokenRecord{
-			ID:       record.ID,
-			Metadata: record.Metadata,
-			Name:     record.Name,
-			OrgID:    record.OrgID,
-			Scopes:   append([]string{}, record.Scopes...),
-		}
+		result.Record = ptrToHelperTokenRecord(record)
 	}
 
 	encoder := json.NewEncoder(os.Stdout)
@@ -222,6 +332,8 @@ func main() {
 	switch strings.ToLower(strings.TrimSpace(os.Args[1])) {
 	case "create":
 		createRelayMobileToken(os.Args[2:])
+	case "delete":
+		deleteRelayMobileToken(os.Args[2:])
 	case "validate":
 		validateRelayMobileToken(os.Args[2:])
 	case "--help", "-h", "help":

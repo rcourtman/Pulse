@@ -7,11 +7,9 @@ import path from 'node:path';
 import process from 'node:process';
 
 import {
-  resolveHostedTenantRootDataDir,
   restartHostedTenantRuntime,
-  runRemote,
-  shellQuote,
 } from './hosted-tenant-runtime.mjs';
+import { createHostedRelayMobileToken } from './hosted-mobile-token-runtime.mjs';
 
 const DEFAULT_CLOUD_HOST = 'root@pulse-cloud';
 const DEFAULT_CONTROL_PLANE_URL = 'https://cloud.pulserelay.pro';
@@ -106,28 +104,6 @@ function runText(command, args, options = {}) {
   });
 }
 
-function buildLocalHelper(tempDir) {
-  const binaryPath = path.join(tempDir, 'relay-mobile-token-helper');
-  execFileSync('go', [
-    'build',
-    '-buildvcs=false',
-    '-o',
-    binaryPath,
-    './tests/integration/scripts/relay-mobile-token-helper.go',
-  ], {
-    cwd: REPO_ROOT,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      CGO_ENABLED: '0',
-      GOARCH: 'amd64',
-      GOOS: 'linux',
-    },
-    stdio: 'pipe',
-  });
-  return binaryPath;
-}
-
 function deriveTenantBaseUrl(controlPlaneUrl, tenantId) {
   const parsed = new URL(controlPlaneUrl);
   parsed.hostname = `${tenantId}.${parsed.hostname}`;
@@ -135,36 +111,6 @@ function deriveTenantBaseUrl(controlPlaneUrl, tenantId) {
   parsed.search = '';
   parsed.hash = '';
   return parsed.toString().replace(/\/$/, '');
-}
-
-function createHostedRelayMobileToken({ cloudHost, tenantId, tempDir }) {
-  const localBinaryPath = buildLocalHelper(tempDir);
-  const remoteBinaryPath = `/tmp/relay-mobile-token-helper-${process.pid}-${Date.now()}`;
-  const tenantDataDir = resolveHostedTenantRootDataDir(tenantId);
-
-  try {
-    execFileSync('scp', [localBinaryPath, `${cloudHost}:${remoteBinaryPath}`], {
-      encoding: 'utf8',
-      maxBuffer: 32 * 1024 * 1024,
-      stdio: 'pipe',
-    });
-    runRemote(cloudHost, `chmod +x ${shellQuote(remoteBinaryPath)}`);
-
-    const output = runRemote(cloudHost, [
-      shellQuote(remoteBinaryPath),
-      'create',
-      '--data-dir',
-      shellQuote(tenantDataDir),
-      '--org-id',
-      shellQuote(tenantId),
-    ].join(' '));
-
-    return JSON.parse(output);
-  } finally {
-    try {
-      runRemote(cloudHost, `rm -f ${shellQuote(remoteBinaryPath)}`);
-    } catch {}
-  }
 }
 
 function curlJson(args) {
