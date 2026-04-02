@@ -54,12 +54,12 @@ export interface AISettings {
   discovery_enabled?: boolean;
   discovery_interval_hours?: number;
 
-  // Quickstart credits
+  // Server-authoritative Patrol quickstart inventory surfaced in AI settings.
   quickstart_credits_total?: number;
   quickstart_credits_used?: number;
   quickstart_credits_remaining?: number;
   quickstart_credits_available?: boolean;
-  using_quickstart?: boolean;
+  using_quickstart?: boolean; // true when Patrol is currently using the quickstart provider
 }
 
 export interface AISettingsUpdateRequest {

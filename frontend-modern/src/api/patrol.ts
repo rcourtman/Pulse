@@ -171,7 +171,7 @@ export interface PatrolStatus {
   license_status?: LicenseStatus;
   upgrade_url?: string;
   summary: FindingsSummary;
-  // Quickstart credits
+  // Server-authoritative Patrol quickstart inventory and runtime source.
   quickstart_credits_remaining?: number;
   quickstart_credits_total?: number;
   using_quickstart?: boolean;

@@ -76,6 +76,13 @@ describe('PricingV6', () => {
     expect(screen.getAllByText('Relay').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pro').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Pro+').length).toBeGreaterThan(0);
+    expect(
+      screen.getByText(
+        'Core monitoring stays free. Relay adds remote access, and Pro unlocks AI operations.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('AI Patrol (BYOK)')).toBeInTheDocument();
+    expect(screen.getByText('Patrol quickstart: 25 runs, no API key')).toBeInTheDocument();
     expect(screen.getByText('8 monitored systems · 14-day history')).toBeInTheDocument();
     expect(screen.getByText('15 monitored systems')).toBeInTheDocument();
     expect(screen.getByText('50 monitored systems')).toBeInTheDocument();

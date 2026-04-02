@@ -686,6 +686,7 @@ describe('AIIntelligence entitlement gating', () => {
       },
       predictions_count: 0,
       recent_changes_count: 0,
+      recent_changes: [],
       learning: {
         resources_with_knowledge: 0,
         total_notes: 0,
@@ -759,8 +760,62 @@ describe('AIIntelligence entitlement gating', () => {
       expect(screen.getByText('Patrol enabled')).toBeInTheDocument();
     });
 
-    expect(screen.queryByText('Credits exhausted — connect API key')).not.toBeInTheDocument();
+    expect(screen.queryByText('Patrol quickstart exhausted')).not.toBeInTheDocument();
     expect(screen.getByText(/Health A · 100\/100/)).toBeInTheDocument();
+  });
+
+  it('shows the active Patrol quickstart chip only when runtime is actually using quickstart', async () => {
+    hasFeatureMock.mockReturnValue(true);
+    licenseStatusMock.mockReturnValue({ subscription_state: 'active' });
+    getPatrolStatusMock.mockResolvedValue(
+      defaultPatrolStatus({
+        runtime_state: 'active',
+        using_quickstart: true,
+        quickstart_credits_total: 25,
+        quickstart_credits_remaining: 12,
+        last_patrol_at: '2026-03-12T09:57:00Z',
+      }),
+    );
+    intelligenceState.summary = {
+      timestamp: '2026-03-12T10:00:00Z',
+      overall_health: {
+        score: 100,
+        grade: 'A',
+        trend: 'stable',
+        factors: [],
+        prediction: 'Infrastructure is healthy with no significant issues detected.',
+      },
+      findings_count: {
+        critical: 0,
+        warning: 0,
+        watch: 0,
+        info: 0,
+        total: 0,
+      },
+      predictions_count: 0,
+      recent_changes_count: 0,
+      learning: {
+        resources_with_knowledge: 0,
+        total_notes: 0,
+        resources_with_baselines: 0,
+        patterns_detected: 0,
+        correlations_learned: 0,
+        incidents_tracked: 0,
+      },
+    };
+
+    render(() => <AIIntelligence />);
+
+    await waitFor(() => {
+      expect(getPatrolStatusMock).toHaveBeenCalled();
+      expect(
+        screen.getByTitle(
+          '12 of 25 free Patrol quickstart runs remaining. No API key needed for Patrol.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('Patrol quickstart: 12/25 runs left')).toBeInTheDocument();
   });
 
   it('surfaces coverage incomplete as the primary patrol assessment instead of no-issues copy', async () => {

@@ -142,6 +142,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
         <Show when={showQuickstartStatus()}>
           <div
             class={`flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium ${quickstartPresentation().className}`}
+            aria-label={quickstartPresentation().title}
             title={quickstartPresentation().title}
           >
             <Show

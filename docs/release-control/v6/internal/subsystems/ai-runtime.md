@@ -75,6 +75,11 @@ runtime cost control, and shared AI transport surfaces.
    platform-native reads or writes must extend the shared Assistant tool
    contracts, and read-only or augmentation-only platforms must stay explicit
    there instead of drifting into provider-local tools.
+7. Keep self-hosted Patrol quickstart messaging aligned with backend runtime
+   truth: the governed quickstart contract is Patrol-only first-run
+   acceleration with server-authoritative run inventory, not a general hosted
+   chat entitlement or a replacement for BYOK once Patrol leaves the
+   quickstart path.
 
 ## Current State
 
@@ -126,6 +131,9 @@ sync `credits_remaining` / `credits_total` back into that cache on every server
 response, and invalidate the cached token on auth rejection instead of reviving
 local counter truth. Explicit BYOK provider credentials still outrank Patrol
 quickstart whenever both are present.
+Public-facing copy that reflects those runtime fields must therefore speak in
+Patrol quickstart runs and Patrol-only no-key activation, not in generic AI
+credits or a promise of full hosted chat.
 That same provider-model contract applies to the chat explore pre-pass in
 `internal/ai/chat/service_explore.go`: any runtime model that is valid for the
 main chat execution path, including `quickstart:minimax-2.5m`, must resolve

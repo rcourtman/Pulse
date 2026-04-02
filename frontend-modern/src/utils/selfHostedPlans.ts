@@ -51,7 +51,8 @@ export const SELF_HOSTED_PLAN_DEFINITIONS: readonly SelfHostedPlanDefinition[] =
     highlights: [
       'Real-time monitoring',
       '7-day metric history',
-      'AI Patrol (BYOK + 25 quickstart credits)',
+      'AI Patrol (BYOK)',
+      'Patrol quickstart: 25 runs, no API key',
       'Update alerts',
       'Basic SSO (OIDC)',
       'Community support',
@@ -111,7 +112,7 @@ export const SELF_HOSTED_PLAN_BY_TIER: Record<SelfHostedTierKey, SelfHostedPlanD
 
 export const SELF_HOSTED_COMMERCIAL_PRESENTATION: SelfHostedCommercialPresentation = {
   pageTitle: 'Pricing',
-  pageDescription: 'Compare tiers and choose what fits.',
+  pageDescription: 'Core monitoring stays free. Relay adds remote access, and Pro unlocks AI operations.',
   mostPopularBadge: 'Most Popular',
   currentPlanLabel: 'Current Plan',
   includedLabel: 'Included',

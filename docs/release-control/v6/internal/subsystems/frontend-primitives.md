@@ -258,6 +258,11 @@ connections` visible as the API-backed alternative for Proxmox and
     route strings or provider-local link builders inside feature panels.
 15. Keep shared summary-card emphasis coherent. When shared summary primitives enter an `inactive` state, `SummaryMetricCard`, `InteractiveSparkline`, and `DensityMap` must all demote background context together so storage, infrastructure, and workloads read as one interaction model instead of mixing page-local opacity, sticky-shell, or highlight rules.
 16. Keep density-map summaries overview-first. When a shared summary density map receives row focus or chart-hover emphasis, `frontend-modern/src/components/shared/DensityMap.tsx`, `frontend-modern/src/components/shared/useDensityMapState.ts`, and `frontend-modern/src/components/shared/densityMapModel.ts` must preserve the multi-entity overview rows and keep focused-entity detail in the hover tooltip instead of swapping the card into a single-series chart, dimming the rest of the map into unusable background noise, duplicating cursor-value tooltip copy, or adding persistent card chrome that steals heatmap space. The card body must stay overview-first; the tooltip may carry the active entity identity, current value, and peak, shared tooltip shells must follow semantic surface tokens instead of forcing a dark palette in light mode, the tooltip header must let long entity names consume the available width before truncating rather than clipping against an arbitrary fixed label cap, numeric metric readouts such as `16.9 MB/s` or `37.4 MB/s` must stay single-line instead of wrapping the unit onto a second row, and density-map detail that cannot fit cleanly inside the canonical tooltip shell must be omitted rather than introducing tooltip-specific chrome or a secondary chart inside the hover surface.
+17. Keep shared commercial and Patrol quickstart presenters on runtime-backed
+    wording. Reusable shells and helper-driven badges must describe quickstart
+    as Patrol runs or Patrol-only activation support when that is the governed
+    backend truth, and must not drift back to generic hosted-chat or generic
+    AI-credit claims.
 17. Keep sparkline scrubbing source-local and sibling-sync timestamp-based. The chart a user is actively scrubbing in `frontend-modern/src/components/shared/InteractiveSparkline.tsx` and `frontend-modern/src/components/shared/useInteractiveSparklineState.ts` must keep its dashed hover cursor on the real local mouse `x`, while sibling cards may map the shared hover timestamp onto their own timelines. Shared cursor sync must not snap the source chart back onto the nearest sample timestamp, the rendered SVG/canvas hover cursor must bind to the actual numeric cursor coordinate rather than a boolean guard state, the time cursor must span the chart viewport instead of collapsing to the series height, and the hover tooltip must track the pointer instead of anchoring to the chart top edge while following the active theme rather than a hardcoded dark shell.
 18. Keep shared contextual focus canonical after adoption. Once a summary or table surface enters route-backed contextual focus, future additions must extend `frontend-modern/src/components/shared/contextualFocus.ts` and its guardrail tests rather than forking another helper for workload IDs, resource IDs, or scroll-preserving same-route selection.
 19. Keep shared infrastructure/resource selectors on the canonical agent-facet
@@ -498,6 +503,10 @@ Those same feature-owned header badges must also stay aligned to the owning
 runtime state instead of surfacing stale auxiliary counters as primary status;
 an exhausted quickstart-credit badge cannot override an otherwise active Patrol
 runtime unless quickstart exhaustion is the active blocker.
+When those shared helpers surface quickstart state, the wording must stay
+Patrol-scoped as well: the badge copy should talk about Patrol quickstart runs
+or Patrol quickstart exhaustion rather than generic AI credits or broad hosted
+AI availability.
 That same route-owned presentation rule also governs Patrol findings empty
 states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone

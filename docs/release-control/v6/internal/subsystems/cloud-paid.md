@@ -127,6 +127,10 @@ agreement, and cloud-specific enforcement rules.
 1. Update this contract when cloud plan semantics change
 2. Update runtime and frontend tests together when plan/limit rules move
 3. Add or tighten drift tests when a pricing/runtime mismatch is fixed
+4. Keep self-hosted pricing and public docs on runtime-backed commercial truth:
+   Patrol quickstart may be presented only as Patrol-only first-run activation
+   support backed by the license server, while Relay and Pro remain the
+   canonical commercial story.
 
 ## Current State
 
@@ -246,6 +250,11 @@ installs authenticate that bootstrap with the installation token, community
 installs send a stable `client_installation_id`, and local runtime cache files
 may memoize the returned token and counts but may not treat those cached counts
 as commercial authority.
+That quickstart allowance is therefore activation support, not the main
+commercial pitch: self-hosted pricing and docs may promise Patrol-only
+quickstart runs with no API key for first use, but they must not market that
+bootstrap as a general hosted chat plan while Relay and Pro carry the paid
+story.
 The self-hosted commercial counted unit is now also locked to monitored
 systems rather than agent installs. `max_monitored_systems` is the live
 runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are

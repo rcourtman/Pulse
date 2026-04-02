@@ -75,6 +75,10 @@ Patrol-specific presentation helpers.
 1. Update Patrol page, state, presentation helpers, and proof files together when Patrol UX semantics change
 2. Keep Patrol-specific copy and badge logic inside the governed Patrol presentation helpers instead of page-local branches
 3. Update this contract whenever a new Patrol-specific page, store, helper, or presentation component becomes canonical runtime surface area
+4. Keep Patrol header quickstart copy Patrol-scoped and runtime-backed: the
+   Patrol header may promise only the server-authoritative quickstart
+   inventory, phrase availability as Patrol runs with no API key, and avoid
+   implying broader hosted chat or generic AI credits.
 
 ## Current State
 
@@ -397,6 +401,10 @@ Patrol may only show the quickstart exhausted warning when `using_quickstart`
 is true or when the Patrol runtime is explicitly blocked by quickstart
 exhaustion, not merely because the stored credit counter reached zero while a
 configured provider path keeps Patrol active.
+That same header copy must stay Patrol-only in operator-facing language:
+available inventory should read as free Patrol quickstart runs with no API
+key for Patrol, and exhaustion should direct the operator toward BYOK for
+Patrol rather than implying a broader hosted AI allowance.
 `frontend-modern/src/utils/remediationPresentation.ts` is now also the
 canonical owner for remediation result badge copy and success/failure styling
 used by `frontend-modern/src/components/patrol/RemediationStatus.tsx`, so

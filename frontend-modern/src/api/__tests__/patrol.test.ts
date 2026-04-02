@@ -75,6 +75,24 @@ describe('patrol api', () => {
     });
   });
 
+  it('preserves the canonical patrol quickstart transport fields', async () => {
+    apiFetchJSONMock.mockResolvedValueOnce({
+      runtime_state: 'active',
+      healthy: true,
+      quickstart_credits_total: 25,
+      quickstart_credits_remaining: 12,
+      using_quickstart: true,
+    } as any);
+
+    await expect(getPatrolStatus()).resolves.toMatchObject({
+      runtime_state: 'active',
+      healthy: true,
+      quickstart_credits_total: 25,
+      quickstart_credits_remaining: 12,
+      using_quickstart: true,
+    });
+  });
+
   it('preserves split patrol recency transport fields', async () => {
     apiFetchJSONMock.mockResolvedValueOnce({
       runtime_state: 'active',

@@ -35,7 +35,8 @@ describe('selfHostedPlans', () => {
   it('keeps shared self-hosted commercial copy in the common contract', () => {
     expect(SELF_HOSTED_COMMERCIAL_PRESENTATION).toEqual({
       pageTitle: 'Pricing',
-      pageDescription: 'Compare tiers and choose what fits.',
+      pageDescription:
+        'Core monitoring stays free. Relay adds remote access, and Pro unlocks AI operations.',
       mostPopularBadge: 'Most Popular',
       currentPlanLabel: 'Current Plan',
       includedLabel: 'Included',
@@ -63,5 +64,11 @@ describe('selfHostedPlans', () => {
         },
       ],
     });
+  });
+
+  it('keeps Community quickstart copy scoped to Patrol activation support', () => {
+    expect(SELF_HOSTED_PLAN_BY_TIER.community.highlights).toEqual(
+      expect.arrayContaining(['AI Patrol (BYOK)', 'Patrol quickstart: 25 runs, no API key']),
+    );
   });
 });
