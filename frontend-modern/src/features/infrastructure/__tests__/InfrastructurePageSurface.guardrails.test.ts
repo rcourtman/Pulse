@@ -64,11 +64,17 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');
     expect(infrastructurePageStateSource).toContain('shouldShowJumpToActiveResourceRow');
+    expect(infrastructurePageStateSource).toContain('preserveScrollableAncestorVerticalOffset');
+    expect(infrastructurePageStateSource).toContain('consumeNextFocusedRevealSkip');
+    expect(infrastructurePageStateSource).toContain('setSkipNextFocusedReveal(true)');
     expect(infrastructurePageStateSource).not.toContain('querySelector<HTMLElement>(');
     expect(infrastructurePageStateSource).not.toContain('scrollIntoView({ behavior: \'smooth\', block: \'center\' })');
 
     expect(infrastructurePageRouteStateSource).not.toContain('useSummaryPageInteractionState');
     expect(infrastructurePageRouteStateSource).not.toContain('setSummaryTableRootRef');
+    expect(infrastructurePageRouteStateSource).toContain('createRouteStateNavigateScheduler');
+    expect(infrastructurePageRouteStateSource).not.toContain('replaceSamePathRouteState');
+    expect(infrastructurePageRouteStateSource).not.toContain('createRouteStateSearchSignal');
   });
 
   it('keeps inline-detail reveal out of infrastructure viewport sync helpers', () => {

@@ -42,6 +42,10 @@ import {
 } from './routing/resourceLinks';
 import { AppLayout } from '@/AppLayout';
 import { useAppRuntimeState } from '@/useAppRuntimeState';
+import {
+  clearPendingAppShellRestoreTop,
+  readPendingAppShellRestoreTop,
+} from '@/utils/appShellScrollRestoration';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -223,8 +227,83 @@ function App() {
   const RootLayout = (props: { children?: JSX.Element }) => {
     const [shortcutsOpen, setShortcutsOpen] = createSignal(false);
     const [commandPaletteOpen, setCommandPaletteOpen] = createSignal(false);
+    const [appScrollShellRef, setAppScrollShellRef] = createSignal<HTMLDivElement | undefined>(
+      undefined,
+    );
+    const [pendingAppShellRestoreTop, setPendingAppShellRestoreTop] = createSignal<number | null>(
+      null,
+    );
     const location = useLocation();
     const isPublicRoute = createMemo(() => isPublicRoutePath(location.pathname));
+
+    createEffect(() => {
+      location.pathname;
+      location.search;
+      const pendingRestoreTop = readPendingAppShellRestoreTop();
+      if (pendingRestoreTop !== null) {
+        setPendingAppShellRestoreTop(pendingRestoreTop);
+      }
+    });
+
+    createEffect(() => {
+      const shell = appScrollShellRef();
+      const restoreTop = pendingAppShellRestoreTop();
+      if (!shell || restoreTop === null) {
+        return;
+      }
+      if (Math.abs(shell.scrollTop - restoreTop) <= 2) {
+        clearPendingAppShellRestoreTop();
+        setPendingAppShellRestoreTop(null);
+        return;
+      }
+
+      let settled = false;
+      let rafId: number | undefined;
+      let timeoutId: number | undefined;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        if (rafId !== undefined) {
+          window.cancelAnimationFrame(rafId);
+        }
+        if (timeoutId !== undefined) {
+          window.clearTimeout(timeoutId);
+        }
+      };
+
+      const attemptRestore = (remainingFrames: number) => {
+        if (settled) return;
+        const maxScrollTop = Math.max(0, shell.scrollHeight - shell.clientHeight);
+        if (restoreTop <= maxScrollTop) {
+          shell.scrollTop = restoreTop;
+          if (Math.abs(shell.scrollTop - restoreTop) <= 2) {
+            clearPendingAppShellRestoreTop();
+            setPendingAppShellRestoreTop(null);
+            finish();
+            return;
+          }
+        }
+        if (remainingFrames <= 0) {
+          clearPendingAppShellRestoreTop();
+          setPendingAppShellRestoreTop(null);
+          finish();
+          return;
+        }
+        rafId = window.requestAnimationFrame(() => attemptRestore(remainingFrames - 1));
+      };
+
+      rafId = window.requestAnimationFrame(() => attemptRestore(90));
+      timeoutId = window.setTimeout(() => {
+        const maxScrollTop = Math.max(0, shell.scrollHeight - shell.clientHeight);
+        shell.scrollTop = Math.min(restoreTop, maxScrollTop);
+        clearPendingAppShellRestoreTop();
+        setPendingAppShellRestoreTop(null);
+        finish();
+      }, 1500);
+
+      onCleanup(finish);
+    });
 
     useKeyboardShortcuts({
       enabled: () => !runtime.needsAuth(),
@@ -322,6 +401,7 @@ function App() {
                       <div class="flex h-screen overflow-hidden">
                         {/* Main content area - shrinks when AI panel is open, scrolls independently */}
                         <div
+                          ref={setAppScrollShellRef}
                           class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-4 sm:py-6 transition-all duration-300`}
                         >
       <AppLayout

@@ -152,4 +152,46 @@ describe('useSummaryPageInteractionState', () => {
     expect(revealActiveSeries).toHaveBeenCalledWith('workload-a');
     expect(scrollTo).toHaveBeenCalledWith({ top: 456, behavior: 'smooth' });
   });
+
+  it('skips the next focused reveal when the interaction owner suppresses inline auto-scroll', () => {
+    const [focusedSeriesId] = createSignal<string | null>('resource-a');
+    const [skipNextFocusedReveal, setSkipNextFocusedReveal] = createSignal(true);
+    const revealActiveSeries = vi.fn();
+    const scrollTo = vi.fn();
+    const root = document.createElement('div');
+    const row = document.createElement('div');
+    const detail = document.createElement('div');
+
+    Object.defineProperty(window, 'scrollTo', {
+      configurable: true,
+      value: scrollTo,
+    });
+
+    row.setAttribute('data-summary-series-id', 'resource-a');
+    row.getBoundingClientRect = vi.fn(() => buildRect(680, 40));
+    detail.setAttribute('data-inline-detail-for', 'resource-a');
+    detail.getBoundingClientRect = vi.fn(() => buildRect(724, 220));
+    root.append(row, detail);
+    document.body.appendChild(root);
+
+    const { result } = renderHook(() =>
+      useSummaryPageInteractionState({
+        focusedSeriesId,
+        revealActiveSeries,
+        consumeNextFocusedRevealSkip: () => {
+          const shouldSkip = skipNextFocusedReveal();
+          if (shouldSkip) {
+            setSkipNextFocusedReveal(false);
+          }
+          return shouldSkip;
+        },
+      }),
+    );
+
+    result.setTableRootRef(root);
+
+    expect(revealActiveSeries).not.toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
+    expect(skipNextFocusedReveal()).toBe(false);
+  });
 });

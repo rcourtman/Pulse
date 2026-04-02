@@ -180,8 +180,11 @@ assembly branch.
    provider-local hover aliases when the selected series is highlighted.
 10. Keep infrastructure contextual focus route-backed and page-scoped. When an
     infrastructure row opens its detail drawer, the selection must stay on the
-    same route through canonical resource query state, preserve scroll via the
-    shared route-state scheduler, and keep `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
+    same route through canonical resource query state, and the shared
+    summary-table focus/runtime contract plus the root app-shell restore path
+    must let direct row toggles open that drawer in place instead of looking
+    like a page refresh or remount. The
+    summary must keep `frontend-modern/src/components/Infrastructure/InfrastructureSummary.tsx`
     rendering the full page-level series set while only the focused label and
     highlight state change.
 11. Keep infrastructure summary hover scope on canonical unified-resource ids
@@ -309,11 +312,15 @@ highlighting the same canonical resource IDs used by the unified-resource
 table and route state.
 That same infrastructure focus boundary now also owns deliberate drawer reveal.
 When an infrastructure row opens inline detail on the same route, the page must
-tag that detail with the canonical active resource ID and let the shared
+tag that detail with the canonical active resource ID. Direct row toggles that
+already have the row in view must capture the current `.app-scroll-shell`
+position through `frontend-modern/src/utils/appShellScrollRestoration.ts`, so
+the remounted root shell in `frontend-modern/src/App.tsx` can stay anchored,
+while non-local reveal paths may still let the shared
 summary-table/contextual-focus helpers reveal only enough of the drawer to show
-the row header plus the start of the detail. `useUnifiedResourceTableViewportSync.ts`
-must stay viewport-only; it may not grow a second selected-row reveal path or a
-resource-local centering rule.
+the row header plus the start of the detail.
+`useUnifiedResourceTableViewportSync.ts` must stay viewport-only; it may not
+grow a second selected-row reveal path or a resource-local centering rule.
 That same unified-resource boundary now also owns stored metrics-target
 continuity for provider-backed resources. When registry rebuild cannot derive a
 fresh metrics target from raw source facets, `internal/unifiedresources/registry.go`

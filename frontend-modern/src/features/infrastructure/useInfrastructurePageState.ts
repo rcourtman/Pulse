@@ -1,5 +1,6 @@
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import type { TimeRange } from '@/api/charts';
+import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import { useUnifiedResources } from '@/hooks/useUnifiedResources';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
@@ -8,6 +9,7 @@ import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
 import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
+import { capturePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
 import {
   buildInfrastructureSummaryGroupScope,
   groupResources,
@@ -56,6 +58,8 @@ export function useInfrastructurePageState() {
     createSignal<SummarySeriesGroupScope | null>(null);
   const [deployCluster, setDeployCluster] = createSignal<DeployCluster | null>(null);
   const [filtersOpen, setFiltersOpen] = createSignal(false);
+  const [tableRootRef, setTableRootRef] = createSignal<HTMLDivElement | undefined>(undefined);
+  const [skipNextFocusedReveal, setSkipNextFocusedReveal] = createSignal(false);
 
   const hasResources = createMemo(() => resources().length > 0);
   const showNoResources = createMemo(() => initialLoadComplete() && !hasResources() && !error());
@@ -106,18 +110,52 @@ export function useInfrastructurePageState() {
     focusedSeriesId: routeState.expandedResourceId,
     focusedGroupScope: focusedResourceGroupScope,
     revealActiveSeries: routeState.setRevealedResourceId,
+    consumeNextFocusedRevealSkip: () => {
+      const shouldSkip = skipNextFocusedReveal();
+      if (shouldSkip) {
+        setSkipNextFocusedReveal(false);
+      }
+      return shouldSkip;
+    },
   });
+  const setSummaryTableRootRef = (element: HTMLDivElement | undefined) => {
+    setTableRootRef(element);
+    summaryInteraction.setTableRootRef(element);
+  };
+
+  const preserveTableScrollAnchor = (apply: () => void) => {
+    preserveScrollableAncestorVerticalOffset(tableRootRef(), apply);
+  };
+
   const setExpandedResourceId = (resourceId: string | null) => {
+    capturePendingAppShellRestoreTop();
+    if (resourceId) {
+      setSkipNextFocusedReveal(true);
+    }
     const groupScope = focusedResourceGroupScope();
     if (groupScope && resourceId && !isSummarySeriesInGroupScope(groupScope, resourceId)) {
-      routeState.setFocusedResourceGroupId(null);
+      preserveTableScrollAnchor(() => {
+        routeState.setFocusedResourceGroupId(null);
+      });
     }
-    routeState.setExpandedResourceId(resourceId);
+    preserveTableScrollAnchor(() => {
+      routeState.setExpandedResourceId(resourceId);
+    });
+  };
+
+  const setFocusedResourceGroupId = (groupId: string | null) => {
+    capturePendingAppShellRestoreTop();
+    preserveTableScrollAnchor(() => {
+      routeState.setFocusedResourceGroupId(groupId);
+    });
   };
 
   const clearPinnedSummaryScope = () => {
-    routeState.setExpandedResourceId(null);
-    routeState.setFocusedResourceGroupId(null);
+    capturePendingAppShellRestoreTop();
+    preserveTableScrollAnchor(() => {
+      routeState.setExpandedResourceId(null);
+      routeState.setFocusedResourceGroupId(null);
+    });
   };
 
   const clearFilters = () => {
@@ -256,8 +294,9 @@ export function useInfrastructurePageState() {
     setExpandedResourceId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredResourceGroupScope,
-    setSummaryTableRootRef: summaryInteraction.setTableRootRef,
+    setSummaryTableRootRef,
     summaryScopePresentation,
     shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
+    setFocusedResourceGroupId,
   };
 }

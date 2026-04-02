@@ -1,17 +1,14 @@
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createEffect, createMemo, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
-import {
-  findInlineDetailElement,
-  preserveScrollableAncestorVerticalOffset,
-  revealInlineDetailInViewport,
-} from '@/components/shared/contextualFocus';
+import { preserveScrollableAncestorVerticalOffset } from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import {
   isSummarySeriesInGroupScope,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
+import { capturePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
   dashboardHasHoveredWorkload,
@@ -41,6 +38,7 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledWorkloadGroupId, setHandledWorkloadGroupId] = createSignal<string | null>(null);
   const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
+  const [skipNextFocusedReveal, setSkipNextFocusedReveal] = createSignal(false);
 
   const [tableWrapperRef, setTableWrapperRefSignal] = createSignal<HTMLDivElement | undefined>(
     undefined,
@@ -60,6 +58,13 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     focusedSeriesId: selectedGuestId,
     focusedGroupScope: focusedWorkloadGroupScope,
     revealActiveSeries: setRevealedGuestId,
+    consumeNextFocusedRevealSkip: () => {
+      const shouldSkip = skipNextFocusedReveal();
+      if (shouldSkip) {
+        setSkipNextFocusedReveal(false);
+      }
+      return shouldSkip;
+    },
   });
 
   const setTableWrapperRef = (element: HTMLDivElement | undefined) => {
@@ -74,6 +79,10 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   };
 
   const setSelectedGuestId = (id: string | null) => {
+    capturePendingAppShellRestoreTop();
+    if (id) {
+      setSkipNextFocusedReveal(true);
+    }
     const activeFocusedGroupScope = focusedWorkloadGroupScope();
     const nextGroupScope =
       activeFocusedGroupScope && !isSummarySeriesInGroupScope(activeFocusedGroupScope, id)
@@ -205,52 +214,6 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     if (!isSummarySeriesInGroupScope(groupScope, selectedId)) {
       setSelectedGuestId(null);
     }
-  });
-
-  createEffect(() => {
-    const selectedId = selectedGuestId();
-    const root = tableWrapperRef();
-    if (!selectedId || !root || typeof window === 'undefined') {
-      return;
-    }
-
-    let rafId: number | undefined;
-    let timeoutId: number | undefined;
-    let settled = false;
-
-    const cleanup = () => {
-      settled = true;
-      if (rafId !== undefined) {
-        window.cancelAnimationFrame(rafId);
-      }
-      if (timeoutId !== undefined) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-
-    const attemptReveal = (remainingFrames: number) => {
-      if (settled) {
-        return;
-      }
-
-      const row = root.querySelector<HTMLElement>(`[data-summary-series-id="${selectedId}"]`);
-      const detail = findInlineDetailElement(root, selectedId);
-      if (row && detail) {
-        const didScroll = revealInlineDetailInViewport({ row, detail });
-        if (!didScroll || remainingFrames <= 0) {
-          cleanup();
-          return;
-        }
-      } else if (remainingFrames <= 0) {
-        cleanup();
-        return;
-      }
-
-      rafId = window.requestAnimationFrame(() => attemptReveal(remainingFrames - 1));
-    };
-
-    rafId = window.requestAnimationFrame(() => attemptReveal(24));
-    timeoutId = window.setTimeout(cleanup, 1500);
   });
 
   onCleanup(() => {

@@ -251,8 +251,10 @@ primitive render the emphasis, instead of layering lane-local row-fill classes
 that diverge across pages or wash out inline metric bars.
 `frontend-modern/src/components/Dashboard/useDashboardSelectionState.ts` must
 write workload selection back into the workloads route through the shared
-same-path route-state scheduler so opening a focused workload preserves scroll
-and does not look like a full page reload, and the governed infrastructure and
+same-path route-state scheduler, but the actual shell-position handoff for
+query-only row focus must go through `frontend-modern/src/utils/appShellScrollRestoration.ts`
+plus the root `frontend-modern/src/App.tsx` shell so opening a focused
+workload does not look like a full page reload, and the governed infrastructure and
 workloads summary surfaces must keep the summary page-scoped while that focus
 reuses the shared highlight contract; density maps may retain page-level
 context, but they must now also surface focused-entity detail inside the same
@@ -269,9 +271,13 @@ infrastructure, or workloads hot paths.
 That same hot-path ownership now also covers deliberate inline-detail reveal.
 When a focused workload or infrastructure row opens its inline detail, the hot
 path may preserve scroll across same-route state writes, but the actual reveal
-must still flow through the shared contextual-focus and summary-table helpers,
-mark the movement as deliberate so route-state restore does not replay over it,
-and scroll only enough to keep the row header plus the top of the detail
+must still flow through the shared contextual-focus and summary-table helpers.
+Direct row toggles that already have the row in view must capture the current
+app-shell scroll position before the focus write and let the remounted root
+shell restore that position, so the interaction stays anchored instead of
+looking like a full refresh; non-local reveal paths may still mark the
+movement as deliberate so route-state restore does not replay over it, and
+then scroll only enough to keep the row header plus the top of the detail
 visible instead of hard-centering every expansion.
 That same hot-path ownership now includes summary cache invalidation.
 Infrastructure and workload summary caches may hydrate charts for fast remounts,

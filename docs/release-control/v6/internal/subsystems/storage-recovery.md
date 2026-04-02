@@ -333,9 +333,12 @@ expanding the owning group only for that deliberate reveal path.
 That same reveal contract now also owns inline-detail expansion. When a pool or
 disk row is deliberately focused and its inline detail opens on the storage
 page, the detail row must publish the same canonical summary series ID through
-`data-inline-detail-for` and let the shared contextual-focus helper reveal only
-enough of that drawer to show the row header plus the top of the detail,
-instead of reverting to storage-local centering or a second row/detail ID map.
+`data-inline-detail-for`, and the shared contextual-focus helper may still
+reveal only enough of that drawer to show the row header plus the top of the
+detail instead of reverting to storage-local centering or a second row/detail
+ID map. Storage should not fork that behavior into a fully in-place
+infrastructure-style shell handoff unless a separately governed product model
+changes the storage interaction contract.
 
 The recovery backend is a real product boundary, not just a helper package:
 `internal/recovery/` owns per-tenant SQLite persistence, rollup derivation,

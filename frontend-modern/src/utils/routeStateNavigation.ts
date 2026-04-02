@@ -1,3 +1,5 @@
+import { schedulePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
+
 export const ROUTE_STATE_REPLACE_OPTIONS = {
   replace: true,
   scroll: false,
@@ -17,6 +19,13 @@ export const markRouteStateDeliberateScroll = (now = Date.now()): void => {
 const isSamePathnameNavigation = (currentPath: string, targetPath: string): boolean => {
   const base = window.location.origin;
   return new URL(currentPath, base).pathname === new URL(targetPath, base).pathname;
+};
+
+const shouldRestorePreservedScrollValue = (current: number, restore: number): boolean => {
+  if (Math.abs(current - restore) <= ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX) {
+    return true;
+  }
+  return restore > ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX && current === 0;
 };
 
 export const createRouteStateNavigateScheduler = (
@@ -45,14 +54,18 @@ export const createRouteStateNavigateScheduler = (
       if (restoreScroll) {
         const previousScrollRestoration = window.history.scrollRestoration;
         window.history.scrollRestoration = 'manual';
+        const shell = document.querySelector<HTMLElement>('.app-scroll-shell');
+        if (shell && shell.scrollTop > 0) {
+          schedulePendingAppShellRestoreTop(shell.scrollTop);
+        }
         const applyScrollRestore = () => {
           if (/jsdom/i.test(window.navigator.userAgent)) return;
           if (routeStateDeliberateScrollSuppressedUntil > Date.now()) {
             return;
           }
           if (
-            Math.abs(window.scrollX - restoreScroll.x) > ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX ||
-            Math.abs(window.scrollY - restoreScroll.y) > ROUTE_STATE_SCROLL_RESTORE_DIVERGENCE_PX
+            !shouldRestorePreservedScrollValue(window.scrollX, restoreScroll.x) ||
+            !shouldRestorePreservedScrollValue(window.scrollY, restoreScroll.y)
           ) {
             return;
           }

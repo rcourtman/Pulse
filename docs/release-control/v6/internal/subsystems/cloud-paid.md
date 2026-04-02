@@ -142,6 +142,12 @@ auth bootstrap, theme sync, and post-reconnect hosted refresh work through
 Solid `onMount(...)` inside the runtime owner instead of letting `App.tsx`,
 `AppLayout.tsx`, or module-evaluation side effects reach directly into browser
 APIs before the hosted shell has mounted.
+That same hosted browser shell boundary also owns same-path query-state
+transitions that refresh hosted/org context without changing the active page.
+`frontend-modern/src/App.tsx` must preserve the mounted `.app-scroll-shell`
+position across those remount-like transitions so inline row focus, hosted
+drawer state, and org-context route updates do not present as a full-page
+refresh.
 Persisted billing state is now also part of that canonical boundary: when a
 recognized Cloud/MSP plan version is loaded or saved, the stored `plan_version`
 must canonicalize and `limits.max_monitored_systems` must reconcile to the authoritative

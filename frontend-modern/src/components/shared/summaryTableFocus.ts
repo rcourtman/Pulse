@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onCleanup, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 import {
   findInlineDetailElement,
   revealInlineDetailInViewport,
@@ -52,6 +52,7 @@ export interface UseSummaryTableFocusBridgeOptions {
   activeSeriesId: Accessor<string | null | undefined>;
   focusedSeriesId?: Accessor<string | null | undefined>;
   revealActiveSeries?: (seriesId: string) => void;
+  consumeNextFocusedRevealSkip?: () => boolean;
 }
 
 export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOptions) {
@@ -124,6 +125,10 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     const focusedId = normalizeSeriesId(focusedSeriesId());
     const root = tableRoot();
     if (!focusedId || !root || typeof window === 'undefined') {
+      return;
+    }
+
+    if (untrack(() => options.consumeNextFocusedRevealSkip?.() ?? false)) {
       return;
     }
 
@@ -230,6 +235,7 @@ export interface UseSummaryPageInteractionStateOptions {
   hoveredGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   focusedGroupScope?: Accessor<SummarySeriesGroupScope | null | undefined>;
   revealActiveSeries?: (seriesId: string) => void;
+  consumeNextFocusedRevealSkip?: () => boolean;
 }
 
 export function useSummaryPageInteractionState(options: UseSummaryPageInteractionStateOptions) {
@@ -270,6 +276,7 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
     activeSeriesId,
     focusedSeriesId,
     revealActiveSeries: options.revealActiveSeries,
+    consumeNextFocusedRevealSkip: options.consumeNextFocusedRevealSkip,
   });
 
   return {

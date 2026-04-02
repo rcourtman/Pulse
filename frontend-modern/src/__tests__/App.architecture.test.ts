@@ -8,7 +8,13 @@ describe('App architecture', () => {
     expect(appSource).toContain('DASHBOARD_PATH,');
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
+    expect(appSource).toContain("import {");
+    expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
+    expect(appSource).toContain('pendingAppShellRestoreTop');
+    expect(appSource).toContain('setAppScrollShellRef');
+    expect(appSource).toContain('readPendingAppShellRestoreTop');
+    expect(appSource).toContain('clearPendingAppShellRestoreTop');
     expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
     expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
     expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');

@@ -89,15 +89,45 @@ async function scrollSectionIntoView(
 ): Promise<number> {
   const top = await locator.evaluate(
     (element, sectionOffset) =>
-      Math.max(
-        0,
-        window.scrollY + element.getBoundingClientRect().top - sectionOffset,
-      ),
+      (() => {
+        const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+        if (shell && shell.contains(element)) {
+          const shellRect = shell.getBoundingClientRect();
+          return Math.max(
+            0,
+            shell.scrollTop +
+              element.getBoundingClientRect().top -
+              shellRect.top -
+              sectionOffset,
+          );
+        }
+        return Math.max(
+          0,
+          window.scrollY + element.getBoundingClientRect().top - sectionOffset,
+        );
+      })(),
     offset,
   );
-  await page.evaluate((nextTop) => window.scrollTo(0, nextTop), top);
+  await page.evaluate((nextTop) => {
+    const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+    if (shell) {
+      shell.scrollTop = nextTop;
+      return;
+    }
+    window.scrollTo(0, nextTop);
+  }, top);
   await page.waitForTimeout(150);
-  return page.evaluate(() => window.scrollY);
+  return page.evaluate(() => {
+    const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+    return shell ? shell.scrollTop : window.scrollY;
+  });
+}
+
+async function readPrimaryViewportScrollTop(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+    return shell ? shell.scrollTop : window.scrollY;
+  });
 }
 
 async function positionElementNearViewportBottom(
@@ -107,15 +137,58 @@ async function positionElementNearViewportBottom(
 ): Promise<number> {
   const targetTop = await locator.evaluate(
     (element, inset) =>
-      Math.max(
-        0,
-        window.scrollY + element.getBoundingClientRect().top - (window.innerHeight - inset),
-      ),
+      (() => {
+        const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+        if (shell && shell.contains(element)) {
+          const shellRect = shell.getBoundingClientRect();
+          return Math.max(
+            0,
+            shell.scrollTop +
+              element.getBoundingClientRect().top -
+              shellRect.top -
+              (shell.clientHeight - inset),
+          );
+        }
+        return Math.max(
+          0,
+          window.scrollY +
+            element.getBoundingClientRect().top -
+            (window.innerHeight - inset),
+        );
+      })(),
     bottomInset,
   );
-  await page.evaluate((nextTop) => window.scrollTo(0, nextTop), targetTop);
+  await page.evaluate((nextTop) => {
+    const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+    if (shell) {
+      shell.scrollTop = nextTop;
+      return;
+    }
+    window.scrollTo(0, nextTop);
+  }, targetTop);
   await page.waitForTimeout(150);
   return locator.evaluate((element) => element.getBoundingClientRect().top);
+}
+
+async function readPrimaryViewportBounds(
+  page: Page,
+): Promise<{ top: number; bottom: number; height: number }> {
+  return page.evaluate(() => {
+    const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+    if (shell) {
+      const rect = shell.getBoundingClientRect();
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        height: shell.clientHeight,
+      };
+    }
+    return {
+      top: 0,
+      bottom: window.innerHeight,
+      height: window.innerHeight,
+    };
+  });
 }
 
 async function findLegacyScopedWorkloadRow(page: Page): Promise<Locator> {
@@ -184,6 +257,7 @@ test.describe.serial("Inline selection scroll stability", () => {
       .first();
     await expect(row).toBeVisible();
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
+    const beforeClickScroll = await readPrimaryViewportScrollTop(page);
     expect(beforeRowTop).toBeGreaterThan(500);
     await row.click();
 
@@ -197,16 +271,18 @@ test.describe.serial("Inline selection scroll stability", () => {
     await expect(detailRow).toBeVisible();
     await page.waitForTimeout(350);
 
-    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const viewportBounds = await readPrimaryViewportBounds(page);
     const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
-    expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
-    expect(afterRowTop).toBeLessThan(viewportHeight * 0.5);
-    expect(detailTop).toBeLessThan(viewportHeight - 48);
+    expect(Math.abs(afterRowTop - beforeRowTop)).toBeLessThanOrEqual(12);
+    expect(detailTop).toBeLessThan(viewportBounds.bottom - 48);
 
-    const afterScroll = await page.evaluate(() => window.scrollY);
-    expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
+    const afterScroll = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+      return shell ? shell.scrollTop : window.scrollY;
+    });
+    expect(Math.abs(afterScroll - beforeClickScroll)).toBeLessThanOrEqual(12);
   });
 
   test("keeps the recovery viewport stable when selecting a protected item", async ({
@@ -240,7 +316,7 @@ test.describe.serial("Inline selection scroll stability", () => {
       page.getByTestId("recovery-history-item-filter-trigger"),
     ).not.toContainText("Any Item");
 
-    const afterScroll = await page.evaluate(() => window.scrollY);
+    const afterScroll = await readPrimaryViewportScrollTop(page);
     expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
   });
 
@@ -261,6 +337,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     const beforeScroll = await scrollSectionIntoView(page, row);
     expect(beforeScroll).toBeGreaterThan(10);
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
+    const beforeClickScroll = await readPrimaryViewportScrollTop(page);
     expect(beforeRowTop).toBeGreaterThan(500);
 
     const workloadId = (await row.getAttribute("data-guest-id")) ?? "";
@@ -280,16 +357,18 @@ test.describe.serial("Inline selection scroll stability", () => {
     );
     await page.waitForTimeout(350);
 
-    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const viewportBounds = await readPrimaryViewportBounds(page);
     const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
-    expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
-    expect(afterRowTop).toBeLessThan(viewportHeight * 0.5);
-    expect(detailTop).toBeLessThan(viewportHeight - 48);
+    expect(Math.abs(afterRowTop - beforeRowTop)).toBeLessThanOrEqual(12);
+    expect(detailTop).toBeLessThan(viewportBounds.bottom - 48);
 
-    const afterScroll = await page.evaluate(() => window.scrollY);
-    expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
+    const afterScroll = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
+      return shell ? shell.scrollTop : window.scrollY;
+    });
+    expect(Math.abs(afterScroll - beforeClickScroll)).toBeLessThanOrEqual(12);
 
     await row.click();
     await expect.poll(() => page.url()).not.toContain("resource=");
@@ -359,6 +438,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     const beforeScroll = await scrollSectionIntoView(page, row);
     expect(beforeScroll).toBeGreaterThan(10);
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
+    const beforeClickScroll = await readPrimaryViewportScrollTop(page);
     expect(beforeRowTop).toBeGreaterThan(500);
 
     await row.click();
@@ -367,12 +447,12 @@ test.describe.serial("Inline selection scroll stability", () => {
     await expect(detailRow).toBeVisible();
     await page.waitForTimeout(350);
 
-    const viewportHeight = await page.evaluate(() => window.innerHeight);
+    const viewportBounds = await readPrimaryViewportBounds(page);
     const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
     expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
-    expect(afterRowTop).toBeLessThan(viewportHeight * 0.42);
-    expect(detailTop).toBeLessThan(viewportHeight - 48);
+    expect(afterRowTop).toBeLessThan(viewportBounds.top + viewportBounds.height * 0.42);
+    expect(detailTop).toBeLessThan(viewportBounds.bottom - 48);
   });
 });
