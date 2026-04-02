@@ -247,6 +247,16 @@ querying, and the operator-facing storage health presentation layer.
     `createRouteStateNavigateScheduler` helper so back-to-back storage filter
     changes coalesce against the current location instead of reintroducing a
     storage-local timeout queue.
+20. Keep storage and recovery global resource context route-backed and
+    lossless. When the shared shell carries `contextResource`, storage and
+    recovery route builders may add their own canonical node, platform, or tab
+    filters, but `frontend-modern/src/routing/resourceLinks.ts`,
+    `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts`, and
+    storage route state must preserve that shell-owned context on rewrites,
+    refresh, and deep links instead of dropping it when a feature-local route
+    writer rebuilds query state. Clearing the shell context must also return
+    these surfaces to their canonical base routes rather than leaving orphaned
+    node or platform filters behind.
 
 ## Current State
 

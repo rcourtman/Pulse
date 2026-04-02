@@ -415,10 +415,13 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('SummaryRowActionButton');
     expect(summaryRowActionButtonSource).toContain("kind: 'disclosure'");
     expect(summaryRowActionButtonSource).toContain("kind: 'scope'");
+    expect(summaryRowActionButtonSource).toContain("kind: 'context'");
     expect(summaryRowActionButtonSource).toContain('aria-controls');
     expect(summaryRowActionButtonSource).toContain('aria-expanded');
     expect(summaryRowActionButtonSource).toContain('aria-pressed');
     expect(summaryRowActionButtonSource).toContain('data-row-action="true"');
+    expect(summaryRowActionButtonSource).toContain('Set global context to');
+    expect(summaryRowActionButtonSource).toContain('Clear global context for');
 
     for (const source of [
       workloadPanelSource,
@@ -432,6 +435,17 @@ describe('shared primitive guardrails', () => {
     ]) {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(source).toContain('SummaryRowActionButton');
+    }
+
+    for (const source of [
+      storagePoolRowSource,
+      diskListSource,
+      unifiedResourceHostTableCardSource,
+      unifiedResourcePBSTableSectionSource,
+      unifiedResourcePMGTableSectionSource,
+    ]) {
+      expect(source).toContain('useGlobalResourceContext');
+      expect(source).toContain('kind="context"');
     }
 
     expect(nodeGroupHeaderSource).toContain('event.stopPropagation()');

@@ -229,6 +229,20 @@ describe('UnifiedResourceTable performance contract', () => {
       );
     });
 
+    it('keeps infrastructure global resource pinning on the shared row action and shell context contract', () => {
+      expect(summaryRowActionButtonSource).toContain("kind: 'context'");
+
+      for (const source of [
+        unifiedResourceHostTableCardSource,
+        unifiedResourcePBSTableSectionSource,
+        unifiedResourcePMGTableSectionSource,
+      ]) {
+        expect(source).toContain('useGlobalResourceContext');
+        expect(source).toContain('SummaryRowActionButton');
+        expect(source).toContain('kind="context"');
+      }
+    });
+
     it('keeps infrastructure summary fetch runtime out of the render shell', () => {
       expect(infrastructureSummarySource).toContain('useInfrastructureSummaryState');
       expect(infrastructureSummarySource).not.toContain('fetchInfrastructureSummaryAndCache');

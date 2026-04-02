@@ -785,6 +785,21 @@ describe('Recovery', () => {
     expect(within(detailsPanel as HTMLTableCellElement).getByText('Finance')).toBeInTheDocument();
   });
 
+  it('preserves the shell global resource context when focusing recovery history', async () => {
+    mockLocationSearch = '?contextResource=agent%3Apve-01';
+    render(() => <Recovery />);
+
+    const item = await screen.findByText('VM 123');
+    fireEvent.click(item);
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/recovery?rollupId=res%3Avm-123&contextResource=agent%3Apve-01',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+    });
+  });
+
   it('keeps optional history placement columns on the neutral recovery vocabulary', async () => {
     facetsPayload.clusters = ['lab-cluster'];
     facetsPayload.nodesAgents = ['pve-01'];

@@ -36,6 +36,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { useGlobalResourceContext } from '@/features/globalResourceContext/GlobalResourceContext';
 
 interface StoragePoolRowProps {
   record: StorageRecord;
@@ -56,9 +57,17 @@ interface StoragePoolRowProps {
 }
 
 export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
+  const globalContext = useGlobalResourceContext();
   const row = createMemo(() => buildStoragePoolRowModel(props.record));
   const detailControlsId = createMemo(() =>
     buildSummaryDisclosureControlsId(props.summarySeriesId),
+  );
+  const globalContextResourceId = createMemo(() => props.record.refs?.resourceId || props.record.id);
+  const supportsGlobalContext = createMemo(() =>
+    globalContext.canPinResourceId(globalContextResourceId()),
+  );
+  const isGlobalContextPinned = createMemo(() =>
+    globalContext.isPinnedGlobalResource(globalContextResourceId()),
   );
   const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
     onPreview: () => props.onHoverChange?.(props.summarySeriesId),
@@ -86,6 +95,19 @@ export const StoragePoolRow: Component<StoragePoolRowProps> = (props) => {
               onAction={props.onToggleExpand}
               onPreviewClear={() => props.onHoverChange?.(null)}
             />
+            <Show when={supportsGlobalContext()}>
+              <SummaryRowActionButton
+                kind="context"
+                subjectLabel={props.record.name}
+                pressed={isGlobalContextPinned()}
+                onAction={() =>
+                  globalContext.setGlobalResourceContextById(
+                    isGlobalContextPinned() ? null : globalContextResourceId(),
+                  )
+                }
+                onPreviewClear={() => props.onHoverChange?.(null)}
+              />
+            </Show>
             <span class={STORAGE_POOL_ROW_NAME_TEXT_CLASS} title={props.record.name}>
               {props.record.name}
             </span>

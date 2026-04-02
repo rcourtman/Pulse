@@ -507,6 +507,12 @@ theme synchronization, and authenticated runtime startup, and
 as org switching and kiosk-safe navigation. Future hosted browser bootstrap
 work must extend that split rather than pulling org bootstrap and app chrome
 back into one monolithic route component.
+That same authenticated shell split now also owns deliberate global
+resource-context bootstrap. `frontend-modern/src/App.tsx` may install the
+shared provider, and `frontend-modern/src/AppLayout.tsx` may surface and carry
+one shell-level `contextResource` state across tabs, but hosted shell work
+must not fork page-local global-context banners, drop shell context on tab
+changes, or entangle pinned resource scope with tenant/org bootstrap.
 That same authenticated shell contract now also has to distinguish backend
 availability from websocket-stream liveness. When hosted runtime health stays
 available during a stream reconnect or renegotiation window,

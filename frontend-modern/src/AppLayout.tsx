@@ -30,8 +30,7 @@ import { useKioskMode } from '@/hooks/useKioskMode';
 import { layoutStore } from '@/utils/layout';
 import { getActiveTabForPath } from '@/routing/navigation';
 import {
-  buildInfrastructurePath,
-  buildWorkloadsPath,
+  buildPathWithGlobalResourceContext,
   DASHBOARD_PATH,
 } from '@/routing/resourceLinks';
 import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
@@ -40,9 +39,8 @@ import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isMultiTenantEnabled, isPro } from '@/stores/license';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
-
-const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
-const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
+import { useGlobalResourceContext } from '@/features/globalResourceContext/GlobalResourceContext';
+import { GlobalResourceContextBar } from '@/features/globalResourceContext/GlobalResourceContextBar';
 
 type PlatformTab = {
   id: string;
@@ -160,6 +158,7 @@ export function AppLayout(props: AppLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const kioskMode = useKioskMode();
+  const globalContext = useGlobalResourceContext();
 
   const [headerVisible, setHeaderVisible] = createSignal(true);
   let headerEl: HTMLDivElement | undefined;
@@ -280,7 +279,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'dashboard',
         label: 'Dashboard',
-        route: DASHBOARD_PATH,
+        route: globalContext.buildPlatformRoute('dashboard'),
         settingsRoute: '/settings',
         tooltip: 'Environment overview and command center',
         enabled: true,
@@ -291,7 +290,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'infrastructure',
         label: 'Infrastructure',
-        route: ROOT_INFRASTRUCTURE_PATH,
+        route: globalContext.buildPlatformRoute('infrastructure'),
         settingsRoute: '/settings',
         tooltip: 'All agents and nodes across platforms',
         enabled: true,
@@ -302,7 +301,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'workloads',
         label: 'Workloads',
-        route: ROOT_WORKLOADS_PATH,
+        route: globalContext.buildPlatformRoute('workloads'),
         settingsRoute: '/settings/workloads/docker',
         tooltip: 'VMs, containers, and Kubernetes workloads',
         enabled: true,
@@ -312,6 +311,7 @@ export function AppLayout(props: AppLayoutProps) {
       },
       ...buildStorageRecoveryTabSpecs().map((tab) => ({
         ...tab,
+        route: globalContext.buildPlatformRoute(tab.id),
         enabled: true,
         live: true,
         icon: tab.id.startsWith('storage') ? (
@@ -331,7 +331,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'dashboard',
         label: 'Dashboard',
-        route: DASHBOARD_PATH,
+        route: globalContext.buildPlatformRoute('dashboard'),
         settingsRoute: '/settings',
         tooltip: 'Environment overview and command center',
         enabled: true,
@@ -342,7 +342,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'infrastructure',
         label: 'Infrastructure',
-        route: ROOT_INFRASTRUCTURE_PATH,
+        route: globalContext.buildPlatformRoute('infrastructure'),
         settingsRoute: '/settings',
         tooltip: 'All agents and nodes across platforms',
         enabled: true,
@@ -353,7 +353,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'workloads',
         label: 'Workloads',
-        route: ROOT_WORKLOADS_PATH,
+        route: globalContext.buildPlatformRoute('workloads'),
         settingsRoute: '/settings/workloads/docker',
         tooltip: 'VMs, containers, and Kubernetes workloads',
         enabled: true,
@@ -363,6 +363,7 @@ export function AppLayout(props: AppLayoutProps) {
       },
       ...buildStorageRecoveryTabSpecs().map((tab) => ({
         ...tab,
+        route: globalContext.buildPlatformRoute(tab.id),
         enabled: true,
         live: true,
         icon: tab.id.startsWith('storage') ? (
@@ -402,7 +403,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'alerts',
         label: 'Alerts',
-        route: '/alerts',
+        route: buildPathWithGlobalResourceContext('/alerts', globalContext.contextResourceId()),
         tooltip: 'Review active alerts and automation rules',
         badge: null,
         count: activeAlertCount,
@@ -412,7 +413,7 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'ai',
         label: 'Patrol',
-        route: '/ai',
+        route: buildPathWithGlobalResourceContext('/ai', globalContext.contextResourceId()),
         tooltip: 'Pulse Patrol monitoring and analysis',
         badge: null,
         count: undefined,
@@ -422,7 +423,10 @@ export function AppLayout(props: AppLayoutProps) {
       {
         id: 'operations',
         label: 'Operations',
-        route: '/operations',
+        route: buildPathWithGlobalResourceContext(
+          '/operations',
+          globalContext.contextResourceId(),
+        ),
         tooltip: 'System operations, diagnostics, and reporting',
         badge: null,
         count: undefined,
@@ -435,7 +439,10 @@ export function AppLayout(props: AppLayoutProps) {
       tabs.push({
         id: 'settings',
         label: 'Settings',
-        route: '/settings',
+        route: buildPathWithGlobalResourceContext(
+          '/settings',
+          globalContext.contextResourceId(),
+        ),
         tooltip: 'Configure Pulse preferences and integrations',
         badge: updateStore.isUpdateVisible() ? 'update' : null,
         count: undefined,
@@ -451,7 +458,12 @@ export function AppLayout(props: AppLayoutProps) {
     if (platform.enabled) {
       navigate(platform.route);
     } else {
-      navigate(platform.settingsRoute);
+      navigate(
+        buildPathWithGlobalResourceContext(
+          platform.settingsRoute,
+          globalContext.contextResourceId(),
+        ),
+      );
     }
   };
 
@@ -743,6 +755,7 @@ export function AppLayout(props: AppLayoutProps) {
         class="tab-content block bg-surface rounded-b rounded-tr rounded-tl shadow mb-2"
       >
         <div class="pulse-panel">
+          <GlobalResourceContextBar class="border-b border-border px-4 py-2" />
           <Suspense fallback={<div class="p-6 text-sm text-muted">Loading view...</div>}>
             {props.children}
           </Suspense>

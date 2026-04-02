@@ -5,6 +5,7 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
+import { useGlobalResourceContext } from '@/features/globalResourceContext/GlobalResourceContext';
 import { resolvePhysicalDiskMetricResourceId } from '@/features/storageBackups/storageMetricsIdentity';
 import {
   Table,
@@ -84,6 +85,7 @@ interface DiskListProps {
 }
 
 export const DiskList: Component<DiskListProps> = (props) => {
+  const globalContext = useGlobalResourceContext();
   const model = useDiskListModel({
     disks: () => props.disks,
     nodes: () => props.nodes,
@@ -172,6 +174,9 @@ export const DiskList: Component<DiskListProps> = (props) => {
                     const isSummaryHighlighted = () =>
                       props.highlightedSummarySeriesId === summarySeriesId;
                     const detailControlsId = buildSummaryDisclosureControlsId(summarySeriesId);
+                    const supportsGlobalContext = () => globalContext.canPinResourceId(disk.id);
+                    const isGlobalContextPinned = () =>
+                      globalContext.isPinnedGlobalResource(disk.id);
                     const interactiveRowHandlers = createSummaryInteractiveRowPreviewHandlers({
                       onPreview: () => props.onHoverChange?.(disk.id),
                       onPreviewClear: () => props.onHoverChange?.(null),
@@ -204,6 +209,19 @@ export const DiskList: Component<DiskListProps> = (props) => {
                                 onAction={() => model.toggleSelectedDisk(disk)}
                                 onPreviewClear={() => props.onHoverChange?.(null)}
                               />
+                              <Show when={supportsGlobalContext()}>
+                                <SummaryRowActionButton
+                                  kind="context"
+                                  subjectLabel={data.model || 'disk'}
+                                  pressed={isGlobalContextPinned()}
+                                  onAction={() =>
+                                    globalContext.setGlobalResourceContextById(
+                                      isGlobalContextPinned() ? null : disk.id,
+                                    )
+                                  }
+                                  onPreviewClear={() => props.onHoverChange?.(null)}
+                                />
+                              </Show>
                               <span
                                 class={PHYSICAL_DISK_NAME_TEXT_CLASS}
                                 title={data.devPath || data.model || disk.name || 'Unknown Disk'}

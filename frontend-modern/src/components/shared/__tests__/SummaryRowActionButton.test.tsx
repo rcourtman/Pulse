@@ -44,6 +44,26 @@ describe('SummaryRowActionButton', () => {
     expect(onAction).toHaveBeenCalledTimes(1);
   });
 
+  it('owns global context pin semantics with aria-pressed', () => {
+    const onAction = vi.fn();
+    render(() => (
+      <SummaryRowActionButton
+        kind="context"
+        subjectLabel="pve1"
+        pressed={false}
+        onAction={onAction}
+      />
+    ));
+
+    const button = screen.getByRole('button', {
+      name: 'Set global context to pve1',
+    });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(button);
+    expect(onAction).toHaveBeenCalledTimes(1);
+  });
+
   it('clears preview and blurs on Escape', () => {
     const onPreviewClear = vi.fn();
     render(() => (

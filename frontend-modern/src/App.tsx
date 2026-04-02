@@ -42,6 +42,7 @@ import {
 } from './routing/resourceLinks';
 import { AppLayout } from '@/AppLayout';
 import { useAppRuntimeState } from '@/useAppRuntimeState';
+import { GlobalResourceContextProvider } from '@/features/globalResourceContext/GlobalResourceContext';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -324,24 +325,26 @@ function App() {
                         <div
                           class={`app-scroll-shell flex-1 min-w-0 overflow-y-scroll bg-base text-base-content font-sans py-4 sm:py-6 transition-all duration-300`}
                         >
-      <AppLayout
-        connectionStatus={runtime.connectionStatus}
-        dataUpdated={runtime.dataUpdated}
-        lastUpdateText={runtime.lastUpdateText}
-        versionInfo={runtime.versionInfo}
-                            hasAuth={runtime.hasAuth}
-                            needsAuth={runtime.needsAuth}
-                            proxyAuthInfo={runtime.proxyAuthInfo}
-                            handleLogout={runtime.handleLogout}
-                            state={runtime.state}
-                            tokenScopes={() => runtime.securityStatus()?.tokenScopes}
-                            organizations={runtime.organizations}
-                            activeOrgID={runtime.activeOrgID}
-                            orgsLoading={runtime.orgsLoading}
-                            onSwitchOrg={runtime.handleOrgSwitch}
-                          >
-                            {props.children}
-                          </AppLayout>
+                          <GlobalResourceContextProvider>
+                            <AppLayout
+                              connectionStatus={runtime.connectionStatus}
+                              dataUpdated={runtime.dataUpdated}
+                              lastUpdateText={runtime.lastUpdateText}
+                              versionInfo={runtime.versionInfo}
+                              hasAuth={runtime.hasAuth}
+                              needsAuth={runtime.needsAuth}
+                              proxyAuthInfo={runtime.proxyAuthInfo}
+                              handleLogout={runtime.handleLogout}
+                              state={runtime.state}
+                              tokenScopes={() => runtime.securityStatus()?.tokenScopes}
+                              organizations={runtime.organizations}
+                              activeOrgID={runtime.activeOrgID}
+                              orgsLoading={runtime.orgsLoading}
+                              onSwitchOrg={runtime.handleOrgSwitch}
+                            >
+                              {props.children}
+                            </AppLayout>
+                          </GlobalResourceContextProvider>
                         </div>
                         {/* AI Panel - slides in from right, pushes content */}
                         <AIChat onClose={() => aiChatStore.close()} />

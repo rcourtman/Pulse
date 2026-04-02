@@ -7,6 +7,9 @@ describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
     expect(appSource).toContain('DASHBOARD_PATH,');
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
+    expect(appSource).toContain(
+      "import { GlobalResourceContextProvider } from '@/features/globalResourceContext/GlobalResourceContext';",
+    );
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
     expect(appSource).toContain('const runtime = useAppRuntimeState();');
     expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
@@ -23,10 +26,18 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
     expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
+    expect(appSource).toContain('<GlobalResourceContextProvider>');
+    expect(appSource).toContain('</GlobalResourceContextProvider>');
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
+    expect(appLayoutSource).toContain(
+      "import { useGlobalResourceContext } from '@/features/globalResourceContext/GlobalResourceContext';",
+    );
+    expect(appLayoutSource).toContain(
+      "import { GlobalResourceContextBar } from '@/features/globalResourceContext/GlobalResourceContextBar';",
+    );
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
@@ -42,6 +53,14 @@ describe('App architecture', () => {
     expect(appSource).not.toContain("apiFetch('/api/security/status')");
     expect(appLayoutSource).not.toContain("eventBus.on('theme_changed'");
     expect(appLayoutSource).not.toContain("apiFetch('/api/security/status')");
+    expect(appLayoutSource).toContain('const globalContext = useGlobalResourceContext();');
+    expect(appLayoutSource).toContain("route: globalContext.buildPlatformRoute('infrastructure')");
+    expect(appLayoutSource).toContain(
+      "route: buildPathWithGlobalResourceContext('/alerts', globalContext.contextResourceId())",
+    );
+    expect(appLayoutSource).toContain(
+      '<GlobalResourceContextBar class="border-b border-border px-4 py-2" />',
+    );
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
     expect(appRuntimeStateSource).toContain('const connectionStatus = createMemo<AppConnectionStatus>(() => {');
     expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');

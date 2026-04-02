@@ -6,7 +6,12 @@ import { useRecoveryRollups } from '@/hooks/useRecoveryRollups';
 import { useRecoveryPoints } from '@/hooks/useRecoveryPoints';
 import { useRecoveryPointsFacets } from '@/hooks/useRecoveryPointsFacets';
 import { useRecoveryPointsSeries } from '@/hooks/useRecoveryPointsSeries';
-import { buildRecoveryPath, parseRecoveryLinkSearch } from '@/routing/resourceLinks';
+import {
+  buildPathWithGlobalResourceContext,
+  buildRecoveryPath,
+  parseGlobalResourceContextSearch,
+  parseRecoveryLinkSearch,
+} from '@/routing/resourceLinks';
 import type { ProtectionRollup, RecoveryOutcome } from '@/types/recovery';
 import type { Resource } from '@/types/resource';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
@@ -406,7 +411,8 @@ export function useRecoverySurfaceState() {
     const currentPath = `${location.pathname}${location.search || ''}`;
     if (hydratedLocationKey() !== currentPath) return;
 
-    const nextPath = buildRecoveryPath({
+    const nextPath = buildPathWithGlobalResourceContext(
+      buildRecoveryPath({
       rollupId: rid || null,
       view: workspaceView() !== defaultView ? workspaceView() : null,
       query: queryFilter().trim() || null,
@@ -422,7 +428,9 @@ export function useRecoverySurfaceState() {
       scope: scopeFilter() === 'workload' ? 'workload' : null,
       node: nodeFilter() !== 'all' ? nodeFilter() : null,
       namespace: namespaceFilter() !== 'all' ? namespaceFilter() : null,
-    });
+      }),
+      parseGlobalResourceContextSearch(location.search || '').resource || null,
+    );
 
     if (nextPath !== currentPath) {
       routeStateNavigate.schedule(nextPath);
