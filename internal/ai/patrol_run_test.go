@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"testing"
@@ -10,19 +11,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
+	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 type stubPatrolQuickstartCreditManager struct {
 	remaining int
+	total     int
 	byok      bool
 }
 
-func (m *stubPatrolQuickstartCreditManager) HasCredits() bool                { return m.remaining > 0 }
-func (m *stubPatrolQuickstartCreditManager) CreditsRemaining() int           { return m.remaining }
-func (m *stubPatrolQuickstartCreditManager) ConsumeCredit() error            { return nil }
+func (m *stubPatrolQuickstartCreditManager) EnsureBootstrap(context.Context) error { return nil }
+func (m *stubPatrolQuickstartCreditManager) HasCredits() bool                      { return m.remaining > 0 }
+func (m *stubPatrolQuickstartCreditManager) CreditsRemaining() int                 { return m.remaining }
+func (m *stubPatrolQuickstartCreditManager) CreditsTotal() int {
+	if m.total > 0 {
+		return m.total
+	}
+	return pkglicensing.QuickstartCreditsTotal
+}
 func (m *stubPatrolQuickstartCreditManager) HasBYOK() bool                   { return m.byok }
 func (m *stubPatrolQuickstartCreditManager) GetProvider() providers.Provider { return nil }
-func (m *stubPatrolQuickstartCreditManager) GrantCredits() error             { return nil }
 
 // --- filterStateByScope tests ---
 

@@ -97,7 +97,7 @@ agreement, and cloud-specific enforcement rules.
 6. Add or change the hosted account portal API, task-first browser shell, maintained portal frontend/bundle, or account-scoped workspace/access/billing handoff through `internal/cloudcp/portal/` and `internal/cloudcp/routes.go`
 7. Add or change Stripe provisioning plan resolution through `internal/cloudcp/stripe/provisioner.go`
 8. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
-9. Add or change license-server transport through `pkg/licensing/license_server_client.go`
+9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
 10. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
 11. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
 12. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
@@ -237,6 +237,15 @@ backward-compatible decode alias for older local stubs and historical test
 fixtures. Future exchange-path changes must not reintroduce a split contract
 where the shared Pulse runtime and the real `pulse-pro/license-server` disagree
 on the activation payload shape.
+That same license-server transport boundary now owns Patrol quickstart
+bootstrap. `pkg/licensing/license_server_client.go` and
+`pkg/licensing/quickstart_bootstrap.go` must treat
+`POST /v1/quickstart/bootstrap` as the canonical exchange for a server-issued
+quickstart token plus the authoritative quickstart credit snapshot. Activated
+installs authenticate that bootstrap with the installation token, community
+installs send a stable `client_installation_id`, and local runtime cache files
+may memoize the returned token and counts but may not treat those cached counts
+as commercial authority.
 The self-hosted commercial counted unit is now also locked to monitored
 systems rather than agent installs. `max_monitored_systems` is the live
 runtime and UI contract, while legacy `max_agents` / `max_nodes` aliases are

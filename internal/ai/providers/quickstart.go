@@ -29,9 +29,13 @@ const (
 // quickstart proxy. It forwards patrol chat requests through the public
 // commercial API edge so users don't need their own API key.
 type QuickstartClient struct {
-	// licenseID identifies the workspace (for rate limiting / credit tracking server-side).
+	// licenseID is the legacy caller-chosen identity path.
 	licenseID string
-	client    *http.Client
+	// quickstartToken is the server-issued bearer token path.
+	quickstartToken string
+	client          *http.Client
+	onStateSync     func(QuickstartServerState)
+	onTokenInvalid  func()
 }
 
 func quickstartProxyURL() string {
@@ -42,9 +46,31 @@ func quickstartProxyURL() string {
 }
 
 // NewQuickstartClient creates a quickstart provider that uses the hosted proxy.
+// This is the legacy identity path retained for non-Patrol callers.
 func NewQuickstartClient(licenseID string) *QuickstartClient {
 	return &QuickstartClient{
 		licenseID: licenseID,
+		client: &http.Client{
+			Timeout: quickstartRequestTimeout,
+		},
+	}
+}
+
+// QuickstartServerState is the authoritative quickstart inventory snapshot
+// returned by the license server alongside a Patrol response.
+type QuickstartServerState struct {
+	CreditsRemaining int
+	CreditsTotal     int
+	TokenExpiresAt   *time.Time
+}
+
+// NewQuickstartClientWithToken creates a quickstart provider that authenticates
+// requests with a server-issued bearer token.
+func NewQuickstartClientWithToken(quickstartToken string, onStateSync func(QuickstartServerState), onTokenInvalid func()) *QuickstartClient {
+	return &QuickstartClient{
+		quickstartToken: strings.TrimSpace(quickstartToken),
+		onStateSync:     onStateSync,
+		onTokenInvalid:  onTokenInvalid,
 		client: &http.Client{
 			Timeout: quickstartRequestTimeout,
 		},
@@ -56,29 +82,93 @@ type quickstartRequest struct {
 	Messages []Message `json:"messages"`
 	System   string    `json:"system,omitempty"`
 	Tools    []Tool    `json:"tools,omitempty"`
-	// LicenseID lets the server track credit usage per workspace.
-	LicenseID string `json:"license_id"`
+	// LicenseID is retained only for the legacy caller-chosen identity path.
+	LicenseID string `json:"license_id,omitempty"`
 }
 
 // quickstartResponse is the response from the hosted proxy.
 type quickstartResponse struct {
-	Content      string     `json:"content"`
-	Model        string     `json:"model"`
-	StopReason   string     `json:"stop_reason,omitempty"`
-	ToolCalls    []ToolCall `json:"tool_calls,omitempty"`
-	InputTokens  int        `json:"input_tokens,omitempty"`
-	OutputTokens int        `json:"output_tokens,omitempty"`
+	Content                  string     `json:"content"`
+	Model                    string     `json:"model"`
+	StopReason               string     `json:"stop_reason,omitempty"`
+	ToolCalls                []ToolCall `json:"tool_calls,omitempty"`
+	InputTokens              int        `json:"input_tokens,omitempty"`
+	OutputTokens             int        `json:"output_tokens,omitempty"`
+	CreditsRemaining         int        `json:"credits_remaining,omitempty"`
+	CreditsTotal             int        `json:"credits_total,omitempty"`
+	QuickstartTokenExpiresAt string     `json:"quickstart_token_expires_at,omitempty"`
+	Code                     string     `json:"code,omitempty"`
 	// Error is set when the server returns a structured error.
 	Error string `json:"error,omitempty"`
+}
+
+// QuickstartRequestError captures a structured quickstart proxy failure.
+type QuickstartRequestError struct {
+	StatusCode       int
+	Code             string
+	Message          string
+	CreditsRemaining int
+	CreditsTotal     int
+}
+
+func (e *QuickstartRequestError) Error() string {
+	if e == nil {
+		return "quickstart: request failed"
+	}
+	if msg := strings.TrimSpace(e.Message); msg != "" {
+		return "quickstart: " + msg
+	}
+	return fmt.Sprintf("quickstart: server returned %d", e.StatusCode)
+}
+
+func (e *QuickstartRequestError) exhausted() bool {
+	if e == nil {
+		return false
+	}
+	if e.StatusCode == http.StatusPaymentRequired {
+		return true
+	}
+	if strings.EqualFold(strings.TrimSpace(e.Code), "quickstart_credits_exhausted") {
+		return true
+	}
+	return e.CreditsTotal > 0 && e.CreditsRemaining == 0
+}
+
+func (e *QuickstartRequestError) unavailable() bool {
+	if e == nil {
+		return false
+	}
+	switch e.StatusCode {
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return true
+	default:
+		return strings.Contains(strings.ToLower(strings.TrimSpace(e.Code)), "unavailable")
+	}
+}
+
+// IsQuickstartCreditsExhausted reports whether err represents an exhausted
+// quickstart inventory response from the server.
+func IsQuickstartCreditsExhausted(err error) bool {
+	typed, ok := err.(*QuickstartRequestError)
+	return ok && typed.exhausted()
+}
+
+// IsQuickstartUnavailable reports whether err represents a quickstart transport
+// failure returned by the license server.
+func IsQuickstartUnavailable(err error) bool {
+	typed, ok := err.(*QuickstartRequestError)
+	return ok && typed.unavailable()
 }
 
 // Chat sends a chat request through the Pulse-hosted quickstart proxy.
 func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	payload := quickstartRequest{
-		Messages:  req.Messages,
-		System:    req.System,
-		Tools:     req.Tools,
-		LicenseID: c.licenseID,
+		Messages: req.Messages,
+		System:   req.System,
+		Tools:    req.Tools,
+	}
+	if strings.TrimSpace(c.quickstartToken) == "" {
+		payload.LicenseID = c.licenseID
 	}
 
 	body, err := json.Marshal(payload)
@@ -104,6 +194,9 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 			return nil, fmt.Errorf("quickstart: create request: %w", err)
 		}
 		httpReq.Header.Set("Content-Type", "application/json")
+		if token := strings.TrimSpace(c.quickstartToken); token != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+token)
+		}
 
 		resp, err := c.client.Do(httpReq)
 		if err != nil {
@@ -120,7 +213,20 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 		}
 
 		if resp.StatusCode != http.StatusOK {
-			lastErr = fmt.Errorf("quickstart: server returned %d: %s", resp.StatusCode, string(respBody))
+			var failure quickstartResponse
+			if err := json.Unmarshal(respBody, &failure); err == nil {
+				c.syncServerState(failure)
+			}
+			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+				c.invalidateToken()
+			}
+			lastErr = &QuickstartRequestError{
+				StatusCode:       resp.StatusCode,
+				Code:             strings.TrimSpace(failure.Code),
+				Message:          firstNonEmpty(strings.TrimSpace(failure.Error), strings.TrimSpace(string(respBody))),
+				CreditsRemaining: failure.CreditsRemaining,
+				CreditsTotal:     failure.CreditsTotal,
+			}
 			// Don't retry on client errors (4xx)
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
 				return nil, lastErr
@@ -136,6 +242,7 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 		if result.Error != "" {
 			return nil, fmt.Errorf("quickstart: server error: %s", result.Error)
 		}
+		c.syncServerState(result)
 
 		return &ChatResponse{
 			Content:      result.Content,
@@ -153,11 +260,18 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 // TestConnection validates connectivity to the quickstart proxy.
 func (c *QuickstartClient) TestConnection(ctx context.Context) error {
 	// Simple connectivity check — send a minimal request.
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL(), bytes.NewReader([]byte(`{"messages":[],"license_id":"`+c.licenseID+`"}`)))
+	requestBody := `{"messages":[]}`
+	if strings.TrimSpace(c.quickstartToken) == "" {
+		requestBody = `{"messages":[],"license_id":"` + c.licenseID + `"}`
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, quickstartProxyURL(), bytes.NewReader([]byte(requestBody)))
 	if err != nil {
 		return fmt.Errorf("quickstart: create test request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(c.quickstartToken); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	resp, err := c.client.Do(httpReq)
 	if err != nil {
@@ -221,4 +335,36 @@ func (c *QuickstartClient) ListModels(_ context.Context) ([]ModelInfo, error) {
 			Notable: true,
 		},
 	}, nil
+}
+
+func (c *QuickstartClient) syncServerState(result quickstartResponse) {
+	if c == nil || c.onStateSync == nil {
+		return
+	}
+	state := QuickstartServerState{
+		CreditsRemaining: result.CreditsRemaining,
+		CreditsTotal:     result.CreditsTotal,
+	}
+	if rawExpiry := strings.TrimSpace(result.QuickstartTokenExpiresAt); rawExpiry != "" {
+		if parsed, err := time.Parse(time.RFC3339, rawExpiry); err == nil {
+			state.TokenExpiresAt = &parsed
+		}
+	}
+	c.onStateSync(state)
+}
+
+func (c *QuickstartClient) invalidateToken() {
+	if c == nil || c.onTokenInvalid == nil {
+		return
+	}
+	c.onTokenInvalid()
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/tools"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
@@ -89,6 +90,10 @@ func (a *chatServiceAdapter) DeleteSession(ctx context.Context, sessionID string
 
 func (a *chatServiceAdapter) ReloadConfig(ctx context.Context, cfg *config.AIConfig) error {
 	return a.svc.Restart(ctx, cfg)
+}
+
+func (a *chatServiceAdapter) SetPatrolProviderFactory(factory func(string) (providers.StreamingProvider, error)) {
+	a.svc.SetPatrolProviderFactory(factory)
 }
 
 // GetExecutor exposes the underlying chat service's tool executor so that

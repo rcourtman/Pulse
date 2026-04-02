@@ -1898,7 +1898,8 @@
             "label": "license server transport proof",
             "match_prefixes": [],
             "match_files": [
-              "pkg/licensing/license_server_client.go"
+              "pkg/licensing/license_server_client.go",
+              "pkg/licensing/quickstart_bootstrap.go"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],

@@ -228,15 +228,13 @@ func NewAISettingsHandler(mtp *config.MultiTenantPersistence, mtm *monitoring.Mu
 	// Wire quickstart credit manager before LoadConfig so the quickstart
 	// provider path is available during initial configuration.
 	if defaultPersistence != nil {
-		billingStore := config.NewFileBillingStore(defaultPersistence.DataDir())
-		qsMgr := ai.NewFileQuickstartCreditManager(
-			billingStore,
+		qsMgr := ai.NewPersistentQuickstartCreditManager(
+			defaultPersistence,
 			"default",
 			func() *config.AIConfig {
 				cfg, _ := handler.loadAIConfigForPersistence(context.Background(), "default", defaultPersistence)
 				return cfg
 			},
-			"default",
 		)
 		defaultAIService.SetQuickstartCredits(qsMgr)
 		if _, err := handler.loadAIConfigForPersistence(context.Background(), "default", defaultPersistence); err != nil {
@@ -324,29 +322,13 @@ func (h *AISettingsHandler) GetAIService(ctx context.Context) *ai.Service {
 	svc.SetAlertAnalyzerFactory(getCreateAlertAnalyzer())
 	// Wire quickstart credit manager before LoadConfig so the quickstart
 	// provider path is available during initial configuration.
-	// Use the base data dir (not tenant-scoped dir) because FileBillingStore
-	// internally resolves org paths: base/orgs/<org>/billing.json.
-	billingBaseDir := mtPersistence.BaseDataDir()
-	billingStore := config.NewFileBillingStore(billingBaseDir)
-	qsMgr := ai.NewFileQuickstartCreditManagerWithOrgResolver(
-		billingStore,
+	qsMgr := ai.NewPersistentQuickstartCreditManager(
+		persistence,
 		orgID,
-		func() string {
-			if !h.hostedMode {
-				return orgID
-			}
-			_, effectiveOrgID, err := loadHostedEffectiveBillingState(billingStore, orgID)
-			if err != nil {
-				log.Warn().Str("orgID", orgID).Err(err).Msg("Failed to resolve hosted quickstart billing org fallback")
-				return orgID
-			}
-			return effectiveOrgID
-		},
 		func() *config.AIConfig {
 			cfg, _ := h.loadAIConfigForPersistence(context.Background(), orgID, persistence)
 			return cfg
 		},
-		orgID,
 	)
 	svc.SetQuickstartCredits(qsMgr)
 	if _, err := h.loadAIConfigForPersistence(context.Background(), orgID, persistence); err != nil {
@@ -2302,10 +2284,15 @@ func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *
 	if qsMgr == nil {
 		return
 	}
-	resp.QuickstartCreditsTotal = quickstartCreditsTotalFromLicensing
+	if err := qsMgr.EnsureBootstrap(ctx); err != nil {
+		log.Debug().Err(err).Msg("Quickstart bootstrap unavailable while populating AI settings")
+	}
+	resp.QuickstartCreditsTotal = qsMgr.CreditsTotal()
 	remaining := qsMgr.CreditsRemaining()
 	resp.QuickstartCreditsRemaining = remaining
-	resp.QuickstartCreditsUsed = quickstartCreditsTotalFromLicensing - remaining
+	if resp.QuickstartCreditsTotal > remaining {
+		resp.QuickstartCreditsUsed = resp.QuickstartCreditsTotal - remaining
+	}
 	resp.QuickstartCreditsAvailable = qsMgr.HasCredits()
 	resp.UsingQuickstart = aiSvc.IsUsingQuickstart()
 }
@@ -2525,8 +2512,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.OpenAIBaseURL = strings.TrimSpace(*req.OpenAIBaseURL)
 	}
 
-	// Track whether we need to grant quickstart credits (deferred until after all validation).
-	grantQuickstartCredits := false
+	// Track whether we should opportunistically refresh quickstart state after validation.
+	refreshQuickstartState := false
 	if req.Enabled != nil {
 		// Only allow enabling if at least one provider is configured OR quickstart credits are available
 		if *req.Enabled {
@@ -2535,20 +2522,18 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				// Check if quickstart credits can bridge the gap
 				aiSvc := h.GetAIService(r.Context())
 				hasQuickstart := false
+				var bootstrapErr error
 				if aiSvc != nil {
 					if qsMgr := aiSvc.GetQuickstartCredits(); qsMgr != nil {
-						hasQuickstart = qsMgr.HasCredits()
-						// First-time enable: grant credits to check availability.
-						// This is safe even if later validation fails — grants are
-						// idempotent and every workspace is entitled to 25 credits.
-						if !hasQuickstart {
-							if err := qsMgr.GrantCredits(); err == nil {
-								hasQuickstart = qsMgr.HasCredits()
-							}
-						}
+						bootstrapErr = qsMgr.EnsureBootstrap(r.Context())
+						hasQuickstart = qsMgr.HasCredits() && qsMgr.GetProvider() != nil
 					}
 				}
 				if !hasQuickstart {
+					if strings.TrimSpace(ai.QuickstartBlockedReasonForError(bootstrapErr)) == ai.QuickstartUnavailableReason() {
+						http.Error(w, ai.QuickstartUnavailableReason(), http.StatusBadGateway)
+						return
+					}
 					http.Error(w, "Please configure a provider (API key or Ollama URL) before enabling Pulse Assistant", http.StatusBadRequest)
 					return
 				}
@@ -2561,9 +2546,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				settings.PatrolModel = quickstartModelStr
 				settings.ChatModel = quickstartModelStr
 			} else {
-				// BYOK is configured — still grant quickstart credits (idempotent)
-				// so every workspace gets the 25 free runs.
-				grantQuickstartCredits = true
+				// BYOK is configured — refresh quickstart state best-effort so the
+				// Patrol status API can still report the current server snapshot.
+				refreshQuickstartState = true
 			}
 		}
 		settings.Enabled = *req.Enabled
@@ -2694,12 +2679,12 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		settings.DiscoveryIntervalHours = 24
 	}
 
-	// Grant quickstart credits now that all validation has passed (idempotent).
-	if grantQuickstartCredits {
+	// Refresh quickstart bootstrap state now that validation has passed.
+	if refreshQuickstartState {
 		if aiSvc := h.GetAIService(r.Context()); aiSvc != nil {
 			if qsMgr := aiSvc.GetQuickstartCredits(); qsMgr != nil {
-				if err := qsMgr.GrantCredits(); err != nil {
-					log.Warn().Err(err).Msg("Failed to grant quickstart credits")
+				if err := qsMgr.EnsureBootstrap(r.Context()); err != nil {
+					log.Warn().Err(err).Msg("Failed to refresh quickstart bootstrap state")
 				}
 			}
 		}

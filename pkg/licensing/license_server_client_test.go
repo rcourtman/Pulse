@@ -342,3 +342,90 @@ func TestClientRefreshGrant(t *testing.T) {
 		}
 	})
 }
+
+func TestClientBootstrapQuickstart(t *testing.T) {
+	t.Run("uses installation bearer token when provided", func(t *testing.T) {
+		var seenAuthorization string
+		var seenRequest QuickstartBootstrapRequest
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Errorf("Method = %q, want POST", r.Method)
+			}
+			if r.URL.Path != "/v1/quickstart/bootstrap" {
+				t.Errorf("Path = %q, want /v1/quickstart/bootstrap", r.URL.Path)
+			}
+			seenAuthorization = r.Header.Get("Authorization")
+			if err := json.NewDecoder(r.Body).Decode(&seenRequest); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(QuickstartBootstrapResponse{
+				QuickstartToken:          "qst_live_123",
+				QuickstartTokenExpiresAt: time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
+				CreditsRemaining:         17,
+				CreditsTotal:             25,
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		resp, err := client.BootstrapQuickstart(context.Background(), "pit_live_token", QuickstartBootstrapRequest{
+			InstanceFingerprint: "fp-123",
+			InstanceName:        "pulse-test",
+			UseCase:             "patrol",
+		})
+		if err != nil {
+			t.Fatalf("BootstrapQuickstart failed: %v", err)
+		}
+		if seenAuthorization != "Bearer pit_live_token" {
+			t.Fatalf("Authorization = %q, want Bearer pit_live_token", seenAuthorization)
+		}
+		if seenRequest.UseCase != "patrol" {
+			t.Fatalf("UseCase = %q, want patrol", seenRequest.UseCase)
+		}
+		if resp.QuickstartToken != "qst_live_123" {
+			t.Fatalf("QuickstartToken = %q, want qst_live_123", resp.QuickstartToken)
+		}
+		if resp.CreditsRemaining != 17 || resp.CreditsTotal != 25 {
+			t.Fatalf("credits = %d/%d, want 17/25", resp.CreditsRemaining, resp.CreditsTotal)
+		}
+	})
+
+	t.Run("uses community installation id when no auth token is present", func(t *testing.T) {
+		var seenAuthorization string
+		var seenRequest QuickstartBootstrapRequest
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			seenAuthorization = r.Header.Get("Authorization")
+			if err := json.NewDecoder(r.Body).Decode(&seenRequest); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			json.NewEncoder(w).Encode(QuickstartBootstrapResponse{
+				QuickstartToken:  "qst_live_community",
+				CreditsRemaining: 25,
+				CreditsTotal:     25,
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		resp, err := client.BootstrapQuickstart(context.Background(), "", QuickstartBootstrapRequest{
+			ClientInstallationID: "community-install-1",
+			InstanceFingerprint:  "community-install-1",
+			UseCase:              "patrol",
+		})
+		if err != nil {
+			t.Fatalf("BootstrapQuickstart failed: %v", err)
+		}
+		if seenAuthorization != "" {
+			t.Fatalf("Authorization = %q, want empty", seenAuthorization)
+		}
+		if seenRequest.ClientInstallationID != "community-install-1" {
+			t.Fatalf("ClientInstallationID = %q, want community-install-1", seenRequest.ClientInstallationID)
+		}
+		if resp.QuickstartToken != "qst_live_community" {
+			t.Fatalf("QuickstartToken = %q, want qst_live_community", resp.QuickstartToken)
+		}
+	})
+}

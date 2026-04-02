@@ -77,26 +77,36 @@ type Config struct {
 type Service struct {
 	mu sync.RWMutex
 
-	cfg               *config.AIConfig
-	dataDir           string
-	stateProvider     StateProvider
-	readState         unifiedresources.ReadState
-	agentServer       AgentServer
-	executor          *tools.PulseToolExecutor
-	actionAuditStore  unifiedresources.ResourceStore
-	sessions          *SessionStore
-	agenticLoop       *AgenticLoop
-	provider          providers.StreamingProvider
-	providerFactory   func(modelStr string) (providers.StreamingProvider, error)
-	started           bool
-	autonomousMode    bool
-	contextPrefetcher *ContextPrefetcher
-	budgetChecker     func() error // Optional mid-run budget enforcement
-	orgID             string
+	cfg                   *config.AIConfig
+	dataDir               string
+	stateProvider         StateProvider
+	readState             unifiedresources.ReadState
+	agentServer           AgentServer
+	executor              *tools.PulseToolExecutor
+	actionAuditStore      unifiedresources.ResourceStore
+	sessions              *SessionStore
+	agenticLoop           *AgenticLoop
+	provider              providers.StreamingProvider
+	providerFactory       func(modelStr string) (providers.StreamingProvider, error)
+	patrolProviderFactory func(modelStr string) (providers.StreamingProvider, error)
+	started               bool
+	autonomousMode        bool
+	contextPrefetcher     *ContextPrefetcher
+	budgetChecker         func() error // Optional mid-run budget enforcement
+	orgID                 string
 
 	activeMu           sync.RWMutex
 	activeExecutions   map[string]map[*AgenticLoop]struct{}
 	questionExecutions map[string]*AgenticLoop
+}
+
+// SetPatrolProviderFactory installs a Patrol-only provider factory override.
+// This lets Patrol use a different quickstart contract without changing normal
+// interactive chat provider selection in the same slice.
+func (s *Service) SetPatrolProviderFactory(factory func(modelStr string) (providers.StreamingProvider, error)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.patrolProviderFactory = factory
 }
 
 // NewService creates a new chat service
@@ -765,7 +775,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	}
 
 	// Create a temporary provider for the patrol model
-	provider, err := s.createProviderForModel(patrolModel)
+	provider, err := s.createPatrolProviderForModel(patrolModel)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create patrol provider: %w", err)
 	}
@@ -939,6 +949,13 @@ func (s *Service) createProviderForModel(modelStr string) (providers.StreamingPr
 	default:
 		return nil, fmt.Errorf("unsupported provider: %s", providerName)
 	}
+}
+
+func (s *Service) createPatrolProviderForModel(modelStr string) (providers.StreamingProvider, error) {
+	if s.patrolProviderFactory != nil {
+		return s.patrolProviderFactory(modelStr)
+	}
+	return s.createProviderForModel(modelStr)
 }
 
 // ListAvailableTools returns tool names available for the given prompt.

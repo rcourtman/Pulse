@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -116,14 +117,29 @@ func addUnifiedRuntimeFinding(store *unified.UnifiedStore, id string, detectedAt
 
 type stubQuickstartCreditManager struct {
 	remaining int
+	total     int
+	provider  providers.Provider
 }
 
-func (m *stubQuickstartCreditManager) HasCredits() bool                { return m.remaining > 0 }
-func (m *stubQuickstartCreditManager) CreditsRemaining() int           { return m.remaining }
-func (m *stubQuickstartCreditManager) ConsumeCredit() error            { return nil }
-func (m *stubQuickstartCreditManager) HasBYOK() bool                   { return false }
-func (m *stubQuickstartCreditManager) GetProvider() providers.Provider { return nil }
-func (m *stubQuickstartCreditManager) GrantCredits() error             { return nil }
+func (m *stubQuickstartCreditManager) EnsureBootstrap(context.Context) error { return nil }
+func (m *stubQuickstartCreditManager) HasCredits() bool                      { return m.remaining > 0 }
+func (m *stubQuickstartCreditManager) CreditsRemaining() int                 { return m.remaining }
+func (m *stubQuickstartCreditManager) CreditsTotal() int {
+	if m.total > 0 {
+		return m.total
+	}
+	return pkglicensing.QuickstartCreditsTotal
+}
+func (m *stubQuickstartCreditManager) HasBYOK() bool { return false }
+func (m *stubQuickstartCreditManager) GetProvider() providers.Provider {
+	if m.provider != nil {
+		return m.provider
+	}
+	if m.remaining <= 0 {
+		return nil
+	}
+	return providers.NewQuickstartClientWithToken("qst_live_test", nil, nil)
+}
 
 func TestHandleGetPatrolStatus_IncludesQuickstartFields(t *testing.T) {
 	handler, _, _, _ := setupAIHandlerWithPatrol(t)

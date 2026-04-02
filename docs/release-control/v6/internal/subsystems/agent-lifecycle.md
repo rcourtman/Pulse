@@ -123,6 +123,13 @@ management, and fleet control surfaces.
 ## Extension Points
 
 1. Add or change install-command generation, canonical /api/auto-register behavior, or installer download behavior through the owned `internal/api/` files above.
+   That same shared `internal/api/` adjacency does not transfer ownership of
+   Patrol quickstart bootstrap or mobile Patrol-provider bridging:
+   `internal/api/ai_handlers.go` and `internal/api/chat_service_adapter.go`
+   may be invoked by lifecycle-adjacent surfaces, but server-issued
+   quickstart tokens, Patrol quickstart credit snapshots, and AI runtime auth
+   remain `ai-runtime` plus `api-contracts` concerns rather than install-token
+   or lifecycle credential state.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.

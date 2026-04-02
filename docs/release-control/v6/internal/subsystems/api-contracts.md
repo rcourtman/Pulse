@@ -231,6 +231,13 @@ Own canonical runtime payload shapes between backend and frontend.
 6. Keep Patrol status payloads explicit enough that the frontend can present blocked runtime state without treating a previously healthy summary snapshot as current runtime truth, and keep Patrol recency semantics explicit in transport by reserving `last_patrol_at` for completed full patrols while exposing any Patrol activity separately through `last_activity_at`
    and the scoped-trigger status payload on that same Patrol status surface, so queued scoped work, busy-mode state, and per-source enablement (`alert` versus `anomaly`) stay transport-backed instead of being inferred by page-local heuristics
    and the split Patrol trigger settings contract, so `patrol_alert_triggers_enabled` and `patrol_anomaly_triggers_enabled` are the canonical AI settings fields while legacy `patrol_event_triggers_enabled` remains a compatibility aggregate rather than the primary control surface
+   and the server-authoritative quickstart contract, so `/api/settings/ai` and
+   `/api/patrol/status` keep `quickstart_credits_remaining`,
+   `quickstart_credits_total`, and `using_quickstart` as canonical transport
+   fields sourced from the latest quickstart bootstrap or proxy response rather
+   than from local grant counters, and shared handlers must not invent
+   client-authored commercial identity or synthetic credits when the quickstart
+   server is unavailable
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed

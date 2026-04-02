@@ -140,6 +140,44 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 	return &result, nil
 }
 
+// BootstrapQuickstart exchanges a runtime identity for a short-lived
+// quickstart token and the current authoritative quickstart inventory.
+// Activated installs should pass their installation token as bearerToken.
+func (c *LicenseServerClient) BootstrapQuickstart(ctx context.Context, bearerToken string, req QuickstartBootstrapRequest) (*QuickstartBootstrapResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal quickstart bootstrap request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/quickstart/bootstrap", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create quickstart bootstrap request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	if token := strings.TrimSpace(bearerToken); token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+token)
+	}
+
+	bootstrapClient := *c.httpClient
+	bootstrapClient.Timeout = 10 * time.Second
+
+	resp, err := bootstrapClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("quickstart bootstrap request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result QuickstartBootstrapResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode quickstart bootstrap response: %w", err)
+	}
+	return &result, nil
+}
+
 // FetchRevocations polls the revocation feed for events after the given sequence number.
 // The feedToken authenticates access to the revocation feed.
 func (c *LicenseServerClient) FetchRevocations(ctx context.Context, feedToken string, sinceSeq int64, limit int) (*RevocationFeedResponse, error) {

@@ -88,7 +88,10 @@ const (
 	PatrolRuntimeStateActive      PatrolRuntimeState = "active"
 )
 
-const patrolQuickstartCreditsExhaustedReason = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+const (
+	patrolQuickstartCreditsExhaustedReason = "Quickstart credits exhausted. Connect your API key to continue using AI Patrol."
+	patrolQuickstartUnavailableReason      = "Quickstart credits require internet access. Connect your API key for offline AI Patrol."
+)
 
 type PatrolStatus struct {
 	RuntimeState     PatrolRuntimeState `json:"runtime_state"`

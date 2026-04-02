@@ -88,6 +88,44 @@ func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testin
 	}
 }
 
+func TestContract_AIQuickstartPayloadFieldsRemainCanonical(t *testing.T) {
+	settingsBody, err := json.Marshal(AISettingsResponse{
+		QuickstartCreditsRemaining: 7,
+		QuickstartCreditsTotal:     25,
+		UsingQuickstart:            true,
+	})
+	if err != nil {
+		t.Fatalf("marshal AI settings response: %v", err)
+	}
+	if !bytes.Contains(settingsBody, []byte(`"quickstart_credits_remaining":7`)) {
+		t.Fatalf("expected AI settings payload to expose quickstart_credits_remaining, got %s", settingsBody)
+	}
+	if !bytes.Contains(settingsBody, []byte(`"quickstart_credits_total":25`)) {
+		t.Fatalf("expected AI settings payload to expose quickstart_credits_total, got %s", settingsBody)
+	}
+	if !bytes.Contains(settingsBody, []byte(`"using_quickstart":true`)) {
+		t.Fatalf("expected AI settings payload to expose using_quickstart, got %s", settingsBody)
+	}
+
+	statusBody, err := json.Marshal(PatrolStatusResponse{
+		QuickstartCreditsRemaining: 7,
+		QuickstartCreditsTotal:     25,
+		UsingQuickstart:            true,
+	})
+	if err != nil {
+		t.Fatalf("marshal patrol status response: %v", err)
+	}
+	if !bytes.Contains(statusBody, []byte(`"quickstart_credits_remaining":7`)) {
+		t.Fatalf("expected patrol status payload to expose quickstart_credits_remaining, got %s", statusBody)
+	}
+	if !bytes.Contains(statusBody, []byte(`"quickstart_credits_total":25`)) {
+		t.Fatalf("expected patrol status payload to expose quickstart_credits_total, got %s", statusBody)
+	}
+	if !bytes.Contains(statusBody, []byte(`"using_quickstart":true`)) {
+		t.Fatalf("expected patrol status payload to expose using_quickstart, got %s", statusBody)
+	}
+}
+
 func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
 	pointTime := time.Date(2026, time.March, 31, 12, 0, 0, 987_000_000, time.UTC)
 

@@ -38,6 +38,7 @@ type ConfigPersistence struct {
 	ssoFile              string
 	apiTokensFile        string
 	aiFile               string
+	quickstartFile       string
 	aiFindingsFile       string
 	aiPatrolRunsFile     string
 	aiUsageHistoryFile   string
@@ -101,6 +102,7 @@ type resolvedConfigPersistencePaths struct {
 	ssoFile              string
 	apiTokensFile        string
 	aiFile               string
+	quickstartFile       string
 	aiFindingsFile       string
 	aiPatrolRunsFile     string
 	aiUsageHistoryFile   string
@@ -165,6 +167,10 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai.enc: %w", err)
 	}
+	quickstartFile, err := resolveLeaf("quickstart.enc")
+	if err != nil {
+		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve quickstart.enc: %w", err)
+	}
 	aiFindingsFile, err := resolveLeaf("ai_findings.json")
 	if err != nil {
 		return "", resolvedConfigPersistencePaths{}, fmt.Errorf("resolve ai_findings.json: %w", err)
@@ -210,6 +216,7 @@ func resolveConfigPersistencePaths(configDir string) (string, resolvedConfigPers
 		ssoFile:              ssoFile,
 		apiTokensFile:        apiTokensFile,
 		aiFile:               aiFile,
+		quickstartFile:       quickstartFile,
 		aiFindingsFile:       aiFindingsFile,
 		aiPatrolRunsFile:     aiPatrolRunsFile,
 		aiUsageHistoryFile:   aiUsageHistoryFile,
@@ -260,6 +267,7 @@ func newConfigPersistence(configDir string) (*ConfigPersistence, error) {
 		ssoFile:              resolvedPaths.ssoFile,
 		apiTokensFile:        resolvedPaths.apiTokensFile,
 		aiFile:               resolvedPaths.aiFile,
+		quickstartFile:       resolvedPaths.quickstartFile,
 		aiFindingsFile:       resolvedPaths.aiFindingsFile,
 		aiPatrolRunsFile:     resolvedPaths.aiPatrolRunsFile,
 		aiUsageHistoryFile:   resolvedPaths.aiUsageHistoryFile,

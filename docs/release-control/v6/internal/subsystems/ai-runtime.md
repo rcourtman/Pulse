@@ -114,6 +114,18 @@ may exist only as an explicit environment-controlled rollout escape hatch, and
 the canonical quickstart proxy contract remains an OpenAI-compatible server-owned
 surface that lives behind the public license API rather than a tenant-local or
 mobile-local adapter.
+That same Patrol quickstart boundary is now server-authoritative end to end.
+`internal/ai/quickstart.go` must bootstrap before the first Patrol-only
+quickstart use, prefer installation identity from `activation.enc` when an
+activation token exists, and otherwise persist one stable community
+`client_installation_id` plus the returned token snapshot under
+`quickstart.enc` through the shared `internal/config/persistence.go` and
+`internal/config/quickstart_state.go` helpers. `internal/ai/providers/quickstart.go`
+must authenticate Patrol proxy calls with `Authorization: Bearer <quickstart_token>`,
+sync `credits_remaining` / `credits_total` back into that cache on every server
+response, and invalidate the cached token on auth rejection instead of reviving
+local counter truth. Explicit BYOK provider credentials still outrank Patrol
+quickstart whenever both are present.
 That same provider-model contract applies to the chat explore pre-pass in
 `internal/ai/chat/service_explore.go`: any runtime model that is valid for the
 main chat execution path, including `quickstart:minimax-2.5m`, must resolve

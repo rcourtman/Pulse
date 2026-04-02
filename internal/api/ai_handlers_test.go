@@ -51,6 +51,31 @@ func saveEnabledTestAIConfig(t *testing.T, persistence *config.ConfigPersistence
 	require.NoError(t, persistence.SaveAIConfig(*aiCfg))
 }
 
+func useTestQuickstartBootstrapServer(t *testing.T, assertRequest func(*http.Request, map[string]any)) {
+	t.Helper()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, http.MethodPost, r.Method)
+		require.Equal(t, "/v1/quickstart/bootstrap", r.URL.Path)
+
+		var reqBody map[string]any
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&reqBody))
+		if assertRequest != nil {
+			assertRequest(r, reqBody)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
+			"quickstart_token":            "qst_live_handler_test",
+			"quickstart_token_expires_at": time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
+			"credits_remaining":           25,
+			"credits_total":               25,
+		}))
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+}
+
 func TestAISettingsHandler_GetAndUpdateSettings_RoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -201,6 +226,14 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 
 func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
+	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
+		assert.Empty(t, strings.TrimSpace(r.Header.Get("Authorization")))
+		clientInstallationID, _ := reqBody["client_installation_id"].(string)
+		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
+		assert.NotEmpty(t, clientInstallationID)
+		assert.Equal(t, clientInstallationID, instanceFingerprint)
+		assert.Equal(t, "patrol", reqBody["use_case"])
+	})
 
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)
@@ -231,6 +264,14 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 
 func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingState(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
+	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
+		assert.Empty(t, strings.TrimSpace(r.Header.Get("Authorization")))
+		clientInstallationID, _ := reqBody["client_installation_id"].(string)
+		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
+		assert.NotEmpty(t, clientInstallationID)
+		assert.Equal(t, clientInstallationID, instanceFingerprint)
+		assert.Equal(t, "patrol", reqBody["use_case"])
+	})
 
 	tmp := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(tmp)
@@ -258,6 +299,35 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
 	assert.True(t, resp.QuickstartCreditsAvailable)
 	assert.True(t, persistence.HasAIConfig())
+}
+
+func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnable(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	quickstartMgr := &stubQuickstartCreditManager{
+		remaining: 25,
+		total:     25,
+	}
+	handler.defaultAIService.SetQuickstartCredits(quickstartMgr)
+
+	body, _ := json.Marshal(AISettingsUpdateRequest{
+		Enabled: ptr(true),
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Enabled)
+	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
+	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
+	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
 }
 
 func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T) {
