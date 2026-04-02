@@ -38,7 +38,6 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
   const [handledWorkloadGroupId, setHandledWorkloadGroupId] = createSignal<string | null>(null);
   const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
-  const [skipNextFocusedReveal, setSkipNextFocusedReveal] = createSignal(false);
 
   const [tableWrapperRef, setTableWrapperRefSignal] = createSignal<HTMLDivElement | undefined>(
     undefined,
@@ -58,13 +57,6 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     focusedSeriesId: selectedGuestId,
     focusedGroupScope: focusedWorkloadGroupScope,
     revealActiveSeries: setRevealedGuestId,
-    consumeNextFocusedRevealSkip: () => {
-      const shouldSkip = skipNextFocusedReveal();
-      if (shouldSkip) {
-        setSkipNextFocusedReveal(false);
-      }
-      return shouldSkip;
-    },
   });
 
   const setTableWrapperRef = (element: HTMLDivElement | undefined) => {
@@ -80,9 +72,6 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
 
   const setSelectedGuestId = (id: string | null) => {
     capturePendingAppShellRestoreTop();
-    if (id) {
-      setSkipNextFocusedReveal(true);
-    }
     const activeFocusedGroupScope = focusedWorkloadGroupScope();
     const nextGroupScope =
       activeFocusedGroupScope && !isSummarySeriesInGroupScope(activeFocusedGroupScope, id)

@@ -2515,6 +2515,7 @@
         "frontend-modern/src/features/dashboardOverview/TrendCharts.tsx",
         "frontend-modern/src/features/operations/operationsPageModel.ts",
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
+        "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/pages/Operations.tsx",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/dashboardEmptyStatePresentation.ts",
@@ -2819,6 +2820,19 @@
             "test_prefixes": [],
             "exact_files": [
               "frontend-modern/src/utils/__tests__/systemLogsPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "retained-value-query-helper",
+            "label": "retained-value query helper proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/hooks/createNonSuspendingQuery.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/components/Infrastructure/__tests__/ResourceDetailDrawer.history.test.tsx"
             ]
           },
           {
@@ -4079,7 +4093,6 @@
             ],
             "match_files": [
               "frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx",
-              "frontend-modern/src/features/recovery/createNonSuspendingQuery.ts",
               "frontend-modern/src/features/recovery/useRecoverySurfaceState.ts",
               "frontend-modern/src/hooks/useDashboardRecovery.ts",
               "frontend-modern/src/hooks/useRecoveryPoints.ts",

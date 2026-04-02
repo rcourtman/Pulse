@@ -262,6 +262,11 @@ card instead of dimming the rest of the map into unusable background noise or
 swapping the hot path into a transient single-series chart. Line-card
 isolation must still flow through the shared sparkline runtime instead of a
 page-local focus overlay.
+That same hot-path rule now also covers infrastructure drawer hydration. Row
+focus may mount drawer-local facet and intelligence fetches, but those
+requests must retain the mounted page shell through the shared non-suspending
+query helper instead of bubbling a transient `Loading view...` fallback through
+`AppLayout.tsx` when an inline infrastructure drawer opens.
 That same hot-path rule now has one shared runtime boundary. Interactive-series
 filtering, active-series derivation, focused-label lookup, and local
 scroll-preserving row focus must extend
@@ -275,10 +280,11 @@ must still flow through the shared contextual-focus and summary-table helpers.
 Direct row toggles that already have the row in view must capture the current
 app-shell scroll position before the focus write and let the remounted root
 shell restore that position, so the interaction stays anchored instead of
-looking like a full refresh; non-local reveal paths may still mark the
-movement as deliberate so route-state restore does not replay over it, and
-then scroll only enough to keep the row header plus the top of the detail
-visible instead of hard-centering every expansion.
+looking like a full refresh. Once the drawer is mounted, the shared reveal
+helper must still take over whenever the opened detail would land below the
+fold, marking that movement as deliberate so route-state restore does not
+replay over it and then scrolling only enough to keep the row header plus the
+top of the detail visible instead of hard-centering every expansion.
 That same hot-path ownership now includes summary cache invalidation.
 Infrastructure and workload summary caches may hydrate charts for fast remounts,
 but when the summary chart timeline contract changes, the cache version must

@@ -6,7 +6,7 @@ import type {
   RecoveryPointsTransportResponse,
 } from '@/types/recovery';
 import { normalizeRecoveryPointsResponse } from '@/utils/recoveryPlatformModel';
-import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 
 const RECOVERY_POINTS_URL = '/api/recovery/points';
 const DEFAULT_LIMIT = 200;

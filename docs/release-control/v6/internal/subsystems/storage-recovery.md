@@ -44,17 +44,16 @@ querying, and the operator-facing storage health presentation layer.
 18. `frontend-modern/src/hooks/useRecoveryRollups.ts`
 19. `frontend-modern/src/hooks/useRecoveryPointsFacets.ts`
 20. `frontend-modern/src/hooks/useRecoveryPointsSeries.ts`
-21. `frontend-modern/src/features/recovery/createNonSuspendingQuery.ts`
-22. `frontend-modern/src/pages/RecoveryRoute.tsx`
-23. `frontend-modern/src/routing/resourceLinks.ts`
-24. `frontend-modern/src/pages/Dashboard.tsx`
-25. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
-26. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
-27. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
-28. `frontend-modern/src/types/recovery.ts`
-29. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
-30. `frontend-modern/src/utils/recoveryTablePresentation.ts`
-31. `frontend-modern/src/utils/textPresentation.ts`
+21. `frontend-modern/src/pages/RecoveryRoute.tsx`
+22. `frontend-modern/src/routing/resourceLinks.ts`
+23. `frontend-modern/src/pages/Dashboard.tsx`
+24. `frontend-modern/src/features/dashboardOverview/dashboardWidgets.ts`
+25. `frontend-modern/src/components/Recovery/DashboardRecoveryStatusPanel.tsx`
+26. `frontend-modern/src/components/Storage/DashboardStoragePanel.tsx`
+27. `frontend-modern/src/types/recovery.ts`
+28. `frontend-modern/src/utils/recoverySummaryPresentation.ts`
+29. `frontend-modern/src/utils/recoveryTablePresentation.ts`
+30. `frontend-modern/src/utils/textPresentation.ts`
 
 ## Shared Boundaries
 
@@ -232,7 +231,7 @@ querying, and the operator-facing storage health presentation layer.
     `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the
     recovery data hooks may retain the last fulfilled rollups, points, facets,
     and series while the next request is in flight through
-    `frontend-modern/src/features/recovery/createNonSuspendingQuery.ts`, but
+    the shared `frontend-modern/src/hooks/createNonSuspendingQuery.ts`, but
     that retained-value behavior must stay route-owned and filter-owned through
     the canonical recovery state model instead of recreating page-local
     suspense escape hatches in `Recovery.tsx` or the recovery sections.
@@ -268,6 +267,11 @@ they do not own the timeline store itself. The canonical resource-change
 history now lives in `internal/unifiedresources/store.go` and is surfaced
 through the shared API/resource wiring, which keeps storage and recovery focused
 on presentation and query shape rather than re-implementing change persistence.
+The retained-value recovery transport helper is now shared too.
+Recovery still owns when rollups, points, facets, and series refetch, but the
+non-suspending query primitive itself now lives under the shared frontend
+primitives contract so other governed surfaces can reuse the same app-shell
+fallback boundary without forking it.
 That same shared-resource dependency now also assumes frontend compatibility
 normalization collapses any legacy top-level `truenas` payload into canonical
 `agent` plus `platformType: 'truenas'` before shared route or filter logic

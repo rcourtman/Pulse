@@ -1,7 +1,7 @@
 import { Accessor, createMemo } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { RecoveryPointsSeriesBucket, RecoveryPointsSeriesResponse } from '@/types/recovery';
-import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 
 const RECOVERY_SERIES_URL = '/api/recovery/series';
 const REFRESH_MS = 30_000;

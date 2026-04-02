@@ -1,4 +1,4 @@
-import { createMemo, createResource, createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import type {
   Resource,
   ResourceChangeKind,
@@ -8,10 +8,20 @@ import type {
 import type { ResourceIntelligence } from '@/types/aiIntelligence';
 import { AIAPI } from '@/api/ai';
 import { ResourceAPI } from '@/api/resources';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 
 interface UseResourceDetailDrawerHistoryStateOptions {
   resource: Resource;
 }
+
+type ResourceFacetBundle = Awaited<ReturnType<typeof ResourceAPI.getFacetBundle>> | null;
+
+type TimelineFacetRequest = {
+  id: string;
+  kind: ResourceChangeKind | '';
+  sourceType: ResourceChangeSourceType | '';
+  sourceAdapter: ResourceChangeSourceAdapter | '';
+};
 
 export const useResourceDetailDrawerHistoryState = (
   options: UseResourceDetailDrawerHistoryStateOptions,
@@ -32,23 +42,26 @@ export const useResourceDetailDrawerHistoryState = (
     return id ? { id } : null;
   });
 
-  const [resourceFacets, { refetch: refetchResourceFacets }] = createResource(
-    resourceFacetRequest,
-    async (request) => {
+  const resourceFacetsState = createNonSuspendingQuery<ResourceFacetBundle, { id: string }>({
+    source: resourceFacetRequest,
+    fetcher: async (request) => {
       if (!request?.id) return null;
       return ResourceAPI.getFacetBundle(request.id, { limit: 25 });
     },
-    { initialValue: null },
-  );
+    initialValue: null,
+  });
+  const resourceFacets = resourceFacetsState.value;
+  const refetchResourceFacets = resourceFacetsState.refetch;
 
-  const [resourceIntelligence] = createResource(
-    resourceFacetRequest,
-    async (request) => {
+  const resourceIntelligenceState = createNonSuspendingQuery<ResourceIntelligence | null, { id: string }>({
+    source: resourceFacetRequest,
+    fetcher: async (request) => {
       if (!request?.id) return null;
       return AIAPI.getResourceIntelligence(request.id);
     },
-    { initialValue: null as ResourceIntelligence | null },
-  );
+    initialValue: null,
+  });
+  const resourceIntelligence = resourceIntelligenceState.value;
 
   const timelineFacetRequest = createMemo(() => {
     const id = resourceFacetId();
@@ -60,9 +73,9 @@ export const useResourceDetailDrawerHistoryState = (
     return { id, kind, sourceType, sourceAdapter };
   });
 
-  const [timelineFacets, { refetch: refetchTimelineFacets }] = createResource(
-    timelineFacetRequest,
-    async (request) => {
+  const timelineFacetsState = createNonSuspendingQuery<ResourceFacetBundle, TimelineFacetRequest>({
+    source: timelineFacetRequest,
+    fetcher: async (request) => {
       if (!request) return null;
       return ResourceAPI.getFacetBundle(request.id, {
         limit: 25,
@@ -71,29 +84,37 @@ export const useResourceDetailDrawerHistoryState = (
         sourceAdapter: request.sourceAdapter || undefined,
       });
     },
-    { initialValue: null },
-  );
+    initialValue: null,
+  });
+  const timelineFacets = timelineFacetsState.value;
+  const refetchTimelineFacets = timelineFacetsState.refetch;
 
   const resourceTimeline = createMemo(
     () => resourceFacets()?.recentChanges ?? resource.recentChanges ?? [],
   );
-  const resourceFacetCounts = createMemo(() => resourceFacets()?.counts ?? resource.facetCounts ?? null);
+  const resourceFacetCounts = createMemo(
+    () => resourceFacets()?.counts ?? resource.facetCounts ?? null,
+  );
   const historyFacetBundle = createMemo(() =>
     timelineFacetRequest() ? (timelineFacets() ?? resourceFacets()) : resourceFacets(),
   );
   const historyFacetCounts = createMemo(
     () => historyFacetBundle()?.counts ?? resourceFacetCounts() ?? null,
   );
-  const historyRecentChanges = createMemo(() => historyFacetBundle()?.recentChanges ?? resourceTimeline());
+  const historyRecentChanges = createMemo(
+    () => historyFacetBundle()?.recentChanges ?? resourceTimeline(),
+  );
   const historyTimeline = createMemo(() => historyRecentChanges());
   const hasTimelineFilters = createMemo(() =>
     Boolean(timelineKindFilter() || timelineSourceTypeFilter() || timelineSourceAdapterFilter()),
   );
   const historyLoadingLabel = createMemo(() => {
     if (timelineFacetRequest()) {
-      return timelineFacets.loading ? 'Refreshing filtered changes...' : 'Filtered changes loaded';
+      return timelineFacetsState.loading()
+        ? 'Refreshing filtered changes...'
+        : 'Filtered changes loaded';
     }
-    return resourceFacets.loading ? 'Refreshing changes...' : 'Changes loaded';
+    return resourceFacetsState.loading() ? 'Refreshing changes...' : 'Changes loaded';
   });
   const resourceTimelineCount = createMemo(
     () => historyFacetCounts()?.recentChanges ?? historyRecentChanges().length,
@@ -108,7 +129,9 @@ export const useResourceDetailDrawerHistoryState = (
     }),
   );
   const facetBundleError = createMemo(() => {
-    const error = timelineFacetRequest() ? timelineFacets.error : resourceFacets.error;
+    const error = timelineFacetRequest()
+      ? timelineFacetsState.error()
+      : resourceFacetsState.error();
     if (!error) return '';
     return (error as Error)?.message || 'Failed to load resource history';
   });

@@ -242,7 +242,7 @@ describe('useDashboardSelectionState', () => {
     expect(row.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
   });
 
-  it('opens mounted workload detail in place when the row itself triggers focus', () => {
+  it('smart-reveals mounted workload detail when the row itself triggers focus near the fold', () => {
     locationSearch = '?type=app-container&platform=truenas&agent=truenas-main';
     const workloadId = 'app-container:truenas-main:nextcloud';
     const [filteredGuests] = createSignal<WorkloadGuest[]>([
@@ -314,7 +314,7 @@ describe('useDashboardSelectionState', () => {
           'behavior' in firstArg &&
           firstArg.behavior === 'smooth',
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it('tracks hovered workload groups without letting them override entity selection outside scope', () => {

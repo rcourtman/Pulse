@@ -133,6 +133,7 @@ work extends shared components instead of creating new local variants.
 111. `frontend-modern/src/components/shared/summaryScopePresentation.ts`
 112. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 113. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
+114. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
 
 ## Shared Boundaries
 
@@ -153,7 +154,7 @@ work extends shared components instead of creating new local variants.
 8. Keep summary chart interaction identity on one shared helper. Summary surfaces that expose row-hover, group-hover, chart-hover, or route-focus-driven chart emphasis must derive page/group/entity scope through `frontend-modern/src/components/shared/summaryCardInteraction.ts` and pass that same resolved scope into card-state, sparkline, and density-map primitives, rather than letting cards read `hovered || focused` while charts listen to a different page-local ID source. Hovering one summary chart must promote that series into the shared active entity so sibling cards highlight the same object instead of keeping chart-local hover islands, and hovering or pinning a workload group header, infrastructure cluster header, or storage pool-group header must scope the matching summary cards through that same shared contract instead of forking a page-local summary filter path. Sibling cards should surface that synchronized hover as one compact header readout through the shared summary-card contract, while the chart under the pointer keeps the only floating tooltip. `frontend-modern/src/components/Recovery/RecoverySummary.tsx` is explicitly outside this interaction dialect: recovery posture cards may share summary framing, but they must not silently grow row/group/chart hover behavior without a separate governed product decision.
 9. Keep page summaries page-scoped when table rows enter contextual focus. Route-backed row selection may add a focused label and shared series emphasis, but infrastructure, workloads, and storage summary cards must continue to render the page-level series set instead of collapsing the summary down to the selected row or replacing the global trend view with row-local empty states.
 10. Keep contextual row focus on the shared summary primitive. Summary surfaces and same-route table drill-ins must reuse `frontend-modern/src/components/shared/contextualFocus.ts` for interactive-series filtering, focused-name lookup, active-series derivation, local scroll preservation, and deliberate inline-detail reveal instead of rebuilding page-local `Set` filters, focused-label scans, drawer-aware scroll math, or ad hoc scroll restoration in each surface.
-11. Keep summary-to-table coordination deliberate, explicit, and reversible. Shared summary hover may highlight the matching table row when it is already visible, but transient chart hover must not auto-filter tables, auto-scroll the page, or reshuffle table ordering. When a page/group/entity scope is active on workloads, infrastructure, or storage, the page shell must surface that state through the shared `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus `frontend-modern/src/components/shared/summaryScopePresentation.ts` contract instead of inventing page-local chips, breadcrumbs, or hidden route-only focus. That shared scope presenter must read like native page context, not a pill/badge widget: it should distinguish transient preview from pinned focus with quiet inline language, keep the current scope visible even when the sticky summary is collapsed or off-screen, and expose a clear reset path for pinned scope so touch-only operators do not depend on hover or “click the same row again” discovery. When the active row is off-screen, page owners must still route through `frontend-modern/src/components/shared/summaryTableFocus.ts` and surface a lightweight `Jump to row` affordance that reveals and scrolls only on explicit user action. Deliberate row focus may reveal inline detail automatically, but that reveal must be drawer-aware: infrastructure and workload row toggles that already have the row in view must hand the current `.app-scroll-shell` position through `frontend-modern/src/utils/appShellScrollRestoration.ts` so the remounted shell in `frontend-modern/src/App.tsx` can reopen the inline detail in place instead of looking like a page refresh, while storage and other non-local reveal paths may still scroll only enough to keep the row header plus the top of the inline detail visible.
+11. Keep summary-to-table coordination deliberate, explicit, and reversible. Shared summary hover may highlight the matching table row when it is already visible, but transient chart hover must not auto-filter tables, auto-scroll the page, or reshuffle table ordering. When a page/group/entity scope is active on workloads, infrastructure, or storage, the page shell must surface that state through the shared `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus `frontend-modern/src/components/shared/summaryScopePresentation.ts` contract instead of inventing page-local chips, breadcrumbs, or hidden route-only focus. That shared scope presenter must read like native page context, not a pill/badge widget: it should distinguish transient preview from pinned focus with quiet inline language, keep the current scope visible even when the sticky summary is collapsed or off-screen, and expose a clear reset path for pinned scope so touch-only operators do not depend on hover or “click the same row again” discovery. When the active row is off-screen, page owners must still route through `frontend-modern/src/components/shared/summaryTableFocus.ts` and surface a lightweight `Jump to row` affordance that reveals and scrolls only on explicit user action. Deliberate row focus may reveal inline detail automatically, but that reveal must be drawer-aware: infrastructure and workload row toggles that already have the row in view must hand the current `.app-scroll-shell` position through `frontend-modern/src/utils/appShellScrollRestoration.ts` so the remounted shell in `frontend-modern/src/App.tsx` can reopen the inline detail without looking like a page refresh, and then still route through the shared reveal helper whenever the opened drawer would otherwise land below the fold. Same-route drawers must therefore scroll only enough to keep the row header plus the top of the inline detail visible, never hard-center the row just because the route state changed.
     Shared summary-linked rows and group headers must also route their preview
     semantics through
     `frontend-modern/src/components/shared/summaryInteractionA11y.ts`.
@@ -171,11 +172,12 @@ work extends shared components instead of creating new local variants.
 12. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer.
 13. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense
-    boundary during in-flight refresh belong under that feature's
-    `frontend-modern/src/features/` owner until multiple surfaces truly share
-    the behavior; do not promote them into `components/shared/` or a generic
-    global hook namespace just because more than one local hook calls them
-    inside the same feature area.
+    boundary during in-flight refresh should stay feature-local until multiple
+    governed surfaces truly share the behavior. Once that boundary is shared,
+    promote the helper into an explicit shared hook owner such as
+    `frontend-modern/src/hooks/createNonSuspendingQuery.ts` rather than
+    re-copying suspense-escape logic into each feature area or burying it
+    inside one feature's private state model.
 
 ## Forbidden Paths
 
@@ -363,6 +365,13 @@ The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table
 composition is reintroduced in new shared components outside the canonical
 allowlist.
+Retained-value query ownership is now part of that shared floor too.
+`frontend-modern/src/hooks/createNonSuspendingQuery.ts` is the canonical
+shared helper for page-local fetches that must stay inside the mounted
+surface instead of falling through the app-level `Loading view...` fallback.
+Feature slices such as recovery and infrastructure drawers may consume that
+helper, but they must not fork new suspense-escape helpers once the shared
+contract exists.
 The settings reporting shell now also owns a deliberate split between
 historical performance reports and current-state VM inventory export.
 `frontend-modern/src/components/Settings/ReportingPanel.tsx`,

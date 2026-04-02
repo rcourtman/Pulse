@@ -59,7 +59,6 @@ export function useInfrastructurePageState() {
   const [deployCluster, setDeployCluster] = createSignal<DeployCluster | null>(null);
   const [filtersOpen, setFiltersOpen] = createSignal(false);
   const [tableRootRef, setTableRootRef] = createSignal<HTMLDivElement | undefined>(undefined);
-  const [skipNextFocusedReveal, setSkipNextFocusedReveal] = createSignal(false);
 
   const hasResources = createMemo(() => resources().length > 0);
   const showNoResources = createMemo(() => initialLoadComplete() && !hasResources() && !error());
@@ -110,13 +109,6 @@ export function useInfrastructurePageState() {
     focusedSeriesId: routeState.expandedResourceId,
     focusedGroupScope: focusedResourceGroupScope,
     revealActiveSeries: routeState.setRevealedResourceId,
-    consumeNextFocusedRevealSkip: () => {
-      const shouldSkip = skipNextFocusedReveal();
-      if (shouldSkip) {
-        setSkipNextFocusedReveal(false);
-      }
-      return shouldSkip;
-    },
   });
   const setSummaryTableRootRef = (element: HTMLDivElement | undefined) => {
     setTableRootRef(element);
@@ -129,9 +121,6 @@ export function useInfrastructurePageState() {
 
   const setExpandedResourceId = (resourceId: string | null) => {
     capturePendingAppShellRestoreTop();
-    if (resourceId) {
-      setSkipNextFocusedReveal(true);
-    }
     const groupScope = focusedResourceGroupScope();
     if (groupScope && resourceId && !isSummarySeriesInGroupScope(groupScope, resourceId)) {
       preserveTableScrollAnchor(() => {

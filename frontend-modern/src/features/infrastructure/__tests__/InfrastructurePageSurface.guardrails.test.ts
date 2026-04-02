@@ -65,8 +65,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');
     expect(infrastructurePageStateSource).toContain('shouldShowJumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('preserveScrollableAncestorVerticalOffset');
-    expect(infrastructurePageStateSource).toContain('consumeNextFocusedRevealSkip');
-    expect(infrastructurePageStateSource).toContain('setSkipNextFocusedReveal(true)');
+    expect(infrastructurePageStateSource).not.toContain('consumeNextFocusedRevealSkip');
+    expect(infrastructurePageStateSource).not.toContain('setSkipNextFocusedReveal(true)');
     expect(infrastructurePageStateSource).not.toContain('querySelector<HTMLElement>(');
     expect(infrastructurePageStateSource).not.toContain('scrollIntoView({ behavior: \'smooth\', block: \'center\' })');
 

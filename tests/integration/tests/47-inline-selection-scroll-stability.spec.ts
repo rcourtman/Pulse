@@ -191,6 +191,38 @@ async function readPrimaryViewportBounds(
   });
 }
 
+async function startAppSuspenseFallbackProbe(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const marker = "__pulseSuspenseFallbackProbe";
+    const existing = (window as Window & Record<string, unknown>)[marker] as
+      | { flashed: boolean; observer?: MutationObserver }
+      | undefined;
+    existing?.observer?.disconnect();
+    const state = { flashed: false, observer: undefined as MutationObserver | undefined };
+    const sample = () => {
+      if (document.body.textContent?.includes("Loading view...")) {
+        state.flashed = true;
+      }
+    };
+    sample();
+    state.observer = new MutationObserver(sample);
+    state.observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+    (window as Window & Record<string, unknown>)[marker] = state;
+  });
+}
+
+async function stopAppSuspenseFallbackProbe(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const marker = "__pulseSuspenseFallbackProbe";
+    const state = (window as Window & Record<string, unknown>)[marker] as
+      | { flashed: boolean; observer?: MutationObserver }
+      | undefined;
+    state?.observer?.disconnect();
+    delete (window as Window & Record<string, unknown>)[marker];
+    return Boolean(state?.flashed);
+  });
+}
+
 async function findLegacyScopedWorkloadRow(page: Page): Promise<Locator> {
   const rows = page.locator("tr[data-guest-id]");
   const rowCount = await rows.count();
@@ -229,7 +261,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     }
   });
 
-  test("keeps the infrastructure viewport stable when opening an inline resource drawer", async ({
+  test("reveals infrastructure inline detail without hard-centering the selected row", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -257,8 +289,8 @@ test.describe.serial("Inline selection scroll stability", () => {
       .first();
     await expect(row).toBeVisible();
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
-    const beforeClickScroll = await readPrimaryViewportScrollTop(page);
     expect(beforeRowTop).toBeGreaterThan(500);
+    await startAppSuspenseFallbackProbe(page);
     await row.click();
 
     await expect(page).toHaveURL(
@@ -275,14 +307,10 @@ test.describe.serial("Inline selection scroll stability", () => {
     const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
-    expect(Math.abs(afterRowTop - beforeRowTop)).toBeLessThanOrEqual(12);
+    expect(afterRowTop).toBeLessThan(beforeRowTop - 150);
+    expect(afterRowTop).toBeLessThan(viewportBounds.top + viewportBounds.height * 0.42);
     expect(detailTop).toBeLessThan(viewportBounds.bottom - 48);
-
-    const afterScroll = await page.evaluate(() => {
-      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
-      return shell ? shell.scrollTop : window.scrollY;
-    });
-    expect(Math.abs(afterScroll - beforeClickScroll)).toBeLessThanOrEqual(12);
+    expect(await stopAppSuspenseFallbackProbe(page)).toBe(false);
   });
 
   test("keeps the recovery viewport stable when selecting a protected item", async ({
@@ -320,7 +348,7 @@ test.describe.serial("Inline selection scroll stability", () => {
     expect(afterScroll).toBeGreaterThanOrEqual(Math.max(10, beforeScroll - 60));
   });
 
-  test("keeps the workloads viewport stable when opening an inline workload drawer", async ({
+  test("keeps workload inline detail visible without hard-centering the selected row", async ({
     page,
   }, testInfo) => {
     test.skip(
@@ -337,7 +365,6 @@ test.describe.serial("Inline selection scroll stability", () => {
     const beforeScroll = await scrollSectionIntoView(page, row);
     expect(beforeScroll).toBeGreaterThan(10);
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
-    const beforeClickScroll = await readPrimaryViewportScrollTop(page);
     expect(beforeRowTop).toBeGreaterThan(500);
 
     const workloadId = (await row.getAttribute("data-guest-id")) ?? "";
@@ -361,14 +388,8 @@ test.describe.serial("Inline selection scroll stability", () => {
     const afterRowTop = await row.evaluate((element) => element.getBoundingClientRect().top);
     const detailTop = await detailRow.evaluate((element) => element.getBoundingClientRect().top);
 
-    expect(Math.abs(afterRowTop - beforeRowTop)).toBeLessThanOrEqual(12);
+    expect(afterRowTop).toBeGreaterThan(viewportBounds.top + 96);
     expect(detailTop).toBeLessThan(viewportBounds.bottom - 48);
-
-    const afterScroll = await page.evaluate(() => {
-      const shell = document.querySelector<HTMLElement>(".app-scroll-shell");
-      return shell ? shell.scrollTop : window.scrollY;
-    });
-    expect(Math.abs(afterScroll - beforeClickScroll)).toBeLessThanOrEqual(12);
 
     await row.click();
     await expect.poll(() => page.url()).not.toContain("resource=");
@@ -438,7 +459,6 @@ test.describe.serial("Inline selection scroll stability", () => {
     const beforeScroll = await scrollSectionIntoView(page, row);
     expect(beforeScroll).toBeGreaterThan(10);
     const beforeRowTop = await positionElementNearViewportBottom(page, row);
-    const beforeClickScroll = await readPrimaryViewportScrollTop(page);
     expect(beforeRowTop).toBeGreaterThan(500);
 
     await row.click();

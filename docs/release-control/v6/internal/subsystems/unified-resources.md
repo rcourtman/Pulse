@@ -263,6 +263,12 @@ may keep an in-memory remount cache for canonical resource charts, but the key
 must carry an explicit summary contract version so a long-lived browser tab
 cannot resurrect older unified-resource summary shapes after the chart model or
 identity mapping changes.
+That same consumer ownership now also includes infrastructure drawer history
+fetches. `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerHistoryState.ts`
+may hydrate canonical facet and intelligence data for the selected resource,
+but it must do so through the shared retained-value query helper so opening a
+resource drawer never drops the whole infrastructure surface into the app-level
+`Loading view...` fallback.
 VMware vSphere now follows the same admission rule. In the admitted phase-1
 direction, vCenter is the connection authority but not a
 top-level unified resource: ESXi hosts must project as canonical `agent`
@@ -316,9 +322,11 @@ tag that detail with the canonical active resource ID. Direct row toggles that
 already have the row in view must capture the current `.app-scroll-shell`
 position through `frontend-modern/src/utils/appShellScrollRestoration.ts`, so
 the remounted root shell in `frontend-modern/src/App.tsx` can stay anchored,
-while non-local reveal paths may still let the shared
-summary-table/contextual-focus helpers reveal only enough of the drawer to show
-the row header plus the start of the detail.
+and then still hand off to the shared summary-table/contextual-focus helpers
+when the opened drawer would otherwise fall below the fold. That reveal must
+scroll only enough of the infrastructure table to keep the row header plus the
+start of the detail visible, not leave the drawer clipped and not hard-center
+the selected row.
 `useUnifiedResourceTableViewportSync.ts` must stay viewport-only; it may not
 grow a second selected-row reveal path or a resource-local centering rule.
 That same unified-resource boundary now also owns stored metrics-target

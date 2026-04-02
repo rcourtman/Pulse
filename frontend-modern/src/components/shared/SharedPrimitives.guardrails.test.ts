@@ -312,7 +312,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryTableFocusSource).toContain('focusedSeriesId');
     expect(summaryTableFocusSource).toContain('findInlineDetailElement');
     expect(summaryTableFocusSource).toContain('revealInlineDetailInViewport');
-    expect(summaryTableFocusSource).toContain('consumeNextFocusedRevealSkip');
     expect(summaryTableFocusSource).toContain('MutationObserver');
     expect(summaryTableFocusSource).toContain('querySelector<HTMLElement>(');
     expect(summaryTableFocusSource).toContain(

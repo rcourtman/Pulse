@@ -1,6 +1,11 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import Recovery from '@/components/Recovery/Recovery';
+import createNonSuspendingQuerySource from '@/hooks/createNonSuspendingQuery.ts?raw';
+import useRecoveryPointsFacetsSource from '@/hooks/useRecoveryPointsFacets.ts?raw';
+import useRecoveryPointsSeriesSource from '@/hooks/useRecoveryPointsSeries.ts?raw';
+import useRecoveryPointsSource from '@/hooks/useRecoveryPoints.ts?raw';
+import useRecoveryRollupsSource from '@/hooks/useRecoveryRollups.ts?raw';
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
@@ -217,6 +222,23 @@ describe('Recovery', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps recovery polling on the shared retained-value query primitive', () => {
+    expect(createNonSuspendingQuerySource).toContain('export function createNonSuspendingQuery');
+    expect(createNonSuspendingQuerySource).toContain('retaining the last fulfilled value');
+    expect(useRecoveryRollupsSource).toContain("from '@/hooks/createNonSuspendingQuery'");
+    expect(useRecoveryPointsSource).toContain("from '@/hooks/createNonSuspendingQuery'");
+    expect(useRecoveryPointsFacetsSource).toContain("from '@/hooks/createNonSuspendingQuery'");
+    expect(useRecoveryPointsSeriesSource).toContain("from '@/hooks/createNonSuspendingQuery'");
+    expect(useRecoveryRollupsSource).not.toContain("from '@/features/recovery/createNonSuspendingQuery'");
+    expect(useRecoveryPointsSource).not.toContain("from '@/features/recovery/createNonSuspendingQuery'");
+    expect(useRecoveryPointsFacetsSource).not.toContain(
+      "from '@/features/recovery/createNonSuspendingQuery'",
+    );
+    expect(useRecoveryPointsSeriesSource).not.toContain(
+      "from '@/features/recovery/createNonSuspendingQuery'",
+    );
   });
 
   it('renders protected rollups and resolves unified resource names', async () => {

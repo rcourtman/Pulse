@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, within } from '@solidjs/testing-library';
+import { Suspense } from 'solid-js';
 
 import discoveryTabSource from '@/components/Discovery/DiscoveryTab.tsx?raw';
 import discoveryTabStateSource from '@/components/Discovery/useDiscoveryTabState.ts?raw';
@@ -140,7 +141,11 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerStateSource).toContain('const [showHistoryFilters, setShowHistoryFilters]');
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
-    expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
+    expect(resourceDetailDrawerHistoryStateSource).toContain(
+      "from '@/hooks/createNonSuspendingQuery'",
+    );
+    expect(resourceDetailDrawerHistoryStateSource).toContain('createNonSuspendingQuery');
+    expect(resourceDetailDrawerHistoryStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerHistoryStateSource).toContain('ResourceAPI.getFacetBundle');
     expect(resourceDetailDrawerHistoryStateSource).toContain('AIAPI.getResourceIntelligence');
     expect(resourceDetailDrawerDerivedStateSource).toContain('toDiscoveryConfig');
@@ -213,6 +218,26 @@ describe('ResourceDetailDrawer change history section', () => {
     expect(resourceDetailDrawerDockerActionsStateSource).toContain(
       'MonitoringAPI.updateAllDockerContainers',
     );
+  });
+
+  it('keeps drawer history fetches out of the page-level suspense fallback', async () => {
+    const pendingFacetBundle = new Promise(() => {});
+    const pendingIntelligence = new Promise(() => {});
+    facetBundleMock.getFacetBundle.mockImplementationOnce(() => pendingFacetBundle as never);
+    aiIntelligenceMock.getResourceIntelligence.mockImplementationOnce(
+      () => pendingIntelligence as never,
+    );
+
+    render(() => (
+      <Suspense fallback={<div>Loading view...</div>}>
+        <ResourceDetailDrawer resource={baseResource({ recentChanges: [] })} />
+      </Suspense>
+    ));
+
+    await Promise.resolve();
+
+    expect(screen.queryByText('Loading view...')).not.toBeInTheDocument();
+    expect(screen.getByText('Current state')).toBeInTheDocument();
   });
 
   it('keeps compact timeline summary chips in overview while showing one embedded change history section', async () => {

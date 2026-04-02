@@ -2,7 +2,7 @@ import { createMemo, type Accessor } from 'solid-js';
 import { apiFetchJSON } from '@/utils/apiClient';
 import type { ProtectionRollup, RecoveryRollupsTransportResponse } from '@/types/recovery';
 import { normalizeRecoveryRollupsResponse } from '@/utils/recoveryPlatformModel';
-import { createNonSuspendingQuery } from '@/features/recovery/createNonSuspendingQuery';
+import { createNonSuspendingQuery } from '@/hooks/createNonSuspendingQuery';
 
 const RECOVERY_ROLLUPS_URL = '/api/recovery/rollups';
 const PAGE_LIMIT = 500;
