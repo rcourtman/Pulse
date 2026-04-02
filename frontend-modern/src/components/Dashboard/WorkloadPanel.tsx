@@ -10,7 +10,10 @@ import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertStyles } from '@/utils/alerts';
 import { isNodeOnline } from '@/utils/status';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import {
+  resolveSummaryGroupMemberInteractionState,
+  type SummarySeriesGroupScope,
+} from '@/components/shared/summaryCardInteraction';
 
 import { GuestDrawer } from './GuestDrawer';
 import { GuestRow } from './GuestRow';
@@ -32,7 +35,9 @@ type WorkloadPanelProps = Pick<
   | 'handleTagClick'
   | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
+  | 'focusedSummaryWorkloadGroupScope'
   | 'focusedSummaryWorkloadGroupId'
+  | 'hoveredSummaryWorkloadGroupScope'
   | 'mobileVisibleColumnIds'
   | 'nodeByInstance'
   | 'search'
@@ -182,6 +187,11 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         }
                         isExpanded={props.selectedGuestId() === guestId()}
                         isSummaryHighlighted={props.activeSummaryWorkloadId() === guestId()}
+                        summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
+                          seriesId: guestId(),
+                          hoveredGroupScope: props.hoveredSummaryWorkloadGroupScope(),
+                          focusedGroupScope: props.focusedSummaryWorkloadGroupScope(),
+                        })}
                         ioEmphasis={props.workloadIOEmphasis()}
                         onHoverChange={props.setHoveredWorkloadId}
                       />

@@ -177,7 +177,11 @@ regression protection.
     scope/pinned pill buttons that compete with the summary shell. Workloads,
     infrastructure, and storage do not rebuild mouse-only hover branches,
     focusable-row toggles, or touch-hostile synthetic hover behavior inside
-    individual row renderers.
+    individual row renderers. The same hot path must also carry block-level
+    group feedback through one shared row-state contract: when a summary group
+    is previewed or pinned, member rows should take a restrained shared
+    preview/pinned wash via `data-summary-group-member-active` rather than
+    per-surface outlines, secondary buttons, or full-strength row fills.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 
 ## Forbidden Paths

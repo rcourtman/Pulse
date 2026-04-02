@@ -9,6 +9,7 @@ import {
   filterSummarySeriesByGroupScope,
   resolveSummaryActiveSeriesId,
   resolveSummaryCardInteractionState,
+  resolveSummaryGroupMemberInteractionState,
   resolveSummaryScopeState,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
@@ -162,6 +163,43 @@ describe('summaryCardInteraction', () => {
       seriesId: null,
       source: 'pinned',
     });
+  });
+
+  it('resolves group-member emphasis from hovered and pinned group scope', () => {
+    const hoveredGroupScope: SummarySeriesGroupScope = {
+      id: 'cluster-a',
+      label: 'Cluster A (2 workloads)',
+      seriesIds: ['alpha', 'beta'],
+    };
+    const focusedGroupScope: SummarySeriesGroupScope = {
+      id: 'cluster-b',
+      label: 'Cluster B (2 workloads)',
+      seriesIds: ['gamma', 'delta'],
+    };
+
+    expect(
+      resolveSummaryGroupMemberInteractionState({
+        seriesId: 'alpha',
+        hoveredGroupScope,
+        focusedGroupScope,
+      }),
+    ).toBe('preview');
+
+    expect(
+      resolveSummaryGroupMemberInteractionState({
+        seriesId: 'gamma',
+        hoveredGroupScope,
+        focusedGroupScope,
+      }),
+    ).toBe('pinned');
+
+    expect(
+      resolveSummaryGroupMemberInteractionState({
+        seriesId: 'omega',
+        hoveredGroupScope,
+        focusedGroupScope,
+      }),
+    ).toBe('default');
   });
 
   it('builds consistent scope-bar presentation for page, group, and entity states', () => {

@@ -894,6 +894,9 @@ test.describe.serial("Summary hover selection", () => {
 
     await matchedGroupRow.hover();
     await expect(matchedGroupRow).toHaveAttribute("data-summary-row-active", "true");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
+      matchedGroupSeriesCount,
+    );
     await expect
       .poll(() => readRenderedSeriesCounts(workloadsSummary))
       .toEqual(new Array(4).fill(matchedGroupSeriesCount));
@@ -901,6 +904,7 @@ test.describe.serial("Summary hover selection", () => {
 
     await page.mouse.move(1, 1);
     await expect(matchedGroupRow).toHaveAttribute("data-summary-row-active", "false");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
     await expect
       .poll(() => readRenderedSeriesCounts(workloadsSummary))
       .toEqual(resolvedBaselineCounts);
@@ -964,6 +968,9 @@ test.describe.serial("Summary hover selection", () => {
 
     await matchedGroupRow.hover();
     await expect(matchedGroupRow).toHaveAttribute("data-summary-row-active", "true");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
+      matchedGroupSeriesCount,
+    );
     await expect
       .poll(() => readRenderedSeriesCounts(infrastructureSummary))
       .toEqual(new Array(4).fill(matchedGroupSeriesCount));
@@ -973,6 +980,7 @@ test.describe.serial("Summary hover selection", () => {
 
     await page.mouse.move(1, 1);
     await expect(matchedGroupRow).toHaveAttribute("data-summary-row-active", "false");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
     await expect
       .poll(() => readRenderedSeriesCounts(infrastructureSummary))
       .toEqual(resolvedBaselineCounts);
@@ -1053,14 +1061,21 @@ test.describe.serial("Summary hover selection", () => {
 
       await matchedGroupRow.hover();
       await expect(scopeBar).toContainText("Preview");
+      await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
+        matchedGroupSeriesCount,
+      );
       await page.mouse.move(1, 1);
       await expect(scopeBar).toContainText("All");
+      await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
 
       await matchedGroupRow.click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBe(matchedGroupId);
       await expect(scopeBar).toContainText("Pinned");
+      await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
+        matchedGroupSeriesCount,
+      );
       await expect(
         scopeBar.getByRole("button", { name: "Reset pinned scope" }),
       ).toBeVisible();
@@ -1072,6 +1087,10 @@ test.describe.serial("Summary hover selection", () => {
       );
 
       await page.mouse.move(1, 1);
+      await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
+      await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(
+        matchedGroupSeriesCount,
+      );
       await expect
         .poll(() => readRenderedSeriesCounts(summary))
         .toEqual(new Array(4).fill(matchedGroupSeriesCount));
@@ -1081,6 +1100,7 @@ test.describe.serial("Summary hover selection", () => {
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBeNull();
       await expect(scopeBar).toContainText("All");
+      await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
       await page.mouse.move(1, 1);
       await expect
         .poll(() => readRenderedSeriesCounts(summary))
@@ -1119,6 +1139,7 @@ test.describe.serial("Summary hover selection", () => {
 
     let matchedGroupRow: import("@playwright/test").Locator | null = null;
     let matchedGroupId = "";
+    let matchedGroupSeriesCount = 0;
     for (let index = 0; index < groupRowCount; index += 1) {
       const row = groupRows.nth(index);
       if (!(await row.isVisible())) {
@@ -1135,25 +1156,34 @@ test.describe.serial("Summary hover selection", () => {
       }
       matchedGroupRow = row;
       matchedGroupId = groupId;
+      matchedGroupSeriesCount = seriesCount;
       break;
     }
 
     expect(matchedGroupRow).not.toBeNull();
     expect(matchedGroupId).not.toBe("");
+    expect(matchedGroupSeriesCount).toBeGreaterThan(0);
     if (!matchedGroupRow) {
       return;
     }
 
     await matchedGroupRow.hover();
     await expect(storageScopeBar).toContainText("Preview");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
+      matchedGroupSeriesCount,
+    );
     await page.mouse.move(1, 1);
     await expect(storageScopeBar).toContainText("All");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
 
     await matchedGroupRow.click();
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBe(matchedGroupId);
     await expect(storageScopeBar).toContainText("Pinned");
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
+      matchedGroupSeriesCount,
+    );
     await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
 
     await expect
@@ -1161,11 +1191,16 @@ test.describe.serial("Summary hover selection", () => {
       .not.toEqual(baselineCounts);
 
     await page.mouse.move(1, 1);
+    await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
+    await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(
+      matchedGroupSeriesCount,
+    );
     await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
 
     await storageScopeBar
       .getByRole("button", { name: "Reset pinned scope" })
       .click();
+    await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBeNull();

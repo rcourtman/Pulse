@@ -228,6 +228,10 @@ assembly branch.
     `data-summary-row-active` and rely on the shared row presentation owned by
     `frontend-modern/src/index.css` instead of provider-specific background
     classes that drift across resource tables or hide inline metric bars.
+    Cluster-member rows must also expose shared preview-versus-pinned group
+    emphasis through `data-summary-group-member-active`, so the whole cluster
+    block reads as the active scope without inventing a second infrastructure-
+    local outline or banner treatment.
     Summary-linked infrastructure rows and cluster headers must also route
     pointer preview and focus preview through
     `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, while

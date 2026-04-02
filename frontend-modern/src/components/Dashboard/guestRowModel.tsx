@@ -1,4 +1,5 @@
 import type { ColumnDef } from '@/hooks/useColumnVisibility';
+import type { SummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import { createVisibleCanonicalTypeColumn } from '@/utils/typeColumnDefinition';
 
@@ -42,6 +43,7 @@ export interface GuestRowProps {
   onClick?: () => void;
   isExpanded?: boolean;
   isSummaryHighlighted?: boolean;
+  summaryGroupMemberState?: SummaryGroupMemberInteractionState;
   ioEmphasis?: WorkloadIOEmphasis;
   onHoverChange?: (guestId: string | null) => void;
 }

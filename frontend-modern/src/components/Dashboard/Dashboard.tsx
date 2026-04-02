@@ -133,7 +133,9 @@ export function Dashboard(props: DashboardProps) {
           handleTagClick={state.handleTagClick}
           activeSummaryWorkloadGroupScope={state.activeSummaryWorkloadGroupScope}
           activeSummaryWorkloadId={state.activeSummaryWorkloadId}
+          focusedSummaryWorkloadGroupScope={state.focusedSummaryWorkloadGroupScope}
           focusedSummaryWorkloadGroupId={state.focusedSummaryWorkloadGroupId}
+          hoveredSummaryWorkloadGroupScope={state.hoveredSummaryWorkloadGroupScope}
           isMobile={state.isMobile}
           mobileVisibleColumnIds={state.mobileVisibleColumnIds}
           mobileVisibleColumns={state.mobileVisibleColumns}

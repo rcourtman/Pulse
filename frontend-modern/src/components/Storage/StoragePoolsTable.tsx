@@ -19,6 +19,7 @@ import { StoragePoolRow } from './StoragePoolRow';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import { useStoragePoolsTableModel } from './useStoragePoolsTableModel';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import { buildStorageSummaryGroupScope } from './storageSummaryGroups';
 
 type StoragePoolsTableProps = {
@@ -34,6 +35,8 @@ type StoragePoolsTableProps = {
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoading: boolean;
   activeSummaryGroupScope?: SummarySeriesGroupScope | null;
+  hoveredSummaryGroupScope?: SummarySeriesGroupScope | null;
+  focusedSummaryGroupScope?: SummarySeriesGroupScope | null;
   focusedSummaryGroupId?: string | null;
   onGroupFocusChange?: (scope: SummarySeriesGroupScope | null) => void;
   onGroupHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
@@ -108,6 +111,11 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                                   props.highlightedSummarySeriesId ===
                                   resolveStorageRecordMetricResourceId(record())
                                 }
+                                summaryGroupMemberState={resolveSummaryGroupMemberInteractionState({
+                                  seriesId: resolveStorageRecordMetricResourceId(record()),
+                                  hoveredGroupScope: props.hoveredSummaryGroupScope,
+                                  focusedGroupScope: props.focusedSummaryGroupScope,
+                                })}
                                 onToggleExpand={() => model.togglePool(record().id)}
                                 onHoverChange={props.onHoverChange}
                                 rowClass={rowModel().rowClass}

@@ -291,6 +291,7 @@ describe('shared primitive guardrails', () => {
     expect(summaryCardInteractionSource).toContain('chartHoveredSeriesId');
     expect(summaryCardInteractionSource).toContain('SummarySeriesGroupScope');
     expect(summaryCardInteractionSource).toContain('resolveSummaryGroupScope');
+    expect(summaryCardInteractionSource).toContain('resolveSummaryGroupMemberInteractionState');
     expect(summaryCardInteractionSource).toContain('resolveSummaryScopeState');
     expect(interactiveSparklineModelSource).toContain('onHoverSyncChange');
     expect(densityMapModelSource).toContain('onHoverSyncChange');
@@ -384,8 +385,12 @@ describe('shared primitive guardrails', () => {
     expect(frontendIndexCssSource).toContain("tr[data-summary-row-active='true'] > td");
     expect(frontendIndexCssSource).toContain('--color-summary-row-bg');
     expect(frontendIndexCssSource).toContain('--color-summary-row-accent');
+    expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='preview'] > td");
+    expect(frontendIndexCssSource).toContain("tr[data-summary-group-member-active='pinned'] > td");
+    expect(frontendIndexCssSource).toContain('--color-summary-group-member-pinned-accent');
 
     expect(guestRowSource).toContain('data-summary-row-active');
+    expect(guestRowSource).toContain('data-summary-group-member-active');
     expect(guestRowStateSource).not.toContain('bg-sky-50/70');
     expect(guestRowStateSource).not.toContain('ring-sky-400/25');
 
@@ -402,6 +407,9 @@ describe('shared primitive guardrails', () => {
       expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
       expect(source).not.toContain('ring-blue-300 dark:ring-blue-600');
     }
+
+    expect(storagePoolRowSource).toContain('data-summary-group-member-active');
+    expect(unifiedResourceHostTableCardSource).toContain('data-summary-group-member-active');
   });
 
   it('keeps summary-linked row input semantics on the shared interaction helper', () => {

@@ -199,7 +199,10 @@ querying, and the operator-facing storage health presentation layer.
     `frontend-modern/src/components/shared/summaryScopePresentation.ts`
     contract so touch users and mouse users see the same explicit, reversible
     scope state instead of relying on hidden route state or storage-local
-    badges.
+    badges. When that scope is a storage pool group, member pool rows should
+    expose shared `data-summary-group-member-active="preview|pinned"` state so
+    the grouped block reads as one scoped set without adding storage-local
+    outlines, pill buttons, or heavy full-row fills.
 14. Keep storage summary remount caches versioned with the chart contract.
     `frontend-modern/src/components/Storage/StorageSummary.tsx` may keep a
     bounded in-memory cache for same-tab remounts, but its cache key must carry

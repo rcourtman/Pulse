@@ -33,6 +33,7 @@ import { buildWorkloadsHref } from './workloadsLink';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
 import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import { resolveSummaryGroupMemberInteractionState } from '@/components/shared/summaryCardInteraction';
 import {
   buildSummaryDisclosureControlsId,
   createSummaryInteractiveRowPreviewHandlers,
@@ -221,6 +222,13 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                   const displayName = createMemo(() =>
                     getPreferredInfrastructureDisplayName(resource),
                   );
+                  const summaryGroupMemberState = createMemo(() =>
+                    resolveSummaryGroupMemberInteractionState({
+                      seriesId: resource.id,
+                      hoveredGroupScope: tableProps.hoveredSummaryGroupScope,
+                      focusedGroupScope: tableProps.focusedSummaryGroupScope,
+                    }),
+                  );
                   const statusIndicator = createMemo(() =>
                     getAgentStatusIndicator({ status: resource.status }),
                   );
@@ -306,6 +314,11 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                       <TableRow
                         data-row-id={resource.id}
                         data-summary-series-id={resource.id}
+                        data-summary-group-member-active={
+                          summaryGroupMemberState() !== 'default'
+                            ? summaryGroupMemberState()
+                            : undefined
+                        }
                         data-summary-row-active={
                           (tableProps.hoveredResourceId === resource.id || isHighlighted()) &&
                           !isExpanded()

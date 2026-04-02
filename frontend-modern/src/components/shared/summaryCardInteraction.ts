@@ -1,4 +1,5 @@
 export type SummaryCardInteractionState = 'default' | 'active' | 'inactive';
+export type SummaryGroupMemberInteractionState = 'default' | 'preview' | 'pinned';
 export type SummaryScopeKind = 'page' | 'group' | 'entity';
 export type SummaryScopeSource = 'page' | 'preview' | 'pinned';
 
@@ -66,6 +67,29 @@ export const resolveSummaryGroupScope = (options: {
     return hoveredGroupScope;
   }
   return normalizeSummarySeriesGroupScope(options.focusedGroupScope);
+};
+
+export const resolveSummaryGroupMemberInteractionState = (options: {
+  seriesId?: string | null;
+  hoveredGroupScope?: SummarySeriesGroupScope | null;
+  focusedGroupScope?: SummarySeriesGroupScope | null;
+}): SummaryGroupMemberInteractionState => {
+  const normalizedSeriesId = normalizeSeriesId(options.seriesId);
+  if (!normalizedSeriesId) {
+    return 'default';
+  }
+
+  const hoveredGroupScope = normalizeSummarySeriesGroupScope(options.hoveredGroupScope);
+  if (isSummarySeriesInGroupScope(hoveredGroupScope, normalizedSeriesId)) {
+    return 'preview';
+  }
+
+  const focusedGroupScope = normalizeSummarySeriesGroupScope(options.focusedGroupScope);
+  if (isSummarySeriesInGroupScope(focusedGroupScope, normalizedSeriesId)) {
+    return 'pinned';
+  }
+
+  return 'default';
 };
 
 export const resolveSummaryScopeState = (options: {

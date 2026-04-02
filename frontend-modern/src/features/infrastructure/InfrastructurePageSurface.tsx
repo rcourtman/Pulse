@@ -338,6 +338,8 @@ export function InfrastructurePageSurface() {
                     resources={filteredResources()}
                     expandedResourceId={expandedResourceId()}
                     activeSummaryGroupScope={activeSummaryResourceGroupScope()}
+                    hoveredSummaryGroupScope={hoveredSummaryResourceGroupScope()}
+                    focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}
                     focusedSummaryGroupId={focusedSummaryResourceGroupId()}
                     hoveredResourceId={activeSummaryResourceId()}
                     highlightedResourceId={highlightedResourceId()}

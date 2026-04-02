@@ -110,6 +110,11 @@ export function GuestRow(props: GuestRowProps) {
         style={rowStyle()}
         data-guest-id={guestId()}
         data-summary-series-id={guestId()}
+        data-summary-group-member-active={
+          props.summaryGroupMemberState && props.summaryGroupMemberState !== 'default'
+            ? props.summaryGroupMemberState
+            : undefined
+        }
         data-summary-row-active={props.isSummaryHighlighted && !props.isExpanded ? 'true' : 'false'}
         onClick={props.onClick}
         {...interactiveRowHandlers}

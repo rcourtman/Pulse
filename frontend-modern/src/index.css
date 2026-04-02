@@ -62,6 +62,11 @@
     --color-summary-row-bg-hover: rgba(14, 165, 233, 0.08);
     --color-summary-row-border: rgba(14, 165, 233, 0.16);
     --color-summary-row-accent: rgba(14, 165, 233, 0.42);
+    --color-summary-group-member-preview-bg: rgba(14, 165, 233, 0.025);
+    --color-summary-group-member-preview-bg-hover: rgba(14, 165, 233, 0.04);
+    --color-summary-group-member-pinned-bg: rgba(14, 165, 233, 0.04);
+    --color-summary-group-member-pinned-bg-hover: rgba(14, 165, 233, 0.055);
+    --color-summary-group-member-pinned-accent: rgba(14, 165, 233, 0.22);
   }
 
   .dark {
@@ -79,6 +84,11 @@
     --color-summary-row-bg-hover: rgba(56, 189, 248, 0.12);
     --color-summary-row-border: rgba(56, 189, 248, 0.18);
     --color-summary-row-accent: rgba(56, 189, 248, 0.5);
+    --color-summary-group-member-preview-bg: rgba(56, 189, 248, 0.045);
+    --color-summary-group-member-preview-bg-hover: rgba(56, 189, 248, 0.065);
+    --color-summary-group-member-pinned-bg: rgba(56, 189, 248, 0.07);
+    --color-summary-group-member-pinned-bg-hover: rgba(56, 189, 248, 0.09);
+    --color-summary-group-member-pinned-accent: rgba(56, 189, 248, 0.28);
   }
 
   body {
@@ -161,6 +171,31 @@
 
   .table-row {
     @apply border-b border-border hover:bg-surface-hover;
+  }
+
+  tr[data-summary-group-member-active='preview'] > td,
+  tr[data-summary-group-member-active='preview'] > th {
+    background-color: var(--color-summary-group-member-preview-bg);
+  }
+
+  tr[data-summary-group-member-active='preview']:hover > td,
+  tr[data-summary-group-member-active='preview']:hover > th {
+    background-color: var(--color-summary-group-member-preview-bg-hover);
+  }
+
+  tr[data-summary-group-member-active='pinned'] > td,
+  tr[data-summary-group-member-active='pinned'] > th {
+    background-color: var(--color-summary-group-member-pinned-bg);
+  }
+
+  tr[data-summary-group-member-active='pinned']:hover > td,
+  tr[data-summary-group-member-active='pinned']:hover > th {
+    background-color: var(--color-summary-group-member-pinned-bg-hover);
+  }
+
+  tr[data-summary-group-member-active='pinned'] > td:first-child,
+  tr[data-summary-group-member-active='pinned'] > th:first-child {
+    box-shadow: inset 1px 0 0 var(--color-summary-group-member-pinned-accent);
   }
 
   tr[data-summary-row-active='true'] > td,

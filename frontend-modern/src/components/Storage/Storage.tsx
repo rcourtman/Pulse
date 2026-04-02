@@ -148,6 +148,8 @@ const Storage: Component = () => {
         getRecordAlertState={getRecordAlertState}
         isLoadingPools={isLoadingPools}
         activeSummaryGroupScope={activeSummaryStorageGroupScope}
+        hoveredSummaryGroupScope={hoveredSummaryStorageGroupScope}
+        focusedSummaryGroupScope={focusedSummaryStorageGroupScope}
         focusedSummaryGroupId={focusedSummaryStorageGroupId}
         onGroupFocusChange={setFocusedStorageGroupScope}
         onGroupHoverChange={setHoveredStorageGroupScope}

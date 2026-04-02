@@ -37,6 +37,8 @@ export interface UnifiedResourceTableProps {
   revealedResourceId?: string | null;
   hoveredResourceId?: string | null;
   activeSummaryGroupScope?: SummarySeriesGroupScope | null;
+  hoveredSummaryGroupScope?: SummarySeriesGroupScope | null;
+  focusedSummaryGroupScope?: SummarySeriesGroupScope | null;
   focusedSummaryGroupId?: string | null;
   onExpandedResourceChange: (id: string | null) => void;
   onHoverChange?: (id: string | null) => void;

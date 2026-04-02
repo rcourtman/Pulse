@@ -30,6 +30,8 @@ type StorageContentCardProps = {
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoadingPools: () => boolean;
   activeSummaryGroupScope: () => SummarySeriesGroupScope | null;
+  hoveredSummaryGroupScope: () => SummarySeriesGroupScope | null;
+  focusedSummaryGroupScope: () => SummarySeriesGroupScope | null;
   focusedSummaryGroupId: () => string | null;
   onGroupFocusChange: (scope: SummarySeriesGroupScope | null) => void;
   onGroupHoverChange: (scope: SummarySeriesGroupScope | null) => void;
@@ -78,6 +80,8 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
           getRecordAlertState={props.getRecordAlertState}
           isLoading={props.isLoadingPools()}
           activeSummaryGroupScope={props.activeSummaryGroupScope()}
+          hoveredSummaryGroupScope={props.hoveredSummaryGroupScope()}
+          focusedSummaryGroupScope={props.focusedSummaryGroupScope()}
           focusedSummaryGroupId={props.focusedSummaryGroupId()}
           onGroupFocusChange={props.onGroupFocusChange}
           onGroupHoverChange={props.onGroupHoverChange}

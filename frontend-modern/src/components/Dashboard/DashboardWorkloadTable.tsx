@@ -22,7 +22,9 @@ type DashboardWorkloadTableProps = Pick<
   | 'handleTagClick'
   | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
+  | 'focusedSummaryWorkloadGroupScope'
   | 'focusedSummaryWorkloadGroupId'
+  | 'hoveredSummaryWorkloadGroupScope'
   | 'isMobile'
   | 'mobileVisibleColumnIds'
   | 'mobileVisibleColumns'
@@ -83,7 +85,9 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
               handleTagClick={props.handleTagClick}
               activeSummaryWorkloadGroupScope={props.activeSummaryWorkloadGroupScope}
               activeSummaryWorkloadId={props.activeSummaryWorkloadId}
+              focusedSummaryWorkloadGroupScope={props.focusedSummaryWorkloadGroupScope}
               focusedSummaryWorkloadGroupId={props.focusedSummaryWorkloadGroupId}
+              hoveredSummaryWorkloadGroupScope={props.hoveredSummaryWorkloadGroupScope}
               mobileVisibleColumnIds={props.mobileVisibleColumnIds}
               nodeByInstance={props.nodeByInstance}
               search={props.search}

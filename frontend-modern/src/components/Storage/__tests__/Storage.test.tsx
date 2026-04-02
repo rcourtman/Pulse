@@ -782,6 +782,61 @@ describe('Storage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('uses shared preview and pinned group-member emphasis for storage pool rows', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+    navigateSpy.mockImplementation((nextPath: string) => {
+      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
+    });
+
+    render(() => <Storage />);
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('tr[data-summary-group-id="storage:node:pve1"]'),
+      ).toBeTruthy();
+    });
+
+    const groupRow = document.querySelector(
+      'tr[data-summary-group-id="storage:node:pve1"]',
+    ) as HTMLTableRowElement | null;
+    expect(groupRow).not.toBeNull();
+    if (!groupRow) {
+      return;
+    }
+
+    fireEvent.pointerEnter(groupRow, { pointerType: 'mouse' });
+
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll('tr[data-summary-group-member-active="preview"]'),
+      ).toHaveLength(1);
+    });
+
+    fireEvent.pointerLeave(groupRow, { pointerType: 'mouse' });
+
+    await waitFor(() => {
+      expect(
+        document.querySelectorAll('tr[data-summary-group-member-active="preview"]'),
+      ).toHaveLength(0);
+    });
+
+    fireEvent.click(groupRow);
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+      expect(
+        document.querySelectorAll('tr[data-summary-group-member-active="pinned"]'),
+      ).toHaveLength(1);
+    });
+  });
+
   it('shows ceph summary card and pool expand chevron', async () => {
     hookResources = [
       buildStorageResource('storage-ceph', 'Ceph-Pool-1', 'pve1', {

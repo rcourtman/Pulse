@@ -46,6 +46,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('hoveredGroupScope={hoveredSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('focusedGroupScope={focusedSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('activeSummaryGroupScope={activeSummaryResourceGroupScope()}');
+    expect(infrastructurePageSurfaceSource).toContain('hoveredSummaryGroupScope={hoveredSummaryResourceGroupScope()}');
+    expect(infrastructurePageSurfaceSource).toContain('focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
     expect(infrastructurePageSurfaceSource).toContain('SummaryScopeBar');
