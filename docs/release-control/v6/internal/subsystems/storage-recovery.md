@@ -220,11 +220,13 @@ querying, and the operator-facing storage health presentation layer.
     rest of the product or obscure inline capacity bars. Storage pool rows,
     physical-disk rows, and storage group headers must also route pointer,
     and focus preview through
-    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`, while
-    deliberate expand/pin ownership must route through
-    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, so
-    touch users do not inherit synthetic hover branches and storage does not
-    keep a special trailing expand column once the shared leading action
+    `frontend-modern/src/components/shared/summaryInteractionA11y.ts`. Pool
+    rows and physical-disk rows may keep deliberate expand/pin ownership on
+    `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`, but
+    storage group headers should pin through the row itself and must not add a
+    separate scope/pinned pill button beside the disclosure chevron. Touch
+    users still must not inherit synthetic hover branches, and storage must
+    not keep a special trailing expand column once the shared leading action
     contract exists.
 17. Keep recovery transport refreshes inside the recovery-owned feature state.
     `frontend-modern/src/features/recovery/useRecoverySurfaceState.ts` and the

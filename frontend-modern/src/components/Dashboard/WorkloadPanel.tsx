@@ -5,7 +5,6 @@ import { NodeGroupHeader } from '@/components/shared/NodeGroupHeader';
 import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
-import { SummaryRowActionButton } from '@/components/shared/SummaryRowActionButton';
 import { buildSummaryDisclosureControlsId } from '@/components/shared/summaryInteractionA11y';
 import { TableBody, TableCell, TableRow } from '@/components/shared/Table';
 import { getAlertStyles } from '@/utils/alerts';
@@ -100,7 +99,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                   when={node()}
                   fallback={
                     <TableRow
-                      class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                      class="cursor-pointer bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
                       data-summary-group-id={groupKey()}
                       data-summary-group-series-count={String(groupSummaryScope()?.seriesIds.length ?? 0)}
                       data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
@@ -115,13 +114,6 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                           const label = props.getGroupLabel(groupKey(), fullGroupGuests());
                           return (
                             <div class="flex items-center gap-3">
-                              <SummaryRowActionButton
-                                kind="scope"
-                                subjectLabel={label.name}
-                                pressed={props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id}
-                                onAction={handleGroupFocusToggle}
-                                onPreviewClear={() => handleGroupHoverChange(null)}
-                              />
                               <span>{label.name}</span>
                               <Show when={label.type}>
                                 <span class="inline-flex items-center rounded px-2 py-0.5 text-[10px] font-medium whitespace-nowrap bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300">
@@ -139,16 +131,7 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       node={node()!}
                       renderAs="tr"
                       colspan={props.totalColumns()}
-                      leadingAction={
-                        <SummaryRowActionButton
-                          kind="scope"
-                          subjectLabel={props.getGroupLabel(groupKey(), fullGroupGuests()).name}
-                          pressed={props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id}
-                          onAction={handleGroupFocusToggle}
-                          onPreviewClear={() => handleGroupHoverChange(null)}
-                        />
-                      }
-                      trClass="transition-colors duration-150 hover:bg-surface-hover"
+                      trClass="cursor-pointer transition-colors duration-150 hover:bg-surface-hover"
                       trProps={{
                         'data-summary-group-id': groupKey(),
                         'data-summary-group-series-count': String(

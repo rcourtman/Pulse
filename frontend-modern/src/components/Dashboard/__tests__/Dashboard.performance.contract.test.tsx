@@ -872,6 +872,9 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('NodeGroupHeader');
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
+      expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
+      expect(workloadPanelSource).not.toContain('kind="scope"');
+      expect(workloadPanelSource).not.toContain('leadingAction={');
       expect(dashboardSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
       expect(dashboardSelectionStateSource).toContain('focusedSummaryWorkloadGroupScope');
       expect(dashboardSelectionStateSource).toContain('setHoveredWorkloadGroupScope');

@@ -172,7 +172,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     });
                     return (
                       <TableRow
-                        class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                        class="cursor-pointer bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
                         data-summary-group-id={groupSummaryScope()?.id ?? undefined}
                         data-summary-group-series-count={String(
                           groupSummaryScope()?.seriesIds.length ?? 0,
@@ -186,15 +186,6 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"
                         >
                           <div class="flex items-center gap-2">
-                            <SummaryRowActionButton
-                              kind="scope"
-                              subjectLabel={group.cluster || 'Standalone'}
-                              pressed={
-                                tableProps.focusedSummaryGroupId === groupSummaryScope()?.id
-                              }
-                              onAction={handleGroupFocusToggle}
-                              onPreviewClear={() => handleGroupHoverChange(null)}
-                            />
                             <Show
                               when={group.cluster}
                               fallback={<span class="text-muted">Standalone</span>}

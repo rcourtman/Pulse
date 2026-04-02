@@ -292,6 +292,8 @@ describe('UnifiedResourceTable performance contract', () => {
         expect(source).not.toContain('bg-blue-50 dark:bg-blue-900 ring-1 ring-blue-300');
         expect(source).not.toContain('bg-blue-100 dark:bg-blue-800');
       }
+
+      expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

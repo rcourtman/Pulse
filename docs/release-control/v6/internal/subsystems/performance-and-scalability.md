@@ -171,10 +171,13 @@ regression protection.
     `frontend-modern/src/components/shared/summaryInteractionA11y.ts` owns
     fine-pointer preview and focus-preview continuity, while
     `frontend-modern/src/components/shared/SummaryRowActionButton.tsx` owns
-    deliberate open/pin controls for summary-linked rows and group headers, so
-    workloads, infrastructure, and storage do not rebuild mouse-only hover
-    branches, focusable-row toggles, or touch-hostile synthetic hover behavior
-    inside individual row renderers.
+    deliberate open/pin controls for summary-linked leaf rows and explicit row
+    chrome. Group headers may pin through the header row itself when that
+    keeps the hot path visually native, but they must not reintroduce local
+    scope/pinned pill buttons that compete with the summary shell. Workloads,
+    infrastructure, and storage do not rebuild mouse-only hover branches,
+    focusable-row toggles, or touch-hostile synthetic hover behavior inside
+    individual row renderers.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
 
 ## Forbidden Paths

@@ -1051,21 +1051,15 @@ test.describe.serial("Summary hover selection", () => {
         return;
       }
 
-      const scopeButton = matchedGroupRow.getByRole("button", {
-        name: /pin summary scope for/i,
-      });
-      await scopeButton.focus();
+      await matchedGroupRow.hover();
       await expect(scopeBar).toContainText("Preview");
-      await page.keyboard.press("Escape");
+      await page.mouse.move(1, 1);
       await expect(scopeBar).toContainText("All");
 
-      await scopeButton.focus();
-      await expect(scopeBar).toContainText("Preview");
-      await page.keyboard.press("Enter");
+      await matchedGroupRow.click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBe(matchedGroupId);
-      await expect(scopeButton).toHaveAttribute("aria-pressed", "true");
       await expect(scopeBar).toContainText("Pinned");
       await expect(
         scopeBar.getByRole("button", { name: "Reset pinned scope" }),
@@ -1150,21 +1144,15 @@ test.describe.serial("Summary hover selection", () => {
       return;
     }
 
-    const scopeButton = matchedGroupRow.getByRole("button", {
-      name: /pin summary scope for/i,
-    });
-    await scopeButton.focus();
+    await matchedGroupRow.hover();
     await expect(storageScopeBar).toContainText("Preview");
-    await page.keyboard.press("Escape");
+    await page.mouse.move(1, 1);
     await expect(storageScopeBar).toContainText("All");
 
-    await scopeButton.focus();
-    await expect(storageScopeBar).toContainText("Preview");
-    await scopeButton.press("Space");
+    await matchedGroupRow.click();
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBe(matchedGroupId);
-    await expect(scopeButton).toHaveAttribute("aria-pressed", "true");
     await expect(storageScopeBar).toContainText("Pinned");
     await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
 

@@ -421,7 +421,6 @@ describe('shared primitive guardrails', () => {
     expect(summaryRowActionButtonSource).toContain('data-row-action="true"');
 
     for (const source of [
-      workloadPanelSource,
       guestRowSource,
       storageGroupRowSource,
       storagePoolRowSource,
@@ -433,6 +432,11 @@ describe('shared primitive guardrails', () => {
       expect(source).toContain('createSummaryInteractiveRowPreviewHandlers');
       expect(source).toContain('SummaryRowActionButton');
     }
+
+    expect(workloadPanelSource).toContain('createSummaryInteractiveRowPreviewHandlers');
+    expect(workloadPanelSource).not.toContain('kind="scope"');
+    expect(storageGroupRowSource).not.toContain('kind="scope"');
+    expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
 
     expect(nodeGroupHeaderSource).toContain('event.stopPropagation()');
   });

@@ -766,9 +766,7 @@ describe('Storage', () => {
       return;
     }
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Pin summary scope for pve1' }),
-    );
+    fireEvent.click(groupRow);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith(
@@ -779,10 +777,9 @@ describe('Storage', () => {
 
     expect(screen.getByTestId('storage-summary-scope')).toHaveTextContent('Pinned');
     expect(screen.getByRole('button', { name: 'Reset pinned scope' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Unpin summary scope for pve1' })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    );
+    expect(
+      screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows ceph summary card and pool expand chevron', async () => {

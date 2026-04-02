@@ -57,7 +57,7 @@ describe('StorageGroupRow', () => {
     expect(container.querySelector('.bg-slate-300')).toBeInTheDocument();
   });
 
-  it('separates summary focus from expand-collapse controls on group rows', () => {
+  it('keeps group-row scope on the row itself while disclosure stays separate', () => {
     const onToggle = vi.fn();
     const onFocusChange = vi.fn();
     const onHoverChange = vi.fn();
@@ -94,14 +94,11 @@ describe('StorageGroupRow', () => {
     fireEvent.pointerEnter(row, { pointerType: 'mouse' });
     expect(onHoverChange).toHaveBeenCalledWith(scope);
 
-    const scopeButton = screen.getByRole('button', {
-      name: 'Pin summary scope for tower',
-    });
-    fireEvent.focusIn(scopeButton);
-    expect(onHoverChange).toHaveBeenLastCalledWith(scope);
-
-    fireEvent.click(scopeButton);
-    expect(onFocusChange).toHaveBeenCalledWith(scope);
+    expect(
+      screen.queryByRole('button', {
+        name: 'Pin summary scope for tower',
+      }),
+    ).not.toBeInTheDocument();
 
     fireEvent.click(row);
     expect(onFocusChange).toHaveBeenCalledWith(scope);

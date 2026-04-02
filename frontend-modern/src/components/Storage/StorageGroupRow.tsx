@@ -63,15 +63,6 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
             onPreviewClear={() => props.onHoverChange?.(null)}
             class="inline-flex items-center justify-center"
           />
-          <SummaryRowActionButton
-            kind="scope"
-            subjectLabel={row().label}
-            pressed={props.summaryFocused}
-            onAction={() =>
-              props.onFocusChange?.(props.summaryFocused ? null : props.summaryGroupScope)
-            }
-            onPreviewClear={() => props.onHoverChange?.(null)}
-          />
 
           {/* Group label */}
           <span class={STORAGE_GROUP_ROW_LABEL_CLASS}>
