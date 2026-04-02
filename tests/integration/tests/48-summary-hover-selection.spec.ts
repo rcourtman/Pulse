@@ -17,7 +17,7 @@ type WorkerFixtures = {
 
 let mockModeWasEnabled: boolean | null = null;
 
-const test = base.extend<{}, WorkerFixtures>({
+const test = base.extend<Record<string, never>, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
   },
@@ -424,6 +424,59 @@ async function readRenderedSeriesCounts(
   );
 }
 
+async function readSummaryCardHeights(
+  summary: import("@playwright/test").Locator,
+): Promise<number[]> {
+  return summary.locator("[data-summary-card-state]").evaluateAll((nodes) =>
+    nodes.map((node) => node.getBoundingClientRect().height),
+  );
+}
+
+async function expectSummaryCardHeightsStableAcrossRowHover(
+  page: import("@playwright/test").Page,
+  summary: import("@playwright/test").Locator,
+  rows: import("@playwright/test").Locator,
+  sampleCount = 8,
+  expectedCardCount = 4,
+): Promise<void> {
+  await expect
+    .poll(async () => {
+      const heights = await readSummaryCardHeights(summary);
+      return (
+        heights.length === expectedCardCount &&
+        heights.every((height) => Number.isFinite(height) && height >= 180)
+      );
+    })
+    .toBe(true);
+
+  const baselineHeights = await readSummaryCardHeights(summary);
+  expect(baselineHeights.length).toBeGreaterThan(0);
+
+  const rowCount = await rows.count();
+  let exercisedRows = 0;
+  for (let index = 0; index < rowCount && exercisedRows < sampleCount; index += 1) {
+    const row = rows.nth(index);
+    if (!(await row.isVisible())) {
+      continue;
+    }
+    await row.hover();
+    await page.waitForTimeout(120);
+    const currentHeights = await readSummaryCardHeights(summary);
+    expect(currentHeights).toHaveLength(baselineHeights.length);
+    currentHeights.forEach((height, cardIndex) => {
+      expect(height).toBeCloseTo(baselineHeights[cardIndex], 0);
+    });
+    exercisedRows += 1;
+  }
+
+  expect(exercisedRows).toBeGreaterThan(0);
+  await page.mouse.move(1, 1);
+  const settledHeights = await readSummaryCardHeights(summary);
+  settledHeights.forEach((height, cardIndex) => {
+    expect(height).toBeCloseTo(baselineHeights[cardIndex], 0);
+  });
+}
+
 async function scrollPrimaryViewportToBottom(
   page: import("@playwright/test").Page,
 ): Promise<void> {
@@ -694,6 +747,35 @@ test.describe.serial("Summary hover selection", () => {
     await expectActiveIsolatedLineCards(storageSummary, 3);
     await expectSummarySyncedReadoutCount(storageSummary, 2);
     await expectOnlyOneSummaryHoverTooltip(page);
+  });
+
+  test("keeps summary card geometry stable while row hover changes active series", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+    const infrastructureSummary = page.getByTestId("infrastructure-summary");
+    await expect(infrastructureSummary).toBeVisible();
+    await expectSummaryCardHeightsStableAcrossRowHover(
+      page,
+      infrastructureSummary,
+      page.locator("tr[data-summary-series-id]"),
+    );
+
+    await page.goto("/workloads", { waitUntil: "domcontentloaded" });
+    const workloadsSummary = page.getByTestId("workloads-summary");
+    await expect(workloadsSummary).toBeVisible();
+    await expectSummaryCardHeightsStableAcrossRowHover(
+      page,
+      workloadsSummary,
+      page.locator("tr[data-guest-id]"),
+    );
   });
 
   test("keeps table coordination non-destructive and reversible", async ({

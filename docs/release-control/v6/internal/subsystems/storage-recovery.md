@@ -1043,6 +1043,10 @@ instead of feature-local spacing overrides. Recovery may select the shared
 default `SummaryPanel` / `SummaryMetricCard` density mode, and it should not
 reintroduce one-off padding hacks or right-side duplicate KPI blocks inside
 `RecoverySummary.tsx`.
+That same shared summary-card contract must also keep recovery on the
+auto-sized card path while chart-backed monitoring summaries use the explicit
+chart slot, so recovery cards stay compact and the shared hover geometry fix
+does not reintroduce recovery-only whitespace or summary-height drift.
 That same one-headline rule applies to the footprint and activity cards too.
 `Coverage` should lead with one dominant item-type count and route platform
 count through the shared card-header secondary label path instead of another

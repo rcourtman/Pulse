@@ -95,5 +95,6 @@ describe('RecoverySummary', () => {
   it('uses the shared default summary density rather than a recovery-only compact override', () => {
     expect(recoverySummarySource).not.toContain('density="compact"');
     expect(recoverySummarySource).not.toContain('!p-1.5 sm:!p-2');
+    expect(recoverySummarySource.match(/bodyLayout="auto"/g) ?? []).toHaveLength(4);
   });
 });

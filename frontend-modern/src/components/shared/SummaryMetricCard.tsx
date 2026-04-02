@@ -10,6 +10,8 @@ export interface SummaryMetricCardProps {
   secondaryLabel?: JSX.Element;
   /** Optional compact readout aligned to the header right edge. */
   headerValue?: JSX.Element;
+  /** Shared summary cards default to chart-backed bodies unless explicitly auto-sized. */
+  bodyLayout?: 'chart' | 'auto';
   /** Whether data has loaded at least once. Drives skeleton vs empty state. */
   loaded: boolean;
   /** Whether there is renderable data. When false, shows the fallback. */
@@ -26,7 +28,10 @@ export interface SummaryMetricCardProps {
 
 export function SummaryMetricCard(props: SummaryMetricCardProps) {
   const isCompact = () => props.density === 'compact';
+  const bodyLayout = () => props.bodyLayout ?? 'chart';
   const interactionState = () => props.interactionState ?? 'default';
+  const chartSlotClass = () =>
+    isCompact() ? 'h-[108px] sm:h-[120px]' : 'h-[136px] sm:h-[150px]';
   const interactionClass = () => {
     switch (interactionState()) {
       case 'active':
@@ -49,9 +54,9 @@ export function SummaryMetricCard(props: SummaryMetricCardProps) {
       >
         <div class="flex flex-col h-full">
           <div
-            class={`flex min-w-0 items-center gap-2 ${isCompact() ? 'mb-1' : 'mb-1.5'}`.trim()}
+            class={`flex min-w-0 items-center gap-2 ${isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'}`.trim()}
           >
-            <div class="flex min-w-0 items-center">
+            <div class="flex min-w-0 flex-1 items-center">
               <span class="text-xs font-medium text-muted uppercase tracking-wide shrink-0">
                 {props.label}
               </span>
@@ -73,7 +78,13 @@ export function SummaryMetricCard(props: SummaryMetricCardProps) {
               )
             }
           >
-            <div class="flex-1 min-h-0">{props.children}</div>
+            <div
+              class={`min-h-0 ${
+                bodyLayout() === 'chart' ? `${chartSlotClass()} shrink-0` : 'flex-1'
+              }`.trim()}
+            >
+              {props.children}
+            </div>
           </Show>
         </div>
       </Card>

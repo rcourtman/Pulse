@@ -124,6 +124,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         <SummaryMetricCard
           label="Posture"
           secondaryLabel={postureSecondaryLabel()}
+          bodyLayout="auto"
           loaded={true}
           hasData={hasRollups()}
         >
@@ -140,6 +141,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         <SummaryMetricCard
           label="Freshness"
           secondaryLabel={freshnessSecondaryLabel()}
+          bodyLayout="auto"
           loaded={true}
           hasData={hasRollups()}
         >
@@ -156,6 +158,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         <SummaryMetricCard
           label="Coverage"
           secondaryLabel={coverageSecondaryLabel()}
+          bodyLayout="auto"
           loaded={true}
           hasData={hasRollups()}
         >
@@ -172,6 +175,7 @@ export const RecoverySummary: Component<RecoverySummaryProps> = (props) => {
         <SummaryMetricCard
           label="Activity"
           secondaryLabel={activitySecondaryLabel()}
+          bodyLayout="auto"
           loaded={props.seriesLoaded()}
           hasData={activity().hasData}
           emptyMessage={props.seriesFailed?.() ? 'Trend data unavailable' : 'No recovery activity yet'}

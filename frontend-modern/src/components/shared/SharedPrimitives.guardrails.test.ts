@@ -329,6 +329,7 @@ describe('shared primitive guardrails', () => {
 
   it('keeps synchronized summary values on one shared card/readout contract', () => {
     expect(summaryMetricCardSource).toContain('headerValue?: JSX.Element');
+    expect(summaryMetricCardSource).toContain("bodyLayout?: 'chart' | 'auto'");
     expect(summaryMetricCardSource).toContain('props.headerValue');
     expect(summaryMetricCardSource).not.toContain('data-summary-sync-readout');
 
@@ -1012,6 +1013,9 @@ describe('shared primitive guardrails', () => {
 
     expect(summaryMetricCardSource).toContain("density?: 'default' | 'compact'");
     expect(summaryMetricCardSource).toContain("props.density === 'compact'");
+    expect(summaryMetricCardSource).toContain("props.bodyLayout ?? 'chart'");
+    expect(summaryMetricCardSource).toContain("isCompact() ? 'mb-1 min-h-[20px]' : 'mb-1.5 min-h-[24px]'");
+    expect(summaryMetricCardSource).toContain("isCompact() ? 'h-[108px] sm:h-[120px]' : 'h-[136px] sm:h-[150px]'");
     expect(summaryMetricCardSource).toContain('!p-1.5 sm:!p-2');
     expect(summaryMetricCardSource).not.toContain('Recovery Posture');
     expect(summaryMetricCardSource).not.toContain('Freshness');
