@@ -245,6 +245,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   const summaryFocus = useSummaryContextualFocusState({
     chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: resourceSeries,
+    hoveredGroupScope: () => props.hoveredGroupScope,
     hoveredSeriesId: () => props.hoveredResourceId,
     focusedSeriesId: () => props.focusedResourceId,
     isSeriesInteractive: (series) =>
@@ -255,17 +256,19 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   });
 
   const displaySeries = createMemo(() => {
-    return buildInfrastructureDisplaySeries(resourceSeries(), null);
+    return summaryFocus.filterSeriesForActiveScope(
+      buildInfrastructureDisplaySeries(resourceSeries(), null),
+    );
   });
 
   const focusedResourceName = createMemo(() => {
-    return summaryFocus.getActiveSeriesName(resourceSeries());
+    return summaryFocus.getActiveSeriesName(displaySeries());
   });
 
   createEffect(() => {
     const hovered = chartHoverSync();
     if (!hovered) return;
-    if (!summaryFocus.hasInteractiveSeriesId(hovered.seriesId)) {
+    if (!summaryFocus.isSeriesIdVisibleInActiveScope(hovered.seriesId)) {
       setChartHoverSync(null);
     }
   });
@@ -284,7 +287,9 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   });
 
   const emptyHistoryLabel = createMemo(() =>
-    buildInfrastructureEmptyHistoryLabel(isAwaitingFirstSample()),
+    summaryFocus.activeGroupScope()
+      ? 'No group history yet'
+      : buildInfrastructureEmptyHistoryLabel(isAwaitingFirstSample()),
   );
 
   const hasData = (metric: InfrastructureSummarySparkMetric) =>

@@ -3,6 +3,7 @@ import { getCpuPercent, getDiskPercent, getMemoryPercent } from '@/types/resourc
 import { getPreferredInfrastructureDisplayName, getPreferredResourceDisplayName } from '@/utils/resourceIdentity';
 import { normalizeSourcePlatformKey, type KnownSourcePlatform } from '@/utils/sourcePlatforms';
 import { getCanonicalStatusLabel, STATUS_SORT_ORDER } from '@/utils/status';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 
 export interface IODistributionStats {
   median: number;
@@ -23,6 +24,8 @@ export interface ResourceGroup {
   cluster: string;
   resources: Resource[];
 }
+
+const INFRASTRUCTURE_STANDALONE_SUMMARY_GROUP_ID = 'cluster:__standalone__';
 
 const isServiceInfrastructureResource = (resource: Resource) =>
   resource.type === 'pbs' || resource.type === 'pmg';
@@ -286,6 +289,46 @@ export const groupResources = (
     return a.cluster.localeCompare(b.cluster);
   });
   return entries;
+};
+
+export const buildInfrastructureSummaryGroupId = (
+  cluster: string | null | undefined,
+): string => {
+  const normalizedCluster = (cluster ?? '').trim();
+  return normalizedCluster
+    ? `cluster:${normalizedCluster}`
+    : INFRASTRUCTURE_STANDALONE_SUMMARY_GROUP_ID;
+};
+
+export const buildInfrastructureSummaryGroupScope = (
+  group: ResourceGroup,
+): SummarySeriesGroupScope | null => {
+  const seriesIds = Array.from(
+    new Set(group.resources.map((resource) => resource.id?.trim() || '').filter(Boolean)),
+  );
+  if (seriesIds.length === 0) {
+    return null;
+  }
+
+  const clusterLabel = group.cluster.trim();
+  const resourceCountLabel = `${group.resources.length} resource${group.resources.length === 1 ? '' : 's'}`;
+
+  return {
+    id: buildInfrastructureSummaryGroupId(group.cluster),
+    label: clusterLabel ? `${clusterLabel} (${resourceCountLabel})` : `Standalone (${resourceCountLabel})`,
+    seriesIds,
+  };
+};
+
+export const infrastructureHasVisibleSummaryGroupScope = (
+  resources: Resource[],
+  scope: SummarySeriesGroupScope | null | undefined,
+): boolean => {
+  if (!scope) {
+    return false;
+  }
+  const visibleResourceIds = new Set(resources.map((resource) => resource.id?.trim() || '').filter(Boolean));
+  return scope.seriesIds.some((seriesId) => visibleResourceIds.has(seriesId.trim()));
 };
 
 export const computeIOScale = (

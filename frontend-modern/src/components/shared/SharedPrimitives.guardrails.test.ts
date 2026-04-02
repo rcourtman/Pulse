@@ -312,6 +312,8 @@ describe('shared primitive guardrails', () => {
 
     expect(infrastructureSummaryStateSource).toContain('useSummaryContextualFocusState');
     expect(infrastructureSummaryStateSource).toContain('chartHoverSync');
+    expect(infrastructureSummaryStateSource).toContain('hoveredGroupScope');
+    expect(infrastructureSummaryStateSource).toContain('filterSeriesForActiveScope');
     expect(infrastructureSummaryStateSource).not.toContain(
       'const interactiveResourceIds = createMemo',
     );

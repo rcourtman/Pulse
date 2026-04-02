@@ -17,10 +17,12 @@ import { getChartSeriesColor } from '@/utils/chartSeriesPresentation';
 import type { Resource } from '@/types/resource';
 import { getDiskPercent } from '@/types/resource';
 import type { SummaryChartHoverSync } from '@/components/shared/contextualFocus';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 
 export interface InfrastructureSummaryProps {
   resources: Resource[];
   timeRange?: TimeRange;
+  hoveredGroupScope?: SummarySeriesGroupScope | null;
   hoveredResourceId?: string | null;
   focusedResourceId?: string | null;
   chartHoverSync?: SummaryChartHoverSync | null;
@@ -248,8 +250,10 @@ export function getSingleDisplayedOnlineInfrastructureResource(
   resources: Resource[],
   displaySeries: InfrastructureSummarySeries[],
 ): Resource | null {
-  if (displaySeries.length !== 1 || resources.length !== 1) return null;
-  const [resource] = resources;
+  if (displaySeries.length !== 1) return null;
+  const [displayedSeries] = displaySeries;
+  if (!displayedSeries) return null;
+  const resource = resources.find((entry) => entry.id === displayedSeries.id);
   if (!resource) return null;
   return resource.status?.toLowerCase() === 'online' ? resource : null;
 }

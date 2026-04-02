@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Resource } from '@/types/resource';
 import type { IODistributionStats } from '@/components/Infrastructure/infrastructureSelectors';
 import {
+  buildInfrastructureSummaryGroupId,
+  buildInfrastructureSummaryGroupScope,
   buildStatusOptions,
   collectAvailableSources,
   collectAvailableStatuses,
@@ -10,6 +12,7 @@ import {
   getOutlierEmphasis,
   getResourceSources,
   groupResources,
+  infrastructureHasVisibleSummaryGroupScope,
   matchesSearch,
   sortResources,
   splitPrimaryAndServiceResources,
@@ -269,6 +272,41 @@ describe('infrastructureSelectors', () => {
         { cluster: 'zeta', resources: [sortedResources[0]] },
         { cluster: '', resources: [sortedResources[2], sortedResources[3]] },
       ]);
+    });
+
+    it('builds canonical summary group scopes for cluster and standalone headers', () => {
+      const [alphaGroup, standaloneGroup] = [
+        { cluster: 'alpha', resources: [sortedResources[1]] },
+        { cluster: '', resources: [sortedResources[2], sortedResources[3]] },
+      ];
+
+      expect(buildInfrastructureSummaryGroupId('alpha')).toBe('cluster:alpha');
+      expect(buildInfrastructureSummaryGroupId('')).toBe('cluster:__standalone__');
+      expect(buildInfrastructureSummaryGroupScope(alphaGroup)).toEqual({
+        id: 'cluster:alpha',
+        label: 'alpha (1 resource)',
+        seriesIds: ['resource-2'],
+      });
+      expect(buildInfrastructureSummaryGroupScope(standaloneGroup)).toEqual({
+        id: 'cluster:__standalone__',
+        label: 'Standalone (2 resources)',
+        seriesIds: ['resource-3', 'resource-4'],
+      });
+    });
+
+    it('drops stale summary group hover once none of its resources are still visible', () => {
+      const scope = buildInfrastructureSummaryGroupScope({
+        cluster: 'alpha',
+        resources: [sortedResources[1]],
+      });
+
+      expect(infrastructureHasVisibleSummaryGroupScope(sortedResources, scope)).toBe(true);
+      expect(
+        infrastructureHasVisibleSummaryGroupScope(
+          sortedResources.filter((resource) => resource.id !== 'resource-2'),
+          scope,
+        ),
+      ).toBe(false);
     });
   });
 

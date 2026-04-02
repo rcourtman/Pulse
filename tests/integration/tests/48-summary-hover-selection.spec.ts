@@ -906,6 +906,78 @@ test.describe.serial("Summary hover selection", () => {
       .toEqual(resolvedBaselineCounts);
   });
 
+  test("treats infrastructure cluster headers as first-class summary scope", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/infrastructure", { waitUntil: "domcontentloaded" });
+    const infrastructureSummary = page.getByTestId("infrastructure-summary");
+    await expect(infrastructureSummary).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const counts = await readRenderedSeriesCounts(infrastructureSummary);
+        return counts.length === 4 && counts.every((count) => count > 1);
+      })
+      .toBe(true);
+    const resolvedBaselineCounts = await readRenderedSeriesCounts(
+      infrastructureSummary,
+    );
+
+    const baselineVisibleRows = await page.locator("tr[data-summary-series-id]").count();
+    const groupRows = page.locator("tr[data-summary-group-id]");
+    const groupRowCount = await groupRows.count();
+    expect(groupRowCount).toBeGreaterThan(0);
+
+    let matchedGroupRow: import("@playwright/test").Locator | null = null;
+    let matchedGroupSeriesCount = 0;
+    for (let index = 0; index < groupRowCount; index += 1) {
+      const row = groupRows.nth(index);
+      if (!(await row.isVisible())) {
+        continue;
+      }
+      const rawSeriesCount = await row.getAttribute("data-summary-group-series-count");
+      const seriesCount = Number.parseInt(rawSeriesCount || "0", 10);
+      if (!Number.isFinite(seriesCount) || seriesCount < 1) {
+        continue;
+      }
+      if (resolvedBaselineCounts.every((count) => count <= seriesCount)) {
+        continue;
+      }
+
+      matchedGroupRow = row;
+      matchedGroupSeriesCount = seriesCount;
+      break;
+    }
+
+    expect(matchedGroupRow).not.toBeNull();
+    expect(matchedGroupSeriesCount).toBeGreaterThan(0);
+    if (!matchedGroupRow) {
+      return;
+    }
+
+    await matchedGroupRow.hover();
+    await expect(matchedGroupRow).toHaveAttribute("data-summary-row-active", "true");
+    await expect
+      .poll(() => readRenderedSeriesCounts(infrastructureSummary))
+      .toEqual(new Array(4).fill(matchedGroupSeriesCount));
+    await expect(page.locator("tr[data-summary-series-id]")).toHaveCount(
+      baselineVisibleRows,
+    );
+
+    await page.mouse.move(1, 1);
+    await expect(matchedGroupRow).toHaveAttribute("data-summary-row-active", "false");
+    await expect
+      .poll(() => readRenderedSeriesCounts(infrastructureSummary))
+      .toEqual(resolvedBaselineCounts);
+  });
+
   test("keeps density-map detail inside the hover tooltip without extra chart chrome", async ({
     page,
   }, testInfo) => {

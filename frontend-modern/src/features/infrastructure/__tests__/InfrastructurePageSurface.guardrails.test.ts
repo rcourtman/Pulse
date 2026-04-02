@@ -43,10 +43,16 @@ describe('InfrastructurePageSurface guardrails', () => {
   it('keeps summary-to-table coordination on the page-state owner', () => {
     expect(infrastructurePageSurfaceSource).toContain('showJumpToActiveRow={shouldShowJumpToActiveResourceRow()}');
     expect(infrastructurePageSurfaceSource).toContain('onJumpToActiveRow={jumpToActiveResourceRow}');
+    expect(infrastructurePageSurfaceSource).toContain('hoveredGroupScope={activeSummaryResourceGroupScope()}');
+    expect(infrastructurePageSurfaceSource).toContain('activeSummaryGroupScope={activeSummaryResourceGroupScope()}');
+    expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
     expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
 
     expect(infrastructurePageStateSource).toContain('useSummaryPageInteractionState');
+    expect(infrastructurePageStateSource).toContain('hoveredResourceGroupScope');
+    expect(infrastructurePageStateSource).toContain('activeSummaryResourceGroupScope');
+    expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');
     expect(infrastructurePageStateSource).toContain('shouldShowJumpToActiveResourceRow');

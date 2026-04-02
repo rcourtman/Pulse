@@ -32,6 +32,7 @@ import { ResourceDetailDrawer } from './ResourceDetailDrawer';
 import { buildWorkloadsHref } from './workloadsLink';
 import { ClusterDeployBanner } from './ClusterDeployBanner';
 import { ResourceFacetSummary } from './ResourceFacetSummary';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
@@ -145,8 +146,26 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                 {(item) => {
                   if (item.type === 'header') {
                     const group = item.group;
+                    const groupSummaryScope = createMemo<SummarySeriesGroupScope | null>(() =>
+                      table.buildHostSummaryGroupScope(group),
+                    );
+                    const isSummaryGroupHighlighted = createMemo(
+                      () => tableProps.activeSummaryGroupScope?.id === groupSummaryScope()?.id,
+                    );
+                    const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
+                      tableProps.onGroupHoverChange?.(next);
+                    };
                     return (
-                      <TableRow class="bg-surface-alt">
+                      <TableRow
+                        class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
+                        data-summary-group-id={groupSummaryScope()?.id ?? undefined}
+                        data-summary-group-series-count={String(
+                          groupSummaryScope()?.seriesIds.length ?? 0,
+                        )}
+                        data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
+                        onMouseEnter={() => handleGroupHoverChange(groupSummaryScope())}
+                        onMouseLeave={() => handleGroupHoverChange(null)}
+                      >
                         <TableCell
                           colspan={9}
                           class="py-1 pr-2 pl-4 text-[12px] sm:text-sm font-semibold text-base-content"

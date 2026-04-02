@@ -7,6 +7,8 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
+import { infrastructureHasVisibleSummaryGroupScope } from '@/components/Infrastructure/infrastructureSelectors';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { useInfrastructurePageRouteState } from './useInfrastructurePageRouteState';
 import { buildInfrastructurePageFilterDerivation } from './infrastructurePageModel';
 
@@ -40,6 +42,8 @@ export function useInfrastructurePageState() {
     'grouped',
     { deserialize: (raw) => (raw === 'grouped' || raw === 'flat' ? raw : 'grouped') },
   );
+  const [hoveredResourceGroupScope, setHoveredResourceGroupScope] =
+    createSignal<SummarySeriesGroupScope | null>(null);
   const [deployCluster, setDeployCluster] = createSignal<DeployCluster | null>(null);
   const [filtersOpen, setFiltersOpen] = createSignal(false);
 
@@ -71,6 +75,7 @@ export function useInfrastructurePageState() {
   });
   const summaryInteraction = useSummaryPageInteractionState({
     hoveredSeriesId: routeState.hoveredResourceId,
+    hoveredGroupScope: hoveredResourceGroupScope,
     focusedSeriesId: routeState.expandedResourceId,
     revealActiveSeries: routeState.setRevealedResourceId,
   });
@@ -84,6 +89,25 @@ export function useInfrastructurePageState() {
   createEffect(() => {
     if (!loading() && !initialLoadComplete()) {
       setInitialLoadComplete(true);
+    }
+  });
+
+  createEffect(() => {
+    if (groupingMode() === 'grouped') {
+      return;
+    }
+    if (hoveredResourceGroupScope()) {
+      setHoveredResourceGroupScope(null);
+    }
+  });
+
+  createEffect(() => {
+    const groupScope = hoveredResourceGroupScope();
+    if (!groupScope) {
+      return;
+    }
+    if (!infrastructureHasVisibleSummaryGroupScope(filteredResources(), groupScope)) {
+      setHoveredResourceGroupScope(null);
     }
   });
 
@@ -106,6 +130,7 @@ export function useInfrastructurePageState() {
     groupingMode,
     setGroupingMode,
     activeSummaryResourceId: summaryInteraction.activeSeriesId,
+    activeSummaryResourceGroupScope: summaryInteraction.activeGroupScope,
     ...routeState,
     chartHoverSync: summaryInteraction.chartHoverSync,
     isMobile,
@@ -124,6 +149,7 @@ export function useInfrastructurePageState() {
     filteredResources,
     hasFilteredResources,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setHoveredResourceGroupScope,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,
     shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
   };

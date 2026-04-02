@@ -2,11 +2,13 @@ import { createMemo, createSignal } from 'solid-js';
 import type { Resource } from '@/types/resource';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import {
+  buildInfrastructureSummaryGroupScope,
   splitPrimaryAndServiceResources,
   sortResources,
   groupResources,
   computeIOScale,
 } from '@/components/Infrastructure/infrastructureSelectors';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { useTableWindowing } from './useTableWindowing';
 import { useUnifiedResourceTableViewportSync } from './useUnifiedResourceTableViewportSync';
 import {
@@ -34,8 +36,10 @@ export interface UnifiedResourceTableProps {
   highlightedResourceId?: string | null;
   revealedResourceId?: string | null;
   hoveredResourceId?: string | null;
+  activeSummaryGroupScope?: SummarySeriesGroupScope | null;
   onExpandedResourceChange: (id: string | null) => void;
   onHoverChange?: (id: string | null) => void;
+  onGroupHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
   groupingMode?: 'grouped' | 'flat';
   onDeployCluster?: (clusterId: string, clusterName: string) => void;
   setTableRootRef?: (element: HTMLDivElement | undefined) => void;
@@ -149,6 +153,7 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     serviceHealthColumnStyle: () => columnStyles().serviceHealthColumnStyle,
     serviceActionColumnStyle: () => columnStyles().serviceActionColumnStyle,
     toggleExpand,
+    buildHostSummaryGroupScope: buildInfrastructureSummaryGroupScope,
     getUnifiedSources,
   };
 }

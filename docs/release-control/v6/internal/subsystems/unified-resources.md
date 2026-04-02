@@ -200,18 +200,27 @@ assembly branch.
     the row may highlight in place through the shared active-resource id; if it
     is off-screen, the page must offer an explicit `Jump to row` affordance
     rather than auto-scrolling or collapsing the table on hover.
-13. Keep infrastructure row emphasis on the shared frontend presentation
+13. Keep infrastructure cluster headers as canonical summary scope. Grouped
+    headers in `frontend-modern/src/components/Infrastructure/UnifiedResourceHostTableCard.tsx`
+    must publish cluster scope from the same `ResourceGroup` / unified-resource
+    ids that power the table rows, and
+    `frontend-modern/src/features/infrastructure/useInfrastructurePageState.ts`
+    plus `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
+    must consume that scope through the shared page/group/entity interaction
+    contract rather than inventing infrastructure-local summary filters or
+    route-backed cluster hover state.
+14. Keep infrastructure row emphasis on the shared frontend presentation
     contract. Host, PBS, and PMG table sections may decide whether a resource
     is contextually active, but they must expose that state through
     `data-summary-row-active` and rely on the shared row presentation owned by
     `frontend-modern/src/index.css` instead of provider-specific background
     classes that drift across resource tables or hide inline metric bars.
-14. Keep infrastructure search aligned with the governed display label. Shared
+15. Keep infrastructure search aligned with the governed display label. Shared
     infrastructure filtering through
     `frontend-modern/src/components/Infrastructure/infrastructureSelectors.ts`
     must match the user-visible safe label for governed resources instead of
     reintroducing redacted hostnames through search-only fallback candidates.
-15. Preserve provider-backed storage backing-pool identity on canonical
+16. Preserve provider-backed storage backing-pool identity on canonical
     storage resources. `internal/unifiedresources/types.go`,
     `internal/unifiedresources/adapters.go`, `internal/unifiedresources/views.go`,
     `frontend-modern/src/types/resource.ts`, and

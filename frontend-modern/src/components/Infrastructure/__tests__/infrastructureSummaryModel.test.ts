@@ -3,6 +3,7 @@ import useInfrastructureSummaryStateSource from '../useInfrastructureSummaryStat
 
 import type { Resource } from '@/types/resource';
 import type { InfrastructureSummarySeries } from '@/components/Infrastructure/infrastructureSummaryModel';
+import { buildInfrastructureSummaryGroupScope } from '@/components/Infrastructure/infrastructureSelectors';
 import { buildDensityMapSynchronizedReadout } from '@/components/shared/densityMapModel';
 import { buildInteractiveSparklineSynchronizedReadout } from '@/components/shared/interactiveSparklineModel';
 import { resolveSummaryActiveSeriesId } from '@/components/shared/summaryCardInteraction';
@@ -129,6 +130,18 @@ describe('infrastructureSummaryModel', () => {
     ).toBe(false);
   });
 
+  it('resolves the single displayed online resource from the filtered summary series instead of full page cardinality', () => {
+    const onlineResource = makeResource({ id: 'resource-1', lastSeen: 5_000 });
+    const secondResource = makeResource({ id: 'resource-2', displayName: 'Host 2' });
+
+    expect(
+      getSingleDisplayedOnlineInfrastructureResource(
+        [onlineResource, secondResource],
+        [makeSeries('resource-1', { name: 'Host 1' })],
+      ),
+    ).toEqual(onlineResource);
+  });
+
   it('builds metric series, data checks, and empty-state copy canonically', () => {
     const series = [
       makeSeries('host-1', {
@@ -228,6 +241,26 @@ describe('infrastructureSummaryModel', () => {
     ).toBe('agent-2');
   });
 
+  it('keeps infrastructure cluster scope separate from active entity selection', () => {
+    const clusterScope = buildInfrastructureSummaryGroupScope({
+      cluster: 'cluster-a',
+      resources: [makeResource({ id: 'agent-1' }), makeResource({ id: 'agent-2' })],
+    });
+
+    expect(
+      resolveSummaryActiveSeriesId({
+        hoveredSeriesId: 'agent-3',
+        groupScope: clusterScope,
+      }),
+    ).toBeNull();
+    expect(
+      resolveSummaryActiveSeriesId({
+        hoveredSeriesId: 'agent-2',
+        groupScope: clusterScope,
+      }),
+    ).toBe('agent-2');
+  });
+
   it('builds sibling synchronized readouts from canonical infrastructure series without duplicating the source tooltip', () => {
     const displayedSeries = buildInfrastructureDisplaySeries(
       [
@@ -318,5 +351,7 @@ describe('infrastructureSummaryModel', () => {
     expect(useInfrastructureSummaryStateSource).toContain(
       'return `${INFRA_SUMMARY_IN_MEMORY_CACHE_VERSION}::${normalizeOrgScope(getOrgID())}::${range}`;',
     );
+    expect(useInfrastructureSummaryStateSource).toContain('hoveredGroupScope');
+    expect(useInfrastructureSummaryStateSource).toContain('filterSeriesForActiveScope');
   });
 });

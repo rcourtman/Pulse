@@ -43,10 +43,12 @@ export function InfrastructurePageSurface() {
     groupingMode,
     setGroupingMode,
     activeSummaryResourceId,
+    activeSummaryResourceGroupScope,
     expandedResourceId,
     setExpandedResourceId,
     chartHoverSync,
     hoveredResourceId,
+    setHoveredResourceGroupScope,
     setHoveredResourceId,
     highlightedResourceId,
     revealedResourceId,
@@ -143,6 +145,7 @@ export function InfrastructurePageSurface() {
                     resources={filteredResources()}
                     timeRange={infrastructureSummaryRange()}
                     onTimeRangeChange={setInfrastructureSummaryRange}
+                    hoveredGroupScope={activeSummaryResourceGroupScope()}
                     hoveredResourceId={hoveredResourceId()}
                     focusedResourceId={expandedResourceId()}
                     chartHoverSync={chartHoverSync()}
@@ -314,10 +317,12 @@ export function InfrastructurePageSurface() {
                 <UnifiedResourceTable
                   resources={filteredResources()}
                   expandedResourceId={expandedResourceId()}
+                  activeSummaryGroupScope={activeSummaryResourceGroupScope()}
                   hoveredResourceId={activeSummaryResourceId()}
                   highlightedResourceId={highlightedResourceId()}
                   revealedResourceId={revealedResourceId()}
                   onExpandedResourceChange={setExpandedResourceId}
+                  onGroupHoverChange={setHoveredResourceGroupScope}
                   onHoverChange={setHoveredResourceId}
                   groupingMode={groupingMode()}
                   onDeployCluster={(id, name) => setDeployCluster({ id, name })}
