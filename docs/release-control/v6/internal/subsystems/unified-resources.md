@@ -215,15 +215,10 @@ assembly branch.
     on the canonical infrastructure route through the shared `summaryGroup`
     query state, so pinned scope is shareable, reversible, and owned by the
     same route-backed summary contract as row focus. Infrastructure must stay
-    row-first here: the pinned cluster header remains the primary visible
-    state while it is on-screen, and the shared
-    `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus
-    `frontend-modern/src/components/shared/summaryScopePresentation.ts`
-    contract should appear only as the compact off-screen fallback inside the
-    existing page-controls search row or mobile trailing slot when that
-    pinned cluster scrolls away. Cluster headers themselves should stay
-    header-like: use the row as the deliberate pin target and do not add a
-    second scope/pinned pill button inside the cluster row chrome.
+    row-first here: the pinned cluster header remains the visible scoped
+    state, and clearing belongs to the governed infrastructure table surface
+    root via `data-summary-clear-surface` rather than a search-row fallback
+    widget or a second scope/pinned pill inside the cluster row chrome.
 14. Keep infrastructure row emphasis on the shared frontend presentation
     contract. Host, PBS, and PMG table sections may decide whether a resource
     is contextually active, but they must expose that state through

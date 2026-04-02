@@ -8,7 +8,6 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
-import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 import { capturePendingAppShellRestoreTop } from '@/utils/appShellScrollRestoration';
 import {
   buildInfrastructureSummaryGroupScope,
@@ -17,10 +16,8 @@ import {
 } from '@/components/Infrastructure/infrastructureSelectors';
 import {
   isSummarySeriesInGroupScope,
-  resolveSummaryScopeState,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
-import { getPreferredInfrastructureDisplayName } from '@/utils/resourceIdentity';
 import { useInfrastructurePageRouteState } from './useInfrastructurePageRouteState';
 import { buildInfrastructurePageFilterDerivation } from './infrastructurePageModel';
 
@@ -203,33 +200,6 @@ export function useInfrastructurePageState() {
     }
   });
 
-  const resourceNamesById = createMemo(() => {
-    const names = new Map<string, string>();
-    for (const resource of filteredResources()) {
-      if (!resource.id?.trim()) {
-        continue;
-      }
-      names.set(resource.id.trim(), getPreferredInfrastructureDisplayName(resource));
-    }
-    return names;
-  });
-  const pinnedSummaryScopeState = createMemo(() =>
-    resolveSummaryScopeState({
-      focusedSeriesId: routeState.expandedResourceId(),
-      focusedGroupScope: focusedResourceGroupScope(),
-    }),
-  );
-  const pinnedSummaryScopePresentation = createMemo(() =>
-    buildSummaryScopePresentation({
-      allLabel: 'All resources',
-      resolveEntityLabel: (seriesId) => resourceNamesById().get(seriesId) ?? seriesId,
-      state: pinnedSummaryScopeState(),
-    }),
-  );
-  const hasPinnedSummaryScope = createMemo(
-    () => pinnedSummaryScopeState().source === 'pinned',
-  );
-
   return {
     loading,
     error,
@@ -254,9 +224,7 @@ export function useInfrastructurePageState() {
     clearPinnedSummaryScope,
     focusedSummaryResourceGroupScope: focusedResourceGroupScope,
     focusedSummaryResourceGroupId: routeState.focusedResourceGroupId,
-    hasPinnedSummaryScope,
     hoveredSummaryResourceGroupScope: hoveredResourceGroupScope,
-    pinnedSummaryScopePresentation,
     ...routeState,
     chartHoverSync: summaryInteraction.chartHoverSync,
     isMobile,
@@ -278,7 +246,6 @@ export function useInfrastructurePageState() {
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredResourceGroupScope,
     setSummaryTableRootRef,
-    shouldShowPinnedSummaryScopeFallback: summaryInteraction.shouldShowPinnedScopeFallback,
     shouldShowJumpToActiveResourceRow: summaryInteraction.shouldShowJumpToActiveRow,
     setFocusedResourceGroupId,
   };

@@ -3,6 +3,7 @@ import infrastructurePageSurfaceSource from '@/features/infrastructure/Infrastru
 import infrastructurePageModelSource from '@/features/infrastructure/infrastructurePageModel.ts?raw';
 import infrastructurePageStateSource from '@/features/infrastructure/useInfrastructurePageState.ts?raw';
 import infrastructurePageRouteStateSource from '@/features/infrastructure/useInfrastructurePageRouteState.ts?raw';
+import unifiedResourceTableSource from '@/components/Infrastructure/UnifiedResourceTable.tsx?raw';
 import unifiedResourceTableStateSource from '@/components/Infrastructure/useUnifiedResourceTableState.ts?raw';
 import unifiedResourceTableViewportSyncSource from '@/components/Infrastructure/useUnifiedResourceTableViewportSync.ts?raw';
 
@@ -50,20 +51,15 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageSurfaceSource).toContain('focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
-    expect(infrastructurePageSurfaceSource).toContain('SummaryScopeBar');
-    expect(infrastructurePageSurfaceSource).toContain('hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback()');
-    expect(infrastructurePageSurfaceSource).toContain('scope={pinnedSummaryScopePresentation()}');
-    expect(infrastructurePageSurfaceSource).toContain('clearPinnedSummaryScope');
-    expect(infrastructurePageSurfaceSource).toContain('searchTrailing={pinnedScopeFallback()}');
-    expect(infrastructurePageSurfaceSource).toContain('mobileTrailing={pinnedScopeFallback()}');
+    expect(infrastructurePageSurfaceSource).not.toContain('SummaryScopeBar');
+    expect(infrastructurePageSurfaceSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
+    expect(infrastructurePageSurfaceSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
     expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
 
     expect(infrastructurePageStateSource).toContain('useSummaryPageInteractionState');
     expect(infrastructurePageStateSource).toContain('hoveredSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('activeSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('focusedSummaryResourceGroupScope');
-    expect(infrastructurePageStateSource).toContain('pinnedSummaryScopePresentation');
-    expect(infrastructurePageStateSource).toContain('shouldShowPinnedSummaryScopeFallback');
     expect(infrastructurePageStateSource).toContain('clearPinnedSummaryScope');
     expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
@@ -74,6 +70,8 @@ describe('InfrastructurePageSurface guardrails', () => {
     expect(infrastructurePageStateSource).not.toContain('setSkipNextFocusedReveal(true)');
     expect(infrastructurePageStateSource).not.toContain('querySelector<HTMLElement>(');
     expect(infrastructurePageStateSource).not.toContain('scrollIntoView({ behavior: \'smooth\', block: \'center\' })');
+    expect(unifiedResourceTableSource).toContain('data-summary-clear-surface');
+    expect(unifiedResourceTableSource).toContain('data-testid="infrastructure-table-surface"');
 
     expect(infrastructurePageRouteStateSource).not.toContain('useSummaryPageInteractionState');
     expect(infrastructurePageRouteStateSource).not.toContain('setSummaryTableRootRef');

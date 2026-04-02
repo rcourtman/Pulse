@@ -201,14 +201,10 @@ querying, and the operator-facing storage health presentation layer.
     disk-temperature cards demote cleanly during pool focus, instead of
     leaving stale row-local IDs or storage-local hover branches on the page.
     Any page, group, or entity scope that becomes pinned through storage
-    interaction must stay row-first and only fall back to the shared
-    `frontend-modern/src/components/shared/SummaryScopeBar.tsx` plus
-    `frontend-modern/src/components/shared/summaryScopePresentation.ts`
-    contract once the pinned row or group scrolls off-screen, with that
-    fallback embedded in the existing storage controls search row or mobile
-    trailing slot rather than a separate strip, so touch users and mouse
-    users keep the same explicit, reversible scope state without adding an
-    always-on storage-local banner.
+    interaction must stay row-first: the pinned row or group remains the
+    visible scoped state, and clearing belongs to the governed storage content
+    surface root via `data-summary-clear-surface` rather than an extra storage-
+    local strip or search-row widget.
     When that scope is a storage
     pool group, member pool rows should expose shared
     `data-summary-group-member-active="preview|pinned"` state so the grouped

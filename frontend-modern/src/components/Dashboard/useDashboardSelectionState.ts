@@ -79,6 +79,9 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
 
   const setTableWrapperRef = (element: HTMLDivElement | undefined) => {
     setTableWrapperRefSignal(element);
+  };
+
+  const setTableRootRef = (element: HTMLDivElement | undefined) => {
     summaryInteraction.setTableRootRef(element);
   };
 
@@ -230,8 +233,8 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,
+    setTableRootRef,
     setTableWrapperRef,
-    shouldShowPinnedSummaryScopeFallback: summaryInteraction.shouldShowPinnedScopeFallback,
     shouldShowJumpToActiveWorkloadRow: summaryInteraction.shouldShowJumpToActiveRow,
     tableBodyRef,
   } as const;

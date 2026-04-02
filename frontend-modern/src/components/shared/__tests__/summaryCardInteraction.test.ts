@@ -13,7 +13,6 @@ import {
   resolveSummaryScopeState,
   type SummarySeriesGroupScope,
 } from '@/components/shared/summaryCardInteraction';
-import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 
 describe('summaryCardInteraction', () => {
   beforeEach(() => {
@@ -200,57 +199,6 @@ describe('summaryCardInteraction', () => {
         focusedGroupScope,
       }),
     ).toBe('default');
-  });
-
-  it('builds consistent scope-bar presentation for page, group, and entity states', () => {
-    const groupScope: SummarySeriesGroupScope = {
-      id: 'cluster-a',
-      label: 'Cluster A (2 workloads)',
-      seriesIds: ['alpha', 'beta'],
-    };
-
-    expect(
-      buildSummaryScopePresentation({
-        allLabel: 'All workloads',
-        resolveEntityLabel: (seriesId) => ({ alpha: 'Alpha VM' })[seriesId] ?? seriesId,
-        state: resolveSummaryScopeState({}),
-      }),
-    ).toEqual({
-      contextLabel: null,
-      kind: 'page',
-      label: 'All workloads',
-      mode: 'all',
-    });
-
-    expect(
-      buildSummaryScopePresentation({
-        allLabel: 'All workloads',
-        state: resolveSummaryScopeState({
-          hoveredGroupScope: groupScope,
-        }),
-      }),
-    ).toEqual({
-      contextLabel: null,
-      kind: 'group',
-      label: 'Cluster A (2 workloads)',
-      mode: 'preview',
-    });
-
-    expect(
-      buildSummaryScopePresentation({
-        allLabel: 'All workloads',
-        resolveEntityLabel: (seriesId) => ({ alpha: 'Alpha VM' })[seriesId] ?? seriesId,
-        state: resolveSummaryScopeState({
-          focusedSeriesId: 'alpha',
-          focusedGroupScope: groupScope,
-        }),
-      }),
-    ).toEqual({
-      contextLabel: 'Cluster A (2 workloads)',
-      kind: 'entity',
-      label: 'Alpha VM',
-      mode: 'pinned',
-    });
   });
 
   it('filters contextual focus down to interactive series ids through one shared hook', () => {

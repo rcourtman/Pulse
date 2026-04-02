@@ -7,8 +7,6 @@ import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useWorkloads } from '@/hooks/useWorkloads';
 import { useKioskMode } from '@/hooks/useKioskMode';
-import { resolveSummaryScopeState } from '@/components/shared/summaryCardInteraction';
-import { buildSummaryScopePresentation } from '@/components/shared/summaryScopePresentation';
 import {
   getDashboardDisconnectedState,
   getDashboardGuestsEmptyState,
@@ -227,43 +225,14 @@ export function useDashboardState(props: DashboardProps) {
     setHoveredWorkloadId,
     setSelectedGuestId,
     setTableBodyRef,
+    setTableRootRef,
     setTableWrapperRef,
     shouldShowJumpToActiveWorkloadRow,
-    shouldShowPinnedSummaryScopeFallback,
     tableBodyRef,
   } = useDashboardSelectionState({
     filteredGuests,
     summaryGroupScopes,
   });
-
-  const workloadNamesById = createMemo(() => {
-    const names = new Map<string, string>();
-    for (const guest of filteredGuests()) {
-      const id = getCanonicalWorkloadId(guest);
-      if (!id) {
-        continue;
-      }
-      names.set(id, guest.name || id);
-    }
-    return names;
-  });
-
-  const pinnedSummaryScopeState = createMemo(() =>
-    resolveSummaryScopeState({
-      focusedSeriesId: selectedGuestId(),
-      focusedGroupScope: focusedSummaryWorkloadGroupScope(),
-    }),
-  );
-  const pinnedSummaryScopePresentation = createMemo(() =>
-    buildSummaryScopePresentation({
-      allLabel: 'All workloads',
-      resolveEntityLabel: (seriesId) => workloadNamesById().get(seriesId) ?? seriesId,
-      state: pinnedSummaryScopeState(),
-    }),
-  );
-  const hasPinnedSummaryScope = createMemo(
-    () => pinnedSummaryScopeState().source === 'pinned',
-  );
 
   const {
     bottomSpacerHeight,
@@ -365,13 +334,11 @@ export function useDashboardState(props: DashboardProps) {
     setSortKey,
     setStatusMode,
     setTableBodyRef,
+    setTableRootRef,
     setTableWrapperRef,
     setViewMode,
     setWorkloadsSummaryCollapsed,
     setWorkloadsSummaryRange,
-    pinnedSummaryScopePresentation,
-    hasPinnedSummaryScope,
-    shouldShowPinnedSummaryScopeFallback,
     shouldShowJumpToActiveWorkloadRow,
     sortDirection,
     sortKey,

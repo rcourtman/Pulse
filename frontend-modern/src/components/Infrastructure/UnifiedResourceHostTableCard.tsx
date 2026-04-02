@@ -62,7 +62,7 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
         <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
           Agent Infrastructure
         </div>
-        <div class="overflow-x-auto" data-summary-clear-surface>
+          <div class="overflow-x-auto">
           <Table
             class="whitespace-nowrap min-w-[max-content]"
             style={{

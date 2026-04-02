@@ -1000,21 +1000,20 @@ test.describe.serial("Summary hover selection", () => {
       {
         path: "/workloads",
         summaryTestId: "workloads-summary",
-        scopeBarTestId: "workloads-summary-scope",
+        clearSurfaceTestId: "workloads-table-surface",
         tableRowSelector: "tr[data-guest-id]",
       },
       {
         path: "/infrastructure",
         summaryTestId: "infrastructure-summary",
-        scopeBarTestId: "infrastructure-summary-scope",
+        clearSurfaceTestId: "infrastructure-table-surface",
         tableRowSelector: "tr[data-summary-series-id]",
       },
     ] as const) {
       await page.goto(surface.path, { waitUntil: "domcontentloaded" });
       const summary = page.getByTestId(surface.summaryTestId);
-      const scopeBar = page.getByTestId(surface.scopeBarTestId);
       await expect(summary).toBeVisible();
-      await expect(scopeBar).toHaveCount(0);
+      await expect(page.getByText("Pinned to")).toHaveCount(0);
 
       await expect
         .poll(async () => {
@@ -1059,19 +1058,19 @@ test.describe.serial("Summary hover selection", () => {
       }
 
       await matchedGroupRow.hover();
-      await expect(scopeBar).toHaveCount(0);
+      await expect(page.getByText("Pinned to")).toHaveCount(0);
       await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
         matchedGroupSeriesCount,
       );
       await page.mouse.move(1, 1);
-      await expect(scopeBar).toHaveCount(0);
+      await expect(page.getByText("Pinned to")).toHaveCount(0);
       await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
 
       await matchedGroupRow.click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBe(matchedGroupId);
-      await expect(scopeBar).toHaveCount(0);
+      await expect(page.getByText("Pinned to")).toHaveCount(0);
       await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
         matchedGroupSeriesCount,
       );
@@ -1113,19 +1112,15 @@ test.describe.serial("Summary hover selection", () => {
           }, matchedGroupId),
         )
         .toBe(true);
-      await expect(scopeBar).toHaveCount(1);
-      await expect(scopeBar).toContainText("Pinned to");
+      await expect(page.getByText("Pinned to")).toHaveCount(0);
 
-      await page
-        .locator("[data-summary-clear-surface]")
-        .first()
-        .evaluate((element) => {
-          element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-        });
+      await page.getByTestId(surface.clearSurfaceTestId).evaluate((element) => {
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBeNull();
-      await expect(scopeBar).toHaveCount(0);
+      await expect(page.getByText("Pinned to")).toHaveCount(0);
       await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
       await page.mouse.move(1, 1);
       await expect
@@ -1146,9 +1141,9 @@ test.describe.serial("Summary hover selection", () => {
 
     await page.goto("/storage?group=node", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
-    const storageScopeBar = page.getByTestId("storage-summary-scope");
+    const storageContentSurface = page.getByTestId("storage-content-surface");
     await expect(storageSummary).toBeVisible();
-    await expect(storageScopeBar).toHaveCount(0);
+    await expect(page.getByText("Pinned to")).toHaveCount(0);
 
     await expect
       .poll(async () => {
@@ -1193,19 +1188,19 @@ test.describe.serial("Summary hover selection", () => {
     }
 
     await matchedGroupRow.hover();
-    await expect(storageScopeBar).toHaveCount(0);
+    await expect(page.getByText("Pinned to")).toHaveCount(0);
     await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
       matchedGroupSeriesCount,
     );
     await page.mouse.move(1, 1);
-    await expect(storageScopeBar).toHaveCount(0);
+    await expect(page.getByText("Pinned to")).toHaveCount(0);
     await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(0);
 
     await matchedGroupRow.click();
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBe(matchedGroupId);
-    await expect(storageScopeBar).toHaveCount(0);
+    await expect(page.getByText("Pinned to")).toHaveCount(0);
     await expect(page.locator('tr[data-summary-group-member-active="preview"]')).toHaveCount(
       matchedGroupSeriesCount,
     );
@@ -1244,20 +1239,16 @@ test.describe.serial("Summary hover selection", () => {
         }, matchedGroupId),
       )
       .toBe(true);
-    await expect(storageScopeBar).toHaveCount(1);
-    await expect(storageScopeBar).toContainText("Pinned to");
+    await expect(page.getByText("Pinned to")).toHaveCount(0);
 
-    await page
-      .locator("[data-summary-clear-surface]")
-      .first()
-      .evaluate((element) => {
-        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
+    await storageContentSurface.evaluate((element) => {
+      element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
     await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
       .toBeNull();
-    await expect(storageScopeBar).toHaveCount(0);
+    await expect(page.getByText("Pinned to")).toHaveCount(0);
     await page.mouse.move(1, 1);
     await expect
       .poll(() => readRenderedSeriesCounts(storageSummary))

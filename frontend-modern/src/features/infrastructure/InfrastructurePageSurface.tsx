@@ -6,7 +6,6 @@ import { Card } from '@/components/shared/Card';
 import { FilterSegmentedControl, LabeledFilterSelect } from '@/components/shared/FilterToolbar';
 import { PageControls } from '@/components/shared/PageControls';
 import { SearchInput } from '@/components/shared/SearchInput';
-import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { UnifiedResourceTable } from '@/components/Infrastructure/UnifiedResourceTable';
 import { InfrastructureSummary } from '@/components/Infrastructure/InfrastructureSummary';
@@ -45,7 +44,6 @@ export function InfrastructurePageSurface() {
     setGroupingMode,
     activeSummaryResourceId,
     activeSummaryResourceGroupScope,
-    clearPinnedSummaryScope,
     focusedSummaryResourceGroupId,
     focusedSummaryResourceGroupScope,
     expandedResourceId,
@@ -68,9 +66,6 @@ export function InfrastructurePageSurface() {
     kioskMode,
     sourceOptions,
     statusOptions,
-    pinnedSummaryScopePresentation,
-    hasPinnedSummaryScope,
-    shouldShowPinnedSummaryScopeFallback,
     hasActiveFilters,
     clearFilters,
     filteredResources,
@@ -79,15 +74,6 @@ export function InfrastructurePageSurface() {
     setSummaryTableRootRef,
     shouldShowJumpToActiveResourceRow,
   } = useInfrastructurePageState();
-  const pinnedScopeFallback = () =>
-    hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback() ? (
-      <SummaryScopeBar
-        testId="infrastructure-summary-scope"
-        scope={pinnedSummaryScopePresentation()}
-        onReset={clearPinnedSummaryScope}
-      />
-    ) : undefined;
-
   const infrastructureEmptyState = () => getInfrastructureEmptyState();
   const infrastructureFilterEmptyState = () => getInfrastructureFilterEmptyState();
   const infrastructureLoadFailureState = () => getInfrastructureLoadFailureState();
@@ -195,8 +181,6 @@ export function InfrastructurePageSurface() {
                       onToggle: () => setFiltersOpen((o) => !o),
                       count: activeFilterCount(),
                     }}
-                    searchTrailing={pinnedScopeFallback()}
-                    mobileTrailing={pinnedScopeFallback()}
                     resetAction={{
                       show: hasActiveFilters(),
                       onClick: clearFilters,

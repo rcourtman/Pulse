@@ -720,10 +720,12 @@ describe('Dashboard performance contract', () => {
 
     it('keeps dashboard filter state in canonical dashboard filter owners', () => {
       expect(dashboardFilterSource).toContain('useDashboardFilterState');
-      expect(dashboardSource).toContain('SummaryScopeBar');
-      expect(dashboardSource).toContain('mobileTrailing={pinnedScopeFallback()}');
-      expect(dashboardSource).toContain('searchTrailing={pinnedScopeFallback()}');
-      expect(dashboardSource).not.toContain('<Show when={state.hasPinnedSummaryScope()');
+      expect(dashboardSource).not.toContain('SummaryScopeBar');
+      expect(dashboardSource).not.toContain('searchTrailing={pinnedScopeFallback()}');
+      expect(dashboardSource).not.toContain('mobileTrailing={pinnedScopeFallback()}');
+      expect(dashboardSource).toContain('setTableRootRef={state.setTableRootRef}');
+      expect(dashboardWorkloadTableSource).toContain('data-summary-clear-surface');
+      expect(dashboardWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
       expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
       expect(dashboardFilterSource).not.toContain('useBreakpoint');
       expect(dashboardFilterSource).not.toContain("props.setSortKey('name')");

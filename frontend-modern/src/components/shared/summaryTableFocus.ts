@@ -129,30 +129,6 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     return Boolean(normalizedActiveSeriesId()) && !isActiveRowVisible();
   });
 
-  const isPinnedScopeVisible = createMemo<boolean>(() => {
-    viewportVersion();
-    const focusedId = normalizeSeriesId(focusedSeriesId());
-    if (focusedId) {
-      const row = focusedRow();
-      return row ? isElementVisibleWithinViewport(row) : false;
-    }
-
-    const focusedGroup = normalizeSeriesId(focusedGroupId());
-    if (focusedGroup) {
-      const row = focusedGroupRow();
-      return row ? isElementVisibleWithinViewport(row) : false;
-    }
-
-    return false;
-  });
-
-  const shouldShowPinnedScopeFallback = createMemo<boolean>(() => {
-    return (
-      Boolean(normalizeSeriesId(focusedSeriesId()) || normalizeSeriesId(focusedGroupId())) &&
-      !isPinnedScopeVisible()
-    );
-  });
-
   createEffect(() => {
     const root = tableRoot();
     if (!root || !options.clearPinnedScope) {
@@ -329,14 +305,48 @@ export function useSummaryTableFocusBridge(options: UseSummaryTableFocusBridgeOp
     onCleanup(cleanup);
   });
 
+  createEffect(() => {
+    const focusedId = normalizeSeriesId(focusedGroupId());
+    const root = tableRoot();
+    if (!focusedId || !root || typeof window === 'undefined') {
+      return;
+    }
+
+    let rafId: number | undefined;
+    let remainingFrames = 12;
+
+    const attemptReveal = () => {
+      const row = focusedGroupRow();
+      if (!row) {
+        if (remainingFrames <= 0) {
+          return;
+        }
+        remainingFrames -= 1;
+        rafId = window.requestAnimationFrame(attemptReveal);
+        return;
+      }
+      if (
+        !isElementVisibleWithinViewport(row) &&
+        typeof (row as HTMLElement).scrollIntoView === 'function'
+      ) {
+        row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    };
+
+    rafId = window.requestAnimationFrame(attemptReveal);
+    onCleanup(() => {
+      if (rafId !== undefined) {
+        window.cancelAnimationFrame(rafId);
+      }
+    });
+  });
+
   return {
     activeRow,
     isActiveRowVisible,
-    isPinnedScopeVisible,
     jumpToActiveRow,
     setTableRootRef: (element: HTMLElement | undefined) => setTableRoot(element ?? null),
     shouldShowJumpToActiveRow,
-    shouldShowPinnedScopeFallback,
   } as const;
 }
 
@@ -402,6 +412,5 @@ export function useSummaryPageInteractionState(options: UseSummaryPageInteractio
     setChartHoverSync,
     setTableRootRef: tableFocus.setTableRootRef,
     shouldShowJumpToActiveRow: tableFocus.shouldShowJumpToActiveRow,
-    shouldShowPinnedScopeFallback: tableFocus.shouldShowPinnedScopeFallback,
   } as const;
 }

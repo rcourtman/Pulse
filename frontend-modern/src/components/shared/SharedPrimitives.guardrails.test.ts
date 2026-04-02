@@ -63,8 +63,6 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
-import summaryScopeBarSource from '@/components/shared/SummaryScopeBar.tsx?raw';
-import summaryScopePresentationSource from '@/components/shared/summaryScopePresentation.ts?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
@@ -339,24 +337,6 @@ describe('shared primitive guardrails', () => {
     expect(workloadsSummarySource).toContain('hoveredGroupScope');
     expect(workloadsSummarySource).toContain('filterSeriesForActiveScope');
     expect(workloadsSummarySource).not.toContain('const interactiveWorkloadIds = createMemo');
-  });
-
-  it('keeps scope-bar presentation on one shared primitive and model', () => {
-    expect(summaryScopePresentationSource).toContain('buildSummaryScopePresentation');
-    expect(summaryScopePresentationSource).toContain("mode: 'all'");
-    expect(summaryScopeBarSource).toContain('SummaryScopeBar');
-    expect(summaryScopeBarSource).toContain('Pinned to');
-    expect(summaryScopeBarSource).toContain('Reset pinned scope');
-    expect(summaryScopeBarSource).toContain('data-summary-scope-variant="inline"');
-    expect(summaryScopeBarSource).toContain('inline-flex min-w-0 max-w-full items-center');
-    expect(summaryScopeBarSource).not.toContain('Previewing');
-    expect(summaryScopeBarSource).not.toContain('Showing');
-    expect(summaryScopeBarSource).not.toContain('Scoped to');
-    expect(summaryScopeBarSource).not.toContain('Clear pinned scope');
-    expect(summaryScopeBarSource).not.toContain('rounded-full');
-    expect(summaryScopeBarSource).not.toContain('bg-surface-alt/60');
-    expect(summaryScopeBarSource).not.toContain('useLocation(');
-    expect(summaryScopeBarSource).not.toContain('useNavigate(');
   });
 
   it('keeps synchronized summary values on one shared card/readout contract', () => {

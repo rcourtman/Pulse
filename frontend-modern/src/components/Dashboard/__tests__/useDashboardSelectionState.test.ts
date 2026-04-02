@@ -231,6 +231,7 @@ describe('useDashboardSelectionState', () => {
     document.body.appendChild(tableWrapper);
 
     result.setTableWrapperRef(tableWrapper as HTMLDivElement);
+    result.setTableRootRef(tableWrapper as HTMLDivElement);
     result.setHoveredWorkloadId('app-container:truenas-main:nextcloud');
 
     expect(result.activeSummaryWorkloadId()).toBe('app-container:truenas-main:nextcloud');
@@ -303,6 +304,7 @@ describe('useDashboardSelectionState', () => {
     document.body.appendChild(tableWrapper);
 
     result.setTableWrapperRef(tableWrapper as HTMLDivElement);
+    result.setTableRootRef(tableWrapper as HTMLDivElement);
     result.setSelectedGuestId(workloadId);
     vi.runAllTimers();
 
@@ -408,12 +410,6 @@ describe('useDashboardSelectionState', () => {
     result.setTableWrapperRef(tableWrapper as HTMLDivElement);
 
     expect(result.focusedSummaryWorkloadGroupId()).toBe('cluster-a');
-    expect(result.shouldShowPinnedSummaryScopeFallback()).toBe(false);
-
-    top = window.innerHeight + 120;
-    window.dispatchEvent(new Event('scroll'));
-
-    expect(result.shouldShowPinnedSummaryScopeFallback()).toBe(true);
   });
 
   it('clears row focus without leaving behind an inferred agent filter', () => {

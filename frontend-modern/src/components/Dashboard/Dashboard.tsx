@@ -3,7 +3,6 @@ import { InfrastructureSelector } from '@/components/shared/InfrastructureSelect
 import { DashboardFilter } from './DashboardFilter';
 import { WorkloadsSummary } from '@/components/Workloads/WorkloadsSummary';
 import { ScrollToTopButton } from '@/components/shared/ScrollToTopButton';
-import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { DashboardStateCards } from './DashboardStateCards';
 import { DashboardStatsStrip } from './DashboardStatsStrip';
@@ -12,14 +11,6 @@ import { useDashboardState, type DashboardProps } from './useDashboardState';
 
 export function Dashboard(props: DashboardProps) {
   const state = useDashboardState(props);
-  const pinnedScopeFallback = () =>
-    state.hasPinnedSummaryScope() && state.shouldShowPinnedSummaryScopeFallback() ? (
-      <SummaryScopeBar
-        testId="workloads-summary-scope"
-        scope={state.pinnedSummaryScopePresentation()}
-        onReset={state.clearPinnedSummaryScope}
-      />
-    ) : undefined;
 
   return (
     <div class="space-y-3">
@@ -98,10 +89,8 @@ export function Dashboard(props: DashboardProps) {
           }
           containerRuntimeFilter={state.containerRuntimeFilterConfig()}
           hostFilter={state.hostFilterConfig()}
-          mobileTrailing={pinnedScopeFallback()}
           namespaceFilter={state.namespaceFilterConfig()}
           platformFilter={state.platformFilterConfig()}
-          searchTrailing={pinnedScopeFallback()}
         />
       </Show>
 
@@ -140,6 +129,7 @@ export function Dashboard(props: DashboardProps) {
           setHoveredWorkloadGroupScope={state.setHoveredWorkloadGroupScope}
           setHoveredWorkloadId={state.setHoveredWorkloadId}
           setSelectedGuestId={state.setSelectedGuestId}
+          setTableRootRef={state.setTableRootRef}
           setTableBodyRef={state.setTableBodyRef}
           setTableWrapperRef={state.setTableWrapperRef}
           sortDirection={state.sortDirection}

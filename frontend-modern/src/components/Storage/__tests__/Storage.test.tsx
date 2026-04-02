@@ -792,7 +792,6 @@ describe('Storage', () => {
       );
     });
 
-    expect(screen.queryByTestId('storage-summary-scope')).not.toBeInTheDocument();
     expect(
       screen.queryByRole('button', { name: 'Unpin summary scope for pve1' }),
     ).not.toBeInTheDocument();
@@ -816,11 +815,8 @@ describe('Storage', () => {
       ).toBeTruthy();
     });
 
-    const clearSurface = document.querySelector('[data-summary-clear-surface]') as HTMLElement | null;
+    const clearSurface = screen.getByTestId('storage-content-surface');
     expect(clearSurface).not.toBeNull();
-    if (!clearSurface) {
-      return;
-    }
 
     fireEvent.click(clearSurface);
 

@@ -4,7 +4,6 @@ import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';
 import StoragePageControls from '@/components/Storage/StoragePageControls';
 import StoragePageSummary from '@/components/Storage/StoragePageSummary';
-import { SummaryScopeBar } from '@/components/shared/SummaryScopeBar';
 import { StickySummarySection } from '@/components/shared/StickySummarySection';
 import { isStorageRecordCeph } from './storagePageState';
 import { useStoragePageModel } from './useStoragePageModel';
@@ -58,25 +57,13 @@ const Storage: Component = () => {
     jumpToActiveStorageRow,
     selectedDiskId,
     setChartHoverSync,
-    clearPinnedSummaryScope,
     setFocusedStorageGroupScope,
     setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef,
-    hasPinnedSummaryScope,
-    pinnedSummaryScopePresentation,
-    shouldShowPinnedSummaryScopeFallback,
     shouldShowJumpToActiveStorageRow,
   } = useStoragePageModel();
-  const pinnedScopeFallback = () =>
-    hasPinnedSummaryScope() && shouldShowPinnedSummaryScopeFallback() ? (
-      <SummaryScopeBar
-        testId="storage-summary-scope"
-        scope={pinnedSummaryScopePresentation()}
-        onReset={clearPinnedSummaryScope}
-      />
-    ) : undefined;
 
   return (
     <div class="space-y-4">
@@ -110,7 +97,6 @@ const Storage: Component = () => {
         setView={setView}
         search={search}
         setSearch={setSearch}
-        searchTrailing={pinnedScopeFallback()}
         groupBy={groupBy}
         setGroupBy={setGroupBy}
         sortKey={sortKey}
@@ -126,7 +112,6 @@ const Storage: Component = () => {
         selectedNodeId={selectedNodeId}
         setSelectedNodeId={setSelectedNodeId}
         storageFilterGroupBy={storageFilterGroupBy}
-        mobileTrailing={pinnedScopeFallback()}
       />
 
       <StoragePageBanners kind={activeBannerKind} reconnect={reconnect} />

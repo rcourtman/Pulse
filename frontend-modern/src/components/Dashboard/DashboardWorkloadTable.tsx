@@ -35,6 +35,7 @@ type DashboardWorkloadTableProps = Pick<
   | 'setHoveredWorkloadGroupScope'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
+  | 'setTableRootRef'
   | 'setTableBodyRef'
   | 'setTableWrapperRef'
   | 'sortDirection'
@@ -50,13 +51,19 @@ type DashboardWorkloadTableProps = Pick<
 export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
   return (
     <ComponentErrorBoundary name="Guest Table">
-      <Card padding="none" tone="card" class="mb-4 rounded-md">
+      <Card
+        ref={props.setTableRootRef}
+        padding="none"
+        tone="card"
+        class="mb-4 rounded-md"
+        data-summary-clear-surface
+        data-testid="workloads-table-surface"
+      >
         <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
           Workloads
         </div>
         <Table
           wrapperRef={props.setTableWrapperRef}
-          wrapperProps={{ 'data-summary-clear-surface': '' }}
           class="whitespace-nowrap min-w-[max-content]"
           style={{
             'table-layout': 'fixed',

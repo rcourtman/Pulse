@@ -50,7 +50,14 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
   });
 
   return (
-    <Card ref={props.setTableRootRef} padding="none" tone="card" class="overflow-hidden">
+    <Card
+      ref={props.setTableRootRef}
+      padding="none"
+      tone="card"
+      class="overflow-hidden"
+      data-summary-clear-surface
+      data-testid="storage-content-surface"
+    >
       <div class={STORAGE_CONTENT_CARD_HEADER_CLASS}>{model.heading()}</div>
       <Show when={model.showDisks()}>
         <div class={STORAGE_CONTENT_CARD_BODY_CLASS}>
