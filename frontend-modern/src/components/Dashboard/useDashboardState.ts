@@ -15,6 +15,7 @@ import {
 } from '@/utils/dashboardEmptyStatePresentation';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 import {
+  buildWorkloadSummaryGroupScopeMap,
   createWorkloadSortComparator,
   filterWorkloads,
   type FilterWorkloadsParams,
@@ -197,16 +198,28 @@ export function useDashboardState(props: DashboardProps) {
     };
     return filterWorkloads(params);
   });
+  const summaryGroupScopes = createMemo(() =>
+    buildWorkloadSummaryGroupScopeMap({
+      guests: filteredGuests(),
+      nodes: props.nodes,
+      groupingMode: groupingMode(),
+      sortComparator: guestSortComparator(),
+    }),
+  );
 
   const {
     activeSummaryWorkloadGroupScope,
     activeSummaryWorkloadId,
     chartHoverSync,
+    focusedSummaryWorkloadGroupScope,
+    focusedSummaryWorkloadGroupId,
     hoveredWorkloadId,
+    hoveredSummaryWorkloadGroupScope,
     jumpToActiveWorkloadRow,
     revealedGuestId,
     selectedGuestId,
     setChartHoverSync,
+    setFocusedWorkloadGroupScope,
     setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,
@@ -216,6 +229,7 @@ export function useDashboardState(props: DashboardProps) {
     tableBodyRef,
   } = useDashboardSelectionState({
     filteredGuests,
+    summaryGroupScopes,
   });
 
   const {
@@ -263,6 +277,8 @@ export function useDashboardState(props: DashboardProps) {
     dashboardInfrastructureEmptyState,
     dashboardLoadingState,
     filteredGuests,
+    focusedSummaryWorkloadGroupScope,
+    focusedSummaryWorkloadGroupId,
     getGroupLabel,
     groupedGuests,
     groupedWindowing,
@@ -274,6 +290,7 @@ export function useDashboardState(props: DashboardProps) {
     handleSort,
     handleTagClick,
     hostFilterConfig,
+    hoveredSummaryWorkloadGroupScope,
     hoveredWorkloadId,
     initialDataReceived,
     isMobile,
@@ -301,6 +318,7 @@ export function useDashboardState(props: DashboardProps) {
     selectedNode,
     setContainerRuntime,
     setChartHoverSync,
+    setFocusedWorkloadGroupScope,
     setGroupingMode,
     setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,

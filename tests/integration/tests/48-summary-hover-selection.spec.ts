@@ -978,6 +978,183 @@ test.describe.serial("Summary hover selection", () => {
       .toEqual(resolvedBaselineCounts);
   });
 
+  test("pins workload and infrastructure group scope into reversible route-backed focus", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    for (const surface of [
+      {
+        path: "/workloads",
+        summaryTestId: "workloads-summary",
+        tableRowSelector: "tr[data-guest-id]",
+      },
+      {
+        path: "/infrastructure",
+        summaryTestId: "infrastructure-summary",
+        tableRowSelector: "tr[data-summary-series-id]",
+      },
+    ] as const) {
+      await page.goto(surface.path, { waitUntil: "domcontentloaded" });
+      const summary = page.getByTestId(surface.summaryTestId);
+      await expect(summary).toBeVisible();
+
+      await expect
+        .poll(async () => {
+          const counts = await readRenderedSeriesCounts(summary);
+          return counts.length === 4 && counts.every((count) => count > 1);
+        })
+        .toBe(true);
+
+      const baselineCounts = await readRenderedSeriesCounts(summary);
+      const baselineVisibleRows = await page.locator(surface.tableRowSelector).count();
+      const groupRows = page.locator("tr[data-summary-group-id]");
+      const groupRowCount = await groupRows.count();
+      expect(groupRowCount).toBeGreaterThan(0);
+
+      let matchedGroupRow: import("@playwright/test").Locator | null = null;
+      let matchedGroupSeriesCount = 0;
+      let matchedGroupId = "";
+      for (let index = 0; index < groupRowCount; index += 1) {
+        const row = groupRows.nth(index);
+        if (!(await row.isVisible())) {
+          continue;
+        }
+        const rawSeriesCount = await row.getAttribute("data-summary-group-series-count");
+        const seriesCount = Number.parseInt(rawSeriesCount || "0", 10);
+        const groupId = (await row.getAttribute("data-summary-group-id")) || "";
+        if (!Number.isFinite(seriesCount) || seriesCount < 1 || !groupId) {
+          continue;
+        }
+        if (baselineCounts.every((count) => count <= seriesCount)) {
+          continue;
+        }
+        matchedGroupRow = row;
+        matchedGroupSeriesCount = seriesCount;
+        matchedGroupId = groupId;
+        break;
+      }
+
+      expect(matchedGroupRow).not.toBeNull();
+      expect(matchedGroupSeriesCount).toBeGreaterThan(0);
+      expect(matchedGroupId).not.toBe("");
+      if (!matchedGroupRow) {
+        return;
+      }
+
+      await matchedGroupRow.click();
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+        .toBe(matchedGroupId);
+      await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "true");
+      await expect
+        .poll(() => readRenderedSeriesCounts(summary))
+        .toEqual(new Array(4).fill(matchedGroupSeriesCount));
+      await expect(page.locator(surface.tableRowSelector)).toHaveCount(
+        baselineVisibleRows,
+      );
+
+      await page.mouse.move(1, 1);
+      await expect
+        .poll(() => readRenderedSeriesCounts(summary))
+        .toEqual(new Array(4).fill(matchedGroupSeriesCount));
+
+      await matchedGroupRow.click();
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+        .toBeNull();
+      await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "false");
+      await page.mouse.move(1, 1);
+      await expect
+        .poll(() => readRenderedSeriesCounts(summary))
+        .toEqual(baselineCounts);
+    }
+  });
+
+  test("pins storage pool-group scope into reversible route-backed focus without collapsing the table", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop runtime proof",
+    );
+
+    await ensureMockModeEnabled(page);
+
+    await page.goto("/storage?group=node", { waitUntil: "domcontentloaded" });
+    const storageSummary = page.getByTestId("storage-summary");
+    await expect(storageSummary).toBeVisible();
+
+    await expect
+      .poll(async () => {
+        const counts = await readRenderedSeriesCounts(storageSummary);
+        return counts.length >= 3 && counts.some((count) => count > 1);
+      })
+      .toBe(true);
+
+    const baselineCounts = await readRenderedSeriesCounts(storageSummary);
+    const baselineVisibleRows = await page.locator("tr[data-row-id]").count();
+    const groupRows = page.locator("tr[data-summary-group-id]");
+    const groupRowCount = await groupRows.count();
+    expect(groupRowCount).toBeGreaterThan(0);
+
+    let matchedGroupRow: import("@playwright/test").Locator | null = null;
+    let matchedGroupId = "";
+    for (let index = 0; index < groupRowCount; index += 1) {
+      const row = groupRows.nth(index);
+      if (!(await row.isVisible())) {
+        continue;
+      }
+      const rawSeriesCount = await row.getAttribute("data-summary-group-series-count");
+      const seriesCount = Number.parseInt(rawSeriesCount || "0", 10);
+      const groupId = (await row.getAttribute("data-summary-group-id")) || "";
+      if (!Number.isFinite(seriesCount) || seriesCount < 1 || !groupId) {
+        continue;
+      }
+      if (baselineCounts.every((count) => count <= seriesCount)) {
+        continue;
+      }
+      matchedGroupRow = row;
+      matchedGroupId = groupId;
+      break;
+    }
+
+    expect(matchedGroupRow).not.toBeNull();
+    expect(matchedGroupId).not.toBe("");
+    if (!matchedGroupRow) {
+      return;
+    }
+
+    await matchedGroupRow.click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+      .toBe(matchedGroupId);
+    await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
+
+    await expect
+      .poll(() => readRenderedSeriesCounts(storageSummary))
+      .not.toEqual(baselineCounts);
+
+    await page.mouse.move(1, 1);
+    await expect(page.locator("tr[data-row-id]")).toHaveCount(baselineVisibleRows);
+
+    await matchedGroupRow.click();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
+      .toBeNull();
+    await expect(matchedGroupRow).toHaveAttribute("aria-pressed", "false");
+    await page.mouse.move(1, 1);
+    await expect
+      .poll(() => readRenderedSeriesCounts(storageSummary))
+      .toEqual(baselineCounts);
+  });
+
   test("keeps density-map detail inside the hover tooltip without extra chart chrome", async ({
     page,
   }, testInfo) => {

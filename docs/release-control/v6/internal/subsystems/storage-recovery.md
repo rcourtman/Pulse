@@ -765,6 +765,13 @@ supporting rail, not as several equal-weight dashboard cards. The governed
 recovery summary should keep the left side focused on posture, attention, and
 freshness, while the right side carries compact coverage and recent-history
 reference detail instead of competing headline widgets.
+That recovery summary rail is intentionally not part of the interactive
+page/group/entity summary contract used by workloads, infrastructure, and
+storage. `frontend-modern/src/components/Recovery/RecoverySummary.tsx` may
+reuse shared summary-card framing, but it must remain a static posture surface:
+no synchronized chart hover, no row-driven group scope, and no implicit
+adoption of `summaryCardInteraction.ts` without a separate governed product
+decision that proves recovery actually wants that interaction model.
 That same workspace shell should stay a compact control strip rather than a
 second summary card: the protected-items versus recovery-events switcher belongs
 close to the active table surface, and it should not restate table counts that

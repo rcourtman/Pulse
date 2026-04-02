@@ -11,6 +11,7 @@ import { useDashboardSelectionState } from '../useDashboardSelectionState';
 
 let locationSearch = '?resource=cluster-a:node-1:101';
 const navigateSpy = vi.fn();
+const emptySummaryGroupScopes = () => new Map<string, SummarySeriesGroupScope>();
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => ({
@@ -46,12 +47,14 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
     expect(result.selectedGuestId()).toBe('cluster-a:node-1:101');
     expect(resolveDashboardResourceSelection(locationSearch)).toEqual({
       resourceId: 'cluster-a:node-1:101',
+      summaryGroupId: null,
     });
   });
 
@@ -69,6 +72,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -86,12 +90,14 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
     expect(result.selectedGuestId()).toBe('app-container:truenas-main:nextcloud');
     expect(resolveDashboardResourceSelection(locationSearch)).toEqual({
       resourceId: 'app-container:truenas-main:nextcloud',
+      summaryGroupId: null,
     });
   });
 
@@ -102,6 +108,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -121,6 +128,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -168,6 +176,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -224,6 +233,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -299,6 +309,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 
@@ -316,6 +327,7 @@ describe('useDashboardSelectionState', () => {
     const { result } = renderHook(() =>
       useDashboardSelectionState({
         filteredGuests,
+        summaryGroupScopes: emptySummaryGroupScopes,
       }),
     );
 

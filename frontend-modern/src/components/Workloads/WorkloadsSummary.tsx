@@ -39,6 +39,7 @@ interface WorkloadsSummaryProps {
   fallbackSnapshots?: WorkloadSummarySnapshot[];
   hoveredWorkloadId?: string | null;
   hoveredGroupScope?: SummarySeriesGroupScope | null;
+  focusedGroupScope?: SummarySeriesGroupScope | null;
   focusedWorkloadId?: string | null;
   chartHoverSync?: SummaryChartHoverSync | null;
   onTimeRangeChange?: (range: TimeRange) => void;
@@ -673,6 +674,7 @@ export const WorkloadsSummary: Component<WorkloadsSummaryProps> = (props) => {
   const summaryFocus = useSummaryContextualFocusState({
     chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: workloadSeries,
+    focusedGroupScope: () => props.focusedGroupScope,
     hoveredGroupScope: () => props.hoveredGroupScope,
     hoveredSeriesId: () => props.hoveredWorkloadId,
     focusedSeriesId: () => props.focusedWorkloadId,

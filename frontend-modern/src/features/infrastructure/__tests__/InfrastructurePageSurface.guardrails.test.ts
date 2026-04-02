@@ -43,15 +43,17 @@ describe('InfrastructurePageSurface guardrails', () => {
   it('keeps summary-to-table coordination on the page-state owner', () => {
     expect(infrastructurePageSurfaceSource).toContain('showJumpToActiveRow={shouldShowJumpToActiveResourceRow()}');
     expect(infrastructurePageSurfaceSource).toContain('onJumpToActiveRow={jumpToActiveResourceRow}');
-    expect(infrastructurePageSurfaceSource).toContain('hoveredGroupScope={activeSummaryResourceGroupScope()}');
+    expect(infrastructurePageSurfaceSource).toContain('hoveredGroupScope={hoveredSummaryResourceGroupScope()}');
+    expect(infrastructurePageSurfaceSource).toContain('focusedGroupScope={focusedSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('activeSummaryGroupScope={activeSummaryResourceGroupScope()}');
     expect(infrastructurePageSurfaceSource).toContain('onGroupHoverChange={setHoveredResourceGroupScope}');
     expect(infrastructurePageSurfaceSource).toContain('setTableRootRef={setSummaryTableRootRef}');
     expect(infrastructurePageSurfaceSource).not.toContain('useSummaryPageInteractionState');
 
     expect(infrastructurePageStateSource).toContain('useSummaryPageInteractionState');
-    expect(infrastructurePageStateSource).toContain('hoveredResourceGroupScope');
+    expect(infrastructurePageStateSource).toContain('hoveredSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('activeSummaryResourceGroupScope');
+    expect(infrastructurePageStateSource).toContain('focusedSummaryResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('setHoveredResourceGroupScope');
     expect(infrastructurePageStateSource).toContain('jumpToActiveResourceRow');
     expect(infrastructurePageStateSource).toContain('setSummaryTableRootRef');

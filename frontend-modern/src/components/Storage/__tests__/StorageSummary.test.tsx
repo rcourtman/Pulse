@@ -2,6 +2,7 @@ import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import StorageSummary from '../StorageSummary';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 
 const mockGetStorageSummaryCharts = vi.fn();
 
@@ -180,6 +181,62 @@ describe('StorageSummary', () => {
         expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
       }
       expect(diskTempCard?.getAttribute('data-interaction-state')).toBe('inactive');
+    });
+  });
+
+  it('filters pool summary cards to the hovered storage group scope', async () => {
+    const poolIds = ['pool:alpha', 'pool:beta', 'pool:gamma'];
+    const hoveredGroupScope: SummarySeriesGroupScope = {
+      id: 'storage:node:pve1',
+      label: 'pve1 (2 pools)',
+      seriesIds: poolIds.slice(0, 2),
+    };
+    mockGetStorageSummaryCharts.mockResolvedValueOnce({
+      pools: {
+        'pool:alpha': {
+          name: 'Alpha Pool',
+          usage: twoPointSeries,
+          used: twoPointSeries,
+          avail: twoPointSeries,
+        },
+        'pool:beta': {
+          name: 'Beta Pool',
+          usage: twoPointSeries,
+          used: twoPointSeries,
+          avail: twoPointSeries,
+        },
+        'pool:gamma': {
+          name: 'Gamma Pool',
+          usage: twoPointSeries,
+          used: twoPointSeries,
+          avail: twoPointSeries,
+        },
+      },
+      disks: {},
+      stats: {
+        oldestDataTimestamp: now - 60_000,
+      },
+    });
+
+    render(() => (
+      <StorageSummary
+        poolCount={3}
+        diskCount={0}
+        timeRange="1h"
+        hoveredGroupScope={hoveredGroupScope}
+        hoveredResourceId="pool:alpha"
+      />
+    ));
+
+    await waitFor(() => {
+      const sparklines = screen.getAllByTestId('sparkline');
+      expect(sparklines).toHaveLength(3);
+      for (const sparkline of sparklines) {
+        expect(sparkline.getAttribute('data-series-count')).toBe('2');
+        expect(sparkline.getAttribute('data-series-ids')).toBe('pool:alpha|pool:beta');
+        expect(sparkline.getAttribute('data-highlight-series-id')).toBe('pool:alpha');
+        expect(sparkline.getAttribute('data-interaction-state')).toBe('active');
+      }
     });
   });
 

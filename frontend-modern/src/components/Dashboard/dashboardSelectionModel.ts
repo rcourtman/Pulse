@@ -9,23 +9,26 @@ import { areSearchParamsEquivalent } from '@/utils/searchParams';
 import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 export interface DashboardResourceSelection {
-  resourceId: string;
+  resourceId: string | null;
+  summaryGroupId: string | null;
 }
 
 export interface DashboardSelectionNavigateTargetOptions {
   pathname: string;
   search: string;
   resourceId: string | null;
+  summaryGroupId: string | null;
 }
 
 export const resolveDashboardResourceSelection = (
   search: string,
 ): DashboardResourceSelection | null => {
-  const { resource: resourceId } = parseWorkloadsLinkSearch(search);
-  if (!resourceId) return null;
+  const { resource: resourceId, summaryGroup: summaryGroupId } = parseWorkloadsLinkSearch(search);
+  if (!resourceId && !summaryGroupId) return null;
 
   return {
-    resourceId,
+    resourceId: resourceId || null,
+    summaryGroupId: summaryGroupId || null,
   };
 };
 
@@ -33,14 +36,20 @@ export const resolveDashboardSelectionNavigateTarget = ({
   pathname,
   search,
   resourceId,
+  summaryGroupId,
 }: DashboardSelectionNavigateTargetOptions): string | null => {
   const currentParams = new URLSearchParams(search);
   const nextParams = new URLSearchParams(search);
   nextParams.delete(WORKLOADS_QUERY_PARAMS.resource);
+  nextParams.delete(WORKLOADS_QUERY_PARAMS.summaryGroup);
 
   const normalizedResourceId = resourceId?.trim() || '';
+  const normalizedSummaryGroupId = summaryGroupId?.trim() || '';
   if (normalizedResourceId) {
     nextParams.set(WORKLOADS_QUERY_PARAMS.resource, normalizedResourceId);
+  }
+  if (normalizedSummaryGroupId) {
+    nextParams.set(WORKLOADS_QUERY_PARAMS.summaryGroup, normalizedSummaryGroupId);
   }
 
   if (areSearchParamsEquivalent(currentParams, nextParams)) {

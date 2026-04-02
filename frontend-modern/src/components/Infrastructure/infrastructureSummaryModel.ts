@@ -23,6 +23,7 @@ export interface InfrastructureSummaryProps {
   resources: Resource[];
   timeRange?: TimeRange;
   hoveredGroupScope?: SummarySeriesGroupScope | null;
+  focusedGroupScope?: SummarySeriesGroupScope | null;
   hoveredResourceId?: string | null;
   focusedResourceId?: string | null;
   chartHoverSync?: SummaryChartHoverSync | null;

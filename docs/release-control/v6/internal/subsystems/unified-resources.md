@@ -208,7 +208,10 @@ assembly branch.
     plus `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
     must consume that scope through the shared page/group/entity interaction
     contract rather than inventing infrastructure-local summary filters or
-    route-backed cluster hover state.
+    route-backed cluster hover state. Deliberate cluster focus must also stay
+    on the canonical infrastructure route through the shared `summaryGroup`
+    query state, so pinned scope is shareable, reversible, and owned by the
+    same route-backed summary contract as row focus.
 14. Keep infrastructure row emphasis on the shared frontend presentation
     contract. Host, PBS, and PMG table sections may decide whether a resource
     is contextually active, but they must expose that state through

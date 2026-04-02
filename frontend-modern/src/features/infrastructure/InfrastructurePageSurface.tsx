@@ -44,10 +44,14 @@ export function InfrastructurePageSurface() {
     setGroupingMode,
     activeSummaryResourceId,
     activeSummaryResourceGroupScope,
+    focusedSummaryResourceGroupId,
+    focusedSummaryResourceGroupScope,
     expandedResourceId,
     setExpandedResourceId,
     chartHoverSync,
     hoveredResourceId,
+    hoveredSummaryResourceGroupScope,
+    setFocusedResourceGroupId,
     setHoveredResourceGroupScope,
     setHoveredResourceId,
     highlightedResourceId,
@@ -145,7 +149,8 @@ export function InfrastructurePageSurface() {
                     resources={filteredResources()}
                     timeRange={infrastructureSummaryRange()}
                     onTimeRangeChange={setInfrastructureSummaryRange}
-                    hoveredGroupScope={activeSummaryResourceGroupScope()}
+                    hoveredGroupScope={hoveredSummaryResourceGroupScope()}
+                    focusedGroupScope={focusedSummaryResourceGroupScope()}
                     hoveredResourceId={hoveredResourceId()}
                     focusedResourceId={expandedResourceId()}
                     chartHoverSync={chartHoverSync()}
@@ -318,10 +323,12 @@ export function InfrastructurePageSurface() {
                   resources={filteredResources()}
                   expandedResourceId={expandedResourceId()}
                   activeSummaryGroupScope={activeSummaryResourceGroupScope()}
+                  focusedSummaryGroupId={focusedSummaryResourceGroupId()}
                   hoveredResourceId={activeSummaryResourceId()}
                   highlightedResourceId={highlightedResourceId()}
                   revealedResourceId={revealedResourceId()}
                   onExpandedResourceChange={setExpandedResourceId}
+                  onGroupFocusChange={setFocusedResourceGroupId}
                   onGroupHoverChange={setHoveredResourceGroupScope}
                   onHoverChange={setHoveredResourceId}
                   groupingMode={groupingMode()}

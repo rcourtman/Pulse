@@ -155,6 +155,12 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                     const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
                       tableProps.onGroupHoverChange?.(next);
                     };
+                    const handleGroupFocusToggle = () => {
+                      const nextScope = groupSummaryScope();
+                      tableProps.onGroupFocusChange?.(
+                        nextScope && tableProps.focusedSummaryGroupId === nextScope.id ? null : nextScope?.id ?? null,
+                      );
+                    };
                     return (
                       <TableRow
                         class="bg-surface-alt transition-colors duration-150 hover:bg-surface-hover"
@@ -163,6 +169,8 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
                           groupSummaryScope()?.seriesIds.length ?? 0,
                         )}
                         data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
+                        aria-pressed={tableProps.focusedSummaryGroupId === groupSummaryScope()?.id}
+                        onClick={handleGroupFocusToggle}
                         onMouseEnter={() => handleGroupHoverChange(groupSummaryScope())}
                         onMouseLeave={() => handleGroupHoverChange(null)}
                       >

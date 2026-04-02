@@ -5,6 +5,7 @@ import {
   useSummaryContextualFocusState,
   type SummaryChartHoverSync,
 } from '@/components/shared/contextualFocus';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import { SummaryJumpToRowButton } from '@/components/shared/SummaryJumpToRowButton';
 import { SummaryPanel } from '@/components/shared/SummaryPanel';
 import { SummaryMetricCard } from '@/components/shared/SummaryMetricCard';
@@ -60,7 +61,9 @@ interface StorageSummaryProps {
   onTimeRangeChange?: (range: SummaryTimeRange) => void;
   nodeId?: string;
   hoveredResourceId?: string | null;
+  hoveredGroupScope?: SummarySeriesGroupScope | null;
   focusedResourceId?: string | null;
+  focusedGroupScope?: SummarySeriesGroupScope | null;
   chartHoverSync?: SummaryChartHoverSync | null;
   onChartHoverSyncChange?: (value: SummaryChartHoverSync | null) => void;
   showJumpToActiveRow?: boolean;
@@ -189,7 +192,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   // Series builders
   // ---------------------------------------------------------------------------
 
-  const poolUsageSeries = createMemo((): InteractiveSparklineSeries[] => {
+  const allPoolUsageSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
     if (!d?.pools) return [];
     const entries = Object.entries(d.pools);
@@ -203,7 +206,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       }));
   });
 
-  const poolUsedSeries = createMemo((): InteractiveSparklineSeries[] => {
+  const allPoolUsedSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
     if (!d?.pools) return [];
     const entries = Object.entries(d.pools);
@@ -217,7 +220,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       }));
   });
 
-  const poolAvailSeries = createMemo((): InteractiveSparklineSeries[] => {
+  const allPoolAvailSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
     if (!d?.pools) return [];
     const entries = Object.entries(d.pools);
@@ -231,7 +234,7 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       }));
   });
 
-  const diskTempSeries = createMemo((): InteractiveSparklineSeries[] => {
+  const allDiskTempSeries = createMemo((): InteractiveSparklineSeries[] => {
     const d = data();
     if (!d?.disks) return [];
     const entries = Object.entries(d.disks);
@@ -245,14 +248,16 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
       }));
   });
   const interactiveSummarySeries = createMemo<InteractiveSparklineSeries[]>(() => [
-      ...poolUsageSeries(),
-      ...poolUsedSeries(),
-      ...poolAvailSeries(),
-      ...diskTempSeries(),
+      ...allPoolUsageSeries(),
+      ...allPoolUsedSeries(),
+      ...allPoolAvailSeries(),
+      ...allDiskTempSeries(),
   ]);
   const summaryFocus = useSummaryContextualFocusState({
     chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: interactiveSummarySeries,
+    focusedGroupScope: () => props.focusedGroupScope,
+    hoveredGroupScope: () => props.hoveredGroupScope,
     hoveredSeriesId: () => props.hoveredResourceId,
     focusedSeriesId: () => props.focusedResourceId,
   });
@@ -260,17 +265,34 @@ const StorageSummary: Component<StorageSummaryProps> = (props) => {
   createEffect(() => {
     const hovered = chartHoverSync();
     if (!hovered) return;
-    if (!summaryFocus.hasInteractiveSeriesId(hovered.seriesId)) {
+    if (!summaryFocus.isSeriesIdVisibleInActiveScope(hovered.seriesId)) {
       setChartHoverSync(null);
     }
   });
+
+  const poolUsageSeries = createMemo(() =>
+    summaryFocus.filterSeriesForActiveScope(allPoolUsageSeries()),
+  );
+  const poolUsedSeries = createMemo(() =>
+    summaryFocus.filterSeriesForActiveScope(allPoolUsedSeries()),
+  );
+  const poolAvailSeries = createMemo(() =>
+    summaryFocus.filterSeriesForActiveScope(allPoolAvailSeries()),
+  );
+  const diskTempSeries = createMemo(() =>
+    summaryFocus.filterSeriesForActiveScope(allDiskTempSeries()),
+  );
 
   const hasPoolUsage = () => poolUsageSeries().length > 0;
   const hasDiskTemp = () => diskTempSeries().length > 0;
   const hasPoolUsed = () => poolUsedSeries().length > 0;
   const hasPoolAvail = () => poolAvailSeries().length > 0;
 
-  const emptyLabel = () => (fetchFailed() ? 'Trend data unavailable' : 'No history yet');
+  const emptyLabel = () => {
+    if (fetchFailed()) return 'Trend data unavailable';
+    if (summaryFocus.activeGroupScope()) return 'No group history yet';
+    return 'No history yet';
+  };
 
   const rangeLabel = () => SUMMARY_TIME_RANGE_LABEL[props.timeRange] ?? props.timeRange;
 

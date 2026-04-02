@@ -28,10 +28,12 @@ type WorkloadPanelProps = Pick<
   | 'handleTagClick'
   | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
+  | 'focusedSummaryWorkloadGroupId'
   | 'mobileVisibleColumnIds'
   | 'nodeByInstance'
   | 'search'
   | 'selectedGuestId'
+  | 'setFocusedWorkloadGroupScope'
   | 'setHoveredWorkloadGroupScope'
   | 'setHoveredWorkloadId'
   | 'setSelectedGuestId'
@@ -75,6 +77,12 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
           const handleGroupHoverChange = (next: SummarySeriesGroupScope | null) => {
             props.setHoveredWorkloadGroupScope(next);
           };
+          const handleGroupFocusToggle = () => {
+            const scope = groupSummaryScope();
+            props.setFocusedWorkloadGroupScope(
+              scope && props.focusedSummaryWorkloadGroupId() === scope.id ? null : scope,
+            );
+          };
 
           return (
             <>
@@ -87,6 +95,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                       data-summary-group-id={groupKey()}
                       data-summary-group-series-count={String(groupSummaryScope()?.seriesIds.length ?? 0)}
                       data-summary-row-active={isSummaryGroupHighlighted() ? 'true' : 'false'}
+                      aria-pressed={props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id}
+                      onClick={handleGroupFocusToggle}
                       onMouseEnter={() => handleGroupHoverChange(groupSummaryScope())}
                       onMouseLeave={() => handleGroupHoverChange(null)}
                     >
@@ -122,6 +132,8 @@ export function WorkloadPanel(props: WorkloadPanelProps) {
                         groupSummaryScope()?.seriesIds.length ?? 0,
                       ),
                       'data-summary-row-active': isSummaryGroupHighlighted() ? 'true' : 'false',
+                      'aria-pressed': props.focusedSummaryWorkloadGroupId() === groupSummaryScope()?.id,
+                      onClick: handleGroupFocusToggle,
                       onMouseEnter: () => handleGroupHoverChange(groupSummaryScope()),
                       onMouseLeave: () => handleGroupHoverChange(null),
                     }}

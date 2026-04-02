@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, untrack } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import {
   resolvePhysicalDiskMetricResourceId,
@@ -6,6 +6,13 @@ import {
 } from '@/features/storageBackups/storageMetricsIdentity';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
+import {
+  isSummarySeriesInGroupScope,
+  type SummarySeriesGroupScope,
+} from '@/components/shared/summaryCardInteraction';
+import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
+import { areSearchParamsEquivalent } from '@/utils/searchParams';
+import { parseStorageLinkSearch, STORAGE_QUERY_PARAMS } from '@/routing/resourceLinks';
 import { useStorageExpansionState } from './useStorageExpansionState';
 import { useStorageFilterState } from './useStorageFilterState';
 import { useStoragePageData } from './useStoragePageData';
@@ -14,12 +21,21 @@ import { useStoragePageResources } from './useStoragePageResources';
 import { useStoragePageStatus } from './useStoragePageStatus';
 import { useStorageResourceHighlight } from './useStorageResourceHighlight';
 import { isStorageRecordCeph } from './storagePageState';
+import { buildStorageSummaryGroupScopeMap } from './storageSummaryGroups';
 
 export const useStoragePageModel = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const routeStateNavigate = createRouteStateNavigateScheduler(
+    navigate,
+    () => `${untrack(() => location.pathname)}${untrack(() => location.search)}`,
+  );
   const kioskMode = useKioskMode();
   const [hoveredStorageRowId, setHoveredStorageResourceId] = createSignal<string | null>(null);
+  const [hoveredStorageGroupScope, setHoveredStorageGroupScope] =
+    createSignal<SummarySeriesGroupScope | null>(null);
+  const [selectedStorageGroupId, setSelectedStorageGroupIdRaw] = createSignal<string | null>(null);
+  const [handledSummaryGroupId, setHandledSummaryGroupId] = createSignal<string | null>(null);
   const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
   const {
     state,
@@ -99,7 +115,7 @@ export const useStoragePageModel = () => {
     reconnect();
   };
 
-  const { expandedGroups, expandedPoolId, setExpandedPoolId, toggleGroup } =
+  const { expandedGroups, expandedPoolId, setExpandedPoolId: setExpandedPoolIdRaw, toggleGroup } =
     useStorageExpansionState({
       groupedKeys: () => groupedRecords().map((group) => group.key),
       view,
@@ -152,10 +168,120 @@ export const useStoragePageModel = () => {
     }
     return ids;
   });
+  const storageSummaryGroupScopes = createMemo<Map<string, SummarySeriesGroupScope>>(() => {
+    if (view() !== 'pools' || groupBy() === 'none') {
+      return new Map<string, SummarySeriesGroupScope>();
+    }
+    return buildStorageSummaryGroupScopeMap(groupedRecords(), groupBy());
+  });
+  const focusedStorageGroupScope = createMemo<SummarySeriesGroupScope | null>(() => {
+    const groupId = selectedStorageGroupId();
+    if (!groupId) {
+      return null;
+    }
+    return storageSummaryGroupScopes().get(groupId) ?? null;
+  });
+
+  const scheduleStorageSummaryGroupPath = (summaryGroupId: string | null) => {
+    const currentParams = new URLSearchParams(location.search);
+    const nextParams = new URLSearchParams(location.search);
+    nextParams.delete(STORAGE_QUERY_PARAMS.summaryGroup);
+    const normalizedSummaryGroupId = summaryGroupId?.trim() || '';
+    if (normalizedSummaryGroupId) {
+      nextParams.set(STORAGE_QUERY_PARAMS.summaryGroup, normalizedSummaryGroupId);
+    }
+    if (areSearchParamsEquivalent(currentParams, nextParams)) {
+      return;
+    }
+    const nextSearch = nextParams.toString();
+    const nextPath = nextSearch ? `${location.pathname}?${nextSearch}` : location.pathname;
+    routeStateNavigate.schedule(nextPath);
+  };
+
+  const clearFocusedStorageGroup = () => {
+    setSelectedStorageGroupIdRaw(null);
+    scheduleStorageSummaryGroupPath(null);
+  };
+
+  const setExpandedPoolId = (
+    value: string | null | ((current: string | null) => string | null),
+  ) => {
+    const nextValue = typeof value === 'function' ? value(expandedPoolId()) : value;
+    const focusedScope = focusedStorageGroupScope();
+    const nextResourceId =
+      nextValue && storageRecordMetricIds().get(nextValue) ? storageRecordMetricIds().get(nextValue)! : null;
+    if (focusedScope && nextResourceId && !isSummarySeriesInGroupScope(focusedScope, nextResourceId)) {
+      clearFocusedStorageGroup();
+    }
+    setExpandedPoolIdRaw(nextValue);
+  };
+
+  const setFocusedStorageGroupScope = (scope: SummarySeriesGroupScope | null) => {
+    const nextGroupId = scope?.id ?? null;
+    setSelectedStorageGroupIdRaw(nextGroupId);
+    if (scope && !isSummarySeriesInGroupScope(scope, focusedStorageResourceId())) {
+      setExpandedPoolIdRaw(null);
+    }
+    scheduleStorageSummaryGroupPath(nextGroupId);
+  };
 
   createEffect(() => {
     view();
     setHoveredStorageResourceId(null);
+    if (view() !== 'pools') {
+      setHoveredStorageGroupScope(null);
+      if (selectedStorageGroupId()) {
+        setFocusedStorageGroupScope(null);
+      }
+    }
+  });
+
+  createEffect(() => {
+    const { summaryGroup } = parseStorageLinkSearch(location.search);
+    if (!summaryGroup) {
+      if (handledSummaryGroupId() === null) {
+        return;
+      }
+      setSelectedStorageGroupIdRaw(null);
+      setHandledSummaryGroupId(null);
+      return;
+    }
+    if (summaryGroup === handledSummaryGroupId()) {
+      return;
+    }
+    setSelectedStorageGroupIdRaw(summaryGroup);
+    setHandledSummaryGroupId(summaryGroup);
+  });
+
+  createEffect(() => {
+    const hoveredGroup = hoveredStorageGroupScope();
+    if (!hoveredGroup) {
+      return;
+    }
+    if (!storageSummaryGroupScopes().has(hoveredGroup.id)) {
+      setHoveredStorageGroupScope(null);
+    }
+  });
+
+  createEffect(() => {
+    const selectedGroupId = selectedStorageGroupId();
+    if (!selectedGroupId) {
+      return;
+    }
+    if (!focusedStorageGroupScope()) {
+      setFocusedStorageGroupScope(null);
+    }
+  });
+
+  createEffect(() => {
+    const focusedScope = focusedStorageGroupScope();
+    const focusedResourceId = focusedStorageResourceId();
+    if (!focusedScope || !focusedResourceId) {
+      return;
+    }
+    if (!isSummarySeriesInGroupScope(focusedScope, focusedResourceId)) {
+      clearFocusedStorageGroup();
+    }
   });
 
   const {
@@ -195,7 +321,9 @@ export const useStoragePageModel = () => {
     setExpandedPoolId,
   });
   const summaryInteraction = useSummaryPageInteractionState({
+    hoveredGroupScope: hoveredStorageGroupScope,
     hoveredSeriesId: hoveredStorageResourceId,
+    focusedGroupScope: focusedStorageGroupScope,
     focusedSeriesId: focusedStorageResourceId,
     revealActiveSeries: (seriesId) => {
       if (physicalDiskSeriesIds().has(seriesId)) {
@@ -218,7 +346,12 @@ export const useStoragePageModel = () => {
     },
   });
 
+  onCleanup(() => {
+    routeStateNavigate.cleanup();
+  });
+
   return {
+    activeSummaryStorageGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryStorageResourceId: summaryInteraction.activeSeriesId,
     kioskMode,
     reconnect: reconnectSurface,
@@ -262,8 +395,13 @@ export const useStoragePageModel = () => {
     hoveredStorageResourceId,
     isLoadingPools,
     jumpToActiveStorageRow: summaryInteraction.jumpToActiveRow,
+    focusedSummaryStorageGroupScope: focusedStorageGroupScope,
+    focusedSummaryStorageGroupId: selectedStorageGroupId,
+    hoveredSummaryStorageGroupScope: hoveredStorageGroupScope,
     selectedDiskId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setFocusedStorageGroupScope,
+    setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,

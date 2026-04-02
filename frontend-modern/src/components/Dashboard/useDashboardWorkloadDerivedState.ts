@@ -8,6 +8,7 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 
 import {
   getDiskUsagePercent,
+  getWorkloadGroupLabel,
   getWorkloadGroupKey,
   groupWorkloads,
   computeWorkloadStats,
@@ -101,22 +102,7 @@ export function useDashboardWorkloadDerivedState(
     guests: WorkloadGuest[],
   ): { type: string; name: string } => {
     const node = nodeByInstance()[groupKey];
-    if (node) return { type: '', name: getNodeDisplayName(node) };
-    const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
-    const [prefix, ...rest] = normalizedGroupKey.split(':');
-    const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
-    if (prefix === 'app-container') return { type: 'App Containers', name: context };
-    if (prefix === 'pod') return { type: 'Pods', name: context };
-    if (prefix === 'vm') return { type: 'VM', name: context };
-    if (prefix === 'system-container') return { type: 'Container', name: context };
-    const first = guests[0];
-    if (first) {
-      const cluster = (first.clusterName || '').trim();
-      const nodeName = (first.node || '').trim();
-      if (nodeName && cluster) return { type: cluster, name: nodeName };
-      if (nodeName) return { type: '', name: nodeName };
-    }
-    return { type: '', name: context };
+    return getWorkloadGroupLabel(groupKey, guests, node ? getNodeDisplayName(node) : null);
   };
 
   const groupedGuests = createMemo(() =>

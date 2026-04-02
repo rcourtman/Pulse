@@ -1,5 +1,5 @@
 import { useLocation, useNavigate } from '@solidjs/router';
-import { createEffect, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
+import { createEffect, createMemo, createSignal, onCleanup, untrack, type Accessor } from 'solid-js';
 
 import {
   findInlineDetailElement,
@@ -7,7 +7,10 @@ import {
   revealInlineDetailInViewport,
 } from '@/components/shared/contextualFocus';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import {
+  isSummarySeriesInGroupScope,
+  type SummarySeriesGroupScope,
+} from '@/components/shared/summaryCardInteraction';
 import type { WorkloadGuest } from '@/types/workloads';
 import { createRouteStateNavigateScheduler } from '@/utils/routeStateNavigation';
 import {
@@ -19,6 +22,7 @@ import {
 
 interface UseDashboardSelectionStateOptions {
   filteredGuests: Accessor<WorkloadGuest[]>;
+  summaryGroupScopes: Accessor<Map<string, SummarySeriesGroupScope>>;
 }
 
 export function useDashboardSelectionState(options: UseDashboardSelectionStateOptions) {
@@ -30,20 +34,31 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   );
 
   const [selectedGuestId, setSelectedGuestIdRaw] = createSignal<string | null>(null);
+  const [selectedWorkloadGroupId, setSelectedWorkloadGroupIdRaw] = createSignal<string | null>(null);
   const [hoveredWorkloadId, setHoveredWorkloadId] = createSignal<string | null>(null);
   const [hoveredWorkloadGroupScope, setHoveredWorkloadGroupScope] =
     createSignal<SummarySeriesGroupScope | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  const [handledWorkloadGroupId, setHandledWorkloadGroupId] = createSignal<string | null>(null);
   const [revealedGuestId, setRevealedGuestId] = createSignal<string | null>(null);
 
   const [tableWrapperRef, setTableWrapperRefSignal] = createSignal<HTMLDivElement | undefined>(
     undefined,
   );
   const [tableBodyRef, setTableBodyRef] = createSignal<HTMLTableSectionElement | null>(null);
+  const focusedWorkloadGroupScope = createMemo<SummarySeriesGroupScope | null>(() => {
+    const selectedGroupId = selectedWorkloadGroupId();
+    if (!selectedGroupId) {
+      return null;
+    }
+    return options.summaryGroupScopes().get(selectedGroupId) ?? null;
+  });
+
   const summaryInteraction = useSummaryPageInteractionState({
     hoveredSeriesId: hoveredWorkloadId,
     hoveredGroupScope: hoveredWorkloadGroupScope,
     focusedSeriesId: selectedGuestId,
+    focusedGroupScope: focusedWorkloadGroupScope,
     revealActiveSeries: setRevealedGuestId,
   });
 
@@ -59,11 +74,45 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
   };
 
   const setSelectedGuestId = (id: string | null) => {
-    setSelectedGuestIdState(id);
+    const activeFocusedGroupScope = focusedWorkloadGroupScope();
+    const nextGroupScope =
+      activeFocusedGroupScope && !isSummarySeriesInGroupScope(activeFocusedGroupScope, id)
+        ? null
+        : activeFocusedGroupScope;
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
+      setSelectedGuestIdRaw(id);
+      setSelectedWorkloadGroupIdRaw(nextGroupScope?.id ?? null);
+    });
     const nextPath = resolveDashboardSelectionNavigateTarget({
       pathname: location.pathname,
       search: location.search,
       resourceId: id,
+      summaryGroupId: nextGroupScope?.id ?? null,
+    });
+    if (nextPath) {
+      routeStateNavigate.schedule(nextPath);
+    }
+  };
+
+  const setFocusedWorkloadGroupScopeState = (scope: SummarySeriesGroupScope | null) => {
+    preserveScrollableAncestorVerticalOffset(tableWrapperRef(), () => {
+      setSelectedWorkloadGroupIdRaw(scope?.id ?? null);
+      if (scope && !isSummarySeriesInGroupScope(scope, selectedGuestId())) {
+        setSelectedGuestIdRaw(null);
+      }
+    });
+  };
+
+  const setFocusedWorkloadGroupScope = (scope: SummarySeriesGroupScope | null) => {
+    const nextGroupId = scope?.id ?? null;
+    const nextSelectedGuestId =
+      scope && !isSummarySeriesInGroupScope(scope, selectedGuestId()) ? null : selectedGuestId();
+    setFocusedWorkloadGroupScopeState(scope);
+    const nextPath = resolveDashboardSelectionNavigateTarget({
+      pathname: location.pathname,
+      search: location.search,
+      resourceId: nextSelectedGuestId,
+      summaryGroupId: nextGroupId,
     });
     if (nextPath) {
       routeStateNavigate.schedule(nextPath);
@@ -77,14 +126,22 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
         setSelectedGuestIdState(null);
         setHandledResourceId(null);
       }
+      if (handledWorkloadGroupId() !== null) {
+        setSelectedWorkloadGroupIdRaw(null);
+        setHandledWorkloadGroupId(null);
+      }
       return;
     }
 
-    const { resourceId } = selection;
-    if (resourceId === handledResourceId()) return;
-
-    setSelectedGuestIdState(resourceId);
-    setHandledResourceId(resourceId);
+    const { resourceId, summaryGroupId } = selection;
+    if (summaryGroupId !== handledWorkloadGroupId()) {
+      setSelectedWorkloadGroupIdRaw(summaryGroupId);
+      setHandledWorkloadGroupId(summaryGroupId);
+    }
+    if (resourceId !== handledResourceId()) {
+      setSelectedGuestIdState(resourceId);
+      setHandledResourceId(resourceId);
+    }
   });
 
   createEffect(() => {
@@ -110,6 +167,27 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     }
     if (!dashboardHasVisibleWorkloadGroupScope(options.filteredGuests(), groupScope)) {
       setHoveredWorkloadGroupScope(null);
+    }
+  });
+
+  createEffect(() => {
+    const selectedGroupId = selectedWorkloadGroupId();
+    if (!selectedGroupId) {
+      return;
+    }
+    if (!focusedWorkloadGroupScope()) {
+      setFocusedWorkloadGroupScope(null);
+    }
+  });
+
+  createEffect(() => {
+    const selectedId = selectedGuestId();
+    const groupScope = focusedWorkloadGroupScope();
+    if (!selectedId || !groupScope) {
+      return;
+    }
+    if (!isSummarySeriesInGroupScope(groupScope, selectedId)) {
+      setSelectedGuestId(null);
     }
   });
 
@@ -167,11 +245,15 @@ export function useDashboardSelectionState(options: UseDashboardSelectionStateOp
     activeSummaryWorkloadGroupScope: summaryInteraction.activeGroupScope,
     activeSummaryWorkloadId: summaryInteraction.activeSeriesId,
     chartHoverSync: summaryInteraction.chartHoverSync,
+    focusedSummaryWorkloadGroupScope: focusedWorkloadGroupScope,
     hoveredWorkloadId,
+    hoveredSummaryWorkloadGroupScope: hoveredWorkloadGroupScope,
     jumpToActiveWorkloadRow: summaryInteraction.jumpToActiveRow,
+    focusedSummaryWorkloadGroupId: selectedWorkloadGroupId,
     revealedGuestId,
     selectedGuestId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
+    setFocusedWorkloadGroupScope,
     setHoveredWorkloadGroupScope,
     setHoveredWorkloadId,
     setSelectedGuestId,

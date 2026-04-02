@@ -18,6 +18,8 @@ import { StorageGroupRow } from './StorageGroupRow';
 import { StoragePoolRow } from './StoragePoolRow';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
 import { useStoragePoolsTableModel } from './useStoragePoolsTableModel';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import { buildStorageSummaryGroupScope } from './storageSummaryGroups';
 
 type StoragePoolsTableProps = {
   groupedRecords: StorageGroupedRecords[];
@@ -31,6 +33,10 @@ type StoragePoolsTableProps = {
   highlightedRecordId: string | null;
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoading: boolean;
+  activeSummaryGroupScope?: SummarySeriesGroupScope | null;
+  focusedSummaryGroupId?: string | null;
+  onGroupFocusChange?: (scope: SummarySeriesGroupScope | null) => void;
+  onGroupHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
   highlightedSummarySeriesId?: string | null;
   onHoverChange?: (recordId: string | null) => void;
 };
@@ -71,12 +77,22 @@ export const StoragePoolsTable: Component<StoragePoolsTableProps> = (props) => {
                   {(group) => (
                     <>
                       <Show when={group.showHeader}>
+                        {(() => {
+                          const groupSummaryScope = buildStorageSummaryGroupScope(group, props.groupBy);
+                          return (
                         <StorageGroupRow
                           group={group}
                           groupBy={props.groupBy}
                           expanded={group.expanded}
                           onToggle={() => props.toggleGroup(group.key)}
+                          summaryGroupScope={groupSummaryScope}
+                          summaryActive={props.activeSummaryGroupScope?.id === groupSummaryScope?.id}
+                          summaryFocused={props.focusedSummaryGroupId === groupSummaryScope?.id}
+                          onFocusChange={props.onGroupFocusChange}
+                          onHoverChange={props.onGroupHoverChange}
                         />
+                          );
+                        })()}
                       </Show>
                       <Show when={group.expanded}>
                         <Index each={group.items}>

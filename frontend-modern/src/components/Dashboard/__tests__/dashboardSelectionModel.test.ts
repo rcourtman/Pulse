@@ -12,6 +12,7 @@ describe('dashboardSelectionModel', () => {
   it('resolves dashboard resource deep links into focused guest ids without inventing filters', () => {
     expect(resolveDashboardResourceSelection('?resource=cluster-a:node-1:101')).toEqual({
       resourceId: 'cluster-a:node-1:101',
+      summaryGroupId: null,
     });
     expect(
       resolveDashboardResourceSelection(
@@ -19,14 +20,17 @@ describe('dashboardSelectionModel', () => {
       ),
     ).toEqual({
       resourceId: 'app-container:truenas-main:nextcloud',
+      summaryGroupId: null,
     });
     expect(
       resolveDashboardResourceSelection('?resource=app-container:docker-main:container-123'),
     ).toEqual({
       resourceId: 'app-container:docker-main:container-123',
+      summaryGroupId: null,
     });
     expect(resolveDashboardResourceSelection('?resource=guest-1')).toEqual({
       resourceId: 'guest-1',
+      summaryGroupId: null,
     });
     expect(resolveDashboardResourceSelection('')).toBeNull();
   });
@@ -53,6 +57,7 @@ describe('dashboardSelectionModel', () => {
         pathname: '/workloads',
         search: '?type=app-container&platform=truenas&agent=truenas-main',
         resourceId: 'app-container:truenas-main:nextcloud',
+        summaryGroupId: null,
       }),
     ).toBe(
       '/workloads?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
@@ -64,6 +69,7 @@ describe('dashboardSelectionModel', () => {
         search:
           '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
         resourceId: null,
+        summaryGroupId: null,
       }),
     ).toBe('/workloads?type=app-container&platform=truenas&agent=truenas-main');
 
@@ -73,6 +79,28 @@ describe('dashboardSelectionModel', () => {
         search:
           '?type=app-container&platform=truenas&agent=truenas-main&resource=app-container%3Atruenas-main%3Anextcloud',
         resourceId: 'app-container:truenas-main:nextcloud',
+        summaryGroupId: null,
+      }),
+    ).toBeNull();
+
+    expect(
+      resolveDashboardSelectionNavigateTarget({
+        pathname: '/workloads',
+        search: '?type=app-container&platform=truenas&agent=truenas-main',
+        resourceId: null,
+        summaryGroupId: 'docker-host:truenas-main',
+      }),
+    ).toBe(
+      '/workloads?type=app-container&platform=truenas&agent=truenas-main&summaryGroup=docker-host%3Atruenas-main',
+    );
+
+    expect(
+      resolveDashboardSelectionNavigateTarget({
+        pathname: '/workloads',
+        search:
+          '?type=app-container&platform=truenas&agent=truenas-main&summaryGroup=docker-host%3Atruenas-main',
+        resourceId: null,
+        summaryGroupId: 'docker-host:truenas-main',
       }),
     ).toBeNull();
   });

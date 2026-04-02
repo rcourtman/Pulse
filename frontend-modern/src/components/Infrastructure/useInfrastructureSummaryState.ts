@@ -245,6 +245,7 @@ export function useInfrastructureSummaryState(props: InfrastructureSummaryProps)
   const summaryFocus = useSummaryContextualFocusState({
     chartHoveredSeriesId: () => chartHoverSync()?.seriesId ?? null,
     interactiveSeries: resourceSeries,
+    focusedGroupScope: () => props.focusedGroupScope,
     hoveredGroupScope: () => props.hoveredGroupScope,
     hoveredSeriesId: () => props.hoveredResourceId,
     focusedSeriesId: () => props.focusedResourceId,

@@ -1,6 +1,7 @@
 import { Component } from 'solid-js';
 import StorageSummary from '@/components/Storage/StorageSummary';
 import type { Resource } from '@/types/resource';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import type { StoragePageNodeOption } from './storagePageState';
 import { useStoragePageSummary } from './useStoragePageSummary';
 import type { SummaryChartHoverSync } from '@/components/shared/contextualFocus';
@@ -11,7 +12,9 @@ type StoragePageSummaryProps = {
   nodeOptions: () => StoragePageNodeOption[];
   physicalDisks: () => Resource[];
   hoveredResourceId: () => string | null;
+  hoveredGroupScope: () => SummarySeriesGroupScope | null;
   focusedResourceId: () => string | null;
+  focusedGroupScope: () => SummarySeriesGroupScope | null;
   chartHoverSync: () => SummaryChartHoverSync | null;
   onChartHoverSyncChange: (value: SummaryChartHoverSync | null) => void;
   showJumpToActiveRow: () => boolean;
@@ -34,7 +37,9 @@ export const StoragePageSummary: Component<StoragePageSummaryProps> = (props) =>
       onTimeRangeChange={setSummaryTimeRange}
       nodeId={props.selectedNodeId()}
       hoveredResourceId={props.hoveredResourceId()}
+      hoveredGroupScope={props.hoveredGroupScope()}
       focusedResourceId={props.focusedResourceId()}
+      focusedGroupScope={props.focusedGroupScope()}
       chartHoverSync={props.chartHoverSync()}
       onChartHoverSyncChange={props.onChartHoverSyncChange}
       showJumpToActiveRow={props.showJumpToActiveRow()}

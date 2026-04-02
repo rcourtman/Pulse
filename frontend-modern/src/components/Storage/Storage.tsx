@@ -34,7 +34,11 @@ const Storage: Component = () => {
     activeBannerKind,
     cephSummaryStats,
     filteredRecords,
+    activeSummaryStorageGroupScope,
     activeSummaryStorageResourceId,
+    focusedSummaryStorageGroupScope,
+    focusedSummaryStorageGroupId,
+    hoveredSummaryStorageGroupScope,
     nodeOptions,
     physicalDisks,
     nodes,
@@ -53,6 +57,8 @@ const Storage: Component = () => {
     jumpToActiveStorageRow,
     selectedDiskId,
     setChartHoverSync,
+    setFocusedStorageGroupScope,
+    setHoveredStorageGroupScope,
     setHoveredStorageResourceId,
     setSelectedDiskId,
     setSummaryTableRootRef,
@@ -68,7 +74,9 @@ const Storage: Component = () => {
           nodeOptions={nodeOptions}
           physicalDisks={physicalDisks}
           hoveredResourceId={hoveredStorageResourceId}
+          hoveredGroupScope={hoveredSummaryStorageGroupScope}
           focusedResourceId={focusedStorageResourceId}
+          focusedGroupScope={focusedSummaryStorageGroupScope}
           chartHoverSync={chartHoverSync}
           onChartHoverSyncChange={setChartHoverSync}
           showJumpToActiveRow={shouldShowJumpToActiveStorageRow}
@@ -124,6 +132,10 @@ const Storage: Component = () => {
         highlightedRecordId={highlightedRecordId}
         getRecordAlertState={getRecordAlertState}
         isLoadingPools={isLoadingPools}
+        activeSummaryGroupScope={activeSummaryStorageGroupScope}
+        focusedSummaryGroupId={focusedSummaryStorageGroupId}
+        onGroupFocusChange={setFocusedStorageGroupScope}
+        onGroupHoverChange={setHoveredStorageGroupScope}
         highlightedSummaryResourceId={activeSummaryStorageResourceId}
         hoveredStorageResourceId={hoveredStorageResourceId}
         setTableRootRef={setSummaryTableRootRef}

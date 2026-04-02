@@ -873,8 +873,10 @@ describe('Dashboard performance contract', () => {
       expect(workloadPanelSource).toContain('GuestDrawer');
       expect(workloadPanelSource).toContain('createMemo(() => getCanonicalWorkloadId(guest()))');
       expect(dashboardSelectionStateSource).toContain('activeSummaryWorkloadGroupScope');
+      expect(dashboardSelectionStateSource).toContain('focusedSummaryWorkloadGroupScope');
       expect(dashboardSelectionStateSource).toContain('setHoveredWorkloadGroupScope');
-      expect(dashboardSource).toContain('hoveredGroupScope={state.activeSummaryWorkloadGroupScope()}');
+      expect(dashboardSource).toContain('hoveredGroupScope={state.hoveredSummaryWorkloadGroupScope()}');
+      expect(dashboardSource).toContain('focusedGroupScope={state.focusedSummaryWorkloadGroupScope()}');
       expect(workloadPanelSource).not.toContain('TableHead');
       expect(dashboardStateCardsSource).toContain('buildInfrastructureWorkspacePath');
       expect(dashboardStateCardsSource).toContain('dashboardInfrastructureEmptyState().title');

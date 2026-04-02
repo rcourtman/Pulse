@@ -37,8 +37,10 @@ export interface UnifiedResourceTableProps {
   revealedResourceId?: string | null;
   hoveredResourceId?: string | null;
   activeSummaryGroupScope?: SummarySeriesGroupScope | null;
+  focusedSummaryGroupId?: string | null;
   onExpandedResourceChange: (id: string | null) => void;
   onHoverChange?: (id: string | null) => void;
+  onGroupFocusChange?: (groupId: string | null) => void;
   onGroupHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
   groupingMode?: 'grouped' | 'flat';
   onDeployCluster?: (clusterId: string, clusterName: string) => void;

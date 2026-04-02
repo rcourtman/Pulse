@@ -71,6 +71,7 @@ describe('resource link routing contract', () => {
       namespace: '',
       agent: 'worker-1',
       resource: 'cluster-a:worker-1:101',
+      summaryGroup: '',
     });
 
     expect(WORKLOADS_QUERY_PARAMS.type).toBe('type');
@@ -80,6 +81,7 @@ describe('resource link routing contract', () => {
     expect(WORKLOADS_QUERY_PARAMS.namespace).toBe('namespace');
     expect(WORKLOADS_QUERY_PARAMS.agent).toBe('agent');
     expect(WORKLOADS_QUERY_PARAMS.resource).toBe('resource');
+    expect(WORKLOADS_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
   });
 
   it('canonicalizes legacy workloads type aliases when building links', () => {
@@ -104,11 +106,13 @@ describe('resource link routing contract', () => {
       source: 'docker',
       query: 'docker-host-1',
       resource: 'docker-host-1',
+      summaryGroup: '',
     });
 
     expect(INFRASTRUCTURE_QUERY_PARAMS.source).toBe('source');
     expect(INFRASTRUCTURE_QUERY_PARAMS.query).toBe('q');
     expect(INFRASTRUCTURE_QUERY_PARAMS.resource).toBe('resource');
+    expect(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
   });
 
   it('canonicalizes infrastructure source aliases when building and parsing links', () => {
@@ -119,6 +123,7 @@ describe('resource link routing contract', () => {
       source: 'proxmox-pbs',
       query: 'archive',
       resource: '',
+      summaryGroup: '',
     });
   });
 
@@ -257,6 +262,7 @@ describe('resource link routing contract', () => {
       resource: 'storage-1',
       sort: 'usage',
       order: 'desc',
+      summaryGroup: '',
     });
 
     expect(STORAGE_QUERY_PARAMS.tab).toBe('tab');
@@ -265,6 +271,7 @@ describe('resource link routing contract', () => {
     expect(STORAGE_QUERY_PARAMS.resource).toBe('resource');
     expect(STORAGE_QUERY_PARAMS.sort).toBe('sort');
     expect(STORAGE_QUERY_PARAMS.order).toBe('order');
+    expect(STORAGE_QUERY_PARAMS.summaryGroup).toBe('summaryGroup');
   });
 
   it('builds storage deep links for exact TrueNAS storage resources', () => {

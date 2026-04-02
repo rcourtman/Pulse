@@ -97,4 +97,15 @@ describe('RecoverySummary', () => {
     expect(recoverySummarySource).not.toContain('!p-1.5 sm:!p-2');
     expect(recoverySummarySource.match(/bodyLayout="auto"/g) ?? []).toHaveLength(4);
   });
+
+  it('keeps recovery summary outside the interactive page-group-entity summary contract', () => {
+    expect(recoverySummarySource).not.toContain('useSummaryPageInteractionState');
+    expect(recoverySummarySource).not.toContain('hoveredGroupScope');
+    expect(recoverySummarySource).not.toContain('focusedGroupScope');
+    expect(recoverySummarySource).not.toContain('hoveredResourceId');
+    expect(recoverySummarySource).not.toContain('focusedResourceId');
+    expect(recoverySummarySource).not.toContain('chartHoverSync');
+    expect(recoverySummarySource).not.toContain('InteractiveSparkline');
+    expect(recoverySummarySource).not.toContain('DensityMap');
+  });
 });

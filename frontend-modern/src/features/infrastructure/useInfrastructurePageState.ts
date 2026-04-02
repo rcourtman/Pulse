@@ -7,8 +7,15 @@ import { STORAGE_KEYS } from '@/utils/localStorage';
 import { useKioskMode } from '@/hooks/useKioskMode';
 import { useSummaryPageInteractionState } from '@/components/shared/summaryTableFocus';
 import { isSummaryTimeRange } from '@/components/shared/summaryTimeRange';
-import { infrastructureHasVisibleSummaryGroupScope } from '@/components/Infrastructure/infrastructureSelectors';
-import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
+import {
+  buildInfrastructureSummaryGroupScope,
+  groupResources,
+  infrastructureHasVisibleSummaryGroupScope,
+} from '@/components/Infrastructure/infrastructureSelectors';
+import {
+  isSummarySeriesInGroupScope,
+  type SummarySeriesGroupScope,
+} from '@/components/shared/summaryCardInteraction';
 import { useInfrastructurePageRouteState } from './useInfrastructurePageRouteState';
 import { buildInfrastructurePageFilterDerivation } from './infrastructurePageModel';
 
@@ -73,12 +80,37 @@ export function useInfrastructurePageState() {
     searchQuery,
     setSearchQuery,
   });
+  const focusedResourceGroupScope = createMemo<SummarySeriesGroupScope | null>(() => {
+    if (groupingMode() !== 'grouped') {
+      return null;
+    }
+    const focusedGroupId = routeState.focusedResourceGroupId();
+    if (!focusedGroupId) {
+      return null;
+    }
+    const groups = groupResources(filteredResources(), groupingMode());
+    for (const group of groups) {
+      const scope = buildInfrastructureSummaryGroupScope(group);
+      if (scope?.id === focusedGroupId) {
+        return scope;
+      }
+    }
+    return null;
+  });
   const summaryInteraction = useSummaryPageInteractionState({
     hoveredSeriesId: routeState.hoveredResourceId,
     hoveredGroupScope: hoveredResourceGroupScope,
     focusedSeriesId: routeState.expandedResourceId,
+    focusedGroupScope: focusedResourceGroupScope,
     revealActiveSeries: routeState.setRevealedResourceId,
   });
+  const setExpandedResourceId = (resourceId: string | null) => {
+    const groupScope = focusedResourceGroupScope();
+    if (groupScope && resourceId && !isSummarySeriesInGroupScope(groupScope, resourceId)) {
+      routeState.setFocusedResourceGroupId(null);
+    }
+    routeState.setExpandedResourceId(resourceId);
+  };
 
   const clearFilters = () => {
     setSelectedSource('');
@@ -99,6 +131,9 @@ export function useInfrastructurePageState() {
     if (hoveredResourceGroupScope()) {
       setHoveredResourceGroupScope(null);
     }
+    if (routeState.focusedResourceGroupId()) {
+      routeState.setFocusedResourceGroupId(null);
+    }
   });
 
   createEffect(() => {
@@ -108,6 +143,27 @@ export function useInfrastructurePageState() {
     }
     if (!infrastructureHasVisibleSummaryGroupScope(filteredResources(), groupScope)) {
       setHoveredResourceGroupScope(null);
+    }
+  });
+
+  createEffect(() => {
+    const focusedGroupId = routeState.focusedResourceGroupId();
+    if (!focusedGroupId) {
+      return;
+    }
+    if (!focusedResourceGroupScope()) {
+      routeState.setFocusedResourceGroupId(null);
+    }
+  });
+
+  createEffect(() => {
+    const expandedResourceId = routeState.expandedResourceId();
+    const groupScope = focusedResourceGroupScope();
+    if (!expandedResourceId || !groupScope) {
+      return;
+    }
+    if (!isSummarySeriesInGroupScope(groupScope, expandedResourceId)) {
+      routeState.setExpandedResourceId(null);
     }
   });
 
@@ -131,6 +187,9 @@ export function useInfrastructurePageState() {
     setGroupingMode,
     activeSummaryResourceId: summaryInteraction.activeSeriesId,
     activeSummaryResourceGroupScope: summaryInteraction.activeGroupScope,
+    focusedSummaryResourceGroupScope: focusedResourceGroupScope,
+    focusedSummaryResourceGroupId: routeState.focusedResourceGroupId,
+    hoveredSummaryResourceGroupScope: hoveredResourceGroupScope,
     ...routeState,
     chartHoverSync: summaryInteraction.chartHoverSync,
     isMobile,
@@ -148,6 +207,7 @@ export function useInfrastructurePageState() {
     clearFilters,
     filteredResources,
     hasFilteredResources,
+    setExpandedResourceId,
     setChartHoverSync: summaryInteraction.setChartHoverSync,
     setHoveredResourceGroupScope,
     setSummaryTableRootRef: summaryInteraction.setTableRootRef,

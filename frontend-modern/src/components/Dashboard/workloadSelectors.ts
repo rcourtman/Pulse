@@ -1,3 +1,4 @@
+import type { Node } from '@/types/api';
 import type { WorkloadGuest, ViewMode } from '@/types/workloads';
 import type { WorkloadIOEmphasis } from './guestRowModel';
 import { computeIOScale } from '@/components/Infrastructure/infrastructureSelectors';
@@ -5,8 +6,9 @@ import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInt
 import { parseFilterStack, evaluateFilterStack } from '@/utils/searchQuery';
 import { normalizeSourcePlatformQueryValue } from '@/utils/sourcePlatforms';
 import { DEGRADED_HEALTH_STATUSES, OFFLINE_HEALTH_STATUSES } from '@/utils/status';
+import { getNodeDisplayName } from '@/utils/nodes';
 import { getCanonicalWorkloadId, resolveWorkloadType } from '@/utils/workloads';
-import { getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
+import { buildNodeByInstance, getKubernetesContextKey, workloadNodeScopeId } from './workloadTopology';
 
 export interface FilterWorkloadsParams {
   guests: WorkloadGuest[];
@@ -249,6 +251,32 @@ export const getWorkloadGroupKey = (guest: WorkloadGuest): string => {
   return `${type}:${context}`;
 };
 
+export const getWorkloadGroupLabel = (
+  groupKey: string,
+  guests: WorkloadGuest[],
+  groupNodeName?: string | null,
+): { type: string; name: string } => {
+  const normalizedGroupKey = guests.length > 0 ? getWorkloadGroupKey(guests[0]) : groupKey;
+  const [prefix, ...rest] = normalizedGroupKey.split(':');
+  const context = rest.length > 0 ? rest.join(':') : normalizedGroupKey;
+  const normalizedNodeName = (groupNodeName || '').trim();
+  if (normalizedNodeName) {
+    return { type: '', name: normalizedNodeName };
+  }
+  if (prefix === 'app-container') return { type: 'App Containers', name: context };
+  if (prefix === 'pod') return { type: 'Pods', name: context };
+  if (prefix === 'vm') return { type: 'VM', name: context };
+  if (prefix === 'system-container') return { type: 'Container', name: context };
+  const first = guests[0];
+  if (first) {
+    const cluster = (first.clusterName || '').trim();
+    const nodeName = (first.node || '').trim();
+    if (nodeName && cluster) return { type: cluster, name: nodeName };
+    if (nodeName) return { type: '', name: nodeName };
+  }
+  return { type: '', name: context };
+};
+
 export const buildWorkloadSummaryGroupScope = (
   groupId: string,
   guests: WorkloadGuest[],
@@ -301,6 +329,38 @@ export const groupWorkloads = (
   }
 
   return groups;
+};
+
+export const buildWorkloadSummaryGroupScopeMap = ({
+  guests,
+  nodes,
+  groupingMode,
+  sortComparator,
+}: {
+  guests: WorkloadGuest[];
+  nodes: Node[];
+  groupingMode: 'grouped' | 'flat';
+  sortComparator: ((a: WorkloadGuest, b: WorkloadGuest) => number) | null;
+}): Map<string, SummarySeriesGroupScope> => {
+  if (groupingMode !== 'grouped') {
+    return new Map<string, SummarySeriesGroupScope>();
+  }
+
+  const grouped = groupWorkloads(guests, groupingMode, sortComparator);
+  const nodeByInstance = buildNodeByInstance(nodes);
+  const scopes = new Map<string, SummarySeriesGroupScope>();
+  for (const [groupKey, groupGuests] of Object.entries(grouped)) {
+    const node = nodeByInstance[groupKey];
+    const scope = buildWorkloadSummaryGroupScope(
+      groupKey,
+      groupGuests,
+      getWorkloadGroupLabel(groupKey, groupGuests, node ? getNodeDisplayName(node) : null),
+    );
+    if (scope) {
+      scopes.set(scope.id, scope);
+    }
+  }
+  return scopes;
 };
 
 export const computeWorkloadStats = (guests: WorkloadGuest[]): WorkloadStats => {

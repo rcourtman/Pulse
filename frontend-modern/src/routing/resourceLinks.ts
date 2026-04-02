@@ -33,6 +33,7 @@ export const WORKLOADS_QUERY_PARAMS = {
   // Canonical v6 agent filter query param.
   agent: 'agent',
   resource: 'resource',
+  summaryGroup: 'summaryGroup',
 } as const;
 
 export const WORKLOADS_PATH = '/workloads';
@@ -47,6 +48,7 @@ export const INFRASTRUCTURE_QUERY_PARAMS = {
   source: 'source',
   query: 'q',
   resource: 'resource',
+  summaryGroup: 'summaryGroup',
 } as const;
 
 export const INFRASTRUCTURE_PATH = '/infrastructure';
@@ -61,6 +63,7 @@ export const STORAGE_QUERY_PARAMS = {
   resource: 'resource',
   sort: 'sort',
   order: 'order',
+  summaryGroup: 'summaryGroup',
 } as const;
 
 export const RECOVERY_QUERY_PARAMS = {
@@ -118,12 +121,14 @@ type WorkloadsLinkOptions = {
   namespace?: string | null;
   agent?: string | null;
   resource?: string | null;
+  summaryGroup?: string | null;
 };
 
 type InfrastructureLinkOptions = {
   source?: string | null;
   query?: string | null;
   resource?: string | null;
+  summaryGroup?: string | null;
 };
 
 type StorageLinkOptions = {
@@ -136,6 +141,7 @@ type StorageLinkOptions = {
   resource?: string | null;
   sort?: string | null;
   order?: string | null;
+  summaryGroup?: string | null;
 };
 
 type RecoveryLinkOptions = {
@@ -182,6 +188,7 @@ export const parseWorkloadsLinkSearch = (search: string) => {
     namespace: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.namespace)),
     agent: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.agent)),
     resource: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.resource)),
+    summaryGroup: normalizeQueryValue(params.get(WORKLOADS_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -194,6 +201,7 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
   const namespace = normalizeQueryValue(options.namespace);
   const agent = normalizeQueryValue(options.agent);
   const resource = normalizeQueryValue(options.resource);
+  const summaryGroup = normalizeQueryValue(options.summaryGroup);
   if (type) params.set(WORKLOADS_QUERY_PARAMS.type, type);
   if (platform) params.set(WORKLOADS_QUERY_PARAMS.platform, platform);
   if (runtime) params.set(WORKLOADS_QUERY_PARAMS.runtime, runtime);
@@ -201,6 +209,7 @@ export const buildWorkloadsPath = (options: WorkloadsLinkOptions = {}): string =
   if (namespace) params.set(WORKLOADS_QUERY_PARAMS.namespace, namespace);
   if (agent) params.set(WORKLOADS_QUERY_PARAMS.agent, agent);
   if (resource) params.set(WORKLOADS_QUERY_PARAMS.resource, resource);
+  if (summaryGroup) params.set(WORKLOADS_QUERY_PARAMS.summaryGroup, summaryGroup);
   const query = params.toString();
   return query ? `${WORKLOADS_PATH}?${query}` : WORKLOADS_PATH;
 };
@@ -211,6 +220,7 @@ export const parseInfrastructureLinkSearch = (search: string) => {
     source: normalizeSourcePlatformQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.source)),
     query: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.query)),
     resource: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.resource)),
+    summaryGroup: normalizeQueryValue(params.get(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -219,9 +229,11 @@ export const buildInfrastructurePath = (options: InfrastructureLinkOptions = {})
   const source = normalizeSourcePlatformQueryValue(options.source);
   const query = normalizeQueryValue(options.query);
   const resource = normalizeQueryValue(options.resource);
+  const summaryGroup = normalizeQueryValue(options.summaryGroup);
   if (source) params.set(INFRASTRUCTURE_QUERY_PARAMS.source, source);
   if (query) params.set(INFRASTRUCTURE_QUERY_PARAMS.query, query);
   if (resource) params.set(INFRASTRUCTURE_QUERY_PARAMS.resource, resource);
+  if (summaryGroup) params.set(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup, summaryGroup);
   const serialized = params.toString();
   return serialized ? `${INFRASTRUCTURE_PATH}?${serialized}` : INFRASTRUCTURE_PATH;
 };
@@ -525,6 +537,7 @@ export const parseStorageLinkSearch = (search: string) => {
     resource: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.resource)),
     sort: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.sort)),
     order: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.order)),
+    summaryGroup: normalizeQueryValue(params.get(STORAGE_QUERY_PARAMS.summaryGroup)),
   };
 };
 
@@ -539,6 +552,7 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   const resource = normalizeQueryValue(options.resource);
   const sort = normalizeQueryValue(options.sort);
   const order = normalizeQueryValue(options.order);
+  const summaryGroup = normalizeQueryValue(options.summaryGroup);
 
   if (tab) params.set(STORAGE_QUERY_PARAMS.tab, tab);
   if (group) params.set(STORAGE_QUERY_PARAMS.group, group);
@@ -549,6 +563,7 @@ export const buildStoragePath = (options: StorageLinkOptions = {}): string => {
   if (resource) params.set(STORAGE_QUERY_PARAMS.resource, resource);
   if (sort) params.set(STORAGE_QUERY_PARAMS.sort, sort);
   if (order) params.set(STORAGE_QUERY_PARAMS.order, order);
+  if (summaryGroup) params.set(STORAGE_QUERY_PARAMS.summaryGroup, summaryGroup);
 
   const serialized = params.toString();
   return serialized ? `/storage?${serialized}` : '/storage';

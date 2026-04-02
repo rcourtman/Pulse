@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import { EnhancedStorageBar } from './EnhancedStorageBar';
 import type { StorageGroupedRecords, StorageGroupKey } from './useStorageModel';
+import type { SummarySeriesGroupScope } from '@/components/shared/summaryCardInteraction';
 import {
   buildStorageGroupRowPresentation,
   STORAGE_GROUP_ROW_CELL_CLASS,
@@ -22,6 +23,11 @@ interface StorageGroupRowProps {
   groupBy: StorageGroupKey;
   expanded: boolean;
   onToggle: () => void;
+  summaryGroupScope: SummarySeriesGroupScope | null;
+  summaryActive: boolean;
+  summaryFocused: boolean;
+  onFocusChange?: (scope: SummarySeriesGroupScope | null) => void;
+  onHoverChange?: (scope: SummarySeriesGroupScope | null) => void;
 }
 
 export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
@@ -30,22 +36,41 @@ export const StorageGroupRow: Component<StorageGroupRowProps> = (props) => {
   return (
     <tr
       class={STORAGE_GROUP_ROW_CLASS}
-      onClick={() => props.onToggle()}
+      data-summary-group-id={props.summaryGroupScope?.id ?? undefined}
+      data-summary-group-series-count={String(props.summaryGroupScope?.seriesIds.length ?? 0)}
+      data-summary-row-active={props.summaryActive ? 'true' : 'false'}
+      aria-pressed={props.summaryFocused}
+      onClick={() =>
+        props.onFocusChange?.(
+          props.summaryFocused ? null : props.summaryGroupScope,
+        )
+      }
+      onMouseEnter={() => props.onHoverChange?.(props.summaryGroupScope)}
+      onMouseLeave={() => props.onHoverChange?.(null)}
     >
       <td colSpan={99} class={STORAGE_GROUP_ROW_CELL_CLASS}>
         <div class={STORAGE_GROUP_ROW_CONTENT_CLASS}>
-          {/* Expand chevron */}
-          <svg
-            class={getStorageGroupChevronClass(props.expanded)}
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
+          <button
+            type="button"
+            aria-label={props.expanded ? `Collapse ${row().label}` : `Expand ${row().label}`}
+            class="inline-flex items-center justify-center"
+            onClick={(event) => {
+              event.stopPropagation();
+              props.onToggle();
+            }}
           >
-            <path d="M9 18l6-6-6-6" />
-          </svg>
+            <svg
+              class={getStorageGroupChevronClass(props.expanded)}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M9 18l6-6-6-6" />
+            </svg>
+          </button>
 
           {/* Group label */}
           <span class={STORAGE_GROUP_ROW_LABEL_CLASS}>

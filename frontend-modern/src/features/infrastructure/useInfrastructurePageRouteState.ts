@@ -46,10 +46,12 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
   );
 
   const [expandedResourceId, setExpandedResourceId] = createSignal<string | null>(null);
+  const [focusedResourceGroupId, setFocusedResourceGroupId] = createSignal<string | null>(null);
   const [hoveredResourceId, setHoveredResourceId] = createSignal<string | null>(null);
   const [highlightedResourceId, setHighlightedResourceId] = createSignal<string | null>(null);
   const [revealedResourceId, setRevealedResourceId] = createSignal<string | null>(null);
   const [handledResourceId, setHandledResourceId] = createSignal<string | null>(null);
+  const [handledSummaryGroupId, setHandledSummaryGroupId] = createSignal<string | null>(null);
   const [handledSourceParam, setHandledSourceParam] = createSignal<string | null>(null);
   const [handledQueryParam, setHandledQueryParam] = createSignal('');
 
@@ -82,6 +84,21 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
       setHighlightedResourceId(null);
     }
     setHandledResourceId(null);
+  });
+
+  createEffect(() => {
+    const { summaryGroup: summaryGroupId } = parseInfrastructureLinkSearch(location.search);
+    if (!summaryGroupId) {
+      if (handledSummaryGroupId() === null) {
+        return;
+      }
+      setFocusedResourceGroupId(null);
+      setHandledSummaryGroupId(null);
+      return;
+    }
+    if (summaryGroupId === handledSummaryGroupId()) return;
+    setFocusedResourceGroupId(summaryGroupId);
+    setHandledSummaryGroupId(summaryGroupId);
   });
 
   createEffect(() => {
@@ -120,9 +137,11 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
     const urlSource = parsed.source ?? '';
     const urlQuery = parsed.query ?? '';
     const urlResource = parsed.resource ?? '';
+    const urlSummaryGroup = parsed.summaryGroup ?? '';
     if ((handledSourceParam() ?? '') !== urlSource) return;
     if (handledQueryParam() !== urlQuery) return;
     if (urlResource && handledResourceId() !== urlResource && !initialLoadComplete()) return;
+    if (urlSummaryGroup && handledSummaryGroupId() !== urlSummaryGroup && !initialLoadComplete()) return;
 
     const nextSource = selectedSource();
     const nextQuery = searchQuery().trim();
@@ -133,11 +152,13 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
     const nextResource = shouldPreserveIncomingResource
       ? currentLinkedResource
       : (selectedResourceId ?? '');
+    const nextSummaryGroup = focusedResourceGroupId() ?? '';
 
     const managedPath = buildInfrastructurePath({
       source: nextSource || null,
       query: nextQuery || null,
       resource: nextResource || null,
+      summaryGroup: nextSummaryGroup || null,
     });
     const managedUrl = new URL(managedPath, 'http://pulse.local');
     const currentParams = new URLSearchParams(location.search);
@@ -145,6 +166,7 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.source);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.query);
     nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.resource);
+    nextParams.delete(INFRASTRUCTURE_QUERY_PARAMS.summaryGroup);
     managedUrl.searchParams.forEach((value, key) => {
       nextParams.set(key, value);
     });
@@ -183,7 +205,9 @@ export function useInfrastructurePageRouteState(options: InfrastructurePageRoute
 
   return {
     expandedResourceId,
+    focusedResourceGroupId,
     setExpandedResourceId,
+    setFocusedResourceGroupId,
     hoveredResourceId,
     setHoveredResourceId,
     highlightedResourceId,

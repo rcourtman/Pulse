@@ -740,6 +740,43 @@ describe('Storage', () => {
     expect((screen.getByLabelText('Node') as HTMLSelectElement).value).toBe('all');
   });
 
+  it('pins storage group scope into the route without conflating it with expansion', async () => {
+    hookResources = [
+      buildStorageResource('storage-1', 'Node-Store', 'pve1'),
+      buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
+    ];
+    mockLocationSearch = '?group=node';
+    navigateSpy.mockImplementation((nextPath: string) => {
+      mockLocationSearch = nextPath.includes('?') ? nextPath.slice(nextPath.indexOf('?')) : '';
+    });
+
+    render(() => <Storage />);
+
+    await waitFor(() => {
+      expect(
+        document.querySelector('tr[data-summary-group-id="storage:node:pve1"]'),
+      ).toBeTruthy();
+    });
+
+    let groupRow = document.querySelector(
+      'tr[data-summary-group-id="storage:node:pve1"]',
+    ) as HTMLTableRowElement | null;
+    expect(groupRow).not.toBeNull();
+    if (!groupRow) {
+      return;
+    }
+
+    fireEvent.click(groupRow);
+
+    await waitFor(() => {
+      expect(navigateSpy).toHaveBeenCalledWith(
+        '/storage?group=node&summaryGroup=storage%3Anode%3Apve1',
+        ROUTE_STATE_REPLACE_OPTIONS,
+      );
+      expect(groupRow.getAttribute('aria-pressed')).toBe('true');
+    });
+  });
+
   it('shows ceph summary card and pool expand chevron', async () => {
     hookResources = [
       buildStorageResource('storage-ceph', 'Ceph-Pool-1', 'pve1', {
