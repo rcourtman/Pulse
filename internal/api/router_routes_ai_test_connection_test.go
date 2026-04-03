@@ -28,6 +28,14 @@ func TestRouteTestConnection_Success(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"version": "0.3.0"})
 			return
 		}
+		if r.URL.Path == "/api/tags" {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{
+					{"name": "llama3", "modified_at": "2026-04-03T09:00:00Z", "size": 1},
+				},
+			})
+			return
+		}
 		http.NotFound(w, r)
 	}))
 	defer ollama.Close()

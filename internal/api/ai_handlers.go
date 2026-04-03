@@ -2314,6 +2314,21 @@ func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *
 	}
 }
 
+func aiSettingsRequireModelResolution(settings *config.AIConfig) bool {
+	if settings == nil || !settings.IsConfigured() {
+		return false
+	}
+	model := strings.TrimSpace(settings.GetModel())
+	if model == "" {
+		return true
+	}
+	providerName, _ := config.ParseModelString(model)
+	if providerName == "" || providerName == config.AIProviderQuickstart {
+		return false
+	}
+	return !settings.HasProvider(providerName)
+}
+
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)
 func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -2334,6 +2349,11 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 
 	if settings == nil {
 		settings = config.NewDefaultAIConfig()
+	}
+	if aiSettingsRequireModelResolution(settings) {
+		if resolvedModel, resolveErr := ai.ResolveConfiguredModel(ctx, settings); resolveErr == nil {
+			settings.Model = resolvedModel
+		}
 	}
 
 	// Determine auth method string
@@ -2568,6 +2588,14 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				settings.PatrolModel = quickstartModelStr
 				settings.ChatModel = quickstartModelStr
 			} else {
+				if aiSettingsRequireModelResolution(settings) {
+					resolvedModel, resolveErr := ai.ResolveConfiguredModel(r.Context(), settings)
+					if resolveErr != nil {
+						http.Error(w, fmt.Sprintf("Failed to resolve provider model: %v", resolveErr), http.StatusBadGateway)
+						return
+					}
+					settings.Model = resolvedModel
+				}
 				// BYOK is configured — refresh quickstart state best-effort so the
 				// Patrol status API can still report the current server snapshot.
 				refreshQuickstartState = true
@@ -2710,6 +2738,15 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				}
 			}
 		}
+	}
+
+	if aiSettingsRequireModelResolution(settings) {
+		resolvedModel, resolveErr := ai.ResolveConfiguredModel(r.Context(), settings)
+		if resolveErr != nil {
+			http.Error(w, fmt.Sprintf("Failed to resolve provider model: %v", resolveErr), http.StatusBadGateway)
+			return
+		}
+		settings.Model = resolvedModel
 	}
 
 	// Save settings
@@ -2923,7 +2960,18 @@ func (h *AISettingsHandler) HandleTestProvider(w http.ResponseWriter, r *http.Re
 	}
 
 	// Create provider and test connection
-	testProvider, err := providers.NewForProvider(cfg, provider, cfg.GetPreferredModelForProvider(provider))
+	model, err := ai.ResolvePreferredModelForProvider(ctx, cfg, provider)
+	if err != nil {
+		testResult.Success = false
+		testResult.Message = "Failed to resolve provider model"
+		log.Error().Err(err).Str("provider", provider).Msg("AI provider model resolution failed")
+		if err := utils.WriteJSONResponse(w, testResult); err != nil {
+			log.Error().Err(err).Msg("failed to write provider test response")
+		}
+		return
+	}
+
+	testProvider, err := providers.NewForProvider(cfg, provider, model)
 	if err != nil {
 		testResult.Success = false
 		testResult.Message = "Failed to create provider"

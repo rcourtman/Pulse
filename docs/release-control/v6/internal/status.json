@@ -1980,6 +1980,117 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA22",
+      "summary": "Pulse does not hardcode vendor BYOK model IDs into setup or runtime defaults: AI settings may submit credentials without a concrete model, and the backend must resolve and persist the effective provider model from the live provider catalog.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "byok-model-resolution-browser-proof",
+          "cwd": "tests/integration",
+          "run": [
+            "/usr/bin/env",
+            "PULSE_E2E_USE_LOCAL_BACKEND=1",
+            "npm",
+            "test",
+            "--",
+            "tests/52-ai-settings-provider-setup.spec.ts",
+            "--project=chromium"
+          ]
+        },
+        {
+          "id": "byok-model-resolution-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/config",
+            "./internal/ai",
+            "./internal/api",
+            "-run",
+            "DefaultModelForProvider|AIConfig_GetModel|AIConfig_GetPreferredModelForProvider|SelectRecommendedProviderModel|Service_TestConnection_Extended|UpdateSettings_ResolvesProviderModelWhenOmitted|TestConnection_Ollama|TestProvider_Ollama|RouteTestConnection|AITestConnectionRouteWithValidScope|RouteTestProvider|AITestProviderRouteWithValidScope",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "byok-model-resolution-frontend-tests",
+          "cwd": "frontend-modern",
+          "run": [
+            "npm",
+            "test",
+            "--",
+            "--run",
+            "src/components/Settings/__tests__/AISettings.test.tsx"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/AISettings.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/useAISettingsState.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/model_resolution.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/model_resolution_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handlers.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/52-ai-settings-provider-setup.spec.ts",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

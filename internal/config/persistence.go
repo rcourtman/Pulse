@@ -2081,13 +2081,6 @@ func applyLegacyAIConfigFields(settings *AIConfig, raw map[string]json.RawMessag
 
 	migrated := false
 
-	if settings.Model == "" && legacyProvider != "" {
-		if defaultModel := DefaultModelForProvider(legacyProvider); defaultModel != "" {
-			settings.Model = defaultModel
-			migrated = true
-		}
-	}
-
 	if legacyAPIKey != "" {
 		switch {
 		case settings.AnthropicAPIKey == "" && shouldUseLegacyProviderCredential(settings, legacyProvider, AIProviderAnthropic):

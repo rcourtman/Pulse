@@ -204,6 +204,77 @@ func TestContract_AISettingsUpdateQuickstartBootstrapJSONSnapshot(t *testing.T) 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
+func TestContract_AISettingsUpdateProviderResolutionJSONSnapshot(t *testing.T) {
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{
+					{"name": "llama3:latest"},
+					{"name": "mistral:latest"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ollama.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(fmt.Sprintf(`{
+		"enabled": true,
+		"ollama_base_url": %q
+	}`, ollama.URL)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	want := fmt.Sprintf(`{
+		"enabled":true,
+		"model":"ollama:llama3:latest",
+		"configured":true,
+		"custom_context":"",
+		"auth_method":"api_key",
+		"oauth_connected":false,
+		"patrol_interval_minutes":360,
+		"patrol_enabled":true,
+		"patrol_auto_fix":false,
+		"alert_triggered_analysis":true,
+		"patrol_event_triggers_enabled":true,
+		"patrol_alert_triggers_enabled":true,
+		"patrol_anomaly_triggers_enabled":true,
+		"use_proactive_thresholds":false,
+		"available_models":[],
+		"anthropic_configured":false,
+		"openai_configured":false,
+		"openrouter_configured":false,
+		"deepseek_configured":false,
+		"gemini_configured":false,
+		"ollama_configured":true,
+		"ollama_base_url":%q,
+		"ollama_password_set":false,
+		"configured_providers":["ollama"],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"quickstart_credits_total":0,
+		"quickstart_credits_used":0,
+		"quickstart_credits_remaining":0,
+		"quickstart_credits_available":false,
+		"using_quickstart":false
+	}`, ollama.URL)
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
 func TestContract_PatrolStatusActivationRequiredSurface(t *testing.T) {
 	handler, _, _, _ := setupAIHandlerWithPatrol(t)
 	persistence := handler.defaultPersistence

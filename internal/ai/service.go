@@ -1483,6 +1483,7 @@ func (s *Service) LoadConfig() error {
 
 	s.usingQuickstart = false
 	s.quickstartBlockedReason = ""
+	modelResolutionCtx := context.Background()
 
 	// Don't initialize provider if AI is not enabled or not configured
 	if cfg == nil || !cfg.Enabled || !cfg.IsConfigured() {
@@ -1516,7 +1517,13 @@ func (s *Service) LoadConfig() error {
 		return nil
 	}
 
-	selectedModel := cfg.GetModel()
+	selectedModel, err := ResolveConfiguredModel(modelResolutionCtx, cfg)
+	if err != nil {
+		log.Warn().Err(err).Str("orgID", s.orgID).Msg("AI enabled but no effective provider model could be resolved")
+		s.provider = nil
+		return nil
+	}
+	cfg.Model = selectedModel
 	selectedProvider, _ := config.ParseModelString(selectedModel)
 
 	// BYOK transition: if the user added their own API key while the model
@@ -1525,7 +1532,7 @@ func (s *Service) LoadConfig() error {
 		var byokDefault string
 		configuredProviders := cfg.GetConfiguredProviders()
 		if len(configuredProviders) > 0 {
-			byokDefault = config.DefaultModelForProvider(configuredProviders[0])
+			byokDefault, _ = ResolveConfiguredProviderModel(modelResolutionCtx, cfg, configuredProviders[0])
 		}
 		if byokDefault != "" {
 			log.Info().
@@ -1549,21 +1556,7 @@ func (s *Service) LoadConfig() error {
 		configuredProviders := cfg.GetConfiguredProviders()
 		if len(configuredProviders) > 0 {
 			fallbackProvider := configuredProviders[0]
-			var fallbackModel string
-			switch fallbackProvider {
-			case config.AIProviderAnthropic:
-				fallbackModel = config.AIProviderAnthropic + ":" + config.DefaultAIModelAnthropic
-			case config.AIProviderOpenAI:
-				fallbackModel = config.AIProviderOpenAI + ":" + config.DefaultAIModelOpenAI
-			case config.AIProviderOpenRouter:
-				fallbackModel = config.AIProviderOpenRouter + ":" + config.DefaultAIModelOpenRouter
-			case config.AIProviderDeepSeek:
-				fallbackModel = config.AIProviderDeepSeek + ":" + config.DefaultAIModelDeepSeek
-			case config.AIProviderGemini:
-				fallbackModel = config.AIProviderGemini + ":" + config.DefaultAIModelGemini
-			case config.AIProviderOllama:
-				fallbackModel = config.AIProviderOllama + ":" + config.DefaultAIModelOllama
-			}
+			fallbackModel, _ := ResolveConfiguredProviderModel(modelResolutionCtx, cfg, fallbackProvider)
 
 			if fallbackModel != "" {
 				log.Warn().
@@ -3531,8 +3524,8 @@ func (s *Service) AnalyzeForDiscovery(ctx context.Context, prompt string) (strin
 				return "", err
 			}
 
-			altModel := config.DefaultModelForProvider(altProviderName)
-			if altModel == "" {
+			altModel, resolveErr := ResolveConfiguredProviderModel(ctx, cfg, altProviderName)
+			if resolveErr != nil || altModel == "" {
 				continue
 			}
 
@@ -4381,17 +4374,21 @@ func (s *Service) TestConnection(ctx context.Context) error {
 	}
 
 	// Try to create a provider for the current default model
-	provider, err := providers.NewForModel(cfg, cfg.GetModel())
+	selectedModel, err := ResolveConfiguredModel(ctx, cfg)
+	if err != nil {
+		if defaultProvider != nil {
+			return defaultProvider.TestConnection(ctx)
+		}
+		return err
+	}
+	provider, err := providers.NewForModel(cfg, selectedModel)
 	if err != nil {
 		// Fall back to default provider or NewFromConfig
-		log.Debug().Err(err).Str("model", cfg.GetModel()).Msg("could not create provider for model, using fallback")
+		log.Debug().Err(err).Str("model", selectedModel).Msg("could not create provider for model, using fallback")
 		if defaultProvider != nil {
 			provider = defaultProvider
 		} else {
-			provider, err = providers.NewFromConfig(cfg)
-			if err != nil {
-				return fmt.Errorf("failed to create fallback AI provider: %w", err)
-			}
+			return fmt.Errorf("failed to create fallback AI provider: %w", err)
 		}
 	}
 

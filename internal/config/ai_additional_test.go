@@ -145,34 +145,9 @@ func TestDefaultModelForProvider(t *testing.T) {
 		want     string
 	}{
 		{
-			name:     "anthropic",
-			provider: AIProviderAnthropic,
-			want:     FormatModelString(AIProviderAnthropic, DefaultAIModelAnthropic),
-		},
-		{
-			name:     "openai",
-			provider: AIProviderOpenAI,
-			want:     FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI),
-		},
-		{
-			name:     "openrouter",
-			provider: AIProviderOpenRouter,
-			want:     FormatModelString(AIProviderOpenRouter, DefaultAIModelOpenRouter),
-		},
-		{
-			name:     "deepseek",
-			provider: AIProviderDeepSeek,
-			want:     FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek),
-		},
-		{
-			name:     "gemini",
-			provider: AIProviderGemini,
-			want:     FormatModelString(AIProviderGemini, DefaultAIModelGemini),
-		},
-		{
-			name:     "ollama",
-			provider: AIProviderOllama,
-			want:     FormatModelString(AIProviderOllama, DefaultAIModelOllama),
+			name:     "quickstart",
+			provider: AIProviderQuickstart,
+			want:     FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart),
 		},
 		{
 			name:     "unknown provider",

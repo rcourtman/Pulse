@@ -372,8 +372,20 @@ describe('AISettings OpenRouter flow', () => {
 
     await waitFor(() => {
       expect(updateSettingsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ openrouter_api_key: 'sk-or-configured' }),
+        expect.objectContaining({
+          model: '',
+          openrouter_api_key: 'sk-or-configured',
+        }),
       );
+    });
+
+    const payload = updateSettingsMock.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload).toMatchObject({
+      model: '',
+      openrouter_api_key: 'sk-or-configured',
+    });
+    expect(payload).not.toMatchObject({
+      model: 'openrouter:openai/gpt-4o-mini',
     });
 
     // Ignore preflight call triggered after save; validate explicit test button action.

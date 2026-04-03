@@ -291,6 +291,12 @@ relay bootstrap reads use one effective hosted billing lease before
 lifecycle-adjacent flows inspect runtime readiness, so install and setup
 surfaces do not observe a tenant-org Pulse Assistant state that disagrees
 with the machine-owned hosted entitlement already backing the same instance.
+That same shared `internal/api/` dependency now also assumes AI settings stay
+vendor-neutral on that boundary. Lifecycle-adjacent setup and infrastructure
+surfaces may depend on the shared AI settings transport being available, but
+they must not revive host-install or first-run branches that guess provider
+model defaults once the backend owns BYOK model resolution from live provider
+catalogs.
 That same shared dependency now also assumes settings-driven AI enablement can
 cold-start the direct Assistant runtime and approval persistence without a
 prior chat session. Lifecycle-adjacent mobile pairing and setup flows depend

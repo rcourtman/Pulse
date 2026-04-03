@@ -256,8 +256,14 @@ Own canonical runtime payload shapes between backend and frontend.
    and the main Patrol page composition boundary, so once that governed
    secondary area exists inside the summary shell the same payloads must not
    also drive a second page-level status strip elsewhere on the route
-9. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
-10. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
+9. Keep AI settings setup transport vendor-neutral: `/api/settings/ai/update`
+   must accept provider credentials or base URLs without a baked vendor model
+   ID, resolve the effective BYOK `model` through the canonical runtime
+   provider-catalog policy, and return that resolved model on the same shared
+   `/api/settings/ai` payload instead of depending on frontend-supplied model
+   defaults.
+10. Treat Patrol summary supporting metrics as readouts, not reinterpretations: when frontend consumers derive cards such as active findings, criticals, warnings, or fixes from the canonical payloads, those cards must stay numeric and must not synthesize new assessment labels like `Issues detected` or verification labels like `Partial verification` beneath the primary summary contract
+11. Treat active Patrol runtime transport as compatible with factual activity surfaces: when the runtime is currently running, frontend consumers may surface in-progress activity context, but they must not replace the activity strip with a second assessment verdict derived from runtime state alone
 11. Treat Patrol recency as a singular transport-driven fact: once header metadata, verification copy, or the findings footer already present the governed Patrol timing context, frontend summary consumers must not derive an extra timing pill from the same payloads inside the primary summary card
 12. Treat Patrol findings counts as a singular supporting surface as well: when the summary shell already exposes count cards for active findings, warnings, criticals, and fixes, the primary assessment card must not repeat those same payload-derived counts as secondary badges
 13. Treat Patrol schedule and recency as header-owned metadata on the main Patrol page: findings empty-state consumers should not receive or restate `next_patrol_at`, `last_patrol_at`, `last_activity_at`, or interval timing once those transport fields are already presented by the primary header and verification shell
@@ -2316,6 +2322,14 @@ provider-scoped test selection. `internal/api/ai_handlers.go` and
 without echoing raw secrets back into the payload, and keep provider test
 routes bound to the provider's own configured model instead of whichever
 other provider currently owns the default `model` selection.
+That same shared `/api/settings/ai` contract now also owns vendor-neutral BYOK
+setup. Frontend callers may submit provider credentials or base URLs without a
+concrete vendor model ID, and `internal/api/ai_handlers.go` must resolve and
+persist the effective `model` through the canonical runtime provider-catalog
+selection path before returning the updated payload. `/api/settings/ai` reads
+must then echo that resolved model back as the canonical default selection, so
+UI setup flows and provider test routes do not drift into frontend-baked model
+defaults or handler-local vendor fallbacks.
 That same shared infrastructure-settings API contract now also owns the
 connected-infrastructure distinction between machine-managed and
 platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,

@@ -291,6 +291,11 @@ they do not own the timeline store itself. The canonical resource-change
 history now lives in `internal/unifiedresources/store.go` and is surfaced
 through the shared API/resource wiring, which keeps storage and recovery focused
 on presentation and query shape rather than re-implementing change persistence.
+That same shared `internal/api/` dependency now also assumes AI settings stay
+vendor-neutral on that boundary. Storage- or recovery-adjacent settings pages
+may coexist with AI controls, but they must keep consuming the canonical AI
+settings payload rather than reviving storage-local provider defaults, modal
+setup logic, or route-specific BYOK model guesses when shared handlers change.
 The retained-value recovery transport helper is now shared too.
 Recovery still owns when rollups, points, facets, and series refetch, but the
 non-suspending query primitive itself now lives under the shared frontend

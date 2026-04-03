@@ -407,6 +407,52 @@ func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesAct
 	assert.Empty(t, resp.QuickstartBlockedReason)
 }
 
+func TestAISettingsHandler_UpdateSettings_ResolvesProviderModelWhenOmitted(t *testing.T) {
+	t.Parallel()
+
+	ollama := newIPv4HTTPServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/tags":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"models": []map[string]any{
+					{"name": "llama3:latest"},
+					{"name": "mistral:latest"},
+				},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer ollama.Close()
+
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+
+	body, _ := json.Marshal(AISettingsUpdateRequest{
+		Enabled:       ptr(true),
+		OllamaBaseURL: ptr(ollama.URL),
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.True(t, resp.Enabled)
+	assert.True(t, resp.OllamaConfigured)
+	assert.Equal(t, "ollama:llama3:latest", resp.Model)
+
+	saved, err := persistence.LoadAIConfig()
+	require.NoError(t, err)
+	require.NotNil(t, saved)
+	assert.Equal(t, "ollama:llama3:latest", saved.Model)
+	assert.Equal(t, ollama.URL, saved.OllamaBaseURL)
+}
+
 func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T) {
 	t.Parallel()
 
@@ -783,7 +829,7 @@ func TestAISettingsHandler_TestConnection_Ollama(t *testing.T) {
 		t.Fatalf("expected success, got %+v", resp)
 	}
 	if versionHits != 1 || tagsHits != 1 {
-		t.Fatalf("expected version+tags check, got version=%d tags=%d", versionHits, tagsHits)
+		t.Fatalf("expected one version check and one tags lookup for explicit Ollama model, got version=%d tags=%d", versionHits, tagsHits)
 	}
 }
 
@@ -845,8 +891,8 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 	if !resp.Success || resp.Provider != "ollama" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
-	if versionHits != 1 || tagsHits != 1 {
-		t.Fatalf("expected version+tags check, got version=%d tags=%d", versionHits, tagsHits)
+	if versionHits != 1 || tagsHits != 2 {
+		t.Fatalf("expected one version check and two tags lookups (service load + connection), got version=%d tags=%d", versionHits, tagsHits)
 	}
 }
 

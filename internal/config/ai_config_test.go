@@ -401,46 +401,46 @@ func TestAIConfig_GetModel(t *testing.T) {
 			expected: "custom-model",
 		},
 		{
-			name: "single provider configured - anthropic",
+			name: "single provider configured does not invent anthropic model",
 			config: AIConfig{
 				AnthropicAPIKey: "key",
 			},
-			expected: DefaultModelForProvider(AIProviderAnthropic),
+			expected: "",
 		},
 		{
-			name: "single provider configured - openai",
+			name: "single provider configured does not invent openai model",
 			config: AIConfig{
 				OpenAIAPIKey: "key",
 			},
-			expected: DefaultModelForProvider(AIProviderOpenAI),
+			expected: "",
 		},
 		{
-			name: "single provider configured - openrouter",
+			name: "single provider configured does not invent openrouter model",
 			config: AIConfig{
 				OpenRouterAPIKey: "key",
 			},
-			expected: DefaultModelForProvider(AIProviderOpenRouter),
+			expected: "",
 		},
 		{
-			name: "single provider configured - deepseek",
+			name: "single provider configured does not invent deepseek model",
 			config: AIConfig{
 				DeepSeekAPIKey: "key",
 			},
-			expected: DefaultModelForProvider(AIProviderDeepSeek),
+			expected: "",
 		},
 		{
-			name: "single provider configured - gemini",
+			name: "single provider configured does not invent gemini model",
 			config: AIConfig{
 				GeminiAPIKey: "key",
 			},
-			expected: DefaultModelForProvider(AIProviderGemini),
+			expected: "",
 		},
 		{
-			name: "single provider configured - ollama",
+			name: "single provider configured does not invent ollama model",
 			config: AIConfig{
 				OllamaBaseURL: "http://localhost:11434",
 			},
-			expected: DefaultModelForProvider(AIProviderOllama),
+			expected: "",
 		},
 		{
 			name: "multiple providers configured (no default)",
@@ -449,13 +449,6 @@ func TestAIConfig_GetModel(t *testing.T) {
 				OpenAIAPIKey:    "key",
 			},
 			expected: "",
-		},
-		{
-			name: "ollama fallback (configured provider)",
-			config: AIConfig{
-				OllamaBaseURL: "http://localhost:11434",
-			},
-			expected: DefaultModelForProvider(AIProviderOllama),
 		},
 		{
 			name:     "no model/provider",
@@ -528,12 +521,12 @@ func TestAIConfig_GetPreferredModelForProvider(t *testing.T) {
 			expected: "llama3.1",
 		},
 		{
-			name: "falls back to provider default when no model matches",
+			name: "returns empty when no model matches",
 			config: AIConfig{
 				Model: "openai:gpt-4o",
 			},
 			provider: AIProviderGemini,
-			expected: FormatModelString(AIProviderGemini, DefaultAIModelGemini),
+			expected: "",
 		},
 		{
 			name:     "unknown provider returns empty",
@@ -742,8 +735,8 @@ func TestNewDefaultAIConfig(t *testing.T) {
 	if config.PatrolIntervalMinutes != 360 {
 		t.Errorf("Default patrol interval should be 360, got %d", config.PatrolIntervalMinutes)
 	}
-	if config.Model != DefaultModelForProvider(AIProviderAnthropic) {
-		t.Errorf("Default model should be %q, got %q", DefaultModelForProvider(AIProviderAnthropic), config.Model)
+	if config.Model != "" {
+		t.Errorf("Default model should be empty until a provider model is resolved, got %q", config.Model)
 	}
 	if !config.PatrolEnabled {
 		t.Error("Default patrol should be enabled")

@@ -111,6 +111,14 @@ That same backend runtime ownership includes `internal/config/ai.go`, because
 provider auth, base URLs, provider-scoped model defaults, and other persisted
 runtime AI selection rules must stay canonical in the shared AI config model
 instead of drifting into handler-local fallbacks or frontend-only assumptions.
+That same provider-model ownership now explicitly forbids Pulse from baking
+vendor model IDs into BYOK default selection. `internal/config/ai.go` may
+persist an explicit operator-chosen model or the Pulse-owned quickstart alias,
+but when a BYOK provider is configured without a concrete model selection,
+`internal/ai/model_resolution.go` must resolve the effective model from the
+provider's live catalog at runtime using the shared provider metadata policy
+instead of reviving static vendor constants in config defaults, service
+fallbacks, or frontend setup flows.
 That quickstart ownership includes the public proxy dependency under
 `internal/ai/providers/quickstart.go`: the runtime must default to the owned
 commercial API edge at `https://license.pulserelay.pro/v1/quickstart/patrol`
@@ -146,6 +154,13 @@ quickstart-ready installs may enable Patrol directly without opening provider
 setup, while activation-required or offline quickstart states must surface one
 canonical blocked reason and fall back to activation-or-BYOK guidance instead
 of inferring readiness from provider model catalogs or local credit counters.
+That same settings/runtime boundary now also governs BYOK first-run setup:
+`frontend-modern/src/components/Settings/useAISettingsState.ts` may send only
+provider credentials or base URLs when the operator connects a provider, and
+`internal/api/ai_handlers.go` plus `internal/ai/service.go` must persist the
+resolved provider model returned by the canonical runtime selection path. The
+setup surface must not reintroduce vendor-default model IDs in modal payloads
+just to make the backend accept the request.
 That same provider-model contract applies to the chat explore pre-pass in
 `internal/ai/chat/service_explore.go`: any runtime model that is valid for the
 main chat execution path, including the Pulse-owned hosted quickstart alias

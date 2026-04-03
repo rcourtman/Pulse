@@ -62,7 +62,7 @@ func TestLoadHostedAwareAIConfig_DoesNotOverrideExplicitAIConfig(t *testing.T) {
 
 	explicit := config.NewDefaultAIConfig()
 	explicit.Enabled = false
-	explicit.Model = config.DefaultModelForProvider(config.AIProviderAnthropic)
+	explicit.Model = "anthropic:existing-explicit-model"
 	if err := persistence.SaveAIConfig(*explicit); err != nil {
 		t.Fatalf("SaveAIConfig(): %v", err)
 	}

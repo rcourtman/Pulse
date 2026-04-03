@@ -439,42 +439,36 @@ export const useAISettingsState = () => {
           return;
         }
         payload.anthropic_api_key = setupApiKey().trim();
-        payload.model = 'anthropic:claude-sonnet-4-20250514';
       } else if (setupProvider() === 'openai') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your OpenAI API key');
           return;
         }
         payload.openai_api_key = setupApiKey().trim();
-        payload.model = 'openai:gpt-4o';
       } else if (setupProvider() === 'openrouter') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your OpenRouter API key');
           return;
         }
         payload.openrouter_api_key = setupApiKey().trim();
-        payload.model = 'openrouter:openai/gpt-4o-mini';
       } else if (setupProvider() === 'deepseek') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your DeepSeek API key');
           return;
         }
         payload.deepseek_api_key = setupApiKey().trim();
-        payload.model = 'deepseek:deepseek-chat';
       } else if (setupProvider() === 'gemini') {
         if (!setupApiKey().trim()) {
           notificationStore.error('Please enter your Google Gemini API key');
           return;
         }
         payload.gemini_api_key = setupApiKey().trim();
-        payload.model = 'gemini:gemini-2.5-flash';
       } else {
         if (!setupOllamaUrl().trim()) {
           notificationStore.error('Please enter your Ollama server URL');
           return;
         }
         payload.ollama_base_url = setupOllamaUrl().trim();
-        payload.model = 'ollama:llama3.2:latest';
       }
 
       const updated = await AIAPI.updateSettings(payload);

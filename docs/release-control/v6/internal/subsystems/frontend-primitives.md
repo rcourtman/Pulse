@@ -234,6 +234,13 @@ work extends shared components instead of creating new local variants.
    completion CTA language aligned with the governed infrastructure install
    workspace instead of regressing to a route jump that leaves the next action
    implicit.
+10. Keep AI settings setup UI backend-driven:
+    `frontend-modern/src/components/Settings/useAISettingsState.ts` and
+    `frontend-modern/src/components/Settings/AISettingsDialogs.tsx` may collect
+    provider credentials or runtime URLs, but they must not bake vendor model
+    IDs into setup payloads. The shared settings shell should let the backend
+    resolve the effective BYOK model and then render that returned state rather
+    than guessing a model in the modal.
 10. Keep shared filter primitives coherent with route-owned option hydration.
     Feature shells such as `frontend-modern/src/features/infrastructure/`
     must keep a route-owned canonical option visible in shared selects like

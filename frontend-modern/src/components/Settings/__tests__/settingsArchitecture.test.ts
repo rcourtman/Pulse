@@ -1120,6 +1120,15 @@ describe('Settings architecture guardrails', () => {
       'const handleEnabledToggle = async (newValue: boolean) =>',
     );
     expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
+    expect(aiSettingsStateSource).toContain(
+      'const payload: Record<string, unknown> = { enabled: true };',
+    );
+    expect(aiSettingsStateSource).not.toContain('anthropic:claude-sonnet');
+    expect(aiSettingsStateSource).not.toContain('openai:gpt-4o');
+    expect(aiSettingsStateSource).not.toContain('openrouter:openai/gpt-4o-mini');
+    expect(aiSettingsStateSource).not.toContain('gemini:gemini-2.5-flash');
+    expect(aiSettingsStateSource).not.toContain('deepseek:deepseek-chat');
+    expect(aiSettingsStateSource).not.toContain('ollama:llama3.2:latest');
     expect(aiSettingsStateSource).toContain('runStartProTrialAction({');
     expect(aiSettingsStateSource).not.toContain('startProTrial()');
     expect(aiSettingsStateSource).not.toContain('getTrialAlreadyUsedMessage()');

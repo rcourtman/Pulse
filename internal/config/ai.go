@@ -135,14 +135,7 @@ const (
 	InvestigationCooldownHours           = 1   // Hours before re-investigating same finding
 )
 
-// Default models per provider
 const (
-	DefaultAIModelAnthropic  = "claude-haiku-4-5"
-	DefaultAIModelOpenAI     = "gpt-4o"
-	DefaultAIModelOpenRouter = "openai/gpt-4o-mini"
-	DefaultAIModelOllama     = "llama3"
-	DefaultAIModelDeepSeek   = "deepseek-chat"    // V3.2 with tool-use support
-	DefaultAIModelGemini     = "gemini-2.5-flash" // Latest stable Gemini model
 	// DefaultAIModelQuickstart is a Pulse-owned stable alias. The hosted
 	// quickstart backend chooses the real upstream vendor model server-side.
 	DefaultAIModelQuickstart = "pulse-hosted"
@@ -156,7 +149,7 @@ const (
 func NewDefaultAIConfig() *AIConfig {
 	return &AIConfig{
 		Enabled:    false,
-		Model:      DefaultModelForProvider(AIProviderAnthropic),
+		Model:      "",
 		AuthMethod: AuthMethodAPIKey,
 		// Patrol defaults - enabled when AI is enabled
 		// Default to 6 hour intervals (much more token-efficient than 15 min)
@@ -336,18 +329,6 @@ func FormatModelString(provider, modelName string) string {
 // Returns empty string if the provider is unknown.
 func DefaultModelForProvider(provider string) string {
 	switch provider {
-	case AIProviderAnthropic:
-		return FormatModelString(AIProviderAnthropic, DefaultAIModelAnthropic)
-	case AIProviderOpenAI:
-		return FormatModelString(AIProviderOpenAI, DefaultAIModelOpenAI)
-	case AIProviderOpenRouter:
-		return FormatModelString(AIProviderOpenRouter, DefaultAIModelOpenRouter)
-	case AIProviderDeepSeek:
-		return FormatModelString(AIProviderDeepSeek, DefaultAIModelDeepSeek)
-	case AIProviderGemini:
-		return FormatModelString(AIProviderGemini, DefaultAIModelGemini)
-	case AIProviderOllama:
-		return FormatModelString(AIProviderOllama, DefaultAIModelOllama)
 	case AIProviderQuickstart:
 		return FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart)
 	default:
@@ -355,27 +336,14 @@ func DefaultModelForProvider(provider string) string {
 	}
 }
 
-// GetModel returns the model, using defaults where appropriate
+// GetModel returns the explicitly configured model, if any.
 func (c *AIConfig) GetModel() string {
-	if c.Model != "" {
-		return c.Model
-	}
-
-	// If only one provider is configured, use its default model
-	// This handles the case where user configures Ollama but doesn't explicitly select a model
-	configured := c.GetConfiguredProviders()
-	if len(configured) == 1 {
-		if defaultModel := DefaultModelForProvider(configured[0]); defaultModel != "" {
-			return defaultModel
-		}
-	}
-
-	return ""
+	return strings.TrimSpace(c.Model)
 }
 
 // GetPreferredModelForProvider returns the most relevant configured model for a provider.
 // It prefers explicitly selected models for that provider before falling back to the
-// provider default model string.
+// provider-owned quickstart alias when applicable.
 func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
 	for _, candidate := range []string{c.Model, c.ChatModel, c.PatrolModel, c.AutoFixModel, c.DiscoveryModel} {
 		candidate = strings.TrimSpace(candidate)
@@ -388,7 +356,10 @@ func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
 		}
 	}
 
-	return DefaultModelForProvider(provider)
+	if provider == AIProviderQuickstart {
+		return DefaultModelForProvider(provider)
+	}
+	return ""
 }
 
 // GetChatModel returns the model for interactive chat conversations

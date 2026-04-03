@@ -116,16 +116,6 @@ export interface AITestResult {
   model?: string;
 }
 
-// Default models for each provider
-export const DEFAULT_MODELS: Record<AIProvider, string> = {
-  anthropic: 'claude-haiku-4-5',
-  openai: 'gpt-4o',
-  openrouter: 'openai/gpt-4o-mini',
-  ollama: 'llama3',
-  deepseek: 'deepseek-chat',
-  gemini: 'gemini-2.5-flash',
-};
-
 // Provider descriptions
 export const PROVIDER_DESCRIPTIONS: Record<AIProvider, string> = {
   anthropic: 'Claude models from Anthropic',
