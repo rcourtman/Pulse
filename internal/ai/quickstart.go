@@ -423,6 +423,12 @@ func QuickstartBlockedReasonForError(err error) string {
 	return quickstartBlockedReasonFromError(err)
 }
 
+// QuickstartCreditsExhaustedReason returns the canonical Patrol quickstart
+// availability message shown when the install has consumed its quickstart runs.
+func QuickstartCreditsExhaustedReason() string {
+	return patrolQuickstartCreditsExhaustedReason
+}
+
 // QuickstartUnavailableReason returns the canonical Patrol quickstart
 // availability message shown when the server-authoritative bootstrap path
 // cannot be reached.

@@ -392,6 +392,11 @@ const canonicalShellTitleExpectations = [
 ] as const;
 
 describe('Settings architecture guardrails', () => {
+  it('keeps the primary AI settings toggle explicitly addressable and runtime-backed', () => {
+    expect(aiSettingsPanelSource).toContain('ariaLabel="Enable AI services"');
+    expect(aiSettingsPanelSource).toContain('await state.handleEnableRequest(newValue)');
+  });
+
   it('keeps shell-level runtime hooks on the shared app runtime context', () => {
     expect(settingsSource).toContain("from '@/contexts/appRuntime'");
     expect(settingsSource).not.toContain("from '@/App'");

@@ -243,6 +243,10 @@ Own canonical runtime payload shapes between backend and frontend.
    activation/trial identity must surface as the canonical activation-required
    quickstart block reason for Patrol and AI settings enablement rather than
    silently attempting anonymous bootstrap
+   and the AI settings blocked-reason contract, so `/api/settings/ai` must
+   expose `quickstart_blocked_reason` when quickstart cannot currently enable
+   Patrol and must clear that field when a provider-backed path is active or
+   quickstart is genuinely usable
    and the public interpretation rule, so those fields describe Patrol-only
    quickstart inventory and active runtime source on activated or trial-backed
    installs rather than a generic hosted AI quota, anonymous Community

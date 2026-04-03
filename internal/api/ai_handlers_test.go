@@ -271,6 +271,7 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
 	assert.True(t, resp.QuickstartCreditsAvailable)
+	assert.Empty(t, resp.QuickstartBlockedReason)
 	assert.True(t, persistence.HasAIConfig())
 }
 
@@ -311,7 +312,33 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
 	assert.True(t, resp.QuickstartCreditsAvailable)
+	assert.Empty(t, resp.QuickstartBlockedReason)
 	assert.True(t, persistence.HasAIConfig())
+}
+
+func TestAISettingsHandler_GetSettings_QuickstartActivationRequiredSurface(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
+		persistence,
+		"default",
+		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
+	))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.False(t, resp.QuickstartCreditsAvailable)
+	assert.Equal(t, 0, resp.QuickstartCreditsTotal)
+	assert.Equal(t, 0, resp.QuickstartCreditsRemaining)
+	assert.Equal(t, ai.QuickstartActivationRequiredReason(), resp.QuickstartBlockedReason)
 }
 
 func TestAISettingsHandler_UpdateSettings_QuickstartRequiresActivationBeforeEnable(t *testing.T) {
@@ -374,6 +401,7 @@ func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesAct
 	assert.True(t, resp.UsingQuickstart)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
 	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
+	assert.Empty(t, resp.QuickstartBlockedReason)
 }
 
 func TestAISettingsHandler_UpdateSettings_OpenRouterKeySetAndClear(t *testing.T) {

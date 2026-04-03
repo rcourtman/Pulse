@@ -2201,11 +2201,12 @@ type AISettingsResponse struct {
 	DiscoveryEnabled       bool `json:"discovery_enabled"`                  // true if discovery is enabled
 	DiscoveryIntervalHours int  `json:"discovery_interval_hours,omitempty"` // Hours between auto-scans (0 = manual only)
 	// Quickstart credits
-	QuickstartCreditsTotal     int  `json:"quickstart_credits_total"`     // Total credits granted (25)
-	QuickstartCreditsUsed      int  `json:"quickstart_credits_used"`      // Credits consumed
-	QuickstartCreditsRemaining int  `json:"quickstart_credits_remaining"` // Credits remaining
-	QuickstartCreditsAvailable bool `json:"quickstart_credits_available"` // true if quickstart credits are usable
-	UsingQuickstart            bool `json:"using_quickstart"`             // true if currently using quickstart provider
+	QuickstartCreditsTotal     int    `json:"quickstart_credits_total"`            // Total credits granted (25)
+	QuickstartCreditsUsed      int    `json:"quickstart_credits_used"`             // Credits consumed
+	QuickstartCreditsRemaining int    `json:"quickstart_credits_remaining"`        // Credits remaining
+	QuickstartCreditsAvailable bool   `json:"quickstart_credits_available"`        // true if quickstart credits are usable
+	UsingQuickstart            bool   `json:"using_quickstart"`                    // true if currently using quickstart provider
+	QuickstartBlockedReason    string `json:"quickstart_blocked_reason,omitempty"` // canonical reason when quickstart is not currently usable
 }
 
 func EmptyAISettingsResponse() AISettingsResponse {
@@ -2284,7 +2285,9 @@ func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *
 	if qsMgr == nil {
 		return
 	}
+	var bootstrapErr error
 	if err := qsMgr.EnsureBootstrap(ctx); err != nil {
+		bootstrapErr = err
 		log.Debug().Err(err).Msg("Quickstart bootstrap unavailable while populating AI settings")
 	}
 	resp.QuickstartCreditsTotal = qsMgr.CreditsTotal()
@@ -2295,6 +2298,20 @@ func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *
 	}
 	resp.QuickstartCreditsAvailable = qsMgr.HasCredits()
 	resp.UsingQuickstart = aiSvc.IsUsingQuickstart()
+	if len(resp.ConfiguredProviders) > 0 && !resp.UsingQuickstart {
+		resp.QuickstartBlockedReason = ""
+		return
+	}
+	switch {
+	case resp.QuickstartCreditsAvailable:
+		resp.QuickstartBlockedReason = ""
+	case resp.QuickstartCreditsTotal > 0 && remaining <= 0:
+		resp.QuickstartBlockedReason = ai.QuickstartCreditsExhaustedReason()
+	case bootstrapErr != nil:
+		resp.QuickstartBlockedReason = strings.TrimSpace(ai.QuickstartBlockedReasonForError(bootstrapErr))
+	default:
+		resp.QuickstartBlockedReason = ""
+	}
 }
 
 // HandleGetAISettings returns the current AI settings (GET /api/settings/ai)

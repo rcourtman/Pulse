@@ -35,10 +35,16 @@ import {
   getAISettingsSaveErrorMessage,
   getAISettingsToggleErrorMessage,
 } from '@/utils/aiSettingsPresentation';
+import {
+  AI_QUICKSTART_ACTIVATION_REQUIRED_REASON,
+  normalizeQuickstartReason,
+} from '@/utils/aiQuickstartContract';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
+
+type AISetupMode = 'provider' | 'activation-or-provider' | 'provider-required';
 
 export const useAISettingsState = () => {
   const [settings, setSettings] = createSignal<AISettingsType | null>(null);
@@ -78,6 +84,7 @@ export const useAISettingsState = () => {
 
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [showSetupModal, setShowSetupModal] = createSignal(false);
+  const [setupMode, setSetupMode] = createSignal<AISetupMode>('provider');
   const [setupProvider, setSetupProvider] = createSignal<AIProvider>('anthropic');
   const [setupApiKey, setSetupApiKey] = createSignal('');
   const [setupOllamaUrl, setSetupOllamaUrl] = createSignal('http://localhost:11434');
@@ -112,11 +119,15 @@ export const useAISettingsState = () => {
   });
 
   const settingsReadiness = createMemo(() =>
-    getAISettingsReadinessPresentation(
-      Boolean(settings()?.configured),
-      settings()?.configured_providers?.length || 0,
-      availableModels().length,
-    ),
+    getAISettingsReadinessPresentation({
+      configured: Boolean(settings()?.configured),
+      providerCount: settings()?.configured_providers?.length || 0,
+      modelCount: availableModels().length,
+      quickstartCreditsAvailable: Boolean(settings()?.quickstart_credits_available),
+      quickstartCreditsRemaining: settings()?.quickstart_credits_remaining ?? 0,
+      quickstartCreditsTotal: settings()?.quickstart_credits_total ?? 0,
+      quickstartBlockedReason: normalizeQuickstartReason(settings()?.quickstart_blocked_reason),
+    }),
   );
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
   const providerIssueCount = createMemo(
@@ -139,8 +150,24 @@ export const useAISettingsState = () => {
           current.ollama_configured),
     );
   });
+  const hasQuickstartAvailable = createMemo(() => Boolean(settings()?.quickstart_credits_available));
+  const quickstartBlockedReason = createMemo(() =>
+    normalizeQuickstartReason(settings()?.quickstart_blocked_reason),
+  );
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
   const upgradeAutofixUrl = () => getUpgradeActionUrlOrFallback('ai_autofix');
+
+  const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
+    (data?.configured_providers?.length ?? 0) > 0;
+
+  const syncModelCatalogForSettings = (data: AISettingsType | null | undefined) => {
+    if (hasProviderBackedModels(data)) {
+      void loadModels();
+      return;
+    }
+    setAvailableModels([]);
+    setModelsError('');
+  };
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible = form.controlLevel === 'autonomous' && autoFixLocked();
@@ -274,10 +301,14 @@ export const useAISettingsState = () => {
     if (startingTrial()) return;
     setStartingTrial(true);
     try {
-      await runStartProTrialAction({
+      const outcome = await runStartProTrialAction({
         showSuccess,
         showError: showWarning,
       });
+      if (outcome === 'activated') {
+        setShowSetupModal(false);
+        await loadSettings();
+      }
     } finally {
       setStartingTrial(false);
     }
@@ -285,7 +316,20 @@ export const useAISettingsState = () => {
 
   const handleCloseSetupModal = () => {
     setShowSetupModal(false);
+    setSetupMode('provider');
     setSetupApiKey('');
+  };
+
+  const openEnableSetupModal = () => {
+    const blockedReason = quickstartBlockedReason();
+    if (blockedReason === AI_QUICKSTART_ACTIVATION_REQUIRED_REASON) {
+      setSetupMode('activation-or-provider');
+    } else if (blockedReason) {
+      setSetupMode('provider-required');
+    } else {
+      setSetupMode('provider');
+    }
+    setShowSetupModal(true);
   };
 
   const checkProviderHealth = async (
@@ -368,15 +412,15 @@ export const useAISettingsState = () => {
       const data = await AIAPI.getSettings();
       setSettings(data);
       resetForm(data);
-      if (data.configured) {
-        void loadModels();
-      }
+      syncModelCatalogForSettings(data);
       void runProviderPreflight(data);
     } catch (error) {
       logger.error('[AISettings] Failed to load settings:', error);
       setLoadError(true);
       setSettings(null);
       resetForm(null);
+      setAvailableModels([]);
+      setModelsError('');
       setProviderHealth(createInitialProviderHealth());
       setPreflightLastCheckedAt(null);
     } finally {
@@ -437,10 +481,10 @@ export const useAISettingsState = () => {
       setSettings(updated);
       setForm('enabled', true);
       resetForm(updated);
+      syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       handleCloseSetupModal();
       notificationStore.success('Pulse Assistant enabled! You can customize settings below.');
-      void loadModels();
       aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error('[AISettings] Setup failed:', error);
@@ -651,6 +695,7 @@ export const useAISettingsState = () => {
       const updated = await AIAPI.updateSettings(payload);
       setSettings(updated);
       resetForm(updated);
+      syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       notificationStore.success('Pulse Assistant settings saved');
       aiChatStore.notifySettingsChanged();
@@ -735,6 +780,7 @@ export const useAISettingsState = () => {
       await AIAPI.updateSettings(clearPayload);
       const newSettings = await AIAPI.getSettings();
       setSettings(newSettings);
+      syncModelCatalogForSettings(newSettings);
       void runProviderPreflight(newSettings);
 
       if (provider === 'anthropic') setForm('anthropicApiKey', '');
@@ -761,6 +807,7 @@ export const useAISettingsState = () => {
     try {
       const updated = await AIAPI.updateSettings({ enabled: newValue });
       setSettings(updated);
+      syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
       aiChatStore.notifySettingsChanged();
@@ -771,6 +818,18 @@ export const useAISettingsState = () => {
         getAISettingsToggleErrorMessage(error instanceof Error ? error.message : ''),
       );
     }
+  };
+
+  const handleEnableRequest = async (newValue: boolean) => {
+    if (!newValue) {
+      await handleEnabledToggle(false);
+      return;
+    }
+    if (hasConfiguredProvider() || hasQuickstartAvailable()) {
+      await handleEnabledToggle(true);
+      return;
+    }
+    openEnableSetupModal();
   };
 
   onMount(() => {
@@ -809,6 +868,7 @@ export const useAISettingsState = () => {
     formatSessionLabel,
     handleClearProvider,
     handleCloseSetupModal,
+    handleEnableRequest,
     handleEnabledToggle,
     handleSave,
     handleSessionDiff,
@@ -819,6 +879,7 @@ export const useAISettingsState = () => {
     handleTest,
     handleTestProvider,
     hasConfiguredProvider,
+    hasQuickstartAvailable,
     loadChatSessions,
     loading,
     loadError,
@@ -848,6 +909,7 @@ export const useAISettingsState = () => {
     setShowDiffModal,
     setShowDiscoverySettings,
     setShowSetupModal,
+    setupMode,
     settings,
     settingsReadiness,
     setupApiKey,
@@ -862,6 +924,7 @@ export const useAISettingsState = () => {
     startingTrial,
     testing,
     testingProvider,
+    quickstartBlockedReason,
     upgradeAutofixUrl,
   };
 };

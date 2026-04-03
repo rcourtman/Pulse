@@ -522,6 +522,12 @@ Patrol is blocked because quickstart lacks a server-verified install identity,
 shared feature shells must preserve the backend activation-or-BYOK guidance
 instead of translating that state into an exhausted-credit badge or a generic
 hosted-AI upgrade message.
+The same primitive boundary now also owns the first AI enable control in
+`AISettings.tsx`: the primary toggle must remain explicitly addressable with a
+stable accessible label, route through the runtime-backed quickstart
+availability/blocked-reason state, and enable directly for quickstart-ready
+installs instead of falling back to generic "first pressed toggle" selectors,
+provider-model-load heuristics, or unconditional BYOK setup modals.
 That same route-owned presentation rule also governs Patrol findings empty
 states: shared section shells under `frontend-modern/src/features/patrol/`
 must not render a green healthy empty state from `0 active findings` alone

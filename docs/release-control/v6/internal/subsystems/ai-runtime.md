@@ -138,6 +138,11 @@ Public-facing copy that reflects those runtime fields must therefore speak in
 Patrol quickstart runs on activated or trial-backed installs and Patrol-only
 no-key activation, not in generic AI credits, anonymous Community bootstrap,
 or a promise of full hosted chat.
+That same runtime-backed contract now governs AI settings enablement too:
+quickstart-ready installs may enable Patrol directly without opening provider
+setup, while activation-required or offline quickstart states must surface one
+canonical blocked reason and fall back to activation-or-BYOK guidance instead
+of inferring readiness from provider model catalogs or local credit counters.
 That same provider-model contract applies to the chat explore pre-pass in
 `internal/ai/chat/service_explore.go`: any runtime model that is valid for the
 main chat execution path, including `quickstart:minimax-2.5m`, must resolve

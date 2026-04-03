@@ -257,6 +257,47 @@ func TestContract_PatrolStatusActivationRequiredSurface(t *testing.T) {
 	}
 }
 
+func TestContract_AISettingsActivationRequiredSurface(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
+		persistence,
+		"default",
+		func() *config.AIConfig { return &config.AIConfig{Enabled: true} },
+	))
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp AISettingsResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode ai settings: %v", err)
+	}
+	if resp.QuickstartBlockedReason != ai.QuickstartActivationRequiredReason() {
+		t.Fatalf(
+			"quickstart_blocked_reason=%q want %q",
+			resp.QuickstartBlockedReason,
+			ai.QuickstartActivationRequiredReason(),
+		)
+	}
+	if resp.QuickstartCreditsRemaining != 0 || resp.QuickstartCreditsTotal != 0 {
+		t.Fatalf("quickstart credits=%d/%d want 0/0", resp.QuickstartCreditsRemaining, resp.QuickstartCreditsTotal)
+	}
+	if resp.QuickstartCreditsAvailable {
+		t.Fatal("expected quickstart_credits_available=false while activation is required")
+	}
+	if !bytes.Contains(rec.Body.Bytes(), []byte(`"quickstart_blocked_reason":"`+ai.QuickstartActivationRequiredReason()+`"`)) {
+		t.Fatalf("expected AI settings payload to expose quickstart_blocked_reason, got %s", rec.Body.Bytes())
+	}
+}
+
 func TestContract_AISettingsBYOKOverrideRetainsQuickstartInventoryJSONSnapshot(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
@@ -1983,7 +2024,7 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"model":"quickstart:minimax-2.5m",
 		"chat_model":"quickstart:minimax-2.5m",
 		"patrol_model":"quickstart:minimax-2.5m",
-		"configured":true,
+		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",
 		"oauth_connected":false,
@@ -2008,11 +2049,12 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
-		"quickstart_credits_total":25,
+		"quickstart_credits_total":0,
 		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":25,
-		"quickstart_credits_available":true,
-		"using_quickstart":true
+		"quickstart_credits_remaining":0,
+		"quickstart_credits_available":false,
+		"using_quickstart":false,
+		"quickstart_blocked_reason":"Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key."
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -2518,7 +2560,7 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 		"model":"quickstart:minimax-2.5m",
 		"chat_model":"quickstart:minimax-2.5m",
 		"patrol_model":"quickstart:minimax-2.5m",
-		"configured":true,
+		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",
 		"oauth_connected":false,
@@ -2543,11 +2585,12 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
-		"quickstart_credits_total":25,
+		"quickstart_credits_total":0,
 		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":25,
-		"quickstart_credits_available":true,
-		"using_quickstart":true
+		"quickstart_credits_remaining":0,
+		"quickstart_credits_available":false,
+		"using_quickstart":false,
+		"quickstart_blocked_reason":"Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key."
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)

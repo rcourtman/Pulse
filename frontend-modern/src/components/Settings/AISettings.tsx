@@ -44,15 +44,11 @@ export const AISettings: Component = () => {
               checked={state.form.enabled}
               onChange={async (event) => {
                 const newValue = event.currentTarget.checked;
-                if (newValue && !state.hasConfiguredProvider()) {
-                  event.currentTarget.checked = false;
-                  state.setShowSetupModal(true);
-                  return;
-                }
-                await state.handleEnabledToggle(newValue);
+                await state.handleEnableRequest(newValue);
               }}
               disabled={state.loading() || state.saving() || state.loadError()}
               containerClass="items-center gap-2"
+              ariaLabel="Enable AI services"
               label={
                 <span class="text-xs font-medium text-muted">
                   {state.form.enabled ? 'Enabled' : 'Disabled'}
@@ -158,9 +154,14 @@ export const AISettings: Component = () => {
         setSetupApiKey={state.setSetupApiKey}
         setupOllamaUrl={state.setupOllamaUrl}
         setSetupOllamaUrl={state.setSetupOllamaUrl}
+        setupMode={state.setupMode}
         setupSaving={state.setupSaving}
+        startingTrial={state.startingTrial}
+        quickstartBlockedReason={state.quickstartBlockedReason}
         handleCloseSetupModal={state.handleCloseSetupModal}
         handleSetupSubmit={state.handleSetupSubmit}
+        canStartTrial={state.canStartTrial}
+        handleStartTrial={state.handleStartTrial}
       />
     </>
   );

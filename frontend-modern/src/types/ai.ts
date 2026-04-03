@@ -60,6 +60,7 @@ export interface AISettings {
   quickstart_credits_remaining?: number;
   quickstart_credits_available?: boolean; // true when this install can currently use Patrol quickstart without BYOK
   using_quickstart?: boolean; // true when Patrol is currently using the quickstart provider on an activated or trial-backed install
+  quickstart_blocked_reason?: string; // canonical reason when quickstart is not currently available
 }
 
 export interface AISettingsUpdateRequest {

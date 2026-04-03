@@ -2,6 +2,7 @@ import { For, Show, type Accessor, type Component, type Setter } from 'solid-js'
 import { Dialog } from '@/components/shared/Dialog';
 import { SelectionCardGroup } from '@/components/shared/SelectionCardGroup';
 import { getAISessionDiffStatusPresentation } from '@/utils/aiSessionDiffPresentation';
+import { RELAY_ONBOARDING_TRIAL_STARTING_LABEL } from '@/utils/relayPresentation';
 import type { FileChange } from '@/api/aiChat';
 import type { AIProvider } from '@/types/ai';
 import {
@@ -17,6 +18,7 @@ export interface AISettingsDialogsProps {
   diffSessionLabel: Accessor<string>;
   formatDiffStats: (change: FileChange) => string;
   showSetupModal: Accessor<boolean>;
+  setupMode: Accessor<'provider' | 'activation-or-provider' | 'provider-required'>;
   setupProvider: Accessor<AIProvider>;
   setSetupProvider: Setter<AIProvider>;
   setupApiKey: Accessor<string>;
@@ -24,12 +26,36 @@ export interface AISettingsDialogsProps {
   setupOllamaUrl: Accessor<string>;
   setSetupOllamaUrl: Setter<string>;
   setupSaving: Accessor<boolean>;
+  startingTrial: Accessor<boolean>;
+  quickstartBlockedReason: Accessor<string>;
   handleCloseSetupModal: () => void;
   handleSetupSubmit: () => Promise<void>;
+  canStartTrial: () => boolean;
+  handleStartTrial: () => Promise<void>;
 }
 
 export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
   const setupProviderConfig = () => getAIProviderConfig(props.setupProvider());
+  const setupTitle = () => {
+    switch (props.setupMode()) {
+      case 'activation-or-provider':
+        return 'Activate quickstart or connect a provider';
+      case 'provider-required':
+        return 'Connect a provider to continue';
+      default:
+        return 'Set Up Pulse Assistant';
+    }
+  };
+  const setupDescription = () => {
+    switch (props.setupMode()) {
+      case 'activation-or-provider':
+        return 'Start a trial to unlock Patrol quickstart, or connect your own provider below.';
+      case 'provider-required':
+        return 'Patrol quickstart is not currently available. Connect a provider to continue.';
+      default:
+        return 'Choose a provider to get started';
+    }
+  };
 
   return (
     <>
@@ -98,11 +124,41 @@ export const AISettingsDialogs: Component<AISettingsDialogsProps> = (props) => {
         >
           <div class="w-full overflow-hidden">
             <div class="bg-blue-600 px-6 py-4">
-              <h3 class="text-lg font-semibold text-white">Set Up Pulse Assistant</h3>
-              <p class="text-blue-100 text-sm mt-1">Choose a provider to get started</p>
+              <h3 class="text-lg font-semibold text-white">{setupTitle()}</h3>
+              <p class="text-blue-100 text-sm mt-1">{setupDescription()}</p>
             </div>
 
             <div class="p-6 space-y-4">
+              <Show when={props.quickstartBlockedReason()}>
+                <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                  {props.quickstartBlockedReason()}
+                </div>
+              </Show>
+
+              <Show when={props.setupMode() === 'activation-or-provider' && props.canStartTrial()}>
+                <div class="rounded-md border border-blue-200 bg-blue-50 p-4 dark:border-blue-800 dark:bg-blue-950/40">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p class="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        Start a Pro trial to unlock Patrol quickstart
+                      </p>
+                      <p class="mt-1 text-xs text-blue-800 dark:text-blue-200">
+                        Use the hosted quickstart path first, or skip it and connect your own model
+                        provider below.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void props.handleStartTrial()}
+                      class="inline-flex min-h-10 sm:min-h-9 items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      disabled={props.startingTrial()}
+                    >
+                      {props.startingTrial() ? RELAY_ONBOARDING_TRIAL_STARTING_LABEL : 'Start Trial'}
+                    </button>
+                  </div>
+                </div>
+              </Show>
+
               <SelectionCardGroup
                 options={AI_SETUP_PROVIDER_OPTIONS}
                 value={props.setupProvider()}

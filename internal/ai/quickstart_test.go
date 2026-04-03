@@ -105,6 +105,15 @@ func TestPersistentQuickstartCreditManager_EnsureBootstrapRequiresInstallationTo
 	}
 }
 
+func TestQuickstartReasonExportsRemainCanonical(t *testing.T) {
+	if got := QuickstartCreditsExhaustedReason(); got != patrolQuickstartCreditsExhaustedReason {
+		t.Fatalf("QuickstartCreditsExhaustedReason() = %q, want %q", got, patrolQuickstartCreditsExhaustedReason)
+	}
+	if got := QuickstartActivationRequiredReason(); got != patrolQuickstartActivationRequiredReason {
+		t.Fatalf("QuickstartActivationRequiredReason() = %q, want %q", got, patrolQuickstartActivationRequiredReason)
+	}
+}
+
 func TestPersistentQuickstartCreditManager_LoadsPersistedTokenWithoutBootstrap(t *testing.T) {
 	dir := t.TempDir()
 	persistence := config.NewConfigPersistence(dir)

@@ -4,6 +4,16 @@ export interface AISettingsReadinessPresentation {
   summary: string;
 }
 
+export interface AISettingsReadinessInput {
+  configured: boolean;
+  providerCount: number;
+  modelCount: number;
+  quickstartCreditsAvailable: boolean;
+  quickstartCreditsRemaining: number;
+  quickstartCreditsTotal: number;
+  quickstartBlockedReason: string;
+}
+
 const AI_OAUTH_ERROR_MESSAGES: Record<string, string> = {
   missing_params: 'The authentication callback is missing required parameters.',
   invalid_state: 'The authentication session is no longer valid. Try again.',
@@ -22,15 +32,39 @@ export function getAIProviderTestResultTextClass(success: boolean): string {
 }
 
 export function getAISettingsReadinessPresentation(
-  configured: boolean,
-  providerCount: number,
-  modelCount: number,
+  input: AISettingsReadinessInput,
 ): AISettingsReadinessPresentation {
+  const {
+    configured,
+    providerCount,
+    modelCount,
+    quickstartCreditsAvailable,
+    quickstartCreditsRemaining,
+    quickstartCreditsTotal,
+    quickstartBlockedReason,
+  } = input;
+
+  if (quickstartCreditsAvailable && providerCount === 0) {
+    return {
+      containerClassName: 'bg-blue-50 dark:bg-blue-900 text-blue-800 dark:text-blue-200',
+      dotClassName: 'bg-blue-400',
+      summary: `Patrol quickstart ready • ${quickstartCreditsRemaining}/${quickstartCreditsTotal} runs left • no API key needed yet`,
+    };
+  }
+
   if (configured) {
     return {
       containerClassName: 'bg-green-50 dark:bg-green-900 text-green-800 dark:text-green-200',
       dotClassName: 'bg-emerald-400',
       summary: `Ready • ${providerCount} provider${providerCount !== 1 ? 's' : ''} • ${modelCount} models`,
+    };
+  }
+
+  if (quickstartBlockedReason) {
+    return {
+      containerClassName: 'bg-amber-50 dark:bg-amber-900 text-amber-800 dark:text-amber-200',
+      dotClassName: 'bg-amber-400',
+      summary: quickstartBlockedReason,
     };
   }
 

@@ -22,8 +22,10 @@ const loggerDebugMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const hasFeatureMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
+const entitlementsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
+const runStartProTrialActionMock = vi.fn();
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -66,9 +68,14 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  entitlements: (...args: unknown[]) => entitlementsMock(...args),
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   getUpgradeActionUrlOrFallback: () => '/upgrade',
+}));
+
+vi.mock('@/utils/trialStartAction', () => ({
+  runStartProTrialAction: (...args: unknown[]) => runStartProTrialActionMock(...args),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -118,12 +125,15 @@ const resetAllMocks = () => {
   loggerErrorMock.mockReset();
   hasFeatureMock.mockReset();
   loadLicenseStatusMock.mockReset();
+  entitlementsMock.mockReset();
   trackPaywallViewedMock.mockReset();
   trackUpgradeClickedMock.mockReset();
+  runStartProTrialActionMock.mockReset();
 };
 
 const setupDefaultMocks = () => {
   hasFeatureMock.mockReturnValue(true);
+  entitlementsMock.mockReturnValue({ trial_eligible: true });
   getSettingsMock.mockResolvedValue(baseSettings());
   getModelsMock.mockResolvedValue({ models: [] });
   testConnectionMock.mockResolvedValue({ success: true, message: 'ok' });
@@ -136,6 +146,7 @@ const setupDefaultMocks = () => {
   summarizeSessionMock.mockResolvedValue(undefined);
   getSessionDiffMock.mockResolvedValue({ files: [], summary: '' });
   revertSessionMock.mockResolvedValue(undefined);
+  runStartProTrialActionMock.mockResolvedValue('activated');
 };
 
 describe('AISettings model loading error states', () => {
@@ -373,5 +384,110 @@ describe('AISettings OpenRouter flow', () => {
       expect(testProviderMock).toHaveBeenCalledTimes(1);
       expect(testProviderMock).toHaveBeenCalledWith('openrouter');
     });
+  });
+});
+
+describe('AISettings quickstart enablement flow', () => {
+  beforeEach(() => {
+    resetAllMocks();
+    setupDefaultMocks();
+  });
+
+  afterEach(() => {
+    cleanup();
+  });
+
+  it('does not load provider model catalog for quickstart-only installs', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: false,
+      model: 'quickstart:minimax-2.5m',
+      quickstart_credits_total: 25,
+      quickstart_credits_remaining: 25,
+      quickstart_credits_available: true,
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    expect(getModelsMock).not.toHaveBeenCalled();
+    expect(
+      screen.getByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
+    ).toBeInTheDocument();
+  });
+
+  it('enables directly when quickstart is available on an activated install', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: false,
+      model: 'quickstart:minimax-2.5m',
+      quickstart_credits_total: 25,
+      quickstart_credits_remaining: 25,
+      quickstart_credits_available: true,
+    });
+    updateSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: true,
+      enabled: true,
+      model: 'quickstart:minimax-2.5m',
+      chat_model: 'quickstart:minimax-2.5m',
+      patrol_model: 'quickstart:minimax-2.5m',
+      quickstart_credits_total: 25,
+      quickstart_credits_remaining: 25,
+      quickstart_credits_available: true,
+      using_quickstart: true,
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable ai services/i }));
+
+    await waitFor(() => {
+      expect(updateSettingsMock).toHaveBeenCalledWith({ enabled: true });
+    });
+
+    expect(screen.queryByText('Choose a provider to get started')).not.toBeInTheDocument();
+    expect(notificationSuccessMock).toHaveBeenCalledWith('Pulse Assistant enabled');
+  });
+
+  it('shows activation-aware setup guidance instead of generic provider setup when quickstart is blocked', async () => {
+    getSettingsMock.mockResolvedValue({
+      ...baseSettings(),
+      configured: false,
+      enabled: false,
+      quickstart_credits_total: 0,
+      quickstart_credits_remaining: 0,
+      quickstart_credits_available: false,
+      quickstart_blocked_reason:
+        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /enable ai services/i }));
+
+    expect(updateSettingsMock).not.toHaveBeenCalled();
+    expect(
+      await screen.findByText('Activate quickstart or connect a provider'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(
+        'Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key.',
+      ),
+    ).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /start trial/i })).toBeInTheDocument();
   });
 });

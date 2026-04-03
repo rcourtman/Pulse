@@ -44,6 +44,7 @@ type AISettingsPayload = {
   quickstart_credits_remaining: number;
   quickstart_credits_available: boolean;
   using_quickstart: boolean;
+  quickstart_blocked_reason?: string;
 };
 
 type PatrolStatusPayload = {
@@ -626,7 +627,7 @@ test.describe("Quickstart cross-surface browser contract", () => {
     await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
   });
 
-  test.fail("activated-install first AI enable toggle should not force BYOK setup when quickstart credits are available", async ({
+  test("activated-install first AI enable toggle should not force BYOK setup when quickstart credits are available", async ({
     page,
   }, testInfo) => {
     test.skip(testInfo.project.name.startsWith("mobile-"), "Desktop-only quickstart coverage");
@@ -653,7 +654,7 @@ test.describe("Quickstart cross-surface browser contract", () => {
     await page.goto("/settings/system-ai", { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "AI Services", level: 1 })).toBeVisible();
 
-    await page.locator("button[aria-pressed]").first().click();
+    await page.getByRole("button", { name: "Enable AI services" }).click();
 
     expect(surface.updateRequests).toHaveLength(1);
     await expect(page.getByText("Choose a provider to get started")).toHaveCount(0);
