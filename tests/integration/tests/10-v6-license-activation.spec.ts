@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { apiRequest, ensureAuthenticated, navigateToSettings } from './helpers';
+import { apiRequest, ensureAuthenticated } from './helpers';
 
 /**
  * V6 License Activation E2E Test
@@ -32,6 +32,23 @@ type EntitlementPayload = {
   licensed_email?: string;
   days_remaining?: number;
   limits?: Array<{ key: string; limit: number; current: number; state: string }>;
+};
+
+type AISettingsPayload = {
+  enabled?: boolean;
+  model?: string;
+  patrol_model?: string;
+  quickstart_credits_total?: number;
+  quickstart_credits_remaining?: number;
+  quickstart_credits_available?: boolean;
+  quickstart_blocked_reason?: string;
+};
+
+type PatrolStatusPayload = {
+  using_quickstart?: boolean;
+  quickstart_credits_total?: number;
+  quickstart_credits_remaining?: number;
+  runtime_state?: string;
 };
 
 test.describe.serial('V6 license activation flow', () => {
@@ -136,11 +153,9 @@ test.describe.serial('V6 license activation flow', () => {
     test.skip(!activationKey, 'No activation key from previous step');
 
     await ensureAuthenticated(page);
-    await navigateToSettings(page);
-
-    // Navigate to the Pulse Pro panel.
-    await page.getByRole('button', { name: /pulse pro/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
+    await page.goto('/settings/system/billing');
+    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Activation' })).toBeVisible();
 
     // Fill in the activation key.
     const textarea = page.locator('#pulse-pro-license-key');
@@ -168,32 +183,12 @@ test.describe.serial('V6 license activation flow', () => {
     test.skip(!activationKey, 'No activation key from previous step');
 
     await ensureAuthenticated(page);
-    await navigateToSettings(page);
-
-    // Open the Pulse Pro panel.
-    await page.getByRole('button', { name: /pulse pro/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
-
-    // Status badge should show "Active".
-    await expect(
-      page.locator('span').filter({ hasText: /^Active$/ }).first(),
-    ).toBeVisible({ timeout: 10_000 });
-
-    // Tier should show "Pro" (DOM text is title-case "Tier", CSS renders uppercase).
-    const tierValue = page
-      .locator('p')
-      .filter({ hasText: /^Tier$/ })
-      .first()
-      .locator('xpath=following-sibling::p[1]');
-    await expect(tierValue).toContainText(/Pro/i);
-
-    // Included Monitored Systems should show 15.
-    const monitoredSystemsValue = page
-      .locator('p')
-      .filter({ hasText: /^Included Monitored Systems$/ })
-      .first()
-      .locator('xpath=following-sibling::p[1]');
-    await expect(monitoredSystemsValue).toHaveText('15');
+    await page.goto('/settings/system/billing');
+    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Plan' })).toBeVisible();
+    await expect(page.getByText(/^Active$/).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText('No Pro license is active.')).toHaveCount(0);
+    await expect(page.getByText('15').first()).toBeVisible();
 
     // Verify entitlements API agrees.
     const entRes = await apiRequest(page, '/api/license/entitlements');
@@ -216,17 +211,86 @@ test.describe.serial('V6 license activation flow', () => {
     expect(guestLimit!.limit).toBe(5);
   });
 
+  test('surfaces activated-install quickstart readiness without requiring BYOK', async ({
+    page,
+  }, testInfo) => {
+    test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
+    test.skip(!activationKey, 'No activation key from previous step');
+
+    await ensureAuthenticated(page);
+
+    const entRes = await apiRequest(page, '/api/license/entitlements');
+    expect(entRes.ok(), `Entitlements request failed: ${entRes.status()}`).toBeTruthy();
+    const ent = (await entRes.json()) as EntitlementPayload;
+    expect(ent.subscription_state).toBe('active');
+
+    await page.goto('/settings/system-ai');
+    await expect(page.getByRole('heading', { name: 'AI Services' }).first()).toBeVisible();
+
+    const preSettingsRes = await apiRequest(page, '/api/settings/ai');
+    expect(preSettingsRes.ok(), `AI settings request failed: ${preSettingsRes.status()}`).toBeTruthy();
+    const preSettings = (await preSettingsRes.json()) as AISettingsPayload;
+    expect(preSettings.quickstart_credits_available).toBe(true);
+    expect(preSettings.quickstart_credits_total).toBe(25);
+    expect(preSettings.quickstart_credits_remaining).toBe(25);
+    expect(preSettings.quickstart_blocked_reason || '').toBe('');
+
+    const enableAI = page.getByRole('button', { name: 'Enable AI services' });
+    await expect(enableAI).toBeVisible();
+    if (await page.getByText(/^Disabled$/).isVisible()) {
+      await enableAI.click();
+    }
+
+    await expect
+      .poll(async () => {
+        const res = await apiRequest(page, '/api/settings/ai');
+        if (!res.ok()) return null;
+        const body = (await res.json()) as AISettingsPayload;
+        return {
+          enabled: body.enabled === true,
+          model: body.model || '',
+          quickstart_credits_available: body.quickstart_credits_available === true,
+          quickstart_credits_remaining: body.quickstart_credits_remaining ?? -1,
+        };
+      }, { timeout: 30_000 })
+      .toEqual({
+        enabled: true,
+        model: 'quickstart:pulse-hosted',
+        quickstart_credits_available: true,
+        quickstart_credits_remaining: 25,
+      });
+
+    await expect(
+      page.getByText(/Patrol quickstart ready • 25\/25 runs left • no API key needed yet/i),
+    ).toBeVisible();
+
+    await page.goto('/ai');
+    await expect(page.getByRole('heading', { name: 'Patrol' }).first()).toBeVisible();
+    await expect(page.getByText('Patrol quickstart: 25/25 runs left')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Run Patrol' })).toBeEnabled();
+
+    const patrolStatusRes = await apiRequest(page, '/api/ai/patrol/status');
+    expect(
+      patrolStatusRes.ok(),
+      `Patrol status request failed: ${patrolStatusRes.status()}`,
+    ).toBeTruthy();
+    const patrolStatus = (await patrolStatusRes.json()) as PatrolStatusPayload;
+    expect(patrolStatus.using_quickstart).toBe(true);
+    expect(patrolStatus.quickstart_credits_total).toBe(25);
+    expect(patrolStatus.quickstart_credits_remaining).toBe(25);
+    expect(patrolStatus.runtime_state).toBe('active');
+  });
+
   test('clears license via UI and verifies free tier', async ({ page }, testInfo) => {
     test.skip(!ADMIN_TOKEN, 'PULSE_LICENSE_ADMIN_TOKEN not set');
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only');
     test.skip(!activationKey, 'No activation key from previous step');
 
     await ensureAuthenticated(page);
-    await navigateToSettings(page);
-
-    // Open the Pulse Pro panel.
-    await page.getByRole('button', { name: /pulse pro/i }).first().click();
-    await expect(page.getByRole('heading', { name: 'Current License' })).toBeVisible();
+    await page.goto('/settings/system/billing');
+    await expect(page.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Activation' })).toBeVisible();
 
     // Set up one-shot dialog handler for the native confirm() prompt.
     page.once('dialog', (dialog) => dialog.accept());
@@ -251,7 +315,6 @@ test.describe.serial('V6 license activation flow', () => {
 
     // Verify UI shows "No Pro license is active" or free-tier state.
     await page.reload();
-    await page.getByRole('button', { name: /pulse pro/i }).first().click();
     await expect(
       page.locator('text=/No Pro license is active/i').first(),
     ).toBeVisible({ timeout: 10_000 });

@@ -16,6 +16,7 @@ type QuickstartBootstrapRequest struct {
 type QuickstartBootstrapResponse struct {
 	QuickstartToken          string `json:"quickstart_token"`
 	QuickstartTokenExpiresAt string `json:"quickstart_token_expires_at,omitempty"`
+	TokenExpiresAt           string `json:"token_expires_at,omitempty"`
 	CreditsRemaining         int    `json:"credits_remaining"`
 	CreditsTotal             int    `json:"credits_total"`
 }

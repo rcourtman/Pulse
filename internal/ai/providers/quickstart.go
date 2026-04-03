@@ -98,6 +98,7 @@ type quickstartResponse struct {
 	CreditsRemaining         int        `json:"credits_remaining,omitempty"`
 	CreditsTotal             int        `json:"credits_total,omitempty"`
 	QuickstartTokenExpiresAt string     `json:"quickstart_token_expires_at,omitempty"`
+	TokenExpiresAt           string     `json:"token_expires_at,omitempty"`
 	Code                     string     `json:"code,omitempty"`
 	// Error is set when the server returns a structured error.
 	Error string `json:"error,omitempty"`
@@ -346,7 +347,7 @@ func (c *QuickstartClient) syncServerState(result quickstartResponse) {
 		CreditsRemaining: result.CreditsRemaining,
 		CreditsTotal:     result.CreditsTotal,
 	}
-	if rawExpiry := strings.TrimSpace(result.QuickstartTokenExpiresAt); rawExpiry != "" {
+	if rawExpiry := firstNonEmpty(result.QuickstartTokenExpiresAt, result.TokenExpiresAt); rawExpiry != "" {
 		if parsed, err := time.Parse(time.RFC3339, rawExpiry); err == nil {
 			state.TokenExpiresAt = &parsed
 		}

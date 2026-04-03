@@ -182,6 +182,9 @@ func (c *LicenseServerClient) BootstrapQuickstart(ctx context.Context, bearerTok
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode quickstart bootstrap response: %w", err)
 	}
+	if strings.TrimSpace(result.QuickstartTokenExpiresAt) == "" {
+		result.QuickstartTokenExpiresAt = strings.TrimSpace(result.TokenExpiresAt)
+	}
 	return &result, nil
 }
 

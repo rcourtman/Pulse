@@ -392,6 +392,30 @@ func TestClientBootstrapQuickstart(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts token_expires_at alias from the server", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusCreated)
+			json.NewEncoder(w).Encode(map[string]any{
+				"quickstart_token":  "qst_live_456",
+				"token_expires_at":  "2026-04-03T18:30:00Z",
+				"credits_remaining": 25,
+				"credits_total":     25,
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		resp, err := client.BootstrapQuickstart(context.Background(), "pit_live_token", QuickstartBootstrapRequest{
+			InstanceFingerprint: "fp-123",
+		})
+		if err != nil {
+			t.Fatalf("BootstrapQuickstart failed: %v", err)
+		}
+		if resp.QuickstartTokenExpiresAt != "2026-04-03T18:30:00Z" {
+			t.Fatalf("QuickstartTokenExpiresAt = %q, want 2026-04-03T18:30:00Z", resp.QuickstartTokenExpiresAt)
+		}
+	})
+
 	t.Run("requires installation bearer token", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			t.Fatal("bootstrap request should not reach the server without an installation token")

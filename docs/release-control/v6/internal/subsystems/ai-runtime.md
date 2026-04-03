@@ -142,9 +142,10 @@ helpers; it must not persist anonymous bootstrap identity or revive local
 counter truth. `internal/ai/providers/quickstart.go` must authenticate Patrol
 proxy calls with `Authorization: Bearer <quickstart_token>`, sync
 `credits_remaining` / `credits_total` back into that cache on every server
-response, and invalidate the cached token on auth rejection. Explicit BYOK
-provider credentials still outrank Patrol quickstart whenever both are
-present.
+response, accept both `quickstart_token_expires_at` and the older
+`token_expires_at` response field while mixed quickstart deployments exist,
+and invalidate the cached token on auth rejection. Explicit BYOK provider
+credentials still outrank Patrol quickstart whenever both are present.
 Public-facing copy that reflects those runtime fields must therefore speak in
 Patrol quickstart runs on activated or trial-backed installs and Patrol-only
 no-key activation, not in generic AI credits, anonymous Community bootstrap,

@@ -114,6 +114,42 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 	}
 }
 
+func TestQuickstartClientWithToken_AcceptsTokenExpiresAtAlias(t *testing.T) {
+	var synced QuickstartServerState
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(quickstartResponse{
+			Content:          "hello",
+			Model:            quickstartModel,
+			StopReason:       "end_turn",
+			CreditsRemaining: 24,
+			CreditsTotal:     25,
+			TokenExpiresAt:   "2026-04-03T19:00:00Z",
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("PULSE_AI_QUICKSTART_PROXY_URL", server.URL)
+
+	client := NewQuickstartClientWithToken("qst_live_test", func(state QuickstartServerState) {
+		synced = state
+	}, nil)
+	if _, err := client.Chat(context.Background(), ChatRequest{
+		Messages: []Message{{Role: "user", Content: "Hi"}},
+	}); err != nil {
+		t.Fatalf("Chat(): %v", err)
+	}
+	if synced.TokenExpiresAt == nil {
+		t.Fatal("expected token expiry sync")
+	}
+	if got := synced.TokenExpiresAt.UTC().Format(time.RFC3339); got != "2026-04-03T19:00:00Z" {
+		t.Fatalf("TokenExpiresAt=%q want 2026-04-03T19:00:00Z", got)
+	}
+}
+
 func TestQuickstartClientWithToken_ExhaustionSyncsStateAndReturnsTypedError(t *testing.T) {
 	var synced QuickstartServerState
 	var syncCalls int

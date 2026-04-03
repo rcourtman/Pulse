@@ -251,7 +251,11 @@ installation-scoped activation state, whether the install is activated
 self-hosted or hosted/trial-backed, and there is no anonymous
 `client_installation_id` fallback in the v6 runtime contract. Local runtime
 cache files may memoize the returned token and counts but may not treat those
-cached counts as commercial authority.
+cached counts as commercial authority. The transport must also remain
+mixed-version compatible while quickstart rolls out: Pulse may send optional
+binding metadata such as `instance_name` and `use_case=patrol`, and the server
+must not reject that additive metadata or rely on one expiry field spelling
+only when returning the quickstart token snapshot.
 That quickstart allowance is therefore activation support, not the main
 commercial pitch: self-hosted pricing and docs may promise Patrol-only
 quickstart runs with no API key for activated or trial-backed installs, but
