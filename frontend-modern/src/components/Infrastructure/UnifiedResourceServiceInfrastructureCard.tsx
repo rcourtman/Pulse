@@ -1,6 +1,7 @@
 import { Show } from 'solid-js';
 import type { Component } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import {
   type UnifiedResourceTableProps,
   type UnifiedResourceTableState,
@@ -21,9 +22,11 @@ export const UnifiedResourceServiceInfrastructureCard: Component<
   return (
     <Show when={table.sortedPBSResources().length > 0 || table.sortedPMGResources().length > 0}>
       <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-        <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Service Infrastructure
-        </div>
+        <SummaryTableCardHeader
+          title="Service Infrastructure"
+          showClearAction={table.showServiceClearAction()}
+          onClear={tableProps.clearPinnedSummaryScope}
+        />
         <UnifiedResourcePBSTableSection tableProps={tableProps} table={table} />
         <UnifiedResourcePMGTableSection tableProps={tableProps} table={table} />
       </Card>

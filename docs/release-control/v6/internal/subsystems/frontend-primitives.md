@@ -132,6 +132,7 @@ work extends shared components instead of creating new local variants.
 110. `frontend-modern/src/components/shared/summaryInteractionA11y.ts`
 111. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 112. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
+113. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
 
 ## Shared Boundaries
 
@@ -167,6 +168,12 @@ work extends shared components instead of creating new local variants.
     off-screen fallback strips. Workloads, infrastructure,
     and storage must not rebuild row-as-button keyboard handling or trailing
     one-off expand columns once the shared action primitive exists.
+    When pinned page, group, or entity scope needs a local explicit reset,
+    the only shared table-chrome owner is
+    `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`: the
+    reset action stays as one compact header-level `Clear` control with an
+    accessible `Clear selection` label, not a second page-level scope strip,
+    search-row accessory, or filter-bar badge.
 12. Keep summary-linked table row emphasis on the shared primitive contract. Workloads, infrastructure, and storage rows that mirror the active summary entity must expose that state through `data-summary-row-active` and let the shared presentation in `frontend-modern/src/index.css` render the row emphasis, rather than carrying page-local sky or blue fill classes inside each row renderer. Group-scoped preview and pin must use that same shared presentation boundary: child rows that belong to a hovered or pinned summary group should expose `data-summary-group-member-active="preview|pinned"` so the block-level emphasis stays subtle, consistent, and reversible instead of each table inventing its own outline, badge, or full-strength fill treatment.
 13. Keep retained-value data loading honest at the ownership boundary. Helpers
     that prevent a feature surface from falling through the app-level Suspense

@@ -112,6 +112,7 @@ export function Dashboard(props: DashboardProps) {
             activeAlerts={state.activeAlerts}
             alertsEnabled={state.alertsEnabled}
             bottomSpacerHeight={state.bottomSpacerHeight}
+            clearPinnedSummaryScope={state.clearPinnedSummaryScope}
             getGroupLabel={state.getGroupLabel}
             groupedGuests={state.groupedGuests}
             groupedWindowing={state.groupedWindowing}

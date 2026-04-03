@@ -1,5 +1,6 @@
 import { ComponentErrorBoundary } from '@/components/ErrorBoundary';
 import { Card } from '@/components/shared/Card';
+import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import { Table } from '@/components/shared/Table';
 
 import type { DashboardState } from './useDashboardState';
@@ -22,6 +23,7 @@ type DashboardWorkloadTableProps = Pick<
   | 'handleTagClick'
   | 'activeSummaryWorkloadGroupScope'
   | 'activeSummaryWorkloadId'
+  | 'clearPinnedSummaryScope'
   | 'focusedSummaryWorkloadGroupScope'
   | 'focusedSummaryWorkloadGroupId'
   | 'hoveredSummaryWorkloadGroupScope'
@@ -49,6 +51,9 @@ type DashboardWorkloadTableProps = Pick<
 >;
 
 export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
+  const showClearSelection = () =>
+    Boolean(props.selectedGuestId() || props.focusedSummaryWorkloadGroupId());
+
   return (
     <ComponentErrorBoundary name="Guest Table">
       <Card
@@ -59,9 +64,11 @@ export function DashboardWorkloadTable(props: DashboardWorkloadTableProps) {
         data-summary-clear-surface
         data-testid="workloads-table-surface"
       >
-        <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Workloads
-        </div>
+        <SummaryTableCardHeader
+          title="Workloads"
+          showClearAction={showClearSelection()}
+          onClear={props.clearPinnedSummaryScope}
+        />
         <Table
           wrapperRef={props.setTableWrapperRef}
           class="whitespace-nowrap min-w-[max-content]"

@@ -94,65 +94,6 @@ async function readSummaryHighlightCount(
     );
 }
 
-async function findNeutralClearPoint(
-  page: import("@playwright/test").Page,
-  surfaceTestId: string,
-  tableTestId: string,
-): Promise<{ x: number; y: number }> {
-  return page.evaluate(
-    ({ surfaceTestId, tableTestId }) => {
-      const surface = document.querySelector<HTMLElement>(`[data-testid="${surfaceTestId}"]`);
-      const table = document.querySelector<HTMLElement>(`[data-testid="${tableTestId}"]`);
-      if (!surface) {
-        throw new Error(`Missing surface ${surfaceTestId}`);
-      }
-      if (!table) {
-        throw new Error(`Missing table ${tableTestId}`);
-      }
-
-      const ignoreSelector = [
-        'button',
-        'a',
-        'input',
-        'select',
-        'textarea',
-        'th',
-        'label',
-        'summary',
-        '[role="button"]',
-        '[role="link"]',
-        '[role="menuitem"]',
-        '[data-summary-clear-ignore]',
-        '[data-summary-series-id]',
-        '[data-summary-group-id]',
-        '[data-inline-detail-for]',
-      ].join(', ');
-
-      const surfaceRect = surface.getBoundingClientRect();
-      const tableRect = table.getBoundingClientRect();
-      const startY = Math.max(surfaceRect.top + 12, tableRect.top + 12);
-      for (let y = startY; y <= surfaceRect.bottom - 12; y += 12) {
-        for (let x = surfaceRect.left + 12; x <= surfaceRect.right - 12; x += 12) {
-          const target = document.elementFromPoint(x, y);
-          if (!(target instanceof HTMLElement) || !surface.contains(target)) {
-            continue;
-          }
-          if (target.closest(ignoreSelector)) {
-            continue;
-          }
-          if (table.contains(target) && !target.closest('[data-summary-clear-surface]')) {
-            continue;
-          }
-          return { x, y };
-        }
-      }
-
-      throw new Error(`No neutral clear point found inside ${surfaceTestId}`);
-    },
-    { surfaceTestId, tableTestId },
-  );
-}
-
 async function hoverRowUntilSummaryHighlights(
   page: import("@playwright/test").Page,
   rows: import("@playwright/test").Locator,
@@ -1059,14 +1000,12 @@ test.describe.serial("Summary hover selection", () => {
       {
         path: "/workloads",
         summaryTestId: "workloads-summary",
-        interactionSurfaceTestId: "workloads-page",
         tableSurfaceTestId: "workloads-table-surface",
         tableRowSelector: "tr[data-guest-id]",
       },
       {
         path: "/infrastructure",
         summaryTestId: "infrastructure-summary",
-        interactionSurfaceTestId: "infrastructure-page",
         tableSurfaceTestId: "infrastructure-table-surface",
         tableRowSelector: "tr[data-summary-series-id]",
       },
@@ -1175,12 +1114,10 @@ test.describe.serial("Summary hover selection", () => {
         .toBe(true);
       await expect(page.getByText("Pinned to")).toHaveCount(0);
 
-      const clearPoint = await findNeutralClearPoint(
-        page,
-        surface.interactionSurfaceTestId,
-        surface.tableSurfaceTestId,
-      );
-      await page.mouse.click(clearPoint.x, clearPoint.y);
+      await page
+        .getByTestId(surface.tableSurfaceTestId)
+        .getByRole("button", { name: "Clear selection" })
+        .click();
       await expect
         .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))
         .toBeNull();
@@ -1220,7 +1157,6 @@ test.describe.serial("Summary hover selection", () => {
 
     await page.goto("/storage?group=node", { waitUntil: "domcontentloaded" });
     const storageSummary = page.getByTestId("storage-summary");
-    const storageInteractionSurface = page.getByTestId("storage-page");
     await expect(storageSummary).toBeVisible();
     await expect(page.getByText("Pinned to")).toHaveCount(0);
 
@@ -1320,13 +1256,10 @@ test.describe.serial("Summary hover selection", () => {
       .toBe(true);
     await expect(page.getByText("Pinned to")).toHaveCount(0);
 
-    const clearPoint = await findNeutralClearPoint(
-      page,
-      "storage-page",
-      "storage-content-surface",
-    );
-    await expect(storageInteractionSurface).toBeVisible();
-    await page.mouse.click(clearPoint.x, clearPoint.y);
+    await page
+      .getByTestId("storage-content-surface")
+      .getByRole("button", { name: "Clear selection" })
+      .click();
     await expect(page.locator('tr[data-summary-group-member-active="pinned"]')).toHaveCount(0);
     await expect
       .poll(() => new URL(page.url()).searchParams.get("summaryGroup"))

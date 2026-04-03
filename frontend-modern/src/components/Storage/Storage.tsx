@@ -33,6 +33,7 @@ const Storage: Component = () => {
     nodeFilterOptions,
     activeBannerKind,
     cephSummaryStats,
+    clearPinnedSummaryScope,
     filteredRecords,
     activeSummaryStorageGroupScope,
     activeSummaryStorageResourceId,
@@ -141,6 +142,7 @@ const Storage: Component = () => {
           getRecordAlertState={getRecordAlertState}
           isLoadingPools={isLoadingPools}
           activeSummaryGroupScope={activeSummaryStorageGroupScope}
+          clearPinnedSummaryScope={clearPinnedSummaryScope}
           hoveredSummaryGroupScope={hoveredSummaryStorageGroupScope}
           focusedSummaryGroupScope={focusedSummaryStorageGroupScope}
           focusedSummaryGroupId={focusedSummaryStorageGroupId}

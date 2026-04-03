@@ -4,6 +4,7 @@ import type { Disk } from '@/types/api';
 import { formatBytes, formatSpeed, formatUptime, normalizeDiskArray } from '@/utils/format';
 import { formatTemperature } from '@/utils/temperature';
 import { Card } from '@/components/shared/Card';
+import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import {
   Table,
   TableBody,
@@ -59,10 +60,12 @@ export const UnifiedResourceHostTableCard: Component<UnifiedResourceHostTableCar
   return (
     <Show when={table.showHostTable()}>
       <Card padding="none" tone="card" class="mb-0 overflow-hidden">
-        <div class="border-b border-border bg-surface-hover px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
-          Agent Infrastructure
-        </div>
-          <div class="overflow-x-auto">
+        <SummaryTableCardHeader
+          title="Agent Infrastructure"
+          showClearAction={table.showHostClearAction()}
+          onClear={tableProps.clearPinnedSummaryScope}
+        />
+        <div class="overflow-x-auto">
           <Table
             class="whitespace-nowrap min-w-[max-content]"
             style={{

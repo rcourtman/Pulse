@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChartsAPI } from '@/api/charts';
 import StorageSummary from '@/components/Storage/StorageSummary';
@@ -797,7 +797,7 @@ describe('Storage', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('clears pinned storage group scope from table whitespace', async () => {
+  it('clears pinned storage group scope from the content-card header action', async () => {
     hookResources = [
       buildStorageResource('storage-1', 'Node-Store', 'pve1'),
       buildStorageResource('storage-2', 'Edge-Store', 'pve2'),
@@ -815,10 +815,10 @@ describe('Storage', () => {
       ).toBeTruthy();
     });
 
-    const clearSurface = screen.getByTestId('storage-page');
-    expect(clearSurface).not.toBeNull();
-
-    fireEvent.click(clearSurface);
+    const clearButton = within(screen.getByTestId('storage-content-surface')).getByRole('button', {
+      name: 'Clear selection',
+    });
+    fireEvent.click(clearButton);
 
     await waitFor(() => {
       expect(navigateSpy).toHaveBeenCalledWith('/storage?group=node', ROUTE_STATE_REPLACE_OPTIONS);

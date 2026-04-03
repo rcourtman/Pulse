@@ -63,6 +63,7 @@ import summaryCardInteractionSource from '@/components/shared/summaryCardInterac
 import summaryJumpToRowButtonSource from '@/components/shared/SummaryJumpToRowButton.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
 import summaryInteractionA11ySource from '@/components/shared/summaryInteractionA11y.ts?raw';
+import summaryTableCardHeaderSource from '@/components/shared/SummaryTableCardHeader.tsx?raw';
 import summaryTableFocusSource from '@/components/shared/summaryTableFocus.ts?raw';
 import infrastructureSummaryTableSource from '@/components/shared/InfrastructureSummaryTable.tsx?raw';
 import infrastructureSummaryTableRowSource from '@/components/shared/InfrastructureSummaryTableRow.tsx?raw';
@@ -109,6 +110,7 @@ import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
+import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
 import workloadPanelSource from '@/components/Dashboard/WorkloadPanel.tsx?raw';
 import guestRowStateSource from '@/components/Dashboard/useGuestRowState.ts?raw';
 import dashboardSelectionStateSource from '@/components/Dashboard/useDashboardSelectionState.ts?raw';
@@ -240,6 +242,18 @@ describe('shared primitive guardrails', () => {
     expect(interactiveSparklineSource).toContain('text-base-content');
     expect(interactiveSparklineSource).toContain('border-border');
     expect(interactiveSparklineSource).not.toContain("'background-color': 'rgb(15, 23, 42)'");
+  });
+
+  it('keeps shared summary table chrome on one canonical header owner', () => {
+    expect(summaryTableCardHeaderSource).toContain('Clear selection');
+    expect(summaryTableCardHeaderSource).toContain("props.clearLabel ?? 'Clear'");
+    expect(summaryTableCardHeaderSource).toContain('props.clearAriaLabel ??');
+    expect(summaryTableCardHeaderSource).toContain('event.stopPropagation()');
+    expect(summaryTableCardHeaderSource).not.toContain('Pinned to');
+    expect(summaryTableCardHeaderSource).not.toContain('Scoped to');
+    expect(dashboardWorkloadTableSource).toContain('SummaryTableCardHeader');
+    expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
+    expect(storagePoolRowSource).not.toContain('Clear selection');
   });
 
   it('keeps active use trial nudge on shell, runtime, and model owners', () => {

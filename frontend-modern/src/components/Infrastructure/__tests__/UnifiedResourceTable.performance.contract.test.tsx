@@ -16,6 +16,7 @@ import infrastructureSummarySource from '@/components/Infrastructure/Infrastruct
 import infrastructureSummaryStateSource from '@/components/Infrastructure/useInfrastructureSummaryState.ts?raw';
 import infrastructureSummaryModelSource from '@/components/Infrastructure/infrastructureSummaryModel.ts?raw';
 import unifiedResourceHostTableCardSource from '@/components/Infrastructure/UnifiedResourceHostTableCard.tsx?raw';
+import unifiedResourceServiceInfrastructureCardSource from '@/components/Infrastructure/UnifiedResourceServiceInfrastructureCard.tsx?raw';
 import unifiedResourcePBSTableSectionSource from '@/components/Infrastructure/UnifiedResourcePBSTableSection.tsx?raw';
 import unifiedResourcePMGTableSectionSource from '@/components/Infrastructure/UnifiedResourcePMGTableSection.tsx?raw';
 import summaryRowActionButtonSource from '@/components/shared/SummaryRowActionButton.tsx?raw';
@@ -200,6 +201,7 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableSource).toContain('useUnifiedResourceTableState');
       expect(unifiedResourceTableSource).toContain('UnifiedResourceHostTableCard');
       expect(unifiedResourceTableSource).toContain('UnifiedResourceServiceInfrastructureCard');
+      expect(unifiedResourceTableSource).toContain('data-summary-clear-surface');
       expect(unifiedResourceTableSource).not.toContain('const sortedPBSResources = createMemo(() =>');
       expect(unifiedResourceTableSource).not.toContain('const getOutlierEmphasis =');
       expect(unifiedResourceTableSource).not.toContain('const getPBSTableRow =');
@@ -208,6 +210,9 @@ describe('UnifiedResourceTable performance contract', () => {
       expect(unifiedResourceTableStateSource).toContain('getUnifiedResourceTableColumnStyles');
       expect(unifiedResourceTableStateSource).toContain('useTableWindowing');
       expect(unifiedResourceTableStateSource).toContain('useUnifiedResourceTableViewportSync');
+      expect(unifiedResourceTableStateSource).toContain('clearPinnedSummaryScope?: () => void;');
+      expect(unifiedResourceTableStateSource).toContain('showHostClearAction');
+      expect(unifiedResourceTableStateSource).toContain('showServiceClearAction');
       expect(unifiedResourceTableStateSource).not.toContain('const resourceColumnStyle = createMemo(() =>');
       expect(unifiedResourceTableStateSource).not.toContain("const showGroupHeaders = props.groupingMode === 'grouped'");
       expect(unifiedResourceTableStateSource).not.toContain('const items: HostTableItem[] = [];');
@@ -294,6 +299,13 @@ describe('UnifiedResourceTable performance contract', () => {
       }
 
       expect(unifiedResourceHostTableCardSource).not.toContain('kind="scope"');
+      expect(unifiedResourceHostTableCardSource).toContain('SummaryTableCardHeader');
+      expect(unifiedResourceHostTableCardSource).toContain('onClear={tableProps.clearPinnedSummaryScope}');
+      expect(unifiedResourceServiceInfrastructureCardSource).toContain('SummaryTableCardHeader');
+      expect(unifiedResourceServiceInfrastructureCardSource).toContain('showClearAction');
+      expect(unifiedResourceServiceInfrastructureCardSource).toContain(
+        'onClear={tableProps.clearPinnedSummaryScope}',
+      );
     });
 
     it('keeps source filtering on the shared canonical source-platform helper', () => {

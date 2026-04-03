@@ -1,10 +1,10 @@
 import { Component, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
+import { SummaryTableCardHeader } from '@/components/shared/SummaryTableCardHeader';
 import { DiskList } from '@/components/Storage/DiskList';
 import StoragePoolsTable from '@/components/Storage/StoragePoolsTable';
 import {
   STORAGE_CONTENT_CARD_BODY_CLASS,
-  STORAGE_CONTENT_CARD_HEADER_CLASS,
 } from '@/features/storageBackups/storagePagePresentation';
 import type { Resource } from '@/types/resource';
 import type { StorageGroupKey, StorageGroupedRecords } from './useStorageModel';
@@ -30,6 +30,7 @@ type StorageContentCardProps = {
   getRecordAlertState: (recordId: string) => StorageAlertRowState;
   isLoadingPools: () => boolean;
   activeSummaryGroupScope: () => SummarySeriesGroupScope | null;
+  clearPinnedSummaryScope: () => void;
   hoveredSummaryGroupScope: () => SummarySeriesGroupScope | null;
   focusedSummaryGroupScope: () => SummarySeriesGroupScope | null;
   focusedSummaryGroupId: () => string | null;
@@ -48,6 +49,8 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
     view: props.view,
     selectedNodeId: props.selectedNodeId,
   });
+  const showClearSelection = () =>
+    Boolean(props.focusedSummaryGroupId() || props.expandedPoolId() || props.selectedDiskId());
 
   return (
     <Card
@@ -58,7 +61,11 @@ export const StorageContentCard: Component<StorageContentCardProps> = (props) =>
       data-summary-clear-surface
       data-testid="storage-content-surface"
     >
-      <div class={STORAGE_CONTENT_CARD_HEADER_CLASS}>{model.heading()}</div>
+      <SummaryTableCardHeader
+        title={model.heading()}
+        showClearAction={showClearSelection()}
+        onClear={props.clearPinnedSummaryScope}
+      />
       <Show when={model.showDisks()}>
         <div class={STORAGE_CONTENT_CARD_BODY_CLASS}>
           <DiskList

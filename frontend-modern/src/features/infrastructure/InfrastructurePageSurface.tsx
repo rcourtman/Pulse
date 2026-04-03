@@ -64,6 +64,7 @@ export function InfrastructurePageSurface() {
     setFiltersOpen,
     activeFilterCount,
     kioskMode,
+    clearPinnedSummaryScope,
     sourceOptions,
     statusOptions,
     hasActiveFilters,
@@ -330,6 +331,7 @@ export function InfrastructurePageSurface() {
                   <UnifiedResourceTable
                     resources={filteredResources()}
                     expandedResourceId={expandedResourceId()}
+                    clearPinnedSummaryScope={clearPinnedSummaryScope}
                     activeSummaryGroupScope={activeSummaryResourceGroupScope()}
                     hoveredSummaryGroupScope={hoveredSummaryResourceGroupScope()}
                     focusedSummaryGroupScope={focusedSummaryResourceGroupScope()}

@@ -33,6 +33,7 @@ import {
 export interface UnifiedResourceTableProps {
   resources: Resource[];
   expandedResourceId: string | null;
+  clearPinnedSummaryScope?: () => void;
   highlightedResourceId?: string | null;
   revealedResourceId?: string | null;
   hoveredResourceId?: string | null;
@@ -57,6 +58,8 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const split = createMemo(() => splitPrimaryAndServiceResources(props.resources));
   const primaryResources = createMemo(() => split().primaryResources);
   const serviceResources = createMemo(() => split().services);
+  const primaryResourceIds = createMemo(() => new Set(primaryResources().map((resource) => resource.id)));
+  const serviceResourceIds = createMemo(() => new Set(serviceResources().map((resource) => resource.id)));
 
   const sortedResources = createMemo(() =>
     sortResources(primaryResources(), sortKey(), sortDirection()),
@@ -130,6 +133,15 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
   const showHostTable = createMemo(() =>
     shouldShowUnifiedResourceHostTable(primaryResources().length, serviceResources().length),
   );
+  const showHostClearAction = createMemo(() =>
+    Boolean(
+      props.focusedSummaryGroupId ||
+        (props.expandedResourceId && primaryResourceIds().has(props.expandedResourceId)),
+    ),
+  );
+  const showServiceClearAction = createMemo(() =>
+    Boolean(props.expandedResourceId && serviceResourceIds().has(props.expandedResourceId)),
+  );
 
   return {
     isMobile,
@@ -152,6 +164,8 @@ export function useUnifiedResourceTableState(props: UnifiedResourceTableProps) {
     uptimeColumnStyle: () => columnStyles().uptimeColumnStyle,
     tempColumnStyle: () => columnStyles().tempColumnStyle,
     showHostTable,
+    showHostClearAction,
+    showServiceClearAction,
     serviceCountColumnStyle: () => columnStyles().serviceCountColumnStyle,
     serviceQueueColumnStyle: () => columnStyles().serviceQueueColumnStyle,
     serviceHealthColumnStyle: () => columnStyles().serviceHealthColumnStyle,

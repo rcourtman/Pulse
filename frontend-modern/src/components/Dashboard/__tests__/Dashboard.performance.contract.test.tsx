@@ -727,8 +727,12 @@ describe('Dashboard performance contract', () => {
       expect(dashboardSource).toContain('setTableRootRef={state.setTableRootRef}');
       expect(dashboardSource).toContain('data-testid="workloads-interaction-surface"');
       expect(dashboardSource).toContain('data-summary-clear-ignore');
+      expect(dashboardSource).toContain('clearPinnedSummaryScope={state.clearPinnedSummaryScope}');
       expect(dashboardWorkloadTableSource).toContain('data-summary-clear-surface');
       expect(dashboardWorkloadTableSource).toContain('data-testid="workloads-table-surface"');
+      expect(dashboardWorkloadTableSource).toContain('SummaryTableCardHeader');
+      expect(dashboardWorkloadTableSource).toContain('showClearSelection');
+      expect(dashboardWorkloadTableSource).toContain('clearPinnedSummaryScope');
       expect(dashboardFilterSource).not.toContain('const [filtersOpen, setFiltersOpen] =');
       expect(dashboardFilterSource).not.toContain('useBreakpoint');
       expect(dashboardFilterSource).not.toContain("props.setSortKey('name')");
