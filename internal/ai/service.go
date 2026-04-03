@@ -1497,7 +1497,7 @@ func (s *Service) LoadConfig() error {
 				s.provider = qp
 				s.usingQuickstart = true
 				// Force all model strings to quickstart so chat.Service creates the right provider.
-				quickstartModelStr := config.AIProviderQuickstart + ":minimax-2.5m"
+				quickstartModelStr := config.DefaultModelForProvider(config.AIProviderQuickstart)
 				cfg.Model = quickstartModelStr
 				cfg.PatrolModel = quickstartModelStr
 				cfg.ChatModel = quickstartModelStr

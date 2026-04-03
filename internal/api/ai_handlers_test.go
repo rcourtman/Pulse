@@ -267,6 +267,7 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.True(t, resp.Enabled)
 	assert.True(t, resp.Configured)
+	assert.Equal(t, "quickstart:pulse-hosted", resp.Model)
 	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
 	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
@@ -308,6 +309,7 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.True(t, resp.Enabled)
 	assert.True(t, resp.Configured)
+	assert.Equal(t, "quickstart:pulse-hosted", resp.Model)
 	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
 	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
@@ -397,6 +399,7 @@ func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesAct
 	var resp AISettingsResponse
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.True(t, resp.Enabled)
+	assert.Equal(t, "quickstart:pulse-hosted", resp.Model)
 	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
 	assert.True(t, resp.UsingQuickstart)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)

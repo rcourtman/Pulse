@@ -166,9 +166,9 @@ func TestContract_AISettingsUpdateQuickstartBootstrapJSONSnapshot(t *testing.T) 
 
 	const want = `{
 		"enabled":true,
-		"model":"quickstart:minimax-2.5m",
-		"chat_model":"quickstart:minimax-2.5m",
-		"patrol_model":"quickstart:minimax-2.5m",
+		"model":"quickstart:pulse-hosted",
+		"chat_model":"quickstart:pulse-hosted",
+		"patrol_model":"quickstart:pulse-hosted",
 		"configured":true,
 		"custom_context":"",
 		"auth_method":"api_key",
@@ -2021,9 +2021,9 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"enabled":true,
-		"model":"quickstart:minimax-2.5m",
-		"chat_model":"quickstart:minimax-2.5m",
-		"patrol_model":"quickstart:minimax-2.5m",
+		"model":"quickstart:pulse-hosted",
+		"chat_model":"quickstart:pulse-hosted",
+		"patrol_model":"quickstart:pulse-hosted",
 		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",
@@ -2557,9 +2557,9 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"enabled":true,
-		"model":"quickstart:minimax-2.5m",
-		"chat_model":"quickstart:minimax-2.5m",
-		"patrol_model":"quickstart:minimax-2.5m",
+		"model":"quickstart:pulse-hosted",
+		"chat_model":"quickstart:pulse-hosted",
+		"patrol_model":"quickstart:pulse-hosted",
 		"configured":false,
 		"custom_context":"",
 		"auth_method":"api_key",

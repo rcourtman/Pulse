@@ -2563,7 +2563,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 				// Persist all model strings so chat.Service restart picks them
 				// up from disk. All three must point to quickstart — any stale
 				// BYOK model reference would cause the chat service to fail.
-				quickstartModelStr := config.AIProviderQuickstart + ":minimax-2.5m"
+				quickstartModelStr := config.DefaultModelForProvider(config.AIProviderQuickstart)
 				settings.Model = quickstartModelStr
 				settings.PatrolModel = quickstartModelStr
 				settings.ChatModel = quickstartModelStr

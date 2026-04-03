@@ -133,6 +133,11 @@ management, and fleet control surfaces.
    authority for Patrol quickstart bootstrap, so lifecycle flows must not
    reintroduce anonymous bootstrap identity or tenant-local commercial-owner
    surrogates when they traverse those shared handlers.
+   That same shared quickstart boundary is vendor-neutral at the lifecycle
+   edge too: lifecycle-adjacent consumers may observe the stable
+   `quickstart:pulse-hosted` alias in AI settings payloads, but they must not
+   bake vendor model IDs or provider-model fallback rules into install or
+   activation flows just because those routes share the backend API tree.
    The shared installation-scoped `activation.enc` path is that authority:
    tenant-local lifecycle routes may reuse it, but they must not fork per-org
    activation caches, alternate installation-token stores, or competing

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,7 +20,7 @@ const (
 	// The API key lives server-side — self-hosted binaries never see it.
 	defaultQuickstartProxyURL = "https://license.pulserelay.pro/v1/quickstart/patrol"
 
-	quickstartModel          = "minimax-2.5m"
+	quickstartModel          = config.DefaultAIModelQuickstart
 	quickstartRequestTimeout = 300 * time.Second // 5 minutes
 	quickstartMaxRetries     = 2
 	quickstartInitialBackoff = 2 * time.Second
@@ -331,7 +332,7 @@ func (c *QuickstartClient) ListModels(_ context.Context) ([]ModelInfo, error) {
 	return []ModelInfo{
 		{
 			ID:      quickstartModel,
-			Name:    "MiniMax 2.5M (Quickstart)",
+			Name:    "Pulse Hosted Quickstart",
 			Notable: true,
 		},
 	}, nil

@@ -224,6 +224,9 @@ func TestAIConfig_GetConfiguredProviders(t *testing.T) {
 }
 
 func TestDefaultModelForProvider_Quickstart(t *testing.T) {
+	if DefaultAIModelQuickstart != "pulse-hosted" {
+		t.Fatalf("DefaultAIModelQuickstart = %q, want pulse-hosted", DefaultAIModelQuickstart)
+	}
 	got := DefaultModelForProvider(AIProviderQuickstart)
 	want := FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart)
 	if got != want {

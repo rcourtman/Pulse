@@ -112,6 +112,11 @@ querying, and the operator-facing storage health presentation layer.
     AI/runtime plus API-contract lanes, and storage/recovery surfaces must not
     reintroduce local quickstart accounting, token lifecycle, anonymous
     bootstrap identity, or commercial identity rules.
+    That shared AI settings payload is also intentionally vendor-neutral:
+    storage/recovery-adjacent consumers may react to the stable
+    `quickstart:pulse-hosted` alias, but they must not treat vendor model IDs
+    or quickstart upstream-model defaults as part of storage/recovery transport
+    ownership or route behavior.
     Activation-required quickstart block reasons exposed on that same shared
     AI settings surface are likewise not storage/recovery onboarding truth;
     adjacent pages may react to the message, but they must not reinterpret it

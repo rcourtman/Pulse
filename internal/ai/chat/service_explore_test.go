@@ -375,7 +375,7 @@ func TestResolveExploreProvider_SupportsQuickstartModel(t *testing.T) {
 	if provider == nil {
 		t.Fatal("expected explore provider resolution to succeed for quickstart")
 	}
-	if model != "quickstart:minimax-2.5m" {
+	if model != "quickstart:pulse-hosted" {
 		t.Fatalf("expected quickstart explore model, got %q", model)
 	}
 	if provider.Name() != config.AIProviderQuickstart {

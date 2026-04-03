@@ -1863,6 +1863,123 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA21",
+      "summary": "Pulse-owned hosted AI contracts stay vendor-neutral: quickstart runtime and API payloads expose the stable alias `quickstart:pulse-hosted`, while the license server requires explicit upstream model configuration instead of hardcoded vendor defaults.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "quickstart-model-alias-browser-proof",
+          "cwd": "tests/integration",
+          "run": [
+            "/usr/bin/env",
+            "PULSE_E2E_SKIP_DOCKER=1",
+            "PULSE_E2E_USE_LOCAL_BACKEND=1",
+            "npm",
+            "test",
+            "--",
+            "tests/51-quickstart-cross-surface.spec.ts",
+            "--project=chromium"
+          ]
+        },
+        {
+          "id": "quickstart-model-alias-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/config",
+            "./internal/ai",
+            "./internal/api",
+            "-run",
+            "Quickstart|DefaultModelForProvider|HostedAISettings|HostedTenantAISettings|ServiceLoadConfig_PrefersBYOKProviderOverQuickstart|ServiceLoadConfig_TracksQuickstartActivationRequirement|HandleGetPatrolStatus|AISettingsHandler_",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "quickstart-model-alias-frontend-tests",
+          "cwd": "frontend-modern",
+          "run": [
+            "npm",
+            "test",
+            "--",
+            "--run",
+            "src/components/Settings/__tests__/AISettings.test.tsx"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "frontend-modern/src/components/Settings/__tests__/AISettings.test.tsx",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service_explore_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/contract_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "tests/integration/tests/51-quickstart-cross-surface.spec.ts",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/main.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/secrets.env.template",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

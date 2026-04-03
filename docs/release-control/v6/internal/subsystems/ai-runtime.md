@@ -118,7 +118,10 @@ instead of depending on an ungoverned standalone hostname. Runtime overrides
 may exist only as an explicit environment-controlled rollout escape hatch, and
 the canonical quickstart proxy contract remains an OpenAI-compatible server-owned
 surface that lives behind the public license API rather than a tenant-local or
-mobile-local adapter.
+mobile-local adapter. That server-owned boundary must also own the real upstream
+vendor model selection explicitly through license-server configuration rather
+than through a baked runtime fallback, so model churn does not leak into the
+Pulse runtime or API contract.
 That same Patrol quickstart boundary is now server-authoritative end to end.
 `internal/ai/quickstart.go` must bootstrap before the first Patrol-only
 quickstart use, resolve installation identity from the installation-scoped
@@ -145,7 +148,8 @@ canonical blocked reason and fall back to activation-or-BYOK guidance instead
 of inferring readiness from provider model catalogs or local credit counters.
 That same provider-model contract applies to the chat explore pre-pass in
 `internal/ai/chat/service_explore.go`: any runtime model that is valid for the
-main chat execution path, including `quickstart:minimax-2.5m`, must resolve
+main chat execution path, including the Pulse-owned hosted quickstart alias
+`quickstart:pulse-hosted`, must resolve
 through the dedicated explore provider path as well. Explore must not reject
 the canonical quickstart provider while the main chat loop accepts it, because
 hosted tenants rely on the same governed quickstart model before BYOK exists.
@@ -194,7 +198,7 @@ When Pulse Cloud runs in hosted mode and no explicit `ai.enc` exists yet,
 canonical hosted billing state instead of falling back to a synthetic
 `enabled=false` default. Entitled hosted tenants that carry AI capabilities
 must persist one machine-owned quickstart-backed AI config with the canonical
-`quickstart:minimax-2.5m` runtime models so Chat and Patrol can start before
+Pulse-owned alias `quickstart:pulse-hosted` so Chat and Patrol can start before
 the operator visits AI Settings, while any explicitly written AI config
 remains authoritative and must not be overwritten by hosted bootstrap. When
 the request runs under a hosted tenant org with no org-local billing lease,

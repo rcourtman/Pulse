@@ -83,9 +83,9 @@ type PatrolSurfaceOverrides = {
 
 const baseAISettings = (): AISettingsPayload => ({
   enabled: true,
-  model: "quickstart:minimax-2.5m",
-  chat_model: "quickstart:minimax-2.5m",
-  patrol_model: "quickstart:minimax-2.5m",
+  model: "quickstart:pulse-hosted",
+  chat_model: "quickstart:pulse-hosted",
+  patrol_model: "quickstart:pulse-hosted",
   configured: true,
   custom_context: "",
   auth_method: "api_key",
@@ -287,9 +287,9 @@ async function mockQuickstartPatrolSurface(page: Page, overrides: PatrolSurfaceO
       patrolStatus.enabled = body.enabled;
       if (body.enabled && settings.quickstart_credits_available && settings.configured_providers.length === 0) {
         settings.configured = true;
-        settings.model = "quickstart:minimax-2.5m";
-        settings.chat_model = "quickstart:minimax-2.5m";
-        settings.patrol_model = "quickstart:minimax-2.5m";
+        settings.model = "quickstart:pulse-hosted";
+        settings.chat_model = "quickstart:pulse-hosted";
+        settings.patrol_model = "quickstart:pulse-hosted";
         settings.using_quickstart = true;
         patrolStatus.runtime_state = "active";
         patrolStatus.using_quickstart = true;
