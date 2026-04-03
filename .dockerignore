@@ -6,6 +6,10 @@
 *.md
 docs/
 dev-docs/
+!docs/
+!docs/**
+!SECURITY.md
+!TERMS.md
 
 # Binaries and build artifacts
 pulse

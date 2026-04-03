@@ -2256,6 +2256,7 @@
         "internal/updates/"
       ],
       "owned_files": [
+        ".dockerignore",
         ".github/workflows/create-release.yml",
         ".github/workflows/deploy-demo-server.yml",
         ".github/workflows/helm-pages.yml",
@@ -2360,6 +2361,7 @@
             "label": "release build metadata proof",
             "match_prefixes": [],
             "match_files": [
+              ".dockerignore",
               ".github/workflows/deploy-demo-server.yml",
               "Dockerfile",
               "scripts/build-release.sh",

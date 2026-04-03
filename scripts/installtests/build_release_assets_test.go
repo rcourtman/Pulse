@@ -121,6 +121,24 @@ func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
 			t.Fatalf("Dockerfile missing shipped-doc build input: %s", needle)
 		}
 	}
+
+	dockerignoreBytes, err := os.ReadFile(repoFile(".dockerignore"))
+	if err != nil {
+		t.Fatalf("read .dockerignore: %v", err)
+	}
+
+	dockerignore := string(dockerignoreBytes)
+	requiredAllowlist := []string{
+		`!docs/`,
+		`!docs/**`,
+		`!SECURITY.md`,
+		`!TERMS.md`,
+	}
+	for _, needle := range requiredAllowlist {
+		if !strings.Contains(dockerignore, needle) {
+			t.Fatalf(".dockerignore missing shipped-doc allowlist entry: %s", needle)
+		}
+	}
 }
 
 func repoFile(parts ...string) string {

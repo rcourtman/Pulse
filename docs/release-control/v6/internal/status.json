@@ -2191,6 +2191,60 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA24",
+      "summary": "Docker release builds must keep the embedded frontend's shipped-doc inputs available inside the container build context: `Dockerfile` and `.dockerignore` jointly own staging `docs/**`, `SECURITY.md`, and `TERMS.md` so hosted runtime image builds do not depend on workstation-local files or silently drop public docs from the frontend embed sync.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L1"
+      ],
+      "subsystem_ids": [
+        "deployment-installability"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "docker-release-build-shipped-doc-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./scripts/installtests",
+            "-run",
+            "TestDocker(AndDemoBuildsUseCanonicalReleaseLdflags|fileStagesShippedDocsForEmbeddedFrontendBuild)",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": ".dockerignore",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "Dockerfile",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "scripts/installtests/build_release_assets_test.go",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

@@ -69,7 +69,7 @@ server-side update execution surfaces.
 ## Extension Points
 
 1. Add or change deployment-type detection, update planning, or apply behavior through `internal/updates/`
-2. Add or change release-build metadata injection, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/resolve_release_promotion.py`, `Dockerfile`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
+2. Add or change release-build metadata injection, Docker build-context allowlists, release artifact assembly, or governed promotion metadata resolution through `scripts/build-release.sh`, `scripts/release_ldflags.sh`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/release_control/resolve_release_promotion.py`, `.dockerignore`, `Dockerfile`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, the operator dispatch helpers `scripts/trigger-release.sh` and `scripts/trigger-release-dry-run.sh`, and the governed release workflows `.github/workflows/create-release.yml`, `.github/workflows/deploy-demo-server.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, and `.github/workflows/update-demo-server.yml`
 3. Add or change shell installer, Windows installer, container-agent installer, or auto-update script behavior through `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-container-agent.sh`, and `scripts/pulse-auto-update.sh`
 4. Add or change server update transport through `internal/api/updates.go` and `frontend-modern/src/api/updates.ts`
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `Makefile`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
@@ -129,11 +129,13 @@ governed deployment-build workflows must all carry the same build metadata
 contract rather than depending on whichever local ldflags string happened to be
 updated last.
 That same Docker release-build boundary also owns the embedded frontend's
-shipped-doc inputs. When the frontend embed build syncs public docs from the
-repo root, `Dockerfile` must stage the canonical shipped docs set into the
-container build context before `npm run build` runs, rather than relying on a
-workstation-local checkout layout or leaving hosted runtime image builds unable
-to resolve `/app/docs/*.md`, `SECURITY.md`, or `TERMS.md`.
+shipped-doc inputs and the Docker context allowlist that makes those files
+available to release builds in the first place. When the frontend embed build
+syncs public docs from the repo root, `Dockerfile` and `.dockerignore` must
+jointly stage the canonical shipped docs set into the container build context
+before `npm run build` runs, rather than relying on a workstation-local
+checkout layout or leaving hosted runtime image builds unable to resolve
+`/app/docs/*.md`, `SECURITY.md`, or `TERMS.md`.
 The same governed promotion path must now stay explicit too:
 `scripts/release_control/resolve_release_promotion.py` is the canonical owner
 for stable-versus-prerelease metadata validation shared by `.github/workflows/release-dry-run.yml`
