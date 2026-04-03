@@ -2350,6 +2350,7 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	if settings == nil {
 		settings = config.NewDefaultAIConfig()
 	}
+	settings.NormalizeQuickstartModelAliases()
 	if aiSettingsRequireModelResolution(settings) {
 		if resolvedModel, resolveErr := ai.ResolveConfiguredModel(ctx, settings); resolveErr == nil {
 			settings.Model = resolvedModel
@@ -2369,9 +2370,9 @@ func (h *AISettingsHandler) HandleGetAISettings(w http.ResponseWriter, r *http.R
 	response := AISettingsResponse{
 		Enabled:        settings.Enabled || isDemo,
 		Model:          settings.GetModel(),
-		ChatModel:      settings.ChatModel,
-		PatrolModel:    settings.PatrolModel,
-		AutoFixModel:   settings.AutoFixModel,
+		ChatModel:      config.NormalizeQuickstartModelString(settings.ChatModel),
+		PatrolModel:    config.NormalizeQuickstartModelString(settings.PatrolModel),
+		AutoFixModel:   config.NormalizeQuickstartModelString(settings.AutoFixModel),
 		Configured:     settings.IsConfigured() || isDemo,
 		CustomContext:  settings.CustomContext,
 		AuthMethod:     authMethod,
@@ -2748,6 +2749,7 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		}
 		settings.Model = resolvedModel
 	}
+	settings.NormalizeQuickstartModelAliases()
 
 	// Save settings
 	if err := h.getPersistence(r.Context()).SaveAIConfig(*settings); err != nil {
@@ -2790,8 +2792,8 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 		Bool("enabled", settings.Enabled).
 		Str("provider", providerName).
 		Str("model", settings.GetModel()).
-		Str("chatModel", settings.ChatModel).
-		Str("patrolModel", settings.PatrolModel).
+		Str("chatModel", config.NormalizeQuickstartModelString(settings.ChatModel)).
+		Str("patrolModel", config.NormalizeQuickstartModelString(settings.PatrolModel)).
 		Bool("alertTriggeredAnalysis", settings.AlertTriggeredAnalysis).
 		Msg("AI settings updated")
 
@@ -2806,9 +2808,9 @@ func (h *AISettingsHandler) HandleUpdateAISettings(w http.ResponseWriter, r *htt
 	response := AISettingsResponse{
 		Enabled:                      settings.Enabled,
 		Model:                        settings.GetModel(),
-		ChatModel:                    settings.ChatModel,
-		PatrolModel:                  settings.PatrolModel,
-		AutoFixModel:                 settings.AutoFixModel,
+		ChatModel:                    config.NormalizeQuickstartModelString(settings.ChatModel),
+		PatrolModel:                  config.NormalizeQuickstartModelString(settings.PatrolModel),
+		AutoFixModel:                 config.NormalizeQuickstartModelString(settings.AutoFixModel),
 		Configured:                   settings.IsConfigured(),
 		CustomContext:                settings.CustomContext,
 		AuthMethod:                   authMethod,

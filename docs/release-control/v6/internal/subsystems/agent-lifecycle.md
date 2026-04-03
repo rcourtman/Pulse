@@ -141,6 +141,11 @@ management, and fleet control surfaces.
    `quickstart:pulse-hosted` alias in AI settings payloads, but they must not
    bake vendor model IDs or provider-model fallback rules into install or
    activation flows just because those routes share the backend API tree.
+   Persisted legacy hosted quickstart model IDs are therefore not lifecycle
+   truth either: when shared settings helpers load or save historical
+   quickstart values, they must normalize them back to
+   `quickstart:pulse-hosted` before adjacent install or activation flows read
+   the payload.
    The machine-scoped quickstart authority must stay canonical too:
    tenant-local lifecycle routes may reuse shared installation activation or
    effective entitlement billing state, but they must not fork per-org

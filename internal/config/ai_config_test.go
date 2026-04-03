@@ -455,6 +455,11 @@ func TestAIConfig_GetModel(t *testing.T) {
 			config:   AIConfig{},
 			expected: "",
 		},
+		{
+			name:     "legacy quickstart model normalizes to owned alias",
+			config:   AIConfig{Model: "quickstart:minimax-2.5m"},
+			expected: DefaultModelForProvider(AIProviderQuickstart),
+		},
 	}
 
 	for _, tt := range tests {
@@ -486,6 +491,39 @@ func TestAIConfig_GetChatModel(t *testing.T) {
 			t.Errorf("GetChatModel() = %q, want 'main-model'", result)
 		}
 	})
+
+	t.Run("normalizes legacy quickstart chat model", func(t *testing.T) {
+		config := AIConfig{
+			Model:     "openai:gpt-4o-mini",
+			ChatModel: "quickstart:minimax-2.5m",
+		}
+		if result := config.GetChatModel(); result != DefaultModelForProvider(AIProviderQuickstart) {
+			t.Errorf("GetChatModel() = %q, want %q", result, DefaultModelForProvider(AIProviderQuickstart))
+		}
+	})
+}
+
+func TestAIConfig_NormalizeQuickstartModelAliases(t *testing.T) {
+	config := AIConfig{
+		Model:          "quickstart:minimax-2.5m",
+		ChatModel:      "pulse-hosted",
+		PatrolModel:    "quickstart:anything",
+		DiscoveryModel: "",
+		AutoFixModel:   "quickstart:legacy-provider-model",
+	}
+
+	changed := config.NormalizeQuickstartModelAliases()
+	if !changed {
+		t.Fatal("expected quickstart alias normalization to report a change")
+	}
+
+	want := DefaultModelForProvider(AIProviderQuickstart)
+	if config.Model != want || config.ChatModel != want || config.PatrolModel != want || config.AutoFixModel != want {
+		t.Fatalf("NormalizeQuickstartModelAliases() = %#v, want all quickstart fields normalized to %q", config, want)
+	}
+	if config.DiscoveryModel != "" {
+		t.Fatalf("expected empty discovery model to remain empty, got %q", config.DiscoveryModel)
+	}
 }
 
 func TestAIConfig_GetPreferredModelForProvider(t *testing.T) {

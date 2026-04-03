@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -316,6 +318,40 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	assert.True(t, resp.QuickstartCreditsAvailable)
 	assert.Empty(t, resp.QuickstartBlockedReason)
 	assert.True(t, persistence.HasAIConfig())
+}
+
+func TestAISettingsHandler_GetSettings_NormalizesLegacyQuickstartAliases(t *testing.T) {
+	tmp := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(tmp)
+	persistence, err := mtp.GetPersistence("default")
+	require.NoError(t, err)
+
+	raw, err := json.Marshal(map[string]any{
+		"enabled":        true,
+		"model":          "quickstart:minimax-2.5m",
+		"chat_model":     "quickstart:minimax-2.5m",
+		"patrol_model":   "quickstart:minimax-2.5m",
+		"auto_fix_model": "quickstart:minimax-2.5m",
+	})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(persistence.DataDir(), "ai.enc"), raw, 0o600))
+
+	handler := NewAISettingsHandler(mtp, nil, nil)
+	handler.defaultConfig = &config.Config{DataPath: tmp}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, "body=%s", rec.Body.String())
+
+	var resp AISettingsResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	want := config.DefaultModelForProvider(config.AIProviderQuickstart)
+	assert.Equal(t, want, resp.Model)
+	assert.Equal(t, want, resp.ChatModel)
+	assert.Equal(t, want, resp.PatrolModel)
+	assert.Equal(t, want, resp.AutoFixModel)
 }
 
 func TestAISettingsHandler_GetSettings_QuickstartActivationRequiredSurface(t *testing.T) {

@@ -69,6 +69,41 @@ func TestLoadAIConfig_Branches(t *testing.T) {
 	assert.NotContains(t, string(rewritten), "secret-key")
 }
 
+func TestLoadAIConfig_MigratesLegacyQuickstartAlias(t *testing.T) {
+	tempDir := t.TempDir()
+	cp := NewConfigPersistence(tempDir)
+	aiFile := filepath.Join(tempDir, "ai.enc")
+
+	legacyConfig := map[string]interface{}{
+		"enabled":        true,
+		"model":          "quickstart:minimax-2.5m",
+		"chat_model":     "quickstart:minimax-2.5m",
+		"patrol_model":   "quickstart:minimax-2.5m",
+		"auto_fix_model": "quickstart:minimax-2.5m",
+	}
+	raw, err := json.Marshal(legacyConfig)
+	if err != nil {
+		t.Fatalf("marshal legacy config: %v", err)
+	}
+	if err := os.WriteFile(aiFile, raw, 0o600); err != nil {
+		t.Fatalf("WriteFile(ai.enc): %v", err)
+	}
+
+	settings, err := cp.LoadAIConfig()
+	assert.NoError(t, err)
+
+	want := DefaultModelForProvider(AIProviderQuickstart)
+	assert.Equal(t, want, settings.Model)
+	assert.Equal(t, want, settings.ChatModel)
+	assert.Equal(t, want, settings.PatrolModel)
+	assert.Equal(t, want, settings.AutoFixModel)
+
+	rewritten, err := os.ReadFile(aiFile)
+	assert.NoError(t, err)
+	assert.False(t, bytes.Equal(rewritten, raw))
+	assert.NotContains(t, string(rewritten), "quickstart:minimax-2.5m")
+}
+
 func TestLoadAIFindings_Branches(t *testing.T) {
 	tempDir := t.TempDir()
 	cp := NewConfigPersistence(tempDir)

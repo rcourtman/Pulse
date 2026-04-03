@@ -218,6 +218,12 @@ querying, and the operator-facing storage health presentation layer.
     unified-resource metrics-target IDs, and the storage page must reuse the
     shared sticky summary primitive instead of a storage-local scroll wrapper.
 13. Keep storage summary interaction scoped through the same canonical IDs.
+14. Keep adjacent AI settings persistence vendor-neutral on the shared
+    `internal/api/` boundary. When storage- or recovery-adjacent hosted flows
+    load or save AI settings through shared helpers, any historical hosted
+    quickstart model IDs must be normalized back to the governed alias
+    `quickstart:pulse-hosted` before adjacent surfaces read or re-emit that
+    state.
     When operators hover or focus pools versus physical disks, the storage
     summary must reuse one resolved active-series ID across card state and
     chart highlighting so pool-only cards demote cleanly during disk focus and
@@ -1816,6 +1822,12 @@ explicit AI config exists. Adjacent recovery surfaces must not invent their
 own "AI disabled until configured" fallback or synthetic activation state when
 the hosted runtime already has enough entitlement proof to bootstrap the
 machine-owned default.
+That same shared persistence path must also rewrite historical hosted
+quickstart model IDs to the Pulse-owned alias before adjacent recovery or
+storage flows read AI settings state. Support and recovery surfaces may
+observe `quickstart:pulse-hosted`, but they must not inherit or re-emit stale
+vendor IDs from old `ai.enc` payloads just because the shared settings helper
+touched persistence on the way through.
 That same shared settings helper layer must then preserve canonical
 org-management privilege for non-default tenant requests. Storage- and
 recovery-adjacent hosted flows that reuse settings-bound helpers must allow

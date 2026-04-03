@@ -244,6 +244,13 @@ the request runs under a hosted tenant org with no org-local billing lease,
 the same AI runtime path must inherit the default hosted lease for bootstrap
 and quickstart-credit reads so tenant-scoped Chat, Patrol, and AI Settings
 stay aligned with the machine-owned hosted entitlement state.
+That same hosted and self-hosted settings boundary must also normalize legacy
+hosted quickstart model aliases on read and write. Persisted values such as
+`quickstart:minimax-2.5m` are historical implementation detail, not governed
+runtime truth, so `internal/config/ai.go`,
+`internal/config/persistence.go`, and `internal/api/ai_handlers.go` must
+rewrite them to `quickstart:pulse-hosted` before the runtime, API payloads,
+or structured logs consume those fields.
 That same runtime boundary also owns approval-store lifecycle in
 `internal/api/ai_handler.go`. Settings-driven enablement and restart must be
 able to cold-start the direct AI runtime, initialize approval persistence, and

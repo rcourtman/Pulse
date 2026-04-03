@@ -1933,6 +1933,7 @@ func (c *ConfigPersistence) SaveAIConfig(settings AIConfig) error {
 	defer c.mu.Unlock()
 
 	settings.NormalizePatrolEventTriggerSettings()
+	settings.NormalizeQuickstartModelAliases()
 
 	if err := c.EnsureConfigDir(); err != nil {
 		return fmt.Errorf("prepare config directory for ai config: %w", err)
@@ -2037,8 +2038,9 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 		settings.ControlLevel = ControlLevelControlled
 		migratedControlLevel = true
 	}
+	migratedQuickstartAliases := settings.NormalizeQuickstartModelAliases()
 
-	if migratedPlaintext || migratedLegacyFields || migratedControlLevel || migratedPatrolTriggerFields {
+	if migratedPlaintext || migratedLegacyFields || migratedControlLevel || migratedPatrolTriggerFields || migratedQuickstartAliases {
 		jsonData, err := json.Marshal(*settings)
 		if err != nil {
 			return nil, fmt.Errorf("marshal ai config migration rewrite: %w", err)
@@ -2050,6 +2052,7 @@ func (c *ConfigPersistence) LoadAIConfig() (*AIConfig, error) {
 			Str("control_level", settings.ControlLevel).
 			Bool("legacy_fields_migrated", migratedLegacyFields).
 			Bool("patrol_trigger_fields_migrated", migratedPatrolTriggerFields).
+			Bool("quickstart_aliases_migrated", migratedQuickstartAliases).
 			Bool("plaintext_migrated", migratedPlaintext).
 			Msg("Migrated AI configuration")
 	}

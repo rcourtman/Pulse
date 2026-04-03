@@ -325,6 +325,23 @@ func FormatModelString(provider, modelName string) string {
 	return provider + ":" + modelName
 }
 
+// NormalizeQuickstartModelString canonicalizes legacy quickstart model strings to
+// Pulse's owned hosted alias. The server chooses the real upstream vendor model.
+func NormalizeQuickstartModelString(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return ""
+	}
+	if strings.EqualFold(model, DefaultAIModelQuickstart) || strings.EqualFold(model, AIProviderQuickstart) {
+		return DefaultModelForProvider(AIProviderQuickstart)
+	}
+	provider, _ := ParseModelString(model)
+	if provider == AIProviderQuickstart {
+		return DefaultModelForProvider(AIProviderQuickstart)
+	}
+	return model
+}
+
 // DefaultModelForProvider returns the default "provider:model" string for a given provider name.
 // Returns empty string if the provider is unknown.
 func DefaultModelForProvider(provider string) string {
@@ -338,7 +355,36 @@ func DefaultModelForProvider(provider string) string {
 
 // GetModel returns the explicitly configured model, if any.
 func (c *AIConfig) GetModel() string {
-	return strings.TrimSpace(c.Model)
+	if c == nil {
+		return ""
+	}
+	return NormalizeQuickstartModelString(c.Model)
+}
+
+// NormalizeQuickstartModelAliases rewrites any legacy quickstart model strings in-place
+// to the owned Pulse alias. Returns true when a field changed.
+func (c *AIConfig) NormalizeQuickstartModelAliases() bool {
+	if c == nil {
+		return false
+	}
+
+	changed := false
+	normalizeField := func(field *string) {
+		normalized := NormalizeQuickstartModelString(*field)
+		if normalized == strings.TrimSpace(*field) {
+			return
+		}
+		*field = normalized
+		changed = true
+	}
+
+	normalizeField(&c.Model)
+	normalizeField(&c.ChatModel)
+	normalizeField(&c.PatrolModel)
+	normalizeField(&c.DiscoveryModel)
+	normalizeField(&c.AutoFixModel)
+
+	return changed
 }
 
 // GetPreferredModelForProvider returns the most relevant configured model for a provider.
@@ -346,7 +392,7 @@ func (c *AIConfig) GetModel() string {
 // provider-owned quickstart alias when applicable.
 func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
 	for _, candidate := range []string{c.Model, c.ChatModel, c.PatrolModel, c.AutoFixModel, c.DiscoveryModel} {
-		candidate = strings.TrimSpace(candidate)
+		candidate = NormalizeQuickstartModelString(candidate)
 		if candidate == "" {
 			continue
 		}
@@ -366,7 +412,7 @@ func (c *AIConfig) GetPreferredModelForProvider(provider string) string {
 // Falls back to the main Model if ChatModel is not set
 func (c *AIConfig) GetChatModel() string {
 	if c.ChatModel != "" {
-		return c.ChatModel
+		return NormalizeQuickstartModelString(c.ChatModel)
 	}
 	return c.GetModel()
 }
@@ -375,7 +421,7 @@ func (c *AIConfig) GetChatModel() string {
 // Falls back to the main Model if PatrolModel is not set
 func (c *AIConfig) GetPatrolModel() string {
 	if c.PatrolModel != "" {
-		return c.PatrolModel
+		return NormalizeQuickstartModelString(c.PatrolModel)
 	}
 	return c.GetModel()
 }
@@ -384,7 +430,7 @@ func (c *AIConfig) GetPatrolModel() string {
 // Falls back to the main model since discovery needs to use the same provider
 func (c *AIConfig) GetDiscoveryModel() string {
 	if c.DiscoveryModel != "" {
-		return c.DiscoveryModel
+		return NormalizeQuickstartModelString(c.DiscoveryModel)
 	}
 	// Fall back to the main model to ensure we use the same provider
 	return c.GetModel()
@@ -395,7 +441,7 @@ func (c *AIConfig) GetDiscoveryModel() string {
 // Auto-fix may warrant a more capable model since it takes actions
 func (c *AIConfig) GetAutoFixModel() string {
 	if c.AutoFixModel != "" {
-		return c.AutoFixModel
+		return NormalizeQuickstartModelString(c.AutoFixModel)
 	}
 	return c.GetPatrolModel()
 }
