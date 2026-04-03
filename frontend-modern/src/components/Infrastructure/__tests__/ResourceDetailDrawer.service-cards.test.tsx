@@ -7,7 +7,7 @@ import { ResourceDetailDrawer } from '@/components/Infrastructure/ResourceDetail
 const wsState = vi.hoisted(() => ({ pmg: [] as any[] }));
 const reconnectSpy = vi.hoisted(() => vi.fn());
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: wsState,
     connected: () => true,

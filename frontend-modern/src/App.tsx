@@ -2,8 +2,6 @@ import {
   Show,
   lazy,
   createSignal,
-  createContext,
-  useContext,
   createEffect,
   createMemo,
   onCleanup,
@@ -11,7 +9,6 @@ import {
 } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { Router, Route, Navigate, useNavigate, useLocation } from '@solidjs/router';
-import { getGlobalWebSocketStore } from './stores/websocket-global';
 import { ToastContainer } from './components/Toast/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { SecurityWarning } from './components/SecurityWarning';
@@ -46,6 +43,7 @@ import {
   clearPendingAppShellRestoreTop,
   readPendingAppShellRestoreTop,
 } from '@/utils/appShellScrollRestoration';
+import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';
 
 function isPublicRoutePath(pathname: string): boolean {
   // Public routes must be viewable without authentication.
@@ -89,29 +87,6 @@ const ROOT_WORKLOADS_PATH = buildWorkloadsPath();
 const STORAGE_PATH = buildStoragePath();
 const RECOVERY_ROUTE_PATH = buildRecoveryPath();
 
-// Enhanced store type with proper typing
-type EnhancedStore = ReturnType<typeof getGlobalWebSocketStore>;
-
-// Export WebSocket context for other components
-export const WebSocketContext = createContext<EnhancedStore>();
-export const useWebSocket = () => {
-  const context = useContext(WebSocketContext);
-  if (!context) {
-    throw new Error('useWebSocket must be used within WebSocketContext.Provider');
-  }
-  return context;
-};
-
-// Dark mode context for reactive theme switching
-export const DarkModeContext = createContext<() => boolean>();
-export const useDarkMode = () => {
-  const context = useContext(DarkModeContext);
-  if (!context) {
-    throw new Error('useDarkMode must be used within DarkModeContext.Provider');
-  }
-  return context;
-};
-
 // Helper to detect if an update is actively in progress (not just checking for updates)
 function isUpdateInProgress(status: string | undefined): boolean {
   if (!status) return false;
@@ -121,7 +96,7 @@ function isUpdateInProgress(status: string | undefined): boolean {
 
 // Global update progress watcher - shows modal in ALL tabs when an update is running
 function GlobalUpdateProgressWatcher() {
-  const wsContext = useContext(WebSocketContext);
+  const wsContext = useWebSocket();
   const navigate = useNavigate();
   const [showProgressModal, setShowProgressModal] = createSignal(false);
   const [hasAutoOpened, setHasAutoOpened] = createSignal(false);

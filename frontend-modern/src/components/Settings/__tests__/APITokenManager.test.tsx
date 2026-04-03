@@ -54,7 +54,7 @@ vi.mock('@/utils/url', () => ({
   getPulseBaseUrl: () => 'https://pulse.example.com',
 }));
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     markDockerRuntimesTokenRevoked: (...args: unknown[]) =>
       markDockerRuntimesTokenRevokedMock(...args),

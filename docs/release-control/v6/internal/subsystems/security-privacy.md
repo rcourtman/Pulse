@@ -379,3 +379,9 @@ reads, expose the backend-owned Pulse Mobile relay access token creator, and
 the relay pairing UI may revoke a displayed token only when that metadata still
 shows no `lastUsedAt`. Refreshing or hiding a QR payload must not delete a
 token that an already paired device is actively depending on.
+That same token-management boundary now also depends on one neutral
+app-runtime context owner. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
+may consume websocket-backed revocation fan-out through
+`frontend-modern/src/contexts/appRuntime.ts`, but security/privacy authority
+stays in the governed API token contract. The hook must not import `@/App` or
+borrow root-shell ownership as token-management authority.

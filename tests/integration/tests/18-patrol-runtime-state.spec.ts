@@ -494,7 +494,7 @@ test.describe("Patrol runtime-state browser contract", () => {
     await expect(
       page.getByRole("button", { name: "Run Patrol" }),
     ).toBeDisabled();
-    await expect(page.getByText(/Credits exhausted/)).toBeVisible();
+    await expect(page.getByText("Patrol quickstart exhausted")).toBeVisible();
     await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
   });
 

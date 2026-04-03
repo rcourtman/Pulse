@@ -126,6 +126,202 @@ func TestContract_AIQuickstartPayloadFieldsRemainCanonical(t *testing.T) {
 	}
 }
 
+func TestContract_AISettingsUpdateQuickstartBootstrapJSONSnapshot(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+	persistQuickstartActivationState(t, persistence)
+	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
+		if got := strings.TrimSpace(r.Header.Get("Authorization")); got != "Bearer pit_live_test" {
+			t.Fatalf("authorization=%q want Bearer pit_live_test", got)
+		}
+		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
+		if instanceFingerprint != "fp-live-test" {
+			t.Fatalf("instance_fingerprint=%q want fp-live-test", instanceFingerprint)
+		}
+		if reqBody["use_case"] != "patrol" {
+			t.Fatalf("use_case=%v want patrol", reqBody["use_case"])
+		}
+	})
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
+		persistence,
+		"default",
+		func() *config.AIConfig {
+			cfg, _ := persistence.LoadAIConfig()
+			return cfg
+		},
+	))
+
+	req := httptest.NewRequest(http.MethodPut, "/api/settings/ai/update", strings.NewReader(`{
+		"enabled": true
+	}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	handler.HandleUpdateAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	const want = `{
+		"enabled":true,
+		"model":"quickstart:minimax-2.5m",
+		"chat_model":"quickstart:minimax-2.5m",
+		"patrol_model":"quickstart:minimax-2.5m",
+		"configured":true,
+		"custom_context":"",
+		"auth_method":"api_key",
+		"oauth_connected":false,
+		"patrol_interval_minutes":360,
+		"patrol_enabled":true,
+		"patrol_auto_fix":false,
+		"alert_triggered_analysis":true,
+		"patrol_event_triggers_enabled":true,
+		"patrol_alert_triggers_enabled":true,
+		"patrol_anomaly_triggers_enabled":true,
+		"use_proactive_thresholds":false,
+		"available_models":[],
+		"anthropic_configured":false,
+		"openai_configured":false,
+		"openrouter_configured":false,
+		"deepseek_configured":false,
+		"gemini_configured":false,
+		"ollama_configured":false,
+		"ollama_base_url":"http://localhost:11434",
+		"ollama_password_set":false,
+		"configured_providers":[],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"quickstart_credits_total":25,
+		"quickstart_credits_used":0,
+		"quickstart_credits_remaining":25,
+		"quickstart_credits_available":true,
+		"using_quickstart":true
+	}`
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
+func TestContract_PatrolStatusActivationRequiredSurface(t *testing.T) {
+	handler, _, _, _ := setupAIHandlerWithPatrol(t)
+	persistence := handler.defaultPersistence
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
+		persistence,
+		"default",
+		func() *config.AIConfig {
+			cfg, _ := persistence.LoadAIConfig()
+			return cfg
+		},
+	))
+	if err := handler.defaultAIService.LoadConfig(); err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/ai/patrol/status", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetPatrolStatus(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp PatrolStatusResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode patrol status: %v", err)
+	}
+	if resp.RuntimeState != ai.PatrolRuntimeStateBlocked {
+		t.Fatalf("runtime_state=%q want %q", resp.RuntimeState, ai.PatrolRuntimeStateBlocked)
+	}
+	if !resp.Enabled {
+		t.Fatal("expected patrol status to remain enabled while activation is required")
+	}
+	if resp.Healthy {
+		t.Fatal("expected activation-required patrol status to report healthy=false")
+	}
+	if resp.BlockedReason != ai.QuickstartActivationRequiredReason() {
+		t.Fatalf("blocked_reason=%q want %q", resp.BlockedReason, ai.QuickstartActivationRequiredReason())
+	}
+	if resp.QuickstartCreditsRemaining != 0 || resp.QuickstartCreditsTotal != 0 {
+		t.Fatalf("quickstart credits=%d/%d want 0/0", resp.QuickstartCreditsRemaining, resp.QuickstartCreditsTotal)
+	}
+	if resp.UsingQuickstart {
+		t.Fatal("expected using_quickstart=false while activation is required")
+	}
+}
+
+func TestContract_AISettingsBYOKOverrideRetainsQuickstartInventoryJSONSnapshot(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{DataPath: tmp}
+	persistence := config.NewConfigPersistence(tmp)
+
+	aiCfg := config.NewDefaultAIConfig()
+	aiCfg.Enabled = true
+	aiCfg.Model = "openai:gpt-4o"
+	aiCfg.OpenAIAPIKey = "sk-openai-test"
+	if err := persistence.SaveAIConfig(*aiCfg); err != nil {
+		t.Fatalf("SaveAIConfig: %v", err)
+	}
+
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetQuickstartCredits(&stubQuickstartCreditManager{
+		remaining: 12,
+		total:     pkglicensing.QuickstartCreditsTotal,
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/api/settings/ai", nil)
+	rec := httptest.NewRecorder()
+	handler.HandleGetAISettings(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	const want = `{
+		"enabled":true,
+		"model":"openai:gpt-4o",
+		"configured":true,
+		"custom_context":"",
+		"auth_method":"api_key",
+		"oauth_connected":false,
+		"patrol_interval_minutes":360,
+		"patrol_enabled":true,
+		"patrol_auto_fix":false,
+		"alert_triggered_analysis":true,
+		"patrol_event_triggers_enabled":true,
+		"patrol_alert_triggers_enabled":true,
+		"patrol_anomaly_triggers_enabled":true,
+		"use_proactive_thresholds":false,
+		"available_models":[],
+		"anthropic_configured":false,
+		"openai_configured":true,
+		"openrouter_configured":false,
+		"deepseek_configured":false,
+		"gemini_configured":false,
+		"ollama_configured":false,
+		"ollama_base_url":"http://localhost:11434",
+		"ollama_password_set":false,
+		"configured_providers":["openai"],
+		"control_level":"read_only",
+		"protected_guests":[],
+		"discovery_enabled":false,
+		"quickstart_credits_total":25,
+		"quickstart_credits_used":13,
+		"quickstart_credits_remaining":12,
+		"quickstart_credits_available":true,
+		"using_quickstart":false
+	}`
+
+	assertJSONSnapshot(t, rec.Body.Bytes(), want)
+}
+
 func TestContract_ChartMetricPointsPreserveMillisecondPrecision(t *testing.T) {
 	pointTime := time.Date(2026, time.March, 31, 12, 0, 0, 987_000_000, time.UTC)
 

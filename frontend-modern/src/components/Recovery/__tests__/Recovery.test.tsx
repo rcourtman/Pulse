@@ -99,7 +99,7 @@ vi.mock('@/utils/apiClient', () => ({
   apiFetchJSON: apiFetchMock,
 }));
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: wsState,
   }),

@@ -1,7 +1,7 @@
 import { Component, createSignal, onMount, Show, Suspense, createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { SettingsDialogs } from './SettingsDialogs';
 import { SettingsPageShell } from './SettingsPageShell';
 import { eventBus } from '@/stores/events';

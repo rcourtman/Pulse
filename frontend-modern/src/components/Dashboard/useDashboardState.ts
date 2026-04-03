@@ -2,7 +2,7 @@ import { createEffect, createMemo } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
 import type { VM, Container, Node } from '@/types/api';
 import type { WorkloadGuest } from '@/types/workloads';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import { usePersistentSignal } from '@/hooks/usePersistentSignal';
 import { useWorkloads } from '@/hooks/useWorkloads';

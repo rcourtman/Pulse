@@ -9,7 +9,7 @@ vi.mock('@solidjs/router', () => ({
   }),
 }));
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     activeAlerts: {},
   }),

@@ -19,7 +19,7 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof ResizeObserver;
 }
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     activeAlerts: [],
   }),

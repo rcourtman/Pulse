@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
 import { For, Show, createMemo, createSignal } from 'solid-js';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { getSourcePlatformBadge } from '@/components/shared/sourcePlatformBadges';
 import type { PBSDatastore } from '@/types/api';
 import type { RecoveryExternalRef, RecoveryPoint } from '@/types/recovery';

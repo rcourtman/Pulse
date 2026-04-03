@@ -336,17 +336,27 @@ func TestAISettingsHandler_UpdateSettings_QuickstartRequiresActivationBeforeEnab
 	assert.Contains(t, rec.Body.String(), ai.QuickstartActivationRequiredReason())
 }
 
-func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnable(t *testing.T) {
+func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesActivationIdentity(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{DataPath: tmp}
 	persistence := config.NewConfigPersistence(tmp)
-	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	persistQuickstartActivationState(t, persistence)
+	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
+		assert.Equal(t, "Bearer pit_live_test", strings.TrimSpace(r.Header.Get("Authorization")))
+		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
+		assert.Equal(t, "fp-live-test", instanceFingerprint)
+		assert.Equal(t, "patrol", reqBody["use_case"])
+	})
 
-	quickstartMgr := &stubQuickstartCreditManager{
-		remaining: 25,
-		total:     25,
-	}
-	handler.defaultAIService.SetQuickstartCredits(quickstartMgr)
+	handler := newTestAISettingsHandler(cfg, persistence, nil)
+	handler.defaultAIService.SetQuickstartCredits(ai.NewPersistentQuickstartCreditManager(
+		persistence,
+		"default",
+		func() *config.AIConfig {
+			cfg, _ := persistence.LoadAIConfig()
+			return cfg
+		},
+	))
 
 	body, _ := json.Marshal(AISettingsUpdateRequest{
 		Enabled: ptr(true),
@@ -361,6 +371,7 @@ func TestAISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnable(t *tes
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.True(t, resp.Enabled)
 	assert.Equal(t, config.DefaultModelForProvider(config.AIProviderQuickstart), resp.Model)
+	assert.True(t, resp.UsingQuickstart)
 	assert.Equal(t, 25, resp.QuickstartCreditsRemaining)
 	assert.Equal(t, 25, resp.QuickstartCreditsTotal)
 }

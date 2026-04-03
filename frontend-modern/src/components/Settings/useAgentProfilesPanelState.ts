@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { AIAPI } from '@/api/ai';
 import {
   AgentProfilesAPI,

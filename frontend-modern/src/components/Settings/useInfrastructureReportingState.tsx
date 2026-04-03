@@ -1,5 +1,5 @@
 import { createEffect, createMemo, createSignal, For, onMount, Show } from 'solid-js';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import {
   MonitoringAPI,
   type RemovedDockerHost,

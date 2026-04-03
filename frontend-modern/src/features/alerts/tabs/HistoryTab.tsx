@@ -2,7 +2,7 @@ import { createSignal, onCleanup, createEffect } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 
 import type { Resource } from '@/types/resource';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 
 import { AlertHistoryAdministrationCard } from '../AlertHistoryAdministrationCard';

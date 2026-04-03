@@ -54,7 +54,7 @@ const overviewMock: DashboardOverview = {
   problemResources: [],
 };
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: { resources: [] },
     activeAlerts: {},

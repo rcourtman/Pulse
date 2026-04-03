@@ -392,6 +392,15 @@ const canonicalShellTitleExpectations = [
 ] as const;
 
 describe('Settings architecture guardrails', () => {
+  it('keeps shell-level runtime hooks on the shared app runtime context', () => {
+    expect(settingsSource).toContain("from '@/contexts/appRuntime'");
+    expect(settingsSource).not.toContain("from '@/App'");
+    expect(apiTokenManagerStateSource).toContain("from '@/contexts/appRuntime'");
+    expect(apiTokenManagerStateSource).not.toContain("from '@/App'");
+    expect(infrastructureReportingStateSource).toContain("from '@/contexts/appRuntime'");
+    expect(infrastructureReportingStateSource).not.toContain("from '@/App'");
+  });
+
   it('keeps extracted settings modules present on disk', () => {
     const settingsModuleFiles = {
       ...import.meta.glob('../*.ts'),

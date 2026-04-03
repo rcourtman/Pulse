@@ -1,7 +1,7 @@
 import { Component, Show, For, createMemo, createSignal } from 'solid-js';
 import { useTooltip } from '@/hooks/useTooltip';
 import { TooltipPortal } from '@/components/shared/TooltipPortal';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { Card } from '@/components/shared/Card';
 import {
   Table,

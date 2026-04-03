@@ -144,7 +144,11 @@ work extends shared components instead of creating new local variants.
 
 1. Add shared primitives in `frontend-modern/src/components/shared/`
 2. Route new top-level settings surfaces through the canonical settings shell
-   instead of introducing page-local framing
+   instead of introducing page-local framing.
+   Shared shells and primitives that need websocket or dark-mode context must
+   consume `frontend-modern/src/contexts/appRuntime.ts`; they must not import
+   `frontend-modern/src/App.tsx`, because `App.tsx` owns provider placement
+   while frontend primitives own reusable consumption.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.
@@ -1764,3 +1768,12 @@ read, write, and busy charts through `HistoryChart` plus
 `useHistoryChartState`, using the canonical physical-disk history resource id,
 instead of reviving `diskMetricsHistory`, a page-local ring buffer, or another
 storage-only live chart primitive for the same telemetry.
+The shared shell boundary now also includes
+`frontend-modern/src/contexts/appRuntime.ts` as the only neutral owner for
+app-level websocket and dark-mode consumption. Shared shells and primitives
+such as `frontend-modern/src/components/Settings/Settings.tsx`,
+`frontend-modern/src/components/shared/TagBadges.tsx`, and
+`frontend-modern/src/components/shared/useInfrastructureSummaryTableState.ts`
+may consume that module, but they must not import `@/App` or recreate shell
+providers. `frontend-modern/src/App.tsx` owns provider placement; primitives
+own reusable consumption only.

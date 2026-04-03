@@ -1047,3 +1047,10 @@ may start shared app-shell services, auth refresh, and websocket recovery, but
 it must not boot a storage-only disk history collector now that storage
 drawers read the canonical backend metrics-history contract through shared
 chart primitives.
+That same hosted browser shell boundary now also treats
+`frontend-modern/src/App.tsx` as provider placement only. Shared runtime
+consumers must import websocket and dark-mode hooks from
+`frontend-modern/src/contexts/appRuntime.ts` instead of importing `@/App`, so
+lazy hosted and settings chunks cannot create a reverse dependency into the
+app shell and blank the mounted browser surface before auth/bootstrap
+completes.

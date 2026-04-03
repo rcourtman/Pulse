@@ -6,7 +6,7 @@ import { RecoveryPointDetails } from './RecoveryPointDetails';
 
 const wsState = vi.hoisted(() => ({ resources: [] as Resource[] }));
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: wsState,
   }),

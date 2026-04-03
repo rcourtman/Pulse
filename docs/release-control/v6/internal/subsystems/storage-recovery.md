@@ -11,6 +11,7 @@
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
     "api-contracts",
+    "cloud-paid",
     "frontend-primitives",
     "unified-resources"
   ]
@@ -124,6 +125,7 @@ querying, and the operator-facing storage health presentation layer.
 31. Keep VMware datastore classification neutral on the shared storage adapter contract. When `frontend-modern/src/features/storageBackups/resourceStorageMapping.ts`, `frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts`, and `frontend-modern/src/features/storageBackups/storageAdapters.ts` evolve canonical storage-record mapping, VMware-backed datastores must continue to land on the shared storage route as inventory-only datastores with neutral protection fallback, not as backup repositories, backup targets, or recovery-protected resources.
 32. Keep infrastructure summary chart bucketing presentation-only on the adjacent shared API boundary. When `internal/api/router.go` normalizes mixed-cadence infrastructure history into equal-time summary buckets for operator-facing summary cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those normalized chart samples as recovery freshness windows, backup cadence, or restore evidence.
 33. Keep workload chart downsampling presentation-only on that same adjacent shared API boundary. When `internal/api/router.go` caps mixed-cadence workload history into equal-time buckets for operator-facing workload cards, storage and recovery may consume the resulting visual context only; they must not reinterpret those shaped chart samples as recovery freshness windows, backup cadence, or restore evidence.
+34. Keep storage and recovery websocket reads on the neutral app-runtime boundary. `frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`, `frontend-modern/src/components/Storage/useStoragePageResources.ts`, and storage/recovery-adjacent dashboard composition may consume live websocket state only through `frontend-modern/src/contexts/appRuntime.ts`, not by importing `frontend-modern/src/App.tsx` or rebuilding shell-local providers.
 
 ## Forbidden Paths
 
@@ -1909,3 +1911,11 @@ canonical history target. Storage must not keep a drawer-local live metrics
 collector, agent-id/device fallback stream, or separate "real-time" history
 store once monitoring and `/api/metrics-store/history` already own the disk
 timeline.
+The same shell/runtime split now applies to websocket consumers:
+`frontend-modern/src/components/Recovery/RecoveryPointDetails.tsx`,
+`frontend-modern/src/components/Storage/useStoragePageResources.ts`, and
+`frontend-modern/src/pages/Dashboard.tsx` may consume websocket state only
+through `frontend-modern/src/contexts/appRuntime.ts`. They must not import
+`@/App` or create storage/recovery-local shell coupling, because provider
+placement remains app-shell-owned and storage/recovery surfaces must stay
+lazy-load safe.

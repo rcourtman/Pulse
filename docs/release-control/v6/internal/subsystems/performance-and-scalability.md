@@ -697,3 +697,8 @@ store-backed disk history path as longer-term disk charts, with the backend
 doing range selection and fallback. Feature-local polling loops or browser-side
 disk ring buffers are forbidden because they duplicate live sampling work and
 drift out of sync with the governed history timeline.
+That same hot-path ownership now also requires lazy-load-safe websocket
+consumption. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
+may read connection and alert state only through
+`frontend-modern/src/contexts/appRuntime.ts`; it must not import `@/App` or
+create a reverse dependency into the root shell just to read websocket state.

@@ -250,7 +250,7 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: wsState,
     activeAlerts: wsActiveAlerts,

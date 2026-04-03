@@ -521,3 +521,11 @@ shared incident category and provider context carried only as shared alert and
 timeline metadata. Alert history may surface VMware alarm, task, and snapshot
 context inside that shared model, but it must not fork into VMware-only alert
 types, badges, or incident chrome.
+That same alert-shell boundary now also treats websocket access as a shared
+app-runtime dependency rather than an alerts-owned provider. Alert shells such
+as `frontend-modern/src/pages/Alerts.tsx` and
+`frontend-modern/src/features/alerts/tabs/HistoryTab.tsx` may consume live
+state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not
+import `@/App` or create reverse dependencies into the root shell chunk,
+because alerts surfaces must remain lazy-load safe and must not blank the app
+before auth/bootstrap finishes.

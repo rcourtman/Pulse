@@ -16,7 +16,7 @@ import { SectionHeader } from '@/components/shared/SectionHeader';
 import { notificationStore } from '@/stores/notifications';
 import Calendar from 'lucide-solid/icons/calendar';
 
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useResources } from '@/hooks/useResources';
 import { aiChatStore } from '@/stores/aiChat';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';

@@ -135,7 +135,8 @@ Own canonical runtime payload shapes between backend and frontend.
 ## Extension Points
 
 1. Add or change payload fields through handler + contract tests together
-2. Update frontend API types in lockstep with backend contract changes
+2. Update frontend API types in lockstep with backend contract changes.
+   Websocket-backed API consumers such as `frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx` may read runtime context only through `frontend-modern/src/contexts/appRuntime.ts`; they must not import `frontend-modern/src/App.tsx`, because payload ownership remains in the API contract rather than the root shell.
 3. Add dedicated contract tests for new stable payloads
 4. Route unified resource sensitivity, routing, and `aiSafeSummary` payload changes through `internal/api/resources.go`, `internal/api/contract_test.go`, and the canonical frontend resource consumer proofs together; resource governance metadata must not ship as an API-only or frontend-only heuristic
 5. Route unified-resource action, lifecycle, and export audit reads through `internal/api/activity_audit_handlers.go`, `internal/api/router_routes_licensing.go`, and `internal/api/contract_test.go` together so the control-plane execution trail stays on a governed API contract instead of a store-only shape
@@ -2329,3 +2330,11 @@ canonical disk `MetricsTarget.ResourceID` the unified resource already
 exposes. Storage drawers and other consumers must not fork a disk-local live
 history route, alternate query identity, or feature-specific fallback payload
 when the governed chart API already owns that transport.
+The shared browser contract now also includes a neutral app-runtime context
+boundary for websocket-backed API consumers. API-contract-owned hooks such as
+`frontend-modern/src/components/Settings/useAPITokenManagerState.ts` and
+`frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
+may read websocket state through `frontend-modern/src/contexts/appRuntime.ts`,
+but payload truth, bootstrap rules, and commercial identity still belong to
+the governed API handlers and contract tests. Those hooks must not import
+`@/App` or treat root-shell ownership as transport authority.

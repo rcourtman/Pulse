@@ -12,7 +12,7 @@ const { darkModeMock, showTooltipMock, hideTooltipMock } = vi.hoisted(() => {
 
 // ── Module mocks ───────────────────────────────────────────────────────
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useDarkMode: () => darkModeMock,
 }));
 

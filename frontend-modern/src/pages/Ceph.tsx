@@ -1,6 +1,6 @@
 import { Component, For, Show, createMemo, createSignal } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useResources } from '@/hooks/useResources';
 import { Card } from '@/components/shared/Card';
 import {

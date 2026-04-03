@@ -1,5 +1,5 @@
 import { createMemo } from 'solid-js';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useResources } from '@/hooks/useResources';
 import { useStorageRecoveryResources } from '@/hooks/useUnifiedResources';
 import { useAlertsActivation } from '@/stores/alertsActivation';

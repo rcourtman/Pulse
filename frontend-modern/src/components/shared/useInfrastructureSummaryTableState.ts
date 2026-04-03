@@ -1,5 +1,5 @@
 import { createMemo, createSignal } from 'solid-js';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useAlertsActivation } from '@/stores/alertsActivation';
 import {

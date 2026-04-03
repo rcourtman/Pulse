@@ -608,6 +608,13 @@ describe('tab path helpers', () => {
     );
     expect(thresholdsOverrideMutationModelSource).toContain('export const stripStateKeys =');
   });
+
+  it('keeps alerts websocket access on the shared app runtime context', () => {
+    expect(alertsPageSource).toContain("from '@/contexts/appRuntime'");
+    expect(alertsPageSource).not.toContain("from '@/App'");
+    expect(alertHistoryTabSource).toContain("from '@/contexts/appRuntime'");
+    expect(alertHistoryTabSource).not.toContain("from '@/App'");
+  });
 });
 
 describe('default schedule helpers', () => {
@@ -987,7 +994,7 @@ describe('Unified selector parity', () => {
       ['docker-host', 'Container Runtime'],
       ['k8s-cluster', 'K8s Cluster'],
       ['k8s-node', 'K8s Node'],
-      ['truenas', 'TrueNAS'],
+      ['truenas', 'Agent'],
       ['vm', 'VM'],
       ['system-container', 'Container'],
       ['oci-container', 'Container'],

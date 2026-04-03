@@ -1,6 +1,6 @@
 import { Component, For, Show } from 'solid-js';
 import { getTagColorWithSpecial } from '@/utils/tagColors';
-import { useDarkMode } from '@/App';
+import { useDarkMode } from '@/contexts/appRuntime';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
 
 interface TagBadgesProps {

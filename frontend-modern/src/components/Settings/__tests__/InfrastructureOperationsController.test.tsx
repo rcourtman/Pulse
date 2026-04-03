@@ -219,7 +219,7 @@ describe('InfrastructurePlatformConnectionsSummaryCard', () => {
   });
 });
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => mockWsStore,
 }));
 

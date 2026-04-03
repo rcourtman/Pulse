@@ -24,7 +24,7 @@ vi.mock('@/hooks/useResources', () => ({
   }),
 }));
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => mockWsStore,
 }));
 

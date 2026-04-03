@@ -7,7 +7,7 @@ import {
 } from 'solid-js';
 import type { APITokenRecord } from '@/api/security';
 import { SecurityAPI } from '@/api/security';
-import { useWebSocket } from '@/App';
+import { useWebSocket } from '@/contexts/appRuntime';
 import { MONITORING_READ_SCOPE, API_SCOPE_LABELS } from '@/constants/apiScopes';
 import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';

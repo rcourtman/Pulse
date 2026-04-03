@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import appSource from '@/App.tsx?raw';
 import appLayoutSource from '@/AppLayout.tsx?raw';
+import appRuntimeContextSource from '@/contexts/appRuntime.ts?raw';
 import appRuntimeStateSource from '@/useAppRuntimeState.ts?raw';
 
 describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
     expect(appSource).toContain('DASHBOARD_PATH,');
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
+    expect(appSource).toContain(
+      "import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';",
+    );
     expect(appSource).toContain("import { useAppRuntimeState } from '@/useAppRuntimeState';");
     expect(appSource).toContain("import {");
     expect(appSource).toContain("} from '@/utils/appShellScrollRestoration';");
@@ -25,6 +29,8 @@ describe('App architecture', () => {
     );
     expect(appSource).not.toContain('function ConnectionStatusBadge(');
     expect(appSource).not.toContain('function AppLayout(');
+    expect(appSource).not.toContain('export const WebSocketContext = createContext<');
+    expect(appSource).not.toContain('export const DarkModeContext = createContext<');
     expect(appSource).not.toContain('ActiveUseTrialNudge');
     expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
     expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
@@ -67,5 +73,15 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).not.toContain("import { startMetricsCollector } from '@/stores/metricsCollector';");
     expect(appRuntimeStateSource).not.toContain('startMetricsCollector();');
     expect(appRuntimeStateSource).not.toContain('function AppLayout(');
+    expect(appRuntimeContextSource).toContain(
+      "import { createContext, useContext } from 'solid-js';",
+    );
+    expect(appRuntimeContextSource).toContain(
+      'export const WebSocketContext = createContext<WebSocketStore>();',
+    );
+    expect(appRuntimeContextSource).toContain('export const useWebSocket = () => {');
+    expect(appRuntimeContextSource).toContain(
+      'export const DarkModeContext = createContext<() => boolean>();',
+    );
   });
 });

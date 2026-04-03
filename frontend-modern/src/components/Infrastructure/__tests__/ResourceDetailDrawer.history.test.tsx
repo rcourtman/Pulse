@@ -55,7 +55,7 @@ const aiIntelligenceMock = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock('@/App', () => ({
+vi.mock('@/contexts/appRuntime', () => ({
   useWebSocket: () => ({
     state: { pmg: [] as any[] },
     connected: () => true,
