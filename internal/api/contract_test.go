@@ -22,6 +22,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/memory"
+	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/license/entitlements"
@@ -40,6 +41,29 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/pkg/metrics"
 	"github.com/rcourtman/pulse-go-rewrite/pkg/reporting"
 )
+
+type contractCapturingStreamingProvider struct {
+	lastRequest providers.ChatRequest
+}
+
+func (p *contractCapturingStreamingProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
+	p.lastRequest = req
+	return &providers.ChatResponse{Content: "ok", Model: req.Model}, nil
+}
+
+func (p *contractCapturingStreamingProvider) ChatStream(ctx context.Context, req providers.ChatRequest, callback providers.StreamCallback) error {
+	p.lastRequest = req
+	callback(providers.StreamEvent{Type: "content", Data: providers.ContentEvent{Text: "hello"}})
+	callback(providers.StreamEvent{Type: "done", Data: providers.DoneEvent{StopReason: "end_turn"}})
+	return nil
+}
+
+func (p *contractCapturingStreamingProvider) TestConnection(ctx context.Context) error { return nil }
+func (p *contractCapturingStreamingProvider) Name() string                             { return "contract-capture" }
+func (p *contractCapturingStreamingProvider) ListModels(ctx context.Context) ([]providers.ModelInfo, error) {
+	return nil, nil
+}
+func (p *contractCapturingStreamingProvider) SupportsThinking(model string) bool { return false }
 
 func TestContract_WebSocketTrustedProxyHostedOrigin(t *testing.T) {
 	t.Setenv("PULSE_TRUSTED_PROXY_CIDRS", "127.0.0.1/32")
@@ -85,6 +109,41 @@ func TestContract_WireAIChatDependencies_WiresTrueNASAppActionProvider(t *testin
 	}
 	if service.appContainerConfigProvider == nil {
 		t.Fatal("expected TrueNAS app config provider to be wired into AI chat dependencies")
+	}
+}
+
+func TestContract_ChatServiceAdapterPatrolForwardsExecutionID(t *testing.T) {
+	cfg := chat.Config{
+		DataDir: t.TempDir(),
+		AIConfig: &config.AIConfig{
+			Enabled:     true,
+			ChatModel:   "stub:model",
+			PatrolModel: "stub:model",
+		},
+	}
+	service := chat.NewService(cfg)
+	provider := &contractCapturingStreamingProvider{}
+	setUnexportedField(t, service, "providerFactory", func(string) (providers.StreamingProvider, error) {
+		return provider, nil
+	})
+	if err := service.Start(context.Background()); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(func() { _ = service.Stop(context.Background()) })
+
+	adapter := &chatServiceAdapter{svc: service}
+	resp, err := adapter.ExecutePatrolStream(context.Background(), ai.PatrolExecuteRequest{
+		Prompt:      "patrol",
+		ExecutionID: "patrol-run-contract",
+	}, func(ai.ChatStreamEvent) {})
+	if err != nil {
+		t.Fatalf("ExecutePatrolStream: %v", err)
+	}
+	if resp == nil || resp.Content == "" {
+		t.Fatalf("expected patrol response content, got %#v", resp)
+	}
+	if provider.lastRequest.ExecutionID != "patrol-run-contract" {
+		t.Fatalf("execution_id=%q want patrol-run-contract", provider.lastRequest.ExecutionID)
 	}
 }
 

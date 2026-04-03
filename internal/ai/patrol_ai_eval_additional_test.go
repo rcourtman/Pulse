@@ -124,7 +124,7 @@ func TestSignalHelpersAndFindingsFromSignals(t *testing.T) {
 
 func TestRunEvaluationPass(t *testing.T) {
 	ps := NewPatrolService(&Service{}, nil)
-	_, err := ps.runEvaluationPass(context.Background(), nil, []DetectedSignal{{SignalType: SignalHighCPU}})
+	_, err := ps.runEvaluationPass(context.Background(), nil, []DetectedSignal{{SignalType: SignalHighCPU}}, "patrol-run-eval")
 	if err == nil {
 		t.Fatal("expected error when chat service is unavailable")
 	}
@@ -139,7 +139,7 @@ func TestRunEvaluationPass(t *testing.T) {
 	svc.SetChatService(mockCS)
 
 	ps.aiService = svc
-	resp, err := ps.runEvaluationPass(context.Background(), nil, []DetectedSignal{{SignalType: SignalHighCPU}})
+	resp, err := ps.runEvaluationPass(context.Background(), nil, []DetectedSignal{{SignalType: SignalHighCPU}}, "patrol-run-eval")
 	if err != nil {
 		t.Fatalf("expected evaluation pass to succeed, got %v", err)
 	}

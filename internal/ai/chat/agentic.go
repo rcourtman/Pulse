@@ -116,6 +116,7 @@ type AgenticLoop struct {
 	baseSystemPrompt string // Base prompt without mode context
 	maxTurns         int
 	orgID            string
+	executionID      string
 
 	// Provider info for telemetry (e.g., "anthropic", "claude-3-sonnet")
 	providerName string
@@ -283,9 +284,10 @@ func (a *AgenticLoop) executeWithTools(ctx context.Context, sessionID string, me
 		// Build the request with dynamic system prompt (includes current mode)
 		systemPrompt := a.getSystemPrompt()
 		req := providers.ChatRequest{
-			Messages: providerMessages,
-			System:   systemPrompt,
-			Tools:    tools,
+			Messages:    providerMessages,
+			System:      systemPrompt,
+			Tools:       tools,
+			ExecutionID: a.executionID,
 		}
 
 		// Determine tool_choice based on turn, intent, and explicit tool requests.

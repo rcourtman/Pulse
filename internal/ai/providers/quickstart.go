@@ -80,9 +80,10 @@ func NewQuickstartClientWithToken(quickstartToken string, onStateSync func(Quick
 
 // quickstartRequest is the payload sent to the hosted proxy.
 type quickstartRequest struct {
-	Messages []Message `json:"messages"`
-	System   string    `json:"system,omitempty"`
-	Tools    []Tool    `json:"tools,omitempty"`
+	Messages    []Message `json:"messages"`
+	System      string    `json:"system,omitempty"`
+	Tools       []Tool    `json:"tools,omitempty"`
+	ExecutionID string    `json:"execution_id,omitempty"`
 	// LicenseID is retained only for the legacy caller-chosen identity path.
 	LicenseID string `json:"license_id,omitempty"`
 }
@@ -165,9 +166,10 @@ func IsQuickstartUnavailable(err error) bool {
 // Chat sends a chat request through the Pulse-hosted quickstart proxy.
 func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResponse, error) {
 	payload := quickstartRequest{
-		Messages: req.Messages,
-		System:   req.System,
-		Tools:    req.Tools,
+		Messages:    req.Messages,
+		System:      req.System,
+		Tools:       req.Tools,
+		ExecutionID: strings.TrimSpace(req.ExecutionID),
 	}
 	if strings.TrimSpace(c.quickstartToken) == "" {
 		payload.LicenseID = c.licenseID

@@ -53,9 +53,10 @@ func (a *AgenticLoop) ensureFinalTextResponse(
 	})
 
 	summaryReq := providers.ChatRequest{
-		Messages:   cleanMessages,
-		System:     a.getSystemPrompt(),
-		ToolChoice: &providers.ToolChoice{Type: providers.ToolChoiceNone},
+		Messages:    cleanMessages,
+		System:      a.getSystemPrompt(),
+		ExecutionID: a.executionID,
+		ToolChoice:  &providers.ToolChoice{Type: providers.ToolChoiceNone},
 		// No Tools field — completely omit tools to prevent hallucinated function calls
 	}
 

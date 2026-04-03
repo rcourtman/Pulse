@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/baseline"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/chat"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/correlation"
@@ -268,6 +269,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	log.Debug().Msg("AI Patrol: Starting agentic patrol analysis")
 
 	maxTurns := computeTriageMaxTurns(len(triageResult.Flags), scope)
+	executionID := uuid.NewString()
 	log.Debug().
 		Int("triage_flags", len(triageResult.Flags)).
 		Int("max_turns", maxTurns).
@@ -338,6 +340,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 			Prompt:       prompt,
 			SystemPrompt: p.getPatrolSystemPromptForTriage(),
 			SessionID:    "patrol-main",
+			ExecutionID:  executionID,
 			UseCase:      "patrol",
 			MaxTurns:     maxTurns,
 		}, func(event ChatStreamEvent) {
@@ -600,7 +603,7 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 				Int("unmatched_signals", len(unmatchedSignals)).
 				Msg("AI Patrol: Unmatched signals found, running evaluation pass")
 
-			evalResp, evalErr := p.runEvaluationPass(ctx, adapter, unmatchedSignals)
+			evalResp, evalErr := p.runEvaluationPass(ctx, adapter, unmatchedSignals, executionID)
 			if evalErr != nil {
 				log.Warn().Err(evalErr).Msg("AI Patrol: Evaluation pass failed")
 			} else if evalResp != nil {
@@ -802,7 +805,7 @@ func formatToolResult(result tools.CallToolResult) string {
 
 // runEvaluationPass runs a focused second LLM call to evaluate unmatched signals
 // that the main patrol pass detected but did not report as findings.
-func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFindingCreatorAdapter, unmatchedSignals []DetectedSignal) (*PatrolStreamResponse, error) {
+func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFindingCreatorAdapter, unmatchedSignals []DetectedSignal, executionID string) (*PatrolStreamResponse, error) {
 	cs := p.aiService.GetChatService()
 	if cs == nil {
 		return nil, fmt.Errorf("chat service not available for evaluation pass")
@@ -823,6 +826,7 @@ func (p *PatrolService) runEvaluationPass(ctx context.Context, adapter *patrolFi
 		Prompt:       userPrompt,
 		SystemPrompt: systemPrompt,
 		SessionID:    "patrol-eval",
+		ExecutionID:  executionID,
 		UseCase:      "patrol",
 		MaxTurns:     5,
 	}, func(event ChatStreamEvent) {

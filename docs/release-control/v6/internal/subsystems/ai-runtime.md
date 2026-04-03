@@ -146,6 +146,12 @@ response, accept both `quickstart_token_expires_at` and the older
 `token_expires_at` response field while mixed quickstart deployments exist,
 and invalidate the cached token on auth rejection. Explicit BYOK provider
 credentials still outrank Patrol quickstart whenever both are present.
+That same Patrol quickstart contract is execution-scoped rather than
+provider-turn-scoped: the runtime must stamp one stable execution identifier
+per higher-level Patrol run and propagate it through every hosted quickstart
+provider call, including retries and the evaluation pass, so one Patrol run
+consumes at most one quickstart credit even when the underlying agentic loop
+makes multiple model turns.
 Public-facing copy that reflects those runtime fields must therefore speak in
 Patrol quickstart runs on activated or trial-backed installs and Patrol-only
 no-key activation, not in generic AI credits, anonymous Community bootstrap,

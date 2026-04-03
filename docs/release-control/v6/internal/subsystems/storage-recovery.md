@@ -117,6 +117,12 @@ querying, and the operator-facing storage health presentation layer.
     `quickstart:pulse-hosted` alias, but they must not treat vendor model IDs
     or quickstart upstream-model defaults as part of storage/recovery transport
     ownership or route behavior.
+    That same adjacent `internal/api/` boundary also now carries Patrol-run
+    execution identity for hosted quickstart billing. Storage and recovery may
+    observe shared Patrol transport through `internal/api/chat_service_adapter.go`,
+    but they must not drop, rewrite, or reinterpret the execution identifier
+    that lets the server-authoritative quickstart ledger charge once per Patrol
+    run instead of once per agentic provider turn.
     Activation-required quickstart block reasons exposed on that same shared
     AI settings surface are likewise not storage/recovery onboarding truth;
     adjacent pages may react to the message, but they must not reinterpret it

@@ -141,7 +141,12 @@ management, and fleet control surfaces.
    The shared installation-scoped `activation.enc` path is that authority:
    tenant-local lifecycle routes may reuse it, but they must not fork per-org
    activation caches, alternate installation-token stores, or competing
-   quickstart-owner identity.
+   quickstart-owner identity. That same shared AI/runtime boundary now also
+   owns Patrol quickstart execution identity: lifecycle-adjacent flows may
+   trigger or observe Patrol runs through `internal/api/chat_service_adapter.go`,
+   but they must preserve the stable execution identifier that lets the hosted
+   quickstart contract bill once per higher-level Patrol run rather than once
+   per internal provider turn.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.

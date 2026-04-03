@@ -1871,6 +1871,7 @@
       "blocking_level": "repo-ready",
       "proof_type": "automated",
       "lane_ids": [
+        "L3",
         "L6"
       ],
       "subsystem_ids": [
@@ -1988,6 +1989,7 @@
       "blocking_level": "repo-ready",
       "proof_type": "automated",
       "lane_ids": [
+        "L3",
         "L6"
       ],
       "subsystem_ids": [
@@ -2088,6 +2090,104 @@
         {
           "repo": "pulse",
           "path": "tests/integration/tests/52-ai-settings-provider-setup.spec.ts",
+          "kind": "file"
+        }
+      ]
+    },
+    {
+      "id": "RA23",
+      "summary": "Patrol quickstart credits are billed per higher-level Patrol execution, not per internal provider turn: the runtime must propagate one stable execution ID across retries, agentic turns, and the evaluation pass, and the license server must treat repeated quickstart proxy calls for that execution as one commercial run.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L3",
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "cloud-paid"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "patrol-quickstart-execution-contract-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai/providers",
+            "./internal/ai/chat",
+            "./internal/ai",
+            "-run",
+            "Quickstart|ExecutePatrolStream|RunEvaluationPass|RetriesWithProviderDerivedSeedBudget",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/chat/service_patrol_additional_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_ai.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/patrol_ai_more_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/providers/quickstart.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/providers/quickstart_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/v6_schema.go",
           "kind": "file"
         }
       ]

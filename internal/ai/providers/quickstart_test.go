@@ -55,6 +55,7 @@ func TestQuickstartClientChat_UsesOverrideProxyURL(t *testing.T) {
 func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.T) {
 	var seenAuthorization string
 	var seenLicenseID string
+	var seenExecutionID string
 	var synced QuickstartServerState
 	var syncCalls int
 
@@ -65,6 +66,7 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 		}
 		seenAuthorization = r.Header.Get("Authorization")
 		seenLicenseID = req.LicenseID
+		seenExecutionID = req.ExecutionID
 		w.Header().Set("Content-Type", "application/json")
 		if err := json.NewEncoder(w).Encode(quickstartResponse{
 			Content:                  "hello",
@@ -86,7 +88,8 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 		syncCalls++
 	}, nil)
 	resp, err := client.Chat(context.Background(), ChatRequest{
-		Messages: []Message{{Role: "user", Content: "Hi"}},
+		Messages:    []Message{{Role: "user", Content: "Hi"}},
+		ExecutionID: "patrol-run-123",
 	})
 	if err != nil {
 		t.Fatalf("Chat(): %v", err)
@@ -96,6 +99,9 @@ func TestQuickstartClientWithToken_UsesBearerAuthAndSyncsServerState(t *testing.
 	}
 	if seenLicenseID != "" {
 		t.Fatalf("license_id=%q want empty for bearer-token quickstart", seenLicenseID)
+	}
+	if seenExecutionID != "patrol-run-123" {
+		t.Fatalf("execution_id=%q want patrol-run-123", seenExecutionID)
 	}
 	if resp.Content != "hello" {
 		t.Fatalf("content=%q want hello", resp.Content)

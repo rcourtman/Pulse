@@ -161,9 +161,10 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 
 	doneCount := 0
 	resp, err := service.ExecutePatrolStream(context.Background(), PatrolRequest{
-		Prompt:    "check status",
-		MaxTurns:  1,
-		SessionID: "",
+		Prompt:      "check status",
+		MaxTurns:    1,
+		SessionID:   "",
+		ExecutionID: "patrol-run-123",
 	}, func(event StreamEvent) {
 		if event.Type == "done" {
 			doneCount++
@@ -180,6 +181,9 @@ func TestService_ExecutePatrolStream_Success(t *testing.T) {
 	}
 	if mockProvider.lastRequest.System == "" {
 		t.Fatalf("expected system prompt to be set")
+	}
+	if mockProvider.lastRequest.ExecutionID != "patrol-run-123" {
+		t.Fatalf("execution_id=%q want patrol-run-123", mockProvider.lastRequest.ExecutionID)
 	}
 	if doneCount != 1 {
 		t.Fatalf("expected done event to be emitted")

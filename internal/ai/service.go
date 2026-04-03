@@ -156,6 +156,7 @@ type PatrolExecuteRequest struct {
 	Prompt       string `json:"prompt"`
 	SystemPrompt string `json:"system_prompt"`
 	SessionID    string `json:"session_id,omitempty"`
+	ExecutionID  string `json:"execution_id,omitempty"`
 	UseCase      string `json:"use_case"` // "patrol" — for model selection
 	MaxTurns     int    `json:"max_turns,omitempty"`
 }

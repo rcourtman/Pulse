@@ -283,10 +283,12 @@ func TestRunAIAnalysis_RetriesWithProviderDerivedSeedBudget(t *testing.T) {
 
 	executor := tools.NewPulseToolExecutor(tools.ExecutorConfig{})
 	promptTokens := make([]int, 0, 2)
+	executionIDs := make([]string, 0, 2)
 	mockCS := &mockChatService{
 		executor: executor,
 		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
 			promptTokens = append(promptTokens, chat.EstimateTokens(req.Prompt))
+			executionIDs = append(executionIDs, req.ExecutionID)
 			if len(promptTokens) == 1 {
 				return nil, fmt.Errorf("API error (400): {\"error\":{\"message\":\"request exceeds the available context size (4096 tokens)\",\"type\":\"exceed_context_size_error\",\"n_ctx\":4096}}")
 			}
@@ -339,6 +341,12 @@ func TestRunAIAnalysis_RetriesWithProviderDerivedSeedBudget(t *testing.T) {
 	}
 	if len(promptTokens) != 2 {
 		t.Fatalf("expected 2 patrol attempts, got %d", len(promptTokens))
+	}
+	if len(executionIDs) != 2 || executionIDs[0] == "" || executionIDs[1] == "" {
+		t.Fatalf("expected execution IDs for each retry attempt, got %#v", executionIDs)
+	}
+	if executionIDs[0] != executionIDs[1] {
+		t.Fatalf("expected retry attempts to share execution ID, got %#v", executionIDs)
 	}
 	if promptTokens[1] >= promptTokens[0] {
 		t.Fatalf("expected retry prompt to shrink, got %d then %d tokens", promptTokens[0], promptTokens[1])
@@ -428,7 +436,18 @@ func TestRunEvaluationPass_RecordsCostUsage(t *testing.T) {
 		},
 		costStore: cost.NewStore(cost.DefaultMaxDays),
 	}
-	svc.SetChatService(&streamChatService{})
+	var seenExecutionID string
+	svc.SetChatService(&mockChatService{
+		executor: tools.NewPulseToolExecutor(tools.ExecutorConfig{}),
+		executePatrolStreamFunc: func(ctx context.Context, req PatrolExecuteRequest, callback ChatStreamCallback) (*PatrolStreamResponse, error) {
+			seenExecutionID = req.ExecutionID
+			return &PatrolStreamResponse{
+				Content:      "evaluation complete",
+				InputTokens:  5,
+				OutputTokens: 7,
+			}, nil
+		},
+	})
 	ps := NewPatrolService(svc, nil)
 
 	signals := []DetectedSignal{
@@ -444,12 +463,15 @@ func TestRunEvaluationPass_RecordsCostUsage(t *testing.T) {
 		},
 	}
 
-	resp, err := ps.runEvaluationPass(context.Background(), nil, signals)
+	resp, err := ps.runEvaluationPass(context.Background(), nil, signals, "patrol-run-eval")
 	if err != nil {
 		t.Fatalf("runEvaluationPass failed: %v", err)
 	}
 	if resp == nil {
 		t.Fatal("expected non-nil response")
+	}
+	if seenExecutionID != "patrol-run-eval" {
+		t.Fatalf("execution_id=%q want patrol-run-eval", seenExecutionID)
 	}
 
 	summary := svc.costStore.GetSummary(1)

@@ -99,6 +99,7 @@ type ToolChoice struct {
 type ChatRequest struct {
 	Messages    []Message   `json:"messages"`
 	Model       string      `json:"model"`
+	ExecutionID string      `json:"execution_id,omitempty"` // Stable higher-level run ID shared across related provider turns
 	MaxTokens   int         `json:"max_tokens,omitempty"`
 	Temperature float64     `json:"temperature,omitempty"`
 	System      string      `json:"system,omitempty"`      // System prompt (Anthropic style)

@@ -256,6 +256,11 @@ mixed-version compatible while quickstart rolls out: Pulse may send optional
 binding metadata such as `instance_name` and `use_case=patrol`, and the server
 must not reject that additive metadata or rely on one expiry field spelling
 only when returning the quickstart token snapshot.
+`POST /v1/quickstart/patrol` also owns the Patrol-run billing boundary: the
+runtime may send an execution identifier for one higher-level Patrol run, and
+the license server must treat repeated proxy calls that share that execution
+identifier as one commercial quickstart run rather than charging once per
+agentic provider turn.
 That quickstart allowance is therefore activation support, not the main
 commercial pitch: self-hosted pricing and docs may promise Patrol-only
 quickstart runs with no API key for activated or trial-backed installs, but

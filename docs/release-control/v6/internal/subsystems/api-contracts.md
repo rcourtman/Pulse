@@ -251,6 +251,11 @@ Own canonical runtime payload shapes between backend and frontend.
    quickstart inventory and active runtime source on activated or trial-backed
    installs rather than a generic hosted AI quota, anonymous Community
    entitlement, or full-chat entitlement
+   and the Patrol execution billing rule, so shared runtime bridges such as
+   `internal/api/chat_service_adapter.go` must preserve the stable Patrol
+   execution identifier that the hosted quickstart contract uses to charge
+   once per higher-level Patrol run rather than once per internal provider
+   turn
 7. Keep Patrol summary payload consumers aligned on one assessment hierarchy: transport-driven Patrol summary surfaces may show supporting counts and outcomes, but the canonical assessment and verification states must remain singular and not be repeated as a second compact verdict strip
 8. Keep Patrol verification and activity facts unified on one transport-backed secondary status area: when frontend consumers combine Patrol status payloads (`runtime_state`, `last_patrol_at`, `last_activity_at`, `trigger_status`) with run-history transport, the latest run result, activity mix, scoped-trigger state, and circuit-breaker context must read as one supporting explanation beneath the primary assessment instead of being re-expanded into a separate full-width status strip plus duplicate summary layers
    and the main Patrol page composition boundary, so once that governed

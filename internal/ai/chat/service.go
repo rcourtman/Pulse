@@ -732,6 +732,7 @@ type PatrolRequest struct {
 	Prompt       string `json:"prompt"`
 	SystemPrompt string `json:"system_prompt"`
 	SessionID    string `json:"session_id,omitempty"`
+	ExecutionID  string `json:"execution_id,omitempty"`
 	UseCase      string `json:"use_case"`
 	MaxTurns     int    `json:"max_turns,omitempty"`
 }
@@ -788,6 +789,7 @@ func (s *Service) ExecutePatrolStream(ctx context.Context, req PatrolRequest, ca
 	tempLoop := NewAgenticLoop(provider, executor, systemPrompt)
 	tempLoop.SetOrgID(s.orgID)
 	tempLoop.SetAutonomousMode(true) // Patrol runs without approval prompts
+	tempLoop.SetExecutionID(req.ExecutionID)
 	if req.MaxTurns > 0 {
 		tempLoop.SetMaxTurns(req.MaxTurns)
 	}

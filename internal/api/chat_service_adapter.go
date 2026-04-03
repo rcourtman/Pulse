@@ -38,6 +38,7 @@ func (a *chatServiceAdapter) ExecutePatrolStream(ctx context.Context, req ai.Pat
 		Prompt:       req.Prompt,
 		SystemPrompt: req.SystemPrompt,
 		SessionID:    req.SessionID,
+		ExecutionID:  req.ExecutionID,
 		UseCase:      req.UseCase,
 		MaxTurns:     req.MaxTurns,
 	}, adaptCallback(callback))

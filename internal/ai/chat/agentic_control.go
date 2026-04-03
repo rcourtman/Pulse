@@ -46,6 +46,15 @@ func (a *AgenticLoop) SetProviderInfo(provider, model string) {
 	a.mu.Unlock()
 }
 
+// SetExecutionID binds a stable higher-level execution identifier to all
+// provider calls made by this loop. Patrol quickstart billing uses this to
+// charge once per Patrol run instead of once per provider turn.
+func (a *AgenticLoop) SetExecutionID(executionID string) {
+	a.mu.Lock()
+	a.executionID = executionID
+	a.mu.Unlock()
+}
+
 // SetBudgetChecker sets a function called after each agentic turn to enforce
 // token spending limits. If the checker returns an error, the loop stops.
 func (a *AgenticLoop) SetBudgetChecker(fn func() error) {
