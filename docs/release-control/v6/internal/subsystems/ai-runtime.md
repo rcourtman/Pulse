@@ -132,15 +132,20 @@ than through a baked runtime fallback, so model churn does not leak into the
 Pulse runtime or API contract.
 That same Patrol quickstart boundary is now server-authoritative end to end.
 `internal/ai/quickstart.go` must bootstrap before the first Patrol-only
-quickstart use, resolve installation identity from the installation-scoped
-`activation.enc` path even when Patrol runs under a tenant-local persistence
-directory, and refuse bootstrap entirely when no valid installation token is
-available. `quickstart.enc` may cache only the server-issued token snapshot
-and latest server-reported inventory through the shared
-`internal/config/persistence.go` and `internal/config/quickstart_state.go`
-helpers; it must not persist anonymous bootstrap identity or revive local
-counter truth. `internal/ai/providers/quickstart.go` must authenticate Patrol
-proxy calls with `Authorization: Bearer <quickstart_token>`, sync
+quickstart use, resolve the strongest server-verified runtime authority in
+this order, and refuse bootstrap entirely when neither exists: installation
+identity from installation-scoped `activation.enc` for activated self-hosted
+installs, then signed entitlement-lease identity from the effective
+entitlement-backed billing state for hosted or trial-backed runtimes. Tenant-
+local Patrol persistence must therefore reuse installation-scoped activation
+state where it exists and must fall back to the shared entitlement lease
+without inventing shadow activation files or anonymous client identity.
+`quickstart.enc` may cache only the server-issued token snapshot and latest
+server-reported inventory through the shared `internal/config/persistence.go`,
+`internal/config/entitlement_billing_state.go`, and
+`internal/config/quickstart_state.go` helpers; it must not persist anonymous
+bootstrap identity or revive local counter truth. `internal/ai/providers/quickstart.go`
+must authenticate Patrol proxy calls with `Authorization: Bearer <quickstart_token>`, sync
 `credits_remaining` / `credits_total` back into that cache on every server
 response, accept both `quickstart_token_expires_at` and the older
 `token_expires_at` response field while mixed quickstart deployments exist,

@@ -3,8 +3,9 @@ package licensing
 // QuickstartBootstrapRequest is sent to the license server to exchange a
 // runtime identity for a server-issued quickstart token.
 //
-// Activated or hosted/trial-backed installs authenticate the request with
-// their installation token. The request body supplies only binding metadata.
+// Activated installs authenticate the request with their installation token.
+// Entitlement-backed runtimes authenticate the request with their signed
+// entitlement lease JWT. The request body supplies only binding metadata.
 type QuickstartBootstrapRequest struct {
 	InstanceFingerprint string `json:"instance_fingerprint,omitempty"`
 	InstanceName        string `json:"instance_name,omitempty"`

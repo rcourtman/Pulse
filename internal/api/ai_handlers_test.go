@@ -240,9 +240,11 @@ func TestAISettingsResponse_UsesCanonicalEmptyCollections(t *testing.T) {
 func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		assert.Equal(t, "Bearer pit_live_test", strings.TrimSpace(r.Header.Get("Authorization")))
-		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
-		assert.Equal(t, "fp-live-test", instanceFingerprint)
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		assert.True(t, strings.HasPrefix(authHeader, "Bearer "))
+		assert.Len(t, strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."), 3)
+		_, hasFingerprint := reqBody["instance_fingerprint"]
+		assert.False(t, hasFingerprint)
 		assert.Equal(t, "patrol", reqBody["use_case"])
 	})
 
@@ -252,7 +254,6 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 	require.NoError(t, err)
 
 	seedHostedAIBillingState(t, mtp, "default")
-	persistQuickstartActivationState(t, persistence)
 
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}
@@ -279,9 +280,11 @@ func TestAISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart(t *testing
 func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingState(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
 	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
-		assert.Equal(t, "Bearer pit_live_test", strings.TrimSpace(r.Header.Get("Authorization")))
-		instanceFingerprint, _ := reqBody["instance_fingerprint"].(string)
-		assert.Equal(t, "fp-live-test", instanceFingerprint)
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		assert.True(t, strings.HasPrefix(authHeader, "Bearer "))
+		assert.Len(t, strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."), 3)
+		_, hasFingerprint := reqBody["instance_fingerprint"]
+		assert.False(t, hasFingerprint)
 		assert.Equal(t, "patrol", reqBody["use_case"])
 	})
 
@@ -289,11 +292,8 @@ func TestAISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingS
 	mtp := config.NewMultiTenantPersistence(tmp)
 	persistence, err := mtp.GetPersistence("t-tenant")
 	require.NoError(t, err)
-	defaultPersistence, err := mtp.GetPersistence("default")
-	require.NoError(t, err)
 
 	seedHostedAIBillingState(t, mtp, "default")
-	persistQuickstartActivationState(t, defaultPersistence)
 
 	handler := NewAISettingsHandler(mtp, nil, nil)
 	handler.defaultConfig = &config.Config{DataPath: tmp}

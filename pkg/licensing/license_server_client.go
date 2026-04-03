@@ -142,13 +142,14 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 
 // BootstrapQuickstart exchanges a runtime identity for a short-lived
 // quickstart token and the current authoritative quickstart inventory.
-// Callers must pass a server-verified installation token as bearerToken.
+// Callers must pass a server-verified quickstart authority token as
+// bearerToken: either an installation token or a signed entitlement lease JWT.
 func (c *LicenseServerClient) BootstrapQuickstart(ctx context.Context, bearerToken string, req QuickstartBootstrapRequest) (*QuickstartBootstrapResponse, error) {
 	if strings.TrimSpace(bearerToken) == "" {
 		return nil, &LicenseServerError{
 			StatusCode: http.StatusUnauthorized,
 			Code:       "activation_required",
-			Message:    "Quickstart bootstrap requires an installation token",
+			Message:    "Quickstart bootstrap requires an activated or entitlement-backed runtime",
 			Retryable:  false,
 		}
 	}

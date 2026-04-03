@@ -344,7 +344,7 @@ func TestClientRefreshGrant(t *testing.T) {
 }
 
 func TestClientBootstrapQuickstart(t *testing.T) {
-	t.Run("uses installation bearer token when provided", func(t *testing.T) {
+	t.Run("uses provided quickstart bearer token", func(t *testing.T) {
 		var seenAuthorization string
 		var seenRequest QuickstartBootstrapRequest
 

@@ -129,24 +129,29 @@ management, and fleet control surfaces.
    may be invoked by lifecycle-adjacent surfaces, but server-issued
    quickstart tokens, Patrol quickstart credit snapshots, and AI runtime auth
    remain `ai-runtime` plus `api-contracts` concerns rather than install-token
-   or lifecycle credential state. Installation activation remains the only
-   authority for Patrol quickstart bootstrap, so lifecycle flows must not
-   reintroduce anonymous bootstrap identity or tenant-local commercial-owner
-   surrogates when they traverse those shared handlers.
+   or lifecycle credential state. Server-verified runtime identity remains the
+   only authority for Patrol quickstart bootstrap: self-hosted installs use the
+   shared installation-scoped `activation.enc`, while entitled hosted lanes use
+   the signed entitlement lease already carried in canonical billing state.
+   Lifecycle flows must not reintroduce anonymous bootstrap identity,
+   tenant-local commercial-owner surrogates, or fake activation records when
+   they traverse those shared handlers.
    That same shared quickstart boundary is vendor-neutral at the lifecycle
    edge too: lifecycle-adjacent consumers may observe the stable
    `quickstart:pulse-hosted` alias in AI settings payloads, but they must not
    bake vendor model IDs or provider-model fallback rules into install or
    activation flows just because those routes share the backend API tree.
-   The shared installation-scoped `activation.enc` path is that authority:
-   tenant-local lifecycle routes may reuse it, but they must not fork per-org
-   activation caches, alternate installation-token stores, or competing
-   quickstart-owner identity. That same shared AI/runtime boundary now also
-   owns Patrol quickstart execution identity: lifecycle-adjacent flows may
-   trigger or observe Patrol runs through `internal/api/chat_service_adapter.go`,
-   but they must preserve the stable execution identifier that lets the hosted
-   quickstart contract bill once per higher-level Patrol run rather than once
-   per internal provider turn.
+   The machine-scoped quickstart authority must stay canonical too:
+   tenant-local lifecycle routes may reuse shared installation activation or
+   effective entitlement billing state, but they must not fork per-org
+   activation caches, alternate installation-token stores, synthetic
+   entitlement mirrors, or competing quickstart-owner identity. That same
+   shared AI/runtime boundary now also owns Patrol quickstart execution
+   identity: lifecycle-adjacent flows may trigger or observe Patrol runs
+   through `internal/api/chat_service_adapter.go`, but they must preserve the
+   stable execution identifier that lets the hosted quickstart contract bill
+   once per higher-level Patrol run rather than once per internal provider
+   turn.
 2. Add or change update continuity and persisted-version handoff through `internal/agentupdate/`.
 3. Add or change runtime-side Unified Agent startup, first-report assembly, and enroll/runtime continuity through `internal/hostagent/`.
    Proxmox host-agent setup must treat local `proxmox-registered` markers as a cache, not authority: before skipping token setup or node repair, `internal/hostagent/proxmox_setup.go` must revalidate the current type and candidate hosts against Pulse through the canonical auto-register contract.
@@ -504,8 +509,10 @@ staying canonical before the first settings write. Hosted operators may land
 in Chat, Patrol-backed setup hints, or AI-dependent remediation surfaces
 before anyone has visited AI Settings, so the shared `internal/api/`
 hosted-AI bootstrap helper must persist the machine-owned quickstart-backed
-`ai.enc` for entitled tenants instead of leaving lifecycle-adjacent hosted
-flows in a fake `AI disabled` state that disappears only after a manual save.
+`ai.enc` for entitled tenants by reusing the signed entitlement lease already
+present in billing state; it must not fabricate installation activation just
+to satisfy quickstart bootstrap. Otherwise lifecycle-adjacent hosted flows end
+up in a fake `AI disabled` state that disappears only after a manual save.
 That same lifecycle-adjacent hosted entitlement path must also preserve the
 trial quickstart grant fields already seeded into billing state. Hosted setup
 and pairing may depend on the shared `internal/api/` entitlement refresh, but

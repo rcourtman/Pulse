@@ -2,6 +2,8 @@ package ai
 
 import (
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"testing"
 	"time"
 
@@ -25,6 +27,37 @@ func (s *stubQuickstartBootstrapClient) BootstrapQuickstart(ctx context.Context,
 		return nil, s.err
 	}
 	return s.resp, nil
+}
+
+func seedQuickstartEntitlementState(t *testing.T, persistence *config.ConfigPersistence, orgID, instanceHost string) string {
+	t.Helper()
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey(): %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(priv, pkglicensing.EntitlementLeaseClaims{
+		OrgID:             orgID,
+		InstanceHost:      instanceHost,
+		PlanVersion:       "cloud_starter",
+		SubscriptionState: pkglicensing.SubStateTrial,
+		Capabilities:      []string{pkglicensing.FeatureAIPatrol},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken(): %v", err)
+	}
+
+	billingStore := config.NewFileBillingStore(persistence.SharedInstallationDataDir())
+	if err := billingStore.SaveBillingState(orgID, &pkglicensing.BillingState{
+		EntitlementJWT:          entitlementJWT,
+		EntitlementRefreshToken: "etr_test_default",
+	}); err != nil {
+		t.Fatalf("SaveBillingState(): %v", err)
+	}
+
+	return entitlementJWT
 }
 
 func TestPersistentQuickstartCreditManager_EnsureBootstrapUsesActivationIdentity(t *testing.T) {
@@ -274,5 +307,49 @@ func TestPersistentQuickstartCreditManager_TenantUsesSharedInstallationActivatio
 	}
 	if mgr.CreditsRemaining() != 14 {
 		t.Fatalf("CreditsRemaining() = %d, want 14", mgr.CreditsRemaining())
+	}
+}
+
+func TestPersistentQuickstartCreditManager_EnsureBootstrapUsesEntitlementIdentityWhenActivationMissing(t *testing.T) {
+	dir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(dir)
+
+	defaultPersistence, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("GetPersistence(default): %v", err)
+	}
+	tenantPersistence, err := mtp.GetPersistence("t-tenant")
+	if err != nil {
+		t.Fatalf("GetPersistence(t-tenant): %v", err)
+	}
+
+	entitlementJWT := seedQuickstartEntitlementState(t, defaultPersistence, "default", "t-hosted.cloud.pulserelay.pro")
+	client := &stubQuickstartBootstrapClient{
+		resp: &pkglicensing.QuickstartBootstrapResponse{
+			QuickstartToken:          "qst_live_entitlement",
+			QuickstartTokenExpiresAt: time.Now().Add(30 * time.Minute).UTC().Format(time.RFC3339),
+			CreditsRemaining:         23,
+			CreditsTotal:             25,
+		},
+	}
+	mgr := NewPersistentQuickstartCreditManagerWithClient(tenantPersistence, "t-tenant", func() *config.AIConfig { return &config.AIConfig{Enabled: true} }, client)
+
+	if err := mgr.EnsureBootstrap(context.Background()); err != nil {
+		t.Fatalf("EnsureBootstrap(): %v", err)
+	}
+	if client.calls != 1 {
+		t.Fatalf("BootstrapQuickstart calls = %d, want 1", client.calls)
+	}
+	if client.bearer != entitlementJWT {
+		t.Fatalf("bearer = %q, want entitlement lease JWT", client.bearer)
+	}
+	if client.req.InstanceFingerprint != "" {
+		t.Fatalf("InstanceFingerprint = %q, want empty for entitlement bootstrap", client.req.InstanceFingerprint)
+	}
+	if mgr.CreditsRemaining() != 23 {
+		t.Fatalf("CreditsRemaining() = %d, want 23", mgr.CreditsRemaining())
+	}
+	if mgr.GetProvider() == nil {
+		t.Fatal("expected quickstart provider after entitlement bootstrap")
 	}
 }

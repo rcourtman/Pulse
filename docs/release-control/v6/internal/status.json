@@ -2245,6 +2245,127 @@
           "kind": "file"
         }
       ]
+    },
+    {
+      "id": "RA25",
+      "summary": "Patrol quickstart bootstrap must resolve a real server-verified commercial principal, never synthetic local identity: activated installs use installation tokens, while entitlement-backed trial or hosted runtimes use signed entitlement leases without fabricating installation-scoped activation state.",
+      "kind": "invariant",
+      "blocking_level": "repo-ready",
+      "proof_type": "automated",
+      "lane_ids": [
+        "L3",
+        "L6"
+      ],
+      "subsystem_ids": [
+        "ai-runtime",
+        "api-contracts",
+        "cloud-paid"
+      ],
+      "release_gate_ids": [],
+      "proof_commands": [
+        {
+          "id": "quickstart-dual-principal-license-server-tests",
+          "run": [
+            "go",
+            "-C",
+            "../pulse-pro/license-server",
+            "test",
+            "-run",
+            "TestHandleQuickstartBootstrap_.*HostedEntitlement|TestHandleQuickstartBootstrap_IssuesTokenForVerifiedInstallation|TestHandleQuickstartBootstrap_RequiresAuth",
+            "-count=1"
+          ]
+        },
+        {
+          "id": "quickstart-dual-principal-runtime-tests",
+          "run": [
+            "go",
+            "test",
+            "./internal/ai",
+            "./internal/api",
+            "./pkg/licensing",
+            "-run",
+            "Quickstart|AISettingsHandler_GetHostedSettings_AutoBootstrapsQuickstart|AISettingsHandler_GetHostedTenantSettings_InheritsDefaultHostedBillingState|AISettingsHandler_UpdateSettings_QuickstartBootstrapBeforeEnableUsesActivationIdentity|ClientBootstrapQuickstart",
+            "-count=1"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/status.json",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/api-contracts.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "docs/release-control/v6/internal/subsystems/cloud-paid.md",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/quickstart.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/ai/quickstart_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/api/ai_handlers_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "internal/config/entitlement_billing_state.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/license_server_client.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse",
+          "path": "pkg/licensing/quickstart_bootstrap.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_entitlement.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_proxy_test.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/quickstart_store.go",
+          "kind": "file"
+        },
+        {
+          "repo": "pulse-pro",
+          "path": "license-server/secrets.env.template",
+          "kind": "file"
+        }
+      ]
     }
   ],
   "evidence_reference_policy": {

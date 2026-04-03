@@ -392,25 +392,91 @@ func (m *PersistentQuickstartCreditManager) secureBootstrapIdentityLocked() (str
 		return "", "", fmt.Errorf("quickstart: persistence unavailable")
 	}
 
+	if bearerToken, fingerprint, ok, err := m.installationBootstrapIdentityLocked(); err != nil {
+		return "", "", err
+	} else if ok {
+		return bearerToken, fingerprint, nil
+	}
+
+	return m.entitlementBootstrapIdentityLocked()
+}
+
+func (m *PersistentQuickstartCreditManager) installationBootstrapIdentityLocked() (string, string, bool, error) {
+	if m == nil || m.persistence == nil {
+		return "", "", false, fmt.Errorf("quickstart: persistence unavailable")
+	}
+
 	licensePersistence, err := pkglicensing.NewPersistence(m.persistence.SharedInstallationDataDir())
 	if err != nil {
-		return "", "", fmt.Errorf("quickstart: load license persistence: %w", err)
+		return "", "", false, fmt.Errorf("quickstart: load license persistence: %w", err)
 	}
 	activationState, err := licensePersistence.LoadActivationState()
 	if err != nil {
-		return "", "", fmt.Errorf("quickstart: load activation state: %w", err)
+		return "", "", false, fmt.Errorf("quickstart: load activation state: %w", err)
 	}
 	if activationState == nil {
-		return "", "", quickstartActivationRequiredError()
+		return "", "", false, nil
 	}
 
 	installationToken := strings.TrimSpace(activationState.InstallationToken)
 	instanceFingerprint := strings.TrimSpace(activationState.InstanceFingerprint)
 	if installationToken == "" || instanceFingerprint == "" {
+		return "", "", false, nil
+	}
+
+	return installationToken, instanceFingerprint, true, nil
+}
+
+func (m *PersistentQuickstartCreditManager) entitlementBootstrapIdentityLocked() (string, string, error) {
+	if m == nil || m.persistence == nil {
+		return "", "", fmt.Errorf("quickstart: persistence unavailable")
+	}
+
+	state, _, err := config.LoadEffectiveEntitlementBillingState(m.persistence.SharedInstallationDataDir(), m.orgID)
+	if err != nil {
+		return "", "", fmt.Errorf("quickstart: load entitlement billing state: %w", err)
+	}
+
+	entitlementJWT := ""
+	if state != nil {
+		entitlementJWT = strings.TrimSpace(state.EntitlementJWT)
+	}
+	if entitlementJWT == "" {
 		return "", "", quickstartActivationRequiredError()
 	}
 
-	return installationToken, instanceFingerprint, nil
+	publicKey, err := pkglicensing.TrialActivationPublicKey()
+	if err != nil {
+		return "", "", fmt.Errorf("quickstart: load entitlement verification key: %w", err)
+	}
+
+	claims, err := pkglicensing.VerifyEntitlementLeaseToken(entitlementJWT, publicKey, "", m.now())
+	if err != nil {
+		return "", "", fmt.Errorf("quickstart: verify entitlement lease: %w", err)
+	}
+	if !quickstartEntitlementSupportsPatrol(claims) {
+		return "", "", quickstartActivationRequiredError()
+	}
+
+	return entitlementJWT, "", nil
+}
+
+func quickstartEntitlementSupportsPatrol(claims *pkglicensing.EntitlementLeaseClaims) bool {
+	if claims == nil {
+		return false
+	}
+	switch claims.SubscriptionState {
+	case pkglicensing.SubStateActive, pkglicensing.SubStateGrace, pkglicensing.SubStateTrial:
+	default:
+		return false
+	}
+	for _, capability := range claims.Capabilities {
+		switch strings.TrimSpace(capability) {
+		case pkglicensing.FeatureAIPatrol, pkglicensing.FeatureAIAutoFix:
+			return true
+		}
+	}
+	return false
 }
 
 func quickstartBlockedReasonFromError(err error) string {

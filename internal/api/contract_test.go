@@ -2125,6 +2125,21 @@ func TestContract_BillingStateQuickstartJSONSnapshot(t *testing.T) {
 
 func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
+	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			t.Fatalf("expected Bearer auth, got %q", authHeader)
+		}
+		if parts := strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."); len(parts) != 3 {
+			t.Fatalf("expected entitlement JWT bearer token, got %q", authHeader)
+		}
+		if _, hasFingerprint := reqBody["instance_fingerprint"]; hasFingerprint {
+			t.Fatalf("expected hosted quickstart bootstrap to omit instance_fingerprint, got %v", reqBody)
+		}
+		if got := reqBody["use_case"]; got != "patrol" {
+			t.Fatalf("use_case=%v want patrol", got)
+		}
+	})
 
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -2154,7 +2169,7 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"model":"quickstart:pulse-hosted",
 		"chat_model":"quickstart:pulse-hosted",
 		"patrol_model":"quickstart:pulse-hosted",
-		"configured":false,
+		"configured":true,
 		"custom_context":"",
 		"auth_method":"api_key",
 		"oauth_connected":false,
@@ -2179,12 +2194,11 @@ func TestContract_HostedAISettingsAutoBootstrapJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
-		"quickstart_credits_total":0,
+		"quickstart_credits_total":25,
 		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":0,
-		"quickstart_credits_available":false,
-		"using_quickstart":false,
-		"quickstart_blocked_reason":"Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key."
+		"quickstart_credits_remaining":25,
+		"quickstart_credits_available":true,
+		"using_quickstart":true
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
@@ -2660,6 +2674,21 @@ func TestContract_ReportingInvalidFormatErrorsUseCatalogDefinitions(t *testing.T
 
 func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 	t.Setenv("PULSE_HOSTED_MODE", "true")
+	useTestQuickstartBootstrapServer(t, func(r *http.Request, reqBody map[string]any) {
+		authHeader := strings.TrimSpace(r.Header.Get("Authorization"))
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			t.Fatalf("expected Bearer auth, got %q", authHeader)
+		}
+		if parts := strings.Split(strings.TrimSpace(strings.TrimPrefix(authHeader, "Bearer ")), "."); len(parts) != 3 {
+			t.Fatalf("expected entitlement JWT bearer token, got %q", authHeader)
+		}
+		if _, hasFingerprint := reqBody["instance_fingerprint"]; hasFingerprint {
+			t.Fatalf("expected hosted quickstart bootstrap to omit instance_fingerprint, got %v", reqBody)
+		}
+		if got := reqBody["use_case"]; got != "patrol" {
+			t.Fatalf("use_case=%v want patrol", got)
+		}
+	})
 
 	baseDir := t.TempDir()
 	mtp := config.NewMultiTenantPersistence(baseDir)
@@ -2690,7 +2719,7 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 		"model":"quickstart:pulse-hosted",
 		"chat_model":"quickstart:pulse-hosted",
 		"patrol_model":"quickstart:pulse-hosted",
-		"configured":false,
+		"configured":true,
 		"custom_context":"",
 		"auth_method":"api_key",
 		"oauth_connected":false,
@@ -2715,12 +2744,11 @@ func TestContract_HostedTenantAISettingsFallbackJSONSnapshot(t *testing.T) {
 		"control_level":"read_only",
 		"protected_guests":[],
 		"discovery_enabled":false,
-		"quickstart_credits_total":0,
+		"quickstart_credits_total":25,
 		"quickstart_credits_used":0,
-		"quickstart_credits_remaining":0,
-		"quickstart_credits_available":false,
-		"using_quickstart":false,
-		"quickstart_blocked_reason":"Activate this install or start a trial to use AI Patrol quickstart. Otherwise connect your API key."
+		"quickstart_credits_remaining":25,
+		"quickstart_credits_available":true,
+		"using_quickstart":true
 	}`
 
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)

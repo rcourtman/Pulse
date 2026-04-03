@@ -246,10 +246,13 @@ bootstrap. `pkg/licensing/license_server_client.go` and
 `pkg/licensing/quickstart_bootstrap.go` must treat
 `POST /v1/quickstart/bootstrap` as the canonical exchange for a server-issued
 quickstart token plus the authoritative quickstart credit snapshot. The Pulse
-runtime must authenticate that bootstrap with the installation token from the
-installation-scoped activation state, whether the install is activated
-self-hosted or hosted/trial-backed, and there is no anonymous
-`client_installation_id` fallback in the v6 runtime contract. Local runtime
+runtime must authenticate that bootstrap with one of the server-verified
+commercial authorities owned by the shared commercial boundary: an
+installation token from installation-scoped activation state for activated
+self-hosted installs, or a signed hosted entitlement lease for entitlement-
+backed trial/cloud runtimes. There is no anonymous `client_installation_id`
+fallback in the v6 runtime contract, and hosted/trial quickstart must not fake
+self-hosted `activation.enc` just to satisfy the bootstrap path. Local runtime
 cache files may memoize the returned token and counts but may not treat those
 cached counts as commercial authority. The transport must also remain
 mixed-version compatible while quickstart rolls out: Pulse may send optional

@@ -46,13 +46,7 @@ func shouldAutoBootstrapHostedAIConfig(hostedMode bool, persistence *config.Conf
 }
 
 func ensureHostedAIQuickstartBillingState(billingBaseDir, orgID string) (*billingState, error) {
-	billingBaseDir = strings.TrimSpace(billingBaseDir)
-	if billingBaseDir == "" {
-		return nil, nil
-	}
-
-	billingStore := config.NewFileBillingStore(billingBaseDir)
-	state, effectiveOrgID, err := loadHostedEffectiveBillingState(billingStore, orgID)
+	state, effectiveOrgID, err := config.LoadEffectiveEntitlementBillingState(billingBaseDir, orgID)
 	if err != nil || state == nil {
 		return state, err
 	}
@@ -61,6 +55,7 @@ func ensureHostedAIQuickstartBillingState(billingBaseDir, orgID string) (*billin
 	}
 
 	updated := normalizeBillingStateFromLicensing(state)
+	billingStore := config.NewFileBillingStore(strings.TrimSpace(billingBaseDir))
 	updated.GrantQuickstartCredits()
 	if err := billingStore.SaveBillingState(effectiveOrgID, updated); err != nil {
 		return nil, fmt.Errorf("save hosted Pulse Assistant quickstart billing state: %w", err)
