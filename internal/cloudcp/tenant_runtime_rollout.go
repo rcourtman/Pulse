@@ -2,11 +2,14 @@ package cloudcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	cpDocker "github.com/rcourtman/pulse-go-rewrite/internal/cloudcp/docker"
@@ -120,7 +123,7 @@ func RolloutTenantRuntime(ctx context.Context, cfg *CPConfig, opts TenantRuntime
 		registry:      reg,
 		docker:        dockerMgr,
 		tenantsDir:    cfg.TenantsDir(),
-		synchronizer:  rsyncTenantRuntimeSynchronizer{},
+		synchronizer:  filesystemTenantRuntimeSynchronizer{},
 		now:           func() time.Time { return time.Now().UTC() },
 		sleep:         time.Sleep,
 		healthTimeout: defaultTenantRuntimeRolloutHealthTimeout,
@@ -396,49 +399,180 @@ func sanitizeTenantRuntimeRolloutRunID(raw string, now time.Time) string {
 	return sanitized
 }
 
-type rsyncTenantRuntimeSynchronizer struct{}
+type filesystemTenantRuntimeSynchronizer struct{}
 
-func (rsyncTenantRuntimeSynchronizer) Snapshot(ctx context.Context, srcDir, snapshotDir string) error {
-	return runTenantRuntimeRsync(ctx, srcDir, snapshotDir)
+func (filesystemTenantRuntimeSynchronizer) Snapshot(ctx context.Context, srcDir, snapshotDir string) error {
+	return syncTenantRuntimeTree(ctx, srcDir, snapshotDir)
 }
 
-func (rsyncTenantRuntimeSynchronizer) Restore(ctx context.Context, snapshotDir, dstDir string) error {
-	return runTenantRuntimeRsync(ctx, snapshotDir, dstDir)
+func (filesystemTenantRuntimeSynchronizer) Restore(ctx context.Context, snapshotDir, dstDir string) error {
+	return syncTenantRuntimeTree(ctx, snapshotDir, dstDir)
 }
 
-func runTenantRuntimeRsync(ctx context.Context, srcDir, dstDir string) error {
+func syncTenantRuntimeTree(ctx context.Context, srcDir, dstDir string) error {
 	srcDir = strings.TrimSpace(srcDir)
 	dstDir = strings.TrimSpace(dstDir)
 	if srcDir == "" || dstDir == "" {
 		return fmt.Errorf("source and destination directories are required")
 	}
+	srcInfo, err := os.Lstat(srcDir)
+	if err != nil {
+		return fmt.Errorf("stat source dir %s: %w", srcDir, err)
+	}
+	if !srcInfo.IsDir() {
+		return fmt.Errorf("source path %s is not a directory", srcDir)
+	}
 	if err := os.MkdirAll(dstDir, 0o755); err != nil {
 		return fmt.Errorf("create destination dir %s: %w", dstDir, err)
 	}
-	cmd := exec.CommandContext(
-		ctx,
-		"rsync",
-		"-a",
-		"--delete",
-		"--numeric-ids",
-		withTrailingSeparator(srcDir),
-		withTrailingSeparator(dstDir),
-	)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		trimmed := strings.TrimSpace(string(output))
-		if trimmed == "" {
-			return fmt.Errorf("rsync %s -> %s: %w", srcDir, dstDir, err)
+	if err := clearDirectoryContents(dstDir); err != nil {
+		return fmt.Errorf("clear destination dir %s: %w", dstDir, err)
+	}
+
+	type pendingDirectory struct {
+		path string
+		info fs.FileInfo
+	}
+	pendingDirs := make([]pendingDirectory, 0, 8)
+
+	err = filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
 		}
-		return fmt.Errorf("rsync %s -> %s: %w: %s", srcDir, dstDir, err, trimmed)
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		relPath, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return fmt.Errorf("rel path for %s: %w", path, err)
+		}
+		targetPath := dstDir
+		if relPath != "." {
+			targetPath = filepath.Join(dstDir, relPath)
+		}
+
+		switch mode := info.Mode(); {
+		case info.IsDir():
+			if err := os.MkdirAll(targetPath, 0o755); err != nil {
+				return fmt.Errorf("create directory %s: %w", targetPath, err)
+			}
+			pendingDirs = append(pendingDirs, pendingDirectory{path: targetPath, info: info})
+			return nil
+		case mode&os.ModeSymlink != 0:
+			linkTarget, err := os.Readlink(path)
+			if err != nil {
+				return fmt.Errorf("read symlink %s: %w", path, err)
+			}
+			if err := os.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+				return fmt.Errorf("create symlink parent %s: %w", filepath.Dir(targetPath), err)
+			}
+			if err := os.Symlink(linkTarget, targetPath); err != nil {
+				return fmt.Errorf("create symlink %s: %w", targetPath, err)
+			}
+			if err := preserveOwnership(targetPath, info, true); err != nil {
+				return fmt.Errorf("preserve symlink ownership %s: %w", targetPath, err)
+			}
+			return nil
+		default:
+			if err := copyTenantRuntimeFile(path, targetPath, info); err != nil {
+				return err
+			}
+			return nil
+		}
+	})
+	if err != nil {
+		return fmt.Errorf("sync %s -> %s: %w", srcDir, dstDir, err)
+	}
+
+	for i := len(pendingDirs) - 1; i >= 0; i-- {
+		dir := pendingDirs[i]
+		if err := preserveDirectoryMetadata(dir.path, dir.info); err != nil {
+			return fmt.Errorf("preserve directory metadata %s: %w", dir.path, err)
+		}
 	}
 	return nil
 }
 
-func withTrailingSeparator(path string) string {
-	cleaned := filepath.Clean(path)
-	if strings.HasSuffix(cleaned, string(os.PathSeparator)) {
-		return cleaned
+func clearDirectoryContents(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return err
 	}
-	return cleaned + string(os.PathSeparator)
+	for _, entry := range entries {
+		if err := os.RemoveAll(filepath.Join(dir, entry.Name())); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func copyTenantRuntimeFile(srcPath, dstPath string, info fs.FileInfo) error {
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0o755); err != nil {
+		return fmt.Errorf("create file parent %s: %w", filepath.Dir(dstPath), err)
+	}
+
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return fmt.Errorf("open source file %s: %w", srcPath, err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode().Perm())
+	if err != nil {
+		return fmt.Errorf("open destination file %s: %w", dstPath, err)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("copy file %s -> %s: %w", srcPath, dstPath, err)
+	}
+	if err := dstFile.Chmod(info.Mode().Perm()); err != nil {
+		return fmt.Errorf("chmod destination file %s: %w", dstPath, err)
+	}
+	if err := preserveOwnership(dstPath, info, false); err != nil {
+		return fmt.Errorf("preserve file ownership %s: %w", dstPath, err)
+	}
+	if err := os.Chtimes(dstPath, info.ModTime(), info.ModTime()); err != nil {
+		return fmt.Errorf("preserve file times %s: %w", dstPath, err)
+	}
+	return nil
+}
+
+func preserveDirectoryMetadata(path string, info fs.FileInfo) error {
+	if err := preserveOwnership(path, info, false); err != nil {
+		return err
+	}
+	if err := os.Chmod(path, info.Mode().Perm()); err != nil {
+		return err
+	}
+	if err := os.Chtimes(path, info.ModTime(), info.ModTime()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func preserveOwnership(path string, info fs.FileInfo, symlink bool) error {
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok || stat == nil {
+		return nil
+	}
+
+	var err error
+	if symlink {
+		err = os.Lchown(path, int(stat.Uid), int(stat.Gid))
+	} else {
+		err = os.Chown(path, int(stat.Uid), int(stat.Gid))
+	}
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.ENOTSUP) || errors.Is(err, syscall.ENOSYS) {
+		return nil
+	}
+	return err
 }

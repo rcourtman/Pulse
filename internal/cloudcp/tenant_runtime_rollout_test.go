@@ -3,6 +3,8 @@ package cloudcp
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -164,6 +166,75 @@ func TestTenantRuntimeRollout_RollsBackOnHealthFailure(t *testing.T) {
 	}
 	if got := docker.byName[tenantRuntimeContainerName(tenant.ID)]; got == nil || got.ID != "old-container" {
 		t.Fatalf("canonical container after rollback = %#v, want old-container", got)
+	}
+}
+
+func TestFilesystemTenantRuntimeSynchronizer_SnapshotAndRestore(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	srcDir := t.TempDir()
+	snapshotDir := t.TempDir()
+	restoreDir := t.TempDir()
+
+	mustWrite := func(path, contents string, mode os.FileMode) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatalf("mkdir parent %s: %v", path, err)
+		}
+		if err := os.WriteFile(path, []byte(contents), mode); err != nil {
+			t.Fatalf("write file %s: %v", path, err)
+		}
+	}
+
+	mustWrite(filepath.Join(srcDir, "billing.json"), "{\"valid\":true}\n", 0o600)
+	mustWrite(filepath.Join(srcDir, "secrets", "handoff.key"), "handoff-key\n", 0o600)
+	if err := os.Symlink(filepath.Join("secrets", "handoff.key"), filepath.Join(srcDir, ".cloud_handoff_key")); err != nil {
+		t.Fatalf("symlink .cloud_handoff_key: %v", err)
+	}
+
+	mustWrite(filepath.Join(snapshotDir, "stale.txt"), "remove me\n", 0o644)
+
+	syncer := filesystemTenantRuntimeSynchronizer{}
+	if err := syncer.Snapshot(ctx, srcDir, snapshotDir); err != nil {
+		t.Fatalf("Snapshot() error = %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(snapshotDir, "stale.txt")); !os.IsNotExist(err) {
+		t.Fatalf("snapshot stale.txt stat err = %v, want not-exist", err)
+	}
+	billingPath := filepath.Join(snapshotDir, "billing.json")
+	billingBytes, err := os.ReadFile(billingPath)
+	if err != nil {
+		t.Fatalf("read snapshot billing.json: %v", err)
+	}
+	if got := string(billingBytes); got != "{\"valid\":true}\n" {
+		t.Fatalf("snapshot billing.json = %q, want %q", got, "{\"valid\":true}\n")
+	}
+	if info, err := os.Stat(billingPath); err != nil {
+		t.Fatalf("stat snapshot billing.json: %v", err)
+	} else if got := info.Mode().Perm(); got != 0o600 {
+		t.Fatalf("snapshot billing.json mode = %o, want 600", got)
+	}
+	if target, err := os.Readlink(filepath.Join(snapshotDir, ".cloud_handoff_key")); err != nil {
+		t.Fatalf("readlink snapshot .cloud_handoff_key: %v", err)
+	} else if target != filepath.Join("secrets", "handoff.key") {
+		t.Fatalf("snapshot symlink target = %q, want %q", target, filepath.Join("secrets", "handoff.key"))
+	}
+
+	mustWrite(filepath.Join(restoreDir, "obsolete.txt"), "old\n", 0o644)
+	if err := syncer.Restore(ctx, snapshotDir, restoreDir); err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(restoreDir, "obsolete.txt")); !os.IsNotExist(err) {
+		t.Fatalf("restore obsolete.txt stat err = %v, want not-exist", err)
+	}
+	restoredBytes, err := os.ReadFile(filepath.Join(restoreDir, "secrets", "handoff.key"))
+	if err != nil {
+		t.Fatalf("read restored handoff.key: %v", err)
+	}
+	if got := string(restoredBytes); got != "handoff-key\n" {
+		t.Fatalf("restored handoff.key = %q, want %q", got, "handoff-key\n")
 	}
 }
 

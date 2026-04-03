@@ -249,7 +249,9 @@ That same deployment boundary now owns hosted tenant canary rollouts too.
 containers through the canonical Docker manager, snapshot tenant data before
 swap, and reconcile the control-plane registry to the live container that
 actually serves traffic instead of relying on ad hoc host-local scripts that
-swap containers behind the control plane's back.
+swap containers behind the control plane's back. That snapshot-and-restore path
+must be self-contained inside the shipped control-plane command rather than
+depending on undeclared host binaries such as `rsync`.
 across pretest, Playwright, and posttest. `scripts/hot-dev.sh` must honor that
 lock by suppressing source-triggered rebuilds and manual `pulse` binary restart
 churn while the owning proof process is still alive. Stale verify locks must
