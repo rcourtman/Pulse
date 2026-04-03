@@ -60,8 +60,8 @@ func NewQuickstartClient(licenseID string) *QuickstartClient {
 // QuickstartServerState is the authoritative quickstart inventory snapshot
 // returned by the license server alongside a Patrol response.
 type QuickstartServerState struct {
-	CreditsRemaining int
-	CreditsTotal     int
+	CreditsRemaining *int
+	CreditsTotal     *int
 	TokenExpiresAt   *time.Time
 }
 
@@ -96,8 +96,8 @@ type quickstartResponse struct {
 	ToolCalls                []ToolCall `json:"tool_calls,omitempty"`
 	InputTokens              int        `json:"input_tokens,omitempty"`
 	OutputTokens             int        `json:"output_tokens,omitempty"`
-	CreditsRemaining         int        `json:"credits_remaining,omitempty"`
-	CreditsTotal             int        `json:"credits_total,omitempty"`
+	CreditsRemaining         *int       `json:"credits_remaining,omitempty"`
+	CreditsTotal             *int       `json:"credits_total,omitempty"`
 	QuickstartTokenExpiresAt string     `json:"quickstart_token_expires_at,omitempty"`
 	TokenExpiresAt           string     `json:"token_expires_at,omitempty"`
 	Code                     string     `json:"code,omitempty"`
@@ -219,6 +219,10 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 		if resp.StatusCode != http.StatusOK {
 			var failure quickstartResponse
 			if err := json.Unmarshal(respBody, &failure); err == nil {
+				if failure.Code == "quickstart_credits_exhausted" && failure.CreditsRemaining == nil {
+					remaining := 0
+					failure.CreditsRemaining = &remaining
+				}
 				c.syncServerState(failure)
 			}
 			if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
@@ -228,8 +232,8 @@ func (c *QuickstartClient) Chat(ctx context.Context, req ChatRequest) (*ChatResp
 				StatusCode:       resp.StatusCode,
 				Code:             strings.TrimSpace(failure.Code),
 				Message:          firstNonEmpty(strings.TrimSpace(failure.Error), strings.TrimSpace(string(respBody))),
-				CreditsRemaining: failure.CreditsRemaining,
-				CreditsTotal:     failure.CreditsTotal,
+				CreditsRemaining: quickstartOptionalInt(failure.CreditsRemaining),
+				CreditsTotal:     quickstartOptionalInt(failure.CreditsTotal),
 			}
 			// Don't retry on client errors (4xx)
 			if resp.StatusCode >= 400 && resp.StatusCode < 500 {
@@ -345,14 +349,26 @@ func (c *QuickstartClient) syncServerState(result quickstartResponse) {
 	if c == nil || c.onStateSync == nil {
 		return
 	}
-	state := QuickstartServerState{
-		CreditsRemaining: result.CreditsRemaining,
-		CreditsTotal:     result.CreditsTotal,
+	state := QuickstartServerState{}
+	hasState := false
+	if result.CreditsRemaining != nil {
+		remaining := *result.CreditsRemaining
+		state.CreditsRemaining = &remaining
+		hasState = true
+	}
+	if result.CreditsTotal != nil {
+		total := *result.CreditsTotal
+		state.CreditsTotal = &total
+		hasState = true
 	}
 	if rawExpiry := firstNonEmpty(result.QuickstartTokenExpiresAt, result.TokenExpiresAt); rawExpiry != "" {
 		if parsed, err := time.Parse(time.RFC3339, rawExpiry); err == nil {
 			state.TokenExpiresAt = &parsed
+			hasState = true
 		}
+	}
+	if !hasState {
+		return
 	}
 	c.onStateSync(state)
 }
@@ -371,4 +387,11 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func quickstartOptionalInt(v *int) int {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

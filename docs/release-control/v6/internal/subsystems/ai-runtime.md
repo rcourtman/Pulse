@@ -149,9 +149,21 @@ credentials still outrank Patrol quickstart whenever both are present.
 That same Patrol quickstart contract is execution-scoped rather than
 provider-turn-scoped: the runtime must stamp one stable execution identifier
 per higher-level Patrol run and propagate it through every hosted quickstart
-provider call, including retries and the evaluation pass, so one Patrol run
-consumes at most one quickstart credit even when the underlying agentic loop
-makes multiple model turns.
+provider call, including retries, the evaluation pass, alert auto-resolution
+quick-analysis calls, and any other ancillary Patrol-side AI work that still
+belongs to the same run, so one Patrol run consumes at most one quickstart
+credit even when the underlying agentic loop makes multiple model turns or
+post-analysis Patrol helpers need additional model calls.
+That same server-authoritative quickstart contract also governs partial and
+released error paths. `internal/ai/providers/quickstart.go` and
+`internal/ai/quickstart.go` must treat server-reported credits and expiry as
+optional fields on non-success responses, sync cached inventory only when the
+server actually returns authoritative inventory, and preserve the last known
+server state otherwise. The license-server quickstart boundary must release
+failed reservations with the post-release workspace snapshot attached whenever
+that inventory is known, rather than forcing the runtime to infer exhaustion
+from absent fields or resetting credits to zero after transient upstream
+errors.
 Public-facing copy that reflects those runtime fields must therefore speak in
 Patrol quickstart runs on activated or trial-backed installs and Patrol-only
 no-key activation, not in generic AI credits, anonymous Community bootstrap,

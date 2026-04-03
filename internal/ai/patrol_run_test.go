@@ -1984,7 +1984,7 @@ func TestShouldResolveAlert_StorageUsageDropped(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
+	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
 	if !shouldResolve {
 		t.Error("expected alert to be resolved (usage dropped below threshold)")
 	}
@@ -2011,7 +2011,7 @@ func TestShouldResolveAlert_CPUDropped(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
 	if !shouldResolve {
 		t.Error("expected alert to be resolved (CPU dropped)")
 	}
@@ -2033,7 +2033,7 @@ func TestShouldResolveAlert_OfflineNowOnline(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
+	shouldResolve, reason := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
 	if !shouldResolve {
 		t.Error("expected offline alert to be resolved (resource now online)")
 	}
@@ -2056,7 +2056,7 @@ func TestShouldResolveAlert_NoMatch(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
 	if shouldResolve {
 		t.Error("expected alert NOT to be resolved when resource not found")
 	}
@@ -2080,7 +2080,7 @@ func TestShouldResolveAlert_StorageStillHigh(t *testing.T) {
 		StartTime:    time.Now().Add(-1 * time.Hour),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
 	if shouldResolve {
 		t.Error("expected alert NOT to be resolved (storage usage still above threshold)")
 	}
@@ -2107,7 +2107,7 @@ func TestShouldResolveAlert_CPUScaleRegression(t *testing.T) {
 		StartTime:    time.Now().Add(-30 * time.Minute),
 	}
 
-	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil)
+	shouldResolve, _ := ps.shouldResolveAlertState(nil, alert, patrolRuntimeStateForTest(ps, state), nil, "")
 	if shouldResolve {
 		t.Error("expected CPU alert NOT to be resolved (95% is still above 90% threshold)")
 	}
@@ -2150,7 +2150,7 @@ func TestReviewAndResolveAlerts_NilResolver(t *testing.T) {
 	ps := NewPatrolService(nil, nil)
 	state := models.StateSnapshot{}
 
-	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true)
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true, "")
 	if result != 0 {
 		t.Errorf("expected 0 resolved with nil resolver, got %d", result)
 	}
@@ -2164,7 +2164,7 @@ func TestReviewAndResolveAlerts_NoActiveAlerts(t *testing.T) {
 	ps.mu.Unlock()
 
 	state := models.StateSnapshot{}
-	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true)
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true, "")
 	if result != 0 {
 		t.Errorf("expected 0 resolved with no alerts, got %d", result)
 	}
@@ -2191,7 +2191,7 @@ func TestReviewAndResolveAlerts_SkipsRecentAlerts(t *testing.T) {
 		Nodes: []models.Node{{ID: "n1", Name: "node-1", Status: "online"}},
 	}
 
-	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true)
+	result := ps.reviewAndResolveAlertsState(nil, patrolRuntimeStateForTest(ps, state), true, "")
 	if result != 0 {
 		t.Errorf("expected 0 resolved (alert too recent), got %d", result)
 	}

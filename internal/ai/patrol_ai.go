@@ -215,7 +215,7 @@ func CleanThinkingTokens(content string) string {
 // runAIAnalysis uses the agentic tool-driven approach to analyze infrastructure.
 // The LLM investigates using MCP tools and reports findings via patrol_report_finding.
 // An optional scope focuses the patrol on specific resources.
-func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRuntimeState, scope *PatrolScope) (*AIAnalysisResult, error) {
+func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRuntimeState, scope *PatrolScope, executionID string) (*AIAnalysisResult, error) {
 	if p.aiService == nil {
 		return nil, fmt.Errorf("Pulse Patrol service not available")
 	}
@@ -269,7 +269,9 @@ func (p *PatrolService) runAIAnalysisState(ctx context.Context, snap patrolRunti
 	log.Debug().Msg("AI Patrol: Starting agentic patrol analysis")
 
 	maxTurns := computeTriageMaxTurns(len(triageResult.Flags), scope)
-	executionID := uuid.NewString()
+	if strings.TrimSpace(executionID) == "" {
+		executionID = uuid.NewString()
+	}
 	log.Debug().
 		Int("triage_flags", len(triageResult.Flags)).
 		Int("max_turns", maxTurns).

@@ -161,6 +161,15 @@ type PatrolExecuteRequest struct {
 	MaxTurns     int    `json:"max_turns,omitempty"`
 }
 
+// QuickAnalysisRequest represents a lightweight single-turn analysis request.
+// ExecutionID lets higher-level workflows group ancillary calls under one
+// commercial run instead of charging each helper call separately.
+type QuickAnalysisRequest struct {
+	Prompt      string `json:"prompt"`
+	ExecutionID string `json:"execution_id,omitempty"`
+	UseCase     string `json:"use_case,omitempty"`
+}
+
 // PatrolStreamResponse contains the results of a patrol execution via the chat service
 type PatrolStreamResponse struct {
 	Content      string `json:"content"`
@@ -1733,7 +1742,7 @@ func (s *Service) createPatrolProviderForModel(modelStr string) (providers.Strea
 // QuickAnalysis performs a lightweight AI analysis for simple decisions.
 // This is used for things like determining if an alert should be auto-resolved.
 // It uses a single-turn, no-tools call for efficiency.
-func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, error) {
+func (s *Service) QuickAnalysis(ctx context.Context, req QuickAnalysisRequest) (string, error) {
 	s.mu.RLock()
 	provider := s.provider
 	cfg := s.cfg
@@ -1756,13 +1765,19 @@ func (s *Service) QuickAnalysis(ctx context.Context, prompt string) (string, err
 		},
 		{
 			Role:    "user",
-			Content: prompt,
+			Content: req.Prompt,
 		},
 	}
 
+	executionID := strings.TrimSpace(req.ExecutionID)
+	if executionID == "" {
+		executionID = uuid.NewString()
+	}
+
 	resp, err := provider.Chat(ctx, providers.ChatRequest{
-		Messages: messages,
-		Model:    model,
+		Messages:    messages,
+		Model:       model,
+		ExecutionID: executionID,
 	})
 	if err != nil {
 		return "", fmt.Errorf("Pulse Assistant analysis failed: %w", err)

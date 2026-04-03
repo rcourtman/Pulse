@@ -332,11 +332,22 @@ func (m *PersistentQuickstartCreditManager) syncServerState(serverState provider
 		return
 	}
 
-	state.QuickstartCreditsRemaining = max(0, serverState.CreditsRemaining)
-	state.QuickstartCreditsTotal = max(0, serverState.CreditsTotal)
+	updated := false
+	if serverState.CreditsRemaining != nil {
+		state.QuickstartCreditsRemaining = max(0, *serverState.CreditsRemaining)
+		updated = true
+	}
+	if serverState.CreditsTotal != nil {
+		state.QuickstartCreditsTotal = max(0, *serverState.CreditsTotal)
+		updated = true
+	}
 	if serverState.TokenExpiresAt != nil {
 		expiryUnix := serverState.TokenExpiresAt.UTC().Unix()
 		state.QuickstartTokenExpiresAt = &expiryUnix
+		updated = true
+	}
+	if !updated {
+		return
 	}
 	nowUnix := m.now().Unix()
 	state.LastSyncedAt = &nowUnix

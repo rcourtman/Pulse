@@ -63,7 +63,7 @@ func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 	}
 	state := models.StateSnapshot{Nodes: []models.Node{{ID: "node1", Name: "node1", CPU: 10}}}
 
-	resolved, reason := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc)
+	resolved, reason := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc, "patrol-run-123")
 	if !resolved {
 		t.Fatalf("expected alert to resolve")
 	}
@@ -72,6 +72,9 @@ func TestPatrolService_AskAIAboutAlert(t *testing.T) {
 	}
 	if !strings.Contains(provider.lastReq.Messages[1].Content, "Resource: node1 (node)") {
 		t.Fatalf("expected prompt to include canonical node resource type, got %q", provider.lastReq.Messages[1].Content)
+	}
+	if provider.lastReq.ExecutionID != "patrol-run-123" {
+		t.Fatalf("execution_id=%q want patrol-run-123", provider.lastReq.ExecutionID)
 	}
 }
 
@@ -96,7 +99,7 @@ func TestPatrolService_AskAIAboutAlert_NormalizesUsageType(t *testing.T) {
 	}
 	state := models.StateSnapshot{Storage: []models.Storage{{ID: "storage-1", Name: "local", Usage: 91, Status: "active"}}}
 
-	resolved, _ := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc)
+	resolved, _ := ps.askAIAboutAlertState(context.Background(), alert, patrolRuntimeStateForTest(ps, state), aiSvc, "patrol-run-usage")
 	if resolved {
 		t.Fatalf("expected alert to stay unresolved")
 	}

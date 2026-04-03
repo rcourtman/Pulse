@@ -22,7 +22,7 @@ func TestRunAIAnalysis_TriageQuietSkipsLLM(t *testing.T) {
 		t.Fatalf("expected quiet triage state, got IsQuiet=%v", triage.IsQuiet)
 	}
 
-	res, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, state), nil)
+	res, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, state), nil, "")
 	if err != nil {
 		t.Fatalf("runAIAnalysis() unexpected error for quiet triage: %v", err)
 	}

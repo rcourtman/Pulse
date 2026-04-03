@@ -18,7 +18,7 @@ func TestService_QuickAnalysis(t *testing.T) {
 	svc := NewService(nil, nil)
 
 	// Case 1: No provider configured
-	_, err := svc.QuickAnalysis(context.Background(), "test")
+	_, err := svc.QuickAnalysis(context.Background(), QuickAnalysisRequest{Prompt: "test"})
 	if err == nil || !strings.Contains(err.Error(), "not enabled") {
 		t.Errorf("Expected error about provider not enabled, got: %v", err)
 	}
@@ -28,6 +28,9 @@ func TestService_QuickAnalysis(t *testing.T) {
 		chatFunc: func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 			if req.Model != "fast-model" {
 				return nil, nil // Should use patrol model
+			}
+			if req.ExecutionID != "patrol-run-123" {
+				t.Fatalf("execution_id=%q want patrol-run-123", req.ExecutionID)
 			}
 			return &providers.ChatResponse{
 				Content: "Analysis Result",
@@ -40,7 +43,11 @@ func TestService_QuickAnalysis(t *testing.T) {
 		PatrolModel: "fast-model",
 	}
 
-	res, err := svc.QuickAnalysis(context.Background(), "Analysis prompt")
+	res, err := svc.QuickAnalysis(context.Background(), QuickAnalysisRequest{
+		Prompt:      "Analysis prompt",
+		ExecutionID: "patrol-run-123",
+		UseCase:     "patrol",
+	})
 	if err != nil {
 		t.Fatalf("QuickAnalysis failed: %v", err)
 	}
@@ -52,7 +59,7 @@ func TestService_QuickAnalysis(t *testing.T) {
 	mockProv.chatFunc = func(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 		return &providers.ChatResponse{Content: ""}, nil
 	}
-	_, err = svc.QuickAnalysis(context.Background(), "test")
+	_, err = svc.QuickAnalysis(context.Background(), QuickAnalysisRequest{Prompt: "test"})
 	if err == nil {
 		t.Error("Expected error for empty response")
 	}

@@ -207,7 +207,7 @@ func TestGetPatrolSystemPrompt_ModeSwitch(t *testing.T) {
 func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 	t.Run("nil service", func(t *testing.T) {
 		ps := NewPatrolService(nil, nil)
-		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil, "")
 		if err == nil {
 			t.Fatal("expected error when aiService is nil")
 		}
@@ -226,7 +226,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 			costStore: store,
 		}
 		ps := NewPatrolService(svc, nil)
-		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, models.StateSnapshot{}), nil, "")
 		if err == nil || !strings.Contains(err.Error(), "patrol skipped") {
 			t.Fatalf("expected budget error, got %v", err)
 		}
@@ -236,7 +236,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 		svc := &Service{}
 		ps := NewPatrolService(svc, nil)
 		scope := &PatrolScope{NoStream: true}
-		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope, "")
 		if err == nil || !strings.Contains(err.Error(), "chat service not available") {
 			t.Fatalf("expected chat service error, got %v", err)
 		}
@@ -247,7 +247,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 		svc.SetChatService(&noExecutorChatService{})
 		ps := NewPatrolService(svc, nil)
 		scope := &PatrolScope{NoStream: true}
-		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope, "")
 		if err == nil || !strings.Contains(err.Error(), "executor access") {
 			t.Fatalf("expected executor access error, got %v", err)
 		}
@@ -258,7 +258,7 @@ func TestRunAIAnalysis_EarlyErrors(t *testing.T) {
 		svc.SetChatService(&mockChatService{executor: nil})
 		ps := NewPatrolService(svc, nil)
 		scope := &PatrolScope{NoStream: true}
-		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
+		_, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope, "")
 		if err == nil || !strings.Contains(err.Error(), "tool executor not available") {
 			t.Fatalf("expected executor nil error, got %v", err)
 		}
@@ -332,7 +332,7 @@ func TestRunAIAnalysis_RetriesWithProviderDerivedSeedBudget(t *testing.T) {
 		t.Fatalf("expected initial triage seed to exceed retry budget, got %d tokens", got)
 	}
 
-	result, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, state), &PatrolScope{NoStream: true})
+	result, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, state), &PatrolScope{NoStream: true}, "")
 	if err != nil {
 		t.Fatalf("runAIAnalysisState returned error: %v", err)
 	}
@@ -400,7 +400,7 @@ func TestRunAIAnalysis_StreamEvents(t *testing.T) {
 	ps := NewPatrolService(svc, nil)
 	scope := &PatrolScope{NoStream: true}
 
-	res, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope)
+	res, err := ps.runAIAnalysisState(context.Background(), patrolRuntimeStateForTest(ps, samplePatrolState()), scope, "")
 	if err != nil {
 		t.Fatalf("runAIAnalysis failed: %v", err)
 	}

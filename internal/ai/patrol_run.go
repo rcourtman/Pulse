@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/circuit"
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
 	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
@@ -264,6 +265,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	start := time.Now()
 	runID := fmt.Sprintf("%d", start.UnixNano())
+	executionID := uuid.NewString()
 	patrolType := "patrol"
 	GetPatrolMetrics().RecordRun(string(trigger), "full")
 
@@ -404,7 +406,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 		// Ensure stream state is clean for this run before the first streamed event.
 		p.resetStreamForRun(runID)
 		// Run agentic AI analysis — the LLM uses tools to investigate and reports findings
-		aiResult, aiErr := p.runAIAnalysisState(ctx, state, scope)
+		aiResult, aiErr := p.runAIAnalysisState(ctx, state, scope, executionID)
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol: LLM analysis failed")
 			runStats.errors++
@@ -530,7 +532,7 @@ func (p *PatrolService) runPatrolWithTrigger(ctx context.Context, trigger Trigge
 
 	// AI-based alert review: check active alerts against current state and auto-resolve fixed issues
 	// Pass llmAllowed so it knows whether AI calls are allowed.
-	alertsResolved := p.reviewAndResolveAlertsState(ctx, state, llmAllowed)
+	alertsResolved := p.reviewAndResolveAlertsState(ctx, state, llmAllowed, executionID)
 	if alertsResolved > 0 {
 		log.Info().Int("alerts_resolved", alertsResolved).Msg("AI Patrol: Auto-resolved alerts where issues are fixed")
 	}
@@ -718,6 +720,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 
 	start := time.Now()
 	runID := fmt.Sprintf("%d", start.UnixNano())
+	executionID := uuid.NewString()
 	GetPatrolMetrics().RecordRun(string(scope.Reason), "scoped")
 	var runStats struct {
 		resourceCount     int
@@ -872,7 +875,7 @@ func (p *PatrolService) runScopedPatrol(ctx context.Context, scope PatrolScope) 
 			p.resetStreamForRun(runID)
 		}
 		// Run agentic AI analysis on filtered state with scope
-		aiResult, aiErr := p.runAIAnalysisState(ctx, filteredState, &scope)
+		aiResult, aiErr := p.runAIAnalysisState(ctx, filteredState, &scope, executionID)
 		if aiErr != nil {
 			log.Warn().Err(aiErr).Msg("AI Patrol (scoped): LLM analysis failed")
 			runStats.errors++
@@ -1952,7 +1955,7 @@ func (p *PatrolService) GetCurrentStreamOutput() (string, string) {
 // reviewAndResolveAlerts uses AI to review active alerts and resolve those where the issue is fixed.
 // This is the core of autonomous alert management - the AI looks at each alert, checks current state,
 // and determines if the underlying issue has been resolved.
-func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool) int {
+func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state patrolRuntimeState, llmAllowed bool, executionID string) int {
 	p.mu.RLock()
 	resolver := p.alertResolver
 	aiService := p.aiService
@@ -1995,7 +1998,7 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 	}
 
 	for _, alert := range alertsToReview {
-		shouldResolve, reason := p.shouldResolveAlertState(ctx, alert, state, aiSvc)
+		shouldResolve, reason := p.shouldResolveAlertState(ctx, alert, state, aiSvc, executionID)
 		if shouldResolve {
 			if resolver.ResolveAlert(alert.ID) {
 				resolvedCount++
@@ -2020,7 +2023,7 @@ func (p *PatrolService) reviewAndResolveAlertsState(ctx context.Context, state p
 
 // shouldResolveAlert determines if an alert should be auto-resolved based on current state.
 // Returns (shouldResolve, reason)
-func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
+func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) (bool, string) {
 	// First, try smart heuristic checks based on alert type
 	switch alert.Type {
 	case "usage": // Storage usage alert
@@ -2055,7 +2058,7 @@ func (p *PatrolService) shouldResolveAlertState(ctx context.Context, alert Alert
 
 	// For complex cases or when heuristics don't apply, use AI judgment if available
 	if aiService != nil && aiService.IsEnabled() {
-		return p.askAIAboutAlertState(ctx, alert, snap, aiService)
+		return p.askAIAboutAlertState(ctx, alert, snap, aiService, executionID)
 	}
 
 	return false, ""
@@ -2291,7 +2294,7 @@ func (p *PatrolService) isResourceOnlineState(alert AlertInfo, snap patrolRuntim
 }
 
 // askAIAboutAlert uses the AI to determine if an alert should be resolved
-func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service) (bool, string) {
+func (p *PatrolService) askAIAboutAlertState(ctx context.Context, alert AlertInfo, snap patrolRuntimeState, aiService *Service, executionID string) (bool, string) {
 	alertType := patrolAlertLookupType(alert)
 	// Build a focused prompt for the AI
 	prompt := fmt.Sprintf(`Review this alert and determine if it should be auto-resolved based on current state.
@@ -2317,7 +2320,11 @@ Respond with ONLY one of:
 		p.getResourceCurrentStateState(alert, snap))
 
 	// Use a quick, low-cost AI call
-	response, err := aiService.QuickAnalysis(ctx, prompt)
+	response, err := aiService.QuickAnalysis(ctx, QuickAnalysisRequest{
+		Prompt:      prompt,
+		ExecutionID: executionID,
+		UseCase:     "patrol",
+	})
 	if err != nil {
 		log.Debug().Err(err).Str("alertID", alert.ID).Msg("AI Patrol: Failed to get AI judgment on alert")
 		return false, ""
