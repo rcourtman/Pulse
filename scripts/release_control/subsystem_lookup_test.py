@@ -4334,6 +4334,34 @@ class SubsystemLookupTest(unittest.TestCase):
             ],
         )
 
+    def test_lookup_paths_assigns_control_plane_rollout_command_to_deployment_installability(self) -> None:
+        result = lookup_paths(["cmd/pulse-control-plane/main.go"])
+        self.assertEqual(result["unowned_runtime_files"], [])
+        self.assertEqual(
+            {item["subsystem"] for item in result["impacted_subsystems"]},
+            {"deployment-installability"},
+        )
+        file_entry = result["files"][0]
+        self.assertEqual(file_entry["classification"], "runtime")
+        self.assertEqual(
+            {match["subsystem"] for match in file_entry["matches"]},
+            {"deployment-installability"},
+        )
+        match = file_entry["matches"][0]
+        self.assertEqual(
+            match["contract"],
+            "docs/release-control/v6/internal/subsystems/deployment-installability.md",
+        )
+        self.assertEqual(match["lane_context"]["lane_id"], "L1")
+        self.assertEqual(
+            match["verification_requirement"]["id"],
+            "hosted-runtime-rollout-control",
+        )
+        self.assertEqual(
+            match["verification_requirement"]["exact_files"],
+            ["internal/cloudcp/tenant_runtime_rollout_test.go"],
+        )
+
     def test_lookup_paths_normalizes_absolute_repo_paths(self) -> None:
         absolute = str(Path(REPO_ROOT, "internal/api/resources.go"))
         result = lookup_paths([absolute])

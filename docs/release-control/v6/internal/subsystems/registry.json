@@ -2265,11 +2265,14 @@
         ".github/workflows/publish-helm-chart.yml",
         ".github/workflows/release-dry-run.yml",
         ".github/workflows/update-demo-server.yml",
+        "cmd/pulse-control-plane/main.go",
         "Dockerfile",
         "docs/releases/V6_PRERELEASE_RUNBOOK.md",
         "frontend-modern/package.json",
         "frontend-modern/src/api/updates.ts",
         "internal/api/updates.go",
+        "internal/cloudcp/docker/manager.go",
+        "internal/cloudcp/tenant_runtime_rollout.go",
         "Makefile",
         "package.json",
         "scripts/build-release.sh",
@@ -2389,6 +2392,21 @@
               "scripts/installtests/install_docker_sh_test.go",
               "scripts/installtests/install_ps1_test.go",
               "scripts/installtests/root_install_sh_test.go"
+            ]
+          },
+          {
+            "id": "hosted-runtime-rollout-control",
+            "label": "hosted runtime rollout control proof",
+            "match_prefixes": [],
+            "match_files": [
+              "cmd/pulse-control-plane/main.go",
+              "internal/cloudcp/docker/manager.go",
+              "internal/cloudcp/tenant_runtime_rollout.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "internal/cloudcp/tenant_runtime_rollout_test.go"
             ]
           },
           {

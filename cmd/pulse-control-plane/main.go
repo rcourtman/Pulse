@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/cloudcp"
 	"github.com/spf13/cobra"
@@ -38,8 +39,71 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+func newTenantRuntimeCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "tenant-runtime",
+		Short: "Operate on hosted tenant runtime containers",
+	}
+	cmd.AddCommand(newTenantRuntimeRolloutCmd())
+	return cmd
+}
+
+func newTenantRuntimeRolloutCmd() *cobra.Command {
+	var tenantID string
+	var image string
+	var runID string
+	var snapshotRoot string
+	var healthTimeout time.Duration
+	var prunePrevious bool
+
+	cmd := &cobra.Command{
+		Use:   "rollout",
+		Short: "Canonically roll a hosted tenant onto a target runtime image",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := cloudcp.LoadConfig()
+			if err != nil {
+				return fmt.Errorf("load control plane config: %w", err)
+			}
+			result, err := cloudcp.RolloutTenantRuntime(cmd.Context(), cfg, cloudcp.TenantRuntimeRolloutOptions{
+				TenantID:      tenantID,
+				Image:         image,
+				RunID:         runID,
+				SnapshotRoot:  snapshotRoot,
+				HealthTimeout: healthTimeout,
+				PrunePrevious: prunePrevious,
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("tenant_id=%s\n", result.TenantID)
+			fmt.Printf("active_container_id=%s\n", result.ActiveContainerID)
+			fmt.Printf("active_image_ref=%s\n", result.ActiveImageRef)
+			fmt.Printf("active_image_id=%s\n", result.ActiveImageID)
+			fmt.Printf("reconciled_only=%t\n", result.ReconciledOnly)
+			if result.PreviousContainerID != "" {
+				fmt.Printf("previous_container_id=%s\n", result.PreviousContainerID)
+			}
+			if result.BackupContainerName != "" {
+				fmt.Printf("backup_container_name=%s\n", result.BackupContainerName)
+			}
+			return nil
+		},
+	}
+	cmd.Flags().StringVar(&tenantID, "tenant-id", "", "Hosted tenant ID to roll")
+	cmd.Flags().StringVar(&image, "image", "", "Target Pulse runtime image reference")
+	cmd.Flags().StringVar(&runID, "run-id", "", "Operator-visible rollout run identifier")
+	cmd.Flags().StringVar(&snapshotRoot, "snapshot-root", "", "Override tenant snapshot root (default: <CP_DATA_DIR>/backups/rollout)")
+	cmd.Flags().DurationVar(&healthTimeout, "health-timeout", 90*time.Second, "How long to wait for the target runtime to become healthy")
+	cmd.Flags().BoolVar(&prunePrevious, "prune-previous", false, "Remove the preserved pre-rollout container after success")
+	_ = cmd.MarkFlagRequired("tenant-id")
+	_ = cmd.MarkFlagRequired("image")
+	return cmd
+}
+
 func init() {
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(newTenantRuntimeCmd())
 }
 
 func main() {

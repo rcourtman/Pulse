@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	"github.com/rs/zerolog/log"
 )
 
@@ -35,6 +36,16 @@ type ManagerConfig struct {
 type Manager struct {
 	cli *client.Client
 	cfg ManagerConfig
+}
+
+// RuntimeContainerInfo is the canonical live-container snapshot used by
+// operator rollout and reconciliation flows.
+type RuntimeContainerInfo struct {
+	ID       string
+	Name     string
+	ImageRef string
+	ImageID  string
+	Running  bool
 }
 
 const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
@@ -62,6 +73,11 @@ func (m *Manager) Close() error {
 		return m.cli.Close()
 	}
 	return nil
+}
+
+// IsNotFound reports whether Docker treated an identifier as missing.
+func IsNotFound(err error) bool {
+	return errdefs.IsNotFound(err)
 }
 
 func (m *Manager) ensureDaemonReachable(ctx context.Context) error {
@@ -266,11 +282,51 @@ func (m *Manager) Stop(ctx context.Context, containerID string) error {
 	return m.cli.ContainerStop(ctx, containerID, container.StopOptions{Timeout: &timeout})
 }
 
+// Start starts a stopped tenant container.
+func (m *Manager) Start(ctx context.Context, containerID string) error {
+	return m.cli.ContainerStart(ctx, containerID, container.StartOptions{})
+}
+
 // Remove removes a stopped tenant container.
 func (m *Manager) Remove(ctx context.Context, containerID string) error {
 	return m.cli.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force: true,
 	})
+}
+
+// Rename renames a tenant container to the supplied Docker name.
+func (m *Manager) Rename(ctx context.Context, containerIDOrName, newName string) error {
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		return err
+	}
+	if err := m.cli.ContainerRename(ctx, containerIDOrName, newName); err != nil {
+		return fmt.Errorf("rename container %s -> %s: %w", containerIDOrName, newName, err)
+	}
+	return nil
+}
+
+// Inspect returns the canonical live metadata for the supplied container
+// identifier.
+func (m *Manager) Inspect(ctx context.Context, containerIDOrName string) (*RuntimeContainerInfo, error) {
+	if err := m.ensureDaemonReachable(ctx); err != nil {
+		return nil, err
+	}
+	inspect, err := m.cli.ContainerInspect(ctx, containerIDOrName)
+	if err != nil {
+		return nil, fmt.Errorf("inspect container %s: %w", containerIDOrName, err)
+	}
+	imageRef := ""
+	if inspect.Config != nil {
+		imageRef = strings.TrimSpace(inspect.Config.Image)
+	}
+	running := inspect.State != nil && inspect.State.Running
+	return &RuntimeContainerInfo{
+		ID:       inspect.ID,
+		Name:     strings.TrimPrefix(strings.TrimSpace(inspect.Name), "/"),
+		ImageRef: imageRef,
+		ImageID:  strings.TrimSpace(inspect.Image),
+		Running:  running,
+	}, nil
 }
 
 // StopAndRemove stops then removes a tenant container.
