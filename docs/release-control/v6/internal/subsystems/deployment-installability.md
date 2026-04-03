@@ -128,6 +128,12 @@ demo-deploy workflow. Shipped binaries, installable container images, and
 governed deployment-build workflows must all carry the same build metadata
 contract rather than depending on whichever local ldflags string happened to be
 updated last.
+That same Docker release-build boundary also owns the embedded frontend's
+shipped-doc inputs. When the frontend embed build syncs public docs from the
+repo root, `Dockerfile` must stage the canonical shipped docs set into the
+container build context before `npm run build` runs, rather than relying on a
+workstation-local checkout layout or leaving hosted runtime image builds unable
+to resolve `/app/docs/*.md`, `SECURITY.md`, or `TERMS.md`.
 The same governed promotion path must now stay explicit too:
 `scripts/release_control/resolve_release_promotion.py` is the canonical owner
 for stable-versus-prerelease metadata validation shared by `.github/workflows/release-dry-run.yml`

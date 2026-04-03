@@ -16,6 +16,8 @@ RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \
 # Copy frontend source
 COPY frontend-modern/ ./
 COPY scripts/exclusive-lock.mjs /app/scripts/exclusive-lock.mjs
+COPY docs/ /app/docs/
+COPY SECURITY.md TERMS.md /app/
 
 # Build frontend
 RUN --mount=type=cache,id=pulse-npm-cache,target=/root/.npm \

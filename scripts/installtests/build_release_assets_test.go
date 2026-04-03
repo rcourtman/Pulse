@@ -105,6 +105,24 @@ func TestDockerAndDemoBuildsUseCanonicalReleaseLdflags(t *testing.T) {
 	}
 }
 
+func TestDockerfileStagesShippedDocsForEmbeddedFrontendBuild(t *testing.T) {
+	dockerfileBytes, err := os.ReadFile(repoFile("Dockerfile"))
+	if err != nil {
+		t.Fatalf("read Dockerfile: %v", err)
+	}
+
+	dockerfile := string(dockerfileBytes)
+	required := []string{
+		`COPY docs/ /app/docs/`,
+		`COPY SECURITY.md TERMS.md /app/`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(dockerfile, needle) {
+			t.Fatalf("Dockerfile missing shipped-doc build input: %s", needle)
+		}
+	}
+}
+
 func repoFile(parts ...string) string {
 	root := filepath.Join("..", "..")
 	segments := append([]string{root}, parts...)
