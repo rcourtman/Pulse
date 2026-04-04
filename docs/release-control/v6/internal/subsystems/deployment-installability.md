@@ -79,7 +79,7 @@ server-side update execution surfaces.
 5. Add or change local dev-runtime orchestration, managed ownership, browser-runtime proof wiring, frontend/backend coherence diagnostics, canonical developer entry wrappers, or dev-runtime helper control surfaces through `scripts/hot-dev.sh`, `scripts/hot-dev-bg.sh`, `Makefile`, `package.json`, `frontend-modern/package.json`, `scripts/dev-check.sh`, `scripts/toggle-mock.sh`, `scripts/clean-mock-alerts.sh`, `scripts/dev-launchd-setup.sh`, `scripts/dev-launchd-wrapper.sh`, `scripts/com.pulse.hot-dev.plist.template`, `tests/integration/scripts/managed-dev-runtime.mjs`, `tests/integration/playwright.config.ts`, `tests/integration/tests/helpers.ts`, `tests/integration/tests/runtime-defaults.ts`, `tests/integration/README.md`, and `tests/integration/QUICK_START.md`
 6. Add or change governed release-promotion workflow inputs, operator-facing promotion metadata, artifact publication lineage enforcement, or stable-promotion rehearsal summaries through `.github/workflows/create-release.yml`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-docker.yml`, `.github/workflows/publish-helm-chart.yml`, `.github/workflows/promote-floating-tags.yml`, `.github/workflows/release-dry-run.yml`, `.github/workflows/update-demo-server.yml`, `docs/releases/V6_PRERELEASE_RUNBOOK.md`, `scripts/check-workflow-dispatch-inputs.py`, `scripts/trigger-release.sh`, and `scripts/trigger-release-dry-run.sh`
 7. Preserve release-matched installer and Helm operator documentation links through `scripts/install.sh`, `.github/workflows/helm-pages.yml`, `.github/workflows/publish-helm-chart.yml`, and the chart metadata itself so deployment guidance and packaged chart metadata do not drift back to branch-tip `main` docs when a release line or promoted tag already exists.
-8. Add or change operator-facing hosted tenant runtime canary rollout, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
+8. Add or change operator-facing hosted tenant runtime canary rollout, batch runtime contract reconciliation, canonical hosted route/public URL generation, or control-plane runtime-registry reconciliation through `cmd/pulse-control-plane/main.go`, `internal/cloudcp/docker/manager.go`, `internal/cloudcp/docker/labels.go`, and `internal/cloudcp/tenant_runtime_rollout.go`
 
 ## Forbidden Paths
 
@@ -210,6 +210,13 @@ route host and `PULSE_PUBLIC_URL`, keep that addressing lowercase-safe for
 mixed-case tenant IDs, and treat same-image runtime routing drift as rollout
 drift that requires a canonical recreate rather than silently reconciling the
 registry against stale Traefik labels or runtime env.
+That same operator boundary also owns fleet remediation of that runtime
+contract. `cmd/pulse-control-plane/main.go` and
+`internal/cloudcp/tenant_runtime_rollout.go` must expose one canonical
+batch-reconcile path that preserves each tenant runtime's current image line,
+supports dry-run planning before mutation, and converges existing hosted
+tenants onto the canonical runtime contract without relying on ad hoc host
+scripts or one-off manual tenant loops.
 That same rule applies to live runtime behavior too: config loading and reload
 watching may not treat `mock.env` as a parallel primary-path control surface.
 Supported mock-mode runtime state must come from the canonical `.env` contract,

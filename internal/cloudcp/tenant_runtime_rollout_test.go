@@ -305,6 +305,98 @@ func TestTenantRuntimeRollout_RecreatesSameImageWhenRoutingContractDrifts(t *tes
 	}
 }
 
+func TestTenantRuntimeContractReconcilePlan_AllTenantsClassifiesNoopRolloutAndSkip(t *testing.T) {
+	tenantNoop := &registry.Tenant{ID: "t-NOOP12345", ContainerID: "noop-live"}
+	tenantDrift := &registry.Tenant{ID: "t-Drift1234", ContainerID: "drift-live"}
+	tenantMissing := &registry.Tenant{ID: "t-MISSING01", ContainerID: ""}
+	reg := &fakeTenantRuntimeRolloutRegistry{
+		tenant:  tenantNoop,
+		tenants: []*registry.Tenant{tenantNoop, tenantDrift, tenantMissing},
+	}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	routingNoop := docker.DesiredRuntimeRouting(tenantNoop.ID)
+	routingDrift := docker.DesiredRuntimeRouting(tenantDrift.ID)
+	docker.addContainer(&cpDocker.RuntimeContainerInfo{
+		ID:        "noop-live",
+		Name:      tenantRuntimeContainerName(tenantNoop.ID),
+		ImageRef:  "pulse-runtime:stable",
+		ImageID:   "sha256:stable",
+		Running:   true,
+		RouteHost: routingNoop.Host,
+		PublicURL: routingNoop.PublicURL,
+	})
+	docker.addContainer(&cpDocker.RuntimeContainerInfo{
+		ID:        "drift-live",
+		Name:      tenantRuntimeContainerName(tenantDrift.ID),
+		ImageRef:  "pulse-runtime:stable",
+		ImageID:   "sha256:stable",
+		Running:   true,
+		RouteHost: "t-Drift1234.cloud.pulserelay.pro",
+		PublicURL: "https://t-Drift1234.cloud.pulserelay.pro",
+	})
+
+	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	plan, err := service.PlanContractReconcile(context.Background(), TenantRuntimeContractReconcilePlanOptions{All: true})
+	if err != nil {
+		t.Fatalf("PlanContractReconcile() error = %v", err)
+	}
+	if len(plan.Tenants) != 3 {
+		t.Fatalf("plan tenant count = %d, want 3", len(plan.Tenants))
+	}
+
+	got := make(map[string]*TenantRuntimeContractReconcilePlanItem, len(plan.Tenants))
+	for _, item := range plan.Tenants {
+		got[item.TenantID] = item
+	}
+	if got[tenantNoop.ID].Action != tenantRuntimeContractActionNoop {
+		t.Fatalf("noop tenant action = %q, want %q", got[tenantNoop.ID].Action, tenantRuntimeContractActionNoop)
+	}
+	if got[tenantDrift.ID].Action != tenantRuntimeContractActionRollout {
+		t.Fatalf("drift tenant action = %q, want %q", got[tenantDrift.ID].Action, tenantRuntimeContractActionRollout)
+	}
+	if got[tenantDrift.ID].DesiredRouteHost != routingDrift.Host {
+		t.Fatalf("drift tenant desired route host = %q, want %q", got[tenantDrift.ID].DesiredRouteHost, routingDrift.Host)
+	}
+	if got[tenantMissing.ID].Action != tenantRuntimeContractActionSkip {
+		t.Fatalf("missing tenant action = %q, want %q", got[tenantMissing.ID].Action, tenantRuntimeContractActionSkip)
+	}
+}
+
+func TestTenantRuntimeContractReconcilePlan_ExplicitTenantIDsDedupesAndPreservesOrder(t *testing.T) {
+	tenantA := &registry.Tenant{ID: "t-EXPLICIT1", ContainerID: "explicit-a"}
+	tenantB := &registry.Tenant{ID: "t-EXPLICIT2", ContainerID: "explicit-b"}
+	reg := &fakeTenantRuntimeRolloutRegistry{
+		tenant:  tenantA,
+		tenants: []*registry.Tenant{tenantA, tenantB},
+	}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	for _, tenant := range []*registry.Tenant{tenantA, tenantB} {
+		routing := docker.DesiredRuntimeRouting(tenant.ID)
+		docker.addContainer(&cpDocker.RuntimeContainerInfo{
+			ID:        tenant.ContainerID,
+			Name:      tenantRuntimeContainerName(tenant.ID),
+			ImageRef:  "pulse-runtime:stable",
+			ImageID:   "sha256:stable",
+			Running:   true,
+			RouteHost: routing.Host,
+			PublicURL: routing.PublicURL,
+		})
+	}
+	service := newTestTenantRuntimeRolloutService(reg, docker, &fakeTenantRuntimeRolloutSynchronizer{}, newFakeTenantRuntimeRolloutClock())
+	plan, err := service.PlanContractReconcile(context.Background(), TenantRuntimeContractReconcilePlanOptions{
+		TenantIDs: []string{"t-EXPLICIT2", "t-EXPLICIT1", "t-EXPLICIT2", ""},
+	})
+	if err != nil {
+		t.Fatalf("PlanContractReconcile() error = %v", err)
+	}
+	if len(plan.Tenants) != 2 {
+		t.Fatalf("plan tenant count = %d, want 2", len(plan.Tenants))
+	}
+	if plan.Tenants[0].TenantID != "t-EXPLICIT2" || plan.Tenants[1].TenantID != "t-EXPLICIT1" {
+		t.Fatalf("tenant order = [%s %s], want [t-EXPLICIT2 t-EXPLICIT1]", plan.Tenants[0].TenantID, plan.Tenants[1].TenantID)
+	}
+}
+
 func newTestTenantRuntimeRolloutService(
 	reg tenantRuntimeRolloutRegistry,
 	docker tenantRuntimeRolloutDocker,
@@ -329,16 +421,43 @@ func tTempDirForRolloutService() string {
 
 type fakeTenantRuntimeRolloutRegistry struct {
 	tenant        *registry.Tenant
+	tenants       []*registry.Tenant
 	updatedTenant registry.Tenant
 	updateCount   int
 }
 
 func (f *fakeTenantRuntimeRolloutRegistry) Get(tenantID string) (*registry.Tenant, error) {
-	if f.tenant == nil || f.tenant.ID != tenantID {
-		return nil, nil
+	if f.tenant != nil && f.tenant.ID == tenantID {
+		copy := *f.tenant
+		return &copy, nil
 	}
-	copy := *f.tenant
-	return &copy, nil
+	for _, tenant := range f.tenants {
+		if tenant == nil || tenant.ID != tenantID {
+			continue
+		}
+		copy := *tenant
+		return &copy, nil
+	}
+	return nil, nil
+}
+
+func (f *fakeTenantRuntimeRolloutRegistry) List() ([]*registry.Tenant, error) {
+	if len(f.tenants) == 0 {
+		if f.tenant == nil {
+			return nil, nil
+		}
+		copy := *f.tenant
+		return []*registry.Tenant{&copy}, nil
+	}
+	result := make([]*registry.Tenant, 0, len(f.tenants))
+	for _, tenant := range f.tenants {
+		if tenant == nil {
+			continue
+		}
+		copy := *tenant
+		result = append(result, &copy)
+	}
+	return result, nil
 }
 
 func (f *fakeTenantRuntimeRolloutRegistry) Update(t *registry.Tenant) error {
@@ -348,6 +467,20 @@ func (f *fakeTenantRuntimeRolloutRegistry) Update(t *registry.Tenant) error {
 	f.updatedTenant = *t
 	f.updateCount++
 	f.tenant = &f.updatedTenant
+	replaced := false
+	for i, tenant := range f.tenants {
+		if tenant == nil || tenant.ID != t.ID {
+			continue
+		}
+		copy := *t
+		f.tenants[i] = &copy
+		replaced = true
+		break
+	}
+	if !replaced && len(f.tenants) > 0 {
+		copy := *t
+		f.tenants = append(f.tenants, &copy)
+	}
 	return nil
 }
 

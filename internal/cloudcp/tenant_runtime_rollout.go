@@ -45,8 +45,36 @@ type TenantRuntimeRolloutResult struct {
 	ReconciledOnly      bool
 }
 
+type TenantRuntimeContractReconcilePlanOptions struct {
+	TenantIDs []string
+	All       bool
+}
+
+type TenantRuntimeContractReconcilePlanItem struct {
+	TenantID         string
+	LiveContainerID  string
+	ImageRef         string
+	LiveRouteHost    string
+	DesiredRouteHost string
+	LivePublicURL    string
+	DesiredPublicURL string
+	Action           string
+	Reason           string
+}
+
+type TenantRuntimeContractReconcilePlan struct {
+	Tenants []*TenantRuntimeContractReconcilePlanItem
+}
+
+const (
+	tenantRuntimeContractActionNoop    = "noop"
+	tenantRuntimeContractActionRollout = "rollout"
+	tenantRuntimeContractActionSkip    = "skip"
+)
+
 type tenantRuntimeRolloutRegistry interface {
 	Get(tenantID string) (*registry.Tenant, error)
+	List() ([]*registry.Tenant, error)
 	Update(t *registry.Tenant) error
 }
 
@@ -93,18 +121,45 @@ func RolloutTenantRuntime(ctx context.Context, cfg *CPConfig, opts TenantRuntime
 	}
 	opts.Image = image
 
+	service, cleanup, err := newTenantRuntimeRolloutServiceFromConfig(cfg, image)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	return service.Rollout(ctx, opts)
+}
+
+func PlanTenantRuntimeContractReconcile(
+	ctx context.Context,
+	cfg *CPConfig,
+	opts TenantRuntimeContractReconcilePlanOptions,
+) (*TenantRuntimeContractReconcilePlan, error) {
+	service, cleanup, err := newTenantRuntimeRolloutServiceFromConfig(cfg, strings.TrimSpace(cfg.PulseImage))
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	return service.PlanContractReconcile(ctx, opts)
+}
+
+func newTenantRuntimeRolloutServiceFromConfig(
+	cfg *CPConfig,
+	image string,
+) (*tenantRuntimeRolloutService, func(), error) {
+	if cfg == nil {
+		return nil, nil, fmt.Errorf("control plane config is required")
+	}
 	if err := os.MkdirAll(cfg.TenantsDir(), 0o755); err != nil {
-		return nil, fmt.Errorf("ensure tenants dir: %w", err)
+		return nil, nil, fmt.Errorf("ensure tenants dir: %w", err)
 	}
 	if err := os.MkdirAll(cfg.ControlPlaneDir(), 0o755); err != nil {
-		return nil, fmt.Errorf("ensure control-plane dir: %w", err)
+		return nil, nil, fmt.Errorf("ensure control-plane dir: %w", err)
 	}
 
 	reg, err := registry.NewTenantRegistry(cfg.ControlPlaneDir())
 	if err != nil {
-		return nil, fmt.Errorf("open tenant registry: %w", err)
+		return nil, nil, fmt.Errorf("open tenant registry: %w", err)
 	}
-	defer reg.Close()
 
 	dockerMgr, err := cpDocker.NewManager(cpDocker.ManagerConfig{
 		Image:                    image,
@@ -116,10 +171,14 @@ func RolloutTenantRuntime(ctx context.Context, cfg *CPConfig, opts TenantRuntime
 		CPUShares:                cfg.TenantCPUShares,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create docker manager: %w", err)
+		_ = reg.Close()
+		return nil, nil, fmt.Errorf("create docker manager: %w", err)
 	}
-	defer dockerMgr.Close()
 
+	cleanup := func() {
+		_ = dockerMgr.Close()
+		_ = reg.Close()
+	}
 	service := &tenantRuntimeRolloutService{
 		registry:      reg,
 		docker:        dockerMgr,
@@ -130,7 +189,7 @@ func RolloutTenantRuntime(ctx context.Context, cfg *CPConfig, opts TenantRuntime
 		healthTimeout: defaultTenantRuntimeRolloutHealthTimeout,
 		healthPoll:    defaultTenantRuntimeRolloutHealthPoll,
 	}
-	return service.Rollout(ctx, opts)
+	return service, cleanup, nil
 }
 
 // Rollout performs the tenant runtime rollout or a drift reconciliation if the
@@ -323,6 +382,113 @@ func tenantRuntimeMatchesContract(
 		return false
 	}
 	return live.RouteHost == desiredRouting.Host && live.PublicURL == desiredRouting.PublicURL
+}
+
+func (s *tenantRuntimeRolloutService) PlanContractReconcile(
+	ctx context.Context,
+	opts TenantRuntimeContractReconcilePlanOptions,
+) (*TenantRuntimeContractReconcilePlan, error) {
+	if s == nil {
+		return nil, fmt.Errorf("rollout service is nil")
+	}
+	tenants, err := s.selectContractReconcileTenants(opts)
+	if err != nil {
+		return nil, err
+	}
+	plan := &TenantRuntimeContractReconcilePlan{
+		Tenants: make([]*TenantRuntimeContractReconcilePlanItem, 0, len(tenants)),
+	}
+	for _, tenant := range tenants {
+		item := &TenantRuntimeContractReconcilePlanItem{
+			TenantID: strings.TrimSpace(tenant.ID),
+		}
+		live, err := s.resolveLiveContainer(ctx, tenant)
+		if err != nil {
+			item.Action = tenantRuntimeContractActionSkip
+			item.Reason = err.Error()
+			plan.Tenants = append(plan.Tenants, item)
+			continue
+		}
+		item.LiveContainerID = strings.TrimSpace(live.ID)
+		item.ImageRef = strings.TrimSpace(live.ImageRef)
+		item.LiveRouteHost = strings.TrimSpace(live.RouteHost)
+		item.LivePublicURL = strings.TrimSpace(live.PublicURL)
+
+		desiredRouting := s.docker.DesiredRuntimeRouting(tenant.ID)
+		item.DesiredRouteHost = desiredRouting.Host
+		item.DesiredPublicURL = desiredRouting.PublicURL
+
+		if item.ImageRef == "" {
+			item.Action = tenantRuntimeContractActionSkip
+			item.Reason = "live runtime image reference is empty"
+			plan.Tenants = append(plan.Tenants, item)
+			continue
+		}
+
+		if tenantRuntimeMatchesContract(live, tenantRuntimeContainerName(tenant.ID), item.ImageRef, desiredRouting) {
+			item.Action = tenantRuntimeContractActionNoop
+			item.Reason = "runtime already matches canonical hosted contract"
+		} else {
+			item.Action = tenantRuntimeContractActionRollout
+			item.Reason = "runtime contract drift detected"
+		}
+		plan.Tenants = append(plan.Tenants, item)
+	}
+	return plan, nil
+}
+
+func (s *tenantRuntimeRolloutService) selectContractReconcileTenants(
+	opts TenantRuntimeContractReconcilePlanOptions,
+) ([]*registry.Tenant, error) {
+	if s == nil {
+		return nil, fmt.Errorf("rollout service is nil")
+	}
+	if opts.All && len(dedupeNonEmptyStrings(opts.TenantIDs)) > 0 {
+		return nil, fmt.Errorf("choose either --all or one or more tenant ids")
+	}
+	if opts.All {
+		tenants, err := s.registry.List()
+		if err != nil {
+			return nil, fmt.Errorf("list tenants: %w", err)
+		}
+		return tenants, nil
+	}
+
+	tenantIDs := dedupeNonEmptyStrings(opts.TenantIDs)
+	if len(tenantIDs) == 0 {
+		return nil, fmt.Errorf("at least one tenant id or --all is required")
+	}
+
+	tenants := make([]*registry.Tenant, 0, len(tenantIDs))
+	for _, tenantID := range tenantIDs {
+		tenant, err := s.registry.Get(tenantID)
+		if err != nil {
+			return nil, fmt.Errorf("load tenant %s: %w", tenantID, err)
+		}
+		if tenant == nil {
+			tenants = append(tenants, &registry.Tenant{ID: tenantID})
+			continue
+		}
+		tenants = append(tenants, tenant)
+	}
+	return tenants, nil
+}
+
+func dedupeNonEmptyStrings(values []string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func (s *tenantRuntimeRolloutService) resolveLiveContainer(ctx context.Context, tenant *registry.Tenant) (*cpDocker.RuntimeContainerInfo, error) {
