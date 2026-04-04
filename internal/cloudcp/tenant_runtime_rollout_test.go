@@ -17,12 +17,15 @@ func TestTenantRuntimeRollout_ReconcilesLiveContainerAlreadyOnTargetImage(t *tes
 	tenant := &registry.Tenant{ID: "t-ROLLSYNC", ContainerID: "stale-registry-id"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
+	routing := docker.DesiredRuntimeRouting(tenant.ID)
 	docker.addContainer(&cpDocker.RuntimeContainerInfo{
-		ID:       "live-container",
-		Name:     tenantRuntimeContainerName(tenant.ID),
-		ImageRef: "pulse-runtime:target",
-		ImageID:  "sha256:target",
-		Running:  true,
+		ID:        "live-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:target",
+		ImageID:   "sha256:target",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
 	})
 	docker.health["live-container"] = []bool{true}
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
@@ -61,19 +64,24 @@ func TestTenantRuntimeRollout_RollsForwardCanonically(t *testing.T) {
 	tenant := &registry.Tenant{ID: "t-ROLLFWD", ContainerID: "old-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
+	routing := docker.DesiredRuntimeRouting(tenant.ID)
 	docker.addContainer(&cpDocker.RuntimeContainerInfo{
-		ID:       "old-container",
-		Name:     tenantRuntimeContainerName(tenant.ID),
-		ImageRef: "pulse-runtime:old",
-		ImageID:  "sha256:old",
-		Running:  true,
+		ID:        "old-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:old",
+		ImageID:   "sha256:old",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
 	})
 	docker.queueCreate(&cpDocker.RuntimeContainerInfo{
-		ID:       "new-container",
-		Name:     tenantRuntimeContainerName(tenant.ID),
-		ImageRef: "pulse-runtime:new",
-		ImageID:  "sha256:new",
-		Running:  true,
+		ID:        "new-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:new",
+		ImageID:   "sha256:new",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
 	}, nil)
 	docker.health["new-container"] = []bool{true}
 	sync := &fakeTenantRuntimeRolloutSynchronizer{}
@@ -119,19 +127,24 @@ func TestTenantRuntimeRollout_RollsBackOnHealthFailure(t *testing.T) {
 	tenant := &registry.Tenant{ID: "t-ROLLBACK", ContainerID: "old-container"}
 	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
 	docker := newFakeTenantRuntimeRolloutDocker()
+	routing := docker.DesiredRuntimeRouting(tenant.ID)
 	docker.addContainer(&cpDocker.RuntimeContainerInfo{
-		ID:       "old-container",
-		Name:     tenantRuntimeContainerName(tenant.ID),
-		ImageRef: "pulse-runtime:old",
-		ImageID:  "sha256:old",
-		Running:  true,
+		ID:        "old-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:old",
+		ImageID:   "sha256:old",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
 	})
 	docker.queueCreate(&cpDocker.RuntimeContainerInfo{
-		ID:       "new-container",
-		Name:     tenantRuntimeContainerName(tenant.ID),
-		ImageRef: "pulse-runtime:new",
-		ImageID:  "sha256:new",
-		Running:  true,
+		ID:        "new-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:new",
+		ImageID:   "sha256:new",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
 	}, nil)
 	docker.health["new-container"] = []bool{false, false, false}
 	docker.health["old-container"] = []bool{true}
@@ -238,6 +251,60 @@ func TestFilesystemTenantRuntimeSynchronizer_SnapshotAndRestore(t *testing.T) {
 	}
 }
 
+func TestTenantRuntimeRollout_RecreatesSameImageWhenRoutingContractDrifts(t *testing.T) {
+	tenant := &registry.Tenant{ID: "t-MixedCase", ContainerID: "live-container"}
+	reg := &fakeTenantRuntimeRolloutRegistry{tenant: tenant}
+	docker := newFakeTenantRuntimeRolloutDocker()
+	docker.addContainer(&cpDocker.RuntimeContainerInfo{
+		ID:        "live-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:target",
+		ImageID:   "sha256:target",
+		Running:   true,
+		RouteHost: "t-MixedCase.cloud.pulserelay.pro",
+		PublicURL: "https://t-MixedCase.cloud.pulserelay.pro",
+	})
+	routing := docker.DesiredRuntimeRouting(tenant.ID)
+	docker.queueCreate(&cpDocker.RuntimeContainerInfo{
+		ID:        "new-container",
+		Name:      tenantRuntimeContainerName(tenant.ID),
+		ImageRef:  "pulse-runtime:target",
+		ImageID:   "sha256:target",
+		Running:   true,
+		RouteHost: routing.Host,
+		PublicURL: routing.PublicURL,
+	}, nil)
+	docker.health["new-container"] = []bool{true}
+	sync := &fakeTenantRuntimeRolloutSynchronizer{}
+	clock := newFakeTenantRuntimeRolloutClock()
+
+	service := newTestTenantRuntimeRolloutService(reg, docker, sync, clock)
+	result, err := service.Rollout(context.Background(), TenantRuntimeRolloutOptions{
+		TenantID: tenant.ID,
+		Image:    "pulse-runtime:target",
+		RunID:    "routingfix",
+	})
+	if err != nil {
+		t.Fatalf("Rollout() error = %v", err)
+	}
+
+	if result.ReconciledOnly {
+		t.Fatalf("ReconciledOnly = true, want false")
+	}
+	if len(docker.createCalls) != 1 {
+		t.Fatalf("create call count = %d, want 1", len(docker.createCalls))
+	}
+	if got := reg.updatedTenant.ContainerID; got != "new-container" {
+		t.Fatalf("updated tenant container id = %q, want new-container", got)
+	}
+	if got := reg.updatedTenant.CurrentImageDigest; got != "sha256:target" {
+		t.Fatalf("updated tenant image digest = %q, want sha256:target", got)
+	}
+	if len(sync.snapshots) != 1 {
+		t.Fatalf("snapshot count = %d, want 1", len(sync.snapshots))
+	}
+}
+
 func newTestTenantRuntimeRolloutService(
 	reg tenantRuntimeRolloutRegistry,
 	docker tenantRuntimeRolloutDocker,
@@ -300,6 +367,7 @@ func (f *fakeTenantRuntimeRolloutSynchronizer) Restore(_ context.Context, snapsh
 }
 
 type fakeTenantRuntimeRolloutDocker struct {
+	baseDomain  string
 	byID        map[string]*cpDocker.RuntimeContainerInfo
 	byName      map[string]*cpDocker.RuntimeContainerInfo
 	createQueue []fakeTenantRuntimeCreateResult
@@ -328,9 +396,10 @@ type fakeTenantRuntimeRenameCall struct {
 
 func newFakeTenantRuntimeRolloutDocker() *fakeTenantRuntimeRolloutDocker {
 	return &fakeTenantRuntimeRolloutDocker{
-		byID:   make(map[string]*cpDocker.RuntimeContainerInfo),
-		byName: make(map[string]*cpDocker.RuntimeContainerInfo),
-		health: make(map[string][]bool),
+		baseDomain: "cloud.pulserelay.pro",
+		byID:       make(map[string]*cpDocker.RuntimeContainerInfo),
+		byName:     make(map[string]*cpDocker.RuntimeContainerInfo),
+		health:     make(map[string][]bool),
 	}
 }
 
@@ -356,6 +425,10 @@ func (f *fakeTenantRuntimeRolloutDocker) CreateAndStart(_ context.Context, tenan
 	}
 	f.addContainer(next.info)
 	return next.info.ID, nil
+}
+
+func (f *fakeTenantRuntimeRolloutDocker) DesiredRuntimeRouting(tenantID string) cpDocker.TenantRuntimeRoutingContract {
+	return cpDocker.CanonicalTenantRuntimeRouting(tenantID, f.baseDomain)
 }
 
 func (f *fakeTenantRuntimeRolloutDocker) HealthCheck(_ context.Context, containerID string) (bool, error) {

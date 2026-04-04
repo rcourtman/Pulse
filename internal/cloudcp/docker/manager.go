@@ -41,11 +41,13 @@ type Manager struct {
 // RuntimeContainerInfo is the canonical live-container snapshot used by
 // operator rollout and reconciliation flows.
 type RuntimeContainerInfo struct {
-	ID       string
-	Name     string
-	ImageRef string
-	ImageID  string
-	Running  bool
+	ID        string
+	Name      string
+	ImageRef  string
+	ImageID   string
+	Running   bool
+	RouteHost string
+	PublicURL string
 }
 
 const immutableOwnershipPathsEnv = "PULSE_IMMUTABLE_OWNERSHIP_PATHS"
@@ -73,6 +75,15 @@ func (m *Manager) Close() error {
 		return m.cli.Close()
 	}
 	return nil
+}
+
+// DesiredRuntimeRouting returns the canonical hosted route/public URL contract
+// for a tenant on this manager's configured base domain.
+func (m *Manager) DesiredRuntimeRouting(tenantID string) TenantRuntimeRoutingContract {
+	if m == nil {
+		return TenantRuntimeRoutingContract{}
+	}
+	return CanonicalTenantRuntimeRouting(tenantID, m.cfg.BaseDomain)
 }
 
 // IsNotFound reports whether Docker treated an identifier as missing.
@@ -160,12 +171,8 @@ func tenantRuntimeOwnershipPaths() []string {
 }
 
 func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedProxyCIDRs []string) []string {
-	publicURL := ""
+	routing := CanonicalTenantRuntimeRouting(tenantID, baseDomain)
 	tenantID = strings.TrimSpace(tenantID)
-	baseDomain = strings.TrimSpace(baseDomain)
-	if tenantID != "" && baseDomain != "" {
-		publicURL = fmt.Sprintf("https://%s.%s", tenantID, baseDomain)
-	}
 
 	env := []string{
 		"PULSE_DATA_DIR=/etc/pulse",
@@ -176,8 +183,8 @@ func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedPro
 		fmt.Sprintf("PGID=%d", tenantRuntimeGID),
 		fmt.Sprintf("%s=%s", immutableOwnershipPathsEnv, strings.Join(tenantImmutableOwnershipPaths(), ":")),
 	}
-	if publicURL != "" {
-		env = append(env, "PULSE_PUBLIC_URL="+publicURL)
+	if routing.PublicURL != "" {
+		env = append(env, "PULSE_PUBLIC_URL="+routing.PublicURL)
 	}
 	if strings.TrimSpace(trialActivationPublicKey) != "" {
 		env = append(env, "PULSE_TRIAL_ACTIVATION_PUBLIC_KEY="+strings.TrimSpace(trialActivationPublicKey))
@@ -186,6 +193,37 @@ func tenantEnv(tenantID, baseDomain, trialActivationPublicKey string, trustedPro
 		env = append(env, "PULSE_TRUSTED_PROXY_CIDRS="+strings.Join(trustedProxyCIDRs, ","))
 	}
 	return env
+}
+
+func routeHostFromLabels(labels map[string]string) string {
+	for key, value := range labels {
+		if !strings.HasPrefix(key, "traefik.http.routers.") || !strings.HasSuffix(key, ".rule") {
+			continue
+		}
+		if host := parseTraefikHostRule(value); host != "" {
+			return host
+		}
+	}
+	return ""
+}
+
+func parseTraefikHostRule(rule string) string {
+	rule = strings.TrimSpace(rule)
+	if !strings.HasPrefix(rule, "Host(`") || !strings.HasSuffix(rule, "`)") {
+		return ""
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(rule, "Host(`"), "`)")
+}
+
+func envValue(env []string, key string) string {
+	prefix := key + "="
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			continue
+		}
+		return strings.TrimPrefix(item, prefix)
+	}
+	return ""
 }
 
 func (m *Manager) tenantTrustedProxyCIDRs(ctx context.Context) []string {
@@ -320,12 +358,20 @@ func (m *Manager) Inspect(ctx context.Context, containerIDOrName string) (*Runti
 		imageRef = strings.TrimSpace(inspect.Config.Image)
 	}
 	running := inspect.State != nil && inspect.State.Running
+	routeHost := ""
+	publicURL := ""
+	if inspect.Config != nil {
+		routeHost = routeHostFromLabels(inspect.Config.Labels)
+		publicURL = envValue(inspect.Config.Env, "PULSE_PUBLIC_URL")
+	}
 	return &RuntimeContainerInfo{
-		ID:       inspect.ID,
-		Name:     strings.TrimPrefix(strings.TrimSpace(inspect.Name), "/"),
-		ImageRef: imageRef,
-		ImageID:  strings.TrimSpace(inspect.Image),
-		Running:  running,
+		ID:        inspect.ID,
+		Name:      strings.TrimPrefix(strings.TrimSpace(inspect.Name), "/"),
+		ImageRef:  imageRef,
+		ImageID:   strings.TrimSpace(inspect.Image),
+		Running:   running,
+		RouteHost: routeHost,
+		PublicURL: publicURL,
 	}, nil
 }
 

@@ -93,6 +93,41 @@ func TestTenantEnvIncludesImmutableOwnershipContract(t *testing.T) {
 	}
 }
 
+func TestCanonicalTenantRuntimeRoutingLowercasesHostedAddressing(t *testing.T) {
+	t.Parallel()
+
+	got := CanonicalTenantRuntimeRouting("T-AbCd123", "Cloud.PulseRelay.Pro")
+	if got.Host != "t-abcd123.cloud.pulserelay.pro" {
+		t.Fatalf("Host = %q, want %q", got.Host, "t-abcd123.cloud.pulserelay.pro")
+	}
+	if got.PublicURL != "https://t-abcd123.cloud.pulserelay.pro" {
+		t.Fatalf("PublicURL = %q, want %q", got.PublicURL, "https://t-abcd123.cloud.pulserelay.pro")
+	}
+}
+
+func TestTraefikLabelsUseCanonicalLowercaseHost(t *testing.T) {
+	t.Parallel()
+
+	labels := TraefikLabels("T-AbCd123", "Cloud.PulseRelay.Pro", 7655)
+	got := labels["traefik.http.routers.pulse-T-AbCd123.rule"]
+	if got != "Host(`t-abcd123.cloud.pulserelay.pro`)" {
+		t.Fatalf("router rule = %q, want %q", got, "Host(`t-abcd123.cloud.pulserelay.pro`)")
+	}
+}
+
+func TestTenantEnvLowercasesPublicURLHost(t *testing.T) {
+	t.Parallel()
+
+	env := tenantEnv("T-AbCd123", "Cloud.PulseRelay.Pro", "", nil)
+	want := "PULSE_PUBLIC_URL=https://t-abcd123.cloud.pulserelay.pro"
+	for _, item := range env {
+		if item == want {
+			return
+		}
+	}
+	t.Fatalf("tenantEnv() missing %q in %v", want, env)
+}
+
 func TestTenantEnvOmitsPublicURLWithoutTenantContext(t *testing.T) {
 	t.Parallel()
 

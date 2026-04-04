@@ -52,6 +52,7 @@ type tenantRuntimeRolloutRegistry interface {
 
 type tenantRuntimeRolloutDocker interface {
 	CreateAndStart(ctx context.Context, tenantID, tenantDataDir string) (string, error)
+	DesiredRuntimeRouting(tenantID string) cpDocker.TenantRuntimeRoutingContract
 	HealthCheck(ctx context.Context, containerID string) (bool, error)
 	Inspect(ctx context.Context, containerIDOrName string) (*cpDocker.RuntimeContainerInfo, error)
 	Remove(ctx context.Context, containerID string) error
@@ -178,7 +179,8 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 	}
 
 	canonicalName := tenantRuntimeContainerName(tenantID)
-	if live.Name == canonicalName && live.ImageRef == image {
+	desiredRouting := s.docker.DesiredRuntimeRouting(tenantID)
+	if tenantRuntimeMatchesContract(live, canonicalName, image, desiredRouting) {
 		healthy, err := s.waitForHealth(ctx, live.ID, healthTimeout, healthPoll)
 		if err == nil {
 			if updateErr := s.persistTenantRuntimeState(tenant, live, healthy); updateErr != nil {
@@ -198,6 +200,15 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 			Str("tenant_id", tenantID).
 			Str("container_id", live.ID).
 			Msg("Live tenant container already matches requested image but failed health sync; recreating canonically")
+	} else if live.Name == canonicalName && live.ImageRef == image {
+		log.Warn().
+			Str("tenant_id", tenantID).
+			Str("container_id", live.ID).
+			Str("live_route_host", live.RouteHost).
+			Str("desired_route_host", desiredRouting.Host).
+			Str("live_public_url", live.PublicURL).
+			Str("desired_public_url", desiredRouting.PublicURL).
+			Msg("Live tenant container already matches requested image but runtime routing drifted; recreating canonically")
 	}
 
 	tenantDataDir := filepath.Join(s.tenantsDir, tenantID)
@@ -297,6 +308,21 @@ func (s *tenantRuntimeRolloutService) Rollout(ctx context.Context, opts TenantRu
 		BackupContainerName: backupName,
 		ReconciledOnly:      false,
 	}, nil
+}
+
+func tenantRuntimeMatchesContract(
+	live *cpDocker.RuntimeContainerInfo,
+	canonicalName string,
+	image string,
+	desiredRouting cpDocker.TenantRuntimeRoutingContract,
+) bool {
+	if live == nil {
+		return false
+	}
+	if live.Name != canonicalName || live.ImageRef != image {
+		return false
+	}
+	return live.RouteHost == desiredRouting.Host && live.PublicURL == desiredRouting.PublicURL
 }
 
 func (s *tenantRuntimeRolloutService) resolveLiveContainer(ctx context.Context, tenant *registry.Tenant) (*cpDocker.RuntimeContainerInfo, error) {

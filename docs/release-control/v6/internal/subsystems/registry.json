@@ -2271,6 +2271,7 @@
         "frontend-modern/package.json",
         "frontend-modern/src/api/updates.ts",
         "internal/api/updates.go",
+        "internal/cloudcp/docker/labels.go",
         "internal/cloudcp/docker/manager.go",
         "internal/cloudcp/tenant_runtime_rollout.go",
         "Makefile",
@@ -2400,6 +2401,7 @@
             "match_prefixes": [],
             "match_files": [
               "cmd/pulse-control-plane/main.go",
+              "internal/cloudcp/docker/labels.go",
               "internal/cloudcp/docker/manager.go",
               "internal/cloudcp/tenant_runtime_rollout.go"
             ],
