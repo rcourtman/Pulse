@@ -164,6 +164,7 @@ class ReleasePromotionPolicyTest(unittest.TestCase):
         resolver = read("scripts/release_control/resolve_release_promotion.py")
         self.assertIn("control_plane.py --branch-for-version", content)
         self.assertIn('git fetch --prune origin main "${REQUIRED_BRANCH}" --tags', content)
+        self.assertIn('REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}', content)
         self.assertIn("resolve_release_promotion.py", content)
         self.assertIn("Rollback command:", content)
         self.assertIn("rollback target and exact reinstall command recorded", policy)

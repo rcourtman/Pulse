@@ -131,6 +131,7 @@ jobs:
         env:
           VERSION: ${{ steps.extract.outputs.version }}
           TAG: ${{ steps.extract.outputs.tag }}
+          REQUIRED_BRANCH: ${{ steps.branch_policy.outputs.required_branch }}
           IS_PRERELEASE: ${{ steps.extract.outputs.is_prerelease }}
           PROMOTED_FROM_TAG_INPUT: ${{ github.event.inputs.promoted_from_tag }}
           ROLLBACK_VERSION_INPUT: ${{ github.event.inputs.rollback_version }}

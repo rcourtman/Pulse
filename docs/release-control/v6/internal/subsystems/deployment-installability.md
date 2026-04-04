@@ -167,6 +167,13 @@ rather than as release-candidate promises.
 Those same workflows must also fetch and dispatch the governed release branch
 derived from release-control metadata instead of hardcoding `pulse/v6`,
 `pulse/v6-release`, or any later branch literal inline.
+That same branch-policy contract must survive step boundaries inside the
+workflows themselves: `.github/workflows/create-release.yml` and
+`.github/workflows/release-dry-run.yml` must pass the resolved
+`steps.branch_policy.outputs.required_branch` value into the promotion-policy
+validation step environment before that step fetches refs or invokes
+`resolve_release_promotion.py`, rather than assuming a shell-local
+`REQUIRED_BRANCH` variable still exists from an earlier step.
 That same `internal/updates/` boundary now also owns runtime data-dir
 authority for temp, backup, and cleanup behavior: `manager.go` must resolve
 its working directories through the shared runtime data-dir helper instead of
