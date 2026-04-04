@@ -253,7 +253,7 @@ def build_blocked_record(*, record_date: str) -> str:
         if version_is_prerelease:
             why_lines = [
                 "The blocker is no longer missing governance text. The remaining problem is that",
-                "the control plane still treats v6 as the prerelease-stabilization line, the working",
+                "the control plane still holds v6 on the pre-GA prerelease line, the working",
                 f"version is still prerelease (`{version}`), and there is still no exercised",
                 f"`Release Dry Run` record proving the eventual stable `{stable_version}`",
                 "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
@@ -273,7 +273,7 @@ def build_blocked_record(*, record_date: str) -> str:
         else:
             why_lines = [
                 "The blocker is no longer missing governance text. The remaining problem is that",
-                "the control plane still treats v6 as the prerelease-stabilization line, and there is",
+                "the control plane still holds v6 on the pre-GA prerelease line, and there is",
                 f"still no exercised `Release Dry Run` record proving the exact `{version}`",
                 "candidate is ready for GA-style promotion. Until that rehearsal exists, stable",
                 "users would still be the first real cohort for the final promotion path.",

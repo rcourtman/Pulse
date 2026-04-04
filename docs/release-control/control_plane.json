@@ -6,7 +6,7 @@
   "control_plane_doc": "docs/release-control/internal/CONTROL_PLANE.md",
   "control_plane_schema": "docs/release-control/control_plane.schema.json",
   "active_profile_id": "v6",
-  "active_target_id": "v6-ga-promotion",
+  "active_target_id": "v6-rc-cut",
   "profiles": [
     {
       "id": "v6",
@@ -30,16 +30,16 @@
       "id": "v6-rc-cut",
       "profile_id": "v6",
       "kind": "release",
-      "status": "completed",
-      "summary": "Drive Pulse v6 to a governed RC cut by clearing prerelease blockers, proving migration safety, and exercising the pre-RC high-risk gates.",
+      "status": "active",
+      "summary": "Hold Pulse v6 on the governed prerelease-cut target until RC publication is explicitly judged ready, while continuing to clear prerelease blockers, prove migration safety, and exercise the pre-RC high-risk gates.",
       "completion_rule": "rc_ready"
     },
     {
       "id": "v6-rc-stabilization",
       "profile_id": "v6",
       "kind": "stabilization",
-      "status": "completed",
-      "summary": "Keep Pulse v6 simple, accurate, and cleanly readable around the proven monitoring-and-alerting RC floor, using resource-change intelligence only where it materially improves investigation or safe AI flows while broader control-plane expansion stays out of the default target until it is proven.",
+      "status": "planned",
+      "summary": "Once a real governed RC exists, keep Pulse v6 simple, accurate, and cleanly readable around that proven monitoring-first floor while broader control-plane expansion stays out of the default target until it is proven.",
       "completion_rule": "manual",
       "proof_scope": "none"
     },
@@ -47,8 +47,8 @@
       "id": "v6-ga-promotion",
       "profile_id": "v6",
       "kind": "release",
-      "status": "active",
-      "summary": "Promote Pulse v6 from a validated RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
+      "status": "planned",
+      "summary": "Promote Pulse v6 from a validated, actually shipped RC to governed GA with exercised promotion proof, rollback clarity, and only GA-blocking decisions remaining.",
       "completion_rule": "release_ready"
     },
     {

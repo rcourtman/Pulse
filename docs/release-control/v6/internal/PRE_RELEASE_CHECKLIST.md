@@ -13,10 +13,13 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
 ## Current Status
 - Automated command-driven checks completed on 2026-03-06 are marked `[x]` below.
 - `status.json` is no longer overclaiming threshold-unmet gates as passed.
-- There are no remaining `rc-ready` high-risk blockers; `rc_ready` now derives
-  true in `status.json`.
-- The active target is back on `v6-rc-stabilization`, so GA rehearsal remains
-  intentionally out of scope until promotion is resumed explicitly.
+- There are no remaining `rc-ready` high-risk release-gate blockers, but
+  `rc_ready` is intentionally held false in `status.json` by the open decision
+  `rc-publication-judgment` until the current candidate is explicitly judged
+  ready for a real governed RC.
+- The active target is back on `v6-rc-cut`, so GA rehearsal remains
+  intentionally out of scope until a real RC has actually shipped and
+  promotion is resumed explicitly.
 - The remaining release-ready blocker is `rc-to-ga-promotion-readiness`, which
   stays blocked until a later stable `6.0.0` candidate completes a matching
   `Release Dry Run` rehearsal with the canonical promotion artifact envelope:

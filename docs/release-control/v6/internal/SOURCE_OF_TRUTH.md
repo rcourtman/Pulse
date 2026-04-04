@@ -154,8 +154,8 @@ Pulse v6 is ready when these outcomes land together:
    customer exposure.
 
 Pulse v6 is still a bridge release toward that unified operations layer, while
-the current active target remains governed GA promotion rather than broad new
-platform execution.
+the current active target remains governed prerelease-cut readiness with an
+explicit RC-publication hold rather than broad new platform execution.
 For this profile, "bridge release" means the product should stop reading as a
 monitoring tool growing sideways and instead make the mixed-estate operator
 surface legible through canonical resources, investigation context, governed

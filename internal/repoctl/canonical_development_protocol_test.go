@@ -510,7 +510,7 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	if !ok || activeTargetID == "" {
 		t.Fatalf("%s missing active_target_id", jsonRel)
 	}
-	if activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" && activeTargetID != "v6-product-lane-expansion" {
+	if activeTargetID != "v6-rc-cut" && activeTargetID != "v6-rc-stabilization" && activeTargetID != "v6-ga-promotion" && activeTargetID != "v6-product-lane-expansion" {
 		t.Fatalf("%s has unexpected active_target_id %q", jsonRel, activeTargetID)
 	}
 
@@ -557,8 +557,8 @@ func TestReleaseControlPlaneFilesExist(t *testing.T) {
 	if status, _ := targetsByID[activeTargetID]["status"].(string); status != "active" {
 		t.Fatalf("%s active_target_id %q is not marked active", jsonRel, activeTargetID)
 	}
-	if status, _ := targetsByID["v6-rc-cut"]["status"].(string); status != "completed" {
-		t.Fatalf("%s v6-rc-cut must remain completed", jsonRel)
+	if status, _ := targetsByID["v6-rc-cut"]["status"].(string); status != "active" && status != "completed" {
+		t.Fatalf("%s v6-rc-cut must remain either active or completed", jsonRel)
 	}
 	if rule, _ := targetsByID["v6-rc-stabilization"]["completion_rule"].(string); rule != "manual" {
 		t.Fatalf("%s v6-rc-stabilization must keep completion_rule=manual", jsonRel)

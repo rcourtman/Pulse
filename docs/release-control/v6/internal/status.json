@@ -2698,7 +2698,7 @@
       "status": "partial",
       "completion": {
         "state": "bounded-residual",
-        "summary": "First-session UX reached the RC floor with the runtime wizard reduced to welcome and security, direct handoff into Infrastructure Operations install, and setup completion retained only as a separate preview surface; broader polish and parity work remain intentionally outside the current stabilization target.",
+        "summary": "First-session UX reached the RC floor with the runtime wizard reduced to welcome and security, direct handoff into Infrastructure Operations install, and setup completion retained only as a separate preview surface; broader polish and parity work remain intentionally outside the current prerelease target.",
         "tracking": [
           {
             "kind": "lane-followup",
@@ -3626,6 +3626,12 @@
         },
         {
           "repo": "pulse",
+          "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-blocked-2026-04-04.md",
+          "kind": "file",
+          "evidence_tier": "local-rehearsal"
+        },
+        {
+          "repo": "pulse",
           "path": "docs/release-control/v6/internal/records/rc-to-ga-promotion-readiness-rehearsal-blocked-2026-03-26.md",
           "kind": "file",
           "evidence_tier": "real-external-e2e"
@@ -4216,7 +4222,23 @@
     }
   ],
   "work_claims": [],
-  "open_decisions": [],
+  "open_decisions": [
+    {
+      "id": "rc-publication-judgment",
+      "summary": "Pulse v6 prerelease publication remains an explicit product judgment: even if the machine-derived RC floor looks close, `rc_ready` stays blocked until the current candidate is explicitly judged ready for a real governed RC and not inferred from accidental `6.0.0-rc.1` lineage or checklist completion.",
+      "owner": "project-owner",
+      "blocking_level": "rc-ready",
+      "status": "open",
+      "opened_at": "2026-04-04",
+      "lane_ids": [
+        "L1",
+        "L8",
+        "L9",
+        "L12"
+      ],
+      "subsystem_ids": []
+    }
+  ],
   "source_of_truth_file": "docs/release-control/v6/internal/SOURCE_OF_TRUTH.md",
   "resolved_decisions": [
     {

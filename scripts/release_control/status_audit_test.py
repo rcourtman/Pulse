@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 import os
 import tempfile
@@ -1354,9 +1355,15 @@ class StatusAuditTest(unittest.TestCase):
                 ],
             )
 
+            control_plane = copy.deepcopy(status_audit.DEFAULT_CONTROL_PLANE)
+            control_plane["targets_by_id"]["v6-rc-cut"]["status"] = "completed"
+
             with mock.patch.dict(os.environ, {"PULSE_REPO_ROOT_PULSE": str(pulse)}, clear=False), mock.patch(
                 "status_audit.load_subsystem_rules",
                 return_value=[],
+            ), mock.patch(
+                "status_audit.DEFAULT_CONTROL_PLANE",
+                control_plane,
             ):
                 report = audit_status_payload(payload)
 
