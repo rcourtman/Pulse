@@ -1,6 +1,6 @@
 # Pulse v6 Source Of Truth
 
-Last updated: 2026-03-30
+Last updated: 2026-04-04
 Status: ACTIVE
 
 This file is the stable human governance layer for the active v6 release
@@ -136,6 +136,12 @@ The same model also sets the current posture for platform breadth: `truenas`
 is at the declared support floor summarized below, and `vmware-vsphere` is the
 current admitted strategic next-platform direction while its support claim
 remains proof-gated.
+Pulse Mobile v1 is not desktop parity on a phone.
+It is the away-from-desk decision surface for the same Pulse runtime: the next
+item, findings, approvals, reconnect state, instance switching, and contextual
+AI handoff.
+Public/store copy and primary mobile shell labels must reinforce that narrower
+job instead of promising a pocket dashboard with full desktop parity.
 
 ## Release Definition
 
