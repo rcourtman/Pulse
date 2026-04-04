@@ -66,7 +66,7 @@ PROFILE_PATH_FIELDS = {
     "registry_schema",
     "subsystem_contract_template",
 }
-PRERELEASE_VERSION_PATTERN = re.compile(r"-(?:rc|alpha|beta)\.[0-9]+$")
+PRERELEASE_VERSION_PATTERN = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
 COMPLETION_RULE_BLOCKING_LEVELS = {
     "repo_ready": ("repo-ready",),
     "rc_ready": ("repo-ready", "rc-ready"),

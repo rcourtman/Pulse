@@ -5211,6 +5211,14 @@ func TestContract_InstallScriptReleaseAssetURLRejectsUnreleasedBuild(t *testing.
 	}
 }
 
+func TestContract_InstallScriptReleaseAssetURLRejectsDevPrereleaseBuild(t *testing.T) {
+	router := &Router{serverVersion: "v6.0.0-dev"}
+
+	if _, err := router.installScriptReleaseAssetURL("install.sh"); err == nil {
+		t.Fatalf("expected dev prerelease build to reject release asset lookup")
+	}
+}
+
 func TestContract_ProxmoxInstallCommandIncludesInsecureForPlainHTTP(t *testing.T) {
 	got := buildProxmoxAgentInstallCommand(agentInstallCommandOptions{
 		BaseURL:            "http://pulse.example.com:7655/",

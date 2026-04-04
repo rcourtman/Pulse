@@ -26,6 +26,11 @@ func TestNormalizeVersionString(t *testing.T) {
 			expected: "4.24.0-rc.3+git.45.gabc123.dirty",
 		},
 		{
+			name:     "development base rebases accidental prerelease lineage",
+			input:    "6.0.0-dev",
+			expected: "6.0.0-dev",
+		},
+		{
 			name:     "branch name falls back to prerelease",
 			input:    "issue-551",
 			expected: "0.0.0-issue-551",
@@ -142,8 +147,81 @@ func TestDetectChannelFromVersion(t *testing.T) {
 		t.Fatalf("detectChannelFromVersion rc = %s, expected rc", got)
 	}
 
+	if got := detectChannelFromVersion("6.0.0-dev+git.45.gabcdef"); got != "stable" {
+		t.Fatalf("detectChannelFromVersion dev = %s, expected stable", got)
+	}
+
 	if got := detectChannelFromVersion("0.0.0-feature-x"); got != "stable" {
 		t.Fatalf("detectChannelFromVersion stable = %s, expected stable", got)
+	}
+}
+
+func TestNormalizeDevelopmentVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		gitVersion  string
+		versionBase string
+		expected    string
+	}{
+		{
+			name:        "git describe inherits current version base not accidental tag",
+			gitVersion:  "6.0.0-rc.1-45-gABCDEF",
+			versionBase: "6.0.0-dev",
+			expected:    "6.0.0-dev+git.45.gabcdef",
+		},
+		{
+			name:        "hash only git version still carries build metadata",
+			gitVersion:  "ABCDEF1-dirty",
+			versionBase: "6.0.0-dev",
+			expected:    "6.0.0-dev+git.0.gabcdef1.dirty",
+		},
+		{
+			name:        "missing base falls back to normalized git version",
+			gitVersion:  "6.0.0-rc.1-45-gABCDEF",
+			versionBase: "",
+			expected:    "6.0.0-rc.1+git.45.gabcdef",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := normalizeDevelopmentVersion(tc.gitVersion, tc.versionBase); got != tc.expected {
+				t.Fatalf("normalizeDevelopmentVersion(%q, %q) = %q, expected %q", tc.gitVersion, tc.versionBase, got, tc.expected)
+			}
+		})
+	}
+}
+
+func TestVersionIsPublishedReleaseAssetVersion(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		version  string
+		expected bool
+	}{
+		{name: "stable release", version: "6.0.0", expected: true},
+		{name: "rc prerelease", version: "6.0.0-rc.1", expected: true},
+		{name: "dev prerelease", version: "6.0.0-dev", expected: false},
+		{name: "build metadata", version: "6.0.0+git.1.gabcdef", expected: false},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			parsed, err := ParseVersion(tc.version)
+			if err != nil {
+				t.Fatalf("ParseVersion(%q) error: %v", tc.version, err)
+			}
+			if got := parsed.IsPublishedReleaseAssetVersion(); got != tc.expected {
+				t.Fatalf("IsPublishedReleaseAssetVersion(%q) = %v, expected %v", tc.version, got, tc.expected)
+			}
+		})
 	}
 }
 

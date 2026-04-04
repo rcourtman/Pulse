@@ -16,8 +16,9 @@ import (
 
 // Pre-compiled regexes for performance (avoid recompilation on each call)
 var (
-	semverRe = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
-	rcNumRe  = regexp.MustCompile(`rc\.?(\d+)`)
+	semverRe  = regexp.MustCompile(`^(\d+)\.(\d+)\.(\d+)(?:-([^+]+))?(?:\+(.+))?$`)
+	rcNumRe   = regexp.MustCompile(`rc\.?(\d+)`)
+	gitHashRe = regexp.MustCompile(`^([0-9a-fA-F]{7,})(-dirty)?$`)
 )
 
 // BuildVersion is the version string injected at build time via ldflags.
@@ -32,6 +33,23 @@ type Version struct {
 	Patch      int
 	Prerelease string
 	Build      string
+}
+
+func (v *Version) IsRCPrerelease() bool {
+	if v == nil {
+		return false
+	}
+	return rcNumRe.MatchString(strings.ToLower(strings.TrimSpace(v.Prerelease)))
+}
+
+func (v *Version) IsPublishedReleaseAssetVersion() bool {
+	if v == nil {
+		return false
+	}
+	if v.Build != "" {
+		return false
+	}
+	return v.Prerelease == "" || v.IsRCPrerelease()
 }
 
 // VersionInfo contains detailed version information
@@ -132,6 +150,7 @@ func (v *Version) IsPrerelease() bool {
 // GetCurrentVersion gets the current running version
 func GetCurrentVersion() (*VersionInfo, error) {
 	allowDockerUpdates := dockerUpdatesAllowed()
+	versionFileRaw, hasVersionFile := readCurrentVersionFile()
 
 	buildInfo := func(raw string, build string, isDev bool) *VersionInfo {
 		normalized := normalizeVersionString(raw)
@@ -160,23 +179,12 @@ func GetCurrentVersion() (*VersionInfo, error) {
 	}
 
 	if gitVersion, err := getGitVersion(); err == nil && gitVersion != "" {
-		return buildInfo(gitVersion, "development", true), nil
+		return buildInfo(normalizeDevelopmentVersion(gitVersion, versionFileRaw), "development", true), nil
 	}
 
 	// Try to read from VERSION file first (release builds)
-	versionPaths := []string{
-		"VERSION",
-		"/opt/pulse/VERSION",
-		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
-	}
-
-	for _, path := range versionPaths {
-		versionBytes, err := os.ReadFile(path)
-		if err == nil {
-			if raw := strings.TrimSpace(string(versionBytes)); raw != "" {
-				return buildInfo(raw, "release", false), nil
-			}
-		}
+	if hasVersionFile {
+		return buildInfo(versionFileRaw, "release", false), nil
 	}
 
 	// Fall back to git (development builds)
@@ -211,9 +219,49 @@ func normalizeVersionString(version string) string {
 	return fmt.Sprintf("0.0.0-%s", sanitizePrereleaseIdentifier(version))
 }
 
+func normalizeDevelopmentVersion(gitVersion string, versionBase string) string {
+	normalizedGit := normalizeVersionString(gitVersion)
+	normalizedBase := normalizeVersionString(versionBase)
+	if versionBase == "" {
+		return normalizedGit
+	}
+	if _, err := ParseVersion(normalizedBase); err != nil {
+		return normalizedGit
+	}
+
+	if buildMetadata, ok := gitBuildMetadata(gitVersion); ok {
+		if strings.Contains(normalizedBase, "+") {
+			return normalizedBase + "." + buildMetadata
+		}
+		return normalizedBase + "+" + buildMetadata
+	}
+
+	return normalizedBase
+}
+
+func gitBuildMetadata(version string) (string, bool) {
+	if normalized, ok := normalizeGitDescribeVersion(version); ok {
+		if plus := strings.Index(normalized, "+"); plus >= 0 && plus < len(normalized)-1 {
+			return normalized[plus+1:], true
+		}
+	}
+
+	matches := gitHashRe.FindStringSubmatch(strings.TrimSpace(version))
+	if matches == nil {
+		return "", false
+	}
+
+	build := "git.0.g" + strings.ToLower(matches[1])
+	if matches[2] != "" {
+		build += ".dirty"
+	}
+	return build, true
+}
+
 var gitDescribeRegex = regexp.MustCompile(`^(\d+\.\d+\.\d+(?:-[0-9A-Za-z\.-]+)?)-(\d+)-g([0-9a-fA-F]+)(-dirty)?$`)
 
 func normalizeGitDescribeVersion(version string) (string, bool) {
+	version = strings.TrimSpace(strings.TrimPrefix(version, "v"))
 	matches := gitDescribeRegex.FindStringSubmatch(version)
 	if matches == nil {
 		return "", false
@@ -270,11 +318,33 @@ func sanitizePrereleaseIdentifier(raw string) string {
 }
 
 func detectChannelFromVersion(version string) string {
-	versionLower := strings.ToLower(version)
-	if strings.Contains(versionLower, "rc") {
-		return "rc"
+	trimmed := strings.TrimSpace(version)
+	if parsed, err := ParseVersion(trimmed); err == nil {
+		if parsed.IsRCPrerelease() {
+			return "rc"
+		}
+		return "stable"
 	}
 	return "stable"
+}
+
+func readCurrentVersionFile() (string, bool) {
+	versionPaths := []string{
+		"VERSION",
+		"/opt/pulse/VERSION",
+		filepath.Join(filepath.Dir(os.Args[0]), "VERSION"),
+	}
+
+	for _, path := range versionPaths {
+		versionBytes, err := os.ReadFile(path)
+		if err == nil {
+			if raw := strings.TrimSpace(string(versionBytes)); raw != "" {
+				return raw, true
+			}
+		}
+	}
+
+	return "", false
 }
 
 // getGitVersion gets version information from git

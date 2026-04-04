@@ -9,6 +9,22 @@ import resolve_release_promotion as resolver
 
 
 class ResolveReleasePromotionTest(unittest.TestCase):
+    def test_dev_prerelease_uses_prerelease_path(self) -> None:
+        metadata = resolver.resolve_metadata(
+            version="6.0.0-dev",
+            promoted_from_tag_input="",
+            rollback_version_input="5.1.14",
+            ga_date_input="",
+            v5_eos_date_input="",
+            hotfix_exception=False,
+            hotfix_reason_input="",
+            release_notes_input="",
+            tag_exists_fn=lambda tag: tag == "v5.1.14",
+        )
+        self.assertEqual(metadata["rollback_tag"], "v5.1.14")
+        self.assertEqual(metadata["promoted_from_tag"], "")
+        self.assertEqual(metadata["soak_hours"], "")
+
     def test_prerelease_requires_explicit_stable_rollback(self) -> None:
         metadata = resolver.resolve_metadata(
             version="6.0.0-rc.2",

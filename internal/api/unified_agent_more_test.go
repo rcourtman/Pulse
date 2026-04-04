@@ -192,6 +192,23 @@ func TestDownloadUnifiedInstallScript_ProxyFallbackRejectsDevelopmentBuild(t *te
 	}
 }
 
+func TestDownloadUnifiedInstallScript_ProxyFallbackRejectsDevPrereleaseBuild(t *testing.T) {
+	router, _ := setupUnifiedAgentRouter(t)
+	router.serverVersion = "v6.0.0-dev"
+
+	req := httptest.NewRequest(http.MethodGet, "/install.sh", nil)
+	w := httptest.NewRecorder()
+
+	router.handleDownloadUnifiedInstallScript(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), "Install script unavailable for current server build") {
+		t.Fatalf("unexpected response body: %q", w.Body.String())
+	}
+}
+
 func TestDownloadUnifiedInstallScript_ProxyFallbackPreservesHEAD(t *testing.T) {
 	router, _ := setupUnifiedAgentRouter(t)
 	router.serverVersion = "v6.0.0-rc.1"

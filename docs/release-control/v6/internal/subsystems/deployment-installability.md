@@ -124,6 +124,14 @@ fallbacks, so shipped release builds report the exact promoted version even
 when the install path has no `.git` metadata or a stale `VERSION` file nearby.
 Runtime bootstrap must seed that build version before the server starts rather
 than leaving version detection to deployment-local filesystem guesses.
+That same version boundary now also owns the working-line development base:
+the checked-in `VERSION` file is the canonical intended semver base for
+current v6 development, and source/dev runtime detection must append git build
+metadata to that base instead of inheriting accidental prerelease tag lineage
+from `git describe`. Non-published prerelease bases such as `6.0.0-dev`
+therefore remain prerelease for branch policy, release-control blocked
+records, and future release promotion planning, but they must not be treated
+as shipped RC lineage or as published release-asset versions.
 That release-build metadata path is now explicit too: `scripts/release_ldflags.sh`
 is the canonical owner for server and agent build ldflags, and release artifact
 assembly must route through it instead of hand-writing overlapping `main.Version`,

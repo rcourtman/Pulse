@@ -212,6 +212,13 @@ querying, and the operator-facing storage health presentation layer.
     snapshot-backed platforms, provider-backed fixtures, unified inventory,
     and recovery/storage context stay aligned instead of drifting through
     recovery-local fixture assembly or partial mock helper APIs.
+12. Keep adjacent shared install-script fallback semantics honest on the
+    `internal/api/` boundary. When storage- or recovery-adjacent routes reuse
+    shared public endpoint or installer helpers, dev prerelease runtime
+    versions such as `v6.0.0-dev` and build-metadata versions must not be
+    treated as published GitHub release assets; only stable or explicit RC
+    tags may back the shared installer fallback that those adjacent surfaces
+    inherit.
 12. Keep storage summary chart identity and sticky-shell behavior on the
     shared storage path. Pool rows, disk rows, storage summary cards, and
     storage detail charts must all address history through the canonical

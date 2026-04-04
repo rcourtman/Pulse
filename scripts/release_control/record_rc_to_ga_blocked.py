@@ -20,7 +20,7 @@ GA_DATE_RE = re.compile(
 V5_EOS_RE = re.compile(
     r"existing v5 users until `(?P<v5_eos_date>\[v5-eos-date\]|\d{4}-\d{2}-\d{2})`\."
 )
-PRERELEASE_RE = re.compile(r"^(?P<stable>\d+\.\d+\.\d+)-(?:rc|alpha|beta)\.\d+$")
+PRERELEASE_RE = re.compile(r"^(?P<stable>\d+\.\d+\.\d+)-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)$")
 TAG_LITERAL_RE = re.compile(r"`(v\d+\.\d+\.\d+-rc\.\d+)`")
 ACCIDENTAL_RC_TAG_DECISION_ID = "accidental-prerelease-tags-do-not-count-as-shipped-rcs"
 RELEASE_DRY_RUN_WORKFLOW = ".github/workflows/release-dry-run.yml"

@@ -341,6 +341,14 @@ Own canonical runtime payload shapes between backend and frontend.
     route API-backed first systems to `/settings/infrastructure/platforms`
     instead of implying that a host install command is required before those
     platforms can report into Pulse.
+24. Keep shared install-script fallback transport pinned to published release
+    lineage. `internal/api/unified_agent.go` and
+    `internal/api/contract_test.go` must only map stable tags or explicit RC
+    prerelease tags without build metadata to GitHub install-script release
+    assets; dev prereleases such as `v6.0.0-dev`, git-described
+    `+git...` builds, and other unpublished prerelease identifiers must fail
+    closed on that API boundary instead of generating fake release URLs from
+    a local runtime version string.
 23. Keep local trial-start transport explicit on the shared commercial API
     boundary: `/api/license/trial/start` must preserve the hosted-signup
     redirect contract during the allowed retry burst, then return the actual
@@ -1453,6 +1461,13 @@ contract: when `/install.sh` or `/install.ps1` cannot be served locally, the
 backend must proxy the install script asset from the exact GitHub release that
 matches `serverVersion` and must fail closed for dev or unreleased builds
 rather than serving branch-tip installer logic.
+That same transport rule is now explicit about prerelease classes too: only
+stable tags and explicit RC prerelease tags without build metadata qualify as
+published install-script release assets. Working-line dev prereleases such as
+`v6.0.0-dev`, git-described builds with `+git...` metadata, and other
+non-published prerelease identifiers must fail closed on that shared
+`internal/api/unified_agent.go` boundary instead of generating fake GitHub
+release URLs from a local runtime version string.
 The `/api/updates/plan` contract must also fail closed without becoming a
 transport error on supported non-auto-update deployments: `manual`,
 `development`, and `source` runtimes must return an explicit manual update

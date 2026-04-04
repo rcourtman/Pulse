@@ -13,7 +13,7 @@ from typing import Callable
 from repo_file_io import REPO_ROOT, git_env
 
 
-SEMVER_PRERELEASE_RE = re.compile(r"-(?:rc|alpha|beta)\.\d+$")
+SEMVER_PRERELEASE_RE = re.compile(r"-(?:[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)(?:\+[0-9A-Za-z.-]+)?$")
 
 
 def normalize_tag(value: str) -> str:

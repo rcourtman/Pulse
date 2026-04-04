@@ -468,8 +468,8 @@ func (r *Router) installScriptReleaseAssetURL(scriptName string) (string, error)
 	if err != nil {
 		return "", fmt.Errorf("server version %q is not a published release version", rawVersion)
 	}
-	if version.Build != "" {
-		return "", fmt.Errorf("server version %q includes build metadata and cannot map to a release asset", rawVersion)
+	if !version.IsPublishedReleaseAssetVersion() {
+		return "", fmt.Errorf("server version %q is not a published release asset version", rawVersion)
 	}
 
 	return fmt.Sprintf(

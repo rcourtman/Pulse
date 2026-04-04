@@ -168,6 +168,7 @@ class ControlPlaneAuditTest(unittest.TestCase):
 
     def test_release_branch_for_version_uses_profile_branch_policy(self) -> None:
         self.assertEqual(release_branch_for_version("6.0.0-rc.1", control_plane=VALID_PAYLOAD), "pulse/v6-release")
+        self.assertEqual(release_branch_for_version("6.0.0-dev", control_plane=VALID_PAYLOAD), "pulse/v6-release")
         self.assertEqual(release_branch_for_version("6.0.0", control_plane=VALID_PAYLOAD), "pulse/v6-release")
 
     def test_audit_flags_stale_active_target(self) -> None:
