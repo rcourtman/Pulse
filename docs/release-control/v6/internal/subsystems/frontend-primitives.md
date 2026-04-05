@@ -133,6 +133,9 @@ work extends shared components instead of creating new local variants.
 111. `frontend-modern/src/components/shared/SummaryRowActionButton.tsx`
 112. `frontend-modern/src/hooks/createNonSuspendingQuery.ts`
 113. `frontend-modern/src/components/shared/SummaryTableCardHeader.tsx`
+114. `frontend-modern/src/components/shared/UpgradeLink.tsx`
+115. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
+116. `frontend-modern/src/utils/upgradeNavigation.ts`
 
 ## Shared Boundaries
 
@@ -370,6 +373,13 @@ connections` visible as the API-backed alternative for Proxmox and
     props that can collapse functions on the live Solid surface. Docker-only
     controls in `ThresholdsTableDockerTab.tsx` must remain gated to real
     `docker-host` resources instead of leaking onto platform-managed runtimes.
+31. Keep shared commercial upgrade navigation typed and destination-aware.
+    Shared paywall shells and upgrade actions must route internal billing or
+    cloud destinations through `frontend-modern/src/utils/upgradeNavigation.ts`,
+    `frontend-modern/src/components/shared/UpgradeLink.tsx`, and
+    `frontend-modern/src/components/shared/useUpgradeNavigation.ts` instead of
+    guessing from labels, hardcoding `target="_blank"`, or calling
+    `window.open(...)` from each feature surface.
 
 ## Current State
 
@@ -387,6 +397,14 @@ disk read, write, and busy charts through `HistoryChart` plus
 `useHistoryChartState`, using the canonical physical-disk history resource id,
 instead of reviving `diskMetricsHistory`, a page-local ring buffer, or another
 storage-only live chart primitive for the same telemetry.
+That same shared-primitive floor now also owns upgrade-navigation semantics.
+`frontend-modern/src/utils/upgradeNavigation.ts` is the canonical typed
+internal-vs-external destination helper, while
+`frontend-modern/src/components/shared/UpgradeLink.tsx` and
+`frontend-modern/src/components/shared/useUpgradeNavigation.ts` own how shared
+paywall surfaces navigate those destinations. Feature shells may request a
+commercial destination, but they must not re-decide whether that destination
+opens in-app or in a new tab once the shared primitive exists.
 
 The subsystem registry now also requires explicit proof-policy coverage for all
 shared runtime files, and shared-component guardrails fail if raw table

@@ -1,3 +1,5 @@
+import { isExternalUpgradeHref } from '@/utils/upgradeNavigation';
+
 const DEFAULT_PUBLIC_PRICING_URL =
   'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
 
@@ -51,7 +53,7 @@ export function getPricingRouteDestination(search: string): string {
 }
 
 export function isExternalPricingDestination(destination: string): boolean {
-  return /^https?:\/\//.test(destination);
+  return isExternalUpgradeHref(destination);
 }
 
 export function handoffToExternalPricing(destination: string): void {

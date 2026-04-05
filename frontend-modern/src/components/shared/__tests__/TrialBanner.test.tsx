@@ -7,8 +7,16 @@ import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?r
 import { TRIAL_BANNER_SNOOZE_KEY } from '@/components/shared/trialBannerModel';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
-const { getUpgradeActionUrlOrFallbackMock, licenseStatusMock, loadLicenseStatusMock, isUpsellSnoozedMock, snoozeUpsellMock } =
+const {
+  getUpgradeActionDestinationMock,
+  getUpgradeActionUrlOrFallbackMock,
+  licenseStatusMock,
+  loadLicenseStatusMock,
+  isUpsellSnoozedMock,
+  snoozeUpsellMock,
+} =
   vi.hoisted(() => ({
+    getUpgradeActionDestinationMock: vi.fn(),
     getUpgradeActionUrlOrFallbackMock: vi.fn(),
     licenseStatusMock: vi.fn(),
     loadLicenseStatusMock: vi.fn(),
@@ -17,6 +25,7 @@ const { getUpgradeActionUrlOrFallbackMock, licenseStatusMock, loadLicenseStatusM
   }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
@@ -30,11 +39,16 @@ vi.mock('@/utils/snooze', () => ({
 describe('TrialBanner', () => {
   beforeEach(() => {
     cleanup();
+    getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     licenseStatusMock.mockReset();
     loadLicenseStatusMock.mockReset();
     isUpsellSnoozedMock.mockReset();
     snoozeUpsellMock.mockReset();
+    getUpgradeActionDestinationMock.mockReturnValue({
+      href: getPublicPricingUrl('trial_banner'),
+      external: true,
+    });
     getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
     loadLicenseStatusMock.mockResolvedValue(undefined);
     isUpsellSnoozedMock.mockReturnValue(false);
@@ -58,7 +72,7 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).toContain('loadLicenseStatus');
     expect(trialBannerStateSource).toContain('licenseStatus');
-    expect(trialBannerStateSource).toContain('getUpgradeActionUrlOrFallback');
+    expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
 
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');

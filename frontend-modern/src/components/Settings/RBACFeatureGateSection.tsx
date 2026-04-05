@@ -1,5 +1,6 @@
 import { Component, Show } from 'solid-js';
-import { getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { getUpgradeActionDestination } from '@/stores/license';
 import type { RBACFeatureGateCopy } from '@/utils/rbacPresentation';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
@@ -26,15 +27,13 @@ export const RBACFeatureGateSection: Component<RBACFeatureGateSectionProps> = (p
         <p class="text-sm text-muted mt-1">{props.copy.body}</p>
       </div>
       <div class="flex flex-col sm:flex-row items-center gap-2">
-        <a
-          href={getUpgradeActionUrlOrFallback('rbac')}
-          target="_blank"
-          rel="noopener noreferrer"
+        <UpgradeLink
+          destination={getUpgradeActionDestination('rbac')}
           class={getUpgradeActionButtonClass()}
           onClick={() => trackUpgradeClicked(props.paywallLocation, 'rbac')}
         >
           {UPGRADE_ACTION_LABEL}
-        </a>
+        </UpgradeLink>
         <Show when={props.canStartTrial}>
           <button
             type="button"

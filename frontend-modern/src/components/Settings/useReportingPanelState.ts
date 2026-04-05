@@ -4,7 +4,7 @@ import { showSuccess, showWarning } from '@/utils/toast';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import {
   entitlements,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
@@ -60,8 +60,10 @@ export const useReportingPanelState = () => {
     licenseLoaded() &&
     reportingFeatureId() !== '' &&
     hasFeature(reportingFeatureId());
-  const upgradeActionUrl = () =>
-    reportingFeatureId() === '' ? '' : getUpgradeActionUrlOrFallback(reportingFeatureId());
+  const upgradeDestination = () =>
+    reportingFeatureId() === ''
+      ? getUpgradeActionDestination('')
+      : getUpgradeActionDestination(reportingFeatureId());
 
   onMount(() => {
     loadLicenseStatus();
@@ -259,6 +261,6 @@ export const useReportingPanelState = () => {
     setTitle,
     startingTrial,
     title,
-    upgradeActionUrl,
+    upgradeDestination,
   };
 };

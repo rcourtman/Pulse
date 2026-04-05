@@ -10,6 +10,10 @@ import {
   getInProductPricingDestination,
   getUpgradeFallbackDestination,
 } from '@/utils/pricingHandoff';
+import {
+  resolveUpgradeDestination,
+  type UpgradeDestination,
+} from '@/utils/upgradeNavigation';
 
 // Reactive signals for entitlements (canonical gating source).
 const [entitlements, setEntitlements] = createSignal<LicenseEntitlements | null>(null);
@@ -187,13 +191,17 @@ export function getFirstUpgradeActionUrl(): string | undefined {
   return current?.upgrade_reasons?.[0]?.action_url;
 }
 
-export function getUpgradeActionUrlOrFallback(key: string): string {
-  return (
+export function getUpgradeActionDestination(key: string): UpgradeDestination {
+  return resolveUpgradeDestination(
     getUpgradeActionUrl(key) ||
-    getInProductPricingDestination(key) ||
-    getFirstUpgradeActionUrl() ||
-    getUpgradeFallbackDestination(key)
+      getInProductPricingDestination(key) ||
+      getFirstUpgradeActionUrl() ||
+      getUpgradeFallbackDestination(key),
   );
+}
+
+export function getUpgradeActionUrlOrFallback(key: string): string {
+  return getUpgradeActionDestination(key).href;
 }
 
 export function getLimit(key: string) {

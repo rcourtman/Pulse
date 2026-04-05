@@ -128,6 +128,13 @@ overall-health summary is degraded or not fully verified. The green healthy
 empty state belongs only to an actually healthy Patrol summary, while degraded
 coverage or paused-runtime states must surface the governing warning/error copy
 through `frontend-modern/src/utils/patrolEmptyStatePresentation.ts`.
+Patrol paywall actions now follow the same shared commercial navigation split.
+`frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`,
+`frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` may resolve
+commercial destinations from the shared license boundary, but they must leave
+internal-versus-external navigation semantics to `frontend-primitives` once a
+Patrol feature can resolve to either product-owned routes or public pricing.
 That degraded empty-state copy must also interpret the finding state rather
 than simply replaying the primary assessment sentence verbatim: when coverage
 is incomplete, the findings panel should tell the operator that Patrol has not

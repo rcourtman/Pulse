@@ -631,14 +631,17 @@ describe('Settings architecture guardrails', () => {
   it('keeps relay settings split into shell, runtime, and pairing owners', () => {
     expect(relaySettingsPanelSource).toContain('./useRelaySettingsPanelState');
     expect(relaySettingsPanelSource).toContain('./RelayPairingSection');
+    expect(relaySettingsPanelSource).toContain('@/components/shared/UpgradeLink');
     expect(relaySettingsPanelSource).toContain('@/utils/upgradePresentation');
     expect(relaySettingsPanelSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(relaySettingsPanelSource).not.toContain('createSignal(');
     expect(relaySettingsPanelSource).not.toContain('QRCode.toDataURL(');
+    expect(relaySettingsPanelSource).not.toContain('target="_blank"');
     expect(relaySettingsPanelSource).not.toContain('>Start free trial<');
     expect(relaySettingsPanelStateSource).toContain(
       "trackPaywallViewed('relay', 'settings_relay_panel')",
     );
+    expect(relaySettingsPanelStateSource).toContain("getUpgradeActionDestination('relay')");
     expect(relaySettingsPanelStateSource).toContain('setInterval(() => void loadStatus(), 5000)');
     expect(relaySettingsPanelStateSource).toContain('QRCode.toDataURL(payload.deep_link');
     expect(relaySettingsPanelStateSource).toContain('runStartProTrialAction({');
@@ -832,7 +835,9 @@ describe('Settings architecture guardrails', () => {
     expect(userAssignmentsPanelSource).toContain('./useUserAssignmentsPanelState');
     expect(userAssignmentsPanelSource).not.toContain('const handleStartTrial = async');
     expect(userAssignmentsPanelSource).not.toContain('const loadData = async');
+    expect(rbacFeatureGateSectionSource).toContain('@/components/shared/UpgradeLink');
     expect(rbacFeatureGateSectionSource).toContain('trackUpgradeClicked');
+    expect(rbacFeatureGateSectionSource).not.toContain('target="_blank"');
     expect(rbacFeatureGateStateSource).toContain('trackPaywallViewed');
     expect(rbacFeatureGateStateSource).toContain('runStartProTrialAction({');
     expect(rbacFeatureGateStateSource).not.toContain('startProTrial()');
@@ -1099,11 +1104,15 @@ describe('Settings architecture guardrails', () => {
     );
     expect(aiModelSelectionSectionSource).toContain('@/components/Settings/aiSettingsModel');
     expect(aiModelSelectionSectionSource).toContain('Advanced Model Selection');
+    expect(aiRuntimeControlsSectionSource).toContain('@/components/shared/UpgradeLink');
     expect(aiRuntimeControlsSectionSource).toContain('@/utils/upgradePresentation');
     expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_ACTION_LABEL');
     expect(aiRuntimeControlsSectionSource).toContain('UPGRADE_TRIAL_LABEL');
     expect(aiRuntimeControlsSectionSource).toContain('Discovery Settings');
     expect(aiRuntimeControlsSectionSource).toContain('Pulse Permission Level');
+    expect(aiRuntimeControlsSectionSource).toContain('destination={state.upgradeAutofixDestination()}');
+    expect(aiRuntimeControlsSectionSource).not.toContain('href={state.upgradeAutofixDestination().href}');
+    expect(aiRuntimeControlsSectionSource).not.toContain('window.open(state.upgradeAutofixDestination().href');
     expect(aiRuntimeControlsSectionSource).not.toContain('>Upgrade to Pro<');
     expect(aiRuntimeControlsSectionSource).not.toContain('>Start free trial<');
     expect(aiChatMaintenanceSectionSource).toContain('Chat Session Maintenance');
@@ -1119,6 +1128,7 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain(
       'const handleEnabledToggle = async (newValue: boolean) =>',
     );
+    expect(aiSettingsStateSource).toContain("getUpgradeActionDestination('ai_autofix')");
     expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
     expect(aiSettingsStateSource).toContain(
       'const payload: Record<string, unknown> = { enabled: true };',
@@ -1183,6 +1193,7 @@ describe('Settings architecture guardrails', () => {
   it('keeps the reporting shell behind extracted runtime and model owners', () => {
     expect(reportingPanelSource).toContain('@/components/Settings/OperationsPanel');
     expect(reportingPanelSource).toContain('@/components/Settings/useReportingPanelState');
+    expect(reportingPanelSource).toContain('@/components/shared/UpgradeLink');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingCatalogModel');
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).toContain('reportingCatalog');
@@ -1194,6 +1205,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('export const useReportingPanelState =');
     expect(reportingPanelStateSource).toContain('loadLicenseStatus');
     expect(reportingPanelStateSource).toContain('runStartProTrialAction({');
+    expect(reportingPanelStateSource).toContain('getUpgradeActionDestination(');
     expect(reportingPanelStateSource).not.toContain('startProTrial()');
     expect(reportingPanelStateSource).toContain('buildReportingRequest');
     expect(reportingPanelStateSource).toContain('buildReportingCatalogRequest');
@@ -1248,15 +1260,18 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps the audit log shell behind an extracted runtime owner', () => {
     expect(auditLogPanelSource).toContain('@/components/Settings/useAuditLogPanelState');
+    expect(auditLogPanelSource).toContain('@/components/shared/UpgradeLink');
     expect(auditLogPanelSource).not.toContain('createLocalStorageStringSignal');
     expect(auditLogPanelSource).not.toContain('const fetchAuditEvents = async (');
     expect(auditLogPanelSource).not.toContain('const verifyAllEvents = async (');
     expect(auditLogPanelSource).not.toContain('trackPaywallViewed');
+    expect(auditLogPanelSource).not.toContain('target="_blank"');
     expect(auditLogStateSource).toContain('export const useAuditLogPanelState =');
     expect(auditLogStateSource).toContain('createLocalStorageStringSignal');
     expect(auditLogStateSource).toContain('const fetchAuditEvents = async (');
     expect(auditLogStateSource).toContain('const verifyAllEvents = async (');
     expect(auditLogStateSource).toContain('trackPaywallViewed');
+    expect(auditLogStateSource).toContain("getUpgradeActionDestination('audit_logging')");
     expect(auditLogStateSource).toContain('runStartProTrialAction({');
     expect(auditLogStateSource).not.toContain('startProTrial()');
     expect(auditLogStateSource).not.toContain('getTrialAlreadyUsedMessage()');
@@ -1264,15 +1279,18 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps the audit webhook shell behind an extracted runtime owner', () => {
     expect(auditWebhookPanelSource).toContain('@/components/Settings/useAuditWebhookPanelState');
+    expect(auditWebhookPanelSource).toContain('@/components/shared/UpgradeLink');
     expect(auditWebhookPanelSource).not.toContain('loadLicenseStatus();');
     expect(auditWebhookPanelSource).not.toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookPanelSource).not.toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookPanelSource).not.toContain('trackPaywallViewed');
+    expect(auditWebhookPanelSource).not.toContain('target="_blank"');
     expect(auditWebhookStateSource).toContain('export const useAuditWebhookPanelState =');
     expect(auditWebhookStateSource).toContain('loadLicenseStatus();');
     expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookStateSource).toContain('trackPaywallViewed');
+    expect(auditWebhookStateSource).toContain("getUpgradeActionDestination('audit_logging')");
     expect(auditWebhookStateSource).toContain('runStartProTrialAction({');
     expect(auditWebhookStateSource).not.toContain('startProTrial()');
     expect(auditWebhookStateSource).not.toContain('getTrialAlreadyUsedMessage()');
@@ -1280,16 +1298,19 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps the SSO providers shell behind extracted runtime owners', () => {
     expect(ssoProvidersPanelSource).toContain('@/components/Settings/useSSOProvidersState');
+    expect(ssoProvidersPanelSource).toContain('@/components/shared/UpgradeLink');
     expect(ssoProvidersPanelSource).toContain('@/utils/ssoProviderPresentation');
     expect(ssoProvidersPanelSource).not.toContain('const loadProviders = async () =>');
     expect(ssoProvidersPanelSource).not.toContain('const handleSave = async (');
     expect(ssoProvidersPanelSource).not.toContain('const testConnection = async () =>');
+    expect(ssoProvidersPanelSource).not.toContain('target="_blank"');
     expect(ssoProvidersStateSource).toContain('@/components/Settings/ssoProvidersModel');
     expect(ssoProvidersStateSource).toContain('@/utils/ssoProviderPresentation');
     expect(ssoProvidersStateSource).toContain('export const useSSOProvidersState =');
     expect(ssoProvidersStateSource).toContain('const loadProviders = async () =>');
     expect(ssoProvidersStateSource).toContain('const handleSave = async (event?: Event) =>');
     expect(ssoProvidersStateSource).toContain('const testConnection = async () =>');
+    expect(ssoProvidersStateSource).toContain('getUpgradeActionDestination');
     expect(ssoProvidersStateSource).toContain('runStartProTrialAction({');
     expect(ssoProvidersStateSource).not.toContain('startProTrial()');
     expect(ssoProvidersStateSource).not.toContain('getTrialAlreadyUsedMessage()');

@@ -432,6 +432,11 @@ and `internal/cloudcp/portal/commercial_proxy.go` plus `internal/cloudcp/routes.
 own the server-side proxy boundary to the shared license/commercial APIs so
 the browser runtime does not widen control-plane CSP with direct cross-origin
 commercial fetches.
+That same shared commercial boundary now also applies to Patrol feature
+handoffs. API-backed Patrol surfaces may consume canonical commercial hrefs
+from the shared license/commercial contract, but they must not re-decide
+internal-versus-external navigation behavior inside API-adjacent page or hook
+owners once the contract can resolve to both in-app and public destinations.
 `/portal` is now one bootstrap-driven shell for both anonymous and
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate

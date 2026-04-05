@@ -7,6 +7,7 @@ import OperationsPanel from '@/components/Settings/OperationsPanel';
 import { CalloutCard } from '@/components/shared/CalloutCard';
 import { formControl, formField, formHelpText, formLabel } from '@/components/shared/Form';
 import { FilterButtonGroup, type FilterOption } from '@/components/shared/FilterButtonGroup';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { useReportingPanelState } from '@/components/Settings/useReportingPanelState';
 import type { ReportingFormat } from '@/components/Settings/reportingCatalogModel';
 import { type ReportingRangeValue } from '@/components/Settings/reportingPanelModel';
@@ -65,7 +66,7 @@ export function ReportingPanel() {
     setTitle,
     startingTrial,
     title,
-    upgradeActionUrl,
+    upgradeDestination,
   } = useReportingPanelState();
 
   const performanceReport = () => reportingCatalog()?.performanceReport ?? null;
@@ -149,15 +150,13 @@ export function ReportingPanel() {
                 </Show>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
-                <a
-                  href={upgradeActionUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <UpgradeLink
+                  destination={upgradeDestination()}
                   class={getUpgradeActionButtonClass()}
                   onClick={() => trackUpgradeClicked('settings_reporting_panel', reportingCatalog()!.id)}
                 >
                   {UPGRADE_ACTION_LABEL}
-                </a>
+                </UpgradeLink>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"

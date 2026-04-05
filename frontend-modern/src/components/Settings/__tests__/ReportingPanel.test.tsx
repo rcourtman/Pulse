@@ -97,7 +97,10 @@ function buildState(overrides: Record<string, unknown> = {}) {
     setTitle: vi.fn(),
     startingTrial: () => false,
     title: () => '',
-    upgradeActionUrl: () => getPublicPricingUrl('advanced_reporting'),
+    upgradeDestination: () => ({
+      href: getPublicPricingUrl('advanced_reporting'),
+      external: true,
+    }),
     ...overrides,
   };
 }

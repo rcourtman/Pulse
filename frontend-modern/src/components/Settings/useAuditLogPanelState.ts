@@ -9,7 +9,7 @@ import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showToast, showWarning } from '@/utils/toast';
 import {
   entitlements,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
@@ -118,7 +118,7 @@ export const useAuditLogPanelState = () => {
     () => licenseLoaded() && !auditLoggingEnabled() && !loading(),
   );
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
-  const upgradeActionUrl = createMemo(() => getUpgradeActionUrlOrFallback('audit_logging'));
+  const upgradeDestination = createMemo(() => getUpgradeActionDestination('audit_logging'));
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {
     if (!auditLoggingEnabled()) {
@@ -633,7 +633,7 @@ export const useAuditLogPanelState = () => {
     successFilter,
     totalEvents,
     totalPages,
-    upgradeActionUrl,
+    upgradeDestination,
     verification,
     verificationFilter,
     verificationSummary,

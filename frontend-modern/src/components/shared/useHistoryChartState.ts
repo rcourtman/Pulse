@@ -7,7 +7,7 @@ import {
 } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
 import {
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   isRangeLocked,
   licenseStatus,
   loadLicenseStatus,
@@ -387,7 +387,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
     dataMax,
     dataMin,
     error,
-    getUpgradeActionUrlOrFallback,
+    getUpgradeActionDestination,
     handleMouseLeave,
     handleMouseMove,
     handleStartTrial,

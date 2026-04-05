@@ -6,6 +6,7 @@ import relayOnboardingCardStateSource from '../useRelayOnboardingCardState.ts?ra
 // ── Hoisted mocks ──────────────────────────────────────────────────────
 
 const {
+  getUpgradeActionDestinationMock,
   mockNavigate,
   loadLicenseStatusMock,
   startProTrialMock,
@@ -20,6 +21,7 @@ const {
   licenseLoadedMock,
   getUpgradeActionUrlOrFallbackMock,
 } = vi.hoisted(() => ({
+  getUpgradeActionDestinationMock: vi.fn(),
   mockNavigate: vi.fn(),
   loadLicenseStatusMock: vi.fn(),
   startProTrialMock: vi.fn(),
@@ -40,6 +42,7 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   licenseLoaded: (...args: unknown[]) => licenseLoadedMock(...args),
@@ -96,6 +99,7 @@ function resetAllMocks() {
   getRelayStatusMock.mockReset();
   hasFeatureMock.mockReset();
   licenseLoadedMock.mockReset();
+  getUpgradeActionDestinationMock.mockReset();
   getUpgradeActionUrlOrFallbackMock.mockReset();
 }
 
@@ -110,6 +114,10 @@ function setupWithRelayFeature(statusOverride?: { connected: boolean; active_cha
   hasFeatureMock.mockReturnValue(true);
   isUpsellSnoozedMock.mockReturnValue(false);
   getRelayStatusMock.mockResolvedValue(defaultStatus);
+  getUpgradeActionDestinationMock.mockReturnValue({
+    href: getPublicPricingUrl('relay'),
+    external: true,
+  });
   getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('relay'));
 }
 
@@ -121,6 +129,10 @@ function setupWithoutRelayFeature() {
   licenseLoadedMock.mockReturnValue(true);
   hasFeatureMock.mockReturnValue(false);
   isUpsellSnoozedMock.mockReturnValue(false);
+  getUpgradeActionDestinationMock.mockReturnValue({
+    href: getPublicPricingUrl('relay'),
+    external: true,
+  });
   getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('relay'));
 }
 

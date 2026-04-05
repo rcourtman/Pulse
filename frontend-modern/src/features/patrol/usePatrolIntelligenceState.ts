@@ -23,7 +23,7 @@ import { notificationStore } from '@/stores/notifications';
 import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import {
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   licenseStatus,
   loadLicenseStatus,
@@ -394,8 +394,10 @@ export function usePatrolIntelligenceState() {
   );
 
   const licenseRequired = createMemo(() => patrolStatus()?.license_required ?? false);
-  const upgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_autofix'));
-  const alertAnalysisUpgradeUrl = createMemo(() => getUpgradeActionUrlOrFallback('ai_alerts'));
+  const upgradeDestination = createMemo(() => getUpgradeActionDestination('ai_autofix'));
+  const alertAnalysisUpgradeDestination = createMemo(() =>
+    getUpgradeActionDestination('ai_alerts'),
+  );
   const runtimeState = createMemo<PatrolRuntimeState>(() => {
     if (!patrolEnabledLocal()) return 'disabled';
     return patrolStatus()?.runtime_state ?? 'active';
@@ -706,7 +708,7 @@ export function usePatrolIntelligenceState() {
     activeTab,
     activePatrolFindings,
     activityRefreshTrigger,
-    alertAnalysisUpgradeUrl,
+    alertAnalysisUpgradeDestination,
     alertAnalysisLocked,
     alertTriggeredAnalysis,
     autonomyLevel,
@@ -782,7 +784,7 @@ export function usePatrolIntelligenceState() {
     startingTrial,
     summaryStats,
     triggerPatrolDisabledReason,
-    upgradeUrl,
+    upgradeDestination,
   };
 }
 

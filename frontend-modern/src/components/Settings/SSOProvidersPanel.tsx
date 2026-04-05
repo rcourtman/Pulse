@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle } from '@/components/shared/Toggle';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import Plus from 'lucide-solid/icons/plus';
@@ -79,8 +80,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     testConnection,
     canTest,
     fetchMetadataPreview,
+    getUpgradeActionDestination,
     licenseLoaded,
-    getUpgradeActionUrlOrFallback,
     trackUpgradeClicked,
   } = useSSOProvidersState(props);
 
@@ -119,10 +120,8 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 >
                   Not now
                 </button>
-                <a
-                  href={getUpgradeActionUrlOrFallback('advanced_sso')}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <UpgradeLink
+                  destination={getUpgradeActionDestination('advanced_sso')}
                   class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
                   onClick={() =>
                     trackUpgradeClicked('settings_sso_providers_add_saml_gate', 'advanced_sso')
@@ -130,7 +129,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 >
                   {UPGRADE_ACTION_LABEL}
                   <ExternalLink class="w-4 h-4" />
-                </a>
+                </UpgradeLink>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"
@@ -159,16 +158,14 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
               </p>
             </div>
             <div class="flex flex-col sm:flex-row items-center gap-2">
-              <a
-                href={getUpgradeActionUrlOrFallback('advanced_sso')}
-                target="_blank"
-                rel="noopener noreferrer"
+              <UpgradeLink
+                destination={getUpgradeActionDestination('advanced_sso')}
                 class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
                 onClick={() => trackUpgradeClicked('settings_sso_providers_banner', 'advanced_sso')}
               >
                 {UPGRADE_ACTION_LABEL}
                 <ExternalLink class="w-4 h-4" />
-              </a>
+              </UpgradeLink>
               <Show when={canStartTrial()}>
                 <button
                   type="button"

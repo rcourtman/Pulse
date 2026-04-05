@@ -2,6 +2,7 @@ import { Component, Show } from 'solid-js';
 import type { AIControlLevel } from '@/utils/aiControlLevelPresentation';
 import type { AISettingsState } from '@/components/Settings/useAISettingsState';
 import { HelpIcon } from '@/components/shared/HelpIcon';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle } from '@/components/shared/Toggle';
 import { TERMS_DOC_URL } from '@/utils/docsLinks';
 import {
@@ -239,15 +240,13 @@ export const AIRuntimeControlsSection: Component<AIRuntimeControlsSectionProps> 
         </Show>
         <Show when={state.form.controlLevel === 'autonomous' && state.autoFixLocked()}>
           <p class="text-xs text-muted">
-            <a
+            <UpgradeLink
               class="text-blue-600 dark:text-blue-400 font-medium hover:underline"
-              href={state.upgradeAutofixUrl()}
-              target="_blank"
-              rel="noopener noreferrer"
+              destination={state.upgradeAutofixDestination()}
               onClick={() => trackUpgradeClicked('settings_ai_patrol_autofix', 'ai_autofix')}
             >
               {UPGRADE_ACTION_LABEL}
-            </a>{' '}
+            </UpgradeLink>{' '}
             to enable autonomous mode.
             <Show when={state.canStartTrial()}>
               {' '}

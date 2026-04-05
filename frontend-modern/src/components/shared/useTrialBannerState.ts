@@ -1,5 +1,5 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
-import { getUpgradeActionUrlOrFallback, licenseStatus, loadLicenseStatus } from '@/stores/license';
+import { getUpgradeActionDestination, licenseStatus, loadLicenseStatus } from '@/stores/license';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
   getTrialBannerToneClass,
@@ -20,8 +20,8 @@ export function useTrialBannerState() {
     normalizeTrialBannerDaysRemaining(licenseStatus()?.trial_days_remaining),
   );
   const toneClass = createMemo(() => getTrialBannerToneClass(daysRemaining()));
-  const upgradeHref = createMemo(() =>
-    getUpgradeActionUrlOrFallback(TRIAL_BANNER_UPGRADE_REASON),
+  const upgradeDestination = createMemo(() =>
+    getUpgradeActionDestination(TRIAL_BANNER_UPGRADE_REASON),
   );
 
   const handleSnooze = () => {
@@ -35,6 +35,6 @@ export function useTrialBannerState() {
     isTrial,
     showActions: () => !snoozed(),
     toneClass,
-    upgradeHref,
+    upgradeDestination,
   };
 }

@@ -1,10 +1,11 @@
 import { Show, createSignal } from 'solid-js';
 import { aiChatStore } from '@/stores/aiChat';
 import type { Alert } from '@/types/api';
+import { useUpgradeNavigation } from '@/components/shared/useUpgradeNavigation';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
-import { getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/license';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 interface InvestigateAlertButtonProps {
@@ -24,6 +25,7 @@ interface InvestigateAlertButtonProps {
  */
 export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
   const [isHovered, setIsHovered] = createSignal(false);
+  const openUpgradeDestination = useUpgradeNavigation();
   const isLocked = () => props.licenseLocked === true;
   // Don't render if AI is not enabled
   if (aiChatStore.enabled !== true) {
@@ -35,7 +37,7 @@ export function InvestigateAlertButton(props: InvestigateAlertButtonProps) {
     e.preventDefault();
     if (isLocked()) {
       trackUpgradeClicked('investigate_alert_button', 'ai_alerts');
-      window.open(getUpgradeActionUrlOrFallback('ai_alerts'), '_blank');
+      openUpgradeDestination(getUpgradeActionDestination('ai_alerts'));
       return;
     }
 

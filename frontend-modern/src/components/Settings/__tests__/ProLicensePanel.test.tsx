@@ -19,6 +19,7 @@ const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const useLocationMock = vi.fn(() => ({ search: '' }));
 const navigateMock = vi.fn();
+const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@solidjs/router', () => ({
@@ -27,6 +28,7 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   isMultiTenantEnabled: () => true,
   licenseLoadError: () => false,
@@ -68,11 +70,16 @@ describe('ProLicensePanel', () => {
     notificationErrorMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
+    getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
     clearLicenseMock.mockResolvedValue({ success: true });
+    getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
+      href: getPublicPricingUrl(feature),
+      external: true,
+    }));
     getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
     useLocationMock.mockReturnValue({ search: '' });
   });

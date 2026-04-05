@@ -4,6 +4,7 @@ import SettingsPanel from '@/components/shared/SettingsPanel';
 import { StatusDot } from '@/components/shared/StatusDot';
 import { Toggle } from '@/components/shared/Toggle';
 import { Card } from '@/components/shared/Card';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { formField, labelClass, controlClass, formHelpText } from '@/components/shared/Form';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
@@ -50,15 +51,13 @@ export const RelaySettingsPanel: Component<RelaySettingsPanelProps> = (props) =>
                 </div>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
-                <a
-                  href={state.upgradeActionUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <UpgradeLink
+                  destination={state.upgradeDestination()}
                   class={RELAY_PRIMARY_LINK_CLASS}
                   onClick={() => trackUpgradeClicked('settings_relay_panel', 'relay')}
                 >
                   Upgrade
-                </a>
+                </UpgradeLink>
                 <Show when={state.canStartTrial()}>
                   <button
                     type="button"

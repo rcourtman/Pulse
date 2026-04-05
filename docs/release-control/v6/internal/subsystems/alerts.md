@@ -116,6 +116,12 @@ compose through additive fired/resolved subscriptions instead of overwriting a
 single callback slot, and alert-triggered Patrol enqueueing must stay on the
 canonical unified alert bridge plus trigger-manager path rather than reviving
 duplicate callback-side Patrol shortcuts.
+Commercial alert handoffs now follow the same shared navigation boundary.
+`frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
+the canonical `ai_alerts` destination from the shared license/commercial
+contract, but it must delegate the actual open behavior to the
+`frontend-primitives` typed upgrade-navigation owner instead of reintroducing
+alert-local `window.open(...)` or raw external-tab assumptions.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field

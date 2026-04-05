@@ -12,7 +12,7 @@ import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import {
   entitlements,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature as hasEntitlement,
   licenseLoaded,
   licenseLoading,
@@ -383,8 +383,8 @@ export const useAgentProfilesPanelState = () => {
     getProfileOptionLabel,
     getSettingsCount,
     getStatusIndicatorBadgeToneClasses,
+    getUpgradeActionDestination,
     getUpgradeActionButtonClass,
-    getUpgradeActionUrlOrFallback,
     handleAssign,
     handleCreate,
     handleDelete,

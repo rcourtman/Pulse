@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { UpgradeLink } from './UpgradeLink';
 import type { HistoryChartState } from './useHistoryChartState';
 
 interface HistoryChartOverlayProps {
@@ -73,15 +74,13 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
             historical data retention.
           </p>
           <div class="flex flex-col items-center gap-2">
-            <a
-              href={props.chart.getUpgradeActionUrlOrFallback('long_term_metrics')}
-              target="_blank"
-              rel="noopener noreferrer"
+            <UpgradeLink
+              destination={props.chart.getUpgradeActionDestination('long_term_metrics')}
               onClick={() => props.chart.trackUpgradeClicked('history_chart', 'long_term_metrics')}
               class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
             >
               Unlock {props.chart.lockTierLabel()} Features
-            </a>
+            </UpgradeLink>
             <Show when={props.chart.canStartTrial()}>
               <button
                 type="button"

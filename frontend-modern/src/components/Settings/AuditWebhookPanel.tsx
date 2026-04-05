@@ -5,6 +5,7 @@ import Plus from 'lucide-solid/icons/plus';
 import Trash2 from 'lucide-solid/icons/trash-2';
 import ExternalLink from 'lucide-solid/icons/external-link';
 import { Card } from '@/components/shared/Card';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { formControl } from '@/components/shared/Form';
 import {
@@ -43,7 +44,7 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
     saving,
     setNewUrl,
     startingTrial,
-    upgradeActionUrl,
+    upgradeDestination,
     webhookUrls,
   } = useAuditWebhookPanelState(props.canManage);
   const featureGateCopy = () => getAuditWebhookFeatureGateCopy();
@@ -66,17 +67,15 @@ export const AuditWebhookPanel: Component<AuditWebhookPanelProps> = (props) => {
                 </p>
               </div>
               <div class="flex flex-col sm:flex-row items-center gap-2">
-                <a
-                  href={upgradeActionUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <UpgradeLink
+                  destination={upgradeDestination()}
                   class={getUpgradeActionButtonClass()}
                   onClick={() =>
                     trackUpgradeClicked('settings_audit_webhook_panel', 'audit_logging')
                   }
                 >
                   {UPGRADE_ACTION_LABEL}
-                </a>
+                </UpgradeLink>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"

@@ -12,7 +12,7 @@ import {
 import { aiChatStore } from '@/stores/aiChat';
 import {
   entitlements,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   loadLicenseStatus,
 } from '@/stores/license';
@@ -155,7 +155,7 @@ export const useAISettingsState = () => {
     normalizeQuickstartReason(settings()?.quickstart_blocked_reason),
   );
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
-  const upgradeAutofixUrl = () => getUpgradeActionUrlOrFallback('ai_autofix');
+  const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>
     (data?.configured_providers?.length ?? 0) > 0;
@@ -919,7 +919,7 @@ export const useAISettingsState = () => {
     testing,
     testingProvider,
     quickstartBlockedReason,
-    upgradeAutofixUrl,
+    upgradeAutofixDestination,
   };
 };
 

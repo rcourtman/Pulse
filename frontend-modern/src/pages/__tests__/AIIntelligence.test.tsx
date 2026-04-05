@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 import { AIIntelligence } from '../AIIntelligence';
 
@@ -102,6 +103,7 @@ const hasFeatureMock = vi.fn();
 const licenseStatusMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
 const startProTrialMock = vi.fn();
+const getUpgradeActionDestinationMock = vi.fn();
 const getUpgradeActionUrlOrFallbackMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
@@ -127,6 +129,7 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
@@ -317,6 +320,7 @@ describe('AIIntelligence entitlement gating', () => {
     licenseStatusMock.mockReset();
     loadLicenseStatusMock.mockReset();
     startProTrialMock.mockReset();
+    getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     trackPaywallViewedMock.mockReset();
     trackUpgradeClickedMock.mockReset();
@@ -364,8 +368,12 @@ describe('AIIntelligence entitlement gating', () => {
     licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue({ outcome: 'started' });
+    getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
+      href: getPublicPricingUrl(feature),
+      external: true,
+    }));
     getUpgradeActionUrlOrFallbackMock.mockImplementation(
-      (feature?: string) => `/upgrade${feature ? `?feature=${feature}` : ''}`,
+      (feature?: string) => getPublicPricingUrl(feature),
     );
     getCorrelationsMock.mockResolvedValue({
       correlations: [],
@@ -504,11 +512,11 @@ describe('AIIntelligence entitlement gating', () => {
     expect(
       screen
         .getAllByRole('link', { name: 'Upgrade to Pro' })
-        .some((link) => link.getAttribute('href') === '/upgrade?feature=ai_autofix'),
+        .some((link) => link.getAttribute('href') === getPublicPricingUrl('ai_autofix')),
     ).toBe(true);
     expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute(
       'href',
-      '/upgrade?feature=ai_alerts',
+      getPublicPricingUrl('ai_alerts'),
     );
 
     await waitFor(() => {

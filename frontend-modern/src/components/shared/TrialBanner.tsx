@@ -5,6 +5,7 @@ import {
   TRIAL_BANNER_TITLE,
   TRIAL_BANNER_UPGRADE_LABEL,
 } from './trialBannerModel';
+import { UpgradeLink } from './UpgradeLink';
 import { useTrialBannerState } from './useTrialBannerState';
 
 export const TrialBanner: Component = () => {
@@ -24,14 +25,12 @@ export const TrialBanner: Component = () => {
           </div>
           <Show when={state.showActions()}>
             <div class="flex items-center gap-2">
-              <a
+              <UpgradeLink
                 class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-                href={state.upgradeHref()}
-                target="_blank"
-                rel="noreferrer"
+                destination={state.upgradeDestination()}
               >
                 {TRIAL_BANNER_UPGRADE_LABEL}
-              </a>
+              </UpgradeLink>
               <button
                 type="button"
                 class="text-xs opacity-70 hover:opacity-100"

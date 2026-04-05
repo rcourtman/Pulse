@@ -58,6 +58,7 @@ import tooltipSource from '@/components/shared/Tooltip.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
+import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
 import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
@@ -93,6 +94,7 @@ import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
+import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 import infrastructureSummaryTableStateSource from '@/components/shared/useInfrastructureSummaryTableState.ts?raw';
@@ -118,6 +120,7 @@ import reportingPanelModelSource from '@/components/Settings/reportingPanelModel
 import reportingPanelStateSource from '@/components/Settings/useReportingPanelState.ts?raw';
 import updatesSettingsModelSource from '@/components/Settings/updatesSettingsModel.ts?raw';
 import diagnosticsModelSource from '@/components/Settings/diagnosticsModel.ts?raw';
+import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import diagnosticsResultsPanelSource from '@/components/Settings/DiagnosticsResultsPanel.tsx?raw';
 import diagnosticsStateSource from '@/components/Settings/useDiagnosticsPanelState.ts?raw';
 import settingsShellSource from '@/components/Settings/Settings.tsx?raw';
@@ -1010,7 +1013,7 @@ describe('frontend resource type boundaries', () => {
     );
     expect(resourceDetailDrawerStateSource).not.toContain('createResource(');
     expect(resourceDetailDrawerStateSource).not.toContain('MonitoringAPI.');
-    expect(resourceDetailDrawerHistoryStateSource).toContain('createResource(');
+    expect(resourceDetailDrawerHistoryStateSource).toContain('createNonSuspendingQuery');
     expect(resourceDetailDrawerDerivedStateSource).toContain(
       "from '@/components/Infrastructure/resourceDetailDiscoveryModel'",
     );
@@ -2052,7 +2055,8 @@ describe('frontend resource type boundaries', () => {
     expect(storageContentCardSource).toContain('useStorageContentCardModel');
     expect(storageContentCardSource).toContain('DiskList');
     expect(storageContentCardSource).toContain('StoragePoolsTable');
-    expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_HEADER_CLASS');
+    expect(storageContentCardSource).toContain('SummaryTableCardHeader');
+    expect(storageContentCardSource).toContain('STORAGE_CONTENT_CARD_BODY_CLASS');
     expect(storageContentCardSource).not.toContain(
       "props.selectedNodeId() === 'all' ? null : props.selectedNodeId()",
     );
@@ -2853,13 +2857,23 @@ describe('frontend resource type boundaries', () => {
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).toContain('loadLicenseStatus');
     expect(trialBannerStateSource).toContain('licenseStatus');
-    expect(trialBannerStateSource).toContain('getUpgradeActionUrlOrFallback');
+    expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
     expect(trialBannerModelSource).toContain('normalizeTrialBannerDaysRemaining');
     expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
     expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
+    expect(upgradeLinkSource).toContain('destination.external');
+    expect(upgradeLinkSource).not.toContain('window.open');
+    expect(upgradeLinkSource).not.toContain('useNavigate(');
+    expect(upgradeNavigationHookSource).toContain('useNavigate()');
+    expect(upgradeNavigationHookSource).toContain('navigateToUpgradeDestination');
+    expect(upgradeNavigationHookSource).not.toContain('window.open');
+    expect(upgradeNavigationSource).toContain('isExternalUpgradeHref');
+    expect(upgradeNavigationSource).toContain('resolveUpgradeDestination');
+    expect(upgradeNavigationSource).toContain('navigateToUpgradeDestination');
+    expect(upgradeNavigationSource).toContain("window.open(href, '_blank', 'noopener,noreferrer')");
     expect(columnPickerSource).toContain('useColumnPickerState');
     expect(columnPickerSource).toContain('COLUMN_PICKER_PANEL_TITLE');
     expect(columnPickerSource).not.toContain('createSignal');
@@ -3262,7 +3276,8 @@ describe('frontend resource type boundaries', () => {
     expect(unifiedResourceTableModelSource).toContain('export const getOutlierEmphasis');
     expect(unifiedResourceTableViewportSyncSource).toContain('window.addEventListener');
     expect(unifiedResourceTableViewportSyncSource).toContain('getBoundingClientRect');
-    expect(unifiedResourceTableViewportSyncSource).toContain('scrollIntoView');
+    expect(unifiedResourceTableViewportSyncSource).toContain('hostWindowing.onScroll');
+    expect(unifiedResourceTableViewportSyncSource).not.toContain('scrollIntoView');
     expect(exploreStatusBlockSource).toContain('getAIExploreStatusPresentation');
     expect(exploreStatusBlockSource).not.toContain('const phaseLabel =');
     expect(exploreStatusBlockSource).not.toContain('const phaseClasses =');

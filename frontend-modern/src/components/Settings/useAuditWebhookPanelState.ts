@@ -4,7 +4,7 @@ import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
 import {
   entitlements,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
@@ -28,7 +28,7 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   const canManage = () => canManageOverride !== false;
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
   const isAuditLoggingEnabled = () => hasFeature('audit_logging');
-  const upgradeActionUrl = () => getUpgradeActionUrlOrFallback('audit_logging');
+  const upgradeDestination = () => getUpgradeActionDestination('audit_logging');
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;
@@ -129,7 +129,7 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
     saving,
     setNewUrl,
     startingTrial,
-    upgradeActionUrl,
+    upgradeDestination,
     webhookUrls,
   };
 };

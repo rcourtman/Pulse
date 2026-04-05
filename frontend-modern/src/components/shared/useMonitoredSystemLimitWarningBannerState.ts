@@ -2,7 +2,7 @@ import { createEffect, createMemo, onMount } from 'solid-js';
 import {
   entitlements,
   getLimit,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasMigrationGap,
   legacyConnections,
   loadLicenseStatus,
@@ -46,8 +46,8 @@ export function useMonitoredSystemLimitWarningBannerState() {
   const migrationTextClass = createMemo(() =>
     getMonitoredSystemMigrationTextClass(isUrgent()),
   );
-  const upgradeHref = createMemo(() =>
-    getUpgradeActionUrlOrFallback(MONITORED_SYSTEM_LIMIT_KEY),
+  const upgradeDestination = createMemo(() =>
+    getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
   );
 
   let wasUrgent = false;
@@ -88,6 +88,6 @@ export function useMonitoredSystemLimitWarningBannerState() {
     overflowSummary,
     showBanner,
     toneClass,
-    upgradeHref,
+    upgradeDestination,
   };
 }

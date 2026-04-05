@@ -167,6 +167,11 @@ license and free-trial runtime, `useRolesPanelState.ts` plus
 `useUserAssignmentsPanelState.ts` plus `UserAssignmentsDialog.tsx` own the
 user-assignment runtime split. `RolesPanel.tsx` and `UserAssignmentsPanel.tsx`
 remain the canonical render shells for those governed RBAC surfaces.
+That RBAC gate now also depends on the shared commercial navigation contract:
+`RBACFeatureGateSection.tsx` may request the canonical `rbac` destination from
+the shared license boundary, but it must render that destination through the
+`frontend-primitives` typed upgrade link owner instead of assuming
+organization-settings paywalls always leave the app in a new tab.
 That shared RBAC free-trial runtime must also preserve backend denial reasons
 through the canonical upgrade presentation helper instead of collapsing every
 trial-start conflict into a generic already-used message. Organization settings

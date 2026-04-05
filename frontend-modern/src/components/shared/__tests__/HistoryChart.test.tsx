@@ -36,6 +36,7 @@ HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
 })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   getUpgradeActionUrlOrFallback: () => 'https://example.com/upgrade',
   isRangeLocked: () => false,
   licenseStatus: () => ({ subscription_state: 'active' }),

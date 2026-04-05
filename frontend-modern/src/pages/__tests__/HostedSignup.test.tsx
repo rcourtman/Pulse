@@ -15,6 +15,7 @@ vi.mock('@/api/hostedSignup', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: () => ({ href: '/cloud', external: false }),
   getUpgradeActionUrlOrFallback: () => 'https://cloud.pulserelay.pro',
 }));
 

@@ -367,6 +367,14 @@ product-owned destinations such as monitored-system billing or Cloud plans
 inside the app, but public self-hosted pricing must leave the product for the
 canonical website rather than rendering a second public pricing surface inside
 Pulse.
+That destination split is canonical commercial truth, but navigation semantics
+are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
+`frontend-modern/src/stores/license.ts` decide which href each commercial
+feature resolves to; `frontend-primitives` owns the typed navigation contract
+that decides whether that href stays in-app or opens externally. Commercial
+surfaces must not re-infer that behavior locally with per-component
+`target="_blank"` or `window.open(...)` branches once a feature can resolve to
+either product-owned billing/cloud routes or the public pricing site.
 The trial-start rate-limit contract is part of that same boundary. Local
 `/api/license/trial/start` retries are allowed as a short human-scale burst so
 operators can revisit the hosted handoff without getting locked out for a day,

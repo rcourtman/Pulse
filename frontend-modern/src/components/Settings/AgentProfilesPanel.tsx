@@ -2,6 +2,7 @@ import { Component, For, Show } from 'solid-js';
 import { Card } from '@/components/shared/Card';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { Dialog } from '@/components/shared/Dialog';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { SuggestProfileModal } from './SuggestProfileModal';
 import { KNOWN_SETTINGS, type SelectSetting, type StringSetting } from './agentProfileSettings';
 import {
@@ -35,8 +36,8 @@ export const AgentProfilesPanel: Component = () => {
     getProfileOptionLabel,
     getSettingsCount,
     getStatusIndicatorBadgeToneClasses,
+    getUpgradeActionDestination,
     getUpgradeActionButtonClass,
-    getUpgradeActionUrlOrFallback,
     handleAssign,
     handleCreate,
     handleDelete,
@@ -97,10 +98,8 @@ export const AgentProfilesPanel: Component = () => {
               monitoring, logging levels, and reporting intervals from a central location.
             </p>
             <div class="flex flex-wrap items-center gap-3">
-              <a
-                href={getUpgradeActionUrlOrFallback('agent_profiles')}
-                target="_blank"
-                rel="noopener noreferrer"
+              <UpgradeLink
+                destination={getUpgradeActionDestination('agent_profiles')}
                 class={getUpgradeActionButtonClass({ tone: 'warning', mobileFullWidth: false })}
                 onClick={() =>
                   trackUpgradeClicked('settings_agent_profiles_panel', 'agent_profiles')
@@ -108,7 +107,7 @@ export const AgentProfilesPanel: Component = () => {
               >
                 <Crown class="w-4 h-4" />
                 {UPGRADE_ACTION_LABEL}
-              </a>
+              </UpgradeLink>
               <Show when={canStartTrial()}>
                 <button
                   type="button"

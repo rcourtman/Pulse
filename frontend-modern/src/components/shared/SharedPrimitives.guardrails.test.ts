@@ -56,6 +56,7 @@ import tooltipPortalSource from '@/components/shared/TooltipPortal.tsx?raw';
 import tooltipModelSource from '@/components/shared/tooltipModel.ts?raw';
 import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
+import upgradeLinkSource from '@/components/shared/UpgradeLink.tsx?raw';
 import interactiveSparklineSource from '@/components/shared/InteractiveSparkline.tsx?raw';
 import interactiveSparklineModelSource from '@/components/shared/interactiveSparklineModel.ts?raw';
 import contextualFocusSource from '@/components/shared/contextualFocus.ts?raw';
@@ -103,12 +104,14 @@ import toggleStateSource from '@/components/shared/useToggleState.ts?raw';
 import searchTipsPopoverStateSource from '@/components/shared/useSearchTipsPopoverState.ts?raw';
 import tooltipStateSource from '@/components/shared/useTooltipState.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
+import upgradeNavigationHookSource from '@/components/shared/useUpgradeNavigation.ts?raw';
 import interactiveSparklineStateSource from '@/components/shared/useInteractiveSparklineState.ts?raw';
 import monitoredSystemLimitWarningBannerStateSource from '@/components/shared/useMonitoredSystemLimitWarningBannerState.ts?raw';
 import selectionCardGroupStateSource from '@/components/shared/useSelectionCardGroupState.ts?raw';
 import webInterfaceUrlFieldSource from '@/components/shared/WebInterfaceUrlField.tsx?raw';
 import webInterfaceUrlFieldModelSource from '@/components/shared/webInterfaceUrlFieldModel.ts?raw';
 import webInterfaceUrlFieldStateSource from '@/components/shared/useWebInterfaceUrlFieldState.ts?raw';
+import upgradeNavigationSource from '@/utils/upgradeNavigation.ts?raw';
 import guestRowSource from '@/components/Dashboard/GuestRow.tsx?raw';
 import dashboardWorkloadTableSource from '@/components/Dashboard/DashboardWorkloadTable.tsx?raw';
 import workloadPanelSource from '@/components/Dashboard/WorkloadPanel.tsx?raw';
@@ -466,7 +469,7 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).toContain('loadLicenseStatus');
     expect(trialBannerStateSource).toContain('licenseStatus');
-    expect(trialBannerStateSource).toContain('getUpgradeActionUrlOrFallback');
+    expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
 
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
@@ -474,6 +477,24 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerModelSource).toContain('getTrialBannerToneClass');
     expect(trialBannerModelSource).toContain('getTrialBannerStatusLabel');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
+  });
+
+  it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {
+    expect(upgradeLinkSource).toContain('destination.external');
+    expect(upgradeLinkSource).toContain("target={local.target ?? '_blank'}");
+    expect(upgradeLinkSource).not.toContain('window.open');
+    expect(upgradeLinkSource).not.toContain('useNavigate(');
+
+    expect(upgradeNavigationHookSource).toContain('export function useUpgradeNavigation');
+    expect(upgradeNavigationHookSource).toContain('useNavigate()');
+    expect(upgradeNavigationHookSource).toContain('navigateToUpgradeDestination');
+    expect(upgradeNavigationHookSource).not.toContain('window.open');
+
+    expect(upgradeNavigationSource).toContain('export interface UpgradeDestination');
+    expect(upgradeNavigationSource).toContain('isExternalUpgradeHref');
+    expect(upgradeNavigationSource).toContain('resolveUpgradeDestination');
+    expect(upgradeNavigationSource).toContain('navigateToUpgradeDestination');
+    expect(upgradeNavigationSource).toContain("window.open(href, '_blank', 'noopener,noreferrer')");
   });
 
   it('keeps column picker on shell, runtime, and model owners', () => {

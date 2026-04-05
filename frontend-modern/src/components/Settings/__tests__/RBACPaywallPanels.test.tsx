@@ -19,6 +19,10 @@ const notificationErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (feature: string) => ({
+    href: `https://example.com/upgrade?feature=${feature}`,
+    external: true,
+  }),
   getUpgradeActionUrlOrFallback: (feature: string) => `/upgrade?feature=${feature}`,
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
@@ -112,7 +116,7 @@ describe('RBAC paywall settings panels', () => {
 
     expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
       'href',
-      '/upgrade?feature=rbac',
+      'https://example.com/upgrade?feature=rbac',
     );
     expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
     expect(getRolesMock).not.toHaveBeenCalled();
@@ -143,7 +147,7 @@ describe('RBAC paywall settings panels', () => {
 
     expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
       'href',
-      '/upgrade?feature=rbac',
+      'https://example.com/upgrade?feature=rbac',
     );
     expect(screen.getByPlaceholderText('Search users...')).toBeDisabled();
     expect(getUsersMock).not.toHaveBeenCalled();

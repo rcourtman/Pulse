@@ -3,7 +3,7 @@ import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   loadLicenseStatus,
   licenseLoaded,
@@ -361,8 +361,8 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     testConnection,
     canTest,
     fetchMetadataPreview,
+    getUpgradeActionDestination,
     licenseLoaded,
-    getUpgradeActionUrlOrFallback,
     trackUpgradeClicked,
   };
 };

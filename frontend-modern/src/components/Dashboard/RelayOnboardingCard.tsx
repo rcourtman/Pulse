@@ -2,7 +2,8 @@ import { Component, Show } from 'solid-js';
 import Smartphone from 'lucide-solid/icons/smartphone';
 import X from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
-import { getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { getUpgradeActionDestination } from '@/stores/license';
 import {
   RELAY_ONBOARDING_DESCRIPTION,
   RELAY_ONBOARDING_DISCONNECTED_LABEL,
@@ -48,15 +49,13 @@ export const RelayOnboardingCard: Component = () => {
                 when={state.hasRelay()}
                 fallback={
                   <>
-                    <a
+                    <UpgradeLink
                       class="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700"
-                      href={getUpgradeActionUrlOrFallback('relay')}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                      destination={getUpgradeActionDestination('relay')}
                       onClick={state.handleUpgradeClick}
                     >
                       {RELAY_ONBOARDING_UPGRADE_LABEL}
-                    </a>
+                    </UpgradeLink>
                     <button
                       type="button"
                       class="inline-flex items-center rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium text-base-content shadow-sm hover:bg-surface-hover disabled:opacity-50"

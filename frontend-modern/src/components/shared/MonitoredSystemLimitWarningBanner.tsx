@@ -6,6 +6,7 @@ import {
   MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL,
   MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL,
 } from './monitoredSystemLimitWarningBannerModel';
+import { UpgradeLink } from './UpgradeLink';
 import { useMonitoredSystemLimitWarningBannerState } from './useMonitoredSystemLimitWarningBannerState';
 
 export const MonitoredSystemLimitWarningBanner: Component = () => {
@@ -42,15 +43,13 @@ export const MonitoredSystemLimitWarningBanner: Component = () => {
             </a>
           </Show>
           <Show when={state.isUrgent()}>
-            <a
+            <UpgradeLink
               class="text-xs font-semibold underline underline-offset-2 hover:opacity-90"
-              href={state.upgradeHref()}
-              target="_blank"
-              rel="noreferrer"
+              destination={state.upgradeDestination()}
               onClick={state.handleUpgradeClick}
             >
               {MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL}
-            </a>
+            </UpgradeLink>
           </Show>
         </div>
       </div>

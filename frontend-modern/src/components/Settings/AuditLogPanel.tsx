@@ -7,6 +7,7 @@ import Play from 'lucide-solid/icons/play';
 import X from 'lucide-solid/icons/x';
 import ShieldAlert from 'lucide-solid/icons/shield-alert';
 import { showTooltip, hideTooltip } from '@/components/shared/Tooltip';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import Toggle from '@/components/shared/Toggle';
 import SettingsPanel from '@/components/shared/SettingsPanel';
 import { PulseDataGrid } from '@/components/shared/PulseDataGrid';
@@ -77,7 +78,7 @@ export default function AuditLogPanel() {
     successFilter,
     totalEvents,
     totalPages,
-    upgradeActionUrl,
+    upgradeDestination,
     verification,
     verificationFilter,
     verificationSummary,
@@ -166,15 +167,13 @@ export default function AuditLogPanel() {
                 </p>
               </div>
               <div class="flex flex-col items-center gap-2">
-                <a
-                  href={upgradeActionUrl()}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <UpgradeLink
+                  destination={upgradeDestination()}
                   class={getUpgradeActionButtonClass({ mobileFullWidth: false })}
                   onClick={handleUpgradeClick}
                 >
                   {UPGRADE_ACTION_LABEL}
-                </a>
+                </UpgradeLink>
                 <Show when={canStartTrial()}>
                   <button
                     type="button"

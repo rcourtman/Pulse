@@ -1,4 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import monitoredSystemLimitWarningBannerSource from '@/components/shared/MonitoredSystemLimitWarningBanner.tsx?raw';
 import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
@@ -30,11 +31,13 @@ const mockLegacyConnections = vi.hoisted(() =>
 const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadLicenseStatus = vi.hoisted(() => vi.fn());
+const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/license', () => ({
   entitlements: mockEntitlements,
   getLimit: mockGetLimit,
+  getUpgradeActionDestination: (...args: unknown[]) => mockGetUpgradeActionDestination(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => mockGetUpgradeActionUrlOrFallback(...args),
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
@@ -62,7 +65,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
     mockLoadLicenseStatus.mockReset();
     mockLoadLicenseStatus.mockResolvedValue(undefined);
+    mockGetUpgradeActionDestination.mockReset();
     mockGetUpgradeActionUrlOrFallback.mockReset();
+    mockGetUpgradeActionDestination.mockReturnValue({
+      href: '/settings/system/billing',
+      external: false,
+    });
     mockGetUpgradeActionUrlOrFallback.mockReturnValue('/settings/system/billing');
   });
 
@@ -115,7 +123,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
 
   it('stays hidden for non-urgent pure v6 installs', async () => {
     const mod = await import('../MonitoredSystemLimitWarningBanner');
-    render(() => <mod.MonitoredSystemLimitWarningBanner />);
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
 
     expect(mockLoadLicenseStatus).toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
@@ -130,7 +142,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
 
     const mod = await import('../MonitoredSystemLimitWarningBanner');
-    render(() => <mod.MonitoredSystemLimitWarningBanner />);
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
 
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
@@ -139,7 +155,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     mockGetLimit.mockReturnValue({ key: 'max_monitored_systems', limit: 6, current: 5, state: 'warning' });
 
     const mod = await import('../MonitoredSystemLimitWarningBanner');
-    render(() => <mod.MonitoredSystemLimitWarningBanner />);
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
 
     expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
@@ -158,7 +178,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
 
     const mod = await import('../MonitoredSystemLimitWarningBanner');
-    render(() => <mod.MonitoredSystemLimitWarningBanner />);
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
 
     expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
     expect(

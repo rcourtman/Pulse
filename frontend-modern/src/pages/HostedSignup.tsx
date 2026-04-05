@@ -2,8 +2,9 @@ import { For, Show, createMemo, createSignal } from 'solid-js';
 import { useLocation } from '@solidjs/router';
 import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { HostedSignupAPI, type HostedAPIError } from '@/api/hostedSignup';
-import { getUpgradeActionUrlOrFallback } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/license';
 import { logger } from '@/utils/logger';
 import {
   HOSTED_SIGNUP_PRESENTATION,
@@ -55,7 +56,7 @@ export default function HostedSignup() {
     return getCloudPlanForTier(params.get('tier'));
   });
   const selectedPlanPrice = createMemo(() => getCloudPlanPricePresentation(selectedPlan()));
-  const cloudPortalURL = createMemo(() => getUpgradeActionUrlOrFallback('cloud'));
+  const cloudPortalDestination = createMemo(() => getUpgradeActionDestination('cloud'));
 
   const canSubmit = createMemo(() => {
     return isValidEmail(email()) && orgName().trim().length >= 3 && status() !== 'submitting';
@@ -205,14 +206,12 @@ export default function HostedSignup() {
           </Show>
 
           <Show when={status() === 'unavailable'}>
-            <a
-              href={cloudPortalURL()}
-              target="_blank"
-              rel="noopener noreferrer"
+            <UpgradeLink
+              destination={cloudPortalDestination()}
               class="inline-flex items-center text-sm font-medium text-blue-700 hover:underline dark:text-blue-300"
             >
               Open hosted signup portal
-            </a>
+            </UpgradeLink>
           </Show>
         </Card>
 

@@ -6,6 +6,7 @@ import XIcon from 'lucide-solid/icons/x';
 import SettingsIcon from 'lucide-solid/icons/settings';
 import { PulsePatrolLogo } from '@/components/Brand/PulsePatrolLogo';
 import { PageHeader } from '@/components/shared/PageHeader';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
 import { formatRelativeTime } from '@/utils/format';
@@ -287,13 +288,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                   </div>
                   <Show when={state.autoFixLocked()}>
                     <div class="pl-1 text-[11px] text-slate-500">
-                      <a
-                        href={state.upgradeUrl()}
-                        target="_blank"
+                      <UpgradeLink
+                        destination={state.upgradeDestination()}
                         class="text-indigo-500 font-medium hover:underline"
                       >
                         Upgrade to Pro
-                      </a>{' '}
+                      </UpgradeLink>{' '}
                       to unlock investigation and auto-fix.
                       <Show when={state.canStartTrial()}>
                         {' '}
@@ -331,13 +331,12 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
 
                   <Show when={state.alertAnalysisLocked()}>
                     <div class="-my-1 pl-1 text-[11px]">
-                      <a
-                        href={state.alertAnalysisUpgradeUrl()}
-                        target="_blank"
+                      <UpgradeLink
+                        destination={state.alertAnalysisUpgradeDestination()}
                         class="text-indigo-500 font-medium hover:underline"
                       >
                         Upgrade
-                      </a>{' '}
+                      </UpgradeLink>{' '}
                       to enable.
                       <Show when={state.canStartTrial()}>
                         <button

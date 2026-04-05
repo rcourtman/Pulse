@@ -9,17 +9,21 @@ import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 const {
   openWithPromptMock,
+  openUpgradeDestinationMock,
   trackUpgradeClickedMock,
   formatAlertValueMock,
   mockAiChatStore,
+  getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
 } =
   vi.hoisted(() => {
     const openWithPromptMock = vi.fn();
+    const openUpgradeDestinationMock = vi.fn();
     const trackUpgradeClickedMock = vi.fn();
     const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
       value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
     );
+    const getUpgradeActionDestinationMock = vi.fn();
     const getUpgradeActionUrlOrFallbackMock = vi.fn();
     const mockAiChatStore = {
       enabled: true as boolean | null,
@@ -27,9 +31,11 @@ const {
     };
     return {
       openWithPromptMock,
+      openUpgradeDestinationMock,
       trackUpgradeClickedMock,
       formatAlertValueMock,
       mockAiChatStore,
+      getUpgradeActionDestinationMock,
       getUpgradeActionUrlOrFallbackMock,
     };
   });
@@ -39,7 +45,12 @@ vi.mock('@/stores/aiChat', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
+}));
+
+vi.mock('@/components/shared/useUpgradeNavigation', () => ({
+  useUpgradeNavigation: () => openUpgradeDestinationMock,
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -89,8 +100,14 @@ beforeEach(() => {
   openWithPromptMock.mockReset();
   trackUpgradeClickedMock.mockReset();
   formatAlertValueMock.mockClear();
+  openUpgradeDestinationMock.mockReset();
+  getUpgradeActionDestinationMock.mockReset();
   getUpgradeActionUrlOrFallbackMock.mockReset();
   mockAiChatStore.enabled = true;
+  getUpgradeActionDestinationMock.mockReturnValue({
+    href: getPublicPricingUrl('ai_alerts'),
+    external: true,
+  });
   getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('ai_alerts'));
   vi.spyOn(window, 'open').mockImplementation(() => null);
 });
@@ -211,7 +228,10 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(button);
 
       expect(trackUpgradeClickedMock).toHaveBeenCalledWith('investigate_alert_button', 'ai_alerts');
-      expect(window.open).toHaveBeenCalledWith(getPublicPricingUrl('ai_alerts'), '_blank');
+      expect(openUpgradeDestinationMock).toHaveBeenCalledWith({
+        href: getPublicPricingUrl('ai_alerts'),
+        external: true,
+      });
       expect(openWithPromptMock).not.toHaveBeenCalled();
     });
 
@@ -271,7 +291,7 @@ describe('InvestigateAlertButton', () => {
       render(() => <InvestigateAlertButton alert={makeAlert()} />);
       await fireEvent.click(screen.getByRole('button'));
       expect(trackUpgradeClickedMock).not.toHaveBeenCalled();
-      expect(window.open).not.toHaveBeenCalled();
+      expect(openUpgradeDestinationMock).not.toHaveBeenCalled();
     });
 
     it('calls formatAlertValue for value and threshold', async () => {

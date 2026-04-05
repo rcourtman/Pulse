@@ -1,6 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
-import { getUpgradeActionUrlOrFallback, licenseLoadError } from '@/stores/license';
+import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { getUpgradeActionDestination, licenseLoadError } from '@/stores/license';
 import {
   getInactiveProUpsellNotice,
   getLicenseStatusLoadingState,
@@ -81,14 +82,12 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
       <div class={`mb-4 rounded-md border p-3 text-sm ${trialEndedNotice?.tone ?? ''}`}>
         <p class="font-medium">{trialEndedNotice?.title}</p>
         <p class="text-xs mt-1 opacity-90">{trialEndedNotice?.body}</p>
-        <a
+        <UpgradeLink
           class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
-          href={getUpgradeActionUrlOrFallback('trial_expired')}
-          target="_blank"
-          rel="noreferrer"
+          destination={getUpgradeActionDestination('trial_expired')}
         >
           {trialEndedNotice?.actionLabel}
-        </a>
+        </UpgradeLink>
       </div>
     </Show>
     <Show when={licenseLoadError()}>
@@ -159,14 +158,12 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           <div class={`rounded-md border p-3 text-sm ${inactiveProUpsellNotice?.tone ?? ''}`}>
             <p class="font-medium">{inactiveProUpsellNotice?.title}</p>
             <p class="text-xs mt-1 opacity-90">{inactiveProUpsellNotice?.body}</p>
-            <a
+            <UpgradeLink
               class="inline-flex items-center gap-1 mt-2 text-xs font-medium hover:underline"
-              href={getUpgradeActionUrlOrFallback('ai_autofix')}
-              target="_blank"
-              rel="noreferrer"
+              destination={getUpgradeActionDestination('ai_autofix')}
             >
               {inactiveProUpsellNotice?.actionLabel}
-            </a>
+            </UpgradeLink>
           </div>
         </Show>
       </Show>

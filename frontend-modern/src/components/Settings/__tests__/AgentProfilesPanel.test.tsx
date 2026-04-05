@@ -18,6 +18,7 @@ const unassignProfileMock = vi.fn();
 const createProfileMock = vi.fn();
 const updateProfileMock = vi.fn();
 const deleteProfileMock = vi.fn();
+const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/useResources', () => ({
@@ -31,6 +32,7 @@ vi.mock('@/contexts/appRuntime', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   hasFeature: () => true,
   licenseLoaded: () => true,
@@ -214,7 +216,12 @@ const makeKubernetesInfrastructureItem = (
 });
 
 beforeEach(() => {
+  getUpgradeActionDestinationMock.mockReset();
   getUpgradeActionUrlOrFallbackMock.mockReset();
+  getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
+    href: getPublicPricingUrl(feature),
+    external: true,
+  }));
   getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
   mockResources = [makeAgentResource()];
   mockWsStore = {

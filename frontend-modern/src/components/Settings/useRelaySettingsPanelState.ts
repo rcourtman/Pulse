@@ -1,7 +1,7 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import {
   entitlements,
-  getUpgradeActionUrlOrFallback,
+  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
   loadLicenseStatus,
@@ -36,7 +36,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const canManage = () => props.canManage !== false;
   const canStartTrial = () => entitlements()?.trial_eligible !== false;
   const relayEnabled = () => hasFeature('relay');
-  const upgradeActionUrl = () => getUpgradeActionUrlOrFallback('relay');
+  const upgradeDestination = () => getUpgradeActionDestination('relay');
   const connectionPresentation = createMemo(() =>
     getRelayConnectionPresentation(config(), status()),
   );
@@ -288,6 +288,6 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
     showPairing,
     startingTrial,
     status,
-    upgradeActionUrl,
+    upgradeDestination,
   };
 }

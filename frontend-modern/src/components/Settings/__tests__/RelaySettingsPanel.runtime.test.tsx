@@ -23,6 +23,7 @@ vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   licenseLoaded: () => true,
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   getUpgradeActionUrlOrFallback: () => '/upgrade',
   startProTrial: vi.fn(),
   entitlements: () => ({ trial_eligible: false }),
@@ -160,7 +161,10 @@ describe('RelaySettingsPanel runtime', () => {
         'Remote access via Pulse Relay requires a Relay license or above. Pair supported Pulse Mobile clients with this instance using a QR code or deep link.',
       ),
     ).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute('href', '/upgrade');
+    expect(screen.getByRole('link', { name: 'Upgrade' })).toHaveAttribute(
+      'href',
+      'https://example.com/upgrade',
+    );
   });
 
   it('loads connected relay state and generates a pairing QR payload', async () => {

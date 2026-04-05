@@ -332,6 +332,13 @@ but the canonical contract is that a successful handoff exchange must reconcile
 tenant organization membership for the handed-off account member before the
 browser follows the new session into protected routes, rather than landing on a
 fresh `access_denied` immediately after session minting.
+Lifecycle-owned paywalls now also follow the shared commercial navigation
+contract. `frontend-modern/src/components/Settings/AgentProfilesPanel.tsx` and
+`frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` may
+request the canonical commercial destination from the shared license boundary,
+but they must leave internal-versus-external navigation semantics to
+`frontend-primitives` instead of hardcoding pricing URLs or tab-open behavior
+inside lifecycle-owned settings surfaces.
 That same platform-connections ownership now also includes mock-runtime
 continuity for API-backed platforms. When `/api/system/mock-mode` flips a
 running server between real and mock data, the canonical TrueNAS and VMware
