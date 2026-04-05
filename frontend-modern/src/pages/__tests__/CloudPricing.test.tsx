@@ -42,6 +42,10 @@ describe('CloudPricing', () => {
       screen.getByText('Create your workspace. No credit card is required for the trial.'),
     ).toBeInTheDocument();
     expect(screen.getByText('Setup')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'See self-hosted plans' })).toHaveAttribute(
+      'href',
+      'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade',
+    );
     expect(
       screen.queryByText(/provisioned in under 60 seconds/i),
     ).not.toBeInTheDocument();

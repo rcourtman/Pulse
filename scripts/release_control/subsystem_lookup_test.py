@@ -609,8 +609,8 @@ class SubsystemLookupTest(unittest.TestCase):
         self.assertEqual(match["lane_context"]["lane_id"], "L3")
         self.assertEqual(match["verification_requirement"]["id"], "pro-license-surface")
 
-    def test_lookup_paths_assigns_pricing_v6_to_cloud_paid(self) -> None:
-        result = lookup_paths(["frontend-modern/src/pages/PricingV6.tsx"])
+    def test_lookup_paths_assigns_pricing_handoff_to_cloud_paid(self) -> None:
+        result = lookup_paths(["frontend-modern/src/pages/PricingHandoff.tsx"])
         self.assertEqual(result["unowned_runtime_files"], [])
         self.assertEqual(
             {item["subsystem"] for item in result["impacted_subsystems"]},

@@ -10,6 +10,7 @@ import {
   getCloudPlanPricePresentation,
   type CloudPlanDefinition,
 } from '@/utils/cloudPlans';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 function CloudTierCard(props: { tier: CloudPlanDefinition }) {
   const t = props.tier;
@@ -133,9 +134,12 @@ export default function CloudPricing() {
         </span>
         <span>
           Prefer self-hosting?{' '}
-          <A href="/pricing" class="text-blue-600 hover:underline dark:text-blue-400">
+          <a
+            href={getPublicPricingUrl()}
+            class="text-blue-600 hover:underline dark:text-blue-400"
+          >
             See self-hosted plans
-          </A>
+          </a>
         </span>
         <span>
           Managing multiple clients?{' '}

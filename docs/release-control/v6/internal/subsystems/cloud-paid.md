@@ -71,14 +71,16 @@ agreement, and cloud-specific enforcement rules.
 49. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 50. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
 51. `frontend-modern/src/pages/CloudPricing.tsx`
-52. `frontend-modern/src/pages/PricingV6.tsx`
-53. `frontend-modern/src/utils/apiClient.ts`
-54. `frontend-modern/src/utils/cloudPlans.ts`
-55. `frontend-modern/src/utils/commercialBillingModel.ts`
-56. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-57. `frontend-modern/src/utils/selfHostedPlans.ts`
-58. `frontend-modern/src/utils/licensePresentation.ts`
-59. `frontend-modern/src/utils/upgradePresentation.ts`
+52. `frontend-modern/src/pages/HostedSignup.tsx`
+53. `frontend-modern/src/pages/PricingHandoff.tsx`
+54. `frontend-modern/src/utils/apiClient.ts`
+55. `frontend-modern/src/utils/cloudPlans.ts`
+56. `frontend-modern/src/utils/commercialBillingModel.ts`
+57. `frontend-modern/src/utils/licensePresentation.ts`
+58. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+59. `frontend-modern/src/utils/pricingHandoff.ts`
+60. `frontend-modern/src/utils/selfHostedPlans.ts`
+61. `frontend-modern/src/utils/upgradePresentation.ts`
 
 ## Shared Boundaries
 
@@ -358,11 +360,13 @@ success-notification, and canonical denial handling through
 `frontend-modern/src/utils/trialStartAction.ts` instead of carrying local
 `startProTrial()` redirect/error branches that drift from backend commercial
 truth.
-That same rule also covers the self-hosted pricing page in
-`frontend-modern/src/pages/PricingV6.tsx`: pricing CTA state may choose when to
-switch from trial to upgrade presentation, but the actual hosted handoff and
-backend denial classification must still flow through the shared trial-start
-owner instead of parsing raw trial-start status codes inline.
+The same commercial handoff rule also covers the legacy `/pricing` route in
+`frontend-modern/src/pages/PricingHandoff.tsx` and
+`frontend-modern/src/utils/pricingHandoff.ts`: compatibility handoff may keep
+product-owned destinations such as monitored-system billing or Cloud plans
+inside the app, but public self-hosted pricing must leave the product for the
+canonical website rather than rendering a second public pricing surface inside
+Pulse.
 The trial-start rate-limit contract is part of that same boundary. Local
 `/api/license/trial/start` retries are allowed as a short human-scale burst so
 operators can revisit the hosted handoff without getting locked out for a day,
@@ -653,9 +657,9 @@ models. `frontend-modern/src/utils/cloudPlans.ts` and
 `frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend
 sources for cloud and self-hosted plan copy, limits, and comparison metadata,
 while `frontend-modern/src/pages/CloudPricing.tsx`,
-`frontend-modern/src/pages/HostedSignup.tsx`, `frontend-modern/src/pages/PricingV6.tsx`,
-and the self-hosted billing settings surfaces must consume those shared owners
-instead of redefining retail plan facts or counted-unit policy locally.
+`frontend-modern/src/pages/HostedSignup.tsx`, and the self-hosted billing
+settings surfaces must consume those shared owners instead of redefining
+retail plan facts or counted-unit policy locally.
 That shared ownership also includes display-ready price semantics. Monthly
 headline price, founding-rate override, compare-at strike-through copy,
 campaign badge copy, and annual summary text must come from the shared
@@ -665,10 +669,10 @@ The same owner also holds shared hosted commercial copy such as page title,
 introductory description, common Cloud inclusions, setup-step guidance,
 hosted-signup section headings, and primary hosted-signup CTA labels when
 those facts describe the canonical offer rather than one page's local layout.
-The same rule applies to self-hosted pricing framing: page title/description,
-badge copy, primary CTA labels, and adjacent upsell-link copy on
-`PricingV6.tsx` must come from the shared self-hosted plan-definition owner
-rather than page-local strings.
+The same rule applies to self-hosted commercial framing inside product-owned
+billing and activation surfaces: plan names, counted-unit copy, and upgrade
+adjacency must come from the shared self-hosted plan-definition owner rather
+than page-local strings.
 The shared license presentation owner also holds self-hosted Pro settings
 upsell and trial-ended notice copy for `ProLicensePlanSection.tsx`; that
 surface must consume canonical helper notices instead of carrying inline

@@ -149,6 +149,12 @@ work extends shared components instead of creating new local variants.
    consume `frontend-modern/src/contexts/appRuntime.ts`; they must not import
    `frontend-modern/src/App.tsx`, because `App.tsx` owns provider placement
    while frontend primitives own reusable consumption.
+   That same shared shell boundary now also owns thin public-route handoff
+   presentation in `frontend-modern/src/App.tsx`: compatibility routes such as
+   `/pricing` may stay outside authenticated chrome, but they must remain
+   minimal handoff shells that defer destination truth to the owning subsystem
+   instead of embedding a second copy of public marketing or checkout UI inside
+   the product runtime.
 3. Add feature-specific presentation only when no shared primitive should own it
 4. Add guardrail tests when a new shared pattern is introduced
 5. Keep shared platform-connections shell state on the reusable settings boundary: `frontend-modern/src/components/Settings/useSettingsInfrastructurePanelProps.ts`, `frontend-modern/src/components/Settings/InfrastructurePlatformConnectionsSummaryCard.tsx`, and `frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx` must continue to derive provider counts, availability, and shared subtab copy from one infrastructure-settings source instead of creating provider-local summary fetches or VMware-only shell vocabulary.

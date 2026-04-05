@@ -1645,13 +1645,14 @@
         "frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts",
         "frontend-modern/src/pages/CloudPricing.tsx",
         "frontend-modern/src/pages/HostedSignup.tsx",
-        "frontend-modern/src/pages/PricingV6.tsx",
+        "frontend-modern/src/pages/PricingHandoff.tsx",
         "frontend-modern/src/useAppRuntimeState.ts",
         "frontend-modern/src/utils/apiClient.ts",
         "frontend-modern/src/utils/cloudPlans.ts",
         "frontend-modern/src/utils/commercialBillingModel.ts",
         "frontend-modern/src/utils/licensePresentation.ts",
         "frontend-modern/src/utils/monitoredSystemPresentation.ts",
+        "frontend-modern/src/utils/pricingHandoff.ts",
         "frontend-modern/src/utils/selfHostedPlans.ts",
         "frontend-modern/src/utils/upgradePresentation.ts",
         "internal/api/public_signup_handlers.go",
@@ -2170,7 +2171,6 @@
               "frontend-modern/src/components/Settings/__tests__/ProLicensePanel.test.tsx",
               "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
               "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
-              "frontend-modern/src/pages/__tests__/PricingV6.test.tsx",
               "frontend-modern/src/utils/__tests__/selfHostedPlans.test.ts"
             ]
           },
@@ -2229,12 +2229,13 @@
           },
           {
             "id": "pricing-pages",
-            "label": "pricing page proof",
+            "label": "pricing route and page proof",
             "match_prefixes": [],
             "match_files": [
               "frontend-modern/src/pages/CloudPricing.tsx",
               "frontend-modern/src/pages/HostedSignup.tsx",
-              "frontend-modern/src/pages/PricingV6.tsx"
+              "frontend-modern/src/pages/PricingHandoff.tsx",
+              "frontend-modern/src/utils/pricingHandoff.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
@@ -2242,7 +2243,8 @@
               "frontend-modern/src/api/__tests__/hostedSignup.test.ts",
               "frontend-modern/src/pages/__tests__/CloudPricing.test.tsx",
               "frontend-modern/src/pages/__tests__/HostedSignup.test.tsx",
-              "frontend-modern/src/pages/__tests__/PricingV6.test.tsx"
+              "frontend-modern/src/pages/__tests__/PricingHandoff.test.tsx",
+              "frontend-modern/src/utils/__tests__/pricingHandoff.test.ts"
             ]
           }
         ]

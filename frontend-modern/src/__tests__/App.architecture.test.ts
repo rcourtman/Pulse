@@ -22,11 +22,16 @@ describe('App architecture', () => {
     expect(appSource).toContain('const ROOT_DASHBOARD_PATH = DASHBOARD_PATH;');
     expect(appSource).toContain('<Route path={ROOT_DASHBOARD_PATH} component={DashboardPage} />');
     expect(appSource).toContain('<Route path="/" component={() => <Navigate href={ROOT_DASHBOARD_PATH} />} />');
+    expect(appSource).toContain(
+      "const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));",
+    );
+    expect(appSource).toContain('<Route path="/pricing" component={PricingHandoffPage} />');
     expect(appSource).toContain("const StoragePage = lazy(() => import('./pages/Storage'));");
     expect(appSource).toContain("const OperationsPage = lazy(() => import('./pages/Operations'));");
     expect(appSource).not.toContain(
       "const StorageComponent = lazy(() => import('./components/Storage/Storage'));",
     );
+    expect(appSource).not.toContain("const PricingPage = lazy(() => import('./pages/PricingV6'));");
     expect(appSource).not.toContain('function ConnectionStatusBadge(');
     expect(appSource).not.toContain('function AppLayout(');
     expect(appSource).not.toContain('export const WebSocketContext = createContext<');

@@ -72,7 +72,7 @@ const AIIntelligencePage = lazy(() =>
   import('./pages/AIIntelligence').then((module) => ({ default: module.AIIntelligence })),
 );
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
-const PricingPage = lazy(() => import('./pages/PricingV6'));
+const PricingHandoffPage = lazy(() => import('./pages/PricingHandoff'));
 const CloudPricingPage = lazy(() => import('./pages/CloudPricing'));
 const HostedSignupPage = lazy(() => import('./pages/HostedSignup'));
 const OperationsPage = lazy(() => import('./pages/Operations'));
@@ -431,7 +431,7 @@ function App() {
   // Use Router with routes
   return (
     <Router root={RootLayout}>
-      <Route path="/pricing" component={PricingPage} />
+      <Route path="/pricing" component={PricingHandoffPage} />
       <Route path="/cloud" component={CloudPricingPage} />
       <Route path="/cloud/signup" component={HostedSignupPage} />
       <Route path="/preview/setup-complete" component={SetupCompletionPreviewPage} />
