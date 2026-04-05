@@ -196,6 +196,13 @@ Own canonical runtime payload shapes between backend and frontend.
     storage metadata such as Proxmox `pool` and `zfsPool` fields when the
     backend emits them, instead of silently dropping that detail from the
     shared runtime contract.
+31. Keep hosted entitlement refresh ownership on the same governed API contract
+    as hosted status and entitlements reads. `internal/api/licensing_handlers.go`,
+    `internal/api/hosted_entitlement_refresh.go`, and
+    `internal/api/contract_test.go` must resolve the effective hosted billing
+    target before refresh, persistence, and evaluator rewiring, so tenant-
+    scoped hosted routes cannot refresh against an empty non-default org while
+    the machine's real hosted lease still lives on `default`.
 
 ## Forbidden Paths
 
@@ -2265,6 +2272,14 @@ when hosted auth handoff preserves a non-default tenant org like `t-...`,
 instance-level hosted billing lease from `default` if that tenant org has no
 org-local billing state of its own, rather than failing closed into
 `subscription_required` on first entry.
+That same hosted entitlement contract also owns lease refresh targeting:
+when a hosted tenant request arrives on a non-default org with no org-local
+lease, `internal/api/hosted_entitlement_refresh.go` must resolve the effective
+billing target through the same default-org fallback before it refreshes,
+persists, or rewires the evaluator. Runtime routes such as
+`/api/ai/approvals` must not refresh against the empty tenant org and silently
+fall back to `license_required` while the real hosted entitlement lease still
+exists on `default`.
 That same hosted browser-session contract must also remain authoritative once
 the handoff lands on the tenant runtime: when a valid `pulse_session` cookie
 is present, shared `internal/api/auth.go` helpers must authenticate that

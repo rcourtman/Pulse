@@ -3,6 +3,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -4619,6 +4621,114 @@ func TestContract_HostedTenantEntitlementsFallbackToDefaultBillingState(t *testi
 	}
 	if !foundMonitoredSystemLimit {
 		t.Fatalf("expected max_monitored_systems limit in payload, got %+v", payload.Limits)
+	}
+}
+
+func TestContract_HostedTenantEntitlementRefreshFallsBackToDefaultBillingState(t *testing.T) {
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	if _, err := mtp.GetPersistence("default"); err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+	if _, err := mtp.GetPersistence("t-tenant"); err != nil {
+		t.Fatalf("init tenant persistence: %v", err)
+	}
+
+	pub, priv, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+	t.Setenv(pkglicensing.TrialActivationPublicKeyEnvVar, base64.StdEncoding.EncodeToString(pub))
+
+	refreshServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/entitlements/refresh" {
+			http.NotFound(w, r)
+			return
+		}
+		var req hostedTrialLeaseRefreshRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode refresh request: %v", err)
+		}
+		if req.OrgID != "default" {
+			t.Fatalf("req.OrgID=%q, want %q", req.OrgID, "default")
+		}
+		if req.InstanceHost != "pulse.example.com" {
+			t.Fatalf("req.InstanceHost=%q, want %q", req.InstanceHost, "pulse.example.com")
+		}
+		if req.EntitlementRefreshToken != "etr_hosted_default" {
+			t.Fatalf("req.EntitlementRefreshToken=%q, want %q", req.EntitlementRefreshToken, "etr_hosted_default")
+		}
+
+		entitlementJWT, err := pkglicensing.SignEntitlementLeaseToken(priv, pkglicensing.EntitlementLeaseClaims{
+			OrgID:             "default",
+			InstanceHost:      "pulse.example.com",
+			PlanVersion:       "msp_starter",
+			SubscriptionState: pkglicensing.SubStateActive,
+			Capabilities: []string{
+				pkglicensing.FeatureRelay,
+				pkglicensing.FeatureAIAutoFix,
+			},
+		})
+		if err != nil {
+			t.Fatalf("SignEntitlementLeaseToken: %v", err)
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(hostedTrialLeaseRefreshResponse{
+			EntitlementJWT: entitlementJWT,
+		})
+	}))
+	defer refreshServer.Close()
+
+	store := config.NewFileBillingStore(baseDir)
+	expiredLease, err := pkglicensing.SignEntitlementLeaseToken(priv, pkglicensing.EntitlementLeaseClaims{
+		OrgID:             "default",
+		InstanceHost:      "pulse.example.com",
+		PlanVersion:       "msp_starter",
+		SubscriptionState: pkglicensing.SubStateActive,
+		Capabilities:      []string{pkglicensing.FeatureRelay},
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-time.Hour)),
+		},
+	})
+	if err != nil {
+		t.Fatalf("SignEntitlementLeaseToken(expired): %v", err)
+	}
+	if err := store.SaveBillingState("default", &entitlements.BillingState{
+		EntitlementJWT:          expiredLease,
+		EntitlementRefreshToken: "etr_hosted_default",
+	}); err != nil {
+		t.Fatalf("save default billing state: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, true, &config.Config{
+		PublicURL:         "https://pulse.example.com",
+		ProTrialSignupURL: refreshServer.URL + "/start-pro-trial",
+	})
+
+	refreshed, permanent, err := handlers.refreshHostedEntitlementLeaseOnce("t-tenant", nil)
+	if err != nil {
+		t.Fatalf("refreshHostedEntitlementLeaseOnce: %v", err)
+	}
+	if !refreshed || permanent {
+		t.Fatalf("refreshed=%v permanent=%v, want refreshed=true permanent=false", refreshed, permanent)
+	}
+
+	state, err := store.GetBillingState("default")
+	if err != nil {
+		t.Fatalf("GetBillingState(default): %v", err)
+	}
+	if state == nil {
+		t.Fatal("expected default billing state after hosted tenant refresh")
+	}
+	if state.SubscriptionState != entitlements.SubStateActive {
+		t.Fatalf("subscription_state=%q, want %q", state.SubscriptionState, entitlements.SubStateActive)
+	}
+	if state.PlanVersion != "msp_starter" {
+		t.Fatalf("plan_version=%q, want %q", state.PlanVersion, "msp_starter")
+	}
+	if !sliceContainsString(state.Capabilities, pkglicensing.FeatureAIAutoFix) {
+		t.Fatalf("expected default hosted billing state to include %q after tenant refresh, got %v", pkglicensing.FeatureAIAutoFix, state.Capabilities)
 	}
 }
 

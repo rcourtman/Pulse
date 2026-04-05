@@ -530,6 +530,13 @@ trial quickstart grant fields already seeded into billing state. Hosted setup
 and pairing may depend on the shared `internal/api/` entitlement refresh, but
 that refresh must not erase quickstart bootstrap inventory while it rewrites
 lease-backed plan and capability data.
+That same shared entitlement refresh path must also keep hosted effective-org
+ownership canonical for lifecycle-adjacent routes: when pairing or relay-mobile
+bootstrap arrives scoped to a tenant org with no org-local lease, the refresh
+must target the instance-level `default` billing lease and evaluator instead
+of persisting a second empty tenant copy. Otherwise hosted pairing falls back
+to free-tier behavior even though the machine already carries the paid hosted
+lease.
 The same setup boundary also depends on canonical org-management privilege
 surviving the next step: once the request is scoped to a hosted tenant org,
 shared `internal/api/security_setup_fix.go` helpers must allow that org's

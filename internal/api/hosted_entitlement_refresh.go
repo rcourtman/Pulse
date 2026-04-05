@@ -53,43 +53,65 @@ func (h *LicenseHandlers) ensureHostedEntitlementRefreshForOrg(orgID string, ser
 	if h == nil || h.mtPersistence == nil {
 		return
 	}
-	orgID = strings.TrimSpace(orgID)
-	if orgID == "" {
-		orgID = "default"
-	}
-	if service != nil && service.Current() != nil {
-		h.stopHostedEntitlementRefreshLoop(orgID)
+	requestedOrgID := normalizeHostedEntitlementOrgID(orgID)
+	effectiveOrgID, state, err := h.loadHostedEntitlementRefreshTarget(requestedOrgID)
+	if err != nil {
+		log.Warn().Err(err).Str("org_id", requestedOrgID).Msg("Failed to load billing state for hosted entitlement refresh")
 		return
 	}
-
-	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
-	state, err := billingStore.GetBillingState(orgID)
-	if err != nil {
-		log.Warn().Err(err).Str("org_id", orgID).Msg("Failed to load billing state for hosted entitlement refresh")
+	if service != nil && service.Current() != nil {
+		h.stopHostedEntitlementRefreshLoop(effectiveOrgID)
+		if effectiveOrgID != requestedOrgID {
+			h.stopHostedEntitlementRefreshLoop(requestedOrgID)
+		}
 		return
 	}
 	if !hasHostedEntitlementRefreshToken(state) {
-		h.stopHostedEntitlementRefreshLoop(orgID)
+		h.stopHostedEntitlementRefreshLoop(effectiveOrgID)
+		if effectiveOrgID != requestedOrgID {
+			h.stopHostedEntitlementRefreshLoop(requestedOrgID)
+		}
 		return
 	}
 
-	loop := h.hostedEntitlementRefreshLoop(orgID)
+	loop := h.hostedEntitlementRefreshLoop(effectiveOrgID)
 	if !loop.isRunning() && hostedEntitlementNeedsImmediateRefresh(state) {
-		if _, permanent, err := h.refreshHostedEntitlementLeaseOnce(orgID, service); err != nil {
+		if _, permanent, err := h.refreshHostedEntitlementLeaseOnce(effectiveOrgID, service); err != nil {
 			if permanent {
-				log.Warn().Err(err).Str("org_id", orgID).Msg("Permanent hosted entitlement refresh failure during initialization")
-				h.stopHostedEntitlementRefreshLoop(orgID)
+				log.Warn().Err(err).Str("org_id", effectiveOrgID).Msg("Permanent hosted entitlement refresh failure during initialization")
+				h.stopHostedEntitlementRefreshLoop(effectiveOrgID)
 				return
 			}
-			log.Warn().Err(err).Str("org_id", orgID).Msg("Hosted entitlement refresh initialization failed")
+			log.Warn().Err(err).Str("org_id", effectiveOrgID).Msg("Hosted entitlement refresh initialization failed")
 		}
 	}
 
-	h.startHostedEntitlementRefreshLoop(orgID)
+	h.startHostedEntitlementRefreshLoop(effectiveOrgID)
+	if effectiveOrgID != requestedOrgID {
+		h.stopHostedEntitlementRefreshLoop(requestedOrgID)
+	}
 }
 
 func hasHostedEntitlementRefreshToken(state *billingState) bool {
 	return state != nil && strings.TrimSpace(state.EntitlementRefreshToken) != ""
+}
+
+func (h *LicenseHandlers) loadHostedEntitlementRefreshTarget(orgID string) (string, *billingState, error) {
+	requestedOrgID := normalizeHostedEntitlementOrgID(orgID)
+	if h == nil || h.mtPersistence == nil {
+		return requestedOrgID, nil, nil
+	}
+
+	state, effectiveOrgID, err := config.LoadEffectiveEntitlementBillingState(h.mtPersistence.BaseDataDir(), requestedOrgID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var normalized *billingState
+	if state != nil {
+		normalized = normalizeBillingStateFromLicensing(state)
+	}
+	return normalizeHostedEntitlementOrgID(effectiveOrgID), normalized, nil
 }
 
 func hostedEntitlementNeedsImmediateRefresh(state *billingState) bool {
@@ -306,9 +328,9 @@ func (h *LicenseHandlers) refreshHostedEntitlementLeaseOnce(orgID string, servic
 	}
 
 	billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
-	state, err := billingStore.GetBillingState(orgID)
+	effectiveOrgID, state, err := h.loadHostedEntitlementRefreshTarget(orgID)
 	if err != nil {
-		return false, false, fmt.Errorf("load billing state: %w", err)
+		return false, false, fmt.Errorf("load hosted entitlement refresh target: %w", err)
 	}
 	if !hasHostedEntitlementRefreshToken(state) {
 		return false, true, nil
@@ -319,16 +341,16 @@ func (h *LicenseHandlers) refreshHostedEntitlementLeaseOnce(orgID string, servic
 		return false, true, fmt.Errorf("hosted entitlement instance host is unavailable")
 	}
 
-	response, err := h.requestHostedEntitlementLeaseRefresh(orgID, instanceHost, state.EntitlementRefreshToken)
+	response, err := h.requestHostedEntitlementLeaseRefresh(effectiveOrgID, instanceHost, state.EntitlementRefreshToken)
 	if err != nil {
 		var refreshErr *hostedEntitlementRefreshError
 		if errors.As(err, &refreshErr) && refreshErr != nil && refreshErr.permanent {
-			if clearErr := h.clearHostedEntitlementState(orgID, billingStore); clearErr != nil {
-				log.Warn().Err(clearErr).Str("org_id", orgID).Msg("Failed to clear hosted entitlement state after permanent refresh failure")
+			if clearErr := h.clearHostedEntitlementState(effectiveOrgID, billingStore); clearErr != nil {
+				log.Warn().Err(clearErr).Str("org_id", effectiveOrgID).Msg("Failed to clear hosted entitlement state after permanent refresh failure")
 			}
 			if service != nil && service.Current() == nil {
 				service.SetEvaluator(nil)
-				_ = h.ensureEvaluatorForOrg(orgID, service)
+				_ = h.ensureEvaluatorForOrg(effectiveOrgID, service)
 			}
 			return false, true, err
 		}
@@ -343,7 +365,7 @@ func (h *LicenseHandlers) refreshHostedEntitlementLeaseOnce(orgID string, servic
 	if err != nil {
 		return false, false, fmt.Errorf("verify refreshed entitlement lease: %w", err)
 	}
-	if normalizeHostedEntitlementOrgID(leaseClaims.OrgID) != normalizeHostedEntitlementOrgID(orgID) {
+	if normalizeHostedEntitlementOrgID(leaseClaims.OrgID) != normalizeHostedEntitlementOrgID(effectiveOrgID) {
 		return false, false, fmt.Errorf("refreshed entitlement lease org mismatch")
 	}
 
@@ -358,11 +380,11 @@ func (h *LicenseHandlers) refreshHostedEntitlementLeaseOnce(orgID string, servic
 	updated.TrialEndsAt = nil
 	updated.TrialExtendedAt = nil
 	updated.GrantQuickstartCredits()
-	if err := billingStore.SaveBillingState(orgID, updated); err != nil {
+	if err := billingStore.SaveBillingState(effectiveOrgID, updated); err != nil {
 		return false, false, fmt.Errorf("save refreshed entitlement lease: %w", err)
 	}
 	if service != nil && service.Current() == nil {
-		service.SetEvaluator(newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, orgID, 0, instanceHost))
+		service.SetEvaluator(newLicenseEvaluatorForBillingStoreFromLicensing(billingStore, effectiveOrgID, 0, instanceHost))
 	}
 	return true, false, nil
 }

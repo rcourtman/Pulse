@@ -102,6 +102,12 @@ querying, and the operator-facing storage health presentation layer.
 16. Preserve optional-auth tokenless behavior in those same shared backend install-command helpers so adjacent transport surfaces do not implicitly persist API tokens and flip auth-configured state when an operator only requested a Proxmox install command on a token-optional Pulse instance.
 17. Preserve backend-owned Pulse Mobile relay runtime credential minting in those same shared `internal/api/` auth/security helpers so storage- and recovery-adjacent transport surfaces do not inherit browser-authored wildcard token bundles when they depend on the canonical security helper layer.
 18. Preserve the dedicated backend-owned `relay:mobile:access` capability and its governed backward-compatible route inventory plus the shared helper call sites around it, so storage- and recovery-adjacent transport surfaces do not treat the mobile relay credential as a general AI scope bundle.
+    That same shared `internal/api/` machine boundary also owns hosted
+    entitlement refresh targeting: when storage- or recovery-adjacent hosted
+    routes execute under a tenant org without org-local billing state, the
+    refresh path must repair the instance-level `default` lease and evaluator
+    instead of rewriting the empty tenant org, so AI-assisted recovery and
+    hosted diagnostics do not collapse into false free-tier behavior.
 19. Preserve shipped local security-doc guidance in shared `internal/api/` config/setup helpers so storage- and recovery-adjacent transport surfaces do not reintroduce GitHub `main` security links when the running build already serves its own local security documentation route.
 20. Keep shared `internal/api/` Patrol transport and alert-trigger edits feature-isolated: Patrol-specific recency fields, callback fan-out, or alert-bridge wiring changes must not leak into recovery queries, storage links, or recovery-adjacent install/setup flows unless this contract changes in the same slice.
     The same adjacency rule applies to AI settings transport in `internal/api/ai_handlers.go`: provider auth state, masked-secret payload fields, and provider-test model selection remain AI/runtime plus API-contract concerns and must not be absorbed into storage/recovery transport ownership just because those handlers live under the shared backend API tree.
@@ -1829,6 +1835,13 @@ explicit AI config exists. Adjacent recovery surfaces must not invent their
 own "AI disabled until configured" fallback or synthetic activation state when
 the hosted runtime already has enough entitlement proof to bootstrap the
 machine-owned default.
+That same hosted entitlement continuity also depends on the shared refresh path
+repairing the correct billing owner. When recovery-adjacent hosted requests run
+under a tenant org without org-local billing state, `internal/api/` must
+refresh, persist, and re-evaluate the instance-level `default` lease instead of
+rewriting the empty tenant org. Otherwise AI-assisted recovery can degrade to a
+false free-tier state even though the hosted machine still has a valid refresh
+token and signed entitlement lease.
 That same shared persistence path must also rewrite historical hosted
 quickstart model IDs to the Pulse-owned alias before adjacent recovery or
 storage flows read AI settings state. Support and recovery surfaces may
