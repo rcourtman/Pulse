@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 import relayOnboardingCardStateSource from '../useRelayOnboardingCardState.ts?raw';
 
 // ── Hoisted mocks ──────────────────────────────────────────────────────
@@ -109,7 +110,7 @@ function setupWithRelayFeature(statusOverride?: { connected: boolean; active_cha
   hasFeatureMock.mockReturnValue(true);
   isUpsellSnoozedMock.mockReturnValue(false);
   getRelayStatusMock.mockResolvedValue(defaultStatus);
-  getUpgradeActionUrlOrFallbackMock.mockReturnValue('/pricing?feature=relay');
+  getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('relay'));
 }
 
 /**
@@ -120,7 +121,7 @@ function setupWithoutRelayFeature() {
   licenseLoadedMock.mockReturnValue(true);
   hasFeatureMock.mockReturnValue(false);
   isUpsellSnoozedMock.mockReturnValue(false);
-  getUpgradeActionUrlOrFallbackMock.mockReturnValue('/pricing?feature=relay');
+  getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('relay'));
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────
@@ -153,7 +154,7 @@ describe('RelayOnboardingCard', () => {
       // The upgrade link should be visible
       const upgradeLink = screen.getByText(/Get Relay/);
       expect(upgradeLink).toBeInTheDocument();
-      expect(upgradeLink.closest('a')).toHaveAttribute('href', '/pricing?feature=relay');
+      expect(upgradeLink.closest('a')).toHaveAttribute('href', getPublicPricingUrl('relay'));
 
       // The trial button should be visible
       expect(screen.getByText(/or start a Pro trial/)).toBeInTheDocument();

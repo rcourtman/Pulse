@@ -1,23 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { Alert } from '@/types/api';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 // ---------------------------------------------------------------------------
 // Mocks — vi.hoisted ensures these are available before vi.mock factories run
 // ---------------------------------------------------------------------------
 
-const { openWithPromptMock, trackUpgradeClickedMock, formatAlertValueMock, mockAiChatStore } =
+const {
+  openWithPromptMock,
+  trackUpgradeClickedMock,
+  formatAlertValueMock,
+  mockAiChatStore,
+  getUpgradeActionUrlOrFallbackMock,
+} =
   vi.hoisted(() => {
     const openWithPromptMock = vi.fn();
     const trackUpgradeClickedMock = vi.fn();
     const formatAlertValueMock = vi.fn((value?: number, _type?: string) =>
       value !== undefined ? `${value.toFixed(1)}%` : 'N/A',
     );
+    const getUpgradeActionUrlOrFallbackMock = vi.fn();
     const mockAiChatStore = {
       enabled: true as boolean | null,
       openWithPrompt: (...args: unknown[]) => openWithPromptMock(...args),
     };
-    return { openWithPromptMock, trackUpgradeClickedMock, formatAlertValueMock, mockAiChatStore };
+    return {
+      openWithPromptMock,
+      trackUpgradeClickedMock,
+      formatAlertValueMock,
+      mockAiChatStore,
+      getUpgradeActionUrlOrFallbackMock,
+    };
   });
 
 vi.mock('@/stores/aiChat', () => ({
@@ -25,7 +39,7 @@ vi.mock('@/stores/aiChat', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  getUpgradeActionUrlOrFallback: (key: string) => `/pricing?feature=${key}`,
+  getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -75,7 +89,9 @@ beforeEach(() => {
   openWithPromptMock.mockReset();
   trackUpgradeClickedMock.mockReset();
   formatAlertValueMock.mockClear();
+  getUpgradeActionUrlOrFallbackMock.mockReset();
   mockAiChatStore.enabled = true;
+  getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('ai_alerts'));
   vi.spyOn(window, 'open').mockImplementation(() => null);
 });
 
@@ -195,7 +211,7 @@ describe('InvestigateAlertButton', () => {
       await fireEvent.click(button);
 
       expect(trackUpgradeClickedMock).toHaveBeenCalledWith('investigate_alert_button', 'ai_alerts');
-      expect(window.open).toHaveBeenCalledWith('/pricing?feature=ai_alerts', '_blank');
+      expect(window.open).toHaveBeenCalledWith(getPublicPricingUrl('ai_alerts'), '_blank');
       expect(openWithPromptMock).not.toHaveBeenCalled();
     });
 

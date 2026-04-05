@@ -7,6 +7,7 @@ import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
@@ -18,6 +19,7 @@ const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const useLocationMock = vi.fn(() => ({ search: '' }));
 const navigateMock = vi.fn();
+const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@solidjs/router', () => ({
   useLocation: () => useLocationMock(),
@@ -25,7 +27,7 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  getUpgradeActionUrlOrFallback: () => '/pricing',
+  getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   isMultiTenantEnabled: () => true,
   licenseLoadError: () => false,
   licenseStatus: () => mockEntitlements,
@@ -66,10 +68,12 @@ describe('ProLicensePanel', () => {
     notificationErrorMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
+    getUpgradeActionUrlOrFallbackMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
     clearLicenseMock.mockResolvedValue({ success: true });
+    getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
     useLocationMock.mockReturnValue({ search: '' });
   });
 

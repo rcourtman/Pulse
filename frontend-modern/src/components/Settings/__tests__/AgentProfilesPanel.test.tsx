@@ -4,6 +4,7 @@ import { AgentProfilesPanel } from '../AgentProfilesPanel';
 import { notificationStore } from '@/stores/notifications';
 import type { ConnectedInfrastructureItem, State } from '@/types/api';
 import type { Resource } from '@/types/resource';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 let mockResources: Resource[] = [];
 let mockWsStore: {
@@ -17,6 +18,7 @@ const unassignProfileMock = vi.fn();
 const createProfileMock = vi.fn();
 const updateProfileMock = vi.fn();
 const deleteProfileMock = vi.fn();
+const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
@@ -29,7 +31,7 @@ vi.mock('@/contexts/appRuntime', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  getUpgradeActionUrlOrFallback: () => '/pricing',
+  getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   hasFeature: () => true,
   licenseLoaded: () => true,
   loadLicenseStatus: () => Promise.resolve(),
@@ -212,6 +214,8 @@ const makeKubernetesInfrastructureItem = (
 });
 
 beforeEach(() => {
+  getUpgradeActionUrlOrFallbackMock.mockReset();
+  getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
   mockResources = [makeAgentResource()];
   mockWsStore = {
     state: {

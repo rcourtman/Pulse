@@ -5,6 +5,7 @@ import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
 import trialBannerStateSource from '@/components/shared/useTrialBannerState.ts?raw';
 import { TRIAL_BANNER_SNOOZE_KEY } from '@/components/shared/trialBannerModel';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 const { getUpgradeActionUrlOrFallbackMock, licenseStatusMock, loadLicenseStatusMock, isUpsellSnoozedMock, snoozeUpsellMock } =
   vi.hoisted(() => ({
@@ -34,7 +35,7 @@ describe('TrialBanner', () => {
     loadLicenseStatusMock.mockReset();
     isUpsellSnoozedMock.mockReset();
     snoozeUpsellMock.mockReset();
-    getUpgradeActionUrlOrFallbackMock.mockReturnValue('/pricing?feature=trial_banner');
+    getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
     loadLicenseStatusMock.mockResolvedValue(undefined);
     isUpsellSnoozedMock.mockReturnValue(false);
   });
@@ -83,7 +84,7 @@ describe('TrialBanner', () => {
     expect(screen.getByText('4 days remaining')).toBeInTheDocument();
     expect(screen.getByText('Upgrade').closest('a')).toHaveAttribute(
       'href',
-      '/pricing?feature=trial_banner',
+      getPublicPricingUrl('trial_banner'),
     );
   });
 

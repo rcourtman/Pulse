@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { ReportingPanel } from '../ReportingPanel';
 import type { JSX } from 'solid-js';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 const useReportingPanelStateMock = vi.fn();
 
@@ -96,7 +97,7 @@ function buildState(overrides: Record<string, unknown> = {}) {
     setTitle: vi.fn(),
     startingTrial: () => false,
     title: () => '',
-    upgradeActionUrl: () => '/pricing',
+    upgradeActionUrl: () => getPublicPricingUrl('advanced_reporting'),
     ...overrides,
   };
 }

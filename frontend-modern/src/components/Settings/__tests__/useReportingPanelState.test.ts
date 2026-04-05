@@ -1,5 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 type UseReportingPanelStateModule = typeof import('../useReportingPanelState');
 
@@ -112,7 +113,7 @@ describe('useReportingPanelState', () => {
 
     vi.doMock('@/stores/license', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
-      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
       hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
       licenseLoaded: vi.fn(() => true),
       loadLicenseStatus: loadLicenseStatusMock,
@@ -200,7 +201,7 @@ describe('useReportingPanelState', () => {
 
     vi.doMock('@/stores/license', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
-      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
       hasFeature: vi.fn(() => false),
       licenseLoaded: vi.fn(() => false),
       loadLicenseStatus: loadLicenseStatusMock,
@@ -253,7 +254,7 @@ describe('useReportingPanelState', () => {
 
     vi.doMock('@/stores/license', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
-      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
       hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
       licenseLoaded: vi.fn(() => true),
       loadLicenseStatus: loadLicenseStatusMock,
@@ -310,7 +311,7 @@ describe('useReportingPanelState', () => {
 
     vi.doMock('@/stores/license', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
-      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
       hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
       licenseLoaded: vi.fn(() => true),
       loadLicenseStatus: loadLicenseStatusMock,
@@ -356,7 +357,7 @@ describe('useReportingPanelState', () => {
 
     vi.doMock('@/stores/license', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
-      getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing'),
+      getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
       hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
       licenseLoaded: vi.fn(() => true),
       loadLicenseStatus: loadLicenseStatusMock,

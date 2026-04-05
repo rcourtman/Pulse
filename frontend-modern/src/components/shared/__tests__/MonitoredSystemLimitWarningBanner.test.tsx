@@ -30,11 +30,12 @@ const mockLegacyConnections = vi.hoisted(() =>
 const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadLicenseStatus = vi.hoisted(() => vi.fn());
+const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/license', () => ({
   entitlements: mockEntitlements,
   getLimit: mockGetLimit,
-  getUpgradeActionUrlOrFallback: vi.fn(() => '/pricing?feature=max_monitored_systems'),
+  getUpgradeActionUrlOrFallback: (...args: unknown[]) => mockGetUpgradeActionUrlOrFallback(...args),
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
   loadLicenseStatus: (...args: unknown[]) => mockLoadLicenseStatus(...args),
@@ -61,6 +62,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
     mockLoadLicenseStatus.mockReset();
     mockLoadLicenseStatus.mockResolvedValue(undefined);
+    mockGetUpgradeActionUrlOrFallback.mockReset();
+    mockGetUpgradeActionUrlOrFallback.mockReturnValue('/settings/system/billing');
   });
 
   afterEach(() => {
@@ -140,6 +143,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
 
     expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
+    expect(screen.getByText('Upgrade to add more')).toHaveAttribute('href', '/settings/system/billing');
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
   });
 
@@ -166,5 +170,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(
       screen.getByText('Includes 1 temporary onboarding slot \(14d remaining\)', { exact: false }),
     ).toBeInTheDocument();
+    expect(screen.getByText('Upgrade to add more')).toHaveAttribute('href', '/settings/system/billing');
   });
 });
