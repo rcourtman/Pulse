@@ -183,14 +183,29 @@ export function getFirstUpgradeActionUrl(): string | undefined {
   return current?.upgrade_reasons?.[0]?.action_url;
 }
 
+const DEFAULT_PUBLIC_UPGRADE_URL =
+  'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
+
 const IN_PRODUCT_UPGRADE_FALLBACKS: Record<string, string> = {
   // Limit-driven upsells should land on billing/usage so operators can see
   // the counted-system ledger before choosing how to expand capacity.
   max_monitored_systems: '/settings/system/billing',
+  cloud: '/cloud',
 };
 
 function getInProductUpgradeFallback(key: string): string | undefined {
   return IN_PRODUCT_UPGRADE_FALLBACKS[key];
+}
+
+function getPublicUpgradeFallback(key: string): string {
+  const normalizedKey = key.trim();
+  const url = new URL(DEFAULT_PUBLIC_UPGRADE_URL);
+  if (normalizedKey) {
+    // Keep frontend fallbacks aligned with the canonical public pricing origin
+    // used by pkg/licensing when entitlement-specific action URLs are missing.
+    url.searchParams.set('feature', normalizedKey);
+  }
+  return url.toString();
 }
 
 export function getUpgradeActionUrlOrFallback(key: string): string {
@@ -198,7 +213,7 @@ export function getUpgradeActionUrlOrFallback(key: string): string {
     getUpgradeActionUrl(key) ||
     getInProductUpgradeFallback(key) ||
     getFirstUpgradeActionUrl() ||
-    `/pricing?feature=${encodeURIComponent(key)}`
+    getPublicUpgradeFallback(key)
   );
 }
 

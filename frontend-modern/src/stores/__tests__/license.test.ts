@@ -310,10 +310,12 @@ describe('license store', () => {
   });
 
   describe('getUpgradeActionUrlOrFallback', () => {
-    it('returns pricing fallback when no upgrade reasons', async () => {
+    it('routes missing self-hosted upgrades to the public pricing site when no upgrade reasons exist', async () => {
       vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
       await loadLicenseStatus(true);
-      expect(getUpgradeActionUrlOrFallback('feature1')).toBe('/pricing?feature=feature1');
+      expect(getUpgradeActionUrlOrFallback('relay')).toBe(
+        'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=relay',
+      );
     });
 
     it('routes monitored-system limit fallbacks to billing usage', async () => {
@@ -324,6 +326,20 @@ describe('license store', () => {
       await loadLicenseStatus(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
         '/settings/system/billing',
+      );
+    });
+
+    it('routes cloud fallbacks to the in-product cloud plans page', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrlOrFallback('cloud')).toBe('/cloud');
+    });
+
+    it('routes generic upgrade fallbacks to the public pricing site', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrlOrFallback('upgrade')).toBe(
+        'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=upgrade',
       );
     });
 
@@ -341,6 +357,14 @@ describe('license store', () => {
       await loadLicenseStatus(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
         '/upgrade/max-monitored-systems',
+      );
+    });
+
+    it('routes unknown keys to the public pricing site as a last resort', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue(mockFreeEntitlements);
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrlOrFallback('feature1')).toBe(
+        'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=feature1',
       );
     });
   });
