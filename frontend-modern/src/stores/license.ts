@@ -183,9 +183,20 @@ export function getFirstUpgradeActionUrl(): string | undefined {
   return current?.upgrade_reasons?.[0]?.action_url;
 }
 
+const IN_PRODUCT_UPGRADE_FALLBACKS: Record<string, string> = {
+  // Limit-driven upsells should land on billing/usage so operators can see
+  // the counted-system ledger before choosing how to expand capacity.
+  max_monitored_systems: '/settings/system/billing',
+};
+
+function getInProductUpgradeFallback(key: string): string | undefined {
+  return IN_PRODUCT_UPGRADE_FALLBACKS[key];
+}
+
 export function getUpgradeActionUrlOrFallback(key: string): string {
   return (
     getUpgradeActionUrl(key) ||
+    getInProductUpgradeFallback(key) ||
     getFirstUpgradeActionUrl() ||
     `/pricing?feature=${encodeURIComponent(key)}`
   );

@@ -315,6 +315,34 @@ describe('license store', () => {
       await loadLicenseStatus(true);
       expect(getUpgradeActionUrlOrFallback('feature1')).toBe('/pricing?feature=feature1');
     });
+
+    it('routes monitored-system limit fallbacks to billing usage', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        upgrade_reasons: [{ key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' }],
+      });
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
+        '/settings/system/billing',
+      );
+    });
+
+    it('prefers a specific monitored-system upgrade action when provided', async () => {
+      vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
+        ...mockProEntitlements,
+        upgrade_reasons: [
+          {
+            key: 'max_monitored_systems',
+            reason: 'Expand monitored-system capacity',
+            action_url: '/upgrade/max-monitored-systems',
+          },
+        ],
+      });
+      await loadLicenseStatus(true);
+      expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
+        '/upgrade/max-monitored-systems',
+      );
+    });
   });
 
   describe('getLimit', () => {
