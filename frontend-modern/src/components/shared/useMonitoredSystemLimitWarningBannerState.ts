@@ -7,6 +7,11 @@ import {
   legacyConnections,
   loadLicenseStatus,
 } from '@/stores/license';
+import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
+import {
+  anchorSelfHostedBillingDestination,
+  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+} from '@/utils/pricingHandoff';
 import {
   trackUpgradeClicked,
   trackUpgradeMetricEvent,
@@ -19,7 +24,9 @@ import {
   getMonitoredSystemOverflowSummary,
   getMonitoredSystemSummary,
   isMonitoredSystemLimitUrgent,
+  MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF,
   MONITORED_SYSTEM_LIMIT_KEY,
+  MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF,
   shouldShowMonitoredSystemLimitBanner,
 } from './monitoredSystemLimitWarningBannerModel';
 
@@ -46,8 +53,17 @@ export function useMonitoredSystemLimitWarningBannerState() {
   const migrationTextClass = createMemo(() =>
     getMonitoredSystemMigrationTextClass(isUrgent()),
   );
+  const learnMoreDestination = createMemo(() =>
+    resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF),
+  );
+  const installCollectorsDestination = createMemo(() =>
+    resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF),
+  );
   const upgradeDestination = createMemo(() =>
-    getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
+    anchorSelfHostedBillingDestination(
+      getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
+      SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+    ),
   );
 
   let wasUrgent = false;
@@ -80,7 +96,9 @@ export function useMonitoredSystemLimitWarningBannerState() {
   return {
     handleInstallCollectorsClick,
     handleUpgradeClick,
+    installCollectorsDestination,
     isUrgent,
+    learnMoreDestination,
     migrationGap,
     migrationMessage,
     migrationTextClass,

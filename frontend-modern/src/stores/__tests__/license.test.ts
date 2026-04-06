@@ -325,7 +325,7 @@ describe('license store', () => {
       });
       await loadLicenseStatus(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
-        '/settings/system/billing',
+        '/settings/system/billing#pulse-pro-plan',
       );
     });
 

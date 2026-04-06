@@ -8,6 +8,10 @@ import { SelfHostedCommercialActivationSection } from './SelfHostedCommercialAct
 import { useProLicensePanelState } from './useProLicensePanelState';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { getMonitoredSystemBriefSummary } from '@/utils/monitoredSystemPresentation';
+import {
+  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
+} from '@/utils/pricingHandoff';
 
 export const ProLicensePanel: Component = () => {
   const state = useProLicensePanelState();
@@ -32,6 +36,7 @@ export const ProLicensePanel: Component = () => {
       >
         <div class="space-y-6">
           <CommercialSection
+            id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}
             title={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionTitle}
             description={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionDescription}
           >
@@ -52,6 +57,7 @@ export const ProLicensePanel: Component = () => {
           </CommercialSection>
 
           <CommercialSection
+            id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}
             title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
             description={getMonitoredSystemBriefSummary()}
           >

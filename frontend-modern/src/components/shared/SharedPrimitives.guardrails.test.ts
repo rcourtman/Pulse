@@ -645,6 +645,7 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerSource).toContain(
       'useMonitoredSystemLimitWarningBannerState',
     );
+    expect(monitoredSystemLimitWarningBannerSource).toContain('UpgradeLink');
     expect(monitoredSystemLimitWarningBannerSource).toContain(
       'MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL',
     );
@@ -662,6 +663,12 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'anchorSelfHostedBillingDestination',
+    );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
@@ -675,6 +682,9 @@ describe('shared primitive guardrails', () => {
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemLimitInstallCollectorsLabel',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_USAGE_HREF',
     );
   });
 

@@ -196,6 +196,11 @@ work extends shared components instead of creating new local variants.
     `frontend-modern/src/hooks/createNonSuspendingQuery.ts` rather than
     re-copying suspense-escape logic into each feature area or burying it
     inside one feature's private state model.
+14. Keep shared commercial warning banners truthful about destination intent.
+    When a shared banner renders both explanatory and commercial CTAs, those
+    labels must resolve to distinct owned destinations or section anchors
+    instead of presenting two different labels that land on the same
+    unscoped billing screen.
 
 ## Forbidden Paths
 

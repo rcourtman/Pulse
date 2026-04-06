@@ -1,7 +1,5 @@
 import { Component, Show } from 'solid-js';
 import {
-  MONITORED_SYSTEM_LIMIT_BILLING_HREF,
-  MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF,
   MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL,
   MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL,
   MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL,
@@ -27,20 +25,20 @@ export const MonitoredSystemLimitWarningBanner: Component = () => {
           <Show when={state.migrationGap()}>
             <span class={`text-xs ${state.migrationTextClass()}`}>{state.migrationMessage()}</span>
           </Show>
-          <a
+          <UpgradeLink
             class="text-xs font-medium underline underline-offset-2 hover:opacity-90"
-            href={MONITORED_SYSTEM_LIMIT_BILLING_HREF}
+            destination={state.learnMoreDestination()}
           >
             {MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL}
-          </a>
+          </UpgradeLink>
           <Show when={state.migrationGap()}>
-            <a
+            <UpgradeLink
               class="text-xs font-medium underline underline-offset-2 hover:opacity-90"
-              href={MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF}
+              destination={state.installCollectorsDestination()}
               onClick={state.handleInstallCollectorsClick}
             >
               {MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL}
-            </a>
+            </UpgradeLink>
           </Show>
           <Show when={state.isUrgent()}>
             <UpgradeLink

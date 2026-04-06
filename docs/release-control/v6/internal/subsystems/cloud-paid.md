@@ -117,6 +117,11 @@ agreement, and cloud-specific enforcement rules.
     `internal/cloudcp/portal/` may surface the facts an operator needs, but the
     shell should not spend vertical space on duplicate context-chip strips when
     the page header and section body already communicate that scope.
+23. Keep self-hosted monitored-system warning CTA intents distinct on the owned
+    billing surface. `Learn more` links must land on the monitored-system usage
+    section, while `Upgrade to add more` links must land on the plan/upgrade
+    section, so the product does not present duplicate labels for one
+    unscoped billing destination.
 
 ## Forbidden Paths
 

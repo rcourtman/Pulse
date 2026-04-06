@@ -14,6 +14,7 @@ export type CommercialUsageMeterItem = {
 };
 
 interface CommercialSectionProps {
+  id?: string;
   title: string;
   description: string;
   children: JSX.Element;
@@ -45,11 +46,11 @@ const usageRatio = (current: number, limit?: number) => {
 };
 
 export const CommercialSection: Component<CommercialSectionProps> = (props) => (
-  <div class="space-y-2 border-t border-border pt-4">
+  <section id={props.id} class="scroll-mt-24 space-y-2 border-t border-border pt-4">
     <h3 class="text-sm font-semibold text-base-content">{props.title}</h3>
     <p class="text-xs text-muted">{props.description}</p>
     <div class="space-y-4">{props.children}</div>
-  </div>
+  </section>
 );
 
 export const CommercialStatGrid: Component<CommercialStatGridProps> = (props) => (

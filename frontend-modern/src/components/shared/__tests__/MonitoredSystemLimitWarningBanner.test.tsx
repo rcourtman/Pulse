@@ -71,7 +71,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       href: '/settings/system/billing',
       external: false,
     });
-    mockGetUpgradeActionUrlOrFallback.mockReturnValue('/settings/system/billing');
+    mockGetUpgradeActionUrlOrFallback.mockReturnValue('/settings/system/billing#pulse-pro-plan');
   });
 
   afterEach(() => {
@@ -162,8 +162,15 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
+    expect(screen.getByText('Learn more')).toHaveAttribute(
+      'href',
+      '/settings/system/billing#pulse-pro-usage',
+    );
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
-    expect(screen.getByText('Upgrade to add more')).toHaveAttribute('href', '/settings/system/billing');
+    expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
+      'href',
+      '/settings/system/billing#pulse-pro-plan',
+    );
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
   });
 
@@ -194,6 +201,13 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(
       screen.getByText('Includes 1 temporary onboarding slot \(14d remaining\)', { exact: false }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Upgrade to add more')).toHaveAttribute('href', '/settings/system/billing');
+    expect(screen.getByText('Learn more')).toHaveAttribute(
+      'href',
+      '/settings/system/billing#pulse-pro-usage',
+    );
+    expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
+      'href',
+      '/settings/system/billing#pulse-pro-plan',
+    );
   });
 });

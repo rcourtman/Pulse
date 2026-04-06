@@ -1,4 +1,4 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import {
@@ -18,8 +18,17 @@ import {
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
+import {
+  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
+} from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
+
+const SELF_HOSTED_PRO_BILLING_SECTION_IDS = new Set([
+  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
+]);
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Not available';
@@ -67,6 +76,30 @@ export function useProLicensePanelState() {
       navigate(nextPath, { replace: true, scroll: false });
     }
     void loadPanelData();
+  });
+
+  const scrollToBillingSectionHash = () => {
+    const hash = location.hash?.trim();
+    if (!hash?.startsWith('#')) {
+      return;
+    }
+
+    const sectionId = hash.slice(1);
+    if (!SELF_HOSTED_PRO_BILLING_SECTION_IDS.has(sectionId)) {
+      return;
+    }
+
+    const target = document.getElementById(sectionId);
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  createEffect(() => {
+    location.hash;
+    requestAnimationFrame(scrollToBillingSectionHash);
   });
 
   const showTrialStart = createMemo(() => {

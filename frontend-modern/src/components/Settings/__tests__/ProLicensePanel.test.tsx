@@ -7,7 +7,11 @@ import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
-import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+import {
+  getPublicPricingUrl,
+  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
+} from '@/utils/pricingHandoff';
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
@@ -19,6 +23,7 @@ const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const useLocationMock = vi.fn(() => ({ search: '' }));
 const navigateMock = vi.fn();
+const scrollIntoViewMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
@@ -70,6 +75,7 @@ describe('ProLicensePanel', () => {
     notificationErrorMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
+    scrollIntoViewMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
@@ -82,10 +88,19 @@ describe('ProLicensePanel', () => {
     }));
     getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
     useLocationMock.mockReturnValue({ search: '' });
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 0;
+    });
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoViewMock,
+    });
   });
 
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
   });
 
   it('shows start trial action only when trial_eligible is true', async () => {
@@ -329,6 +344,23 @@ describe('ProLicensePanel', () => {
     });
   });
 
+  it('anchors the plan and usage sections and scrolls to the requested billing hash', async () => {
+    useLocationMock.mockReturnValue({
+      search: '',
+      pathname: '/settings/system/billing',
+      hash: `#${SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}`,
+    });
+
+    render(() => <ProLicensePanel />);
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalled();
+    });
+
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).toBeInTheDocument();
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
+  });
+
   it('shows a migration-pending notice and hides the trial CTA', async () => {
     mockEntitlements = {
       capabilities: [],
@@ -473,6 +505,8 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).not.toContain('createSignal(');
     expect(proLicensePanelSource).not.toContain('useLocation()');
     expect(proLicensePanelStateSource).toContain('useLocation');
+    expect(proLicensePanelStateSource).toContain('requestAnimationFrame(scrollToBillingSectionHash);');
+    expect(proLicensePanelStateSource).toContain('SELF_HOSTED_PRO_BILLING_SECTION_IDS');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
@@ -506,5 +540,7 @@ describe('ProLicensePanel', () => {
     expect(selfHostedCommercialActivationSectionSource).not.toContain(
       'Legacy v5 license detected',
     );
+    expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}');
+    expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}');
   });
 });
