@@ -118,10 +118,12 @@ agreement, and cloud-specific enforcement rules.
     shell should not spend vertical space on duplicate context-chip strips when
     the page header and section body already communicate that scope.
 23. Keep self-hosted monitored-system warning CTA intents distinct on the owned
-    billing surface. `Learn more` links must land on the monitored-system usage
-    section, while `Upgrade to add more` links must land on the plan/upgrade
-    section, so the product does not present duplicate labels for one
-    unscoped billing destination.
+    billing surface. `Learn more` links must land on the monitored-system
+    usage-focused billing state, while `Upgrade to add more` links must land on
+    the plan-focused billing state. The owned billing shell must express those
+    states explicitly through its section selector and rendered content, not
+    merely through nearby hash anchors that still present the same visible
+    destination.
 
 ## Forbidden Paths
 
@@ -1083,3 +1085,13 @@ consumers must import websocket and dark-mode hooks from
 lazy hosted and settings chunks cannot create a reverse dependency into the
 app shell and blank the mounted browser surface before auth/bootstrap
 completes.
+That same cloud-paid/browser boundary now also governs public demo posture.
+`DEMO_MODE` may run against a real internal entitlement, but public demo
+surfaces must not reveal self-hosted license metadata, hosted billing state,
+monitored-system ledgers, upgrade nudges, or activation controls just because
+the underlying runtime is commercially enabled. `frontend-modern/src/utils/apiClient.ts`
+must treat `X-Demo-Mode` as the canonical browser signal, and shared billing
+or upgrade surfaces must hide or suppress themselves from that signal rather
+than teaching mock mode or frontend-only feature flags to bypass the real
+licensing model. Demo readiness therefore means presentation isolation, not a
+license exemption.
