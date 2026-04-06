@@ -5,10 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /*  Mocks                                                              */
 /* ------------------------------------------------------------------ */
 
-const apiFetchMock = vi.hoisted(() => vi.fn());
+const demoModeEnabledMock = vi.hoisted(() => vi.fn());
+const ensureDemoModeResolvedMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/utils/apiClient', () => ({
-  apiFetch: apiFetchMock,
+vi.mock('@/stores/demoMode', () => ({
+  demoModeEnabled: () => demoModeEnabledMock(),
+  ensureDemoModeResolved: (...args: unknown[]) => ensureDemoModeResolvedMock(...args),
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -16,36 +18,15 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 /* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-/** Build a minimal Response-like object with the given demo header value. */
-function fakeResponse(demoHeader: string | null) {
-  const headers = new Headers();
-  if (demoHeader !== null) {
-    headers.set('X-Demo-Mode', demoHeader);
-  }
-  return { ok: true, headers };
-}
-
-/** Create a deferred promise whose resolution the test controls. */
-function deferred<T>() {
-  let resolve!: (v: T) => void;
-  let reject!: (e: unknown) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-/* ------------------------------------------------------------------ */
 /*  Tests                                                              */
 /* ------------------------------------------------------------------ */
 
 describe('DemoBanner', () => {
   beforeEach(() => {
-    apiFetchMock.mockReset();
+    demoModeEnabledMock.mockReset();
+    ensureDemoModeResolvedMock.mockReset();
+    demoModeEnabledMock.mockReturnValue(false);
+    ensureDemoModeResolvedMock.mockResolvedValue(false);
     sessionStorage.clear();
   });
 
@@ -58,73 +39,28 @@ describe('DemoBanner', () => {
 
   /* ---------- Visibility ---------- */
 
-  it('shows the banner when X-Demo-Mode header is "true"', async () => {
-    apiFetchMock.mockResolvedValue(fakeResponse('true'));
+  it('shows the banner when demo mode is enabled', async () => {
+    demoModeEnabledMock.mockReturnValue(true);
 
     await renderBanner();
 
-    await waitFor(() => {
-      expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
   });
 
-  it('stays hidden when X-Demo-Mode header is absent', async () => {
-    const d = deferred();
-    apiFetchMock.mockReturnValue(d.promise);
-
+  it('stays hidden when demo mode is disabled', async () => {
     await renderBanner();
 
-    // Banner must be hidden while request is in flight.
-    expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-
-    // Resolve with no demo header and verify banner stays hidden.
-    d.resolve(fakeResponse(null));
-    await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    });
-    expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-  });
-
-  it('stays hidden when X-Demo-Mode header is "false"', async () => {
-    const d = deferred();
-    apiFetchMock.mockReturnValue(d.promise);
-
-    await renderBanner();
-
-    expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-
-    d.resolve(fakeResponse('false'));
-    await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    });
-    expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-  });
-
-  it('stays hidden when the health check request fails', async () => {
-    const d = deferred();
-    apiFetchMock.mockReturnValue(d.promise);
-
-    await renderBanner();
-
-    expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-
-    d.reject(new Error('network error'));
-    await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    });
     expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
   });
 
   /* ---------- Dismiss ---------- */
 
   it('hides the banner when the dismiss button is clicked', async () => {
-    apiFetchMock.mockResolvedValue(fakeResponse('true'));
+    demoModeEnabledMock.mockReturnValue(true);
 
     await renderBanner();
 
-    await waitFor(() => {
-      expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
 
     const dismissBtn = screen.getByTitle('Dismiss');
     fireEvent.click(dismissBtn);
@@ -137,13 +73,11 @@ describe('DemoBanner', () => {
   });
 
   it('persists dismissal to sessionStorage', async () => {
-    apiFetchMock.mockResolvedValue(fakeResponse('true'));
+    demoModeEnabledMock.mockReturnValue(true);
 
     await renderBanner();
 
-    await waitFor(() => {
-      expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
-    });
+    expect(screen.getByText('Demo instance with mock data (read-only)')).toBeInTheDocument();
 
     fireEvent.click(screen.getByTitle('Dismiss'));
 
@@ -152,32 +86,22 @@ describe('DemoBanner', () => {
 
   it('stays hidden when sessionStorage already has dismissal flag', async () => {
     sessionStorage.setItem('demoBannerDismissed', 'true');
-
-    const d = deferred();
-    apiFetchMock.mockReturnValue(d.promise);
+    demoModeEnabledMock.mockReturnValue(true);
 
     await renderBanner();
 
-    expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-
-    // Even when the API confirms demo mode, prior dismissal keeps the banner hidden.
-    d.resolve(fakeResponse('true'));
-    await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledTimes(1);
-    });
     expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
   });
 
-  /* ---------- API call ---------- */
+  /* ---------- Demo-mode resolve ---------- */
 
-  it('calls /api/health exactly once on mount', async () => {
-    apiFetchMock.mockResolvedValue(fakeResponse(null));
+  it('resolves demo mode exactly once on mount', async () => {
+    ensureDemoModeResolvedMock.mockResolvedValue(false);
 
     await renderBanner();
 
     await waitFor(() => {
-      expect(apiFetchMock).toHaveBeenCalledTimes(1);
+      expect(ensureDemoModeResolvedMock).toHaveBeenCalledTimes(1);
     });
-    expect(apiFetchMock).toHaveBeenCalledWith('/api/health');
   });
 });

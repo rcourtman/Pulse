@@ -31,6 +31,8 @@ const mockLegacyConnections = vi.hoisted(() =>
 const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadLicenseStatus = vi.hoisted(() => vi.fn());
+const mockDemoModeEnabled = vi.hoisted(() => vi.fn(() => false));
+const mockEnsureDemoModeResolved = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
@@ -42,6 +44,11 @@ vi.mock('@/stores/license', () => ({
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
   loadLicenseStatus: (...args: unknown[]) => mockLoadLicenseStatus(...args),
+}));
+
+vi.mock('@/stores/demoMode', () => ({
+  demoModeEnabled: () => mockDemoModeEnabled(),
+  ensureDemoModeResolved: (...args: unknown[]) => mockEnsureDemoModeResolved(...args),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -63,6 +70,10 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       docker_hosts: 0,
       kubernetes_clusters: 0,
     });
+    mockDemoModeEnabled.mockReset();
+    mockDemoModeEnabled.mockReturnValue(false);
+    mockEnsureDemoModeResolved.mockReset();
+    mockEnsureDemoModeResolved.mockResolvedValue(false);
     mockLoadLicenseStatus.mockReset();
     mockLoadLicenseStatus.mockResolvedValue(undefined);
     mockGetUpgradeActionDestination.mockReset();
@@ -98,6 +109,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('ensureDemoModeResolved');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
@@ -130,6 +142,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(mockLoadLicenseStatus).toHaveBeenCalled();
+    expect(mockEnsureDemoModeResolved).toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
 
@@ -209,5 +222,25 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       'href',
       '/settings/system/billing#pulse-pro-plan',
     );
+  });
+
+  it('stays hidden in demo mode even when usage is urgent', async () => {
+    mockDemoModeEnabled.mockReturnValue(true);
+    mockGetLimit.mockReturnValue({
+      key: 'max_monitored_systems',
+      limit: 6,
+      current: 5,
+      state: 'warning',
+    });
+
+    const mod = await import('../MonitoredSystemLimitWarningBanner');
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
+
+    expect(screen.queryByText('Monitored systems: 5/6')).not.toBeInTheDocument();
+    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
   });
 });

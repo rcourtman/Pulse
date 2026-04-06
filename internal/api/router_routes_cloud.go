@@ -19,7 +19,11 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 		routerConfig = &config.Config{}
 	}
 
-	billingHandlers := NewBillingStateHandlers(config.NewFileBillingStore(routerConfig.DataPath), r.hostedMode)
+	billingHandlers := NewBillingStateHandlers(
+		config.NewFileBillingStore(routerConfig.DataPath),
+		r.hostedMode,
+		routerConfig.DemoMode,
+	)
 	lifecycleHandlers := NewOrgLifecycleHandlers(r.multiTenant, r.hostedMode)
 	hostedOrgAdminHandlers := NewHostedOrgAdminHandlers(r.multiTenant, r.hostedMode)
 	r.mux.HandleFunc(

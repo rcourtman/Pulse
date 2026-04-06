@@ -469,8 +469,11 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).toContain('loadLicenseStatus');
     expect(trialBannerStateSource).toContain('licenseStatus');
+    expect(trialBannerStateSource).toContain('demoModeEnabled');
+    expect(trialBannerStateSource).toContain('ensureDemoModeResolved');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
+    expect(trialBannerStateSource).not.toContain("fetch('/api/health'");
 
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
     expect(trialBannerModelSource).toContain('normalizeTrialBannerDaysRemaining');
@@ -661,6 +664,8 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('ensureDemoModeResolved');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
@@ -670,6 +675,7 @@ describe('shared primitive guardrails', () => {
       'SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain("fetch('/api/health'");
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemMigrationMessage',

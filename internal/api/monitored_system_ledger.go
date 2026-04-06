@@ -103,6 +103,10 @@ func (e MonitoredSystemLedgerEntry) NormalizeCollections() MonitoredSystemLedger
 }
 
 func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Request) {
+	if hideCommercialReadSurfaceInDemo(w, req, r != nil && r.config != nil && r.config.DemoMode) {
+		return
+	}
+
 	orgID := GetOrgID(req.Context())
 
 	// Get canonical monitored systems from the unified ReadState surface.

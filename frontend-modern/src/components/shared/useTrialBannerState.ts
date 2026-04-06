@@ -1,4 +1,5 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
+import { demoModeEnabled, ensureDemoModeResolved } from '@/stores/demoMode';
 import { getUpgradeActionDestination, licenseStatus, loadLicenseStatus } from '@/stores/license';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
@@ -13,9 +14,12 @@ export function useTrialBannerState() {
 
   onMount(() => {
     void loadLicenseStatus();
+    void ensureDemoModeResolved();
   });
 
-  const isTrial = createMemo(() => licenseStatus()?.subscription_state === 'trial');
+  const isTrial = createMemo(
+    () => !demoModeEnabled() && licenseStatus()?.subscription_state === 'trial',
+  );
   const daysRemaining = createMemo(() =>
     normalizeTrialBannerDaysRemaining(licenseStatus()?.trial_days_remaining),
   );
@@ -33,7 +37,7 @@ export function useTrialBannerState() {
     daysRemaining,
     handleSnooze,
     isTrial,
-    showActions: () => !snoozed(),
+    showActions: () => !demoModeEnabled() && !snoozed(),
     toneClass,
     upgradeDestination,
   };

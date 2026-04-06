@@ -4811,6 +4811,45 @@ func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
+func TestContract_DemoModeCommercialReadSurfaceReturnsNotFound(t *testing.T) {
+	t.Run("license status", func(t *testing.T) {
+		handlers := NewLicenseHandlers(nil, false, &config.Config{DemoMode: true})
+		req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
+		rec := httptest.NewRecorder()
+
+		handlers.HandleLicenseStatus(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+	})
+
+	t.Run("monitored system ledger", func(t *testing.T) {
+		router := &Router{config: &config.Config{DemoMode: true}}
+		req := httptest.NewRequest(http.MethodGet, "/api/license/monitored-system-ledger", nil)
+		rec := httptest.NewRecorder()
+
+		router.handleMonitoredSystemLedger(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+	})
+
+	t.Run("hosted billing state", func(t *testing.T) {
+		handlers := NewBillingStateHandlers(config.NewFileBillingStore(t.TempDir()), true, true)
+		req := httptest.NewRequest(http.MethodGet, "/api/admin/orgs/t-tenant/billing-state", nil)
+		req.SetPathValue("id", "t-tenant")
+		rec := httptest.NewRecorder()
+
+		handlers.HandleGetBillingState(rec, req)
+
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		}
+	})
+}
+
 func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
 	key := []byte("test-handoff-key")
 	configDir := t.TempDir()

@@ -45,6 +45,7 @@ export interface SettingsNavItem {
   locked?: boolean;
   hideWhenUnavailable?: boolean;
   hostedOnly?: boolean;
+  hideInDemoMode?: boolean;
   requiredCapability?: keyof SecurityStatusSettingsCapabilities;
   badge?: string;
   features?: string[];

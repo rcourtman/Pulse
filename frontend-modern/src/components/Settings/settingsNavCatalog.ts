@@ -72,6 +72,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         iconProps: { strokeWidth: 2 },
         features: ['multi_tenant'],
         hideWhenUnavailable: true,
+        hideInDemoMode: true,
       },
       {
         id: 'organization-billing-admin',
@@ -81,6 +82,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         features: ['multi_tenant'],
         hideWhenUnavailable: true,
         hostedOnly: true,
+        hideInDemoMode: true,
         requiredCapability: 'billingAdmin',
       },
     ],
@@ -127,6 +129,7 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         id: 'system-billing',
         label: SELF_HOSTED_PRO_BILLING_PRESENTATION.shellTitle,
         icon: PulseLogoIcon,
+        hideInDemoMode: true,
       },
     ],
   },

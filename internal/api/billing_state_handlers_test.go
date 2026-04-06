@@ -294,6 +294,40 @@ func TestBillingStateHostedModeGate(t *testing.T) {
 	}
 }
 
+func TestBillingStateDemoModeGate(t *testing.T) {
+	router, _ := newBillingStateTestRouter(t, true)
+	router.config.DemoMode = true
+	router.mux = http.NewServeMux()
+	router.registerHostedRoutes(nil, nil, nil)
+
+	testCases := []struct {
+		method string
+		body   string
+	}{
+		{
+			method: http.MethodGet,
+			body:   "",
+		},
+		{
+			method: http.MethodPut,
+			body: `{
+				"capabilities":["feature_x"],
+				"limits":{"max_monitored_systems":10},
+				"meters_enabled":["api_requests"],
+				"plan_version":"pro-v1",
+				"subscription_state":"active"
+			}`,
+		},
+	}
+
+	for _, tc := range testCases {
+		rec := doBillingStateRequest(router, tc.method, "/api/admin/orgs/acme/billing-state", tc.body)
+		if rec.Code != http.StatusNotFound {
+			t.Fatalf("expected 404 when demo mode is enabled for %s, got %d: %s", tc.method, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 func newBillingStateTestRouter(t *testing.T, hostedMode bool) (*Router, string) {
 	t.Helper()
 

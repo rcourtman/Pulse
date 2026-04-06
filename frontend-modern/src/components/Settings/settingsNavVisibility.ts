@@ -6,6 +6,8 @@ import type { SettingsTab } from './settingsNavigationModel';
 export interface SettingsNavVisibilityContext {
   hasFeature: (feature: string) => boolean;
   licenseLoaded: () => boolean;
+  demoModeEnabled?: boolean;
+  demoModeResolved?: boolean;
   hostedModeEnabled?: boolean;
   settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
   settingsCapabilitiesResolved?: boolean;
@@ -27,6 +29,10 @@ export function shouldHideSettingsNavItem(
   if (!item) return false;
 
   if (item.hostedOnly && !context.hostedModeEnabled) {
+    return true;
+  }
+
+  if (item.hideInDemoMode && context.demoModeEnabled) {
     return true;
   }
 

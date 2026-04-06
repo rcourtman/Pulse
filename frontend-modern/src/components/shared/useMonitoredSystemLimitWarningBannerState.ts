@@ -1,4 +1,5 @@
 import { createEffect, createMemo, onMount } from 'solid-js';
+import { demoModeEnabled, ensureDemoModeResolved } from '@/stores/demoMode';
 import {
   entitlements,
   getLimit,
@@ -33,11 +34,14 @@ import {
 export function useMonitoredSystemLimitWarningBannerState() {
   onMount(() => {
     void loadLicenseStatus();
+    void ensureDemoModeResolved();
   });
 
   const monitoredSystemLimit = createMemo(() => getLimit(MONITORED_SYSTEM_LIMIT_KEY));
   const isUrgent = createMemo(() => isMonitoredSystemLimitUrgent(monitoredSystemLimit()));
-  const showBanner = createMemo(() => shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit()));
+  const showBanner = createMemo(
+    () => !demoModeEnabled() && shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit()),
+  );
   const migrationGap = createMemo(() => hasMigrationGap());
   const migrationCounts = createMemo(() => legacyConnections());
   const monitoredSystemSummary = createMemo(() =>
@@ -69,8 +73,9 @@ export function useMonitoredSystemLimitWarningBannerState() {
   let wasUrgent = false;
   createEffect(() => {
     const urgent = isUrgent();
+    const visible = showBanner();
     const limit = monitoredSystemLimit();
-    if (urgent && !wasUrgent && limit) {
+    if (visible && urgent && !wasUrgent && limit) {
       trackUpgradeMetricEvent({
         type: UPGRADE_METRIC_EVENTS.LIMIT_WARNING_SHOWN,
         surface: 'monitored_system_limit_banner',
@@ -79,7 +84,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
         limit_value: limit.limit,
       });
     }
-    wasUrgent = urgent;
+    wasUrgent = visible && urgent;
   });
 
   const handleInstallCollectorsClick = () => {

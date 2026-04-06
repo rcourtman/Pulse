@@ -1440,6 +1440,14 @@ describe('Settings architecture guardrails', () => {
     expect(SETTINGS_HEADER_META['organization-billing'].description).toContain('plan limits');
   });
 
+  it('keeps demo-mode billing visibility on the shared settings shell owner', () => {
+    expect(settingsNavigationModelSource).toContain('hideInDemoMode?: boolean;');
+    expect(settingsNavVisibilitySource).toContain('item.hideInDemoMode && context.demoModeEnabled');
+    expect(getSettingsNavItem('system-billing')?.hideInDemoMode).toBe(true);
+    expect(getSettingsNavItem('organization-billing')?.hideInDemoMode).toBe(true);
+    expect(getSettingsNavItem('organization-billing-admin')?.hideInDemoMode).toBe(true);
+  });
+
   it('keeps relay shell copy on the shared relay presentation owner', () => {
     expect(settingsHeaderMetaSource).toContain('RELAY_SETTINGS_DESCRIPTION');
     expect(relaySettingsPanelSource).toContain('description={RELAY_SETTINGS_DESCRIPTION}');

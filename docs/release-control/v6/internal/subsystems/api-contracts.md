@@ -74,6 +74,7 @@ Own canonical runtime payload shapes between backend and frontend.
 50. `internal/cloudcp/portal/frontend_sync_test.go`
 51. `internal/api/recovery_handlers.go`
 52. `internal/api/config_setup_handlers.go`
+53. `internal/api/demo_mode_commercial.go`
 
 ## Shared Boundaries
 
@@ -2402,3 +2403,13 @@ may read websocket state through `frontend-modern/src/contexts/appRuntime.ts`,
 but payload truth, bootstrap rules, and commercial identity still belong to
 the governed API handlers and contract tests. Those hooks must not import
 `@/App` or treat root-shell ownership as transport authority.
+That same shared commercial API contract now also owns the public demo
+read-side boundary. `internal/api/demo_mode_commercial.go`,
+`internal/api/licensing_handlers.go`,
+`internal/api/monitored_system_ledger.go`, and
+`internal/api/subscription_state_handlers.go` must fail closed with a generic
+`404` for public-demo billing, license-status, and monitored-system-ledger
+reads whenever `DEMO_MODE` is enabled. Demo runtimes may still use real
+server-side entitlement evaluation internally, but the governed browser/API
+contract must not expose commercial identity, usage, or upgrade-state payloads
+back to public viewers through those read surfaces.

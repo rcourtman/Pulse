@@ -396,6 +396,17 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+That same shared settings-shell and banner boundary now also owns demo-mode
+commercial suppression. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
+`frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
+`frontend-modern/src/components/shared/useTrialBannerState.ts`, and
+`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
+must consume one shared demo-mode truth and hide billing tabs, trial nudges,
+and monitored-system warning banners when the browser is rendering a public
+demo runtime. Shared primitives must not perform their own ad hoc `/api/health`
+polling or rebuild per-banner demo heuristics; the settings shell and shared
+banner hooks stay on the canonical shared demo-mode owner so suppression stays
+coherent across customer-facing surfaces.
 Storage disk drawers now also sit on that same shared-primitives floor.
 `frontend-modern/src/components/Storage/DiskDetail.tsx` must render physical-
 disk read, write, and busy charts through `HistoryChart` plus
@@ -1819,3 +1830,14 @@ such as `frontend-modern/src/components/Settings/Settings.tsx`,
 may consume that module, but they must not import `@/App` or recreate shell
 providers. `frontend-modern/src/App.tsx` owns provider placement; primitives
 own reusable consumption only.
+That same shared settings-shell and banner boundary now also owns demo-mode
+commercial suppression. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
+`frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
+`frontend-modern/src/components/shared/useTrialBannerState.ts`, and
+`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
+must consume one shared demo-mode truth and hide billing tabs, trial nudges,
+and monitored-system warning banners when the browser is rendering a public
+demo runtime. Shared primitives must not perform their own ad hoc `/api/health`
+polling or rebuild per-banner demo heuristics; the settings shell and shared
+banner hooks stay on the canonical shared demo-mode owner so suppression stays
+coherent across customer-facing surfaces.

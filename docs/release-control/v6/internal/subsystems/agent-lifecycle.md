@@ -301,6 +301,14 @@ This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
 management, and fleet safety stop hiding inside architecture, migration, or
 monitoring work.
+That same adjacent `internal/api/` boundary now also keeps public demos from
+leaking commercial state through lifecycle-adjacent surfaces. Agent install,
+reporting, and setup flows may share backend helpers with billing or license
+transport, but `DEMO_MODE` must continue to 404 commercial read surfaces
+instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
+demo readiness therefore comes from hiding commercial presentation on the
+shared API boundary, not from introducing a second fake-entitlement path into
+lifecycle-owned install or reporting flows.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered
 through shared drawers or lifecycle-adjacent resource context, those reads
@@ -1825,3 +1833,11 @@ may read websocket state only through
 recreate app-shell providers, because `frontend-modern/src/App.tsx` owns
 provider placement while lifecycle hooks must stay lazy-load safe and
 shell-independent.
+That same adjacent `internal/api/` boundary now also keeps public demos from
+leaking commercial state through lifecycle-adjacent surfaces. Agent install,
+reporting, and setup flows may share backend helpers with billing or license
+transport, but `DEMO_MODE` must continue to 404 commercial read surfaces
+instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
+demo readiness therefore comes from hiding commercial presentation on the
+shared API boundary, not from introducing a second fake-entitlement path into
+lifecycle-owned install or reporting flows.

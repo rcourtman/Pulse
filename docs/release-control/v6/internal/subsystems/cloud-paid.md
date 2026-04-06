@@ -148,6 +148,16 @@ agreement, and cloud-specific enforcement rules.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
+That same cloud-paid/browser boundary now also governs public demo posture.
+`DEMO_MODE` may run against a real internal entitlement, but public demo
+surfaces must not reveal self-hosted license metadata, hosted billing state,
+monitored-system ledgers, upgrade nudges, or activation controls just because
+the underlying runtime is commercially enabled. `frontend-modern/src/utils/apiClient.ts`
+must treat `X-Demo-Mode` as the canonical browser signal, and shared billing
+or upgrade surfaces must hide or suppress themselves from that signal rather
+than teaching mock mode or frontend-only feature flags to bypass the real
+licensing model. Demo readiness therefore means presentation isolation, not a
+license exemption.
 Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan
 versions are consumed at hosted entitlement and workspace-limit enforcement

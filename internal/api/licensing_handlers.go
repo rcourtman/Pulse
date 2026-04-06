@@ -918,6 +918,9 @@ func (h *LicenseHandlers) HandleLicenseStatus(w http.ResponseWriter, r *http.Req
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if hideCommercialReadSurfaceInDemo(w, r, h != nil && h.cfg != nil && h.cfg.DemoMode) {
+		return
+	}
 
 	service, _, err := h.getTenantComponents(r.Context())
 	if err != nil {

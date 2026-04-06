@@ -1,4 +1,5 @@
 import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
+import { demoModeEnabled, demoModeResolved } from '@/stores/demoMode';
 import type { SecurityStatus } from '@/types/config';
 import { logger } from '@/utils/logger';
 import { hasFeature, isHostedModeEnabled, licenseLoaded } from '@/stores/license';
@@ -35,6 +36,8 @@ export function useSettingsAccess({
             !shouldHideSettingsNavItem(item.id, {
               hasFeature,
               licenseLoaded,
+              demoModeEnabled: demoModeEnabled(),
+              demoModeResolved: demoModeResolved(),
               hostedModeEnabled,
               settingsCapabilities,
               settingsCapabilitiesResolved,
@@ -70,9 +73,11 @@ export function useSettingsAccess({
     const current = activeTab();
     const requiresFeatureResolution = Boolean(tabFeatureRequirements[current]?.length);
     const requiresCapabilityResolution = Boolean(getSettingsNavItem(current)?.requiredCapability);
+    const requiresDemoModeResolution = Boolean(getSettingsNavItem(current)?.hideInDemoMode);
     if (
       (requiresFeatureResolution && !licenseLoaded()) ||
-      (requiresCapabilityResolution && securityStatusLoading())
+      (requiresCapabilityResolution && securityStatusLoading()) ||
+      (requiresDemoModeResolution && !demoModeResolved())
     ) {
       return;
     }

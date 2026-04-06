@@ -314,6 +314,14 @@ querying, and the operator-facing storage health presentation layer.
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
 engine stop hiding inside broader monitoring and E2E buckets.
+That same adjacent `internal/api/` boundary now also governs public-demo
+commercial redaction for storage and recovery viewers. Shared storage/recovery
+surfaces may run beside a demo runtime that has real internal entitlements,
+but `DEMO_MODE` must still 404 license-status, billing-state, and monitored-
+system-ledger reads so adjacent recovery or storage pages do not leak
+commercial identity or upgrade posture into a public demo. Storage/recovery
+must consume that redacted boundary as presentation truth rather than
+reintroducing mock-only license bypasses or page-local commercial fallbacks.
 Physical-disk live I/O drawers now also sit on the canonical storage surface.
 Storage disk drawers may show read, write, busy, and SMART history, but every
 chart must route through the shared `HistoryChart` API contract using the disk
@@ -1988,3 +1996,11 @@ through `frontend-modern/src/contexts/appRuntime.ts`. They must not import
 `@/App` or create storage/recovery-local shell coupling, because provider
 placement remains app-shell-owned and storage/recovery surfaces must stay
 lazy-load safe.
+That same adjacent `internal/api/` boundary now also governs public-demo
+commercial redaction for storage and recovery viewers. Shared storage/recovery
+surfaces may run beside a demo runtime that has real internal entitlements,
+but `DEMO_MODE` must still 404 license-status, billing-state, and monitored-
+system-ledger reads so adjacent recovery or storage pages do not leak
+commercial identity or upgrade posture into a public demo. Storage/recovery
+must consume that redacted boundary as presentation truth rather than
+reintroducing mock-only license bypasses or page-local commercial fallbacks.

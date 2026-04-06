@@ -1,22 +1,16 @@
 import { createSignal, onMount, Show } from 'solid-js';
-import { apiFetch } from '@/utils/apiClient';
-import { logger } from '@/utils/logger';
+import { demoModeEnabled, ensureDemoModeResolved } from '@/stores/demoMode';
 
 export function DemoBanner() {
-  const [isDemoMode, setIsDemoMode] = createSignal(false);
   const [dismissed, setDismissed] = createSignal(false);
 
   onMount(async () => {
-    // Check if we're in demo mode by trying a test request
-    try {
-      const response = await apiFetch('/api/health');
-      const demoHeader = response.headers.get('X-Demo-Mode');
-      if (demoHeader === 'true') {
-        setIsDemoMode(true);
-      }
-    } catch (error) {
-      // Non-fatal: banner remains hidden when demo detection cannot be verified.
-      logger.debug('[DemoBanner] Failed to check demo mode', error);
+    void ensureDemoModeResolved();
+  });
+
+  onMount(() => {
+    if (sessionStorage.getItem('demoBannerDismissed') === 'true') {
+      setDismissed(true);
     }
   });
 
@@ -26,15 +20,8 @@ export function DemoBanner() {
     sessionStorage.setItem('demoBannerDismissed', 'true');
   };
 
-  // Check if already dismissed this session
-  onMount(() => {
-    if (sessionStorage.getItem('demoBannerDismissed') === 'true') {
-      setDismissed(true);
-    }
-  });
-
   return (
-    <Show when={isDemoMode() && !dismissed()}>
+    <Show when={demoModeEnabled() && !dismissed()}>
       <div class="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
         <div class="container mx-auto flex items-center justify-between text-sm">
           <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300">

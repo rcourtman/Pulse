@@ -2,6 +2,7 @@
 // This replaces the three separate auth utilities (api.ts, auth.ts, authInterceptor.ts)
 
 import { logger } from '@/utils/logger';
+import { syncDemoModeFromResponse } from '@/stores/demoMode';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 
 const AUTH_STORAGE_KEY = STORAGE_KEYS.AUTH;
@@ -626,7 +627,12 @@ class ApiClient {
       credentials: 'include', // Important for session cookies
     };
 
-    const response = await fetch(url, finalOptions);
+    const observeDemoMode = (response: Response): Response => {
+      syncDemoModeFromResponse(response);
+      return response;
+    };
+
+    const response = observeDemoMode(await fetch(url, finalOptions));
 
     // Handle stale/invalid org context by clearing it and retrying once against default org.
     if (
@@ -649,11 +655,13 @@ class ApiClient {
         this.setOrgID(null);
         const retryHeaders: Record<string, string> = { ...finalHeaders };
         delete retryHeaders[ORG_HEADER_NAME];
-        return fetch(url, {
+        return observeDemoMode(
+          await fetch(url, {
           ...fetchOptions,
           headers: retryHeaders,
           credentials: 'include',
-        });
+          }),
+        );
       }
     }
 
@@ -694,11 +702,11 @@ class ApiClient {
         this.csrfToken = refreshedToken;
         logger.debug(`[apiClient] Retrying ${method} ${url} with refreshed CSRF token`);
         finalHeaders['X-CSRF-Token'] = refreshedToken;
-        const retryResponse = await fetch(url, {
+        const retryResponse = observeDemoMode(await fetch(url, {
           ...fetchOptions,
           headers: finalHeaders,
           credentials: 'include',
-        });
+        }));
         return retryResponse;
       }
     }
@@ -740,11 +748,11 @@ class ApiClient {
         throw err;
       }
 
-      return fetch(url, {
+      return observeDemoMode(await fetch(url, {
         ...fetchOptions,
         headers: finalHeaders,
         credentials: 'include',
-      });
+      }));
     }
 
     return response;
