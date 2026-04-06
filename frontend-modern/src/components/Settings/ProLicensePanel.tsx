@@ -1,4 +1,4 @@
-import type { Component } from 'solid-js';
+import { Show, type Component } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import ShieldCheck from 'lucide-solid/icons/shield-check';
 import { MonitoredSystemLedgerPanel } from './MonitoredSystemLedgerPanel';
@@ -7,6 +7,7 @@ import { ProLicensePlanSection } from './ProLicensePlanSection';
 import { SelfHostedCommercialActivationSection } from './SelfHostedCommercialActivationSection';
 import { useProLicensePanelState } from './useProLicensePanelState';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
+import { Subtabs } from '@/components/shared/Subtabs';
 import { getMonitoredSystemBriefSummary } from '@/utils/monitoredSystemPresentation';
 import {
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
@@ -35,34 +36,54 @@ export const ProLicensePanel: Component = () => {
         loading={false}
       >
         <div class="space-y-6">
-          <CommercialSection
-            id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}
-            title={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionTitle}
-            description={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionDescription}
-          >
-            <ProLicensePlanSection
-              commercialMigrationNotice={state.commercialMigrationNotice()}
-              commercialPlanModel={state.commercialPlanModel()}
-              entitlements={state.entitlements()}
-              formattedFeatures={state.formattedFeatures()}
-              grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
-              hasLicenseDetails={state.hasLicenseDetails()}
-              hasPaidFeatures={state.hasPaidFeatures()}
-              loading={state.loading()}
-              onReload={() => void state.loadPanelData()}
-              statusPresentation={state.statusPresentation()}
-              trialActivationNotice={state.trialActivationNotice()}
-              trialEnded={state.trialEnded()}
-            />
-          </CommercialSection>
+          <Subtabs
+            value={state.activeSection()}
+            onChange={state.setActiveSection}
+            ariaLabel={SELF_HOSTED_PRO_BILLING_PRESENTATION.sectionSelectorAriaLabel}
+            tabs={[
+              {
+                value: 'plan',
+                label: SELF_HOSTED_PRO_BILLING_PRESENTATION.planTabLabel,
+              },
+              {
+                value: 'usage',
+                label: SELF_HOSTED_PRO_BILLING_PRESENTATION.usageTabLabel,
+              },
+            ]}
+          />
 
-          <CommercialSection
-            id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}
-            title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
-            description={getMonitoredSystemBriefSummary()}
-          >
-            <MonitoredSystemLedgerPanel embedded />
-          </CommercialSection>
+          <Show when={state.activeSection() === 'plan'}>
+            <CommercialSection
+              id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}
+              title={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionTitle}
+              description={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionDescription}
+            >
+              <ProLicensePlanSection
+                commercialMigrationNotice={state.commercialMigrationNotice()}
+                commercialPlanModel={state.commercialPlanModel()}
+                entitlements={state.entitlements()}
+                formattedFeatures={state.formattedFeatures()}
+                grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
+                hasLicenseDetails={state.hasLicenseDetails()}
+                hasPaidFeatures={state.hasPaidFeatures()}
+                loading={state.loading()}
+                onReload={() => void state.loadPanelData()}
+                statusPresentation={state.statusPresentation()}
+                trialActivationNotice={state.trialActivationNotice()}
+                trialEnded={state.trialEnded()}
+              />
+            </CommercialSection>
+          </Show>
+
+          <Show when={state.activeSection() === 'usage'}>
+            <CommercialSection
+              id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}
+              title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
+              description={getMonitoredSystemBriefSummary()}
+            >
+              <MonitoredSystemLedgerPanel embedded />
+            </CommercialSection>
+          </Show>
 
           <SelfHostedCommercialActivationSection
             licenseKey={state.licenseKey()}

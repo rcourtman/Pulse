@@ -69,7 +69,10 @@ describe('licensePresentation', () => {
       infrastructureRouteReferral: 'Billing and monitored-system limits live in Pulse Pro.',
       infrastructureWorkspaceReferral:
         'Billing, monitored-system limits, and Pulse Pro license status live in Pulse Pro, not here.',
+      sectionSelectorAriaLabel: 'Pulse Pro billing section',
       refreshLabel: 'Refresh',
+      planTabLabel: 'Plan',
+      usageTabLabel: 'Usage',
       planSectionTitle: 'Plan',
       planSectionDescription:
         'Review your active plan, expiry, included limits, and paid capabilities.',

@@ -21,9 +21,12 @@ const activateLicenseMock = vi.fn();
 const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
-const useLocationMock = vi.fn(() => ({ search: '' }));
+const useLocationMock = vi.fn(() => ({
+  search: '',
+  pathname: '/settings/system/billing',
+  hash: '',
+}));
 const navigateMock = vi.fn();
-const scrollIntoViewMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
@@ -75,7 +78,6 @@ describe('ProLicensePanel', () => {
     notificationErrorMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
-    scrollIntoViewMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     loadLicenseStatusMock.mockResolvedValue(undefined);
@@ -87,20 +89,15 @@ describe('ProLicensePanel', () => {
       external: true,
     }));
     getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
-    useLocationMock.mockReturnValue({ search: '' });
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      callback(0);
-      return 0;
-    });
-    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
-      configurable: true,
-      value: scrollIntoViewMock,
+    useLocationMock.mockReturnValue({
+      search: '',
+      pathname: '/settings/system/billing',
+      hash: '',
     });
   });
 
   afterEach(() => {
     cleanup();
-    vi.unstubAllGlobals();
   });
 
   it('shows start trial action only when trial_eligible is true', async () => {
@@ -183,26 +180,15 @@ describe('ProLicensePanel', () => {
     expect(screen.getAllByText('Active').length).toBeGreaterThan(0);
     expect(screen.getByText('V5 Lifetime Grandfathered')).toBeInTheDocument();
     expect(screen.getByText('Included Monitored Systems')).toBeInTheDocument();
-    expect(
-      screen.getByText('Billing is based on monitored systems. Child resources are included.'),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/a monitored system is a top-level machine or cluster/i),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View counting rules' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    );
+    expect(screen.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'false');
 
-    fireEvent.click(screen.getByRole('button', { name: 'View counting rules' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
 
-    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toHaveAttribute(
-      'aria-expanded',
-      'true',
-    );
-    expect(
-      screen.getByText(/a monitored system is a top-level machine or cluster/i),
-    ).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing#pulse-pro-usage', {
+      replace: false,
+      scroll: false,
+    });
   });
 
   it('shows recurring grandfathered pricing continuity for migrated v5 Pro plans', async () => {
@@ -344,7 +330,7 @@ describe('ProLicensePanel', () => {
     });
   });
 
-  it('anchors the plan and usage sections and scrolls to the requested billing hash', async () => {
+  it('focuses the usage billing section when the route hash requests it', async () => {
     useLocationMock.mockReturnValue({
       search: '',
       pathname: '/settings/system/billing',
@@ -353,12 +339,28 @@ describe('ProLicensePanel', () => {
 
     render(() => <ProLicensePanel />);
 
-    await waitFor(() => {
-      expect(scrollIntoViewMock).toHaveBeenCalled();
+    expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeInTheDocument();
+    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
+    expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
+  });
+
+  it('navigates between plan and usage focus states through the billing subtabs', async () => {
+    useLocationMock.mockReturnValue({
+      search: '',
+      pathname: '/settings/system/billing',
+      hash: `#${SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}`,
     });
 
-    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).toBeInTheDocument();
-    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
+    render(() => <ProLicensePanel />);
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
+
+    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing#pulse-pro-usage', {
+      replace: false,
+      scroll: false,
+    });
   });
 
   it('shows a migration-pending notice and hides the trial CTA', async () => {
@@ -502,11 +504,13 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
+    expect(proLicensePanelSource).toContain("value={state.activeSection()}");
+    expect(proLicensePanelSource).toContain('<Subtabs');
     expect(proLicensePanelSource).not.toContain('createSignal(');
     expect(proLicensePanelSource).not.toContain('useLocation()');
     expect(proLicensePanelStateSource).toContain('useLocation');
-    expect(proLicensePanelStateSource).toContain('requestAnimationFrame(scrollToBillingSectionHash);');
-    expect(proLicensePanelStateSource).toContain('SELF_HOSTED_PRO_BILLING_SECTION_IDS');
+    expect(proLicensePanelStateSource).toContain('const activeSection = createMemo<SelfHostedBillingSection>(() => {');
+    expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: SelfHostedBillingSection) => {');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');

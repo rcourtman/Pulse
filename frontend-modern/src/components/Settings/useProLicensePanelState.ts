@@ -1,4 +1,4 @@
-import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import {
@@ -29,6 +29,8 @@ const SELF_HOSTED_PRO_BILLING_SECTION_IDS = new Set([
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
 ]);
+
+export type SelfHostedBillingSection = 'plan' | 'usage';
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Not available';
@@ -78,29 +80,27 @@ export function useProLicensePanelState() {
     void loadPanelData();
   });
 
-  const scrollToBillingSectionHash = () => {
+  const activeSection = createMemo<SelfHostedBillingSection>(() => {
     const hash = location.hash?.trim();
-    if (!hash?.startsWith('#')) {
-      return;
+    const sectionId = hash?.startsWith('#') ? hash.slice(1) : '';
+    if (sectionId === SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID) {
+      return 'usage';
     }
+    return 'plan';
+  });
 
-    const sectionId = hash.slice(1);
+  const setActiveSection = (section: SelfHostedBillingSection) => {
+    const sectionId =
+      section === 'usage'
+        ? SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID
+        : SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID;
     if (!SELF_HOSTED_PRO_BILLING_SECTION_IDS.has(sectionId)) {
       return;
     }
 
-    const target = document.getElementById(sectionId);
-    if (!target) {
-      return;
-    }
-
-    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    const nextPath = `${location.pathname}${location.search}${`#${sectionId}`}`;
+    navigate(nextPath, { replace: false, scroll: false });
   };
-
-  createEffect(() => {
-    location.hash;
-    requestAnimationFrame(scrollToBillingSectionHash);
-  });
 
   const showTrialStart = createMemo(() => {
     const current = entitlements();
@@ -289,6 +289,7 @@ export function useProLicensePanelState() {
   };
 
   return {
+    activeSection,
     activating,
     clearing,
     commercialMigrationNotice,
@@ -305,6 +306,7 @@ export function useProLicensePanelState() {
     loadPanelData,
     loading,
     looksLikeLegacyLicenseKey,
+    setActiveSection,
     setLicenseKey,
     showTrialStart,
     startingTrial,

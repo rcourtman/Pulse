@@ -123,7 +123,10 @@ agreement, and cloud-specific enforcement rules.
     the plan-focused billing state. The owned billing shell must express those
     states explicitly through its section selector and rendered content, not
     merely through nearby hash anchors that still present the same visible
-    destination.
+    destination. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+    and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+    therefore own a canonical two-state billing focus model (`plan` vs
+    `usage`) that survives direct links and in-product CTA navigation.
 
 ## Forbidden Paths
 
