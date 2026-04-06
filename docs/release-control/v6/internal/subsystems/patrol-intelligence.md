@@ -135,6 +135,12 @@ Patrol paywall actions now follow the same shared commercial navigation split.
 commercial destinations from the shared license boundary, but they must leave
 internal-versus-external navigation semantics to `frontend-primitives` once a
 Patrol feature can resolve to either product-owned routes or public pricing.
+That same Patrol-owned commercial boundary must also fail closed in public
+demo runtimes. Patrol header and banner upgrade/trial affordances may render
+for real customer workspaces, but when
+`/api/security/status.sessionCapabilities.demoMode` is true they must suppress
+upgrade CTAs, trial nudges, and Pro-only helper copy instead of leaking
+commercial posture into the public demo presentation.
 That degraded empty-state copy must also interpret the finding state rather
 than simply replaying the primary assessment sentence verbatim: when coverage
 is incomplete, the findings panel should tell the operator that Patrol has not

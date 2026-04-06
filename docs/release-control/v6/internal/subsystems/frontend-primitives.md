@@ -136,6 +136,11 @@ work extends shared components instead of creating new local variants.
 114. `frontend-modern/src/components/shared/UpgradeLink.tsx`
 115. `frontend-modern/src/components/shared/useUpgradeNavigation.ts`
 116. `frontend-modern/src/utils/upgradeNavigation.ts`
+117. `frontend-modern/src/components/DemoBanner.tsx`
+118. `frontend-modern/src/components/Login.tsx`
+119. `frontend-modern/src/stores/demoMode.ts`
+120. `frontend-modern/src/stores/sessionCapabilities.ts`
+121. `frontend-modern/src/useAppRuntimeState.ts`
 
 ## Shared Boundaries
 
@@ -399,14 +404,25 @@ badges, or panel copy just because the underlying signal came from vSphere.
 That same shared settings-shell and banner boundary now also owns demo-mode
 commercial suppression. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
 `frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
+`frontend-modern/src/stores/sessionCapabilities.ts`,
+`frontend-modern/src/stores/demoMode.ts`,
+`frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/components/shared/useTrialBannerState.ts`, and
-`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
-must consume one shared demo-mode truth and hide billing tabs, trial nudges,
-and monitored-system warning banners when the browser is rendering a public
-demo runtime. Shared primitives must not perform their own ad hoc `/api/health`
-polling or rebuild per-banner demo heuristics; the settings shell and shared
-banner hooks stay on the canonical shared demo-mode owner so suppression stays
-coherent across customer-facing surfaces.
+`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
+`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`,
+`frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
+`frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
+`frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
+must consume one shared bootstrap truth from
+`/api/security/status.sessionCapabilities.demoMode` and hide billing tabs,
+trial nudges, monitored-system warning banners, dashboard upsells, Patrol
+upgrade CTAs, history-lock paywalls, and other public-demo commercial
+affordances when the browser is rendering a public demo runtime.
+Shared primitives must not perform their own ad hoc `/api/health` polling,
+response-header inference, hostname heuristics, or per-banner demo branching;
+the runtime bootstrap, shared session-capability store, and shared banner
+hooks stay on one canonical owner so suppression stays coherent across
+customer-facing surfaces.
 Storage disk drawers now also sit on that same shared-primitives floor.
 `frontend-modern/src/components/Storage/DiskDetail.tsx` must render physical-
 disk read, write, and busy charts through `HistoryChart` plus
@@ -1833,11 +1849,22 @@ own reusable consumption only.
 That same shared settings-shell and banner boundary now also owns demo-mode
 commercial suppression. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
 `frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
+`frontend-modern/src/stores/sessionCapabilities.ts`,
+`frontend-modern/src/stores/demoMode.ts`,
+`frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/components/shared/useTrialBannerState.ts`, and
-`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`
-must consume one shared demo-mode truth and hide billing tabs, trial nudges,
-and monitored-system warning banners when the browser is rendering a public
-demo runtime. Shared primitives must not perform their own ad hoc `/api/health`
-polling or rebuild per-banner demo heuristics; the settings shell and shared
-banner hooks stay on the canonical shared demo-mode owner so suppression stays
-coherent across customer-facing surfaces.
+`frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
+`frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`,
+`frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
+`frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
+`frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
+must consume one shared bootstrap truth from
+`/api/security/status.sessionCapabilities.demoMode` and hide billing tabs,
+trial nudges, monitored-system warning banners, dashboard upsells, Patrol
+upgrade CTAs, history-lock paywalls, and other public-demo commercial
+affordances when the browser is rendering a public demo runtime.
+Shared primitives must not perform their own ad hoc `/api/health` polling,
+response-header inference, hostname heuristics, or per-banner demo branching;
+the runtime bootstrap, shared session-capability store, and shared banner
+hooks stay on one canonical owner so suppression stays coherent across
+customer-facing surfaces.

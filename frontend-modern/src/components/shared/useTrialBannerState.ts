@@ -1,5 +1,5 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
-import { demoModeEnabled, ensureDemoModeResolved } from '@/stores/demoMode';
+import { demoModeEnabled } from '@/stores/demoMode';
 import { getUpgradeActionDestination, licenseStatus, loadLicenseStatus } from '@/stores/license';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
@@ -14,7 +14,6 @@ export function useTrialBannerState() {
 
   onMount(() => {
     void loadLicenseStatus();
-    void ensureDemoModeResolved();
   });
 
   const isTrial = createMemo(

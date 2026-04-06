@@ -20,6 +20,7 @@ const {
   hasFeatureMock,
   licenseLoadedMock,
   getUpgradeActionUrlOrFallbackMock,
+  demoModeEnabledMock,
 } = vi.hoisted(() => ({
   getUpgradeActionDestinationMock: vi.fn(),
   mockNavigate: vi.fn(),
@@ -35,6 +36,7 @@ const {
   hasFeatureMock: vi.fn(),
   licenseLoadedMock: vi.fn(),
   getUpgradeActionUrlOrFallbackMock: vi.fn(),
+  demoModeEnabledMock: vi.fn(),
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -48,6 +50,10 @@ vi.mock('@/stores/license', () => ({
   licenseLoaded: (...args: unknown[]) => licenseLoadedMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
+}));
+
+vi.mock('@/stores/demoMode', () => ({
+  demoModeEnabled: () => demoModeEnabledMock(),
 }));
 
 vi.mock('@/api/relay', () => ({
@@ -101,6 +107,8 @@ function resetAllMocks() {
   licenseLoadedMock.mockReset();
   getUpgradeActionDestinationMock.mockReset();
   getUpgradeActionUrlOrFallbackMock.mockReset();
+  demoModeEnabledMock.mockReset();
+  demoModeEnabledMock.mockReturnValue(false);
 }
 
 /**
@@ -204,6 +212,20 @@ describe('RelayOnboardingCard', () => {
       });
 
       expect(screen.queryByText('Set Up Relay')).not.toBeInTheDocument();
+    });
+
+    it('hides the relay paywall entirely in demo mode', async () => {
+      setupWithoutRelayFeature();
+      demoModeEnabledMock.mockReturnValue(true);
+      render(() => <RelayOnboardingCard />);
+
+      await waitFor(() => {
+        expect(loadLicenseStatusMock).toHaveBeenCalled();
+      });
+
+      expect(screen.queryByTestId('card')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Get Relay/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/or start a Pro trial/)).not.toBeInTheDocument();
     });
   });
 

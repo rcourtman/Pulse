@@ -270,4 +270,33 @@ describe('useAppRuntimeState', () => {
 
     dispose();
   });
+
+  it('syncs demo mode from security status session capabilities during bootstrap', async () => {
+    apiFetchMock.mockImplementation(async (url: string) => {
+      if (url === '/api/security/status') {
+        return new Response(
+          JSON.stringify({
+            hasAuthentication: true,
+            sessionCapabilities: { demoMode: true },
+          }),
+          { status: 200 },
+        );
+      }
+      if (url === '/api/state') {
+        return new Response('{}', { status: 200 });
+      }
+      throw new Error(`Unhandled apiFetch URL: ${url}`);
+    });
+
+    const demoModeModule = await import('@/stores/demoMode');
+    const { dispose } = mountHook();
+
+    await flushAsync();
+    await flushAsync();
+
+    expect(demoModeModule.demoModeResolved()).toBe(true);
+    expect(demoModeModule.demoModeEnabled()).toBe(true);
+
+    dispose();
+  });
 });

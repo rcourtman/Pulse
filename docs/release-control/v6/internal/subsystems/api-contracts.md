@@ -75,6 +75,7 @@ Own canonical runtime payload shapes between backend and frontend.
 51. `internal/api/recovery_handlers.go`
 52. `internal/api/config_setup_handlers.go`
 53. `internal/api/demo_mode_commercial.go`
+54. `internal/api/security_status_capabilities.go`
 
 ## Shared Boundaries
 
@@ -204,6 +205,14 @@ Own canonical runtime payload shapes between backend and frontend.
     target before refresh, persistence, and evaluator rewiring, so tenant-
     scoped hosted routes cannot refresh against an empty non-default org while
     the machine's real hosted lease still lives on `default`.
+32. Keep public demo bootstrap posture on the shared security-status contract.
+    `internal/api/router_routes_auth_security.go`,
+    `internal/api/security_status_capabilities.go`, frontend security-status
+    consumers, and shared demo-mode stores must treat
+    `/api/security/status.sessionCapabilities.demoMode` as the canonical
+    browser bootstrap signal for public demo posture instead of asking
+    frontend callers to infer demo state from response headers, `/api/health`
+    probes, or hostname heuristics.
 
 ## Forbidden Paths
 

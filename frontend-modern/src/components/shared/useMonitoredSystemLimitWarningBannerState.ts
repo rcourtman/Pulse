@@ -1,5 +1,5 @@
 import { createEffect, createMemo, onMount } from 'solid-js';
-import { demoModeEnabled, ensureDemoModeResolved } from '@/stores/demoMode';
+import { demoModeEnabled } from '@/stores/demoMode';
 import {
   entitlements,
   getLimit,
@@ -34,7 +34,6 @@ import {
 export function useMonitoredSystemLimitWarningBannerState() {
   onMount(() => {
     void loadLicenseStatus();
-    void ensureDemoModeResolved();
   });
 
   const monitoredSystemLimit = createMemo(() => getLimit(MONITORED_SYSTEM_LIMIT_KEY));

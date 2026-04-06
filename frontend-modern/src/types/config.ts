@@ -117,6 +117,10 @@ export interface SecurityStatusSettingsCapabilities {
   billingAdmin: boolean;
 }
 
+export interface SecurityStatusSessionCapabilities {
+  demoMode: boolean;
+}
+
 export interface SecurityStatus {
   hasAuthentication: boolean;
   apiTokenConfigured: boolean;
@@ -153,6 +157,7 @@ export interface SecurityStatus {
   ssoProviders?: SSOProviderInfo[];
   // Token auth scopes (for kiosk/limited-access mode)
   tokenScopes?: string[];
+  sessionCapabilities?: SecurityStatusSessionCapabilities;
   settingsCapabilities?: SecurityStatusSettingsCapabilities;
 }
 

@@ -379,6 +379,12 @@ reads, expose the backend-owned Pulse Mobile relay access token creator, and
 the relay pairing UI may revoke a displayed token only when that metadata still
 shows no `lastUsedAt`. Refreshing or hiding a QR payload must not delete a
 token that an already paired device is actively depending on.
+That same auth/security boundary also owns browser session-capability posture:
+`internal/api/router_routes_auth_security.go` together with
+`internal/api/security_status_capabilities.go` must expose
+`/api/security/status.sessionCapabilities.demoMode` as the backend-owned
+public-demo posture signal, and security/privacy consumers must not infer demo
+state from response headers, `/api/health`, or hostname heuristics.
 That same token-management boundary now also depends on one neutral
 app-runtime context owner. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 may consume websocket-backed revocation fan-out through

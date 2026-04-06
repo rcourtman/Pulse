@@ -308,7 +308,10 @@ transport, but `DEMO_MODE` must continue to 404 commercial read surfaces
 instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
 demo readiness therefore comes from hiding commercial presentation on the
 shared API boundary, not from introducing a second fake-entitlement path into
-lifecycle-owned install or reporting flows.
+lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces
+must also treat `/api/security/status.sessionCapabilities.demoMode` as the
+canonical public-demo bootstrap signal instead of inferring demo posture from
+headers, `/api/health`, or hostname heuristics.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered
 through shared drawers or lifecycle-adjacent resource context, those reads
@@ -1840,4 +1843,7 @@ transport, but `DEMO_MODE` must continue to 404 commercial read surfaces
 instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
 demo readiness therefore comes from hiding commercial presentation on the
 shared API boundary, not from introducing a second fake-entitlement path into
-lifecycle-owned install or reporting flows.
+lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces
+must also treat `/api/security/status.sessionCapabilities.demoMode` as the
+canonical public-demo bootstrap signal instead of inferring demo posture from
+headers, `/api/health`, or hostname heuristics.

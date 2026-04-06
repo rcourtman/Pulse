@@ -32,7 +32,6 @@ const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadLicenseStatus = vi.hoisted(() => vi.fn());
 const mockDemoModeEnabled = vi.hoisted(() => vi.fn(() => false));
-const mockEnsureDemoModeResolved = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
@@ -48,7 +47,6 @@ vi.mock('@/stores/license', () => ({
 
 vi.mock('@/stores/demoMode', () => ({
   demoModeEnabled: () => mockDemoModeEnabled(),
-  ensureDemoModeResolved: (...args: unknown[]) => mockEnsureDemoModeResolved(...args),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -72,8 +70,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
     mockDemoModeEnabled.mockReset();
     mockDemoModeEnabled.mockReturnValue(false);
-    mockEnsureDemoModeResolved.mockReset();
-    mockEnsureDemoModeResolved.mockResolvedValue(false);
     mockLoadLicenseStatus.mockReset();
     mockLoadLicenseStatus.mockResolvedValue(undefined);
     mockGetUpgradeActionDestination.mockReset();
@@ -109,7 +105,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('ensureDemoModeResolved');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
@@ -142,7 +138,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(mockLoadLicenseStatus).toHaveBeenCalled();
-    expect(mockEnsureDemoModeResolved).toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
 

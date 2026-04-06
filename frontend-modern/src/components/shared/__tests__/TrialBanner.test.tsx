@@ -9,7 +9,6 @@ import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 const {
   demoModeEnabledMock,
-  ensureDemoModeResolvedMock,
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
   licenseStatusMock,
@@ -19,7 +18,6 @@ const {
 } =
   vi.hoisted(() => ({
     demoModeEnabledMock: vi.fn(),
-    ensureDemoModeResolvedMock: vi.fn(),
     getUpgradeActionDestinationMock: vi.fn(),
     getUpgradeActionUrlOrFallbackMock: vi.fn(),
     licenseStatusMock: vi.fn(),
@@ -37,7 +35,6 @@ vi.mock('@/stores/license', () => ({
 
 vi.mock('@/stores/demoMode', () => ({
   demoModeEnabled: () => demoModeEnabledMock(),
-  ensureDemoModeResolved: (...args: unknown[]) => ensureDemoModeResolvedMock(...args),
 }));
 
 vi.mock('@/utils/snooze', () => ({
@@ -49,7 +46,6 @@ describe('TrialBanner', () => {
   beforeEach(() => {
     cleanup();
     demoModeEnabledMock.mockReset();
-    ensureDemoModeResolvedMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     licenseStatusMock.mockReset();
@@ -61,7 +57,6 @@ describe('TrialBanner', () => {
       external: true,
     });
     demoModeEnabledMock.mockReturnValue(false);
-    ensureDemoModeResolvedMock.mockResolvedValue(false);
     getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
     loadLicenseStatusMock.mockResolvedValue(undefined);
     isUpsellSnoozedMock.mockReturnValue(false);
@@ -84,7 +79,7 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).toContain('loadLicenseStatus');
-    expect(trialBannerStateSource).toContain('ensureDemoModeResolved');
+    expect(trialBannerStateSource).toContain('demoModeEnabled');
     expect(trialBannerStateSource).toContain('licenseStatus');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
@@ -106,7 +101,6 @@ describe('TrialBanner', () => {
 
     await waitFor(() => {
       expect(loadLicenseStatusMock).toHaveBeenCalled();
-      expect(ensureDemoModeResolvedMock).toHaveBeenCalled();
     });
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Pro Trial:')).toBeInTheDocument();

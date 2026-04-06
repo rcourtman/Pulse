@@ -1,5 +1,6 @@
 import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
-import { demoModeEnabled, demoModeResolved } from '@/stores/demoMode';
+import { syncDemoModeFromSecurityStatus } from '@/stores/demoMode';
+import { sessionCapabilities, sessionCapabilitiesResolved } from '@/stores/sessionCapabilities';
 import type { SecurityStatus } from '@/types/config';
 import { logger } from '@/utils/logger';
 import { hasFeature, isHostedModeEnabled, licenseLoaded } from '@/stores/license';
@@ -22,6 +23,16 @@ export function useSettingsAccess({
 }: UseSettingsAccessParams) {
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
+  const demoModeEnabled = createMemo(() => {
+    const resolvedSecurityStatus = securityStatus();
+    if (resolvedSecurityStatus) {
+      return resolvedSecurityStatus.sessionCapabilities?.demoMode === true;
+    }
+    return sessionCapabilities().demoMode;
+  });
+  const demoModeResolved = createMemo(
+    () => securityStatus() !== null || sessionCapabilitiesResolved(),
+  );
 
   const visibleTabGroups = createMemo(() => {
     const hostedModeEnabled = isHostedModeEnabled();
@@ -93,8 +104,9 @@ export function useSettingsAccess({
       const { apiFetch } = await import('@/utils/apiClient');
       const response = await apiFetch('/api/security/status');
       if (response.ok) {
-        const status = await response.json();
+        const status = (await response.json()) as SecurityStatus;
         logger.debug('Security status loaded', status);
+        syncDemoModeFromSecurityStatus(status);
         setSecurityStatus(status);
       } else {
         logger.error('Failed to fetch security status', { status: response.status });

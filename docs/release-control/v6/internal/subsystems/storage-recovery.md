@@ -322,6 +322,10 @@ system-ledger reads so adjacent recovery or storage pages do not leak
 commercial identity or upgrade posture into a public demo. Storage/recovery
 must consume that redacted boundary as presentation truth rather than
 reintroducing mock-only license bypasses or page-local commercial fallbacks.
+Browser-facing storage/recovery surfaces must also treat
+`/api/security/status.sessionCapabilities.demoMode` as the canonical
+public-demo bootstrap signal instead of inferring demo posture from headers,
+`/api/health`, or hostname heuristics.
 Physical-disk live I/O drawers now also sit on the canonical storage surface.
 Storage disk drawers may show read, write, busy, and SMART history, but every
 chart must route through the shared `HistoryChart` API contract using the disk
@@ -2004,3 +2008,7 @@ system-ledger reads so adjacent recovery or storage pages do not leak
 commercial identity or upgrade posture into a public demo. Storage/recovery
 must consume that redacted boundary as presentation truth rather than
 reintroducing mock-only license bypasses or page-local commercial fallbacks.
+Browser-facing storage/recovery surfaces must also treat
+`/api/security/status.sessionCapabilities.demoMode` as the canonical
+public-demo bootstrap signal instead of inferring demo posture from headers,
+`/api/health`, or hostname heuristics.

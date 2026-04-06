@@ -45,6 +45,10 @@ vi.mock('@/stores/license', () => ({
   startProTrial: vi.fn(),
 }));
 
+vi.mock('@/stores/demoMode', () => ({
+  demoModeEnabled: () => false,
+}));
+
 vi.mock('@/api/charts', () => ({
   ChartsAPI: {
     getMetricsHistory: vi.fn().mockResolvedValue({ points: [], source: 'store' }),
@@ -87,6 +91,8 @@ describe('HistoryChart', () => {
 
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).toContain('demoModeEnabled');
+    expect(historyChartOverlaySource).toContain('Historical data beyond {props.chart.lockDays()} days is hidden in this demo.');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');
 

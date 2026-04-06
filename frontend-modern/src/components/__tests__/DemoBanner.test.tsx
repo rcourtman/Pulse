@@ -6,11 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /* ------------------------------------------------------------------ */
 
 const demoModeEnabledMock = vi.hoisted(() => vi.fn());
-const ensureDemoModeResolvedMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/demoMode', () => ({
   demoModeEnabled: () => demoModeEnabledMock(),
-  ensureDemoModeResolved: (...args: unknown[]) => ensureDemoModeResolvedMock(...args),
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -24,9 +22,7 @@ vi.mock('@/utils/logger', () => ({
 describe('DemoBanner', () => {
   beforeEach(() => {
     demoModeEnabledMock.mockReset();
-    ensureDemoModeResolvedMock.mockReset();
     demoModeEnabledMock.mockReturnValue(false);
-    ensureDemoModeResolvedMock.mockResolvedValue(false);
     sessionStorage.clear();
   });
 
@@ -91,17 +87,5 @@ describe('DemoBanner', () => {
     await renderBanner();
 
     expect(screen.queryByText('Demo instance with mock data (read-only)')).not.toBeInTheDocument();
-  });
-
-  /* ---------- Demo-mode resolve ---------- */
-
-  it('resolves demo mode exactly once on mount', async () => {
-    ensureDemoModeResolvedMock.mockResolvedValue(false);
-
-    await renderBanner();
-
-    await waitFor(() => {
-      expect(ensureDemoModeResolvedMock).toHaveBeenCalledTimes(1);
-    });
   });
 });

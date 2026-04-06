@@ -1557,6 +1557,8 @@ describe('frontend resource type boundaries', () => {
     expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
     expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
     expect(relayOnboardingCardSource).toContain('./useRelayOnboardingCardState');
+    expect(relayOnboardingCardSource).toContain('demoModeEnabled');
+    expect(relayOnboardingCardSource).toContain('!demoModeEnabled() || state.hasRelay()');
     expect(relayOnboardingCardSource).not.toContain('createSignal(');
     expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
@@ -3179,7 +3181,11 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartHeaderSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
+    expect(historyChartOverlaySource).toContain('demoModeEnabled');
     expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
+    expect(historyChartOverlaySource).toContain(
+      'Historical data beyond {props.chart.lockDays()} days is hidden in this demo.',
+    );
     expect(historyChartTooltipSource).toContain('formatHistoryChartTooltipValue');
     expect(containerUpdateBadgeSource).toContain('useContainerUpdateButtonState');
     expect(containerUpdateBadgeSource).toContain('getUpdateButtonClass');
@@ -4396,6 +4402,17 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceBanners');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceSummary');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceWorkspace');
+    expect(patrolIntelligenceBannersSource).toContain('demoModeEnabled');
+    expect(patrolIntelligenceBannersSource).toContain(
+      '!demoModeEnabled() && state.licenseRequired()',
+    );
+    expect(patrolIntelligenceHeaderSource).toContain('demoModeEnabled');
+    expect(patrolIntelligenceHeaderSource).toContain(
+      '!demoModeEnabled() && state.autoFixLocked()',
+    );
+    expect(patrolIntelligenceHeaderSource).toContain(
+      '!demoModeEnabled() && state.alertAnalysisLocked()',
+    );
     expect(operationsPageRouteSource).toContain(
       "import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';",
     );

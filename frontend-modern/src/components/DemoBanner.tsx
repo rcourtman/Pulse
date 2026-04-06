@@ -1,12 +1,8 @@
 import { createSignal, onMount, Show } from 'solid-js';
-import { demoModeEnabled, ensureDemoModeResolved } from '@/stores/demoMode';
+import { demoModeEnabled } from '@/stores/demoMode';
 
 export function DemoBanner() {
   const [dismissed, setDismissed] = createSignal(false);
-
-  onMount(async () => {
-    void ensureDemoModeResolved();
-  });
 
   onMount(() => {
     if (sessionStorage.getItem('demoBannerDismissed') === 'true') {

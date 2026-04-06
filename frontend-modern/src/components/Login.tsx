@@ -271,6 +271,7 @@ export const Login: Component<LoginProps> = (props) => {
               oidcLoading,
               oidcError,
               oidcMessage,
+              demoModeEnabled: authStatus()?.sessionCapabilities?.demoMode === true,
               showLocalLogin: shouldShowLocalLogin(),
               ssoProviders: ssoProviders(),
             }}
@@ -313,6 +314,7 @@ const LoginForm: Component<{
   oidcLoading: () => boolean;
   oidcError: () => string;
   oidcMessage: () => string;
+  demoModeEnabled: boolean;
   showLocalLogin: boolean;
   ssoProviders: SSOProviderInfo[];
 }> = (props) => {
@@ -329,22 +331,16 @@ const LoginForm: Component<{
     oidcLoading,
     oidcError,
     oidcMessage,
+    demoModeEnabled,
     showLocalLogin,
     ssoProviders,
   } = props;
-
-  // Check if we're on the demo server
-  const isDemoServer = () => {
-    const hostname = window.location.hostname;
-    const normalized = hostname.toLowerCase();
-    return normalized === 'demo' || normalized.startsWith('demo.') || normalized.includes('.demo.');
-  };
 
   return (
     <div class="min-h-screen flex items-center justify-center bg-base py-12 px-4 sm:px-6 lg:px-8">
       <div class="max-w-md w-full space-y-8">
         {/* Demo Credentials Banner */}
-        <Show when={isDemoServer()}>
+        <Show when={demoModeEnabled}>
           <div class="bg-surface rounded-md p-4 shadow-sm border border-blue-200 dark:border-blue-800 animate-fade-in">
             <div class="flex items-center gap-3">
               <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center">

@@ -52,6 +52,7 @@ import {
   licenseLoaded,
   loadLicenseStatus,
 } from '@/stores/license';
+import { syncDemoModeFromSecurityStatus } from '@/stores/demoMode';
 import { layoutStore } from '@/utils/layout';
 import {
   markSystemSettingsLoadedWithDefaults,
@@ -578,7 +579,9 @@ export const useAppRuntimeState = () => {
         localStorage.removeItem('just_logged_out');
         logger.debug('[App] User logged out, showing login page');
         if (securityResponse.ok) {
-          setSecurityStatus((await securityResponse.json()) as SecurityStatus);
+          const securityData = (await securityResponse.json()) as SecurityStatus;
+          syncDemoModeFromSecurityStatus(securityData);
+          setSecurityStatus(securityData);
         }
         setHasAuth(true);
         setNeedsAuth(true);
@@ -600,6 +603,7 @@ export const useAppRuntimeState = () => {
         ssoLogoutURL?: string;
       };
       logger.debug('[App] Security status fetched', securityData);
+      syncDemoModeFromSecurityStatus(securityData);
       setSecurityStatus(securityData);
 
       const authConfigured = securityData.hasAuthentication || false;

@@ -1442,7 +1442,9 @@ describe('Settings architecture guardrails', () => {
 
   it('keeps demo-mode billing visibility on the shared settings shell owner', () => {
     expect(settingsNavigationModelSource).toContain('hideInDemoMode?: boolean;');
-    expect(settingsNavVisibilitySource).toContain('item.hideInDemoMode && context.demoModeEnabled');
+    expect(settingsNavVisibilitySource).toContain('if (item.hideInDemoMode)');
+    expect(settingsNavVisibilitySource).toContain('context.demoModeResolved === false');
+    expect(settingsNavVisibilitySource).toContain('if (context.demoModeEnabled)');
     expect(getSettingsNavItem('system-billing')?.hideInDemoMode).toBe(true);
     expect(getSettingsNavItem('organization-billing')?.hideInDemoMode).toBe(true);
     expect(getSettingsNavItem('organization-billing-admin')?.hideInDemoMode).toBe(true);

@@ -385,3 +385,28 @@ func TestSecurityStatusRestrictsSessionCapabilitiesToConfiguredAdmin(t *testing.
 		t.Fatalf("did not expect audit capability for non-admin session user")
 	}
 }
+
+func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	cfg := &config.Config{DemoMode: true}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload struct {
+		SessionCapabilities securityStatusSessionCapabilities `json:"sessionCapabilities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !payload.SessionCapabilities.DemoMode {
+		t.Fatalf("expected sessionCapabilities.demoMode to be true, got %#v", payload.SessionCapabilities)
+	}
+}

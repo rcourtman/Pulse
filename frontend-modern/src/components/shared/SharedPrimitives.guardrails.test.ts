@@ -470,7 +470,6 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerStateSource).toContain('loadLicenseStatus');
     expect(trialBannerStateSource).toContain('licenseStatus');
     expect(trialBannerStateSource).toContain('demoModeEnabled');
-    expect(trialBannerStateSource).toContain('ensureDemoModeResolved');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
     expect(trialBannerStateSource).not.toContain("fetch('/api/health'");
@@ -665,7 +664,6 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('ensureDemoModeResolved');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(

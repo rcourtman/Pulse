@@ -116,6 +116,26 @@ describe('settingsNavigation integration scaffold', () => {
     ).toBe(true);
   });
 
+  it('fails closed for demo-hidden tabs until demo mode is resolved', () => {
+    expect(
+      shouldHideSettingsNavItem('system-billing', {
+        hasFeature: hasFeatures([]),
+        licenseLoaded: () => true,
+        demoModeResolved: false,
+        hostedModeEnabled: false,
+      }),
+    ).toBe(true);
+
+    expect(
+      shouldHideSettingsNavItem('organization-billing', {
+        hasFeature: hasFeatures(['multi_tenant']),
+        licenseLoaded: () => true,
+        demoModeResolved: false,
+        hostedModeEnabled: true,
+      }),
+    ).toBe(true);
+  });
+
   it('hides tabs when the backend denies the required capability', () => {
     expect(
       shouldHideSettingsNavItem('api', {

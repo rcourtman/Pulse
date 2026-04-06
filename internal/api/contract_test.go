@@ -5963,6 +5963,33 @@ func TestContract_SetupScriptURLResponseJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_SecurityStatusIncludesSessionCapabilitiesDemoMode(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.DemoMode = true
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode security status payload: %v", err)
+	}
+
+	sessionCapabilities, ok := payload["sessionCapabilities"].(map[string]any)
+	if !ok {
+		t.Fatalf("sessionCapabilities = %#v, want object", payload["sessionCapabilities"])
+	}
+	if got, _ := sessionCapabilities["demoMode"].(bool); !got {
+		t.Fatalf("sessionCapabilities.demoMode = %v, want true", sessionCapabilities["demoMode"])
+	}
+}
+
 func TestContract_SetupScriptURLRejectsNonCanonicalRequestJSON(t *testing.T) {
 	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})
 

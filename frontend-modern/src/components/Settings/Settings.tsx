@@ -142,6 +142,9 @@ const Settings: Component<SettingsProps> = (props) => {
   });
   const activeSettingsPanelEntry = createMemo(() => {
     const currentTab = activeTab();
+    if (!flatTabs().some((tab) => tab.id === currentTab)) {
+      return null;
+    }
     return settingsPanelRegistry()[currentTab];
   });
 
@@ -169,7 +172,16 @@ const Settings: Component<SettingsProps> = (props) => {
         setActiveTab={setActiveTab}
         isPro={isPro}
       >
-        <Show when={activeSettingsPanelEntry()}>
+        <Show
+          when={activeSettingsPanelEntry()}
+          fallback={
+            securityStatusLoading() ? (
+              <div class="flex items-center justify-center rounded-md border border-dashed border-border bg-surface-alt py-12 text-sm text-muted">
+                {getSettingsLoadingState().text}
+              </div>
+            ) : null
+          }
+        >
           {(entry) => (
             <Suspense
               fallback={

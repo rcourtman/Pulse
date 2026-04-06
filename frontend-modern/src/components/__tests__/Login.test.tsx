@@ -155,4 +155,20 @@ describe('Login', () => {
     // because we passed securityStatus directly
     expect(mockFetch).not.toHaveBeenCalledWith('/api/security/status');
   });
+
+  it('shows demo credentials when session capabilities mark the runtime as demo mode', async () => {
+    const mockOnLogin = vi.fn();
+    const securityStatus = {
+      hasAuthentication: true,
+      hideLocalLogin: false,
+      sessionCapabilities: { demoMode: true },
+    };
+
+    render(() => (
+      <Login onLogin={mockOnLogin} hasAuth={true} securityStatus={securityStatus as any} />
+    ));
+
+    expect(await screen.findByText('Demo Mode')).toBeInTheDocument();
+    expect(screen.getAllByText('demo')).toHaveLength(2);
+  });
 });

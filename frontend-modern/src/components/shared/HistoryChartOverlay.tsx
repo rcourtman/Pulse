@@ -1,4 +1,5 @@
 import { Component, Show } from 'solid-js';
+import { demoModeEnabled } from '@/stores/demoMode';
 import { UpgradeLink } from './UpgradeLink';
 import type { HistoryChartState } from './useHistoryChartState';
 
@@ -69,29 +70,38 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
             </svg>
           </div>
           <h3 class="text-lg font-bold text-base-content mb-1">{props.chart.lockDays()}-Day History</h3>
-          <p class="text-sm text-muted text-center max-w-[200px] mb-4">
-            Upgrade to {props.chart.lockTierLabel()} to unlock {props.chart.lockDays()} days of
-            historical data retention.
-          </p>
-          <div class="flex flex-col items-center gap-2">
-            <UpgradeLink
-              destination={props.chart.getUpgradeActionDestination('long_term_metrics')}
-              onClick={() => props.chart.trackUpgradeClicked('history_chart', 'long_term_metrics')}
-              class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
-            >
-              Unlock {props.chart.lockTierLabel()} Features
-            </UpgradeLink>
-            <Show when={props.chart.canStartTrial()}>
-              <button
-                type="button"
-                class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
-                disabled={props.chart.startingTrial()}
-                onClick={props.chart.handleStartTrial}
+          <Show
+            when={!demoModeEnabled()}
+            fallback={
+              <p class="text-sm text-muted text-center max-w-[220px] mb-4">
+                Historical data beyond {props.chart.lockDays()} days is hidden in this demo.
+              </p>
+            }
+          >
+            <p class="text-sm text-muted text-center max-w-[200px] mb-4">
+              Upgrade to {props.chart.lockTierLabel()} to unlock {props.chart.lockDays()} days of
+              historical data retention.
+            </p>
+            <div class="flex flex-col items-center gap-2">
+              <UpgradeLink
+                destination={props.chart.getUpgradeActionDestination('long_term_metrics')}
+                onClick={() => props.chart.trackUpgradeClicked('history_chart', 'long_term_metrics')}
+                class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm transition-colors"
               >
-                Or start a free 14-day trial
-              </button>
-            </Show>
-          </div>
+                Unlock {props.chart.lockTierLabel()} Features
+              </UpgradeLink>
+              <Show when={props.chart.canStartTrial()}>
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline disabled:opacity-60"
+                  disabled={props.chart.startingTrial()}
+                  onClick={props.chart.handleStartTrial}
+                >
+                  Or start a free 14-day trial
+                </button>
+              </Show>
+            </div>
+          </Show>
         </div>
       </Show>
     </>

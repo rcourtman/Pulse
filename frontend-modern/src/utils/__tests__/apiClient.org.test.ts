@@ -67,25 +67,6 @@ describe('apiClient org context', () => {
     expect(headers['X-Pulse-Org-ID']).toBe('tenant-ledger');
   });
 
-  it('tracks demo mode from shared API response headers', async () => {
-    vi.resetModules();
-    mockFetch.mockResolvedValue(
-      new Response('{}', {
-        status: 200,
-        headers: { 'X-Demo-Mode': 'true' },
-      }),
-    );
-    global.fetch = mockFetch as unknown as typeof fetch;
-
-    const apiClientModule = await import('@/utils/apiClient');
-    const demoModeModule = await import('@/stores/demoMode');
-
-    await apiClientModule.apiFetch('/api/state');
-
-    expect(demoModeModule.demoModeResolved()).toBe(true);
-    expect(demoModeModule.demoModeEnabled()).toBe(true);
-  });
-
   it('uses default org context when skipOrgContext is enabled', async () => {
     mockFetch.mockResolvedValue(new Response('[]', { status: 200 }));
 

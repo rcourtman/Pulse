@@ -288,6 +288,7 @@ func (r *Router) registerAuthSecurityInstallRoutes() {
 				"ssoSessionUsername":          ssoSessionUsername,
 				"hideLocalLogin":              r.config.HideLocalLogin,
 				"agentUrl":                    agentURL,
+				"sessionCapabilities":         r.securityStatusSessionCapabilities(),
 				"settingsCapabilities":        r.securityStatusSettingsCapabilitiesFromSnapshot(authSnapshot),
 			}
 

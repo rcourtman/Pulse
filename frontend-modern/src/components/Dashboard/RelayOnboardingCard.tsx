@@ -3,6 +3,7 @@ import Smartphone from 'lucide-solid/icons/smartphone';
 import X from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
+import { demoModeEnabled } from '@/stores/demoMode';
 import { getUpgradeActionDestination } from '@/stores/license';
 import {
   RELAY_ONBOARDING_DESCRIPTION,
@@ -19,7 +20,7 @@ export const RelayOnboardingCard: Component = () => {
   const state = useRelayOnboardingCardState();
 
   return (
-    <Show when={state.shouldShow()}>
+    <Show when={state.shouldShow() && (!demoModeEnabled() || state.hasRelay())}>
       <Card padding="lg" class="relative overflow-hidden">
         <div class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100 dark:bg-blue-900" />
         <div class="absolute -right-16 -bottom-16 h-40 w-40 rounded-full bg-surface-alt" />

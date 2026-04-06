@@ -25,6 +25,10 @@ type securityStatusSettingsCapabilities struct {
 	BillingAdmin        bool `json:"billingAdmin"`
 }
 
+type securityStatusSessionCapabilities struct {
+	DemoMode bool `json:"demoMode"`
+}
+
 type securityStatusAuthSnapshot struct {
 	request        *http.Request
 	authenticated  bool
@@ -225,4 +229,10 @@ func (r *Router) securityStatusSettingsCapabilitiesFromSnapshot(snapshot securit
 
 func (r *Router) securityStatusSettingsCapabilities(req *http.Request) securityStatusSettingsCapabilities {
 	return r.securityStatusSettingsCapabilitiesFromSnapshot(r.buildSecurityStatusAuthSnapshot(req))
+}
+
+func (r *Router) securityStatusSessionCapabilities() securityStatusSessionCapabilities {
+	return securityStatusSessionCapabilities{
+		DemoMode: r != nil && r.config != nil && r.config.DemoMode,
+	}
 }

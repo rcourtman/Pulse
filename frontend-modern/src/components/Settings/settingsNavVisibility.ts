@@ -32,8 +32,14 @@ export function shouldHideSettingsNavItem(
     return true;
   }
 
-  if (item.hideInDemoMode && context.demoModeEnabled) {
-    return true;
+  if (item.hideInDemoMode) {
+    if (context.demoModeResolved === false) {
+      return true;
+    }
+
+    if (context.demoModeEnabled) {
+      return true;
+    }
   }
 
   if (
