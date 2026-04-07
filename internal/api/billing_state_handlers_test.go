@@ -359,7 +359,7 @@ func doBillingStateRequest(router *Router, method, path, body string) *httptest.
 	}
 	req.Header.Set("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte("admin:Password!1")))
 	rec := httptest.NewRecorder()
-	router.mux.ServeHTTP(rec, req)
+	DemoModeMiddleware(router.config, router.mux).ServeHTTP(rec, req)
 	return rec
 }
 

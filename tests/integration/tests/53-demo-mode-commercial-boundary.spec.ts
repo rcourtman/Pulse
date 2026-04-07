@@ -19,33 +19,23 @@ const SECURITY_STATUS_DEMO_PAYLOAD = {
   },
 };
 
-const DEMO_COMMERCIAL_ENTITLEMENTS = {
+const DEMO_PUBLIC_ENTITLEMENTS = {
   capabilities: ['ai_patrol', 'relay'],
   limits: [
     {
       key: 'max_monitored_systems',
-      limit: 5,
-      current: 16,
-      state: 'enforced',
+      limit: 0,
+      current: 0,
+      state: 'ok',
     },
   ],
-  subscription_state: 'trial',
-  upgrade_reasons: [
-    {
-      key: 'max_monitored_systems',
-      reason: 'Upgrade to monitor more systems.',
-      action_url: '/settings/system/billing#plan',
-    },
-    {
-      key: 'trial_banner',
-      reason: 'Upgrade to keep Pro features active.',
-      action_url: '/settings/system/billing#plan',
-    },
-  ],
-  tier: 'pro',
+  subscription_state: 'active',
+  upgrade_reasons: [],
+  tier: 'free',
   hosted_mode: false,
-  trial_days_remaining: 7,
+  valid: false,
   trial_eligible: false,
+  max_history_days: 90,
   legacy_connections: {
     proxmox_nodes: 0,
     docker_hosts: 0,
@@ -144,7 +134,7 @@ base.describe('Demo mode commercial boundary', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(DEMO_COMMERCIAL_ENTITLEMENTS),
+        body: JSON.stringify(DEMO_PUBLIC_ENTITLEMENTS),
       });
     });
 
@@ -216,6 +206,113 @@ base.describe('Demo mode commercial boundary', () => {
     );
     fs.mkdirSync(path.dirname(screenshotPath), { recursive: true });
     await page.screenshot({ path: screenshotPath, fullPage: true });
+    },
+  );
+
+  authenticatedTest(
+    'exposes only the redacted commercial contract in the browser',
+    async ({ page }) => {
+      await page.route('**/api/security/status', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(SECURITY_STATUS_DEMO_PAYLOAD),
+        });
+      });
+
+      await page.route('**/api/license/entitlements', async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify(DEMO_PUBLIC_ENTITLEMENTS),
+        });
+      });
+
+      const hiddenNotFound = async (route: string) => {
+        await page.route(route, async (innerRoute) => {
+          await innerRoute.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            body: JSON.stringify({ error: 'not found' }),
+          });
+        });
+      };
+
+      await hiddenNotFound('**/api/license/status');
+      await hiddenNotFound('**/api/license/features');
+      await hiddenNotFound('**/api/license/activate');
+      await hiddenNotFound('**/api/license/clear');
+      await hiddenNotFound('**/api/license/trial/start');
+      await hiddenNotFound('**/api/license/monitored-system-ledger');
+      await hiddenNotFound('**/api/admin/orgs/**/billing-state');
+      await hiddenNotFound('**/api/upgrade-metrics/**');
+      await hiddenNotFound('**/auth/trial-activate');
+
+      await page.goto('/settings/infrastructure/install', { waitUntil: 'domcontentloaded' });
+
+      const responses = await page.evaluate(async () => {
+        const probe = async (input: string, init?: RequestInit) => {
+          const res = await fetch(input, {
+            credentials: 'include',
+            ...init,
+          });
+          let body: unknown = null;
+          try {
+            body = await res.json();
+          } catch {
+            body = null;
+          }
+          return { status: res.status, body };
+        };
+
+        return {
+          entitlements: await probe('/api/license/entitlements'),
+          status: await probe('/api/license/status'),
+          features: await probe('/api/license/features'),
+          activate: await probe('/api/license/activate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ license_key: 'demo' }),
+          }),
+          clear: await probe('/api/license/clear', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({}),
+          }),
+          trialStart: await probe('/api/license/trial/start', { method: 'POST' }),
+          ledger: await probe('/api/license/monitored-system-ledger'),
+          billingState: await probe('/api/admin/orgs/default/billing-state'),
+          upgradeMetrics: await probe('/api/upgrade-metrics/stats'),
+          trialActivate: await probe('/auth/trial-activate'),
+        };
+      });
+
+      expect(responses.entitlements.status).toBe(200);
+      expect(responses.entitlements.body).toMatchObject({
+        capabilities: ['ai_patrol', 'relay'],
+        subscription_state: 'active',
+        upgrade_reasons: [],
+        tier: 'free',
+        valid: false,
+        trial_eligible: false,
+        max_history_days: 90,
+      });
+      expect(responses.entitlements.body).not.toHaveProperty('licensed_email');
+      expect(responses.entitlements.body).not.toHaveProperty('trial_days_remaining');
+      expect(responses.entitlements.body).not.toHaveProperty('trial_expires_at');
+      expect((responses.entitlements.body as { limits?: Array<{ key: string; current: number; limit: number; state: string }> }).limits).toEqual([
+        { key: 'max_monitored_systems', limit: 0, current: 0, state: 'ok' },
+      ]);
+
+      expect(responses.status.status).toBe(404);
+      expect(responses.features.status).toBe(404);
+      expect(responses.activate.status).toBe(404);
+      expect(responses.clear.status).toBe(404);
+      expect(responses.trialStart.status).toBe(404);
+      expect(responses.ledger.status).toBe(404);
+      expect(responses.billingState.status).toBe(404);
+      expect(responses.upgradeMetrics.status).toBe(404);
+      expect(responses.trialActivate.status).toBe(404);
     },
   );
 });

@@ -12,13 +12,23 @@ import (
 // DemoModeMiddleware blocks all modification requests in demo mode
 func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !cfg.DemoMode {
+		if cfg == nil || !cfg.DemoMode {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		// Add header so frontend knows we're in demo mode
 		w.Header().Set("X-Demo-Mode", "true")
+
+		if exposure, ok := publicDemoCommercialPolicyForRequest(r); ok {
+			switch exposure {
+			case publicDemoCommercialExposureHidden:
+				http.NotFound(w, r)
+				return
+			case publicDemoCommercialExposureRedacted:
+				r = withPublicDemoCommercialContext(r, exposure)
+			}
+		}
 
 		// Allow GET and HEAD requests (read-only)
 		if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {

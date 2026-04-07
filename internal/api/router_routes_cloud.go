@@ -22,7 +22,6 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	billingHandlers := NewBillingStateHandlers(
 		config.NewFileBillingStore(routerConfig.DataPath),
 		r.hostedMode,
-		routerConfig.DemoMode,
 	)
 	lifecycleHandlers := NewOrgLifecycleHandlers(r.multiTenant, r.hostedMode)
 	hostedOrgAdminHandlers := NewHostedOrgAdminHandlers(r.multiTenant, r.hostedMode)

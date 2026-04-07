@@ -76,6 +76,7 @@ Own canonical runtime payload shapes between backend and frontend.
 52. `internal/api/config_setup_handlers.go`
 53. `internal/api/demo_mode_commercial.go`
 54. `internal/api/security_status_capabilities.go`
+55. `internal/api/demo_middleware.go`
 
 ## Shared Boundaries
 
@@ -213,6 +214,16 @@ Own canonical runtime payload shapes between backend and frontend.
     browser bootstrap signal for public demo posture instead of asking
     frontend callers to infer demo state from response headers, `/api/health`
     probes, or hostname heuristics.
+33. Keep public demo commercial posture middleware-owned on that same shared
+    API contract. `internal/api/demo_middleware.go`,
+    `internal/api/demo_mode_commercial.go`,
+    `internal/api/subscription_entitlements.go`, and
+    `internal/api/contract_test.go` must classify commercial routes centrally
+    as either hidden (`404`) or redacted, and `/api/license/entitlements`
+    must preserve runtime capability fields while clearing licensed identity,
+    upgrade prompts, trial nudges, usage counts, and plan metadata for public
+    demo browsers instead of relying on scattered handler-local demo checks or
+    frontend-only suppression.
 
 ## Forbidden Paths
 

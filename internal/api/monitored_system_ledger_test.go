@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -325,17 +324,5 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].Explanation.Summary == "" {
 		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)
-	}
-}
-
-func TestHandleMonitoredSystemLedger_DemoModeReturnsNotFound(t *testing.T) {
-	router := &Router{config: &config.Config{DemoMode: true}}
-	req := httptest.NewRequest(http.MethodGet, "/api/license/monitored-system-ledger", nil)
-	rec := httptest.NewRecorder()
-
-	router.handleMonitoredSystemLedger(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
 	}
 }

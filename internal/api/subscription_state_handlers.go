@@ -11,19 +11,12 @@ import (
 
 type BillingStateHandlers struct {
 	store      *config.FileBillingStore
-	demoMode   bool
 	hostedMode bool
 }
 
-func NewBillingStateHandlers(store *config.FileBillingStore, hostedMode bool, demoModes ...bool) *BillingStateHandlers {
-	demoMode := false
-	if len(demoModes) > 0 {
-		demoMode = demoModes[0]
-	}
-
+func NewBillingStateHandlers(store *config.FileBillingStore, hostedMode bool) *BillingStateHandlers {
 	return &BillingStateHandlers{
 		store:      store,
-		demoMode:   demoMode,
 		hostedMode: hostedMode,
 	}
 }
@@ -35,9 +28,6 @@ func (h *BillingStateHandlers) HandleGetBillingState(w http.ResponseWriter, r *h
 	}
 	if !h.hostedMode {
 		http.NotFound(w, r)
-		return
-	}
-	if hideCommercialReadSurfaceInDemo(w, r, h.demoMode) {
 		return
 	}
 	if h.store == nil {
@@ -91,9 +81,6 @@ func (h *BillingStateHandlers) HandlePutBillingState(w http.ResponseWriter, r *h
 	}
 	if !h.hostedMode {
 		http.NotFound(w, r)
-		return
-	}
-	if hideCommercialReadSurfaceInDemo(w, r, h.demoMode) {
 		return
 	}
 	if h.store == nil {

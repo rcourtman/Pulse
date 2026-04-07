@@ -4811,41 +4811,83 @@ func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
-func TestContract_DemoModeCommercialReadSurfaceReturnsNotFound(t *testing.T) {
-	t.Run("license status", func(t *testing.T) {
-		handlers := NewLicenseHandlers(nil, false, &config.Config{DemoMode: true})
-		req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
-		rec := httptest.NewRecorder()
+func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
+	t.Run("hidden routes return not found", func(t *testing.T) {
+		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			t.Fatalf("hidden commercial route should not reach downstream handler: %s %s", r.Method, r.URL.Path)
+		})
+		handler := DemoModeMiddleware(&config.Config{DemoMode: true}, next)
 
-		handlers.HandleLicenseStatus(rec, req)
+		testCases := []struct {
+			method string
+			path   string
+		}{
+			{method: http.MethodGet, path: "/api/license/status"},
+			{method: http.MethodGet, path: "/api/license/features"},
+			{method: http.MethodPost, path: "/api/license/activate"},
+			{method: http.MethodPost, path: "/api/license/clear"},
+			{method: http.MethodPost, path: "/api/license/trial/start"},
+			{method: http.MethodGet, path: "/api/license/monitored-system-ledger"},
+			{method: http.MethodGet, path: "/api/admin/orgs/t-tenant/billing-state"},
+			{method: http.MethodPut, path: "/api/admin/orgs/t-tenant/billing-state"},
+			{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
+			{method: http.MethodPost, path: "/api/upgrade-metrics/events"},
+			{method: http.MethodGet, path: "/auth/trial-activate"},
+		}
 
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		for _, tc := range testCases {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("%s %s status=%d, want %d: %s", tc.method, tc.path, rec.Code, http.StatusNotFound, rec.Body.String())
+			}
 		}
 	})
 
-	t.Run("monitored system ledger", func(t *testing.T) {
-		router := &Router{config: &config.Config{DemoMode: true}}
-		req := httptest.NewRequest(http.MethodGet, "/api/license/monitored-system-ledger", nil)
-		rec := httptest.NewRecorder()
+	t.Run("entitlements are redacted instead of hidden", func(t *testing.T) {
+		t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
-		router.handleMonitoredSystemLedger(rec, req)
-
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		handlers := createTestHandler(t)
+		licenseKey, err := pkglicensing.GenerateLicenseForTesting("contract-demo@example.com", pkglicensing.TierPro, 24*time.Hour)
+		if err != nil {
+			t.Fatalf("GenerateLicenseForTesting: %v", err)
 		}
-	})
+		if _, err := handlers.Service(context.Background()).Activate(licenseKey); err != nil {
+			t.Fatalf("Activate() error = %v", err)
+		}
 
-	t.Run("hosted billing state", func(t *testing.T) {
-		handlers := NewBillingStateHandlers(config.NewFileBillingStore(t.TempDir()), true, true)
-		req := httptest.NewRequest(http.MethodGet, "/api/admin/orgs/t-tenant/billing-state", nil)
-		req.SetPathValue("id", "t-tenant")
+		req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
+		req = withPublicDemoCommercialContext(req, publicDemoCommercialExposureRedacted)
 		rec := httptest.NewRecorder()
+		handlers.HandleEntitlements(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
 
-		handlers.HandleGetBillingState(rec, req)
-
-		if rec.Code != http.StatusNotFound {
-			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+		var payload EntitlementPayload
+		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if len(payload.Capabilities) == 0 {
+			t.Fatalf("expected sanitized entitlements to preserve capabilities, got %+v", payload)
+		}
+		if payload.LicensedEmail != "" {
+			t.Fatalf("licensed_email=%q, want empty", payload.LicensedEmail)
+		}
+		if payload.Tier != string(pkglicensing.TierFree) {
+			t.Fatalf("tier=%q, want %q", payload.Tier, pkglicensing.TierFree)
+		}
+		if payload.SubscriptionState != string(pkglicensing.SubStateActive) {
+			t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, pkglicensing.SubStateActive)
+		}
+		if len(payload.UpgradeReasons) != 0 {
+			t.Fatalf("upgrade_reasons=%v, want empty", payload.UpgradeReasons)
+		}
+		for _, limit := range payload.Limits {
+			if limit.Limit != 0 || limit.Current != 0 || limit.State != "ok" {
+				t.Fatalf("sanitized limit=%+v, want limit=0 current=0 state=ok", limit)
+			}
 		}
 	})
 }

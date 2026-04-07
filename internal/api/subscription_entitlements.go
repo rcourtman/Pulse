@@ -64,6 +64,9 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	}
 	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(r.Context(), svc, existing)
 	payload.HostedMode = h != nil && h.hostedMode
+	if isPublicDemoCommercialRedactedRequest(r) {
+		payload = sanitizeEntitlementPayloadForPublicDemo(payload)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)

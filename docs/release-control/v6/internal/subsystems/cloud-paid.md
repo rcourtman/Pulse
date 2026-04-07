@@ -121,12 +121,14 @@ agreement, and cloud-specific enforcement rules.
     billing surface. `Learn more` links must land on the monitored-system
     usage-focused billing state, while `Upgrade to add more` links must land on
     the plan-focused billing state. The owned billing shell must express those
-    states explicitly through its section selector and rendered content, not
-    merely through nearby hash anchors that still present the same visible
-    destination. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+    states explicitly through canonical route-owned destinations
+    (`/settings/system/billing/plan` and `/settings/system/billing/usage`) and
+    their rendered content, not through nearby fragments that still present the
+    same visible destination. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
     and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
     therefore own a canonical two-state billing focus model (`plan` vs
-    `usage`) that survives direct links and in-product CTA navigation.
+    `usage`) that survives direct links, compatibility redirects, and
+    in-product CTA navigation.
 
 ## Forbidden Paths
 
@@ -164,6 +166,18 @@ real licensing model. That includes settings billing tabs, public-demo banner
 and monitored-system/trial nudges, dashboard relay paywalls, Patrol upgrade
 CTAs, and history-lock upsells. Demo readiness therefore means presentation
 isolation, not a license exemption.
+That same public-demo boundary now also owns route-level commercial
+classification. `internal/api/demo_middleware.go` and
+`internal/api/demo_mode_commercial.go` must decide centrally which commercial
+endpoints are fully hidden (`404`) and which remain available only as a
+redacted public contract. `/api/license/entitlements` is the canonical
+redacted exception: it may continue to carry capability and history-retention
+fields needed for demo-visible product behavior, but it must not expose
+licensed identity, plan labels, upgrade reasons, trial urgency, or observed
+usage counts to public browsers. The governed browser proof for that posture
+lives in `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts`
+and is expected to stay runnable through
+`tests/integration/scripts/run-tests.sh demo-contract`.
 Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan
 versions are consumed at hosted entitlement and workspace-limit enforcement
@@ -562,6 +576,11 @@ and context, but `CommercialBillingSections.tsx` and
 commercial information architecture. Future billing work must extend that
 shared shell/model first instead of letting self-hosted Pulse Pro and hosted
 organization billing drift back into parallel local layouts or vocabularies.
+For self-hosted Pulse Pro specifically, the plan/usage split is now also a
+router contract: `/settings/system/billing/plan` is the canonical plan state,
+`/settings/system/billing/usage` is the canonical monitored-system usage state,
+and `/settings/system/billing` remains a compatibility handoff rather than the
+primary owned destination.
 That same ownership split is explicit in the governed registry as well:
 `CommercialBillingSections.tsx` is part of the shared commercial shell/model
 surface, while `SelfHostedCommercialActivationSection.tsx` stays on the

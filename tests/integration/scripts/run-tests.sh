@@ -2,7 +2,7 @@
 #
 # Run Pulse integration tests with different suites
 # Usage: ./run-tests.sh [suite]
-#   suite: all, core, diagnostic, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, evals, updates-api
+#   suite: all, core, diagnostic, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, demo-contract, evals, updates-api
 #
 
 set -e
@@ -143,6 +143,9 @@ run_suite() {
         cloud-lifecycle)
             npx playwright test "tests/09-cloud-billing-lifecycle.spec.ts" --project=chromium --reporter=list
             ;;
+        demo-contract)
+            npx playwright test "tests/53-demo-mode-commercial-boundary.spec.ts" --project=chromium --project=mobile-chrome --reporter=list
+            ;;
         evals)
             node ./scripts/run-evals.mjs --mode deterministic
             ;;
@@ -188,6 +191,7 @@ case "$SUITE" in
         run_suite "Trial Signup E2E" "trial" || FAILED_TESTS+=("Trial Signup E2E")
         run_suite "Cloud Hosting E2E" "cloud-hosting" || FAILED_TESTS+=("Cloud Hosting E2E")
         run_suite "Cloud Billing Lifecycle E2E" "cloud-lifecycle" || FAILED_TESTS+=("Cloud Billing Lifecycle E2E")
+        run_suite "Public Demo Contract" "demo-contract" || FAILED_TESTS+=("Public Demo Contract")
         run_suite "Navigation Performance" "perf" || FAILED_TESTS+=("Navigation Performance")
         run_suite "Theme Visual Regression" "visual" || FAILED_TESTS+=("Theme Visual Regression")
         run_suite "Update API Integration" "updates-api" || FAILED_TESTS+=("Update API Integration")
@@ -225,6 +229,10 @@ case "$SUITE" in
         run_suite "Cloud Billing Lifecycle E2E" "cloud-lifecycle" || FAILED_TESTS+=("Cloud Billing Lifecycle E2E")
         ;;
 
+    demo-contract)
+        run_suite "Public Demo Contract" "demo-contract" || FAILED_TESTS+=("Public Demo Contract")
+        ;;
+
     evals)
         run_suite "Agentic Eval Pack (Deterministic)" "evals" || FAILED_TESTS+=("Agentic Eval Pack (Deterministic)")
         ;;
@@ -235,7 +243,7 @@ case "$SUITE" in
 
     *)
         echo "Unknown suite: $SUITE"
-        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, evals, updates-api"
+        echo "Available suites: all, diagnostic, core, perf, visual, multi-tenant, trial, cloud-hosting, cloud-lifecycle, demo-contract, evals, updates-api"
         exit 1
         ;;
 esac

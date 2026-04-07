@@ -187,20 +187,6 @@ func TestHandleLicenseStatus_NoLicense(t *testing.T) {
 	}
 }
 
-func TestHandleLicenseStatus_DemoModeReturnsNotFound(t *testing.T) {
-	handler := createTestHandler(t)
-	handler.SetConfig(&config.Config{DemoMode: true})
-
-	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil)
-	rec := httptest.NewRecorder()
-
-	handler.HandleLicenseStatus(rec, req)
-
-	if rec.Code != http.StatusNotFound {
-		t.Fatalf("expected status %d, got %d", http.StatusNotFound, rec.Code)
-	}
-}
-
 func TestHandleLicenseStatus_WithActiveLicense(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
