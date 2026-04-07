@@ -73,13 +73,6 @@ export function renderBillingStatus(id: string, status: BillingStatus): void {
   el.className = 'billing-status visible' + (status.error ? ' error' : ' success');
 }
 
-function formatCheckoutDate(value: string | undefined): string {
-  if (!value) return '';
-  var parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '';
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
 function renderUpgradePlansHTML(billingState: PortalBillingState): string {
   var pricing = billingState.upgradePricing.data;
   if (!pricing || !Array.isArray(pricing.plans)) {
@@ -94,6 +87,10 @@ function renderUpgradePlansHTML(billingState: PortalBillingState): string {
   if (plans.length === 0) {
     return '';
   }
+
+  var checkoutDisabled = billingState.upgradeCheckout.pending ||
+    billingState.upgradeHandoff.status === 'loading' ||
+    !String(billingState.upgradeActivationURLTemplate || '').trim();
 
   return '<div class="billing-upgrade-plan-grid">' + plans.map(function(plan) {
     var buttons = Array.isArray(plan.buttons) ? plan.buttons : [];
@@ -125,7 +122,7 @@ function renderUpgradePlansHTML(billingState: PortalBillingState): string {
               ' data-upgrade-plan-key="' + escapeAttribute(button.planKey || '') + '"' +
               ' data-upgrade-tier="' + escapeAttribute(button.tier || '') + '"' +
               ' data-upgrade-billing-cycle="' + escapeAttribute(button.billingCycle || '') + '"' +
-              (billingState.upgradeCheckout.pending ? ' disabled' : '') +
+              (checkoutDisabled ? ' disabled' : '') +
               '>' +
               escapeText(button.label) +
             '</button>'
@@ -136,17 +133,15 @@ function renderUpgradePlansHTML(billingState: PortalBillingState): string {
   }).join('') + '</div>';
 }
 
-export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: PortalBootstrapData): void {
+export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap: PortalBootstrapData): void {
   var root = getElement('upgrade-billing-root');
   if (!root) return;
 
   var featureKey = String(billingState.upgradeFeatureKey || '').trim();
   var pricingState = billingState.upgradePricing;
-  var checkoutResultState = billingState.upgradeCheckoutResult;
-  var result = checkoutResultState.data;
-  var returnURL = String(billingState.upgradeReturnURL || '').trim();
+  var handoffState = billingState.upgradeHandoff;
+  var activationURLTemplate = String(billingState.upgradeActivationURLTemplate || '').trim();
   var returnToken = String(billingState.upgradePurchaseReturnToken || '').trim();
-  var sessionID = String(billingState.upgradeCheckoutSessionID || '').trim();
   var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : '';
   var summaryItems = [] as string[];
 
@@ -158,6 +153,17 @@ export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: 
   }
   if (billingState.upgradeCheckout.error) {
     summaryItems.push('<div class="billing-status visible error">' + escapeText(billingState.upgradeCheckout.error) + '</div>');
+  }
+  if (!returnToken) {
+    summaryItems.push(
+      '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the return path before checkout.</div>',
+    );
+  } else if (handoffState.status === 'loading' && !activationURLTemplate) {
+    summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro return path...</div>');
+  } else if (handoffState.status === 'error') {
+    summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || 'Failed to verify the secure Pulse Pro return path.') + '</div>');
+  } else if (handoffState.status === 'ready' && activationURLTemplate) {
+    summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
   }
   if (pricingState.status === 'loading' && !pricingState.data) {
     summaryItems.push('<p>Loading self-hosted plan options...</p>');
@@ -172,39 +178,6 @@ export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: 
     summaryItems.push('<div class="helper-text">' + explainer + '</div>');
   }
 
-  if (checkoutResultState.status === 'loading') {
-    summaryItems.push('<div class="billing-status visible">Finalizing the completed checkout...</div>');
-  } else if (checkoutResultState.status === 'error') {
-    summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutResultState.error || 'Could not confirm the completed checkout.') + '</div>');
-  } else if (result && result.status === 'fulfilled') {
-    var activationForm = returnURL && sessionID && returnToken
-      ? (
-        '<form method="POST" action="' + escapeAttribute(returnURL) + '">' +
-          '<input type="hidden" name="session_id" value="' + escapeAttribute(sessionID) + '">' +
-          '<input type="hidden" name="feature" value="' + escapeAttribute(featureKey) + '">' +
-          '<input type="hidden" name="purchase_return_token" value="' + escapeAttribute(returnToken) + '">' +
-          '<div class="form-actions">' +
-            '<button class="btn-primary" type="submit">Activate in Pulse Pro</button>' +
-          '</div>' +
-        '</form>'
-      )
-      : '<div class="helper-text">Return to Pulse Pro billing and reopen the upgrade flow so Pulse can securely finalize this completed checkout. If automatic return is unavailable, Pulse Account can still retrieve the latest active license.</div>';
-    summaryItems.push(
-      '<div class="billing-result">' +
-        '<h4>Checkout complete</h4>' +
-        '<div class="result-grid">' +
-          '<div><div class="result-meta-label">Plan</div><div class="result-meta-value">' + escapeText(result.tier || result.plan_key || 'Purchased') + '</div></div>' +
-          '<div><div class="result-meta-label">Purchase email</div><div class="result-meta-value">' + escapeText(result.owner_email || bootstrap.email || '') + '</div></div>' +
-          '<div><div class="result-meta-label">Activation key</div><div class="result-meta-value">' + escapeText(result.activation_key_prefix || 'Issued') + '</div></div>' +
-          '<div><div class="result-meta-label">Monitored systems</div><div class="result-meta-value">' + escapeText(typeof result.max_monitored_systems === 'number' && result.max_monitored_systems > 0 ? String(result.max_monitored_systems) : 'Included') + '</div></div>' +
-        '</div>' +
-        activationForm +
-      '</div>',
-    );
-  } else if (result && result.message) {
-    summaryItems.push('<div class="billing-status visible">' + escapeText(result.message) + '</div>');
-  }
-
   root.innerHTML =
     '<div class="billing-upgrade-root">' +
       summaryItems.join('') +
@@ -212,9 +185,11 @@ export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: 
       (pricingState.status === 'ready' && pricingState.data && pricingState.data.description
         ? '<div class="helper-text">' + escapeText(pricingState.data.description) + '</div>'
         : '') +
-      (result && result.status === 'fulfilled' && formatCheckoutDate(result.current_period_end)
-        ? '<div class="helper-text">Next renewal: ' + escapeText(formatCheckoutDate(result.current_period_end)) + '</div>'
-        : '') +
+      '<div class="helper-text">' +
+        (featureKey === 'max_monitored_systems'
+          ? 'Pulse Account compares self-hosted tiers and sends completed monitored-system upgrades straight back to Pulse Pro billing.'
+          : 'Pulse Account compares self-hosted tiers and sends completed checkout straight back to Pulse Pro billing.') +
+      '</div>' +
     '</div>';
 }
 

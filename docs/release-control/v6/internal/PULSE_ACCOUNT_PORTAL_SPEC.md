@@ -1,6 +1,6 @@
 # Pulse Account Portal Spec
 
-Last updated: 2026-03-29
+Last updated: 2026-04-07
 Status: ACTIVE
 
 ## Purpose
@@ -429,6 +429,8 @@ Transition rule:
 3. in-product self-hosted upgrade CTAs should hand off into `Pulse Account`
    billing first, with `Pulse Account` owning self-hosted plan comparison and
    checkout before returning through Pulse's activation callback
+   via a signed instance-bound handoff token rather than loose return query
+   parameters
 4. utility pages should shrink toward redirects or lightweight recovery
    handoffs once equivalent Pulse Account areas exist
 
@@ -468,6 +470,10 @@ Accepted as sufficient for RC and GA:
    Pulse accepting a signed instance-bound return token and returning either
    the originating billing tab or the current tab fallback to the owned
    billing route automatically
+5. `Pulse Account` must not render a second manual `Activate in Pulse Pro`
+   step after hosted checkout success; the portal must resolve a verified
+   Pulse return template first and let checkout success flow straight into
+   Pulse's activation bridge
 5. commercial surfaces are functional but still fragmented outside the owned
    checkout-return path
 

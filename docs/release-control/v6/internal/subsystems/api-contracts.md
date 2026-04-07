@@ -501,21 +501,26 @@ hosted-only accounts do not render self-hosted license, refund, privacy, or
 self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
 That same runtime handoff contract now also covers product-originated
-self-hosted upgrade arrivals: `/portal?service=upgrade&feature=...` may open a
-portal-owned upgrade job inside `Billing`, but it must not fabricate broader
-self-hosted commercial history or reveal retrieve/refund/privacy panels for a
-hosted-only account that only arrived through an upgrade CTA.
+self-hosted upgrade arrivals: `/portal?service=upgrade&purchase_return_token=...`
+may open a portal-owned upgrade job inside `Billing`, but it must not
+fabricate broader self-hosted commercial history or reveal
+retrieve/refund/privacy panels for a hosted-only account that only arrived
+through an upgrade CTA.
 That same commercial contract now also includes the self-hosted purchase
 return path. Product-originated upgrade handoffs must include a canonical
-`return_url` that points back to Pulse's public `POST /auth/license-purchase-activate`
-callback plus a signed `purchase_return_token` bound to the originating Pulse
-instance, and that callback must redeem the completed checkout through the
-shared license/commercial API before returning the browser to the owned
-billing plan route. When the upgrade flow was opened in a secondary tab, the
-callback may refresh the originating billing tab and close itself; when no
-opener is available, the callback must still return the current tab to the
-owned billing route automatically instead of leaving the operator on a dead
-success page.
+signed `purchase_return_token` bound to the originating Pulse instance. The
+portal runtime must derive the originating Pulse origin from the browser
+referrer, resolve a verified `activation_url_template` through Pulse-owned
+`GET /auth/license-purchase-handoff`, and use that verified template as the
+checkout success target instead of trusting loose `feature` or `return_url`
+query parameters. Pulse's public `GET /auth/license-purchase-activate`
+callback then serves an auto-submitting bridge into the owned POST activation
+path, which redeems the completed checkout through the shared
+license/commercial API before returning the browser to the owned billing plan
+route. When the upgrade flow was opened in a secondary tab, the callback may
+refresh the originating billing tab and close itself; when no opener is
+available, the callback must still return the current tab to the owned billing
+route automatically instead of leaving the operator on a dead success page.
 That same typed bootstrap/runtime contract must also derive the default signed-
 in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and the signed-in shell keeps

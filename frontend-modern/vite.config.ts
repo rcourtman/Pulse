@@ -200,6 +200,18 @@ export default defineConfig({
         changeOrigin: true,
         cookieDomainRewrite: '',
       },
+      '/auth/license-purchase-start': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/auth/license-purchase-handoff': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
+      '/auth/license-purchase-activate': {
+        target: backendUrl,
+        changeOrigin: true,
+      },
       '/install-container-agent.sh': {
         target: backendUrl,
         changeOrigin: true,

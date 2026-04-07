@@ -190,6 +190,16 @@ management, and fleet control surfaces.
     prereleases and build-metadata versions must fail closed so first-host
     install, repair, and fleet continuity do not depend on unpublished or
     branch-local installer URLs.
+13. Keep self-hosted purchase handoff state on the adjacent commercial/auth
+    boundary. When shared `internal/api/router.go`,
+    `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
+    or `internal/api/demo_mode_commercial.go` evolve public
+    `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
+    `/auth/license-purchase-activate`, lifecycle-adjacent setup and fleet
+    surfaces may rely on that public-route wiring but must not reinterpret
+    purchase-return tokens, activation-bridge form state, or demo-hidden
+    commercial route policy as installer credentials, registration state, or
+    fleet enrollment authority.
 
 ## Forbidden Paths
 

@@ -223,14 +223,18 @@ describe('services view', function() {
     expect(document.getElementById('manage-inline-status')?.textContent).toBe('Code sent.');
   });
 
-  it('renders upgrade panel with canonical plans and a return-to-product activation form', function() {
+  it('renders upgrade panel with verified direct-return checkout actions', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
     billingState.upgradeFeatureKey = 'max_monitored_systems';
-    billingState.upgradeReturnURL = 'https://pulse.example.com/auth/license-purchase-activate';
     billingState.upgradePurchaseReturnToken = 'prt_signed';
-    billingState.upgradeCheckoutSessionID = 'cs_success';
+    billingState.upgradeActivationURLTemplate = 'https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}';
+    billingState.upgradeHandoff.status = 'ready';
+    billingState.upgradeHandoff.data = {
+      feature: 'max_monitored_systems',
+      activation_url_template: billingState.upgradeActivationURLTemplate,
+    };
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
       title: 'Pricing',
@@ -257,45 +261,60 @@ describe('services view', function() {
         },
       ],
     };
-    billingState.upgradeCheckoutResult.status = 'ready';
-    billingState.upgradeCheckoutResult.data = {
-      status: 'fulfilled',
-      owner_email: 'buyer@example.com',
-      tier: 'pro_plus',
-      activation_key_prefix: 'ppk_live_preview',
-      max_monitored_systems: 50,
-    };
 
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Buy Annual');
-    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Activate in Pulse Pro');
-    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('session_id');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'purchase_return_token',
+      'Pulse Account will return completed checkout directly to Pulse Pro billing.',
     );
-    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('ppk_live_preview');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('Activate in Pulse Pro');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).not.toContain('ppk_live_preview');
+    expect(
+      (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 
-  it('renders a product-refresh fallback when a completed checkout has no return URL', function() {
+  it('renders a blocked checkout state until the Pulse Pro handoff is verified', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
-    billingState.upgradeFeatureKey = 'max_monitored_systems';
-    billingState.upgradeCheckoutSessionID = 'cs_success';
-    billingState.upgradeCheckoutResult.status = 'ready';
-    billingState.upgradeCheckoutResult.data = {
-      status: 'fulfilled',
-      owner_email: 'buyer@example.com',
-      tier: 'pro_plus',
-      activation_key_prefix: 'ppk_live_preview',
-      max_monitored_systems: 50,
+    billingState.upgradePurchaseReturnToken = 'prt_signed';
+    billingState.upgradeHandoff.status = 'error';
+    billingState.upgradeHandoff.error = 'Pulse Account could not verify the secure return path.';
+    billingState.upgradePricing.status = 'ready';
+    billingState.upgradePricing.data = {
+      title: 'Pricing',
+      description: 'Canonical pricing model',
+      plans: [
+        {
+          tierKicker: 'Relay',
+          title: 'Relay',
+          price: '$4.99',
+          period: '$39/year available too',
+          blurb: 'Secure remote access and mobile access.',
+          features: [{ tone: 'check', html: 'Up to <strong>8 monitored systems</strong>' }],
+          buttons: [
+            {
+              kind: 'checkout',
+              className: 'btn btn-primary',
+              tier: 'relay',
+              planKey: 'price_relay_annual',
+              billingCycle: 'annual',
+              label: 'Buy Annual',
+            },
+          ],
+        },
+      ],
     };
 
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Return to Pulse Pro billing and reopen the upgrade flow',
+      'Pulse Account could not verify the secure return path.',
     );
+    expect(
+      (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
+    ).toBe(true);
   });
 });

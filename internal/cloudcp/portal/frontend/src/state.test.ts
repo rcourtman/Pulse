@@ -35,12 +35,12 @@ describe('portal state', function() {
     expect(billingState.flows.manage.confirm.pending).toBe(false);
     expect(billingState.refund.submit.pending).toBe(false);
     expect(billingState.upgradeFeatureKey).toBe('');
-    expect(billingState.upgradeReturnURL).toBe('');
+    expect(billingState.upgradeInstanceOrigin).toBe('');
     expect(billingState.upgradePurchaseReturnToken).toBe('');
-    expect(billingState.upgradeCheckoutSessionID).toBe('');
+    expect(billingState.upgradeActivationURLTemplate).toBe('');
+    expect(billingState.upgradeHandoff.status).toBe('idle');
     expect(billingState.upgradeCheckoutStatus).toBe('');
     expect(billingState.upgradePricing.status).toBe('idle');
-    expect(billingState.upgradeCheckoutResult.status).toBe('idle');
 
     billingState.flows.manage.emailValue = 'override@example.com';
     syncBillingStateBootstrapEmail(billingState, 'owner@example.com');

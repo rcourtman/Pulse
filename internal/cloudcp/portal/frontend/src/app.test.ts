@@ -150,10 +150,9 @@ describe('portal app', function() {
       {
         email: 'buyer@example.com',
         openBillingPanelID: 'retrieve-billing-panel',
+        upgradeInstanceOrigin: '',
         upgradeFeatureKey: '',
-        upgradeReturnURL: '',
         upgradePurchaseReturnToken: '',
-        upgradeCheckoutSessionID: '',
         upgradeCheckoutStatus: '',
       }
     );

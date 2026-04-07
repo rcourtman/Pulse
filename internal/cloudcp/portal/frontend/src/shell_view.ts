@@ -168,8 +168,8 @@ function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
 function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
   var helperCopy = featureKey === 'max_monitored_systems'
-    ? 'Choose the self-hosted tier that matches the monitored-system allowance you need, then send the completed purchase back to Pulse Pro for activation.'
-    : 'Choose the self-hosted tier that fits this upgrade, then send the completed purchase back to Pulse Pro for activation.';
+    ? 'Choose the self-hosted tier that matches the monitored-system allowance you need. Pulse Account will send completed checkout directly back to Pulse Pro billing.'
+    : 'Choose the self-hosted tier that fits this upgrade. Pulse Account will send completed checkout directly back to Pulse Pro billing.';
   return renderBillingTaskPanel(
     selfHostedUpgradeActionTitle(featureKey),
     'Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.',

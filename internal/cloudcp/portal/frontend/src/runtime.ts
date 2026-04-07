@@ -5,10 +5,9 @@ import type { PortalBootstrapData } from './types';
 export interface PortalRuntimeHandoff {
   email: string;
   openBillingPanelID: string;
+  upgradeInstanceOrigin: string;
   upgradeFeatureKey: string;
-  upgradeReturnURL: string;
   upgradePurchaseReturnToken: string;
-  upgradeCheckoutSessionID: string;
   upgradeCheckoutStatus: '' | 'success' | 'cancelled';
 }
 
@@ -35,6 +34,18 @@ function normalizeHandoffEmail(value: string | null): string {
   return String(value || '').trim();
 }
 
+function normalizeHandoffInstanceOrigin(
+  value: string | null | undefined,
+): string {
+  var trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  try {
+    return new URL(trimmed).origin;
+  } catch {
+    return '';
+  }
+}
+
 function normalizeHandoffBillingPanel(value: string | null): string {
   switch (String(value || '').trim()) {
     case 'upgrade':
@@ -56,15 +67,7 @@ function normalizeUpgradeFeatureKey(value: string | null): string {
   return String(value || '').trim();
 }
 
-function normalizeUpgradeReturnURL(value: string | null): string {
-  return String(value || '').trim();
-}
-
 function normalizeUpgradePurchaseReturnToken(value: string | null): string {
-  return String(value || '').trim();
-}
-
-function normalizeUpgradeCheckoutSessionID(value: string | null): string {
   return String(value || '').trim();
 }
 
@@ -79,26 +82,27 @@ function normalizeUpgradeCheckoutStatus(value: string | null): '' | 'success' | 
   }
 }
 
-export function readPortalRuntimeHandoff(locationHref: string | undefined = window.location.href): PortalRuntimeHandoff {
+export function readPortalRuntimeHandoff(
+  locationHref: string | undefined = window.location.href,
+  referrerHref: string | undefined = typeof document !== 'undefined' ? document.referrer : '',
+): PortalRuntimeHandoff {
   try {
     var params = new URL(locationHref).searchParams;
     return {
       email: normalizeHandoffEmail(params.get('email')),
       openBillingPanelID: normalizeHandoffBillingPanel(params.get('service')),
-      upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
-      upgradeReturnURL: normalizeUpgradeReturnURL(params.get('return_url')),
+      upgradeInstanceOrigin: normalizeHandoffInstanceOrigin(referrerHref),
+      upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('purchase_return_token') ? '' : params.get('feature')),
       upgradePurchaseReturnToken: normalizeUpgradePurchaseReturnToken(params.get('purchase_return_token')),
-      upgradeCheckoutSessionID: normalizeUpgradeCheckoutSessionID(params.get('session_id')),
       upgradeCheckoutStatus: normalizeUpgradeCheckoutStatus(params.get('checkout')),
     };
   } catch {
     return {
       email: '',
       openBillingPanelID: '',
+      upgradeInstanceOrigin: '',
       upgradeFeatureKey: '',
-      upgradeReturnURL: '',
       upgradePurchaseReturnToken: '',
-      upgradeCheckoutSessionID: '',
       upgradeCheckoutStatus: '',
     };
   }
@@ -143,25 +147,25 @@ export function createPortalRuntime(
       billingState.refund.emailValue = handoff.email;
     }, { notify: false });
   }
-  if (handoff.openBillingPanelID) {
-    store.setActiveShellSection('billing');
-    store.updateBillingState(function(billingState) {
-      billingState.openBillingPanelID = handoff.openBillingPanelID;
-      billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
-      billingState.upgradeReturnURL = handoff.upgradeReturnURL;
-      billingState.upgradePurchaseReturnToken = handoff.upgradePurchaseReturnToken;
-      billingState.upgradeCheckoutSessionID = handoff.upgradeCheckoutSessionID;
-      billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
-    }, { notify: false });
-  } else if (handoff.upgradeFeatureKey) {
-    store.setActiveShellSection('billing');
-    store.updateBillingState(function(billingState) {
-      billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
-      billingState.upgradeReturnURL = handoff.upgradeReturnURL;
-      billingState.upgradePurchaseReturnToken = handoff.upgradePurchaseReturnToken;
-      billingState.upgradeCheckoutSessionID = handoff.upgradeCheckoutSessionID;
-      billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
-    }, { notify: false });
+	if (handoff.openBillingPanelID) {
+		store.setActiveShellSection('billing');
+		store.updateBillingState(function(billingState) {
+			billingState.openBillingPanelID = handoff.openBillingPanelID;
+			billingState.upgradeInstanceOrigin = handoff.upgradeInstanceOrigin;
+			billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+			billingState.upgradePurchaseReturnToken = handoff.upgradePurchaseReturnToken;
+			billingState.upgradeActivationURLTemplate = '';
+			billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
+		}, { notify: false });
+	} else if (handoff.upgradeFeatureKey || handoff.upgradePurchaseReturnToken) {
+		store.setActiveShellSection('billing');
+		store.updateBillingState(function(billingState) {
+			billingState.upgradeInstanceOrigin = handoff.upgradeInstanceOrigin;
+			billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+			billingState.upgradePurchaseReturnToken = handoff.upgradePurchaseReturnToken;
+			billingState.upgradeActivationURLTemplate = '';
+			billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
+		}, { notify: false });
   }
   return {
     bootstrapDefaults: bootstrapDefaults,

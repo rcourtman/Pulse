@@ -159,6 +159,16 @@ querying, and the operator-facing storage health presentation layer.
     commercial compatibility handoffs like `/pricing` must stay separate thin
     route exits rather than borrowing storage/recovery preview framing,
     first-session copy, or page-state assumptions.
+36. Keep public self-hosted purchase handoff and activation routes on the
+    adjacent commercial/auth boundary. When `internal/api/router.go`,
+    `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
+    or `internal/api/demo_mode_commercial.go` evolve
+    `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
+    `/auth/license-purchase-activate`, storage and recovery may coexist with
+    those shared public-route helpers but must not reuse purchase-return tokens,
+    activation-bridge callbacks, or demo-hidden commercial route policy as
+    recovery identity, restore proof, preview framing, or backup/recovery-local
+    transport.
 
 ## Forbidden Paths
 

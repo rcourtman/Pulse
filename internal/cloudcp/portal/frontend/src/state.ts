@@ -118,13 +118,13 @@ export function createPortalBillingState(): PortalBillingState {
   return {
     openBillingPanelID: '',
     upgradeFeatureKey: '',
-    upgradeReturnURL: '',
+    upgradeInstanceOrigin: '',
     upgradePurchaseReturnToken: '',
-    upgradeCheckoutSessionID: '',
+    upgradeActivationURLTemplate: '',
+    upgradeHandoff: createQueryState(null),
     upgradeCheckoutStatus: '',
     upgradePricing: createQueryState(null),
     upgradeCheckout: createMutationState(),
-    upgradeCheckoutResult: createQueryState(null),
     flows: {
       manage: newVerificationFlowState(),
       retrieve: newVerificationFlowState(),

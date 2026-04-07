@@ -168,8 +168,7 @@ test.describe('Self-hosted upgrade return flow', () => {
         status: 303,
         headers: {
           location:
-            `${PULSE_ACCOUNT_PORTAL_URL}?feature=max_monitored_systems&service=upgrade` +
-            `&return_url=${encodeURIComponent(PURCHASE_RETURN_URL)}` +
+            `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade` +
             `&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
         },
         body: '',
@@ -178,9 +177,9 @@ test.describe('Self-hosted upgrade return flow', () => {
 
     await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
       const requestUrl = new URL(route.request().url());
-      expect(requestUrl.searchParams.get('feature')).toBe('max_monitored_systems');
       expect(requestUrl.searchParams.get('service')).toBe('upgrade');
-      expect(requestUrl.searchParams.get('return_url')).toBe(PURCHASE_RETURN_URL);
+      expect(requestUrl.searchParams.get('feature')).toBeNull();
+      expect(requestUrl.searchParams.get('return_url')).toBeNull();
       expect(requestUrl.searchParams.get('purchase_return_token')).toBe(PURCHASE_RETURN_TOKEN);
 
       await route.fulfill({
@@ -189,22 +188,39 @@ test.describe('Self-hosted upgrade return flow', () => {
         body:
           '<!doctype html><html><body>' +
           '<h1>Pulse Account</h1>' +
-          '<p>Checkout complete.</p>' +
-          `<form method="POST" action="${escapeAttribute(PURCHASE_RETURN_URL)}">` +
-          '<input type="hidden" name="session_id" value="cs_upgrade_return">' +
-          '<input type="hidden" name="feature" value="max_monitored_systems">' +
-          `<input type="hidden" name="purchase_return_token" value="${escapeAttribute(PURCHASE_RETURN_TOKEN)}">` +
-          '<button type="submit">Activate in Pulse Pro</button>' +
-          '</form>' +
+          '<p>Checkout complete. Returning to Pulse Pro.</p>' +
+          `<script>setTimeout(function(){window.location.replace(${JSON.stringify(
+            `${PURCHASE_RETURN_URL}?session_id=cs_upgrade_return&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+          )});},150);</script>` +
           '</body></html>',
       });
     });
 
-    await context.route(PURCHASE_RETURN_URL, async (route) => {
-      expect(route.request().method()).toBe('POST');
-      const formData = new URLSearchParams(route.request().postData() || '');
+    await context.route(`${PURCHASE_RETURN_URL}**`, async (route) => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        const requestUrl = new URL(request.url());
+        expect(requestUrl.searchParams.get('session_id')).toBe('cs_upgrade_return');
+        expect(requestUrl.searchParams.get('purchase_return_token')).toBe(PURCHASE_RETURN_TOKEN);
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/html',
+          body:
+            '<!doctype html><html><body>' +
+            '<h1>Finalizing Pulse Pro upgrade</h1>' +
+            `<form id="purchase-activation-continue-form" method="POST" action="${escapeAttribute(PURCHASE_RETURN_URL)}">` +
+            '<input type="hidden" name="session_id" value="cs_upgrade_return">' +
+            `<input type="hidden" name="purchase_return_token" value="${escapeAttribute(PURCHASE_RETURN_TOKEN)}">` +
+            '</form>' +
+            '<script>setTimeout(function(){document.getElementById("purchase-activation-continue-form")?.submit();},50);</script>' +
+            '</body></html>',
+        });
+        return;
+      }
+
+      expect(request.method()).toBe('POST');
+      const formData = new URLSearchParams(request.postData() || '');
       expect(formData.get('session_id')).toBe('cs_upgrade_return');
-      expect(formData.get('feature')).toBe('max_monitored_systems');
       expect(formData.get('purchase_return_token')).toBe(PURCHASE_RETURN_TOKEN);
       await route.fulfill({
         status: 200,
@@ -232,22 +248,14 @@ test.describe('Self-hosted upgrade return flow', () => {
     );
 
     await page.goto(
-      `${PULSE_ACCOUNT_PORTAL_URL}?feature=max_monitored_systems&service=upgrade` +
-        `&return_url=${encodeURIComponent(PURCHASE_RETURN_URL)}` +
-        `&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+      `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
       {
         waitUntil: 'domcontentloaded',
       },
     );
-    await expect(page).toHaveURL(
-      new RegExp(
-        `${PULSE_ACCOUNT_PORTAL_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*purchase_return_token=${PURCHASE_RETURN_TOKEN}`,
-      ),
-    );
     await expect(page.getByRole('heading', { name: 'Pulse Account' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Activate in Pulse Pro' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'Activate in Pulse Pro' }).click();
+    await expect(page.getByText('Checkout complete. Returning to Pulse Pro.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Activate in Pulse Pro' })).toHaveCount(0);
     await expect(page).toHaveURL(/\/settings\/system\/billing\/plan\?intent=max_monitored_systems$/);
   });
 });

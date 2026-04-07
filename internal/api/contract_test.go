@@ -4835,6 +4835,7 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
 			{method: http.MethodPost, path: "/api/upgrade-metrics/events"},
 			{method: http.MethodGet, path: licensePurchaseStartPath},
+			{method: http.MethodGet, path: licensePurchaseHandoffPath},
 			{method: http.MethodGet, path: "/auth/trial-activate"},
 		}
 
@@ -4881,6 +4882,54 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://pulse.example.com"+licensePurchaseHandoffPath+
+			"?purchase_return_token="+url.QueryEscape(returnToken),
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutHandoff(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := rec.Header().Get("Access-Control-Allow-Origin"); got != "*" {
+		t.Fatalf("allow-origin=%q, want *", got)
+	}
+	if got := rec.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache-control=%q, want no-store", got)
+	}
+
+	var payload struct {
+		Feature               string `json:"feature"`
+		ActivationURLTemplate string `json:"activation_url_template"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode payload: %v", err)
+	}
+
+	wantTemplate, err := licensePurchaseActivationTemplateURL(
+		"https://pulse.example.com"+licensePurchaseActivationPath,
+		returnToken,
+	)
+	if err != nil {
+		t.Fatalf("licensePurchaseActivationTemplateURL: %v", err)
+	}
+	if payload.Feature != "max_monitored_systems" {
+		t.Fatalf("feature=%q, want max_monitored_systems", payload.Feature)
+	}
+	if payload.ActivationURLTemplate != wantTemplate {
+		t.Fatalf("activation_url_template=%q, want %q", payload.ActivationURLTemplate, wantTemplate)
+	}
 }
 
 func TestContract_HandoffExchangeJSONSnapshot(t *testing.T) {
@@ -6020,6 +6069,21 @@ func TestContract_SecurityStatusIncludesSessionCapabilitiesDemoMode(t *testing.T
 	}
 	if got, _ := sessionCapabilities["demoMode"].(bool); !got {
 		t.Fatalf("sessionCapabilities.demoMode = %v, want true", sessionCapabilities["demoMode"])
+	}
+
+	presentationPolicy, ok := payload["presentationPolicy"].(map[string]any)
+	if !ok {
+		t.Fatalf("presentationPolicy = %#v, want object", payload["presentationPolicy"])
+	}
+	for key, want := range map[string]bool{
+		"demoMode":       true,
+		"readOnly":       true,
+		"hideCommercial": true,
+		"hideUpgrade":    true,
+	} {
+		if got, _ := presentationPolicy[key].(bool); got != want {
+			t.Fatalf("presentationPolicy.%s = %v, want %v", key, presentationPolicy[key], want)
+		}
 	}
 }
 

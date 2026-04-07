@@ -183,6 +183,16 @@ regression protection.
     preview/pinned wash via `data-summary-group-member-active` rather than
     per-surface outlines, secondary buttons, or full-strength row fills.
 28. Keep summary-card hover emphasis on one bounded rendering budget: when a summary row is active, shared sparkline and density-map primitives must promote the selected series and demote background series through the same active-series ID rather than layering a second page-local highlight pass, so zoom-range and hover scrubbing stay visually coherent without reintroducing multi-series overdraw on the hot summary cards. Density maps on that hot path must stay overview-first under focus: preserve the multi-entity heatmap rows, layer focused-entity detail inside the card, and avoid swapping transient hover into a separate single-series chart path.
+29. Keep public self-hosted checkout handoff endpoints on the adjacent
+    commercial/router boundary, not the summary-chart hot path. When
+    `internal/api/router.go`, `internal/api/router_routes_cloud.go`, or
+    `internal/api/licensing_handlers.go` evolve
+    `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
+    `/auth/license-purchase-activate`, performance work may keep those routes
+    cheap and redirect-safe, but it must not treat purchase-return callbacks as
+    chart-transport hot paths, fold summary-card caching into commercial
+    callback behavior, or reuse those public auth endpoints as a justification
+    for relaxing the protected history payload budgets that belong elsewhere.
 
 ## Forbidden Paths
 
