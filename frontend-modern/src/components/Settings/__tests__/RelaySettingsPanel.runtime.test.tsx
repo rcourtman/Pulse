@@ -155,6 +155,10 @@ describe('RelaySettingsPanel runtime', () => {
     cleanup();
   });
 
+  it('relies on shared commercial posture bootstrap for relay settings', () => {
+    expect(relaySettingsPanelStateSource).not.toContain('loadCommercialPosture(');
+  });
+
   it('shows supported Pulse Mobile pairing copy on the relay paywall', async () => {
     hasFeatureMock.mockReturnValue(false);
 
@@ -182,6 +186,7 @@ describe('RelaySettingsPanel runtime', () => {
       expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
     });
 
+    expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('Pair Pulse Mobile through Relay')).toBeInTheDocument();
     expect(
       screen.getByText(

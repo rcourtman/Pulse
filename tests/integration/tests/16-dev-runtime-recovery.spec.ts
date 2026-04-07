@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { ensureAuthenticated } from './helpers';
+import { ensureAuthenticated, trackBrowserRequests } from './helpers';
 import {
   killManagedDevRuntimeOwnerProcess,
   restartManagedDevRuntimeBackend,
@@ -10,6 +10,38 @@ const truthy = (value: string | undefined) =>
   ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
 
 test.describe.serial('Managed dev runtime recovery', () => {
+  test('browser request tracking stays browser-only under the managed dev runtime', async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop-only managed dev runtime coverage');
+    test.skip(!truthy(process.env.PULSE_E2E_USE_HOT_DEV), 'Runs only against the managed hot-dev runtime');
+
+    const securityStatusRequests = trackBrowserRequests(page, '/api/security/status');
+
+    try {
+      await ensureAuthenticated(page);
+
+      await expect
+        .poll(() => securityStatusRequests.count(), {
+          timeout: 30_000,
+          message: 'expected browser bootstrap to request security status under the managed runtime',
+        })
+        .toBeGreaterThan(0);
+
+      securityStatusRequests.clear();
+
+      const response = await page.request.get('/api/security/status');
+      expect(response.ok()).toBeTruthy();
+      expect(
+        securityStatusRequests.urls(),
+        'browser request tracking must ignore direct Playwright API helper calls',
+      ).toEqual([]);
+    } finally {
+      securityStatusRequests.stop();
+    }
+  });
+
   test('browser shell distinguishes stream-only reconnect from total backend loss', async ({
     page,
   }, testInfo) => {

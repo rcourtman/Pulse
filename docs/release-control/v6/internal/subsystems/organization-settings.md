@@ -195,3 +195,10 @@ store, while free-trial eligibility and upgrade routing stay on the canonical
 commercial-posture store backed by `/api/license/commercial-posture`.
 Organization settings must not collapse those two concerns back into one
 payload just because the same paywall shell renders both.
+That same posture split now also fixes RBAC bootstrap ownership.
+`frontend-modern/src/components/Settings/useRBACFeatureGateState.ts` may
+consume the resolved commercial-posture store for trial and upgrade copy, but
+it must not issue its own mount-time `loadCommercialPosture()` read.
+Authenticated-shell bootstrap belongs to
+`frontend-modern/src/useAppRuntimeState.ts`, with only the governed first-run
+setup completion surface allowed to bootstrap posture outside that shell.

@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test';
-import { ensureAuthenticated, ensureFirstRunExperience, navigateToSettings, apiRequest } from './helpers';
+import {
+  ensureAuthenticated,
+  ensureFirstRunExperience,
+  navigateToSettings,
+  apiRequest,
+  trackBrowserRequests,
+} from './helpers';
 
 /**
  * Dedicated first-session E2E test covering the full journey:
@@ -14,11 +20,7 @@ import { ensureAuthenticated, ensureFirstRunExperience, navigateToSettings, apiR
  * setup wizard before the rest of the suite continues through normal auth.
  */
 
-type EntitlementPayload = {
-  subscription_state?: string;
-  tier?: string;
-  valid?: boolean;
-  trial_eligible?: boolean;
+type RuntimeCapabilitiesPayload = {
   capabilities?: string[];
 };
 
@@ -162,11 +164,13 @@ test.describe.serial('First-session experience', () => {
 
     await ensureAuthenticated(page);
 
-    // Query entitlements to check feature access per-route (not blanket free/paid).
-    const entRes = await apiRequest(page, '/api/license/entitlements');
-    expect(entRes.ok()).toBeTruthy();
-    const entitlements = (await entRes.json()) as EntitlementPayload;
-    const features = new Set(entitlements.capabilities || []);
+    // Query runtime capabilities to check feature access per-route without
+    // depending on billing-only entitlements.
+    const runtimeRes = await apiRequest(page, '/api/license/runtime-capabilities');
+    expect(runtimeRes.ok()).toBeTruthy();
+    const runtimeCapabilities = (await runtimeRes.json()) as RuntimeCapabilitiesPayload;
+    const features = new Set(runtimeCapabilities.capabilities || []);
+    const entitlementsRequests = trackBrowserRequests(page, '/api/license/entitlements');
 
     // Gated routes with their required feature. Gating is feature-based, not
     // tier-based — e.g. a "relay" tier has the relay feature but not
@@ -177,80 +181,92 @@ test.describe.serial('First-session experience', () => {
       { route: '/settings/system-relay', feature: 'relay' },
     ] as const;
 
-    for (const { route, feature } of gatedRoutes) {
-      const hasFeature = features.has(feature);
-      const routePattern = route.startsWith('/operations/') ? /\/operations/ : /\/settings/;
+    try {
+      for (const { route, feature } of gatedRoutes) {
+        const hasFeature = features.has(feature);
+        const routePattern = route.startsWith('/operations/') ? /\/operations/ : /\/settings/;
 
-      if (!hasFeature) {
-        // Install a MutationObserver via addInitScript BEFORE navigating so it
-        // runs before any app code. This catches transient form elements that
-        // flash before the paywall renders (flash-of-unlocked-content).
-        await page.addInitScript(() => {
-          (window as any).__pulseFlashDetected = false;
-          const SELECTOR = 'form input:not([type="search"]), form textarea, form select';
+        if (!hasFeature) {
+          // Install a MutationObserver via addInitScript BEFORE navigating so it
+          // runs before any app code. This catches transient form elements that
+          // flash before the paywall renders (flash-of-unlocked-content).
+          await page.addInitScript(() => {
+            (window as any).__pulseFlashDetected = false;
+            const SELECTOR = 'form input:not([type="search"]), form textarea, form select';
 
-          const checkForFlash = () => {
-            const els = document.querySelectorAll(SELECTOR);
-            if (els.length > 0) {
-              (window as any).__pulseFlashDetected = true;
-            }
-          };
+            const checkForFlash = () => {
+              const els = document.querySelectorAll(SELECTOR);
+              if (els.length > 0) {
+                (window as any).__pulseFlashDetected = true;
+              }
+            };
 
-          const observer = new MutationObserver(checkForFlash);
+            const observer = new MutationObserver(checkForFlash);
 
-          // Start observing on documentElement immediately (always available
-          // in addInitScript context), so we catch body insertion and all
-          // subsequent DOM mutations including app boot. This avoids the gap
-          // where DOMContentLoaded fires after app scripts.
-          observer.observe(document.documentElement, {
-            childList: true,
-            subtree: true,
+            // Start observing on documentElement immediately (always available
+            // in addInitScript context), so we catch body insertion and all
+            // subsequent DOM mutations including app boot. This avoids the gap
+            // where DOMContentLoaded fires after app scripts.
+            observer.observe(document.documentElement, {
+              childList: true,
+              subtree: true,
+            });
+            // Also do an immediate check in case DOM is already populated.
+            checkForFlash();
+
+            // Auto-disconnect after 5 seconds to avoid leaking.
+            setTimeout(() => observer.disconnect(), 5000);
           });
-          // Also do an immediate check in case DOM is already populated.
-          checkForFlash();
 
-          // Auto-disconnect after 5 seconds to avoid leaking.
-          setTimeout(() => observer.disconnect(), 5000);
-        });
+          await page.goto(route, { waitUntil: 'domcontentloaded' });
+          await page.waitForURL(routePattern, { timeout: 10_000 });
+          await expect(page.locator('#root')).toBeVisible();
 
-        await page.goto(route, { waitUntil: 'domcontentloaded' });
-        await page.waitForURL(routePattern, { timeout: 10_000 });
-        await expect(page.locator('#root')).toBeVisible();
+          // Wait for the page to settle, then read the observer result.
+          await page.waitForTimeout(2_000);
+          const flashDetected = await page.evaluate(
+            () => (window as any).__pulseFlashDetected === true,
+          );
 
-        // Wait for the page to settle, then read the observer result.
-        await page.waitForTimeout(2_000);
-        const flashDetected = await page.evaluate(
-          () => (window as any).__pulseFlashDetected === true,
-        );
+          expect(
+            flashDetected,
+            `Gated route ${route} (feature=${feature}) showed form elements on unlicensed tier (flash-of-unlocked-content)`,
+          ).toBe(false);
 
-        expect(
-          flashDetected,
-          `Gated route ${route} (feature=${feature}) showed form elements on unlicensed tier (flash-of-unlocked-content)`,
-        ).toBe(false);
+          // Paywall indicator should be visible.
+          const paywallIndicator = page.locator(
+            'text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial/i',
+          ).first();
+          const isPaywallVisible = await paywallIndicator
+            .isVisible({ timeout: 5_000 })
+            .catch(() => false);
+          expect(
+            isPaywallVisible,
+            `Gated route ${route} (feature=${feature}) should show paywall when feature is not available`,
+          ).toBeTruthy();
+        } else {
+          await page.goto(route, { waitUntil: 'domcontentloaded' });
+          await page.waitForURL(routePattern, { timeout: 10_000 });
+          await expect(page.locator('#root')).toBeVisible();
 
-        // Paywall indicator should be visible.
-        const paywallIndicator = page.locator(
-          'text=/Upgrade|Pro Feature|Requires Pro|Requires Relay|Start.*Trial/i',
-        ).first();
-        const isPaywallVisible = await paywallIndicator.isVisible({ timeout: 5_000 }).catch(() => false);
-        expect(
-          isPaywallVisible,
-          `Gated route ${route} (feature=${feature}) should show paywall when feature is not available`,
-        ).toBeTruthy();
-      } else {
-        await page.goto(route, { waitUntil: 'domcontentloaded' });
-        await page.waitForURL(routePattern, { timeout: 10_000 });
-        await expect(page.locator('#root')).toBeVisible();
-
-        // Licensed for this feature — the full panel content should render.
-        const panelContent = page.locator('h1, h2, h3, label, form')
-          .filter({ hasNotText: 'Settings' })
-          .first();
-        await expect(
-          panelContent,
-          `Gated route ${route} should render content when feature=${feature} is available`,
-        ).toBeVisible({ timeout: 10_000 });
+          // Licensed for this feature — the full panel content should render.
+          const panelContent = page
+            .locator('h1, h2, h3, label, form')
+            .filter({ hasNotText: 'Settings' })
+            .first();
+          await expect(
+            panelContent,
+            `Gated route ${route} should render content when feature=${feature} is available`,
+          ).toBeVisible({ timeout: 10_000 });
+        }
       }
+    } finally {
+      const requestedURLs = entitlementsRequests.urls();
+      entitlementsRequests.stop();
+      expect(
+        requestedURLs,
+        'Non-billing gated routes must not trigger billing entitlements reads in the browser shell',
+      ).toEqual([]);
     }
   });
 

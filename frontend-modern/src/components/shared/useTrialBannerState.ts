@@ -1,9 +1,5 @@
-import { createMemo, createSignal, onMount } from 'solid-js';
-import {
-  commercialPosture,
-  getUpgradeActionDestination,
-  loadCommercialPosture,
-} from '@/stores/licenseCommercial';
+import { createMemo, createSignal } from 'solid-js';
+import { commercialPosture, getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
@@ -15,10 +11,6 @@ import {
 
 export function useTrialBannerState() {
   const [snoozed, setSnoozed] = createSignal(isUpsellSnoozed(TRIAL_BANNER_SNOOZE_KEY));
-
-  onMount(() => {
-    void loadCommercialPosture();
-  });
 
   const isTrial = createMemo(
     () =>

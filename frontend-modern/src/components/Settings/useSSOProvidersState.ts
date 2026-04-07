@@ -9,7 +9,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -131,7 +130,6 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   onMount(() => {
     loadRuntimeCapabilities();
-    loadCommercialPosture();
     void loadProviders();
   });
 

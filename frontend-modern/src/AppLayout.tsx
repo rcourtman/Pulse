@@ -39,15 +39,8 @@ import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { isMultiTenantEnabled } from '@/stores/license';
-import {
-  isPro,
-  loadCommercialPosture,
-} from '@/stores/licenseCommercial';
-import {
-  presentationPolicyHidesCommercialSurfaces,
-  presentationPolicyHidesUpgradePrompts,
-  sessionPresentationPolicyResolved,
-} from '@/stores/sessionPresentationPolicy';
+import { isPro } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -180,16 +173,6 @@ export function AppLayout(props: AppLayoutProps) {
       headerHideTimeout = undefined;
     }
   };
-
-  createEffect(() => {
-    if (!sessionPresentationPolicyResolved()) {
-      return;
-    }
-    if (presentationPolicyHidesCommercialSurfaces()) {
-      return;
-    }
-    void loadCommercialPosture();
-  });
 
   const showHeader = () => {
     clearHeaderHideTimeout();

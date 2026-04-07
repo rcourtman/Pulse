@@ -111,7 +111,6 @@ describe('ApprovalSection', () => {
       />
     ));
 
-    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(await screen.findByText('Fix Pending Approval')).toBeInTheDocument();
     expect(screen.getAllByText('Fix Pending Approval')).toHaveLength(1);
     expect(screen.getByText('details unavailable')).toBeInTheDocument();
@@ -150,7 +149,6 @@ describe('ApprovalSection', () => {
 
     render(() => <ApprovalSection findingId="finding-2" investigationOutcome="fix_queued" />);
 
-    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(await screen.findAllByRole('button', { name: /re-approve & execute/i })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: /re-approve & execute/i }));
 

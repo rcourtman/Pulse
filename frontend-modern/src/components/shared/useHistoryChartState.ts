@@ -14,7 +14,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
@@ -79,7 +78,6 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
 
   onMount(() => {
     loadRuntimeCapabilities();
-    loadCommercialPosture();
   });
 
   createEffect(() => {

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import {
   ensureAuthenticated,
   apiRequest,
+  trackBrowserRequests,
 } from '../helpers';
 
 /**
@@ -41,9 +42,8 @@ function buildRelayServerURL(): string {
   return `${scheme}://${RELAY_HOST}${portSuffix}/ws/instance`;
 }
 
-type EntitlementPayload = {
+type RuntimeCapabilitiesPayload = {
   capabilities?: string[];
-  valid?: boolean;
 };
 
 type CreateRelayMobileTokenResponse = {
@@ -116,21 +116,21 @@ test.describe.serial('Journey: Relay Pairing → Mobile Connection', () => {
     test.skip(!RELAY_HOST, 'PULSE_E2E_RELAY_HOST must be set');
   });
 
-  test('relay feature is available via entitlements', async ({ page }, testInfo) => {
+  test('relay feature is available via runtime capabilities', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop relay journey');
     test.skip(!RELAY_HOST, 'Relay host not configured');
 
     await ensureAuthenticated(page);
 
-    const res = await apiRequest(page, '/api/license/entitlements');
+    const res = await apiRequest(page, '/api/license/runtime-capabilities');
     expect(res.ok()).toBeTruthy();
 
-    const entitlements = (await res.json()) as EntitlementPayload;
-    const capabilities = new Set(entitlements.capabilities || []);
+    const runtimeCapabilities = (await res.json()) as RuntimeCapabilitiesPayload;
+    const capabilities = new Set(runtimeCapabilities.capabilities || []);
 
     expect(
       capabilities.has('relay'),
-      'Relay feature must be available in license entitlements. ' +
+      'Relay feature must be available in runtime capabilities. ' +
         'Ensure the test instance has a Pro or higher license.',
     ).toBeTruthy();
   });
@@ -283,18 +283,28 @@ test.describe.serial('Journey: Relay Pairing → Mobile Connection', () => {
     test.skip(!RELAY_HOST, 'Relay host not configured');
 
     await ensureAuthenticated(page);
+    const entitlementsRequests = trackBrowserRequests(page, '/api/license/entitlements');
 
-    await page.goto('/settings/system-relay', { waitUntil: 'domcontentloaded' });
-    await page.waitForURL(/\/settings/, { timeout: 10_000 });
-    await expect(page.locator('#root')).toBeVisible();
+    try {
+      await page.goto('/settings/system-relay', { waitUntil: 'domcontentloaded' });
+      await page.waitForURL(/\/settings/, { timeout: 10_000 });
+      await expect(page.locator('#root')).toBeVisible();
 
-    const relayContent = page.locator(
-      'text=/Relay|Connected|Enabled|Mobile|Pairing/i',
-    ).first();
+      const relayContent = page.locator(
+        'text=/Relay|Connected|Enabled|Mobile|Pairing/i',
+      ).first();
 
-    await expect(
-      relayContent,
-      'Relay settings page should show relay-related content',
-    ).toBeVisible({ timeout: 15_000 });
+      await expect(
+        relayContent,
+        'Relay settings page should show relay-related content',
+      ).toBeVisible({ timeout: 15_000 });
+    } finally {
+      const requestedURLs = entitlementsRequests.urls();
+      entitlementsRequests.stop();
+      expect(
+        requestedURLs,
+        'Relay settings browser journey must not trigger billing entitlements reads',
+      ).toEqual([]);
+    }
   });
 });

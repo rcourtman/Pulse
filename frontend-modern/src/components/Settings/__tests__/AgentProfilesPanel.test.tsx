@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, cleanup, within } from '@solidjs/testing-library';
+import agentProfilesPanelStateSource from '../useAgentProfilesPanelState.ts?raw';
 import { AgentProfilesPanel } from '../AgentProfilesPanel';
 import { notificationStore } from '@/stores/notifications';
 import type { ConnectedInfrastructureItem, State } from '@/types/api';
@@ -262,6 +263,10 @@ afterEach(() => {
 });
 
 describe('AgentProfilesPanel V6 agent ID handling', () => {
+  it('relies on shared commercial posture bootstrap instead of local posture loads', () => {
+    expect(agentProfilesPanelStateSource).not.toContain('loadCommercialPosture(');
+  });
+
   it('maps assignments using actionable V6 agent ID instead of resource hash ID', async () => {
     listAssignmentsMock.mockResolvedValue([
       { agent_id: 'agent-123', profile_id: 'profile-a', updated_at: new Date().toISOString() },

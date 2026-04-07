@@ -130,7 +130,6 @@ describe('RBAC paywall settings panels', () => {
       'href',
       'https://example.com/upgrade?feature=rbac',
     );
-    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
     expect(getRolesMock).not.toHaveBeenCalled();
     expect(trackPaywallViewedMock).toHaveBeenCalledWith('rbac', 'settings_roles_panel');
@@ -158,7 +157,6 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('Centralized Access Control (Pro)')).toBeInTheDocument();
     });
 
-    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
       'href',
       'https://example.com/upgrade?feature=rbac',

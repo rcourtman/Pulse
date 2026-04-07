@@ -144,6 +144,14 @@ suppression is now the shared resolved `presentationPolicy` from
 upgrade CTAs, trial nudges, and Pro-only helper copy only from that shared
 policy instead of reviving local demo heuristics or issuing early commercial
 reads before the policy resolves.
+That same posture split now also centralizes Patrol commercial bootstrap.
+`frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts` and
+`frontend-modern/src/components/patrol/ApprovalSection.tsx` may consume the
+resolved commercial-posture store when Patrol needs upgrade or trial context,
+but they must not trigger their own mount-time `loadCommercialPosture()`
+reads. Authenticated Patrol shells inherit that bootstrap from
+`frontend-modern/src/useAppRuntimeState.ts`, so Patrol-specific hooks do not
+quietly retake ownership of commercial fetch timing.
 That degraded empty-state copy must also interpret the finding state rather
 than simply replaying the primary assessment sentence verbatim: when coverage
 is incomplete, the findings panel should tell the operator that Patrol has not

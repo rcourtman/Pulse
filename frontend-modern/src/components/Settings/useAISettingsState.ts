@@ -17,7 +17,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { notificationStore } from '@/stores/notifications';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
@@ -831,7 +830,6 @@ export const useAISettingsState = () => {
 
   onMount(() => {
     loadRuntimeCapabilities();
-    loadCommercialPosture();
 
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);

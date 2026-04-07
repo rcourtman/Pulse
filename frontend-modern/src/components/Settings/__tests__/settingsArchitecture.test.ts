@@ -1507,17 +1507,22 @@ describe('Settings architecture guardrails', () => {
 
     expect(aiSettingsStateSource).toContain("} from '@/stores/license';");
     expect(aiSettingsStateSource).toContain("} from '@/stores/licenseCommercial';");
-    expect(aiSettingsStateSource).toContain('loadCommercialPosture();');
+    expect(aiSettingsStateSource).not.toContain('loadCommercialPosture();');
 
     expect(reportingPanelStateSource).toContain("} from '@/stores/license';");
     expect(reportingPanelStateSource).toContain("} from '@/stores/licenseCommercial';");
-    expect(reportingPanelStateSource).toContain('loadCommercialPosture();');
+    expect(reportingPanelStateSource).not.toContain('loadCommercialPosture();');
 
     expect(auditLogStateSource).toContain("} from '@/stores/license';");
     expect(auditLogStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(auditLogStateSource).not.toContain('loadCommercialPosture();');
     expect(auditWebhookStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(auditWebhookStateSource).not.toContain('loadCommercialPosture();');
     expect(ssoProvidersStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(ssoProvidersStateSource).not.toContain('loadCommercialPosture();');
     expect(rbacFeatureGateStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(rbacFeatureGateStateSource).not.toContain('loadCommercialPosture();');
     expect(nodeModalStateSource).toContain("from '@/stores/licenseCommercial';");
+    expect(nodeModalStateSource).not.toContain('loadCommercialPosture();');
   });
 });

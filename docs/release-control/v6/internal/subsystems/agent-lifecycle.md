@@ -337,6 +337,17 @@ Lifecycle-owned browser shells must also defer any commercial helper reads
 until that presentation policy resolves so demo suppression stays fail-closed
 during first render instead of racing hidden commercial endpoints from shared
 setup or install surfaces.
+The governed exception is
+`frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx`: because
+that first-run completion surface renders before the authenticated shell has
+mounted `frontend-modern/src/useAppRuntimeState.ts`, it may issue the local
+commercial posture bootstrap needed for trial and upgrade posture, and it may
+force-refresh that posture after a successful trial start. Other
+lifecycle-adjacent authenticated-shell surfaces such as
+`frontend-modern/src/components/Settings/useNodeModalState.ts` and
+`frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` must
+consume the shared posture owner instead of reintroducing their own mount-time
+commercial reads.
 That same shared boundary now also owns the one-time checkout-return lookup:
 lifecycle-adjacent surfaces may initiate billing or account handoff through
 shared public routes, but they must never persist, derive, or replay the

@@ -86,7 +86,7 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('export function useTrialBannerState');
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).toContain('loadCommercialPosture');
+    expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('commercialPosture');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
@@ -99,17 +99,13 @@ describe('TrialBanner', () => {
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
   });
 
-  it('loads commercial posture on mount and renders trial details when active', async () => {
+  it('renders trial details from shared commercial posture when active', async () => {
     commercialPostureMock.mockReturnValue({
       subscription_state: 'trial',
       trial_days_remaining: 4.8,
     });
 
     renderBanner();
-
-    await waitFor(() => {
-      expect(loadCommercialPostureMock).toHaveBeenCalled();
-    });
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Pro Trial:')).toBeInTheDocument();
     expect(screen.getByText('4 days remaining')).toBeInTheDocument();

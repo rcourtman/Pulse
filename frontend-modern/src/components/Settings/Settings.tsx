@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, Show, Suspense, createMemo, createEffect } from 'solid-js';
+import { Component, createSignal, onMount, Show, Suspense, createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -22,11 +22,7 @@ import {
   getRuntimeLimit,
   loadRuntimeCapabilities,
 } from '@/stores/license';
-import { isPro, loadCommercialPosture } from '@/stores/licenseCommercial';
-import {
-  presentationPolicyHidesCommercialSurfaces,
-  sessionPresentationPolicyResolved,
-} from '@/stores/sessionPresentationPolicy';
+import { isPro } from '@/stores/licenseCommercial';
 
 interface SettingsProps {
   darkMode: () => boolean;
@@ -158,16 +154,6 @@ const Settings: Component<SettingsProps> = (props) => {
 
   onMount(() => {
     void loadRuntimeCapabilities();
-  });
-
-  createEffect(() => {
-    if (!sessionPresentationPolicyResolved()) {
-      return;
-    }
-    if (presentationPolicyHidesCommercialSurfaces()) {
-      return;
-    }
-    void loadCommercialPosture();
   });
 
   return (

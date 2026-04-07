@@ -265,6 +265,15 @@ restarts, or startup build.
 Otherwise unrelated parallel test edits or hot-dev's own binary output can
 tear down `7655`, produce transient `5173` proxy failures, and undermine the
 canonical browser-runtime proof path.
+That same shared helper boundary now also owns browser-versus-API request
+truth inside Playwright helpers. `tests/integration/tests/helpers.ts` may
+offer request trackers for browser-shell contract proofs, but those helpers
+must observe page-originated traffic only and must not blur browser runtime
+requests together with `page.request` or other direct API helper calls.
+Managed runtime recovery and browser bootstrap proofs therefore need to keep
+helper coverage that demonstrates browser-shell request tracking remains
+trustworthy when the same test also performs direct health or security-status
+API probes.
 `scripts/hot-dev-bg.sh` must also supervise `scripts/hot-dev.sh` in an isolated
 child session so an unexpected owner-process death cannot leave orphaned
 watchers or health monitors behind. When the supervisor replaces the managed

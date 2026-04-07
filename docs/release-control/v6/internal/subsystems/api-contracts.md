@@ -477,6 +477,15 @@ contract for real customer workspaces, and `/api/license/entitlements`
 remains billing-only. New callers must extend one of those owned shapes
 instead of reviving a combined entitlement payload for mixed runtime,
 commercial, and billing concerns.
+That same shared API contract now also owns browser-proofed read separation.
+Non-billing browser journeys such as
+`tests/integration/tests/11-first-session.spec.ts`,
+`tests/integration/tests/journeys/01-smoke-bootstrap-login-dashboard.spec.ts`,
+and `tests/integration/tests/journeys/03-relay-pairing.spec.ts` may call
+`/api/license/runtime-capabilities` for feature truth, but they must assert
+zero browser requests to `/api/license/entitlements`. Billing activation,
+upgrade, and owned billing panels remain the only browser surfaces allowed to
+read the billing-only entitlements contract.
 `/portal` is now one bootstrap-driven shell for both anonymous and
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate

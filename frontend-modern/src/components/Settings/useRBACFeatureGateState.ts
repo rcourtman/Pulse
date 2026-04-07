@@ -5,7 +5,6 @@ import {
 } from '@/stores/license';
 import {
   commercialPosture,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
@@ -39,7 +38,6 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
 
   onMount(() => {
     void loadRuntimeCapabilities();
-    void loadCommercialPosture();
   });
 
   createEffect((wasPaywallVisible) => {

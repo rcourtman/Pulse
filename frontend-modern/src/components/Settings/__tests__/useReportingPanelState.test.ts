@@ -157,7 +157,7 @@ describe('useReportingPanelState', () => {
     await flushAsync();
 
     expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
-    expect(loadCommercialLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(loadCommercialLicenseStatusMock).not.toHaveBeenCalled();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.performanceReport.defaultFormat).toBe('csv');
     expect(hookState.format()).toBe('csv');
@@ -237,7 +237,7 @@ describe('useReportingPanelState', () => {
     await flushAsync();
 
     expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
-    expect(loadCommercialLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(loadCommercialLicenseStatusMock).not.toHaveBeenCalled();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
     expect(hookState.isLocked()).toBe(false);

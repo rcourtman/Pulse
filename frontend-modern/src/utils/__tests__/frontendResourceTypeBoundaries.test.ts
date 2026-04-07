@@ -2859,7 +2859,7 @@ describe('frontend resource type boundaries', () => {
     expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).toContain('loadCommercialPosture');
+    expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
     expect(trialBannerStateSource).toContain('commercialPosture');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');

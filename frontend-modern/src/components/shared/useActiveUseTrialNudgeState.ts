@@ -1,5 +1,5 @@
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { commercialPosture, loadCommercialPosture } from '@/stores/licenseCommercial';
+import { commercialPosture } from '@/stores/licenseCommercial';
 import { notificationStore } from '@/stores/notifications';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
@@ -38,7 +38,6 @@ export function useActiveUseTrialNudgeState() {
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   onMount(() => {
-    void loadCommercialPosture();
     setFirstSeen(getActiveUseTrialNudgeFirstSeenTimestamp());
     const timer = window.setInterval(() => setNow(Date.now()), ACTIVE_USE_TRIAL_NUDGE_REFRESH_MS);
     onCleanup(() => window.clearInterval(timer));

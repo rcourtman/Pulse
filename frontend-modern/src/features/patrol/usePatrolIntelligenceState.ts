@@ -29,7 +29,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
@@ -673,7 +672,6 @@ export function usePatrolIntelligenceState() {
   onMount(async () => {
     await Promise.all([
       loadRuntimeCapabilities(),
-      loadCommercialPosture(),
       loadAllData(),
       loadAutonomySettings(),
       loadModels(),

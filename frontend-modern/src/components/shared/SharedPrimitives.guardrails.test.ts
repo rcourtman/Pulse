@@ -467,7 +467,7 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerStateSource).toContain('export function useTrialBannerState');
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).toContain('loadCommercialPosture');
+    expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
     expect(trialBannerStateSource).toContain('commercialPosture');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');

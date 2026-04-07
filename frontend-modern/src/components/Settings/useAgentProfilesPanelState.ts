@@ -18,7 +18,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import type { ConnectedInfrastructureItem } from '@/types/api';
@@ -238,7 +237,6 @@ export const useAgentProfilesPanelState = () => {
 
   onMount(async () => {
     await loadRuntimeCapabilities();
-    await loadCommercialPosture();
 
     try {
       const aiSettings = await AIAPI.getSettings();

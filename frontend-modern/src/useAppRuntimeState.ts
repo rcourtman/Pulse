@@ -52,6 +52,7 @@ import {
   runtimeCapabilitiesLoaded,
   loadRuntimeCapabilities,
 } from '@/stores/license';
+import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { layoutStore } from '@/utils/layout';
 import {
@@ -281,6 +282,8 @@ export const useAppRuntimeState = () => {
     setWsStore(acquireWsStore());
     setBackendHealthy(true);
     await loadSystemSettingsAndLayout();
+    // Shared commercial posture bootstraps once per authenticated app shell.
+    void loadCommercialPosture();
   };
 
   const checkBackendHealth = async () => {

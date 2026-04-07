@@ -14,7 +14,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -545,7 +544,6 @@ export const useAuditLogPanelState = () => {
   onMount(() => {
     setIsMounted(true);
     void loadRuntimeCapabilities();
-    void loadCommercialPosture();
   });
 
   createEffect(() => {

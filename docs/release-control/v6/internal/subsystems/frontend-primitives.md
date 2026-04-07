@@ -435,6 +435,16 @@ commercial identity, upgrade routing, and trial state must stay in
 `frontend-modern/src/stores/licenseCommercial.ts`, which suppresses public-demo
 loads locally and defers its first fetch until the presentation policy has
 resolved instead of depending on route-local guards.
+That same shared primitive boundary now also centralizes authenticated-shell
+commercial posture bootstrap. `frontend-modern/src/useAppRuntimeState.ts`
+owns the first shared `loadCommercialPosture()` read after authenticated app
+runtime has mounted, while `frontend-modern/src/AppLayout.tsx`,
+`frontend-modern/src/components/Settings/Settings.tsx`, shared warning-banner
+hooks, Patrol state hooks, and settings-panel state hooks must consume the
+resolved store state instead of reissuing mount-time posture fetches from each
+surface. Shared commercial posture loading may still dedupe or force-refresh
+through the store for governed billing or first-run flows, but route-local or
+panel-local bootstrap ownership is forbidden.
 Storage disk drawers now also sit on that same shared-primitives floor.
 `frontend-modern/src/components/Storage/DiskDetail.tsx` must render physical-
 disk read, write, and busy charts through `HistoryChart` plus

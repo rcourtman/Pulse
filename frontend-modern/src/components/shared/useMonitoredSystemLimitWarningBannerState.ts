@@ -9,7 +9,6 @@ import {
   getUpgradeActionDestination,
   hasMigrationGap,
   legacyConnections,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
@@ -37,7 +36,6 @@ import {
 export function useMonitoredSystemLimitWarningBannerState() {
   onMount(() => {
     void loadRuntimeCapabilities();
-    void loadCommercialPosture();
   });
 
   const monitoredSystemLimit = createMemo(() => getRuntimeLimit(MONITORED_SYSTEM_LIMIT_KEY));

@@ -55,10 +55,9 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).toContain("import { isMultiTenantEnabled } from '@/stores/license';");
-    expect(appLayoutSource).toContain("loadCommercialPosture");
-    expect(appLayoutSource).toContain('sessionPresentationPolicyResolved');
-    expect(appLayoutSource).toContain('if (presentationPolicyHidesCommercialSurfaces()) {');
-    expect(appLayoutSource).toContain('void loadCommercialPosture();');
+    expect(appLayoutSource).not.toContain('loadCommercialPosture');
+    expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
+    expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
     expect(appSource).not.toContain("apiFetch('/api/security/status')");
@@ -75,10 +74,14 @@ describe('App architecture', () => {
       "import {\n  isHostedModeEnabled,\n  isMultiTenantEnabled,\n  runtimeCapabilitiesLoaded,\n  loadRuntimeCapabilities,\n} from '@/stores/license';",
     );
     expect(appRuntimeStateSource).toContain(
+      "import { loadCommercialPosture } from '@/stores/licenseCommercial';",
+    );
+    expect(appRuntimeStateSource).toContain(
       'const [activeOrgID, setActiveOrgID] = createSignal(',
     );
     expect(appRuntimeStateSource).toContain('onMount(() => {');
     expect(appRuntimeStateSource).toContain('onMount(async () => {');
+    expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
     expect(appRuntimeStateSource).toContain("eventBus.on('theme_changed', handleRemoteThemeChange);");
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",

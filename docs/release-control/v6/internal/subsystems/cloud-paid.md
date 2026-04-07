@@ -193,6 +193,27 @@ The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through
 `tests/integration/scripts/run-tests.sh demo-contract`.
+That same licensing/browser boundary now also owns authenticated commercial
+posture bootstrap and the prohibition on non-billing entitlement reads.
+`frontend-modern/src/useAppRuntimeState.ts` is the canonical authenticated
+owner for the first `/api/license/commercial-posture` read, while
+`frontend-modern/src/AppLayout.tsx`,
+`frontend-modern/src/components/Settings/Settings.tsx`,
+`frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, and
+other non-billing feature hooks may consume the resolved posture store but
+must not each trigger their own mount-time posture fetch. Billing-owned
+surfaces such as `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+may still force refresh through the same shared store when plan, trial, or
+recovery actions mutate commercial truth.
+Non-billing browser journeys must also stay off
+`/api/license/entitlements` entirely. Dashboard, infrastructure, alerts,
+first-session gated routes, and relay settings must take feature truth from
+`/api/license/runtime-capabilities` or already loaded commercial posture, and
+the governed browser proof in
+`tests/integration/tests/11-first-session.spec.ts`,
+`tests/integration/tests/journeys/01-smoke-bootstrap-login-dashboard.spec.ts`,
+and `tests/integration/tests/journeys/03-relay-pairing.spec.ts` must continue
+to assert zero browser-shell entitlement requests outside owned billing flows.
 Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan
 versions are consumed at hosted entitlement and workspace-limit enforcement

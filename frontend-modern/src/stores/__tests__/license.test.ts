@@ -296,6 +296,25 @@ describe('license stores', () => {
       expect(commercialPosture()).toEqual(mockCommercialPosture);
     });
 
+    it('deduplicates in-flight commercial posture loads', async () => {
+      let resolveLoad: ((value: typeof mockCommercialPosture) => void) | null = null;
+      vi.mocked(LicenseAPI.getCommercialPosture).mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          }),
+      );
+
+      const firstLoad = loadCommercialPosture(true);
+      const secondLoad = loadCommercialPosture();
+
+      expect(LicenseAPI.getCommercialPosture).toHaveBeenCalledTimes(1);
+      resolveLoad?.(mockCommercialPosture);
+      await Promise.all([firstLoad, secondLoad]);
+
+      expect(commercialPosture()).toEqual(mockCommercialPosture);
+    });
+
     it('sets commercial fallback posture on error', async () => {
       vi.mocked(LicenseAPI.getCommercialPosture).mockRejectedValue(new Error('API error'));
 

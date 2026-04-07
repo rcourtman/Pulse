@@ -55,7 +55,7 @@ describe('NodeModal guardrails', () => {
     expect(nodeModalSource).toContain('useNodeModalState');
     expect(nodeModalStateSource).toContain("from '@/stores/licenseCommercial';");
     expect(nodeModalStateSource).not.toContain("from '@/stores/license';\n");
-    expect(nodeModalStateSource).toContain('void loadCommercialPosture();');
+    expect(nodeModalStateSource).not.toContain('loadCommercialPosture(');
     expect(nodeModalStateSource).toContain('const ent = commercialPosture();');
     expect(nodeModalStateSource).toContain('const copyProxmoxAgentInstallCommand = async (');
     expect(nodeModalStateSource).toContain("const data = await NodesAPI.getAgentInstallCommand({");

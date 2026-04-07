@@ -1,4 +1,4 @@
-import { Browser, Page, expect } from "@playwright/test";
+import { Browser, Page, Request, expect } from "@playwright/test";
 import { preferredBrowserBaseURL, readRuntimeState } from "./runtime-defaults";
 
 const runtimePrimaryAPIToken = (): string => {
@@ -60,6 +60,29 @@ export async function waitForPulseReady(page: Page, timeoutMs = 120_000) {
     await page.waitForTimeout(1000);
   }
   throw lastError ?? new Error("Timed out waiting for Pulse to become ready");
+}
+
+export function trackBrowserRequests(page: Page, matcher: string | RegExp) {
+  const matchedURLs: string[] = [];
+  const matches = (url: string) =>
+    typeof matcher === "string" ? url.includes(matcher) : matcher.test(url);
+  const handleRequest = (request: Request) => {
+    const url = request.url();
+    if (matches(url)) {
+      matchedURLs.push(url);
+    }
+  };
+
+  page.on("request", handleRequest);
+
+  return {
+    clear: () => {
+      matchedURLs.length = 0;
+    },
+    count: () => matchedURLs.length,
+    stop: () => page.off("request", handleRequest),
+    urls: () => [...matchedURLs],
+  };
 }
 
 type SecurityStatus = {

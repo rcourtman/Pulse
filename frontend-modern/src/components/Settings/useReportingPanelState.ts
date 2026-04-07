@@ -9,7 +9,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -70,7 +69,6 @@ export const useReportingPanelState = () => {
 
   onMount(() => {
     loadRuntimeCapabilities();
-    loadCommercialPosture();
   });
 
   createEffect((wasVisible: boolean) => {

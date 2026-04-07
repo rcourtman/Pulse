@@ -6,7 +6,6 @@ import {
 import {
   commercialPosture,
   getUpgradeActionDestination,
-  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -134,7 +133,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   };
 
   onMount(async () => {
-    await Promise.all([loadRuntimeCapabilities(), loadCommercialPosture()]);
+    await loadRuntimeCapabilities();
     if (!relayEnabled()) {
       setLoading(false);
       return;

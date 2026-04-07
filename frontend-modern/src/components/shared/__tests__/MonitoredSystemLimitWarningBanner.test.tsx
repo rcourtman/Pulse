@@ -115,7 +115,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadCommercialPosture');
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain('loadCommercialPosture');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
     );
@@ -155,7 +155,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(mockLoadRuntimeLicenseStatus).toHaveBeenCalled();
-    expect(mockLoadCommercialPosture).toHaveBeenCalled();
+    expect(mockLoadCommercialPosture).not.toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
 

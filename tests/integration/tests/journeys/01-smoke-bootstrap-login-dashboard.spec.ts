@@ -9,6 +9,7 @@ import {
   navigateToSettings,
   setMockMode,
   getMockMode,
+  trackBrowserRequests,
 } from '../helpers';
 
 /**
@@ -206,6 +207,38 @@ test.describe.serial('Journey: Bootstrap → Login → Dashboard', () => {
     }
   });
 
+  test('core non-billing navigation does not read billing entitlements', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop smoke journey');
+
+    await ensureAuthenticated(page);
+
+    const entitlementsRequests = trackBrowserRequests(page, '/api/license/entitlements');
+    try {
+      await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#root')).toBeVisible();
+
+      await page.goto('/infrastructure', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#root')).toBeVisible();
+
+      await page.goto('/alerts/overview', { waitUntil: 'domcontentloaded' });
+      await expect(page.locator('#root')).toBeVisible();
+
+      await navigateToSettings(page);
+      await expect(page.locator('[aria-label="Settings navigation"]')).toBeVisible({
+        timeout: 10_000,
+      });
+    } finally {
+      const requestedURLs = entitlementsRequests.urls();
+      entitlementsRequests.stop();
+      expect(
+        requestedURLs,
+        'Core non-billing navigation must not trigger billing entitlements reads in the browser shell',
+      ).toEqual([]);
+    }
+  });
+
   test('logout and re-login cycle completes successfully', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop smoke journey');
 
@@ -218,7 +251,7 @@ test.describe.serial('Journey: Bootstrap → Login → Dashboard', () => {
     await expect(page).toHaveURL(AUTHENTICATED_URL);
   });
 
-  test('API returns valid state after full journey', async ({ page }, testInfo) => {
+  test('API returns runtime capabilities after full journey', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop smoke journey');
 
     await ensureAuthenticated(page);
@@ -229,10 +262,13 @@ test.describe.serial('Journey: Bootstrap → Login → Dashboard', () => {
     const healthRes = await apiRequest(page, '/api/health');
     expect(healthRes.ok(), `GET /api/health failed: ${healthRes.status()}`).toBeTruthy();
 
-    const entRes = await apiRequest(page, '/api/license/entitlements');
-    expect(entRes.ok(), `GET /api/license/entitlements failed: ${entRes.status()}`).toBeTruthy();
+    const runtimeRes = await apiRequest(page, '/api/license/runtime-capabilities');
+    expect(
+      runtimeRes.ok(),
+      `GET /api/license/runtime-capabilities failed: ${runtimeRes.status()}`,
+    ).toBeTruthy();
 
-    const entitlements = await entRes.json();
-    expect(entitlements).toHaveProperty('valid');
+    const runtimeCapabilities = await runtimeRes.json();
+    expect(Array.isArray(runtimeCapabilities.capabilities)).toBe(true);
   });
 });

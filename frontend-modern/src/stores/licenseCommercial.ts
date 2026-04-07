@@ -41,6 +41,7 @@ const [commercialPostureState, setCommercialPostureState] =
 const [loading, setLoading] = createSignal(false);
 const [loaded, setLoaded] = createSignal(false);
 const [loadError, setLoadError] = createSignal<Error | null>(null);
+let inFlightCommercialPostureLoad: Promise<void> | null = null;
 
 type TrialStartErrorPayload = {
   error?: string;
@@ -78,6 +79,8 @@ function parseRetryAfterSeconds(value: string | null | undefined): number | unde
 
 /**
  * Load the commercial posture payload used by non-billing trial and upgrade UI.
+ * Initial bootstrap belongs to the authenticated app shell or first-run setup,
+ * not to feature-local hooks.
  */
 export async function loadCommercialPosture(force = false): Promise<void> {
   if (!sessionPresentationPolicyResolved()) {
@@ -96,25 +99,43 @@ export async function loadCommercialPosture(force = false): Promise<void> {
     return;
   }
 
+  if (inFlightCommercialPostureLoad) {
+    if (!force) {
+      return inFlightCommercialPostureLoad;
+    }
+    await inFlightCommercialPostureLoad;
+  }
+
   if (loaded() && !force) return;
 
   setLoading(true);
+  const request = (async () => {
+    try {
+      const next = await LicenseAPI.getCommercialPosture();
+      setCommercialPostureState(next);
+      setLoadError(null);
+      setLoaded(true);
+      logger.debug('[licenseCommercialStore] Commercial posture loaded', {
+        tier: next.tier,
+        sub_state: next.subscription_state,
+      });
+    } catch (err) {
+      logger.error('[licenseCommercialStore] Failed to load commercial posture', err);
+      setLoadError(err instanceof Error ? err : new Error(String(err)));
+      setCommercialPostureState(FREE_COMMERCIAL_POSTURE_FALLBACK);
+      setLoaded(true);
+    } finally {
+      setLoading(false);
+    }
+  })();
+
+  inFlightCommercialPostureLoad = request;
   try {
-    const next = await LicenseAPI.getCommercialPosture();
-    setCommercialPostureState(next);
-    setLoadError(null);
-    setLoaded(true);
-    logger.debug('[licenseCommercialStore] Commercial posture loaded', {
-      tier: next.tier,
-      sub_state: next.subscription_state,
-    });
-  } catch (err) {
-    logger.error('[licenseCommercialStore] Failed to load commercial posture', err);
-    setLoadError(err instanceof Error ? err : new Error(String(err)));
-    setCommercialPostureState(FREE_COMMERCIAL_POSTURE_FALLBACK);
-    setLoaded(true);
+    await request;
   } finally {
-    setLoading(false);
+    if (inFlightCommercialPostureLoad === request) {
+      inFlightCommercialPostureLoad = null;
+    }
   }
 }
 
