@@ -11,16 +11,31 @@ const DefaultUpgradeURL = "https://pulserelay.pro/pricing?utm_source=pulse&utm_m
 // DefaultProTrialSignupURL is the hosted signup/checkout entrypoint for Pulse Pro trials.
 const DefaultProTrialSignupURL = "https://cloud.pulserelay.pro/start-pro-trial?utm_source=pulse&utm_medium=app&utm_campaign=trial_signup"
 
+// DefaultPulseAccountPortalURL is the authenticated Pulse Account portal entrypoint.
+const DefaultPulseAccountPortalURL = "https://cloud.pulserelay.pro/portal"
+
 // ProTrialSignupURLEnvVar overrides the hosted signup URL for Pulse Pro trials.
 const ProTrialSignupURLEnvVar = "PULSE_PRO_TRIAL_SIGNUP_URL"
+
+// PulseAccountPortalURLEnvVar overrides the Pulse Account portal URL.
+const PulseAccountPortalURLEnvVar = "PULSE_ACCOUNT_PORTAL_URL"
 
 // ResolveProTrialSignupURL returns the canonical hosted signup URL for Pulse Pro trials.
 // Invalid overrides are ignored and the default URL is returned.
 func ResolveProTrialSignupURL(override string) string {
-	if normalized, ok := validateProTrialSignupURLOverride(override); ok {
+	if normalized, ok := validateExternalUpgradeURLOverride(override); ok {
 		return normalized
 	}
 	return DefaultProTrialSignupURL
+}
+
+// ResolvePulseAccountPortalURL returns the canonical Pulse Account portal URL.
+// Invalid overrides are ignored and the default URL is returned.
+func ResolvePulseAccountPortalURL(override string) string {
+	if normalized, ok := validateExternalUpgradeURLOverride(override); ok {
+		return normalized
+	}
+	return DefaultPulseAccountPortalURL
 }
 
 // ProTrialSignupURL returns the default hosted signup URL for Pulse Pro trials.
@@ -28,7 +43,7 @@ func ProTrialSignupURL() string {
 	return DefaultProTrialSignupURL
 }
 
-func validateProTrialSignupURLOverride(raw string) (string, bool) {
+func validateExternalUpgradeURLOverride(raw string) (string, bool) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", false

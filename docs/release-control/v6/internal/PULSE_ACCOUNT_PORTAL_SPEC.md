@@ -464,7 +464,10 @@ Accepted as sufficient for RC and GA:
    billing, with `Pulse Account` owning self-hosted plan comparison and
    checkout for those arrivals
 4. purchase completion may return directly into Pulse billing activation
-   instead of requiring manual copy/paste of a newly issued license key
+   instead of requiring manual copy/paste of a newly issued license key, with
+   Pulse accepting a signed instance-bound return token and returning either
+   the originating billing tab or the current tab fallback to the owned
+   billing route automatically
 5. commercial surfaces are functional but still fragmented outside the owned
    checkout-return path
 

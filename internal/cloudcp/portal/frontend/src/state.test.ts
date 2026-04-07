@@ -36,6 +36,7 @@ describe('portal state', function() {
     expect(billingState.refund.submit.pending).toBe(false);
     expect(billingState.upgradeFeatureKey).toBe('');
     expect(billingState.upgradeReturnURL).toBe('');
+    expect(billingState.upgradePurchaseReturnToken).toBe('');
     expect(billingState.upgradeCheckoutSessionID).toBe('');
     expect(billingState.upgradeCheckoutStatus).toBe('');
     expect(billingState.upgradePricing.status).toBe('idle');

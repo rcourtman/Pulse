@@ -27,9 +27,9 @@ import {
   loadLicenseStatus,
 } from '@/stores/license';
 import {
+  commercialPosture,
   getUpgradeActionDestination,
-  licenseStatus,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
@@ -171,7 +171,7 @@ export function usePatrolIntelligenceState() {
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
 
   const canStartTrial = createMemo(() => {
-    const entitlements = licenseStatus();
+    const entitlements = commercialPosture();
     if (!entitlements) return false;
     if (
       entitlements.subscription_state === 'active' ||
@@ -673,7 +673,7 @@ export function usePatrolIntelligenceState() {
   onMount(async () => {
     await Promise.all([
       loadLicenseStatus(),
-      loadCommercialLicenseStatus(),
+      loadCommercialPosture(),
       loadAllData(),
       loadAutonomySettings(),
       loadModels(),

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -26,6 +27,25 @@ func createTestHandler(t *testing.T) *LicenseHandlers {
 		t.Fatalf("Failed to initialize default persistence: %v", err)
 	}
 	return NewLicenseHandlers(mtp, false)
+}
+
+func issuePurchaseReturnToken(t *testing.T, handler *LicenseHandlers, orgID, feature string) string {
+	t.Helper()
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+	signingKey, err := handler.purchaseReturnSigningKey()
+	if err != nil {
+		t.Fatalf("purchaseReturnSigningKey: %v", err)
+	}
+	token, err := signPurchaseReturnTokenFromLicensing(signingKey, purchaseReturnClaimsModel{
+		OrgID:        orgID,
+		Feature:      feature,
+		InstanceHost: "pulse.example.com",
+		ReturnURL:    "https://pulse.example.com/auth/license-purchase-activate",
+	})
+	if err != nil {
+		t.Fatalf("signPurchaseReturnTokenFromLicensing: %v", err)
+	}
+	return token
 }
 
 type licenseFeaturesResponseDTO struct {
@@ -673,7 +693,66 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	}
 }
 
-func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndRedirectsToBilling(t *testing.T) {
+func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://pulse.example.com/auth/license-purchase-start?feature=relay&utm_content=legacy-bookmark",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutStart(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusSeeOther, rec.Body.String())
+	}
+	location := rec.Header().Get("Location")
+	if location == "" {
+		t.Fatal("expected redirect location")
+	}
+	redirectURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if redirectURL.Scheme != "https" || redirectURL.Host != "cloud.pulserelay.pro" || redirectURL.Path != "/portal" {
+		t.Fatalf("redirect location = %q, want Pulse Account portal", location)
+	}
+	if got := redirectURL.Query().Get("feature"); got != "relay" {
+		t.Fatalf("feature = %q, want relay", got)
+	}
+	if got := redirectURL.Query().Get("service"); got != "upgrade" {
+		t.Fatalf("service = %q, want upgrade", got)
+	}
+	if got := redirectURL.Query().Get("return_url"); got != "https://pulse.example.com/auth/license-purchase-activate" {
+		t.Fatalf("return_url = %q, want canonical purchase callback", got)
+	}
+	if got := redirectURL.Query().Get("utm_content"); got != "legacy-bookmark" {
+		t.Fatalf("utm_content = %q, want preserved query value", got)
+	}
+	returnToken := redirectURL.Query().Get("purchase_return_token")
+	if strings.TrimSpace(returnToken) == "" {
+		t.Fatal("expected signed purchase_return_token in redirect")
+	}
+	signingKey, err := handler.purchaseReturnSigningKey()
+	if err != nil {
+		t.Fatalf("purchaseReturnSigningKey: %v", err)
+	}
+	claims, err := verifyPurchaseReturnTokenFromLicensing(returnToken, signingKey, "pulse.example.com", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("verifyPurchaseReturnTokenFromLicensing: %v", err)
+	}
+	if claims.OrgID != "default" {
+		t.Fatalf("claims.OrgID = %q, want default", claims.OrgID)
+	}
+	if claims.Feature != "relay" {
+		t.Fatalf("claims.Feature = %q, want relay", claims.Feature)
+	}
+}
+
+func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
@@ -735,9 +814,47 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndRedirectsToBilling(
 	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
 	req := httptest.NewRequest(
 		http.MethodPost,
-		licensePurchaseActivationPath,
+		"https://pulse.example.com"+licensePurchaseActivationPath,
+		strings.NewReader("session_id=cs_success&feature=max_monitored_systems&purchase_return_token="+url.QueryEscape(returnToken)),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutActivation(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Pulse Pro activated") {
+		t.Fatalf("body = %q, want success bridge title", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "window.opener.location.assign") {
+		t.Fatalf("body = %q, want opener refresh bridge", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "window.location.replace(redirectPath)") {
+		t.Fatalf("body = %q, want same-tab billing fallback", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "window.close()") {
+		t.Fatalf("body = %q, want popup close bridge", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=max_monitored_systems") {
+		t.Fatalf("body = %q, want monitored-system billing route", rec.Body.String())
+	}
+	if !handler.Service(context.Background()).IsActivated() {
+		t.Fatal("expected completed checkout to activate the local license")
+	}
+}
+
+func TestHandleCheckoutActivation_RejectsMissingPurchaseReturnToken(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://pulse.example.com"+licensePurchaseActivationPath,
 		strings.NewReader("session_id=cs_success&feature=max_monitored_systems"),
 	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -745,14 +862,11 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndRedirectsToBilling(
 
 	handler.HandleCheckoutActivation(rec, req)
 
-	if rec.Code != http.StatusSeeOther {
-		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusSeeOther, rec.Body.String())
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusBadRequest, rec.Body.String())
 	}
-	if got := rec.Header().Get("Location"); got != "/settings/system/billing/plan?intent=max_monitored_systems" {
-		t.Fatalf("location = %q, want monitored-system billing plan route", got)
-	}
-	if !handler.Service(context.Background()).IsActivated() {
-		t.Fatal("expected completed checkout to activate the local license")
+	if !strings.Contains(rec.Body.String(), "missing required state") {
+		t.Fatalf("body = %q, want missing state message", rec.Body.String())
 	}
 }
 
@@ -768,10 +882,11 @@ func TestHandleCheckoutActivation_RendersFailurePageWhenCheckoutIsNotFulfilled(t
 	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
 	req := httptest.NewRequest(
 		http.MethodPost,
-		licensePurchaseActivationPath,
-		strings.NewReader("session_id=cs_pending"),
+		"https://pulse.example.com"+licensePurchaseActivationPath,
+		strings.NewReader("session_id=cs_pending&feature=max_monitored_systems&purchase_return_token="+url.QueryEscape(returnToken)),
 	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()

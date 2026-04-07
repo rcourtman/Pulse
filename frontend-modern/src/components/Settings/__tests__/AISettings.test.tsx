@@ -22,6 +22,8 @@ const loggerDebugMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const hasFeatureMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
+const loadCommercialPostureMock = vi.fn();
+const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
@@ -73,8 +75,10 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
   entitlements: (...args: unknown[]) => entitlementsMock(...args),
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
 }));
 
@@ -129,6 +133,8 @@ const resetAllMocks = () => {
   loggerErrorMock.mockReset();
   hasFeatureMock.mockReset();
   loadLicenseStatusMock.mockReset();
+  loadCommercialPostureMock.mockReset();
+  commercialPostureMock.mockReset();
   entitlementsMock.mockReset();
   trackPaywallViewedMock.mockReset();
   trackUpgradeClickedMock.mockReset();
@@ -137,6 +143,8 @@ const resetAllMocks = () => {
 
 const setupDefaultMocks = () => {
   hasFeatureMock.mockReturnValue(true);
+  loadCommercialPostureMock.mockResolvedValue(undefined);
+  commercialPostureMock.mockReturnValue({ trial_eligible: true });
   entitlementsMock.mockReturnValue({ trial_eligible: true });
   getSettingsMock.mockResolvedValue(baseSettings());
   getModelsMock.mockResolvedValue({ models: [] });

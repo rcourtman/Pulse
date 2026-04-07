@@ -102,6 +102,7 @@ const apiFetchJSONMock = vi.fn();
 const hasFeatureMock = vi.fn();
 const licenseStatusMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
+const loadCommercialPostureMock = vi.fn();
 const startProTrialMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.fn();
 const getUpgradeActionUrlOrFallbackMock = vi.fn();
@@ -135,7 +136,9 @@ vi.mock('@/stores/license', () => ({
 
 vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
+  commercialPosture: (...args: unknown[]) => licenseStatusMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
@@ -323,6 +326,7 @@ describe('AIIntelligence entitlement gating', () => {
     hasFeatureMock.mockReset();
     licenseStatusMock.mockReset();
     loadLicenseStatusMock.mockReset();
+    loadCommercialPostureMock.mockReset();
     startProTrialMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
@@ -371,6 +375,7 @@ describe('AIIntelligence entitlement gating', () => {
     );
     licenseStatusMock.mockReturnValue({ subscription_state: 'expired' });
     loadLicenseStatusMock.mockResolvedValue(undefined);
+    loadCommercialPostureMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue({ outcome: 'started' });
     getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
       href: getPublicPricingUrl(feature),

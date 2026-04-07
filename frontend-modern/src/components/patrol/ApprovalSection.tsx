@@ -9,7 +9,7 @@ import { Component, Show, createSignal, createResource, createMemo, onMount } fr
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { licenseStatus, loadLicenseStatus } from '@/stores/licenseCommercial';
+import { commercialPosture, loadCommercialPosture } from '@/stores/licenseCommercial';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -30,7 +30,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const [executionResult, setExecutionResult] = createSignal<ApprovalExecutionResult | null>(null);
 
   onMount(() => {
-    void loadLicenseStatus();
+    void loadCommercialPosture();
   });
 
   // Find the pending approval for this finding from the store
@@ -48,7 +48,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
 
   const [startingTrial, setStartingTrial] = createSignal(false);
   const canStartTrial = createMemo(() => {
-    const ent = licenseStatus();
+    const ent = commercialPosture();
     if (!ent) return false;
     if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
     return ent.trial_eligible !== false;

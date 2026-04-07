@@ -22,6 +22,7 @@ const notificationSuccessMock = vi.hoisted(() => vi.fn());
 const notificationErrorMock = vi.hoisted(() => vi.fn());
 const openWithPromptMock = vi.hoisted(() => vi.fn());
 const startProTrialMock = vi.hoisted(() => vi.fn());
+const loadCommercialPostureMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -58,8 +59,10 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  commercialPosture: () => state.entitlements,
   licenseStatus: () => state.entitlements,
-  loadLicenseStatus: vi.fn(),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
+  loadLicenseStatus: (...args: unknown[]) => loadCommercialPostureMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 
@@ -86,6 +89,8 @@ describe('ApprovalSection', () => {
     notificationErrorMock.mockReset();
     openWithPromptMock.mockReset();
     startProTrialMock.mockReset();
+    loadCommercialPostureMock.mockReset();
+    loadCommercialPostureMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -106,6 +111,7 @@ describe('ApprovalSection', () => {
       />
     ));
 
+    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(await screen.findByText('Fix Pending Approval')).toBeInTheDocument();
     expect(screen.getAllByText('Fix Pending Approval')).toHaveLength(1);
     expect(screen.getByText('details unavailable')).toBeInTheDocument();
@@ -144,6 +150,7 @@ describe('ApprovalSection', () => {
 
     render(() => <ApprovalSection findingId="finding-2" investigationOutcome="fix_queued" />);
 
+    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(await screen.findAllByRole('button', { name: /re-approve & execute/i })).toHaveLength(1);
     fireEvent.click(screen.getByRole('button', { name: /re-approve & execute/i }));
 

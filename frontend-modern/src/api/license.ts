@@ -51,16 +51,26 @@ export interface LicenseRuntimeCapabilities {
   max_history_days?: number;
 }
 
-// Mirrors internal/api/subscription_entitlements.go:EntitlementPayload
-export interface LicenseCommercialEntitlements {
-  capabilities: string[];
-  limits: EntitlementLimitStatus[];
+// Mirrors internal/api/subscription_entitlements.go:CommercialPosturePayload
+export interface LicenseCommercialPosture {
   subscription_state: string;
   upgrade_reasons: EntitlementUpgradeReason[];
-  plan_version?: string;
   tier: string;
   trial_expires_at?: number;
   trial_days_remaining?: number;
+  trial_eligible?: boolean;
+  trial_eligibility_reason?: string;
+  overflow_days_remaining?: number;
+  legacy_connections?: EntitlementLegacyConnections;
+  has_migration_gap?: boolean;
+  commercial_migration?: CommercialMigrationStatus;
+}
+
+// Mirrors internal/api/subscription_entitlements.go:EntitlementPayload
+export interface LicenseCommercialEntitlements extends LicenseCommercialPosture {
+  capabilities: string[];
+  limits: EntitlementLimitStatus[];
+  plan_version?: string;
   hosted_mode?: boolean;
   valid?: boolean;
   licensed_email?: string;
@@ -69,13 +79,7 @@ export interface LicenseCommercialEntitlements {
   days_remaining?: number;
   in_grace_period?: boolean;
   grace_period_end?: string;
-  trial_eligible?: boolean;
-  trial_eligibility_reason?: string;
   max_history_days?: number;
-  overflow_days_remaining?: number;
-  legacy_connections?: EntitlementLegacyConnections;
-  has_migration_gap?: boolean;
-  commercial_migration?: CommercialMigrationStatus;
 }
 
 export type LicenseEntitlements = LicenseCommercialEntitlements;
@@ -108,6 +112,10 @@ export class LicenseAPI {
     return apiFetchJSON(
       `${this.baseUrl}/runtime-capabilities`,
     ) as Promise<LicenseRuntimeCapabilities>;
+  }
+
+  static async getCommercialPosture(): Promise<LicenseCommercialPosture> {
+    return apiFetchJSON(`${this.baseUrl}/commercial-posture`) as Promise<LicenseCommercialPosture>;
   }
 
   static async getCommercialEntitlements(): Promise<LicenseCommercialEntitlements> {

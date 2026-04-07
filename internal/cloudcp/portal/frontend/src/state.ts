@@ -119,6 +119,7 @@ export function createPortalBillingState(): PortalBillingState {
     openBillingPanelID: '',
     upgradeFeatureKey: '',
     upgradeReturnURL: '',
+    upgradePurchaseReturnToken: '',
     upgradeCheckoutSessionID: '',
     upgradeCheckoutStatus: '',
     upgradePricing: createQueryState(null),

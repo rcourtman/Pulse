@@ -65,6 +65,10 @@ func routeBelongsToPublicDemoCommercialBoundary(route string) bool {
 	switch {
 	case route == "/auth/trial-activate":
 		return true
+	case route == licensePurchaseStartPath:
+		return true
+	case route == "GET "+licensePurchaseStartPath:
+		return true
 	case route == "GET /api/license/runtime-capabilities":
 		return false
 	case strings.HasPrefix(route, "/api/license/"):

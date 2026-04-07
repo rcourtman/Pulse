@@ -84,6 +84,49 @@ type EntitlementPayload struct {
 	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
 }
 
+// CommercialPosturePayload is the canonical non-billing commercial contract
+// for upgrade messaging, trial posture, and monitored-system migration copy.
+// It intentionally excludes billing identity, grandfathered plan terms, and
+// other full-entitlement details that belong only to billing surfaces.
+type CommercialPosturePayload struct {
+	// SubscriptionState is the current subscription lifecycle state.
+	SubscriptionState string `json:"subscription_state"`
+
+	// UpgradeReasons provides user-actionable upgrade prompts.
+	UpgradeReasons []UpgradeReason `json:"upgrade_reasons"`
+
+	// Tier is the marketing tier name (for display only, never gate on this).
+	Tier string `json:"tier"`
+
+	// TrialExpiresAt is the trial expiration Unix timestamp when in trial state.
+	TrialExpiresAt *int64 `json:"trial_expires_at,omitempty"`
+
+	// TrialDaysRemaining is the number of whole or partial days remaining in trial.
+	TrialDaysRemaining *int `json:"trial_days_remaining,omitempty"`
+
+	// TrialEligible indicates whether this org can start a self-serve trial right now.
+	TrialEligible bool `json:"trial_eligible"`
+
+	// TrialEligibilityReason is set when trial start is denied.
+	TrialEligibilityReason string `json:"trial_eligibility_reason,omitempty"`
+
+	// OverflowDaysRemaining is set when the onboarding overflow (+1 host) is active.
+	OverflowDaysRemaining *int `json:"overflow_days_remaining,omitempty"`
+
+	// LegacyConnections is retained for response compatibility. Monitored-system
+	// enforcement now counts API-backed and agent-backed top-level systems
+	// together, so this field is informational only.
+	LegacyConnections LegacyConnectionCounts `json:"legacy_connections"`
+
+	// HasMigrationGap is retained for response compatibility. API-backed systems
+	// now count toward the same monitored-system cap as agent-backed systems.
+	HasMigrationGap bool `json:"has_migration_gap"`
+
+	// CommercialMigration reports unresolved paid-license migration work entering
+	// from v5-era commercial state.
+	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
+}
+
 // RuntimeCapabilitiesPayload is the canonical non-commercial license contract
 // for feature gating and runtime retention/limit decisions.
 type RuntimeCapabilitiesPayload struct {
@@ -157,6 +200,20 @@ func BuildEntitlementPayload(status *LicenseStatus, subscriptionState string) En
 	return BuildEntitlementPayloadWithUsage(status, subscriptionState, EntitlementUsageSnapshot{}, nil)
 }
 
+// BuildCommercialPosturePayload constructs the canonical non-billing
+// commercial posture payload from LicenseStatus.
+func BuildCommercialPosturePayload(
+	status *LicenseStatus,
+	subscriptionState string,
+) CommercialPosturePayload {
+	return BuildCommercialPosturePayloadWithUsage(
+		status,
+		subscriptionState,
+		EntitlementUsageSnapshot{},
+		nil,
+	)
+}
+
 // BuildRuntimeCapabilitiesPayload constructs the canonical non-commercial
 // runtime capability payload from LicenseStatus.
 func BuildRuntimeCapabilitiesPayload(
@@ -184,6 +241,45 @@ func BuildRuntimeCapabilitiesPayloadWithUsage(
 		HostedMode:     entitlementPayload.HostedMode,
 		MaxHistoryDays: entitlementPayload.MaxHistoryDays,
 	}
+}
+
+// BuildCommercialPosturePayloadWithUsage constructs the canonical non-billing
+// commercial posture payload from LicenseStatus and observed usage.
+func BuildCommercialPosturePayloadWithUsage(
+	status *LicenseStatus,
+	subscriptionState string,
+	usage EntitlementUsageSnapshot,
+	trialEndsAtUnix *int64,
+) CommercialPosturePayload {
+	return CommercialPosturePayloadFromEntitlementPayload(
+		BuildEntitlementPayloadWithUsage(status, subscriptionState, usage, trialEndsAtUnix),
+	)
+}
+
+// CommercialPosturePayloadFromEntitlementPayload projects the non-billing
+// commercial posture fields out of the full entitlement payload.
+func CommercialPosturePayloadFromEntitlementPayload(
+	payload EntitlementPayload,
+) CommercialPosturePayload {
+	sanitized := CommercialPosturePayload{
+		SubscriptionState:      payload.SubscriptionState,
+		UpgradeReasons:         append([]UpgradeReason(nil), payload.UpgradeReasons...),
+		Tier:                   payload.Tier,
+		TrialExpiresAt:         payload.TrialExpiresAt,
+		TrialDaysRemaining:     payload.TrialDaysRemaining,
+		TrialEligible:          payload.TrialEligible,
+		TrialEligibilityReason: payload.TrialEligibilityReason,
+		OverflowDaysRemaining:  payload.OverflowDaysRemaining,
+		LegacyConnections:      payload.LegacyConnections,
+		HasMigrationGap:        payload.HasMigrationGap,
+	}
+	if payload.CommercialMigration != nil {
+		sanitized.CommercialMigration = CloneCommercialMigrationStatus(payload.CommercialMigration)
+	}
+	if sanitized.UpgradeReasons == nil {
+		sanitized.UpgradeReasons = []UpgradeReason{}
+	}
+	return sanitized
 }
 
 // BuildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.

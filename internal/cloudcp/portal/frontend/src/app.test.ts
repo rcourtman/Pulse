@@ -152,6 +152,7 @@ describe('portal app', function() {
         openBillingPanelID: 'retrieve-billing-panel',
         upgradeFeatureKey: '',
         upgradeReturnURL: '',
+        upgradePurchaseReturnToken: '',
         upgradeCheckoutSessionID: '',
         upgradeCheckoutStatus: '',
       }

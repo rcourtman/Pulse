@@ -29,6 +29,16 @@ var publicDemoCommercialPolicies = []publicDemoCommercialRoutePolicy{
 		matches:  exactDemoCommercialPath("/api/license/features"),
 	},
 	{
+		route:    "GET /api/license/commercial-posture",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/license/commercial-posture"),
+	},
+	{
+		route:    "GET /auth/license-purchase-start",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/auth/license-purchase-start"),
+	},
+	{
 		route:    "/api/license/activate",
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialPath("/api/license/activate"),

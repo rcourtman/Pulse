@@ -174,6 +174,7 @@ export interface PortalBillingState {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
   upgradeReturnURL: string;
+  upgradePurchaseReturnToken: string;
   upgradeCheckoutSessionID: string;
   upgradeCheckoutStatus: PortalUpgradeCheckoutStatus;
   upgradePricing: PortalQueryState<PortalUpgradePricingModel | null>;

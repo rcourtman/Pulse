@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 import { TrialBanner } from '@/components/shared/TrialBanner';
 import trialBannerSource from '@/components/shared/TrialBanner.tsx?raw';
 import trialBannerModelSource from '@/components/shared/trialBannerModel.ts?raw';
@@ -11,8 +12,8 @@ const {
   demoModeEnabledMock,
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
-  licenseStatusMock,
-  loadLicenseStatusMock,
+  commercialPostureMock,
+  loadCommercialPostureMock,
   isUpsellSnoozedMock,
   snoozeUpsellMock,
 } =
@@ -20,8 +21,8 @@ const {
     demoModeEnabledMock: vi.fn(),
     getUpgradeActionDestinationMock: vi.fn(),
     getUpgradeActionUrlOrFallbackMock: vi.fn(),
-    licenseStatusMock: vi.fn(),
-    loadLicenseStatusMock: vi.fn(),
+    commercialPostureMock: vi.fn(),
+    loadCommercialPostureMock: vi.fn(),
     isUpsellSnoozedMock: vi.fn(),
     snoozeUpsellMock: vi.fn(),
   }));
@@ -29,8 +30,8 @@ const {
 vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
-  licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
 }));
 
 vi.mock('@/stores/demoMode', () => ({
@@ -43,13 +44,19 @@ vi.mock('@/utils/snooze', () => ({
 }));
 
 describe('TrialBanner', () => {
+  const renderBanner = () => render(() => (
+    <Router>
+      <Route path="/" component={() => <TrialBanner />} />
+    </Router>
+  ));
+
   beforeEach(() => {
     cleanup();
     demoModeEnabledMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
-    licenseStatusMock.mockReset();
-    loadLicenseStatusMock.mockReset();
+    commercialPostureMock.mockReset();
+    loadCommercialPostureMock.mockReset();
     isUpsellSnoozedMock.mockReset();
     snoozeUpsellMock.mockReset();
     getUpgradeActionDestinationMock.mockReturnValue({
@@ -58,7 +65,7 @@ describe('TrialBanner', () => {
     });
     demoModeEnabledMock.mockReturnValue(false);
     getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
-    loadLicenseStatusMock.mockResolvedValue(undefined);
+    loadCommercialPostureMock.mockResolvedValue(undefined);
     isUpsellSnoozedMock.mockReturnValue(false);
   });
 
@@ -78,9 +85,9 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('export function useTrialBannerState');
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).toContain('loadLicenseStatus');
+    expect(trialBannerStateSource).toContain('loadCommercialPosture');
     expect(trialBannerStateSource).toContain('demoModeEnabled');
-    expect(trialBannerStateSource).toContain('licenseStatus');
+    expect(trialBannerStateSource).toContain('commercialPosture');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
 
@@ -91,16 +98,16 @@ describe('TrialBanner', () => {
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_UPGRADE_LABEL');
   });
 
-  it('loads license status on mount and renders trial details when active', async () => {
-    licenseStatusMock.mockReturnValue({
+  it('loads commercial posture on mount and renders trial details when active', async () => {
+    commercialPostureMock.mockReturnValue({
       subscription_state: 'trial',
       trial_days_remaining: 4.8,
     });
 
-    render(() => <TrialBanner />);
+    renderBanner();
 
     await waitFor(() => {
-      expect(loadLicenseStatusMock).toHaveBeenCalled();
+      expect(loadCommercialPostureMock).toHaveBeenCalled();
     });
     expect(screen.getByRole('status')).toBeInTheDocument();
     expect(screen.getByText('Pro Trial:')).toBeInTheDocument();
@@ -112,35 +119,35 @@ describe('TrialBanner', () => {
   });
 
   it('shows active fallback when trial days are unavailable', () => {
-    licenseStatusMock.mockReturnValue({
+    commercialPostureMock.mockReturnValue({
       subscription_state: 'trial',
       trial_days_remaining: undefined,
     });
 
-    render(() => <TrialBanner />);
+    renderBanner();
 
     expect(screen.getByText('Active')).toBeInTheDocument();
   });
 
   it('stays hidden in demo mode even when the workspace is on trial', () => {
     demoModeEnabledMock.mockReturnValue(true);
-    licenseStatusMock.mockReturnValue({
+    commercialPostureMock.mockReturnValue({
       subscription_state: 'trial',
       trial_days_remaining: 2,
     });
 
-    render(() => <TrialBanner />);
+    renderBanner();
 
     expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('snoozes and hides the action row', async () => {
-    licenseStatusMock.mockReturnValue({
+    commercialPostureMock.mockReturnValue({
       subscription_state: 'trial',
       trial_days_remaining: 2,
     });
 
-    render(() => <TrialBanner />);
+    renderBanner();
 
     fireEvent.click(screen.getByRole('button', { name: 'Snooze 7d' }));
 

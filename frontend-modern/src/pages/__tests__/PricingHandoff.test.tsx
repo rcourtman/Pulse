@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import PricingHandoff from '@/pages/PricingHandoff';
-import { getPulseAccountPortalUpgradeUrl } from '@/utils/pricingHandoff';
+import { getSelfHostedPurchaseStartUrl } from '@/utils/pricingHandoff';
 
 const trackPaywallViewedMock = vi.fn();
 const handoffToExternalPricingMock = vi.fn();
@@ -35,10 +35,9 @@ describe('PricingHandoff', () => {
 
   it('hands self-hosted upgrade requests off to Pulse Account', async () => {
     window.history.replaceState({}, '', '/pricing?feature=relay');
-    const expectedDestination = getPulseAccountPortalUpgradeUrl(
+    const expectedDestination = getSelfHostedPurchaseStartUrl(
       'relay',
-      undefined,
-      'http://localhost:3000/pricing?feature=relay',
+      new URLSearchParams('feature=relay'),
     );
 
     render(() => (

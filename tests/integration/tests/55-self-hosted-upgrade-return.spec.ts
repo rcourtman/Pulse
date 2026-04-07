@@ -1,9 +1,12 @@
 import { test, expect, type BrowserContext, type Page, type Route } from '@playwright/test';
 
 const DEV_SERVER_URL = 'http://127.0.0.1:5173';
+const PURCHASE_START_PATH = '/auth/license-purchase-start';
+const PURCHASE_START_URL = `${DEV_SERVER_URL}${PURCHASE_START_PATH}`;
 const PULSE_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
 const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
 const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
+const PURCHASE_RETURN_TOKEN = 'prt_signed_checkout_return';
 
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],
@@ -13,6 +16,27 @@ const MONITORED_SYSTEM_ENTITLEMENTS = {
   tier: 'free',
   trial_eligible: false,
   hosted_mode: false,
+  legacy_connections: {
+    proxmox_nodes: 0,
+    docker_hosts: 0,
+    kubernetes_clusters: 0,
+  },
+  has_migration_gap: false,
+  overflow_days_remaining: 14,
+};
+
+const MONITORED_SYSTEM_RUNTIME_CAPABILITIES = {
+  capabilities: [],
+  limits: [{ key: 'max_monitored_systems', limit: 5, current: 16, state: 'enforced' }],
+  hosted_mode: false,
+  max_history_days: 90,
+};
+
+const MONITORED_SYSTEM_COMMERCIAL_POSTURE = {
+  subscription_state: 'expired',
+  upgrade_reasons: [],
+  tier: 'free',
+  trial_eligible: false,
   legacy_connections: {
     proxmox_nodes: 0,
     docker_hosts: 0,
@@ -94,12 +118,11 @@ async function configureBillingFixtures(context: BrowserContext, page: Page) {
   });
 
   await context.route('**/api/license/runtime-capabilities', async (route) => {
-    await fulfillJSON(route, {
-      capabilities: [],
-      limits: [{ key: 'max_monitored_systems', limit: 5, current: 16, state: 'enforced' }],
-      hosted_mode: false,
-      max_history_days: 90,
-    });
+    await fulfillJSON(route, MONITORED_SYSTEM_RUNTIME_CAPABILITIES);
+  });
+
+  await context.route('**/api/license/commercial-posture', async (route) => {
+    await fulfillJSON(route, MONITORED_SYSTEM_COMMERCIAL_POSTURE);
   });
 
   await context.route('**/api/license/entitlements', async (route) => {
@@ -135,12 +158,30 @@ test.describe('Self-hosted upgrade return flow', () => {
 
     const context = page.context();
     await configureBillingFixtures(context, page);
+    let purchaseStartURL = '';
+
+    await context.route(`${PURCHASE_START_URL}**`, async (route) => {
+      const requestUrl = new URL(route.request().url());
+      purchaseStartURL = requestUrl.toString();
+      expect(requestUrl.searchParams.get('feature')).toBe('max_monitored_systems');
+      await route.fulfill({
+        status: 303,
+        headers: {
+          location:
+            `${PULSE_ACCOUNT_PORTAL_URL}?feature=max_monitored_systems&service=upgrade` +
+            `&return_url=${encodeURIComponent(PURCHASE_RETURN_URL)}` +
+            `&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+        },
+        body: '',
+      });
+    });
 
     await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
       const requestUrl = new URL(route.request().url());
       expect(requestUrl.searchParams.get('feature')).toBe('max_monitored_systems');
       expect(requestUrl.searchParams.get('service')).toBe('upgrade');
       expect(requestUrl.searchParams.get('return_url')).toBe(PURCHASE_RETURN_URL);
+      expect(requestUrl.searchParams.get('purchase_return_token')).toBe(PURCHASE_RETURN_TOKEN);
 
       await route.fulfill({
         status: 200,
@@ -152,6 +193,7 @@ test.describe('Self-hosted upgrade return flow', () => {
           `<form method="POST" action="${escapeAttribute(PURCHASE_RETURN_URL)}">` +
           '<input type="hidden" name="session_id" value="cs_upgrade_return">' +
           '<input type="hidden" name="feature" value="max_monitored_systems">' +
+          `<input type="hidden" name="purchase_return_token" value="${escapeAttribute(PURCHASE_RETURN_TOKEN)}">` +
           '<button type="submit">Activate in Pulse Pro</button>' +
           '</form>' +
           '</body></html>',
@@ -163,12 +205,15 @@ test.describe('Self-hosted upgrade return flow', () => {
       const formData = new URLSearchParams(route.request().postData() || '');
       expect(formData.get('session_id')).toBe('cs_upgrade_return');
       expect(formData.get('feature')).toBe('max_monitored_systems');
+      expect(formData.get('purchase_return_token')).toBe(PURCHASE_RETURN_TOKEN);
       await route.fulfill({
-        status: 303,
-        headers: {
-          location: ACTIVATED_BILLING_URL,
-        },
-        body: '',
+        status: 200,
+        contentType: 'text/html',
+        body:
+          '<!doctype html><html><body>' +
+          '<h1>Pulse Pro activated</h1>' +
+          `<script>(function(){var redirectPath=${JSON.stringify(ACTIVATED_BILLING_URL)};if(window.opener&&!window.opener.closed){window.opener.location.assign(redirectPath);window.close();return;}window.location.replace(redirectPath);}());</script>` +
+          '</body></html>',
       });
     });
 
@@ -177,24 +222,32 @@ test.describe('Self-hosted upgrade return flow', () => {
     const comparePlansLink = page.getByRole('link', { name: 'Compare plans' });
     await expect(comparePlansLink).toHaveAttribute(
       'href',
-      `${PULSE_ACCOUNT_PORTAL_URL}?feature=max_monitored_systems&service=upgrade&return_url=${encodeURIComponent(PURCHASE_RETURN_URL)}`,
+      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
     );
 
-    const [popup] = await Promise.all([
-      page.waitForEvent('popup'),
-      comparePlansLink.click(),
-    ]);
+    await expect(comparePlansLink).toHaveAttribute('target', '_blank');
+    await comparePlansLink.click();
+    await expect.poll(() => purchaseStartURL).toBe(
+      `${PURCHASE_START_URL}?feature=max_monitored_systems`,
+    );
 
-    await popup.waitForLoadState('domcontentloaded');
-    await expect(popup.getByRole('heading', { name: 'Pulse Account' })).toBeVisible();
-    await expect(popup.getByRole('button', { name: 'Activate in Pulse Pro' })).toBeVisible();
+    await page.goto(
+      `${PULSE_ACCOUNT_PORTAL_URL}?feature=max_monitored_systems&service=upgrade` +
+        `&return_url=${encodeURIComponent(PURCHASE_RETURN_URL)}` +
+        `&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+      {
+        waitUntil: 'domcontentloaded',
+      },
+    );
+    await expect(page).toHaveURL(
+      new RegExp(
+        `${PULSE_ACCOUNT_PORTAL_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}.*purchase_return_token=${PURCHASE_RETURN_TOKEN}`,
+      ),
+    );
+    await expect(page.getByRole('heading', { name: 'Pulse Account' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Activate in Pulse Pro' })).toBeVisible();
 
-    await popup.getByRole('button', { name: 'Activate in Pulse Pro' }).click();
-    await popup.waitForURL('**/settings/system/billing/plan?intent=max_monitored_systems');
-    await expect(popup.getByRole('heading', { name: 'Pulse Pro' }).first()).toBeVisible();
-    await expect(popup.getByRole('tab', { name: 'Plan' })).toHaveAttribute('aria-selected', 'true');
-
+    await page.getByRole('button', { name: 'Activate in Pulse Pro' }).click();
     await expect(page).toHaveURL(/\/settings\/system\/billing\/plan\?intent=max_monitored_systems$/);
-    await popup.close();
   });
 });

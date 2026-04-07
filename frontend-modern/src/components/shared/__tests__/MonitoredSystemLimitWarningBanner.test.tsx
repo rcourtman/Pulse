@@ -30,19 +30,24 @@ const mockLegacyConnections = vi.hoisted(() =>
 );
 const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
-const mockLoadLicenseStatus = vi.hoisted(() => vi.fn());
+const mockLoadRuntimeLicenseStatus = vi.hoisted(() => vi.fn());
+const mockLoadCommercialPosture = vi.hoisted(() => vi.fn());
 const mockDemoModeEnabled = vi.hoisted(() => vi.fn(() => false));
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
+vi.mock('@/stores/license', () => ({
+  getLimit: (...args: unknown[]) => mockGetLimit(...args),
+  loadLicenseStatus: (...args: unknown[]) => mockLoadRuntimeLicenseStatus(...args),
+}));
+
 vi.mock('@/stores/licenseCommercial', () => ({
-  entitlements: mockEntitlements,
-  getLimit: mockGetLimit,
+  commercialPosture: mockEntitlements,
   getUpgradeActionDestination: (...args: unknown[]) => mockGetUpgradeActionDestination(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => mockGetUpgradeActionUrlOrFallback(...args),
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
-  loadLicenseStatus: (...args: unknown[]) => mockLoadLicenseStatus(...args),
+  loadCommercialPosture: (...args: unknown[]) => mockLoadCommercialPosture(...args),
 }));
 
 vi.mock('@/stores/demoMode', () => ({
@@ -70,8 +75,10 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     });
     mockDemoModeEnabled.mockReset();
     mockDemoModeEnabled.mockReturnValue(false);
-    mockLoadLicenseStatus.mockReset();
-    mockLoadLicenseStatus.mockResolvedValue(undefined);
+    mockLoadRuntimeLicenseStatus.mockReset();
+    mockLoadRuntimeLicenseStatus.mockResolvedValue(undefined);
+    mockLoadCommercialPosture.mockReset();
+    mockLoadCommercialPosture.mockResolvedValue(undefined);
     mockGetUpgradeActionDestination.mockReset();
     mockGetUpgradeActionUrlOrFallback.mockReset();
     mockGetUpgradeActionDestination.mockReturnValue({
@@ -107,6 +114,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadCommercialPosture');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
@@ -143,7 +151,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       </Router>
     ));
 
-    expect(mockLoadLicenseStatus).toHaveBeenCalled();
+    expect(mockLoadRuntimeLicenseStatus).toHaveBeenCalled();
+    expect(mockLoadCommercialPosture).toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
 

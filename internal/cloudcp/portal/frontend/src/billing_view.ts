@@ -145,6 +145,7 @@ export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: 
   var checkoutResultState = billingState.upgradeCheckoutResult;
   var result = checkoutResultState.data;
   var returnURL = String(billingState.upgradeReturnURL || '').trim();
+  var returnToken = String(billingState.upgradePurchaseReturnToken || '').trim();
   var sessionID = String(billingState.upgradeCheckoutSessionID || '').trim();
   var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : '';
   var summaryItems = [] as string[];
@@ -176,17 +177,18 @@ export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: 
   } else if (checkoutResultState.status === 'error') {
     summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutResultState.error || 'Could not confirm the completed checkout.') + '</div>');
   } else if (result && result.status === 'fulfilled') {
-    var activationForm = returnURL && sessionID
+    var activationForm = returnURL && sessionID && returnToken
       ? (
         '<form method="POST" action="' + escapeAttribute(returnURL) + '">' +
           '<input type="hidden" name="session_id" value="' + escapeAttribute(sessionID) + '">' +
           '<input type="hidden" name="feature" value="' + escapeAttribute(featureKey) + '">' +
+          '<input type="hidden" name="purchase_return_token" value="' + escapeAttribute(returnToken) + '">' +
           '<div class="form-actions">' +
             '<button class="btn-primary" type="submit">Activate in Pulse Pro</button>' +
           '</div>' +
         '</form>'
       )
-      : '<div class="helper-text">Return to Pulse Pro billing to refresh the upgraded entitlement. If automatic activation is unavailable, Pulse Account can still retrieve the latest active license.</div>';
+      : '<div class="helper-text">Return to Pulse Pro billing and reopen the upgrade flow so Pulse can securely finalize this completed checkout. If automatic return is unavailable, Pulse Account can still retrieve the latest active license.</div>';
     summaryItems.push(
       '<div class="billing-result">' +
         '<h4>Checkout complete</h4>' +

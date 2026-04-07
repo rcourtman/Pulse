@@ -5,6 +5,7 @@ import {
   getPricingRouteDestination,
   handoffToExternalPricing,
   isExternalPricingDestination,
+  isSelfHostedPurchaseStartDestination,
   isPulseAccountPortalDestination,
 } from '@/utils/pricingHandoff';
 
@@ -12,8 +13,11 @@ export default function PricingHandoff() {
   const location = useLocation();
   const destination = createMemo(() => getPricingRouteDestination(location.search));
   const externalDestination = createMemo(() => isExternalPricingDestination(destination()));
+  const selfHostedPurchaseStartDestination = createMemo(() =>
+    isSelfHostedPurchaseStartDestination(destination()),
+  );
   const pulseAccountDestination = createMemo(() =>
-    isPulseAccountPortalDestination(destination()),
+    isPulseAccountPortalDestination(destination()) || selfHostedPurchaseStartDestination(),
   );
   const handoffLabel = createMemo(() =>
     pulseAccountDestination() ? 'Pulse Account' : 'pricing',
@@ -24,13 +28,16 @@ export default function PricingHandoff() {
 
   onMount(() => {
     trackPaywallViewed('pricing', 'pricing_handoff');
-    if (externalDestination()) {
+    if (externalDestination() || selfHostedPurchaseStartDestination()) {
       handoffToExternalPricing(destination());
     }
   });
 
   return (
-    <Show when={externalDestination()} fallback={<Navigate href={destination()} />}>
+    <Show
+      when={externalDestination() || selfHostedPurchaseStartDestination()}
+      fallback={<Navigate href={destination()} />}
+    >
       <div class="flex min-h-[50vh] items-center justify-center">
         <div class="space-y-2 text-center">
           <h1 class="text-lg font-semibold text-base-content">

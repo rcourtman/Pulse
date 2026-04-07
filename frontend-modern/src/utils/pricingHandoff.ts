@@ -1,5 +1,6 @@
 import {
   isExternalUpgradeHref,
+  resolveUpgradeDestination,
   type UpgradeDestination,
 } from '@/utils/upgradeNavigation';
 
@@ -7,8 +8,10 @@ const DEFAULT_PUBLIC_PRICING_URL =
   'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
 const DEFAULT_PULSE_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
 const PULSE_ACCOUNT_PORTAL_UPGRADE_SERVICE = 'upgrade';
+export const SELF_HOSTED_PURCHASE_START_PATH = '/auth/license-purchase-start';
 export const SELF_HOSTED_PURCHASE_RETURN_PATH = '/auth/license-purchase-activate';
 export const PULSE_ACCOUNT_PORTAL_RETURN_URL_QUERY_PARAM = 'return_url';
+export const PULSE_ACCOUNT_PORTAL_RETURN_TOKEN_QUERY_PARAM = 'purchase_return_token';
 
 export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
 export const SELF_HOSTED_PRO_BILLING_PLAN_ROUTE = `${SELF_HOSTED_PRO_BILLING_ROUTE}/plan`;
@@ -103,6 +106,38 @@ export function getSelfHostedPurchaseReturnUrl(locationHref?: string): string | 
   }
 }
 
+export function getSelfHostedPurchaseStartUrl(
+  feature?: string | null,
+  searchParams?: URLSearchParams,
+): string {
+  const url = new URL(SELF_HOSTED_PURCHASE_START_PATH, INTERNAL_HREF_BASE);
+  if (searchParams) {
+    for (const [key, value] of searchParams.entries()) {
+      const normalizedValue = value.trim();
+      if (normalizedValue) {
+        url.searchParams.set(key, normalizedValue);
+      }
+    }
+  }
+
+  const normalizedFeature = normalizeFeatureKey(feature);
+  if (normalizedFeature) {
+    url.searchParams.set('feature', normalizedFeature);
+  }
+  return `${url.pathname}${url.search}`;
+}
+
+export function resolveSelfHostedPurchaseStartDestination(
+  feature?: string | null,
+  searchParams?: URLSearchParams,
+): UpgradeDestination {
+  return resolveUpgradeDestination(getSelfHostedPurchaseStartUrl(feature, searchParams), {
+    hardNavigation: true,
+    newTab: true,
+    preserveOpener: true,
+  });
+}
+
 export function getInProductPricingDestination(
   feature: string | null | undefined,
 ): string | undefined {
@@ -175,7 +210,7 @@ export function getPulseAccountPortalUpgradeUrl(
 }
 
 export function getUpgradeFallbackDestination(feature?: string | null): string {
-  return getInProductPricingDestination(feature) || getPulseAccountPortalUpgradeUrl(feature);
+  return getInProductPricingDestination(feature) || getSelfHostedPurchaseStartUrl(feature);
 }
 
 export function getSelfHostedBillingUsageDetail(
@@ -312,7 +347,7 @@ export function getPricingRouteDestination(search: string): string {
   }
 
   if (normalizeFeatureKey(feature)) {
-    return getPulseAccountPortalUpgradeUrl(feature, params);
+    return getSelfHostedPurchaseStartUrl(feature, params);
   }
 
   const url = new URL(DEFAULT_PUBLIC_PRICING_URL);
@@ -327,6 +362,18 @@ export function getPricingRouteDestination(search: string): string {
 
 export function isExternalPricingDestination(destination: string): boolean {
   return isExternalUpgradeHref(destination);
+}
+
+export function isSelfHostedPurchaseStartDestination(destination: string): boolean {
+  if (isExternalUpgradeHref(destination)) {
+    return false;
+  }
+
+  try {
+    return new URL(destination, INTERNAL_HREF_BASE).pathname === SELF_HOSTED_PURCHASE_START_PATH;
+  } catch {
+    return false;
+  }
 }
 
 export function isPulseAccountPortalDestination(destination: string): boolean {

@@ -32,8 +32,8 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
-  loadLicenseStatus,
-  entitlements,
+  commercialPosture,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import {
   RELAY_ONBOARDING_SETUP_LABEL,
@@ -132,7 +132,7 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   let firstConnectionTracked = false;
 
   onMount(() => {
-    void loadLicenseStatus();
+    void loadCommercialPosture();
   });
 
   createEffect(() => {
@@ -329,7 +329,7 @@ Keep these credentials secure!
       });
       if (outcome === 'activated') {
         setTrialStarted(true);
-        await loadLicenseStatus(true);
+        await loadCommercialPosture(true);
       }
     } finally {
       setTrialStarting(false);
@@ -735,7 +735,7 @@ Keep these credentials secure!
                   Relay.
                 </p>
                 <Show
-                  when={!trialStarted() && entitlements()?.subscription_state !== 'trial'}
+                  when={!trialStarted() && commercialPosture()?.subscription_state !== 'trial'}
                   fallback={
                     <button
                       type="button"

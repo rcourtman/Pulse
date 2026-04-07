@@ -5,6 +5,7 @@ import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
 import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 
 const loadLicenseStatusMock = vi.fn();
+const loadCommercialPostureMock = vi.fn();
 const hasFeatureMock = vi.fn();
 const getRelayConfigMock = vi.fn();
 const getRelayStatusMock = vi.fn();
@@ -26,8 +27,10 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  commercialPosture: () => ({ trial_eligible: false }),
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   entitlements: () => ({ trial_eligible: false }),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: vi.fn(),
 }));
@@ -79,6 +82,7 @@ import { RelaySettingsPanel } from '../RelaySettingsPanel';
 describe('RelaySettingsPanel runtime', () => {
   beforeEach(() => {
     loadLicenseStatusMock.mockReset();
+    loadCommercialPostureMock.mockReset();
     hasFeatureMock.mockReset();
     getRelayConfigMock.mockReset();
     getRelayStatusMock.mockReset();
@@ -95,6 +99,7 @@ describe('RelaySettingsPanel runtime', () => {
 
     hasFeatureMock.mockReturnValue(true);
     loadLicenseStatusMock.mockResolvedValue(undefined);
+    loadCommercialPostureMock.mockResolvedValue(undefined);
     getRelayConfigMock.mockResolvedValue({
       enabled: true,
       server_url: 'wss://relay.example.test/ws/instance',

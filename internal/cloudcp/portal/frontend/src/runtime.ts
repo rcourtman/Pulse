@@ -7,6 +7,7 @@ export interface PortalRuntimeHandoff {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
   upgradeReturnURL: string;
+  upgradePurchaseReturnToken: string;
   upgradeCheckoutSessionID: string;
   upgradeCheckoutStatus: '' | 'success' | 'cancelled';
 }
@@ -59,6 +60,10 @@ function normalizeUpgradeReturnURL(value: string | null): string {
   return String(value || '').trim();
 }
 
+function normalizeUpgradePurchaseReturnToken(value: string | null): string {
+  return String(value || '').trim();
+}
+
 function normalizeUpgradeCheckoutSessionID(value: string | null): string {
   return String(value || '').trim();
 }
@@ -82,6 +87,7 @@ export function readPortalRuntimeHandoff(locationHref: string | undefined = wind
       openBillingPanelID: normalizeHandoffBillingPanel(params.get('service')),
       upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
       upgradeReturnURL: normalizeUpgradeReturnURL(params.get('return_url')),
+      upgradePurchaseReturnToken: normalizeUpgradePurchaseReturnToken(params.get('purchase_return_token')),
       upgradeCheckoutSessionID: normalizeUpgradeCheckoutSessionID(params.get('session_id')),
       upgradeCheckoutStatus: normalizeUpgradeCheckoutStatus(params.get('checkout')),
     };
@@ -91,6 +97,7 @@ export function readPortalRuntimeHandoff(locationHref: string | undefined = wind
       openBillingPanelID: '',
       upgradeFeatureKey: '',
       upgradeReturnURL: '',
+      upgradePurchaseReturnToken: '',
       upgradeCheckoutSessionID: '',
       upgradeCheckoutStatus: '',
     };
@@ -142,6 +149,7 @@ export function createPortalRuntime(
       billingState.openBillingPanelID = handoff.openBillingPanelID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
       billingState.upgradeReturnURL = handoff.upgradeReturnURL;
+      billingState.upgradePurchaseReturnToken = handoff.upgradePurchaseReturnToken;
       billingState.upgradeCheckoutSessionID = handoff.upgradeCheckoutSessionID;
       billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
     }, { notify: false });
@@ -150,6 +158,7 @@ export function createPortalRuntime(
     store.updateBillingState(function(billingState) {
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
       billingState.upgradeReturnURL = handoff.upgradeReturnURL;
+      billingState.upgradePurchaseReturnToken = handoff.upgradePurchaseReturnToken;
       billingState.upgradeCheckoutSessionID = handoff.upgradeCheckoutSessionID;
       billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
     }, { notify: false });

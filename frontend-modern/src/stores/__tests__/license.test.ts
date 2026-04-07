@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LicenseAPI,
   type LicenseCommercialEntitlements,
+  type LicenseCommercialPosture,
   type LicenseRuntimeCapabilities,
 } from '@/api/license';
 import { demoModeEnabled } from '@/stores/demoMode';
-import { getPulseAccountPortalUpgradeUrl } from '@/utils/pricingHandoff';
+import { getUpgradeFallbackDestination } from '@/utils/pricingHandoff';
 import {
   getLimit,
   hasFeature,
@@ -19,7 +20,7 @@ import {
   runtimeCapabilities,
 } from '@/stores/license';
 import {
-  entitlements,
+  commercialPosture,
   getFirstUpgradeActionUrl,
   getUpgradeActionUrl,
   getUpgradeActionUrlOrFallback,
@@ -27,10 +28,15 @@ import {
   hasMigrationGap,
   isPro,
   legacyConnections,
-  licenseLoadError as commercialLicenseLoadError,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  commercialPostureLoadError,
+  loadCommercialPosture,
   startProTrial,
 } from '@/stores/licenseCommercial';
+import {
+  licenseEntitlements,
+  licenseEntitlementsLoadError,
+  loadLicenseEntitlements,
+} from '@/stores/licenseEntitlements';
 
 vi.mock('@/api/license');
 vi.mock('@/stores/demoMode', () => ({
@@ -48,23 +54,26 @@ describe('license stores', () => {
     max_history_days: 90,
   };
 
-  const mockCommercialEntitlements: LicenseCommercialEntitlements = {
+  const mockCommercialPosture: LicenseCommercialPosture = {
     tier: 'pro',
     subscription_state: 'active',
-    capabilities: mockRuntimeCapabilities.capabilities,
-    limits: mockRuntimeCapabilities.limits,
     upgrade_reasons: [
       { key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' },
       { key: 'reason2', reason: 'Reason 2', action_url: '/upgrade/reason2' },
     ],
-    hosted_mode: false,
-    max_history_days: 90,
     legacy_connections: {
       proxmox_nodes: 2,
       docker_hosts: 1,
       kubernetes_clusters: 0,
     },
     has_migration_gap: true,
+  };
+  const mockCommercialEntitlements: LicenseCommercialEntitlements = {
+    ...mockCommercialPosture,
+    capabilities: mockRuntimeCapabilities.capabilities,
+    limits: mockRuntimeCapabilities.limits,
+    hosted_mode: false,
+    max_history_days: 90,
   };
 
   const mockFreeRuntimeCapabilities: LicenseRuntimeCapabilities = {
@@ -74,12 +83,16 @@ describe('license stores', () => {
     max_history_days: 7,
   };
 
-  const mockFreeCommercialEntitlements: LicenseCommercialEntitlements = {
+  const mockFreeCommercialPosture: LicenseCommercialPosture = {
     tier: 'free',
     subscription_state: 'expired',
+    upgrade_reasons: [],
+  };
+
+  const mockFreeCommercialEntitlements: LicenseCommercialEntitlements = {
+    ...mockFreeCommercialPosture,
     capabilities: [],
     limits: [],
-    upgrade_reasons: [],
     hosted_mode: false,
     max_history_days: 7,
   };
@@ -237,20 +250,17 @@ describe('license stores', () => {
     });
   });
 
-  describe('commercial entitlement store', () => {
-    it('suppresses commercial entitlement reads in demo mode', async () => {
+  describe('commercial posture store', () => {
+    it('suppresses commercial posture reads in demo mode', async () => {
       vi.mocked(demoModeEnabled).mockReturnValue(true);
 
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
 
-      expect(LicenseAPI.getCommercialEntitlements).not.toHaveBeenCalled();
-      expect(entitlements()).toEqual({
-        capabilities: ['update_alerts', 'sso', 'ai_patrol'],
-        limits: [],
+      expect(LicenseAPI.getCommercialPosture).not.toHaveBeenCalled();
+      expect(commercialPosture()).toEqual({
         subscription_state: 'expired',
         upgrade_reasons: [],
         tier: 'free',
-        hosted_mode: false,
         trial_eligible: false,
         legacy_connections: {
           proxmox_nodes: 0,
@@ -260,30 +270,27 @@ describe('license stores', () => {
         has_migration_gap: false,
         commercial_migration: undefined,
       });
-      expect(commercialLicenseLoadError()).toBeNull();
+      expect(commercialPostureLoadError()).toBeNull();
     });
 
-    it('loads commercial entitlements from API', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
+    it('loads commercial posture from API', async () => {
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
 
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
 
-      expect(LicenseAPI.getCommercialEntitlements).toHaveBeenCalled();
-      expect(entitlements()).toEqual(mockCommercialEntitlements);
+      expect(LicenseAPI.getCommercialPosture).toHaveBeenCalled();
+      expect(commercialPosture()).toEqual(mockCommercialPosture);
     });
 
-    it('sets commercial fallback entitlements on error', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockRejectedValue(new Error('API error'));
+    it('sets commercial fallback posture on error', async () => {
+      vi.mocked(LicenseAPI.getCommercialPosture).mockRejectedValue(new Error('API error'));
 
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
 
-      expect(entitlements()).toEqual({
-        capabilities: ['update_alerts', 'sso', 'ai_patrol'],
-        limits: [],
+      expect(commercialPosture()).toEqual({
         subscription_state: 'expired',
         upgrade_reasons: [],
         tier: 'free',
-        hosted_mode: false,
         trial_eligible: false,
         legacy_connections: {
           proxmox_nodes: 0,
@@ -296,14 +303,12 @@ describe('license stores', () => {
     });
 
     it('sets commercial loadError on API failure', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockRejectedValue(
-        new Error('Network timeout'),
-      );
+      vi.mocked(LicenseAPI.getCommercialPosture).mockRejectedValue(new Error('Network timeout'));
 
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
 
-      expect(commercialLicenseLoadError()).toBeInstanceOf(Error);
-      expect(commercialLicenseLoadError()?.message).toBe('Network timeout');
+      expect(commercialPostureLoadError()).toBeInstanceOf(Error);
+      expect(commercialPostureLoadError()?.message).toBe('Network timeout');
     });
 
     it('startProTrial throws error if trial start fails', async () => {
@@ -366,61 +371,61 @@ describe('license stores', () => {
 
     it('startProTrial refreshes commercial and runtime state when local activation succeeds', async () => {
       vi.mocked(LicenseAPI.startTrial).mockResolvedValue({ ok: true } as Response);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
       vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
 
       await expect(startProTrial()).resolves.toEqual({ outcome: 'activated' });
+      expect(LicenseAPI.getCommercialPosture).toHaveBeenCalled();
       expect(LicenseAPI.getCommercialEntitlements).toHaveBeenCalled();
       expect(LicenseAPI.getRuntimeCapabilities).toHaveBeenCalled();
     });
 
     it('returns true for pro tier', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
+      await loadCommercialPosture(true);
       expect(isPro()).toBe(true);
     });
 
     it('returns true for pro_plus tier', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue({
-        ...mockCommercialEntitlements,
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
+        ...mockCommercialPosture,
         tier: 'pro_plus',
       });
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
       expect(isPro()).toBe(true);
     });
 
     it('returns false for relay tier (paid but not Pro)', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue({
-        ...mockCommercialEntitlements,
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
+        ...mockCommercialPosture,
         tier: 'relay',
       });
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
       expect(isPro()).toBe(false);
     });
 
     it('returns false for free tier', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(
-        mockFreeCommercialEntitlements,
-      );
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
+      await loadCommercialPosture(true);
       expect(isPro()).toBe(false);
     });
 
     it('returns upgrade reason by key', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
+      await loadCommercialPosture(true);
       expect(getUpgradeReason('reason2')?.key).toBe('reason2');
     });
 
     it('returns undefined for unknown key', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
+      await loadCommercialPosture(true);
       expect(getUpgradeReason('unknown')).toBeUndefined();
     });
 
-    it('returns legacy connection counts from entitlements', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      await loadCommercialLicenseStatus(true);
+    it('returns legacy connection counts from posture', async () => {
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
+      await loadCommercialPosture(true);
 
       expect(legacyConnections()).toEqual({
         proxmox_nodes: 2,
@@ -431,12 +436,12 @@ describe('license stores', () => {
     });
 
     it('falls back to zero legacy counts when absent', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue({
-        ...mockFreeCommercialEntitlements,
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
+        ...mockFreeCommercialPosture,
         legacy_connections: undefined,
         has_migration_gap: undefined,
       });
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
 
       expect(legacyConnections()).toEqual({
         proxmox_nodes: 0,
@@ -447,57 +452,49 @@ describe('license stores', () => {
     });
 
     it('returns action URL for upgrade reason', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
+      await loadCommercialPosture(true);
       expect(getUpgradeActionUrl('reason1')).toBe('/upgrade/reason1');
     });
 
     it('returns first upgrade reason URL', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockCommercialPosture);
+      await loadCommercialPosture(true);
       expect(getFirstUpgradeActionUrl()).toBe('/upgrade/reason1');
     });
 
     it('routes missing self-hosted upgrades to Pulse Account when no upgrade reasons exist', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(
-        mockFreeCommercialEntitlements,
-      );
-      await loadCommercialLicenseStatus(true);
-      expect(getUpgradeActionUrlOrFallback('relay')).toBe(getPulseAccountPortalUpgradeUrl('relay'));
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
+      await loadCommercialPosture(true);
+      expect(getUpgradeActionUrlOrFallback('relay')).toBe(getUpgradeFallbackDestination('relay'));
     });
 
     it('routes monitored-system limit fallbacks to the billing upgrade arrival', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue({
-        ...mockCommercialEntitlements,
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
+        ...mockCommercialPosture,
         upgrade_reasons: [{ key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' }],
       });
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
         '/settings/system/billing/plan?intent=max_monitored_systems',
       );
     });
 
     it('routes cloud fallbacks to the in-product cloud plans page', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(
-        mockFreeCommercialEntitlements,
-      );
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
+      await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('cloud')).toBe('/cloud');
     });
 
     it('routes generic upgrade fallbacks to Pulse Account', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(
-        mockFreeCommercialEntitlements,
-      );
-      await loadCommercialLicenseStatus(true);
-      expect(getUpgradeActionUrlOrFallback('upgrade')).toBe(
-        getPulseAccountPortalUpgradeUrl('upgrade'),
-      );
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
+      await loadCommercialPosture(true);
+      expect(getUpgradeActionUrlOrFallback('upgrade')).toBe(getUpgradeFallbackDestination('upgrade'));
     });
 
     it('prefers a specific monitored-system upgrade action when provided', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue({
-        ...mockCommercialEntitlements,
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue({
+        ...mockCommercialPosture,
         upgrade_reasons: [
           {
             key: 'max_monitored_systems',
@@ -506,20 +503,64 @@ describe('license stores', () => {
           },
         ],
       });
-      await loadCommercialLicenseStatus(true);
+      await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
-        '/upgrade/max-monitored-systems',
+        getUpgradeFallbackDestination('max_monitored_systems'),
       );
     });
 
     it('routes unknown keys to Pulse Account as a last resort', async () => {
-      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(
-        mockFreeCommercialEntitlements,
-      );
-      await loadCommercialLicenseStatus(true);
+      vi.mocked(LicenseAPI.getCommercialPosture).mockResolvedValue(mockFreeCommercialPosture);
+      await loadCommercialPosture(true);
       expect(getUpgradeActionUrlOrFallback('feature1')).toBe(
-        getPulseAccountPortalUpgradeUrl('feature1'),
+        getUpgradeFallbackDestination('feature1'),
       );
+    });
+  });
+
+  describe('billing entitlements store', () => {
+    it('suppresses full entitlements reads in demo mode', async () => {
+      vi.mocked(demoModeEnabled).mockReturnValue(true);
+
+      await loadLicenseEntitlements(true);
+
+      expect(LicenseAPI.getCommercialEntitlements).not.toHaveBeenCalled();
+      expect(licenseEntitlements()).toEqual({
+        capabilities: ['update_alerts', 'sso', 'ai_patrol'],
+        limits: [],
+        subscription_state: 'expired',
+        upgrade_reasons: [],
+        tier: 'free',
+        trial_eligible: false,
+        legacy_connections: {
+          proxmox_nodes: 0,
+          docker_hosts: 0,
+          kubernetes_clusters: 0,
+        },
+        has_migration_gap: false,
+        commercial_migration: undefined,
+      });
+      expect(licenseEntitlementsLoadError()).toBeNull();
+    });
+
+    it('loads full billing entitlements from API', async () => {
+      vi.mocked(LicenseAPI.getCommercialEntitlements).mockResolvedValue(mockCommercialEntitlements);
+
+      await loadLicenseEntitlements(true);
+
+      expect(LicenseAPI.getCommercialEntitlements).toHaveBeenCalled();
+      expect(licenseEntitlements()).toEqual(mockCommercialEntitlements);
+    });
+
+    it('sets billing loadError on API failure', async () => {
+      vi.mocked(LicenseAPI.getCommercialEntitlements).mockRejectedValue(
+        new Error('billing unavailable'),
+      );
+
+      await loadLicenseEntitlements(true);
+
+      expect(licenseEntitlementsLoadError()).toBeInstanceOf(Error);
+      expect(licenseEntitlementsLoadError()?.message).toBe('billing unavailable');
     });
   });
 });

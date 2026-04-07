@@ -2,7 +2,7 @@ import { createSignal, createMemo, createRoot } from 'solid-js';
 import {
   LicenseAPI,
   type EntitlementLegacyConnections,
-  type LicenseCommercialEntitlements,
+  type LicenseCommercialPosture,
 } from '@/api/license';
 import { demoModeEnabled } from '@/stores/demoMode';
 import { eventBus } from '@/stores/events';
@@ -10,20 +10,19 @@ import { logger } from '@/utils/logger';
 import {
   getInProductPricingDestination,
   getUpgradeFallbackDestination,
+  isSelfHostedPurchaseStartDestination,
 } from '@/utils/pricingHandoff';
 import {
   resolveUpgradeDestination,
   type UpgradeDestination,
 } from '@/utils/upgradeNavigation';
 import { loadLicenseStatus as loadRuntimeLicenseStatus } from '@/stores/license';
+import { loadLicenseEntitlements } from '@/stores/licenseEntitlements';
 
-const FREE_COMMERCIAL_ENTITLEMENTS_FALLBACK: LicenseCommercialEntitlements = {
-  capabilities: ['update_alerts', 'sso', 'ai_patrol'],
-  limits: [],
+const FREE_COMMERCIAL_POSTURE_FALLBACK: LicenseCommercialPosture = {
   subscription_state: 'expired',
   upgrade_reasons: [],
   tier: 'free',
-  hosted_mode: false,
   trial_eligible: false,
   legacy_connections: {
     proxmox_nodes: 0,
@@ -34,8 +33,8 @@ const FREE_COMMERCIAL_ENTITLEMENTS_FALLBACK: LicenseCommercialEntitlements = {
   commercial_migration: undefined,
 };
 
-const [commercialEntitlements, setCommercialEntitlements] =
-  createSignal<LicenseCommercialEntitlements | null>(null);
+const [commercialPostureState, setCommercialPostureState] =
+  createSignal<LicenseCommercialPosture | null>(null);
 const [loading, setLoading] = createSignal(false);
 const [loaded, setLoaded] = createSignal(false);
 const [loadError, setLoadError] = createSignal<Error | null>(null);
@@ -75,15 +74,15 @@ function parseRetryAfterSeconds(value: string | null | undefined): number | unde
 }
 
 /**
- * Load the commercial entitlement payload used by billing, trial, and upgrade UI.
+ * Load the commercial posture payload used by non-billing trial and upgrade UI.
  */
-export async function loadLicenseStatus(force = false): Promise<void> {
+export async function loadCommercialPosture(force = false): Promise<void> {
   if (demoModeEnabled()) {
-    setCommercialEntitlements(FREE_COMMERCIAL_ENTITLEMENTS_FALLBACK);
+    setCommercialPostureState(FREE_COMMERCIAL_POSTURE_FALLBACK);
     setLoadError(null);
     setLoaded(true);
     setLoading(false);
-    logger.debug('[licenseCommercialStore] Commercial entitlements suppressed in demo mode');
+    logger.debug('[licenseCommercialStore] Commercial posture suppressed in demo mode');
     return;
   }
 
@@ -91,18 +90,18 @@ export async function loadLicenseStatus(force = false): Promise<void> {
 
   setLoading(true);
   try {
-    const next = await LicenseAPI.getCommercialEntitlements();
-    setCommercialEntitlements(next);
+    const next = await LicenseAPI.getCommercialPosture();
+    setCommercialPostureState(next);
     setLoadError(null);
     setLoaded(true);
-    logger.debug('[licenseCommercialStore] Commercial entitlements loaded', {
+    logger.debug('[licenseCommercialStore] Commercial posture loaded', {
       tier: next.tier,
       sub_state: next.subscription_state,
     });
   } catch (err) {
-    logger.error('[licenseCommercialStore] Failed to load commercial entitlements', err);
+    logger.error('[licenseCommercialStore] Failed to load commercial posture', err);
     setLoadError(err instanceof Error ? err : new Error(String(err)));
-    setCommercialEntitlements(FREE_COMMERCIAL_ENTITLEMENTS_FALLBACK);
+    setCommercialPostureState(FREE_COMMERCIAL_POSTURE_FALLBACK);
     setLoaded(true);
   } finally {
     setLoading(false);
@@ -149,7 +148,11 @@ export async function startProTrial(): Promise<StartProTrialResult> {
     err.retryAfterSeconds = retryAfterSeconds;
     throw err;
   }
-  await Promise.all([loadLicenseStatus(true), loadRuntimeLicenseStatus(true)]);
+  await Promise.all([
+    loadCommercialPosture(true),
+    loadRuntimeLicenseStatus(true),
+    loadLicenseEntitlements(true),
+  ]);
   return { outcome: 'activated' };
 }
 
@@ -169,13 +172,13 @@ const PRO_TIERS = new Set([
  */
 export const isPro = createRoot(() =>
   createMemo(() => {
-    const current = commercialEntitlements();
+    const current = commercialPostureState();
     return Boolean(current && PRO_TIERS.has(current.tier));
   }),
 );
 
 export function getUpgradeReason(key: string) {
-  const current = commercialEntitlements();
+  const current = commercialPostureState();
   if (!current?.upgrade_reasons?.length) return undefined;
   return current.upgrade_reasons.find((reason) => reason.key === key);
 }
@@ -185,32 +188,33 @@ export function getUpgradeActionUrl(key: string): string | undefined {
 }
 
 export function getFirstUpgradeActionUrl(): string | undefined {
-  const current = commercialEntitlements();
+  const current = commercialPostureState();
   return current?.upgrade_reasons?.[0]?.action_url;
 }
 
 export function getUpgradeActionDestination(key: string): UpgradeDestination {
-  return resolveUpgradeDestination(
-    getUpgradeActionUrl(key) ||
-      getInProductPricingDestination(key) ||
-      getFirstUpgradeActionUrl() ||
-      getUpgradeFallbackDestination(key),
-  );
+  const productOwnedHref = key ? getUpgradeFallbackDestination(key) : undefined;
+  const href =
+    productOwnedHref || getUpgradeActionUrl(key) || getFirstUpgradeActionUrl() || getUpgradeFallbackDestination(key);
+
+  if (isSelfHostedPurchaseStartDestination(href)) {
+    return resolveUpgradeDestination(href, {
+      hardNavigation: true,
+      newTab: true,
+      preserveOpener: true,
+    });
+  }
+
+  return resolveUpgradeDestination(href);
 }
 
 export function getUpgradeActionUrlOrFallback(key: string): string {
   return getUpgradeActionDestination(key).href;
 }
 
-export function getLimit(key: string) {
-  const current = commercialEntitlements();
-  if (!current?.limits?.length) return undefined;
-  return current.limits.find((limit) => limit.key === key);
-}
-
 export function legacyConnections(): EntitlementLegacyConnections {
   return (
-    commercialEntitlements()?.legacy_connections ?? {
+    commercialPostureState()?.legacy_connections ?? {
       proxmox_nodes: 0,
       docker_hosts: 0,
       kubernetes_clusters: 0,
@@ -219,22 +223,26 @@ export function legacyConnections(): EntitlementLegacyConnections {
 }
 
 export function hasMigrationGap(): boolean {
-  return Boolean(commercialEntitlements()?.has_migration_gap);
+  return Boolean(commercialPostureState()?.has_migration_gap);
 }
 
-// Ensure org-scoped commercial entitlements do not leak across tenant switches.
+// Ensure org-scoped commercial posture does not leak across tenant switches.
 eventBus.on('org_switched', () => {
-  setCommercialEntitlements(null);
+  setCommercialPostureState(null);
   setLoaded(false);
   setLoadError(null);
-  void loadLicenseStatus(true);
+  void loadCommercialPosture(true);
 });
 
 export {
-  commercialEntitlements,
-  commercialEntitlements as entitlements,
-  commercialEntitlements as licenseStatus,
+  commercialPostureState as commercialPosture,
+  commercialPostureState as entitlements,
+  commercialPostureState as licenseStatus,
+  loadCommercialPosture as loadLicenseStatus,
+  loading as commercialPostureLoading,
   loading as licenseLoading,
+  loaded as commercialPostureLoaded,
   loaded as licenseLoaded,
+  loadError as commercialPostureLoadError,
   loadError as licenseLoadError,
 };

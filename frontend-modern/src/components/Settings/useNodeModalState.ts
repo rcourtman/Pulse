@@ -4,7 +4,7 @@ import type { NodeConfig } from '@/types/nodes';
 import { notificationStore } from '@/stores/notifications';
 import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
-import { licenseStatus, loadLicenseStatus } from '@/stores/licenseCommercial';
+import { commercialPosture, loadCommercialPosture } from '@/stores/licenseCommercial';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import {
@@ -44,7 +44,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
 
   onMount(() => {
-    void loadLicenseStatus();
+    void loadCommercialPosture();
   });
 
   const isAdvancedSetupMode = () =>
@@ -60,7 +60,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [startingTrial, setStartingTrial] = createSignal(false);
   const hostLimitReached = createMemo(() => false);
   const canStartTrial = createMemo(() => {
-    const ent = licenseStatus();
+    const ent = commercialPosture();
     if (!ent) return false;
     if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
     return ent.trial_eligible !== false;

@@ -20,10 +20,16 @@ describe('upgradeNavigation', () => {
     expect(resolveUpgradeDestination('  /cloud  ')).toEqual({
       href: '/cloud',
       external: false,
+      hardNavigation: false,
+      newTab: false,
+      preserveOpener: false,
     });
     expect(resolveUpgradeDestination(' https://pulserelay.pro/pricing ')).toEqual({
       href: 'https://pulserelay.pro/pricing',
       external: true,
+      hardNavigation: true,
+      newTab: true,
+      preserveOpener: false,
     });
   });
 
@@ -31,7 +37,11 @@ describe('upgradeNavigation', () => {
     const navigate = vi.fn();
     const openExternal = vi.fn();
 
-    navigateToUpgradeDestination({ href: '/settings/system/billing', external: false }, navigate, openExternal);
+    navigateToUpgradeDestination(
+      { href: '/settings/system/billing', external: false },
+      navigate,
+      openExternal,
+    );
 
     expect(navigate).toHaveBeenCalledWith('/settings/system/billing');
     expect(openExternal).not.toHaveBeenCalled();
@@ -49,6 +59,7 @@ describe('upgradeNavigation', () => {
 
     expect(openExternal).toHaveBeenCalledWith(
       'https://pulserelay.pro/pricing?feature=relay',
+      false,
     );
     expect(navigate).not.toHaveBeenCalled();
   });
@@ -73,6 +84,18 @@ describe('upgradeNavigation', () => {
       'https://pulserelay.pro/pricing?feature=relay',
       '_blank',
       'noopener,noreferrer',
+    );
+  });
+
+  it('opens preserve-opener destinations without noopener so the return bridge can refresh the opener', () => {
+    const windowOpen = vi.fn();
+    vi.stubGlobal('window', { open: windowOpen });
+
+    openExternalUpgradeDestination('/auth/license-purchase-start?feature=relay', true);
+
+    expect(windowOpen).toHaveBeenCalledWith(
+      '/auth/license-purchase-start?feature=relay',
+      '_blank',
     );
   });
 });

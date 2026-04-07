@@ -89,6 +89,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       billingState.openBillingPanelID = nextState.openBillingPanelID;
       billingState.upgradeFeatureKey = nextState.upgradeFeatureKey;
       billingState.upgradeReturnURL = nextState.upgradeReturnURL;
+      billingState.upgradePurchaseReturnToken = nextState.upgradePurchaseReturnToken;
       billingState.upgradeCheckoutSessionID = nextState.upgradeCheckoutSessionID;
       billingState.upgradeCheckoutStatus = nextState.upgradeCheckoutStatus;
       billingState.upgradePricing = nextState.upgradePricing;
@@ -190,6 +191,9 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     }
     if (billingState.upgradeReturnURL) {
       url.searchParams.set('return_url', billingState.upgradeReturnURL);
+    }
+    if (billingState.upgradePurchaseReturnToken) {
+      url.searchParams.set('purchase_return_token', billingState.upgradePurchaseReturnToken);
     }
     url.searchParams.set('service', 'upgrade');
     url.searchParams.set('checkout', status);

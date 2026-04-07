@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  getSelfHostedPurchaseStartUrl,
   getSelfHostedPurchaseReturnUrl,
   getSelfHostedBillingHref,
   getSelfHostedBillingPlanIntent,
@@ -9,8 +10,10 @@ import {
   getPublicPricingUrl,
   getUpgradeFallbackDestination,
   isExternalPricingDestination,
+  isSelfHostedPurchaseStartDestination,
   resolveCanonicalSelfHostedBillingHref,
   resolveSelfHostedBillingSection,
+  resolveSelfHostedPurchaseStartDestination,
   scopeSelfHostedBillingDestination,
   SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
@@ -19,6 +22,7 @@ import {
   SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+  SELF_HOSTED_PURCHASE_START_PATH,
   SELF_HOSTED_PURCHASE_RETURN_PATH,
 } from '@/utils/pricingHandoff';
 
@@ -35,7 +39,7 @@ describe('pricingHandoff', () => {
 
   it('routes self-hosted upgrades to Pulse Account first', () => {
     expect(getUpgradeFallbackDestination('relay')).toBe(
-      getPulseAccountPortalUpgradeUrl('relay'),
+      getSelfHostedPurchaseStartUrl('relay'),
     );
   });
 
@@ -53,7 +57,7 @@ describe('pricingHandoff', () => {
 
   it('preserves extra query parameters when handing off the legacy pricing route', () => {
     expect(getPricingRouteDestination('?feature=relay&utm_content=legacy-bookmark')).toBe(
-      getPulseAccountPortalUpgradeUrl(
+      getSelfHostedPurchaseStartUrl(
         'relay',
         new URLSearchParams('feature=relay&utm_content=legacy-bookmark'),
       ),
@@ -130,19 +134,33 @@ describe('pricingHandoff', () => {
     });
     expect(
       scopeSelfHostedBillingDestination(
-        { href: getPulseAccountPortalUpgradeUrl('relay'), external: true },
+        resolveSelfHostedPurchaseStartDestination('relay'),
         'usage',
         { detail: SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL },
       ),
     ).toEqual({
-      href: getPulseAccountPortalUpgradeUrl('relay'),
-      external: true,
+      href: getSelfHostedPurchaseStartUrl('relay'),
+      external: false,
+      hardNavigation: true,
+      newTab: true,
+      preserveOpener: true,
     });
   });
 
   it('detects external pricing destinations', () => {
     expect(isExternalPricingDestination(getPulseAccountPortalUpgradeUrl('relay'))).toBe(true);
+    expect(isExternalPricingDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(false);
     expect(isExternalPricingDestination('/cloud')).toBe(false);
+  });
+
+  it('detects the internal self-hosted purchase start destination', () => {
+    expect(isSelfHostedPurchaseStartDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(
+      true,
+    );
+    expect(isSelfHostedPurchaseStartDestination(SELF_HOSTED_PURCHASE_START_PATH)).toBe(true);
+    expect(isSelfHostedPurchaseStartDestination(getPulseAccountPortalUpgradeUrl('relay'))).toBe(
+      false,
+    );
   });
 
   it('adds the product return URL to Pulse Account upgrade links when the app origin is known', () => {

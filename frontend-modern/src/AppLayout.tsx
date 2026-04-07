@@ -43,7 +43,7 @@ import { demoModeEnabled } from '@/stores/demoMode';
 import { isMultiTenantEnabled } from '@/stores/license';
 import {
   isPro,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
@@ -180,7 +180,7 @@ export function AppLayout(props: AppLayoutProps) {
 
   onMount(() => {
     if (!demoModeEnabled()) {
-      void loadCommercialLicenseStatus();
+      void loadCommercialPosture();
     }
   });
 

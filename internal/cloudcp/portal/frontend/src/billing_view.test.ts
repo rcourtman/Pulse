@@ -229,6 +229,7 @@ describe('services view', function() {
     var billingState = createPortalBillingState();
     billingState.upgradeFeatureKey = 'max_monitored_systems';
     billingState.upgradeReturnURL = 'https://pulse.example.com/auth/license-purchase-activate';
+    billingState.upgradePurchaseReturnToken = 'prt_signed';
     billingState.upgradeCheckoutSessionID = 'cs_success';
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
@@ -270,6 +271,9 @@ describe('services view', function() {
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Buy Annual');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Activate in Pulse Pro');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('session_id');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
+      'purchase_return_token',
+    );
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('ppk_live_preview');
   });
 
@@ -291,7 +295,7 @@ describe('services view', function() {
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Return to Pulse Pro billing to refresh the upgraded entitlement.',
+      'Return to Pulse Pro billing and reopen the upgrade flow',
     );
   });
 });

@@ -4,9 +4,9 @@ import {
   licenseLoaded,
 } from '@/stores/license';
 import {
-  entitlements,
+  commercialPosture,
   getUpgradeActionDestination,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -37,7 +37,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => props.canManage !== false;
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
+  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
   const relayEnabled = () => hasFeature('relay');
   const upgradeDestination = () => getUpgradeActionDestination('relay');
   const connectionPresentation = createMemo(() =>
@@ -134,7 +134,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   };
 
   onMount(async () => {
-    await Promise.all([loadLicenseStatus(), loadCommercialLicenseStatus()]);
+    await Promise.all([loadLicenseStatus(), loadCommercialPosture()]);
     if (!relayEnabled()) {
       setLoading(false);
       return;

@@ -8,17 +8,33 @@ type UpgradeLinkProps = Omit<JSX.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'
 
 export const UpgradeLink: Component<UpgradeLinkProps> = (props) => {
   const [local, others] = splitProps(props, ['destination', 'rel', 'target']);
+  const newTab = () => local.destination.newTab ?? local.destination.external;
+  const hardNavigation = () => local.destination.hardNavigation ?? local.destination.external;
+  const useHardLink = () => Boolean(hardNavigation() || newTab());
+  const rel = () => {
+    if (local.rel) return local.rel;
+    if (newTab() && !local.destination.preserveOpener) {
+      return 'noopener noreferrer';
+    }
+    return undefined;
+  };
+  const target = () => {
+    if (newTab()) {
+      return local.target ?? '_blank';
+    }
+    return local.target;
+  };
 
   return (
     <Show
-      when={local.destination.external}
+      when={useHardLink()}
       fallback={<A {...others} href={local.destination.href} />}
     >
       <a
         {...others}
         href={local.destination.href}
-        target={local.target ?? '_blank'}
-        rel={local.rel ?? 'noopener noreferrer'}
+        target={target()}
+        rel={rel()}
       />
     </Show>
   );

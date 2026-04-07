@@ -220,10 +220,12 @@ Own canonical runtime payload shapes between backend and frontend.
     `internal/api/subscription_entitlements.go`, and
     `internal/api/contract_test.go` must classify commercial routes centrally
     as either hidden (`404`) or runtime-safe. Public demo browsers may read the
-    non-commercial `/api/license/runtime-capabilities` contract, while
-    `/api/license/entitlements` stays hidden and must not be relied on for
-    runtime feature truth, upgrade prompts, trial nudges, usage counts, or plan
-    metadata.
+    non-commercial `/api/license/runtime-capabilities` contract for feature
+    truth, while `/api/license/commercial-posture`,
+    `/api/license/entitlements`, and `/auth/license-purchase-start` stay
+    hidden. Upgrade prompts, trial nudges, monitored-system migration guidance,
+    usage counts, billing identity, and plan metadata must therefore not depend
+    on hidden commercial routes surviving the public demo boundary.
 
 ## Forbidden Paths
 
@@ -506,9 +508,14 @@ hosted-only account that only arrived through an upgrade CTA.
 That same commercial contract now also includes the self-hosted purchase
 return path. Product-originated upgrade handoffs must include a canonical
 `return_url` that points back to Pulse's public `POST /auth/license-purchase-activate`
-callback, and that callback must redeem the completed checkout through the
-shared license/commercial API before redirecting the browser back to the
-owned billing plan route.
+callback plus a signed `purchase_return_token` bound to the originating Pulse
+instance, and that callback must redeem the completed checkout through the
+shared license/commercial API before returning the browser to the owned
+billing plan route. When the upgrade flow was opened in a secondary tab, the
+callback may refresh the originating billing tab and close itself; when no
+opener is available, the callback must still return the current tab to the
+owned billing route automatically instead of leaving the operator on a dead
+success page.
 That same typed bootstrap/runtime contract must also derive the default signed-
 in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and the signed-in shell keeps
@@ -2305,10 +2312,11 @@ provider bridges purely to satisfy Patrol once the Patrol runtime can operate
 from those canonical tenant providers directly.
 Hosted licensing handlers now also carry a tenant-scoped fallback contract:
 when hosted auth handoff preserves a non-default tenant org like `t-...`,
-`/api/license/status`, `/api/license/entitlements`, and
-`/api/license/runtime-capabilities` must still evaluate the instance-level
-hosted billing lease from `default` if that tenant org has no org-local
-billing state of its own, rather than failing closed into
+`/api/license/status`, `/api/license/commercial-posture`,
+`/api/license/entitlements`, and `/api/license/runtime-capabilities` must
+still evaluate the instance-level hosted billing lease from `default` if that
+tenant org has no org-local billing state of its own, rather than failing
+closed into
 `subscription_required` on first entry.
 That same hosted entitlement contract also owns lease refresh targeting:
 when a hosted tenant request arrives on a non-default org with no org-local

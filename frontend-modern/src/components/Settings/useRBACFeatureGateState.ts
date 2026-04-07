@@ -4,8 +4,8 @@ import {
   licenseLoaded,
 } from '@/stores/license';
 import {
-  entitlements,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  commercialPosture,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadLicenseStatus } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
@@ -31,7 +31,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
     getRBACFeatureGateCopy(options.kind),
   );
   const licenseReady = createMemo(() => licenseLoaded());
-  const canStartTrial = createMemo(() => entitlements()?.trial_eligible !== false);
+  const canStartTrial = createMemo(() => commercialPosture()?.trial_eligible !== false);
   const rbacEnabled = createMemo(() => licenseReady() && hasFeature('rbac'));
   const paywallVisible = createMemo(
     () => licenseReady() && !hasFeature('rbac') && !options.loading(),
@@ -39,7 +39,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
 
   onMount(() => {
     void loadLicenseStatus();
-    void loadCommercialLicenseStatus();
+    void loadCommercialPosture();
   });
 
   createEffect((wasPaywallVisible) => {

@@ -18,7 +18,11 @@ import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 
-import { getLimit, isPro, loadLicenseStatus } from '@/stores/licenseCommercial';
+import {
+  getLimit,
+  loadLicenseStatus as loadRuntimeLicenseStatus,
+} from '@/stores/license';
+import { isPro, loadCommercialPosture } from '@/stores/licenseCommercial';
 
 interface SettingsProps {
   darkMode: () => boolean;
@@ -149,7 +153,8 @@ const Settings: Component<SettingsProps> = (props) => {
   });
 
   onMount(() => {
-    loadLicenseStatus();
+    void loadRuntimeLicenseStatus();
+    void loadCommercialPosture();
   });
 
   return (

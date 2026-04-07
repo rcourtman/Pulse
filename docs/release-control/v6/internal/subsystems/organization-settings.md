@@ -184,6 +184,7 @@ lane-local `startProTrial()` branch once that shared helper covers the same
 runtime contract.
 That same RBAC paywall surface now also depends on the runtime-versus-
 commercial license split: RBAC enablement must stay on the runtime capability
-store, while free-trial eligibility and upgrade routing stay on the commercial
-store. Organization settings must not collapse those two concerns back into
-one payload just because the same paywall shell renders both.
+store, while free-trial eligibility and upgrade routing stay on the canonical
+commercial-posture store backed by `/api/license/commercial-posture`.
+Organization settings must not collapse those two concerns back into one
+payload just because the same paywall shell renders both.

@@ -12,9 +12,9 @@ import {
   maxHistoryDays,
 } from '@/stores/license';
 import {
+  commercialPosture,
   getUpgradeActionDestination,
-  licenseStatus,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
@@ -55,7 +55,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
 
   const canStartTrial = createMemo(() => {
-    const ent = licenseStatus();
+    const ent = commercialPosture();
     if (!ent) return false;
     if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
     return ent.trial_eligible !== false;
@@ -79,7 +79,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
 
   onMount(() => {
     loadLicenseStatus();
-    loadCommercialLicenseStatus();
+    loadCommercialPosture();
   });
 
   createEffect(() => {

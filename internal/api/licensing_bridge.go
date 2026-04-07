@@ -40,6 +40,7 @@ type billingStoreModel = pkglicensing.BillingStore
 type billingState = pkglicensing.BillingState
 type subscriptionState = pkglicensing.SubscriptionState
 type entitlementPayloadModel = pkglicensing.EntitlementPayload
+type commercialPosturePayloadModel = pkglicensing.CommercialPosturePayload
 type runtimeCapabilitiesPayloadModel = pkglicensing.RuntimeCapabilitiesPayload
 type limitStatusModel = pkglicensing.LimitStatus
 type upgradeReasonModel = pkglicensing.UpgradeReason
@@ -54,6 +55,7 @@ type conversionEvent = pkglicensing.ConversionEvent
 type conversionHealthStatus = pkglicensing.HealthStatus
 type conversionCollectionConfigSnapshot = pkglicensing.CollectionConfigSnapshot
 type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
+type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
 
@@ -98,6 +100,10 @@ func upgradeURLForFeatureFromLicensing(feature string) string {
 
 func proTrialSignupURLFromLicensing(override string) string {
 	return pkglicensing.ResolveProTrialSignupURL(override)
+}
+
+func pulseAccountPortalURLFromLicensing(override string) string {
+	return pkglicensing.ResolvePulseAccountPortalURL(override)
 }
 
 func defaultBillingStateFromLicensing() *billingState {
@@ -221,6 +227,13 @@ func buildRuntimeCapabilitiesPayloadFromLicensing(
 	return pkglicensing.BuildRuntimeCapabilitiesPayload(status, subscriptionState)
 }
 
+func buildCommercialPosturePayloadFromLicensing(
+	status *licenseStatus,
+	subscriptionState string,
+) commercialPosturePayloadModel {
+	return pkglicensing.BuildCommercialPosturePayload(status, subscriptionState)
+}
+
 func buildFeatureMapFromLicensing(service *licenseService) map[string]bool {
 	return pkglicensing.BuildFeatureMap(service, nil)
 }
@@ -240,6 +253,26 @@ func buildRuntimeCapabilitiesPayloadWithUsageFromLicensing(
 	usage entitlementUsageSnapshotModel,
 ) runtimeCapabilitiesPayloadModel {
 	return pkglicensing.BuildRuntimeCapabilitiesPayloadWithUsage(status, subscriptionState, usage)
+}
+
+func buildCommercialPosturePayloadWithUsageFromLicensing(
+	status *licenseStatus,
+	subscriptionState string,
+	usage entitlementUsageSnapshotModel,
+	trialEndsAtUnix *int64,
+) commercialPosturePayloadModel {
+	return pkglicensing.BuildCommercialPosturePayloadWithUsage(
+		status,
+		subscriptionState,
+		usage,
+		trialEndsAtUnix,
+	)
+}
+
+func commercialPosturePayloadFromEntitlementPayloadFromLicensing(
+	payload entitlementPayloadModel,
+) commercialPosturePayloadModel {
+	return pkglicensing.CommercialPosturePayloadFromEntitlementPayload(payload)
 }
 
 func limitStateFromLicensing(current, limit int64) string {
@@ -272,6 +305,14 @@ func trialActivationPublicKeyFromLicensing() (ed25519.PublicKey, error) {
 
 func verifyTrialActivationTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string, now time.Time) (*trialActivationClaimsModel, error) {
 	return pkglicensing.VerifyTrialActivationToken(token, key, expectedInstanceHost, now)
+}
+
+func signPurchaseReturnTokenFromLicensing(signingKey []byte, claims purchaseReturnClaimsModel) (string, error) {
+	return pkglicensing.SignPurchaseReturnToken(signingKey, claims)
+}
+
+func verifyPurchaseReturnTokenFromLicensing(token string, signingKey []byte, expectedInstanceHost string, now time.Time) (*purchaseReturnClaimsModel, error) {
+	return pkglicensing.VerifyPurchaseReturnToken(token, signingKey, expectedInstanceHost, now)
 }
 
 func verifyEntitlementLeaseTokenFromLicensing(token string, key ed25519.PublicKey, expectedInstanceHost string, now time.Time) (*entitlementLeaseClaimsModel, error) {

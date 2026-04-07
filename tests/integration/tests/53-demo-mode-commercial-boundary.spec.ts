@@ -102,10 +102,12 @@ base.describe('Demo mode commercial boundary', () => {
     page,
   }, testInfo) => {
     let runtimeCapabilitiesRequests = 0;
+    let commercialPostureRequests = 0;
     let entitlementsRequests = 0;
     let licenseStatusRequests = 0;
     let monitoredSystemLedgerRequests = 0;
     let billingStateRequests = 0;
+    let checkoutStartRequests = 0;
 
     await page.addInitScript(() => {
       localStorage.setItem('pulse_whats_new_v2_shown', 'true');
@@ -125,6 +127,15 @@ base.describe('Demo mode commercial boundary', () => {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(DEMO_PUBLIC_RUNTIME_CAPABILITIES),
+      });
+    });
+
+    await page.route('**/api/license/commercial-posture', async (route) => {
+      commercialPostureRequests += 1;
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'not found' }),
       });
     });
 
@@ -164,6 +175,15 @@ base.describe('Demo mode commercial boundary', () => {
       });
     });
 
+    await page.route('**/auth/license-purchase-start**', async (route) => {
+      checkoutStartRequests += 1;
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'not found' }),
+      });
+    });
+
     await page.goto('/settings/system/billing', { waitUntil: 'domcontentloaded' });
     await page.waitForURL('**/settings/infrastructure/install', { timeout: 15_000 });
 
@@ -172,6 +192,7 @@ base.describe('Demo mode commercial boundary', () => {
         message: 'expected demo shell to load runtime capabilities',
       })
       .toBeGreaterThan(0);
+    expect(commercialPostureRequests, 'demo settings route should not read commercial posture').toBe(0);
     expect(entitlementsRequests, 'demo settings route should not read commercial entitlements').toBe(0);
 
     await expect(
@@ -198,6 +219,7 @@ base.describe('Demo mode commercial boundary', () => {
       'demo settings route should not read the monitored-system ledger',
     ).toBe(0);
     expect(billingStateRequests, 'demo settings route should not read hosted billing state').toBe(0);
+    expect(checkoutStartRequests, 'demo settings route should not trigger hosted checkout start').toBe(0);
 
     const screenshotPath = path.resolve(
       __dirname,
@@ -242,6 +264,7 @@ base.describe('Demo mode commercial boundary', () => {
 
       await hiddenNotFound('**/api/license/status');
       await hiddenNotFound('**/api/license/features');
+      await hiddenNotFound('**/api/license/commercial-posture');
       await hiddenNotFound('**/api/license/entitlements');
       await hiddenNotFound('**/api/license/activate');
       await hiddenNotFound('**/api/license/clear');
@@ -249,6 +272,7 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/license/monitored-system-ledger');
       await hiddenNotFound('**/api/admin/orgs/**/billing-state');
       await hiddenNotFound('**/api/upgrade-metrics/**');
+      await hiddenNotFound('**/auth/license-purchase-start**');
       await hiddenNotFound('**/auth/trial-activate');
 
       await page.goto('/settings/infrastructure/install', { waitUntil: 'domcontentloaded' });
@@ -272,6 +296,7 @@ base.describe('Demo mode commercial boundary', () => {
           runtimeCapabilities: await probe('/api/license/runtime-capabilities'),
           status: await probe('/api/license/status'),
           features: await probe('/api/license/features'),
+          commercialPosture: await probe('/api/license/commercial-posture'),
           entitlements: await probe('/api/license/entitlements'),
           activate: await probe('/api/license/activate', {
             method: 'POST',
@@ -287,6 +312,7 @@ base.describe('Demo mode commercial boundary', () => {
           ledger: await probe('/api/license/monitored-system-ledger'),
           billingState: await probe('/api/admin/orgs/default/billing-state'),
           upgradeMetrics: await probe('/api/upgrade-metrics/stats'),
+          checkoutStart: await probe('/auth/license-purchase-start'),
           trialActivate: await probe('/auth/trial-activate'),
         };
       });
@@ -305,6 +331,7 @@ base.describe('Demo mode commercial boundary', () => {
         { key: 'max_monitored_systems', limit: 0, current: 0, state: 'ok' },
       ]);
 
+      expect(responses.commercialPosture.status).toBe(404);
       expect(responses.entitlements.status).toBe(404);
       expect(responses.status.status).toBe(404);
       expect(responses.features.status).toBe(404);
@@ -314,6 +341,7 @@ base.describe('Demo mode commercial boundary', () => {
       expect(responses.ledger.status).toBe(404);
       expect(responses.billingState.status).toBe(404);
       expect(responses.upgradeMetrics.status).toBe(404);
+      expect(responses.checkoutStart.status).toBe(404);
       expect(responses.trialActivate.status).toBe(404);
     },
   );

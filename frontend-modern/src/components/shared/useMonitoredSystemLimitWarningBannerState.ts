@@ -1,12 +1,15 @@
 import { createEffect, createMemo, onMount } from 'solid-js';
 import { demoModeEnabled } from '@/stores/demoMode';
 import {
-  entitlements,
   getLimit,
+  loadLicenseStatus as loadRuntimeLicenseStatus,
+} from '@/stores/license';
+import {
+  commercialPosture,
   getUpgradeActionDestination,
   hasMigrationGap,
   legacyConnections,
-  loadLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
@@ -33,7 +36,8 @@ import {
 
 export function useMonitoredSystemLimitWarningBannerState() {
   onMount(() => {
-    void loadLicenseStatus();
+    void loadRuntimeLicenseStatus();
+    void loadCommercialPosture();
   });
 
   const monitoredSystemLimit = createMemo(() => getLimit(MONITORED_SYSTEM_LIMIT_KEY));
@@ -50,7 +54,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
     getMonitoredSystemMigrationMessage(migrationCounts()),
   );
   const overflowSummary = createMemo(() =>
-    getMonitoredSystemOverflowSummary(entitlements()?.overflow_days_remaining),
+    getMonitoredSystemOverflowSummary(commercialPosture()?.overflow_days_remaining),
   );
   const toneClass = createMemo(() => getMonitoredSystemBannerToneClass(isUrgent()));
   const migrationTextClass = createMemo(() =>

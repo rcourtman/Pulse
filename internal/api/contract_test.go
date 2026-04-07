@@ -4824,6 +4824,7 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 		}{
 			{method: http.MethodGet, path: "/api/license/status"},
 			{method: http.MethodGet, path: "/api/license/features"},
+			{method: http.MethodGet, path: "/api/license/commercial-posture"},
 			{method: http.MethodGet, path: "/api/license/entitlements"},
 			{method: http.MethodPost, path: "/api/license/activate"},
 			{method: http.MethodPost, path: "/api/license/clear"},
@@ -4833,6 +4834,7 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodPut, path: "/api/admin/orgs/t-tenant/billing-state"},
 			{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},
 			{method: http.MethodPost, path: "/api/upgrade-metrics/events"},
+			{method: http.MethodGet, path: licensePurchaseStartPath},
 			{method: http.MethodGet, path: "/auth/trial-activate"},
 		}
 

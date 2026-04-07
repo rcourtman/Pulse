@@ -654,8 +654,10 @@ notification flow, or customer-facing system-log copy back into the panel
 render shell.
 Shared trial CTA handling is now part of that same primitive boundary for
 settings and shared paywalls. Shared/settings runtime owners must derive trial
-eligibility from the canonical entitlements payload, including
-`trial_eligible`, and route operator-facing failure copy through
+eligibility and upgrade posture from the canonical commercial-posture
+contract, including `trial_eligible`, while billing identity and plan detail
+stay on the billing-only entitlements contract. Shared/settings runtime owners
+must route operator-facing failure copy through
 `frontend-modern/src/utils/upgradePresentation.ts`. The trial-start runtime
 handoff itself is now centralized in
 `frontend-modern/src/utils/trialStartAction.ts`; settings/shared paywalls and

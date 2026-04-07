@@ -25,7 +25,7 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Use the Platform connections workspace when:');
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
     expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
-    expect(setupCompletionPanelSource).toContain('await loadLicenseStatus(true);');
+    expect(setupCompletionPanelSource).toContain('await loadCommercialPosture(true);');
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 

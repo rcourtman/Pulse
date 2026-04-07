@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -165,6 +166,88 @@ func TestBuildEntitlementPayload_NilCapabilities(t *testing.T) {
 	}
 	if len(payload.Capabilities) != 0 {
 		t.Fatalf("expected capabilities length 0, got %d", len(payload.Capabilities))
+	}
+}
+
+func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
+	status := &license.LicenseStatus{
+		Valid:               true,
+		Tier:                license.TierFree,
+		Features:            append([]string(nil), license.TierFeatures[license.TierFree]...),
+		MaxMonitoredSystems: 5,
+	}
+
+	payload := buildCommercialPosturePayloadWithUsage(status, "", entitlementUsageSnapshot{
+		MonitoredSystems: 7,
+		LegacyConnections: pkglicensing.LegacyConnectionCounts{
+			ProxmoxNodes: 2,
+			DockerHosts:  1,
+		},
+	}, nil)
+
+	if payload.Tier != string(license.TierFree) {
+		t.Fatalf("expected tier=%q, got %q", license.TierFree, payload.Tier)
+	}
+	if payload.SubscriptionState != string(license.SubStateActive) {
+		t.Fatalf("expected subscription_state=%q, got %q", license.SubStateActive, payload.SubscriptionState)
+	}
+	if len(payload.UpgradeReasons) == 0 {
+		t.Fatal("expected upgrade reasons for free-tier commercial posture")
+	}
+	if payload.LegacyConnections.ProxmoxNodes != 2 || payload.LegacyConnections.DockerHosts != 1 {
+		t.Fatalf("expected legacy counts to be preserved, got %+v", payload.LegacyConnections)
+	}
+	if payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=false under canonical monitored-system counting")
+	}
+}
+
+func TestHandleCommercialPosture_ActiveLicense(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
+	handler := createTestHandler(t)
+	licenseKey, err := pkglicensing.GenerateLicenseForTesting(
+		"owner@example.com",
+		pkglicensing.TierPro,
+		24*time.Hour,
+	)
+	if err != nil {
+		t.Fatalf("GenerateLicenseForTesting: %v", err)
+	}
+	if _, err := handler.Service(context.Background()).Activate(licenseKey); err != nil {
+		t.Fatalf("Activate() error = %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/commercial-posture", nil)
+	rec := httptest.NewRecorder()
+
+	handler.HandleCommercialPosture(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d: %s", http.StatusOK, rec.Code, rec.Body.String())
+	}
+
+	body := rec.Body.String()
+	for _, forbidden := range []string{
+		`"capabilities"`,
+		`"limits"`,
+		`"licensed_email"`,
+		`"plan_version"`,
+		`"max_history_days"`,
+	} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("commercial posture leaked field %s in %s", forbidden, body)
+		}
+	}
+
+	var payload CommercialPosturePayload
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("failed to decode commercial posture payload: %v", err)
+	}
+	if payload.SubscriptionState != string(license.SubStateActive) {
+		t.Fatalf("expected subscription_state %q, got %q", license.SubStateActive, payload.SubscriptionState)
+	}
+	if payload.Tier != string(license.TierPro) {
+		t.Fatalf("expected tier %q, got %q", license.TierPro, payload.Tier)
 	}
 }
 

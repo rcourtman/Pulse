@@ -52,4 +52,32 @@ describe('UpgradeLink', () => {
     expect(link).toHaveAttribute('target', '_blank');
     expect(link).toHaveAttribute('rel', 'noopener noreferrer');
   });
+
+  it('preserves opener access for self-hosted purchase-start links', () => {
+    render(() => (
+      <Router>
+        <Route
+          path="/"
+          component={() => (
+            <UpgradeLink
+              destination={{
+                href: '/auth/license-purchase-start?feature=relay',
+                external: false,
+                hardNavigation: true,
+                newTab: true,
+                preserveOpener: true,
+              }}
+            >
+              Compare plans
+            </UpgradeLink>
+          )}
+        />
+      </Router>
+    ));
+
+    const link = screen.getByRole('link', { name: 'Compare plans' });
+    expect(link).toHaveAttribute('href', '/auth/license-purchase-start?feature=relay');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).not.toHaveAttribute('rel');
+  });
 });

@@ -2,11 +2,15 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import {
-  licenseLoadError,
-  licenseStatus,
-  loadLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { isMultiTenantEnabled } from '@/stores/license';
+import { loadLicenseStatus as loadRuntimeLicenseStatus } from '@/stores/license';
+import {
+  licenseEntitlements,
+  licenseEntitlementsLoadError,
+  loadLicenseEntitlements,
+} from '@/stores/licenseEntitlements';
 import { LicenseAPI } from '@/api/license';
 import {
   formatLicensePlanVersion,
@@ -55,14 +59,14 @@ export function useProLicensePanelState() {
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [trialActivationResult, setTrialActivationResult] = createSignal('');
 
-  const entitlements = createMemo(() => licenseStatus());
+  const entitlements = createMemo(() => licenseEntitlements());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
   const trialExpiryUnix = createMemo(() => entitlements()?.trial_expires_at);
   const trialDaysRemaining = createMemo(() => entitlements()?.trial_days_remaining);
 
   const loadPanelData = async () => {
     setLoading(true);
-    await loadLicenseStatus(true);
+    await loadLicenseEntitlements(true);
     setLoading(false);
   };
 
@@ -112,7 +116,7 @@ export function useProLicensePanelState() {
       return current.trial_eligible;
     }
     const state = subscriptionState();
-    return state !== 'active' && state !== 'trial' && !licenseLoadError();
+    return state !== 'active' && state !== 'trial' && !licenseEntitlementsLoadError();
   });
 
   const handleStartTrial = async () => {
@@ -266,7 +270,11 @@ export function useProLicensePanelState() {
       }
       notificationStore.success(result.message || 'License activated');
       setLicenseKey('');
-      await loadPanelData();
+      await Promise.all([
+        loadPanelData(),
+        loadCommercialPosture(true),
+        loadRuntimeLicenseStatus(true),
+      ]);
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to activate license');
     } finally {
@@ -282,7 +290,11 @@ export function useProLicensePanelState() {
     try {
       const result = await LicenseAPI.clearLicense();
       notificationStore.success(result.message || 'License cleared');
-      await loadPanelData();
+      await Promise.all([
+        loadPanelData(),
+        loadCommercialPosture(true),
+        loadRuntimeLicenseStatus(true),
+      ]);
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to clear license');
     } finally {

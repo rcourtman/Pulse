@@ -6,8 +6,9 @@ import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
 
 const hasFeatureMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
-const loadCommercialLicenseStatusMock = vi.fn();
+const loadCommercialPostureMock = vi.fn();
 const startProTrialMock = vi.fn();
+const commercialPostureMock = vi.fn();
 const entitlementsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
 const trackUpgradeClickedMock = vi.fn();
@@ -26,12 +27,14 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
   getUpgradeActionDestination: (feature: string) => ({
     href: `https://example.com/upgrade?feature=${feature}`,
     external: true,
   }),
   getUpgradeActionUrlOrFallback: (feature: string) => `/upgrade?feature=${feature}`,
-  loadLicenseStatus: (...args: unknown[]) => loadCommercialLicenseStatusMock(...args),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
+  loadLicenseStatus: (...args: unknown[]) => loadCommercialPostureMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   entitlements: (...args: unknown[]) => entitlementsMock(...args),
 }));
@@ -71,8 +74,9 @@ describe('RBAC paywall settings panels', () => {
   beforeEach(() => {
     hasFeatureMock.mockReset();
     loadLicenseStatusMock.mockReset();
-    loadCommercialLicenseStatusMock.mockReset();
+    loadCommercialPostureMock.mockReset();
     startProTrialMock.mockReset();
+    commercialPostureMock.mockReset();
     entitlementsMock.mockReset();
     trackPaywallViewedMock.mockReset();
     trackUpgradeClickedMock.mockReset();
@@ -86,8 +90,9 @@ describe('RBAC paywall settings panels', () => {
 
     hasFeatureMock.mockReturnValue(true);
     loadLicenseStatusMock.mockResolvedValue(undefined);
-    loadCommercialLicenseStatusMock.mockResolvedValue(undefined);
+    loadCommercialPostureMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue({ outcome: 'started' });
+    commercialPostureMock.mockReturnValue({ trial_eligible: false });
     entitlementsMock.mockReturnValue({ trial_eligible: false });
     getRolesMock.mockResolvedValue([
       {
@@ -125,6 +130,7 @@ describe('RBAC paywall settings panels', () => {
       'href',
       'https://example.com/upgrade?feature=rbac',
     );
+    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'New Role' })).toBeDisabled();
     expect(getRolesMock).not.toHaveBeenCalled();
     expect(trackPaywallViewedMock).toHaveBeenCalledWith('rbac', 'settings_roles_panel');
@@ -152,6 +158,7 @@ describe('RBAC paywall settings panels', () => {
       expect(screen.getByText('Centralized Access Control (Pro)')).toBeInTheDocument();
     });
 
+    expect(loadCommercialPostureMock).toHaveBeenCalled();
     expect(screen.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute(
       'href',
       'https://example.com/upgrade?feature=rbac',
@@ -205,6 +212,7 @@ describe('RBAC paywall settings panels', () => {
 
   it('surfaces backend trial-start messages instead of collapsing every conflict into already-used', async () => {
     hasFeatureMock.mockImplementation((feature: string) => feature !== 'rbac');
+    commercialPostureMock.mockReturnValue({ trial_eligible: true });
     entitlementsMock.mockReturnValue({ trial_eligible: true });
     startProTrialMock.mockRejectedValueOnce(
       Object.assign(

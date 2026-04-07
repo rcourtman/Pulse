@@ -38,6 +38,7 @@ func (r *Router) registerOrgLicenseRoutesGroup(orgHandlers *OrgHandlers, rbacHan
 	r.mux.HandleFunc("/api/license/activate", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleActivateLicense)))
 	r.mux.HandleFunc("/api/license/clear", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleClearLicense)))
 	r.mux.HandleFunc("GET /api/license/runtime-capabilities", RequireAuth(r.config, r.licenseHandlers.HandleRuntimeCapabilities))
+	r.mux.HandleFunc("GET /api/license/commercial-posture", RequireAuth(r.config, r.licenseHandlers.HandleCommercialPosture))
 	r.mux.HandleFunc("GET /api/license/entitlements", RequireAuth(r.config, r.licenseHandlers.HandleEntitlements))
 	r.mux.HandleFunc("GET /api/license/monitored-system-ledger", RequireAuth(r.config, r.handleMonitoredSystemLedger))
 	r.mux.HandleFunc("POST /api/license/trial/start", RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.licenseHandlers.HandleStartTrial)))

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { Route, Router } from '@solidjs/router';
 
 import type { LicenseEntitlements } from '@/api/license';
 import { ProLicensePanel } from '../ProLicensePanel';
@@ -8,8 +9,8 @@ import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import {
-  getPulseAccountPortalUpgradeUrl,
   getPublicPricingUrl,
+  getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
@@ -18,7 +19,10 @@ import {
 
 let mockEntitlements: LicenseEntitlements | null = null;
 
-const loadLicenseStatusMock = vi.fn();
+const loadRuntimeLicenseStatusMock = vi.fn();
+const loadCommercialPostureMock = vi.fn();
+const loadLicenseEntitlementsMock = vi.fn();
+const licenseEntitlementsLoadErrorMock = vi.fn(() => null);
 const startProTrialMock = vi.fn();
 const activateLicenseMock = vi.fn();
 const clearLicenseMock = vi.fn();
@@ -33,22 +37,31 @@ const navigateMock = vi.fn();
 const getUpgradeActionDestinationMock = vi.hoisted(() => vi.fn());
 const getUpgradeActionUrlOrFallbackMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@solidjs/router', () => ({
-  useLocation: () => useLocationMock(),
-  useNavigate: () => navigateMock,
-}));
+vi.mock('@solidjs/router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@solidjs/router')>();
+  return {
+    ...actual,
+    useLocation: () => useLocationMock(),
+    useNavigate: () => navigateMock,
+  };
+});
 
 vi.mock('@/stores/license', () => ({
   isMultiTenantEnabled: () => true,
+  loadLicenseStatus: (...args: unknown[]) => loadRuntimeLicenseStatusMock(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
-  licenseLoadError: () => false,
-  licenseStatus: () => mockEntitlements,
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
+}));
+
+vi.mock('@/stores/licenseEntitlements', () => ({
+  licenseEntitlements: () => mockEntitlements,
+  licenseEntitlementsLoadError: () => licenseEntitlementsLoadErrorMock(),
+  loadLicenseEntitlements: (...args: unknown[]) => loadLicenseEntitlementsMock(...args),
 }));
 
 vi.mock('@/api/license', () => ({
@@ -66,6 +79,12 @@ vi.mock('@/stores/notifications', () => ({
 }));
 
 describe('ProLicensePanel', () => {
+  const renderPanel = () => render(() => (
+    <Router>
+      <Route path="/" component={() => <ProLicensePanel />} />
+    </Router>
+  ));
+
   beforeEach(() => {
     mockEntitlements = {
       capabilities: [],
@@ -76,7 +95,10 @@ describe('ProLicensePanel', () => {
       trial_eligible: true,
     };
 
-    loadLicenseStatusMock.mockReset();
+    loadRuntimeLicenseStatusMock.mockReset();
+    loadCommercialPostureMock.mockReset();
+    loadLicenseEntitlementsMock.mockReset();
+    licenseEntitlementsLoadErrorMock.mockReset();
     startProTrialMock.mockReset();
     activateLicenseMock.mockReset();
     clearLicenseMock.mockReset();
@@ -86,7 +108,10 @@ describe('ProLicensePanel', () => {
     navigateMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
-    loadLicenseStatusMock.mockResolvedValue(undefined);
+    loadRuntimeLicenseStatusMock.mockResolvedValue(undefined);
+    loadCommercialPostureMock.mockResolvedValue(undefined);
+    loadLicenseEntitlementsMock.mockResolvedValue(undefined);
+    licenseEntitlementsLoadErrorMock.mockReturnValue(null);
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
     clearLicenseMock.mockResolvedValue({ success: true });
@@ -107,10 +132,10 @@ describe('ProLicensePanel', () => {
   });
 
   it('shows start trial action only when trial_eligible is true', async () => {
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     await waitFor(() => {
-      expect(loadLicenseStatusMock).toHaveBeenCalled();
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
 
     expect(screen.getByText('Pulse Pro')).toBeInTheDocument();
@@ -128,7 +153,7 @@ describe('ProLicensePanel', () => {
       trial_eligibility_reason: 'already_used',
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(
       screen.queryByRole('button', { name: /start 14-day pro trial/i }),
@@ -148,10 +173,10 @@ describe('ProLicensePanel', () => {
       trial_eligible: false,
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     await waitFor(() => {
-      expect(loadLicenseStatusMock).toHaveBeenCalled();
+      expect(loadLicenseEntitlementsMock).toHaveBeenCalled();
     });
     await waitFor(() => {
       expect(screen.getByText('Days Remaining')).toBeInTheDocument();
@@ -175,7 +200,7 @@ describe('ProLicensePanel', () => {
       trial_eligible: false,
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     await waitFor(() => {
       expect(screen.getByText('Plan Terms')).toBeInTheDocument();
@@ -224,7 +249,7 @@ describe('ProLicensePanel', () => {
         trial_eligible: false,
       };
 
-      render(() => <ProLicensePanel />);
+      renderPanel();
 
       await waitFor(() => {
         expect(screen.getByText('Plan Terms')).toBeInTheDocument();
@@ -266,7 +291,7 @@ describe('ProLicensePanel', () => {
       tier: 'enterprise',
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     await waitFor(() => {
       expect(screen.getByText('Basic SSO (OIDC)')).toBeInTheDocument();
@@ -294,7 +319,7 @@ describe('ProLicensePanel', () => {
   });
 
   it('starts trial and records conversion metric when user clicks start', async () => {
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
 
@@ -305,7 +330,7 @@ describe('ProLicensePanel', () => {
   });
 
   it('shows migration guidance when the pasted key looks like a legacy v5 license', async () => {
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     fireEvent.input(screen.getByLabelText(/license \/ activation key/i), {
       target: { value: 'header.payload.signature' },
@@ -324,7 +349,7 @@ describe('ProLicensePanel', () => {
       hash: '',
     });
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(screen.getByText('Trial activated')).toBeInTheDocument();
     expect(
@@ -343,7 +368,7 @@ describe('ProLicensePanel', () => {
       hash: '',
     });
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
     expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeInTheDocument();
@@ -359,12 +384,12 @@ describe('ProLicensePanel', () => {
       hash: '',
     });
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(screen.getByText('Need a higher monitored-system cap?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
-      getPulseAccountPortalUpgradeUrl('max_monitored_systems'),
+      getSelfHostedPurchaseStartUrl('max_monitored_systems'),
     );
   });
 
@@ -375,7 +400,7 @@ describe('ProLicensePanel', () => {
       hash: '',
     });
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
 
@@ -402,7 +427,7 @@ describe('ProLicensePanel', () => {
       },
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(screen.getByText('v5 license migration pending')).toBeInTheDocument();
     expect(screen.getByText(/automatic v6 exchange did not complete yet/i)).toBeInTheDocument();
@@ -428,7 +453,7 @@ describe('ProLicensePanel', () => {
       },
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(screen.getByText('v5 license migration pending')).toBeInTheDocument();
     expect(screen.getByText(/rate-limited right now/i)).toBeInTheDocument();
@@ -452,7 +477,7 @@ describe('ProLicensePanel', () => {
       },
     };
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     expect(screen.getByText('v5 license migration needs attention')).toBeInTheDocument();
     expect(
@@ -477,7 +502,7 @@ describe('ProLicensePanel', () => {
       ),
     );
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
 
@@ -496,7 +521,7 @@ describe('ProLicensePanel', () => {
       }),
     );
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
 
@@ -512,7 +537,7 @@ describe('ProLicensePanel', () => {
       }),
     );
 
-    render(() => <ProLicensePanel />);
+    renderPanel();
 
     fireEvent.click(screen.getByRole('button', { name: /start 14-day pro trial/i }));
 
@@ -535,7 +560,9 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('getSelfHostedBillingPlanIntent');
     expect(proLicensePanelStateSource).toContain('getSelfHostedBillingUsageDetail');
     expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: SelfHostedBillingSection) => {');
-    expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
+    expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
+    expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
+    expect(proLicensePanelStateSource).toContain('loadRuntimeLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
@@ -559,7 +586,7 @@ describe('ProLicensePanel', () => {
       'monitoredSystemUpgradeArrivalTitle',
     );
     expect(proLicensePlanSectionSource).toContain(
-      "getPulseAccountPortalUpgradeUrl('max_monitored_systems')",
+      "resolveSelfHostedPurchaseStartDestination('max_monitored_systems')",
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');

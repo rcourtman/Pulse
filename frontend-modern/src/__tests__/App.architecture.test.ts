@@ -55,11 +55,9 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).toContain("import { isMultiTenantEnabled } from '@/stores/license';");
-    expect(appLayoutSource).toContain(
-      "loadLicenseStatus as loadCommercialLicenseStatus",
-    );
+    expect(appLayoutSource).toContain("loadCommercialPosture");
     expect(appLayoutSource).toContain('if (!demoModeEnabled()) {');
-    expect(appLayoutSource).toContain('void loadCommercialLicenseStatus();');
+    expect(appLayoutSource).toContain('void loadCommercialPosture();');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
     expect(appSource).not.toContain("apiFetch('/api/security/status')");

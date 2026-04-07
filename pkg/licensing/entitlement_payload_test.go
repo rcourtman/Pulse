@@ -1,7 +1,9 @@
 package licensing
 
 import (
+	"encoding/json"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -237,6 +239,90 @@ func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
 	}
 	if payload.LegacyConnections.Total() != 0 {
 		t.Fatalf("expected zero legacy connections for nil status payload, got %+v", payload.LegacyConnections)
+	}
+}
+
+func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierFree,
+		Features:            append([]string(nil), TierFeatures[TierFree]...),
+		MaxMonitoredSystems: 5,
+	}
+
+	payload := BuildCommercialPosturePayloadWithUsage(status, "", EntitlementUsageSnapshot{
+		MonitoredSystems: 7,
+		LegacyConnections: LegacyConnectionCounts{
+			ProxmoxNodes: 2,
+			DockerHosts:  1,
+		},
+	}, nil)
+
+	if payload.Tier != string(TierFree) {
+		t.Fatalf("expected tier=%q, got %q", TierFree, payload.Tier)
+	}
+	if payload.SubscriptionState != string(SubStateActive) {
+		t.Fatalf("expected subscription_state=%q, got %q", SubStateActive, payload.SubscriptionState)
+	}
+	if len(payload.UpgradeReasons) == 0 {
+		t.Fatal("expected commercial posture to preserve upgrade reasons")
+	}
+	if payload.LegacyConnections.ProxmoxNodes != 2 || payload.LegacyConnections.DockerHosts != 1 {
+		t.Fatalf("expected legacy connection counts to be preserved, got %+v", payload.LegacyConnections)
+	}
+	if payload.HasMigrationGap {
+		t.Fatal("expected has_migration_gap=false under canonical monitored-system counting")
+	}
+}
+
+func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFields(t *testing.T) {
+	expiresAt := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	payload := BuildEntitlementPayloadWithUsage(&LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		PlanVersion:         "v5_lifetime_grandfathered",
+		Email:               "owner@example.com",
+		ExpiresAt:           &expiresAt,
+		IsLifetime:          false,
+		DaysRemaining:       2,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 50,
+	}, string(SubStateActive), EntitlementUsageSnapshot{
+		MonitoredSystems: 12,
+		LegacyConnections: LegacyConnectionCounts{
+			ProxmoxNodes: 1,
+		},
+	}, nil)
+
+	posture := CommercialPosturePayloadFromEntitlementPayload(payload)
+
+	if posture.Tier != string(TierPro) {
+		t.Fatalf("expected tier=%q, got %q", TierPro, posture.Tier)
+	}
+	if posture.SubscriptionState != string(SubStateActive) {
+		t.Fatalf("expected subscription_state=%q, got %q", SubStateActive, posture.SubscriptionState)
+	}
+	if posture.LegacyConnections.ProxmoxNodes != 1 {
+		t.Fatalf("expected proxmox_nodes=1, got %+v", posture.LegacyConnections)
+	}
+
+	body, err := json.Marshal(posture)
+	if err != nil {
+		t.Fatalf("marshal commercial posture: %v", err)
+	}
+	jsonBody := string(body)
+	for _, forbidden := range []string{
+		`"capabilities"`,
+		`"limits"`,
+		`"licensed_email"`,
+		`"plan_version"`,
+		`"hosted_mode"`,
+		`"valid"`,
+		`"max_history_days"`,
+	} {
+		if strings.Contains(jsonBody, forbidden) {
+			t.Fatalf("commercial posture leaked billing/runtime field %s in %s", forbidden, jsonBody)
+		}
 	}
 }
 

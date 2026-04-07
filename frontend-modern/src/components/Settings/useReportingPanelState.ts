@@ -7,9 +7,9 @@ import {
   licenseLoaded,
 } from '@/stores/license';
 import {
-  entitlements,
+  commercialPosture,
   getUpgradeActionDestination,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -58,7 +58,7 @@ export const useReportingPanelState = () => {
     licenseLoaded() &&
     reportingFeatureId() !== '' &&
     !hasFeature(reportingFeatureId());
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
+  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
   const isReportingEnabled = () =>
     licenseLoaded() &&
     reportingFeatureId() !== '' &&
@@ -70,7 +70,7 @@ export const useReportingPanelState = () => {
 
   onMount(() => {
     loadLicenseStatus();
-    loadCommercialLicenseStatus();
+    loadCommercialPosture();
   });
 
   createEffect((wasVisible: boolean) => {

@@ -1990,6 +1990,19 @@
             ]
           },
           {
+            "id": "purchase-return-handoff",
+            "label": "purchase return handoff proof",
+            "match_prefixes": [],
+            "match_files": [
+              "pkg/licensing/purchase_return.go"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "pkg/licensing/purchase_return_test.go"
+            ]
+          },
+          {
             "id": "conversion-telemetry-pipeline",
             "label": "conversion telemetry pipeline proof",
             "match_prefixes": [

@@ -49,6 +49,23 @@ describe('LicenseAPI', () => {
     });
   });
 
+  it('reads commercial posture from the public-safe commercial endpoint', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      tier: 'pro',
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      trial_eligible: false,
+    });
+
+    const result = await LicenseAPI.getCommercialPosture();
+
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/commercial-posture');
+    expect(result).toMatchObject({
+      tier: 'pro',
+      subscription_state: 'active',
+    });
+  });
+
   it('keeps getEntitlements as a compatibility alias for the commercial endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       tier: 'free',

@@ -19,6 +19,27 @@ const MONITORED_SYSTEM_ENTITLEMENTS = {
   overflow_days_remaining: 14,
 };
 
+const MONITORED_SYSTEM_RUNTIME_CAPABILITIES = {
+  capabilities: [],
+  limits: [{ key: 'max_monitored_systems', limit: 5, current: 16, state: 'enforced' }],
+  hosted_mode: false,
+  max_history_days: 90,
+};
+
+const MONITORED_SYSTEM_COMMERCIAL_POSTURE = {
+  subscription_state: 'expired',
+  upgrade_reasons: [],
+  tier: 'free',
+  trial_eligible: false,
+  legacy_connections: {
+    proxmox_nodes: 0,
+    docker_hosts: 0,
+    kubernetes_clusters: 0,
+  },
+  has_migration_gap: false,
+  overflow_days_remaining: 14,
+};
+
 const MONITORED_SYSTEM_LEDGER = {
   systems: [
     {
@@ -86,11 +107,40 @@ async function configureMonitoredSystemBillingFixtures(page: Page) {
     });
   });
 
+  await page.route('**/api/license/runtime-capabilities', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        capabilities: [],
+        limits: [{ key: 'max_monitored_systems', limit: 5, current: 16, state: 'enforced' }],
+        hosted_mode: false,
+        max_history_days: 90,
+      }),
+    });
+  });
+
   await page.route('**/api/license/entitlements', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(MONITORED_SYSTEM_ENTITLEMENTS),
+    });
+  });
+
+  await page.route('**/api/license/runtime-capabilities', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MONITORED_SYSTEM_RUNTIME_CAPABILITIES),
+    });
+  });
+
+  await page.route('**/api/license/commercial-posture', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MONITORED_SYSTEM_COMMERCIAL_POSTURE),
     });
   });
 
@@ -142,7 +192,7 @@ test.describe('Monitored-system billing focus', () => {
     await expect(page.getByText('Need a higher monitored-system cap?')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
-      'https://cloud.pulserelay.pro/portal?feature=max_monitored_systems&service=upgrade&return_url=http%3A%2F%2F127.0.0.1%3A5173%2Fauth%2Flicense-purchase-activate',
+      '/auth/license-purchase-start?feature=max_monitored_systems',
     );
   });
 });

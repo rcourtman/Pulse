@@ -37,50 +37,51 @@ agreement, and cloud-specific enforcement rules.
 15. `pkg/licensing/persistence.go`
 16. `pkg/licensing/activation_store.go`
 17. `pkg/licensing/trial_activation.go`
-18. `pkg/licensing/stripe_subscription.go`
-19. `pkg/licensing/monitored_system_limit.go`
-20. `internal/cloudcp/account/tenant_handlers.go`
-21. `internal/cloudcp/config.go`
-22. `internal/cloudcp/entitlements/service.go`
-23. `internal/cloudcp/portal/handlers.go`
-24. `internal/cloudcp/portal/page.go`
-25. `internal/cloudcp/public_cloud_signup_handlers.go`
-26. `internal/cloudcp/registry/registry.go`
-27. `internal/cloudcp/routes.go`
-28. `internal/cloudcp/stripe/provisioner.go`
-29. `internal/hosted/provisioner.go`
-30. `frontend-modern/src/App.tsx`
-31. `frontend-modern/src/AppLayout.tsx`
-32. `frontend-modern/src/useAppRuntimeState.ts`
-33. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
-34. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
-35. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
-36. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
-37. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
-38. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
-39. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
-40. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-41. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-42. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-43. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-44. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
-45. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-46. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-47. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-48. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-49. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-50. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-51. `frontend-modern/src/pages/CloudPricing.tsx`
-52. `frontend-modern/src/pages/HostedSignup.tsx`
-53. `frontend-modern/src/pages/PricingHandoff.tsx`
-54. `frontend-modern/src/utils/apiClient.ts`
-55. `frontend-modern/src/utils/cloudPlans.ts`
-56. `frontend-modern/src/utils/commercialBillingModel.ts`
-57. `frontend-modern/src/utils/licensePresentation.ts`
-58. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-59. `frontend-modern/src/utils/pricingHandoff.ts`
-60. `frontend-modern/src/utils/selfHostedPlans.ts`
-61. `frontend-modern/src/utils/upgradePresentation.ts`
+18. `pkg/licensing/purchase_return.go`
+19. `pkg/licensing/stripe_subscription.go`
+20. `pkg/licensing/monitored_system_limit.go`
+21. `internal/cloudcp/account/tenant_handlers.go`
+22. `internal/cloudcp/config.go`
+23. `internal/cloudcp/entitlements/service.go`
+24. `internal/cloudcp/portal/handlers.go`
+25. `internal/cloudcp/portal/page.go`
+26. `internal/cloudcp/public_cloud_signup_handlers.go`
+27. `internal/cloudcp/registry/registry.go`
+28. `internal/cloudcp/routes.go`
+29. `internal/cloudcp/stripe/provisioner.go`
+30. `internal/hosted/provisioner.go`
+31. `frontend-modern/src/App.tsx`
+32. `frontend-modern/src/AppLayout.tsx`
+33. `frontend-modern/src/useAppRuntimeState.ts`
+34. `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`
+35. `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
+36. `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`
+37. `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`
+38. `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`
+39. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
+40. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
+41. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
+42. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+43. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+44. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+45. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+46. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+47. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+48. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+49. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+50. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+51. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+52. `frontend-modern/src/pages/CloudPricing.tsx`
+53. `frontend-modern/src/pages/HostedSignup.tsx`
+54. `frontend-modern/src/pages/PricingHandoff.tsx`
+55. `frontend-modern/src/utils/apiClient.ts`
+56. `frontend-modern/src/utils/cloudPlans.ts`
+57. `frontend-modern/src/utils/commercialBillingModel.ts`
+58. `frontend-modern/src/utils/licensePresentation.ts`
+59. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+60. `frontend-modern/src/utils/pricingHandoff.ts`
+61. `frontend-modern/src/utils/selfHostedPlans.ts`
+62. `frontend-modern/src/utils/upgradePresentation.ts`
 
 ## Shared Boundaries
 
@@ -101,7 +102,9 @@ agreement, and cloud-specific enforcement rules.
 8. Add or change activation/grant lifecycle or dev-mode capability widening through `pkg/licensing/dev_mode_features.go`, `pkg/licensing/service.go`, `pkg/licensing/grant_refresh.go`, and `pkg/licensing/revocation_poll.go`
 9. Add or change license-server transport through `pkg/licensing/license_server_client.go` and `pkg/licensing/quickstart_bootstrap.go`
 10. Add or change encrypted activation persistence through `pkg/licensing/persistence.go` and `pkg/licensing/activation_store.go`
-11. Add or change hosted trial token semantics through `pkg/licensing/trial_activation.go`
+11. Add or change hosted trial or self-hosted purchase-return token semantics
+    through `pkg/licensing/trial_activation.go` and
+    `pkg/licensing/purchase_return.go`
 12. Add or change hosted signup provisioning through `internal/hosted/provisioner.go`
 13. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
@@ -174,13 +177,16 @@ classification. `internal/api/demo_middleware.go` and
 `internal/api/demo_mode_commercial.go` must decide centrally which commercial
 endpoints are fully hidden (`404`) and which remain available only as a
 non-commercial public contract. `/api/license/runtime-capabilities` is the
-canonical public exception: it may carry capability and history-retention
-fields needed for demo-visible product behavior, but
-`/api/license/entitlements` must stay hidden and public browsers must not see
-licensed identity, plan labels, upgrade reasons, trial urgency, or observed
-usage counts. The commercial store must also fail closed locally in demo mode
-so hidden routes are not probed from the browser shell. The governed browser
-proof for that posture lives in
+canonical public exception for feature truth and history retention.
+`/api/license/commercial-posture` is the canonical non-billing commercial
+contract for upgrade/trial posture in real customer workspaces, while
+`/api/license/entitlements` remains billing-only. In public demo mode both
+commercial routes, plus `/auth/license-purchase-start`, must stay hidden and
+public browsers must not see licensed identity, plan labels, upgrade reasons,
+trial urgency, observed usage counts, or checkout handoff state. The
+commercial posture store and billing-entitlements store must also fail closed
+locally in demo mode so hidden routes are not probed from the browser shell.
+The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through
 `tests/integration/scripts/run-tests.sh demo-contract`.
@@ -417,7 +423,12 @@ checkout-session creation, and the purchase return handoff back into Pulse via
 `/auth/license-purchase-activate`; Pulse itself must not render a second
 public pricing surface inside the runtime, and the authenticated portal shell
 must not collapse back into a public-site-only waystation for new-purchase
-depth.
+depth. That handoff now starts through Pulse-owned `GET /auth/license-purchase-start`,
+which mints a signed `purchase_return_token` for the local instance before the
+browser leaves for `Pulse Account`. The owned activation callback must accept
+that signed state, redeem the completed checkout, and return the operator to
+the canonical billing plan route automatically whether checkout completed in a
+secondary tab or in the current tab fallback path.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial

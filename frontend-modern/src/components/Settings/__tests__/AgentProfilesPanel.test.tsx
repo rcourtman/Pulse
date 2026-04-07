@@ -39,9 +39,11 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  commercialPosture: () => ({ trial_eligible: true }),
   entitlements: () => ({ trial_eligible: true }),
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
+  loadCommercialPosture: () => Promise.resolve(),
   loadLicenseStatus: () => Promise.resolve(),
   startProTrial: vi.fn(),
 }));

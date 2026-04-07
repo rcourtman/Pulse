@@ -1,4 +1,4 @@
-import type { LicenseEntitlements } from '@/api/license';
+import type { LicenseCommercialPosture } from '@/api/license';
 
 export const ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY = 'pulse_active_use_nudge_snoozed';
 export const ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY = 'pulse_first_seen_ts';
@@ -12,7 +12,7 @@ export const ACTIVE_USE_TRIAL_NUDGE_STARTING_LABEL = 'Starting...';
 export const ACTIVE_USE_TRIAL_NUDGE_SNOOZE_LABEL = 'Snooze 7d';
 
 export function isActiveUseTrialNudgeEligible(
-  entitlements: LicenseEntitlements | null | undefined,
+  entitlements: LicenseCommercialPosture | null | undefined,
 ): boolean {
   if (!entitlements) return false;
 

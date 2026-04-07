@@ -7,9 +7,9 @@ import {
   licenseLoaded,
 } from '@/stores/license';
 import {
-  entitlements,
+  commercialPosture,
   getUpgradeActionDestination,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -72,7 +72,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const canManage = () => props.canManage !== false;
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
+  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
 
   const handleStartTrial = async () => {
     if (startingTrial()) {
@@ -131,7 +131,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   onMount(() => {
     loadLicenseStatus();
-    loadCommercialLicenseStatus();
+    loadCommercialPosture();
     void loadProviders();
   });
 

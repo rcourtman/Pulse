@@ -55,8 +55,11 @@ func TestDemoModeMiddleware(t *testing.T) {
 
 		// Demo mode enabled - commercial surfaces are hidden centrally
 		{"demo on hidden license status", true, http.MethodGet, "/api/license/status", "", false, http.StatusNotFound, true},
+		{"demo on hidden commercial posture", true, http.MethodGet, "/api/license/commercial-posture", "", false, http.StatusNotFound, true},
 		{"demo on hidden license entitlements", true, http.MethodGet, "/api/license/entitlements", "", false, http.StatusNotFound, true},
+		{"demo on hidden checkout start", true, http.MethodGet, "/auth/license-purchase-start", "", false, http.StatusNotFound, true},
 		{"demo on hidden license activate", true, http.MethodPost, "/api/license/activate", "", false, http.StatusNotFound, true},
+		{"demo on hidden purchase start", true, http.MethodGet, licensePurchaseStartPath, "", false, http.StatusNotFound, true},
 		{"demo on hidden trial activation", true, http.MethodGet, "/auth/trial-activate", "", false, http.StatusNotFound, true},
 		{"demo on runtime capabilities", true, http.MethodGet, "/api/license/runtime-capabilities", "", true, http.StatusOK, true},
 

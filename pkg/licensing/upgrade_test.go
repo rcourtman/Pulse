@@ -32,3 +32,34 @@ func TestResolveProTrialSignupURL_RejectsInvalidOverrides(t *testing.T) {
 		})
 	}
 }
+
+func TestResolvePulseAccountPortalURL_DefaultWhenUnset(t *testing.T) {
+	if got := ResolvePulseAccountPortalURL(""); got != DefaultPulseAccountPortalURL {
+		t.Fatalf("ResolvePulseAccountPortalURL(\"\") = %q, want %q", got, DefaultPulseAccountPortalURL)
+	}
+}
+
+func TestResolvePulseAccountPortalURL_UsesValidOverride(t *testing.T) {
+	const override = "https://example.com/portal?src=test"
+
+	if got := ResolvePulseAccountPortalURL(override); got != override {
+		t.Fatalf("ResolvePulseAccountPortalURL() = %q, want %q", got, override)
+	}
+}
+
+func TestResolvePulseAccountPortalURL_RejectsInvalidOverrides(t *testing.T) {
+	testCases := []string{
+		"relative/path",
+		"javascript:alert(1)",
+		"https://",
+		"ftp://example.com/portal",
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc, func(t *testing.T) {
+			if got := ResolvePulseAccountPortalURL(tc); got != DefaultPulseAccountPortalURL {
+				t.Fatalf("ResolvePulseAccountPortalURL() = %q, want default %q", got, DefaultPulseAccountPortalURL)
+			}
+		})
+	}
+}

@@ -1,15 +1,15 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
-import { getUpgradeActionDestination, licenseLoadError } from '@/stores/licenseCommercial';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
+import { licenseEntitlementsLoadError } from '@/stores/licenseEntitlements';
 import {
   getInactiveProUpsellNotice,
   getLicenseStatusLoadingState,
   getNoActiveProLicenseState,
   getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
-import { getPulseAccountPortalUpgradeUrl } from '@/utils/pricingHandoff';
-import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
+import { resolveSelfHostedPurchaseStartDestination } from '@/utils/pricingHandoff';
 import { CommercialStatGrid } from './CommercialBillingSections';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
@@ -56,7 +56,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
   const inactiveProUpsellNotice =
     !props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;
   const monitoredSystemUpgradeDestination = () =>
-    resolveUpgradeDestination(getPulseAccountPortalUpgradeUrl('max_monitored_systems'));
+    resolveSelfHostedPurchaseStartDestination('max_monitored_systems');
 
   return (
     <>
@@ -100,7 +100,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </div>
         )}
       </Show>
-      <Show when={props.trialEnded && !licenseLoadError() && trialEndedNotice}>
+      <Show when={props.trialEnded && !licenseEntitlementsLoadError() && trialEndedNotice}>
         <div class={`mb-4 rounded-md border p-3 text-sm ${trialEndedNotice?.tone ?? ''}`}>
           <p class="font-medium">{trialEndedNotice?.title}</p>
           <p class="text-xs mt-1 opacity-90">{trialEndedNotice?.body}</p>
@@ -112,7 +112,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </UpgradeLink>
         </div>
       </Show>
-      <Show when={licenseLoadError()}>
+      <Show when={licenseEntitlementsLoadError()}>
         <div class="rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900 p-3 text-sm text-amber-800 dark:text-amber-200">
           <p class="font-medium">Could not load license status</p>
           <p class="text-xs text-amber-700 dark:text-amber-300 mt-1">
@@ -129,7 +129,7 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           </button>
         </div>
       </Show>
-      <Show when={!licenseLoadError()}>
+      <Show when={!licenseEntitlementsLoadError()}>
         <Show
           when={!props.loading}
           fallback={<p class="text-sm ">{getLicenseStatusLoadingState().text}</p>}

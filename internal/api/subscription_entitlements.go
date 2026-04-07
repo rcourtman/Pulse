@@ -18,33 +18,30 @@ type EntitlementPayload = entitlementPayloadModel
 // response for feature gating and operational limit checks.
 type RuntimeCapabilitiesPayload = runtimeCapabilitiesPayloadModel
 
+// CommercialPosturePayload is the canonical non-billing commercial response
+// for upgrade/trial posture and monitored-system migration guidance.
+type CommercialPosturePayload = commercialPosturePayloadModel
+
 // LimitStatus represents a quantitative limit with current usage state.
 type LimitStatus = limitStatusModel
 
 // UpgradeReason provides context for why a user should upgrade.
 type UpgradeReason = upgradeReasonModel
 
-// HandleEntitlements returns the normalized entitlement payload for the current tenant.
-// This is the commercial entitlement endpoint for billing, trial, and upgrade presentation.
-func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
-		return
-	}
-
-	svc, _, err := h.getTenantComponents(r.Context())
+func (h *LicenseHandlers) buildCommercialEntitlementPayload(
+	ctx context.Context,
+) (EntitlementPayload, error) {
+	svc, _, err := h.getTenantComponents(ctx)
 	if err != nil {
-		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Internal server error", nil)
-		return
+		return EntitlementPayload{}, err
 	}
 
-	// Build payload from current license status (which is evaluator-aware when no JWT is present).
 	status := svc.Status()
-	usage := h.entitlementUsageSnapshot(r.Context())
+	usage := h.entitlementUsageSnapshot(ctx)
 	trialEndsAtUnix := trialEndsAtUnixFromService(svc)
 
 	// Onboarding overflow: +1 agent for 14 days on free tier.
-	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
+	overflowGrantedAt := h.ensureOnboardingOverflow(ctx, status.Tier)
 	now := time.Now()
 	if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
 		status.MaxMonitoredSystems += bonus
@@ -62,15 +59,50 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 			payload.PlanVersion = pv
 		}
 	}
-	existing := h.billingStateForContext(r.Context())
+	existing := h.billingStateForContext(ctx)
 	if existing != nil {
 		payload.CommercialMigration = cloneCommercialMigrationStatusFromLicensing(existing.CommercialMigration)
 	}
-	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(r.Context(), svc, existing)
+	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(ctx, svc, existing)
 	payload.HostedMode = h != nil && h.hostedMode
+	return payload, nil
+}
+
+// HandleEntitlements returns the normalized entitlement payload for the current tenant.
+// This is the commercial entitlement endpoint for billing, trial, and upgrade presentation.
+func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
+		return
+	}
+
+	payload, err := h.buildCommercialEntitlementPayload(r.Context())
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Internal server error", nil)
+		return
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(payload)
+}
+
+// HandleCommercialPosture returns the canonical non-billing commercial posture payload.
+func (h *LicenseHandlers) HandleCommercialPosture(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
+		return
+	}
+
+	payload, err := h.buildCommercialEntitlementPayload(r.Context())
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Internal server error", nil)
+		return
+	}
+
+	posture := commercialPosturePayloadFromEntitlementPayload(payload)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(posture)
 }
 
 // HandleRuntimeCapabilities returns the canonical non-commercial runtime capability payload.
@@ -171,6 +203,13 @@ func buildRuntimeCapabilitiesPayload(
 	return buildRuntimeCapabilitiesPayloadFromLicensing(status, subscriptionState)
 }
 
+func buildCommercialPosturePayload(
+	status *licenseStatus,
+	subscriptionState string,
+) CommercialPosturePayload {
+	return buildCommercialPosturePayloadFromLicensing(status, subscriptionState)
+}
+
 // buildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
 func buildEntitlementPayloadWithUsage(
 	status *licenseStatus,
@@ -187,6 +226,26 @@ func buildRuntimeCapabilitiesPayloadWithUsage(
 	usage entitlementUsageSnapshot,
 ) RuntimeCapabilitiesPayload {
 	return buildRuntimeCapabilitiesPayloadWithUsageFromLicensing(status, subscriptionState, usage)
+}
+
+func buildCommercialPosturePayloadWithUsage(
+	status *licenseStatus,
+	subscriptionState string,
+	usage entitlementUsageSnapshot,
+	trialEndsAtUnix *int64,
+) CommercialPosturePayload {
+	return buildCommercialPosturePayloadWithUsageFromLicensing(
+		status,
+		subscriptionState,
+		usage,
+		trialEndsAtUnix,
+	)
+}
+
+func commercialPosturePayloadFromEntitlementPayload(
+	payload EntitlementPayload,
+) CommercialPosturePayload {
+	return commercialPosturePayloadFromEntitlementPayloadFromLicensing(payload)
 }
 
 // limitState returns the over-limit UX state string.

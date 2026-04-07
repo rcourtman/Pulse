@@ -16,9 +16,9 @@ import {
   licenseLoading,
 } from '@/stores/license';
 import {
-  entitlements,
+  commercialPosture,
   getUpgradeActionDestination,
-  loadLicenseStatus as loadCommercialLicenseStatus,
+  loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { loadLicenseStatus } from '@/stores/license';
 import type { ConnectedInfrastructureItem } from '@/types/api';
@@ -78,7 +78,7 @@ export const useAgentProfilesPanelState = () => {
   const checkingLicense = () => !licenseLoaded() || licenseLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = () => entitlements()?.trial_eligible !== false;
+  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
 
   const [aiAvailable, setAiAvailable] = createSignal(false);
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
@@ -238,7 +238,7 @@ export const useAgentProfilesPanelState = () => {
 
   onMount(async () => {
     await loadLicenseStatus();
-    await loadCommercialLicenseStatus();
+    await loadCommercialPosture();
 
     try {
       const aiSettings = await AIAPI.getSettings();

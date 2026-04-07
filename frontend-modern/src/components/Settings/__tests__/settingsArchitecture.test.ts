@@ -579,7 +579,9 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).toContain('./selfHostedBillingPresentation');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
-    expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
+    expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
+    expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
+    expect(proLicensePanelStateSource).toContain('loadRuntimeLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelSource).not.toContain('title="Pulse Pro"');
@@ -1505,11 +1507,11 @@ describe('Settings architecture guardrails', () => {
 
     expect(aiSettingsStateSource).toContain("} from '@/stores/license';");
     expect(aiSettingsStateSource).toContain("} from '@/stores/licenseCommercial';");
-    expect(aiSettingsStateSource).toContain('loadCommercialLicenseStatus();');
+    expect(aiSettingsStateSource).toContain('loadCommercialPosture();');
 
     expect(reportingPanelStateSource).toContain("} from '@/stores/license';");
     expect(reportingPanelStateSource).toContain("} from '@/stores/licenseCommercial';");
-    expect(reportingPanelStateSource).toContain('loadCommercialLicenseStatus();');
+    expect(reportingPanelStateSource).toContain('loadCommercialPosture();');
 
     expect(auditLogStateSource).toContain("} from '@/stores/license';");
     expect(auditLogStateSource).toContain("} from '@/stores/licenseCommercial';");
