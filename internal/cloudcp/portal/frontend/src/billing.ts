@@ -1,4 +1,11 @@
-import { beginMutationState, failMutationState, succeedMutationState } from './async_state';
+import {
+  beginMutationState,
+  beginQueryState,
+  failMutationState,
+  failQueryState,
+  resolveQueryState,
+  succeedMutationState,
+} from './async_state';
 import type { PortalAPI } from './api';
 import { installBillingController } from './billing_controller';
 import {
@@ -26,10 +33,18 @@ import {
   renderRefundPanel,
   renderRetrievePanel,
   renderBillingStatus,
+  renderUpgradePanel,
   setValue,
   setVisible,
 } from './billing_view';
-import type { PortalBillingFlowID, PortalBillingState, VerificationFlowState } from './types';
+import type {
+  PortalBillingFlowID,
+  PortalBillingState,
+  PortalCheckoutSessionCreateResponse,
+  PortalCheckoutSessionResult,
+  PortalUpgradePricingModel,
+  VerificationFlowState,
+} from './types';
 
 interface VerificationFlowDefinition {
   requestPath: string;
@@ -72,6 +87,13 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (!billingState.flows) {
       var nextState = createPortalBillingState();
       billingState.openBillingPanelID = nextState.openBillingPanelID;
+      billingState.upgradeFeatureKey = nextState.upgradeFeatureKey;
+      billingState.upgradeReturnURL = nextState.upgradeReturnURL;
+      billingState.upgradeCheckoutSessionID = nextState.upgradeCheckoutSessionID;
+      billingState.upgradeCheckoutStatus = nextState.upgradeCheckoutStatus;
+      billingState.upgradePricing = nextState.upgradePricing;
+      billingState.upgradeCheckout = nextState.upgradeCheckout;
+      billingState.upgradeCheckoutResult = nextState.upgradeCheckoutResult;
       billingState.flows = nextState.flows;
       billingState.refund = nextState.refund;
     }
@@ -116,6 +138,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
   }
 
   function renderAllFlows() {
+    renderUpgrade();
     renderFlow('manage');
     renderFlow('retrieve');
     renderFlow('export');
@@ -130,6 +153,10 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     renderBillingStatus('refund-inline-status', refundState.status);
   }
 
+  function renderUpgrade() {
+    renderUpgradePanel(getBillingState(), store.getBootstrap());
+  }
+
   function resetVerificationFlow(flowID: PortalBillingFlowID) {
     var flow = verificationFlows[flowID];
     if (!flow) return;
@@ -138,6 +165,122 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     }, false);
     if (flow.codeInputID) {
       setValue(flow.codeInputID, '');
+    }
+  }
+
+  function currentPortalBaseURL(): string {
+    try {
+      var locationURL = new URL(window.location.href);
+      var portalPath = String(store.getBootstrap().portal_path || '/portal').trim() || '/portal';
+      var portalURL = new URL(portalPath, locationURL.origin);
+      return portalURL.toString();
+    } catch {
+      return String(store.getBootstrap().portal_path || '/portal');
+    }
+  }
+
+  function buildUpgradeCheckoutReturnURL(status: 'success' | 'cancelled'): string {
+    var url = new URL(currentPortalBaseURL());
+    var billingState = getBillingState();
+    if (billingState.flows.manage.emailValue) {
+      url.searchParams.set('email', billingState.flows.manage.emailValue);
+    }
+    if (billingState.upgradeFeatureKey) {
+      url.searchParams.set('feature', billingState.upgradeFeatureKey);
+    }
+    if (billingState.upgradeReturnURL) {
+      url.searchParams.set('return_url', billingState.upgradeReturnURL);
+    }
+    url.searchParams.set('service', 'upgrade');
+    url.searchParams.set('checkout', status);
+    if (status === 'success') {
+      url.searchParams.set('session_id', '{CHECKOUT_SESSION_ID}');
+    }
+    return url.toString();
+  }
+
+  async function loadUpgradePricing(force: boolean) {
+    var billingState = getBillingState();
+    if (!force && (billingState.upgradePricing.status === 'loading' || billingState.upgradePricing.status === 'ready')) {
+      return;
+    }
+    updateBillingState(function(nextBillingState) {
+      beginQueryState(nextBillingState.upgradePricing, null);
+    });
+    try {
+      var pricing = await api.getCommercialJSON<PortalUpgradePricingModel>('/v1/public/pricing-model?track=v6');
+      updateBillingState(function(nextBillingState) {
+        resolveQueryState(nextBillingState.upgradePricing, pricing);
+      });
+    } catch (err) {
+      updateBillingState(function(nextBillingState) {
+        failQueryState(
+          nextBillingState.upgradePricing,
+          null,
+          err instanceof Error ? err.message : 'Failed to load self-hosted plans.',
+        );
+      });
+    }
+  }
+
+  async function resolveCompletedCheckout(force: boolean) {
+    var billingState = getBillingState();
+    var sessionID = billingState.upgradeCheckoutSessionID;
+    if (!sessionID) return;
+    if (!force && (billingState.upgradeCheckoutResult.status === 'loading' || billingState.upgradeCheckoutResult.status === 'ready')) {
+      return;
+    }
+    updateBillingState(function(nextBillingState) {
+      beginQueryState(nextBillingState.upgradeCheckoutResult, null);
+    });
+    try {
+      var result = await api.getCommercialJSON<PortalCheckoutSessionResult>(
+        '/v1/checkout/session?session_id=' + encodeURIComponent(sessionID),
+      );
+      updateBillingState(function(nextBillingState) {
+        resolveQueryState(nextBillingState.upgradeCheckoutResult, result);
+      });
+    } catch (err) {
+      updateBillingState(function(nextBillingState) {
+        failQueryState(
+          nextBillingState.upgradeCheckoutResult,
+          null,
+          err instanceof Error ? err.message : 'Failed to confirm the completed checkout.',
+        );
+      });
+    }
+  }
+
+  async function startUpgradeCheckout(planKey: string, tier: string, billingCycle: string) {
+    if (!planKey || !tier || !billingCycle) return;
+    updateBillingState(function(nextBillingState) {
+      beginMutationState(nextBillingState.upgradeCheckout);
+      nextBillingState.upgradeCheckoutResult = createPortalBillingState().upgradeCheckoutResult;
+      nextBillingState.upgradeCheckoutSessionID = '';
+      nextBillingState.upgradeCheckoutStatus = '';
+    });
+    try {
+      var data = await api.postCommercialJSON<PortalCheckoutSessionCreateResponse>('/v1/checkout/session', {
+        plan_key: planKey,
+        tier: tier,
+        billing_cycle: billingCycle,
+        success_url: buildUpgradeCheckoutReturnURL('success'),
+        cancel_url: buildUpgradeCheckoutReturnURL('cancelled'),
+      });
+      if (!data || !data.url) {
+        throw new Error('Checkout URL was not returned.');
+      }
+      updateBillingState(function(nextBillingState) {
+        succeedMutationState(nextBillingState.upgradeCheckout);
+      });
+      window.location.href = data.url;
+    } catch (err) {
+      updateBillingState(function(nextBillingState) {
+        failMutationState(
+          nextBillingState.upgradeCheckout,
+          err instanceof Error ? err.message : 'Failed to start checkout.',
+        );
+      });
     }
   }
 
@@ -425,6 +568,17 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
   }
 
   function renderBillingRuntime() {
+    var billingState = getBillingState();
+    if (
+      billingState.openBillingPanelID === 'upgrade-billing-panel' ||
+      !!billingState.upgradeFeatureKey ||
+      billingState.upgradeCheckoutStatus === 'success'
+    ) {
+      void loadUpgradePricing(false);
+    }
+    if (billingState.upgradeCheckoutStatus === 'success' && billingState.upgradeCheckoutSessionID) {
+      void resolveCompletedCheckout(false);
+    }
     renderOpenBillingPanels(getBillingState().openBillingPanelID);
     renderAllFlows();
   }
@@ -454,6 +608,12 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     },
     submitRefund: function() {
       void submitRefund();
+    },
+    reloadUpgradePricing: function() {
+      void loadUpgradePricing(true);
+    },
+    startUpgradeCheckout: function(planKey, tier, billingCycle) {
+      void startUpgradeCheckout(planKey, tier, billingCycle);
     },
     updateInputValue: function(inputKind, value) {
       updateBillingState(function(billingState) {

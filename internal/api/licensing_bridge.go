@@ -40,6 +40,7 @@ type billingStoreModel = pkglicensing.BillingStore
 type billingState = pkglicensing.BillingState
 type subscriptionState = pkglicensing.SubscriptionState
 type entitlementPayloadModel = pkglicensing.EntitlementPayload
+type runtimeCapabilitiesPayloadModel = pkglicensing.RuntimeCapabilitiesPayload
 type limitStatusModel = pkglicensing.LimitStatus
 type upgradeReasonModel = pkglicensing.UpgradeReason
 type entitlementUsageSnapshotModel = pkglicensing.EntitlementUsageSnapshot
@@ -213,6 +214,13 @@ func buildEntitlementPayloadFromLicensing(status *licenseStatus, subscriptionSta
 	return pkglicensing.BuildEntitlementPayload(status, subscriptionState)
 }
 
+func buildRuntimeCapabilitiesPayloadFromLicensing(
+	status *licenseStatus,
+	subscriptionState string,
+) runtimeCapabilitiesPayloadModel {
+	return pkglicensing.BuildRuntimeCapabilitiesPayload(status, subscriptionState)
+}
+
 func buildFeatureMapFromLicensing(service *licenseService) map[string]bool {
 	return pkglicensing.BuildFeatureMap(service, nil)
 }
@@ -224,6 +232,14 @@ func buildEntitlementPayloadWithUsageFromLicensing(
 	trialEndsAtUnix *int64,
 ) entitlementPayloadModel {
 	return pkglicensing.BuildEntitlementPayloadWithUsage(status, subscriptionState, usage, trialEndsAtUnix)
+}
+
+func buildRuntimeCapabilitiesPayloadWithUsageFromLicensing(
+	status *licenseStatus,
+	subscriptionState string,
+	usage entitlementUsageSnapshotModel,
+) runtimeCapabilitiesPayloadModel {
+	return pkglicensing.BuildRuntimeCapabilitiesPayloadWithUsage(status, subscriptionState, usage)
 }
 
 func limitStateFromLicensing(current, limit int64) string {

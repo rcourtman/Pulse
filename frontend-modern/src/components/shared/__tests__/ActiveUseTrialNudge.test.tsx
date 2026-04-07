@@ -25,8 +25,9 @@ const {
   snoozeUpsellMock: vi.fn(),
 }));
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
+  loadLicenseStatus: vi.fn(),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 

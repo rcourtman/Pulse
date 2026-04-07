@@ -4,7 +4,7 @@ import { Card } from '@/components/shared/Card';
 import { PageHeader } from '@/components/shared/PageHeader';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { HostedSignupAPI, type HostedAPIError } from '@/api/hostedSignup';
-import { getUpgradeActionDestination } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { logger } from '@/utils/logger';
 import {
   HOSTED_SIGNUP_PRESENTATION,

@@ -1,4 +1,10 @@
-import type { PortalBootstrapData, RefundState, BillingStatus, VerificationFlowState } from './types';
+import type {
+  PortalBillingState,
+  PortalBootstrapData,
+  RefundState,
+  BillingStatus,
+  VerificationFlowState,
+} from './types';
 
 type FormValueElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 
@@ -65,6 +71,149 @@ export function renderBillingStatus(id: string, status: BillingStatus): void {
   }
   el.textContent = status.message;
   el.className = 'billing-status visible' + (status.error ? ' error' : ' success');
+}
+
+function formatCheckoutDate(value: string | undefined): string {
+  if (!value) return '';
+  var parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return '';
+  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderUpgradePlansHTML(billingState: PortalBillingState): string {
+  var pricing = billingState.upgradePricing.data;
+  if (!pricing || !Array.isArray(pricing.plans)) {
+    return '';
+  }
+
+  var plans = pricing.plans.filter(function(plan) {
+    return Array.isArray(plan.buttons) && plan.buttons.some(function(button) {
+      return button.kind === 'checkout' && button.planKey && button.billingCycle;
+    });
+  });
+  if (plans.length === 0) {
+    return '';
+  }
+
+  return '<div class="billing-upgrade-plan-grid">' + plans.map(function(plan) {
+    var buttons = Array.isArray(plan.buttons) ? plan.buttons : [];
+    var checkoutButtons = buttons.filter(function(button) {
+      return button.kind === 'checkout' && button.planKey && button.billingCycle;
+    });
+    return (
+      '<article class="billing-upgrade-plan-card' + (plan.highlight ? ' highlight' : '') + '">' +
+        (plan.badge ? '<div class="billing-upgrade-plan-badge">' + escapeText(plan.badge) + '</div>' : '') +
+        '<div class="billing-upgrade-plan-header">' +
+          '<div class="billing-upgrade-plan-kicker">' + escapeText(plan.tierKicker) + '</div>' +
+          '<h4>' + escapeText(plan.title) + '</h4>' +
+          '<div class="billing-upgrade-plan-price">' + escapeText(plan.price) + '</div>' +
+          '<div class="billing-upgrade-plan-period">' + escapeText(plan.period) + '</div>' +
+        '</div>' +
+        '<p class="billing-upgrade-plan-blurb">' + escapeText(plan.blurb) + '</p>' +
+        '<ul class="billing-upgrade-plan-features">' + plan.features.map(function(feature) {
+          return (
+            '<li class="billing-upgrade-plan-feature tone-' + escapeAttribute(feature.tone) + '">' +
+              '<span class="billing-upgrade-plan-feature-copy">' + String(feature.html || '') + '</span>' +
+            '</li>'
+          );
+        }).join('') + '</ul>' +
+        (plan.note ? '<div class="helper-text">' + escapeText(plan.note) + '</div>' : '') +
+        '<div class="form-actions">' + checkoutButtons.map(function(button) {
+          return (
+            '<button type="button" class="' + escapeAttribute(button.className || 'btn-primary') + '"' +
+              ' data-account-billing-action="upgrade-start-checkout"' +
+              ' data-upgrade-plan-key="' + escapeAttribute(button.planKey || '') + '"' +
+              ' data-upgrade-tier="' + escapeAttribute(button.tier || '') + '"' +
+              ' data-upgrade-billing-cycle="' + escapeAttribute(button.billingCycle || '') + '"' +
+              (billingState.upgradeCheckout.pending ? ' disabled' : '') +
+              '>' +
+              escapeText(button.label) +
+            '</button>'
+          );
+        }).join('') + '</div>' +
+      '</article>'
+    );
+  }).join('') + '</div>';
+}
+
+export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: PortalBootstrapData): void {
+  var root = getElement('upgrade-billing-root');
+  if (!root) return;
+
+  var featureKey = String(billingState.upgradeFeatureKey || '').trim();
+  var pricingState = billingState.upgradePricing;
+  var checkoutResultState = billingState.upgradeCheckoutResult;
+  var result = checkoutResultState.data;
+  var returnURL = String(billingState.upgradeReturnURL || '').trim();
+  var sessionID = String(billingState.upgradeCheckoutSessionID || '').trim();
+  var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : '';
+  var summaryItems = [] as string[];
+
+  if (billingState.upgradeCheckoutStatus === 'cancelled') {
+    summaryItems.push('<div class="billing-status visible">Checkout was cancelled before completion.</div>');
+  }
+  if (billingState.upgradeCheckout.pending) {
+    summaryItems.push('<div class="billing-status visible">Redirecting to secure checkout...</div>');
+  }
+  if (billingState.upgradeCheckout.error) {
+    summaryItems.push('<div class="billing-status visible error">' + escapeText(billingState.upgradeCheckout.error) + '</div>');
+  }
+  if (pricingState.status === 'loading' && !pricingState.data) {
+    summaryItems.push('<p>Loading self-hosted plan options...</p>');
+  }
+  if (pricingState.status === 'error') {
+    summaryItems.push(
+      '<div class="billing-status visible error">' + escapeText(pricingState.error || 'Failed to load self-hosted plans.') + '</div>' +
+      '<div class="form-actions"><button type="button" class="btn-secondary" data-account-billing-action="upgrade-reload-pricing">Retry plan load</button></div>',
+    );
+  }
+  if (explainer) {
+    summaryItems.push('<div class="helper-text">' + explainer + '</div>');
+  }
+
+  if (checkoutResultState.status === 'loading') {
+    summaryItems.push('<div class="billing-status visible">Finalizing the completed checkout...</div>');
+  } else if (checkoutResultState.status === 'error') {
+    summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutResultState.error || 'Could not confirm the completed checkout.') + '</div>');
+  } else if (result && result.status === 'fulfilled') {
+    var activationForm = returnURL && sessionID
+      ? (
+        '<form method="POST" action="' + escapeAttribute(returnURL) + '">' +
+          '<input type="hidden" name="session_id" value="' + escapeAttribute(sessionID) + '">' +
+          '<input type="hidden" name="feature" value="' + escapeAttribute(featureKey) + '">' +
+          '<div class="form-actions">' +
+            '<button class="btn-primary" type="submit">Activate in Pulse Pro</button>' +
+          '</div>' +
+        '</form>'
+      )
+      : '<div class="helper-text">Return to Pulse Pro billing, then use Pulse Account to retrieve the latest active license if automatic activation is unavailable.</div>';
+    summaryItems.push(
+      '<div class="billing-result">' +
+        '<h4>Checkout complete</h4>' +
+        '<div class="result-grid">' +
+          '<div><div class="result-meta-label">Plan</div><div class="result-meta-value">' + escapeText(result.tier || result.plan_key || 'Purchased') + '</div></div>' +
+          '<div><div class="result-meta-label">Purchase email</div><div class="result-meta-value">' + escapeText(result.owner_email || bootstrap.email || '') + '</div></div>' +
+          '<div><div class="result-meta-label">Activation key</div><div class="result-meta-value">' + escapeText(result.activation_key_prefix || 'Issued') + '</div></div>' +
+          '<div><div class="result-meta-label">Monitored systems</div><div class="result-meta-value">' + escapeText(typeof result.max_monitored_systems === 'number' && result.max_monitored_systems > 0 ? String(result.max_monitored_systems) : 'Included') + '</div></div>' +
+        '</div>' +
+        activationForm +
+      '</div>',
+    );
+  } else if (result && result.message) {
+    summaryItems.push('<div class="billing-status visible">' + escapeText(result.message) + '</div>');
+  }
+
+  root.innerHTML =
+    '<div class="billing-upgrade-root">' +
+      summaryItems.join('') +
+      renderUpgradePlansHTML(billingState) +
+      (pricingState.status === 'ready' && pricingState.data && pricingState.data.description
+        ? '<div class="helper-text">' + escapeText(pricingState.data.description) + '</div>'
+        : '') +
+      (result && result.status === 'fulfilled' && formatCheckoutDate(result.current_period_end)
+        ? '<div class="helper-text">Next renewal: ' + escapeText(formatCheckoutDate(result.current_period_end)) + '</div>'
+        : '') +
+    '</div>';
 }
 
 export function renderButton(id: string | undefined, disabled: boolean, label: string | undefined): void {

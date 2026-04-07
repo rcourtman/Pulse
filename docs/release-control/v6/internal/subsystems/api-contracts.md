@@ -219,11 +219,11 @@ Own canonical runtime payload shapes between backend and frontend.
     `internal/api/demo_mode_commercial.go`,
     `internal/api/subscription_entitlements.go`, and
     `internal/api/contract_test.go` must classify commercial routes centrally
-    as either hidden (`404`) or redacted, and `/api/license/entitlements`
-    must preserve runtime capability fields while clearing licensed identity,
-    upgrade prompts, trial nudges, usage counts, and plan metadata for public
-    demo browsers instead of relying on scattered handler-local demo checks or
-    frontend-only suppression.
+    as either hidden (`404`) or runtime-safe. Public demo browsers may read the
+    non-commercial `/api/license/runtime-capabilities` contract, while
+    `/api/license/entitlements` stays hidden and must not be relied on for
+    runtime feature truth, upgrade prompts, trial nudges, usage counts, or plan
+    metadata.
 
 ## Forbidden Paths
 
@@ -689,7 +689,7 @@ the newer catalog-owned inventory export contract when the backend does not
 provide it.
 The licensing API must also stay internally coherent in local dev mode. When
 backend feature gates are widened by `PULSE_DEV=true` or demo/mock mode,
-`/api/license/entitlements` must advertise the same capability set in
+`/api/license/runtime-capabilities` must advertise the same capability set in
 `capabilities`; it must not leave frontend shells on stale free-tier gating
 while backend `HasFeature()` already treats those features as available.
 That widening still has to respect runtime feature flags. A capability like
@@ -2299,9 +2299,10 @@ provider bridges purely to satisfy Patrol once the Patrol runtime can operate
 from those canonical tenant providers directly.
 Hosted licensing handlers now also carry a tenant-scoped fallback contract:
 when hosted auth handoff preserves a non-default tenant org like `t-...`,
-`/api/license/status` and `/api/license/entitlements` must still evaluate the
-instance-level hosted billing lease from `default` if that tenant org has no
-org-local billing state of its own, rather than failing closed into
+`/api/license/status`, `/api/license/entitlements`, and
+`/api/license/runtime-capabilities` must still evaluate the instance-level
+hosted billing lease from `default` if that tenant org has no org-local
+billing state of its own, rather than failing closed into
 `subscription_required` on first entry.
 That same hosted entitlement contract also owns lease refresh targeting:
 when a hosted tenant request arrives on a non-default org with no org-local

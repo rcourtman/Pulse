@@ -4,7 +4,7 @@ import X from 'lucide-solid/icons/x';
 import { Card } from '@/components/shared/Card';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { demoModeEnabled } from '@/stores/demoMode';
-import { getUpgradeActionDestination } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import {
   RELAY_ONBOARDING_DESCRIPTION,
   RELAY_ONBOARDING_DISCONNECTED_LABEL,

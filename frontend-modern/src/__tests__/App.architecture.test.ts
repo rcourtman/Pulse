@@ -54,6 +54,12 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('Preview');
     expect(appLayoutSource).not.toContain('props.connected()');
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
+    expect(appLayoutSource).toContain("import { isMultiTenantEnabled } from '@/stores/license';");
+    expect(appLayoutSource).toContain(
+      "loadLicenseStatus as loadCommercialLicenseStatus",
+    );
+    expect(appLayoutSource).toContain('if (!demoModeEnabled()) {');
+    expect(appLayoutSource).toContain('void loadCommercialLicenseStatus();');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
     expect(appSource).not.toContain("apiFetch('/api/security/status')");
@@ -66,6 +72,9 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain("const checkBackendHealth = async () => {");
     expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
     expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
+    expect(appRuntimeStateSource).toContain(
+      "import {\n  isHostedModeEnabled,\n  isMultiTenantEnabled,\n  licenseLoaded,\n  loadLicenseStatus,\n} from '@/stores/license';",
+    );
     expect(appRuntimeStateSource).toContain(
       'const [activeOrgID, setActiveOrgID] = createSignal(',
     );

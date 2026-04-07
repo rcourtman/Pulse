@@ -1034,6 +1034,104 @@ header .logout-btn:hover,
   background: var(--bg-subtle);
 }
 
+.billing-upgrade-root {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.billing-upgrade-plan-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.billing-upgrade-plan-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius);
+  background: var(--bg-subtle);
+}
+
+.billing-upgrade-plan-card.highlight {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.billing-upgrade-plan-badge {
+  align-self: flex-start;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.billing-upgrade-plan-header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.billing-upgrade-plan-kicker {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.billing-upgrade-plan-header h4 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.billing-upgrade-plan-price {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.billing-upgrade-plan-period,
+.billing-upgrade-plan-blurb {
+  font-size: 13px;
+  color: var(--ink-secondary);
+}
+
+.billing-upgrade-plan-blurb {
+  margin: 0;
+}
+
+.billing-upgrade-plan-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.billing-upgrade-plan-feature {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.billing-upgrade-plan-feature::before {
+  content: "•";
+  color: var(--accent);
+  font-weight: 700;
+}
+
 .billing-result label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 500; }
 .billing-result textarea { width: 100%; min-height: 60px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); font: inherit; font-size: 13px; resize: vertical; }
 .result-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 8px; }

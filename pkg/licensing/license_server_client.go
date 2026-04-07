@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -18,6 +19,21 @@ import (
 type LicenseServerClient struct {
 	baseURL    string
 	httpClient *http.Client
+}
+
+// CheckoutSessionResult is the canonical purchase-fulfillment response returned
+// by the commercial checkout session endpoint.
+type CheckoutSessionResult struct {
+	Status              string `json:"status"`
+	Message             string `json:"message,omitempty"`
+	CheckoutStatus      string `json:"checkout_status,omitempty"`
+	PaymentStatus       string `json:"payment_status,omitempty"`
+	LicenseID           string `json:"license_id,omitempty"`
+	ActivationKey       string `json:"activation_key,omitempty"`
+	ActivationKeyPrefix string `json:"activation_key_prefix,omitempty"`
+	OwnerEmail          string `json:"owner_email,omitempty"`
+	Tier                string `json:"tier,omitempty"`
+	PlanKey             string `json:"plan_key,omitempty"`
 }
 
 // NewLicenseServerClient creates a client for the license server.
@@ -136,6 +152,42 @@ func (c *LicenseServerClient) RefreshGrant(ctx context.Context, installationID, 
 	var result RefreshGrantResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode refresh response: %w", err)
+	}
+	return &result, nil
+}
+
+// GetCheckoutSessionResult resolves a commercial checkout session into its
+// authoritative fulfillment payload.
+func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sessionID string) (*CheckoutSessionResult, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, fmt.Errorf("checkout session id is required")
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		c.baseURL+"/v1/checkout/session?session_id="+url.QueryEscape(sessionID),
+		nil,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create checkout session result request: %w", err)
+	}
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("checkout session result request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseError(resp)
+	}
+
+	var result CheckoutSessionResult
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode checkout session result response: %w", err)
 	}
 	return &result, nil
 }

@@ -3,12 +3,15 @@ import { createStore } from 'solid-js/store';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
-  getUpgradeActionDestination,
   hasFeature,
-  loadLicenseStatus,
   licenseLoaded,
-  entitlements,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getSSOCopySuccessMessage,
@@ -128,6 +131,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   onMount(() => {
     loadLicenseStatus();
+    loadCommercialLicenseStatus();
     void loadProviders();
   });
 

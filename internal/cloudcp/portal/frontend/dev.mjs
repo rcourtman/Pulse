@@ -476,13 +476,84 @@ function routeAccountAPI(request, response, url, bootstrap, scenario) {
 }
 
 function routeCommercialAPI(request, response, url, scenario) {
+  const successRedirect = previewReturnURL(request, scenario, 'Preview mode: external billing or email verification would complete here.');
+  const route = url.pathname.replace('/__portal_preview/commercial', '');
+
+  if (request.method === 'GET' && route === '/v1/public/pricing-model') {
+    sendJSON(response, 200, {
+      title: 'Simple self-hosted pricing for Pulse',
+      description: 'Preview pricing contract',
+      explainer: 'Pulse counts <strong>monitored systems</strong>, not every child resource.',
+      plans: [
+        {
+          badge: 'Recommended',
+          highlight: true,
+          tierKicker: 'Relay',
+          title: 'Relay',
+          price: '$4.99',
+          period: '$39/year available too',
+          blurb: 'Secure remote access and mobile access.',
+          features: [
+            { tone: 'check', html: 'Up to <strong>8 monitored systems</strong>' },
+            { tone: 'check', html: 'Remote access' },
+          ],
+          buttons: [
+            { kind: 'checkout', className: 'btn btn-secondary', tier: 'relay', planKey: 'price_relay_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
+            { kind: 'checkout', className: 'btn btn-primary', tier: 'relay', planKey: 'price_relay_annual', billingCycle: 'annual', label: 'Buy Annual' },
+          ],
+        },
+        {
+          tierKicker: 'Pro',
+          title: 'Pro',
+          price: '$8.99',
+          period: '$79/year available too',
+          blurb: 'Investigation, alert analysis, and auto-fix.',
+          features: [
+            { tone: 'check', html: 'Up to <strong>15 monitored systems</strong>' },
+            { tone: 'check', html: 'Everything in Relay' },
+          ],
+          buttons: [
+            { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro', planKey: 'price_pro_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
+            { kind: 'checkout', className: 'btn btn-primary', tier: 'pro', planKey: 'price_pro_annual', billingCycle: 'annual', label: 'Buy Annual' },
+          ],
+        },
+        {
+          tierKicker: 'Pro+',
+          title: 'Pro+',
+          price: '$14.99',
+          period: '$129/year available too',
+          blurb: 'More room for larger self-hosted environments.',
+          features: [
+            { tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' },
+            { tone: 'check', html: 'Everything in Pro' },
+          ],
+          buttons: [
+            { kind: 'checkout', className: 'btn btn-secondary', tier: 'pro_plus', planKey: 'price_pro_plus_monthly', billingCycle: 'monthly', label: 'Buy Monthly' },
+            { kind: 'checkout', className: 'btn btn-primary', tier: 'pro_plus', planKey: 'price_pro_plus_annual', billingCycle: 'annual', label: 'Buy Annual' },
+          ],
+        },
+      ],
+    });
+    return;
+  }
+
+  if (request.method === 'GET' && route === '/v1/checkout/session') {
+    sendJSON(response, 200, {
+      status: 'fulfilled',
+      owner_email: 'buyer@example.com',
+      tier: 'pro_plus',
+      plan_key: 'price_pro_plus_annual',
+      activation_key_prefix: 'ppk_live_preview',
+      max_monitored_systems: 50,
+      current_period_end: iso('2027-03-20T10:00:00Z'),
+    });
+    return;
+  }
+
   if (request.method !== 'POST') {
     sendText(response, 405, 'Method not allowed');
     return;
   }
-
-  const successRedirect = previewReturnURL(request, scenario, 'Preview mode: external billing or email verification would complete here.');
-  const route = url.pathname.replace('/__portal_preview/commercial', '');
 
   if (
     route === '/v1/manage/request' ||
@@ -536,6 +607,21 @@ function routeCommercialAPI(request, response, url, scenario) {
 
   if (route === '/v1/self-refund') {
     sendJSON(response, 200, { ok: true });
+    return;
+  }
+
+  if (route === '/v1/checkout/session') {
+    readJSONBody(request).then(function(body) {
+      const successURL = String(body.success_url || '').replace('{CHECKOUT_SESSION_ID}', 'cs_preview_success');
+      sendJSON(response, 200, {
+        url: successURL || successRedirect,
+        plan_key: body.plan_key || 'price_pro_plus_annual',
+        tier: body.tier || 'pro_plus',
+        billing_cycle: body.billing_cycle || 'annual',
+      });
+    }).catch(function() {
+      sendJSON(response, 400, { error: 'Invalid JSON.' });
+    });
     return;
   }
 

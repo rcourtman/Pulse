@@ -1,4 +1,4 @@
-import { startProTrial } from '@/stores/license';
+import { startProTrial } from '@/stores/licenseCommercial';
 import { getProTrialStartedMessage, getTrialStartErrorMessage } from '@/utils/upgradePresentation';
 
 export type StartProTrialActionOutcome = 'activated' | 'redirect' | 'error';

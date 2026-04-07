@@ -41,6 +41,7 @@ export interface PortalAPI {
   fetchBootstrap(): Promise<PortalBootstrapData>;
   requestMagicLink(email: string): Promise<PortalMagicLinkResponse>;
   logout(): Promise<void>;
+  getCommercialJSON<T>(path: string): Promise<T>;
   postCommercialJSON<T>(path: string, body: Record<string, unknown>): Promise<T>;
   createWorkspace(accountID: string, body: PortalWorkspaceCreateRequest): Promise<void>;
   suspendWorkspace(accountID: string, tenantID: string): Promise<void>;
@@ -139,6 +140,11 @@ export function createPortalAPI(context: PortalAPIContext): PortalAPI {
       return request<void>(bootstrap().logout_path, {
         method: 'POST',
       }, 'Failed to sign out.');
+    },
+    getCommercialJSON: function<T>(path: string) {
+      return request<T>(bootstrap().commercial_api_base_url + path, {
+        headers: { Accept: 'application/json' },
+      }, 'Commercial request failed.');
     },
     postCommercialJSON: function<T>(path: string, body: Record<string, unknown>) {
       return request<T>(bootstrap().commercial_api_base_url + path, {

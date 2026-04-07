@@ -35,7 +35,7 @@ const mockDemoModeEnabled = vi.hoisted(() => vi.fn(() => false));
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   entitlements: mockEntitlements,
   getLimit: mockGetLimit,
   getUpgradeActionDestination: (...args: unknown[]) => mockGetUpgradeActionDestination(...args),

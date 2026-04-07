@@ -7,6 +7,8 @@ const DEFAULT_PUBLIC_PRICING_URL =
   'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
 const DEFAULT_PULSE_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
 const PULSE_ACCOUNT_PORTAL_UPGRADE_SERVICE = 'upgrade';
+export const SELF_HOSTED_PURCHASE_RETURN_PATH = '/auth/license-purchase-activate';
+export const PULSE_ACCOUNT_PORTAL_RETURN_URL_QUERY_PARAM = 'return_url';
 
 export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
 export const SELF_HOSTED_PRO_BILLING_PLAN_ROUTE = `${SELF_HOSTED_PRO_BILLING_ROUTE}/plan`;
@@ -74,6 +76,33 @@ function normalizeFeatureKey(feature: string | null | undefined): string | undef
   return normalized ? normalized : undefined;
 }
 
+function resolvePulseProductOrigin(locationHref?: string): string | undefined {
+  const candidateHref =
+    typeof locationHref === 'string' && locationHref.trim()
+      ? locationHref
+      : typeof window !== 'undefined'
+        ? window.location.href
+        : undefined;
+  if (!candidateHref) return undefined;
+
+  try {
+    return new URL(candidateHref).origin;
+  } catch {
+    return undefined;
+  }
+}
+
+export function getSelfHostedPurchaseReturnUrl(locationHref?: string): string | undefined {
+  const origin = resolvePulseProductOrigin(locationHref);
+  if (!origin) return undefined;
+
+  try {
+    return new URL(SELF_HOSTED_PURCHASE_RETURN_PATH, origin).toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export function getInProductPricingDestination(
   feature: string | null | undefined,
 ): string | undefined {
@@ -94,6 +123,8 @@ export function getPublicPricingUrl(feature?: string | null): string {
 export function getPulseAccountPortalUrl(options: {
   email?: string | null;
   feature?: string | null;
+  locationHref?: string;
+  returnUrl?: string | null;
   service?: string | null;
   searchParams?: URLSearchParams;
 } = {}): string {
@@ -122,15 +153,22 @@ export function getPulseAccountPortalUrl(options: {
     url.searchParams.set('service', normalizedService);
   }
 
+  const normalizedReturnUrl = options.returnUrl?.trim() || getSelfHostedPurchaseReturnUrl(options.locationHref);
+  if (normalizedReturnUrl) {
+    url.searchParams.set(PULSE_ACCOUNT_PORTAL_RETURN_URL_QUERY_PARAM, normalizedReturnUrl);
+  }
+
   return url.toString();
 }
 
 export function getPulseAccountPortalUpgradeUrl(
   feature?: string | null,
   searchParams?: URLSearchParams,
+  locationHref?: string,
 ): string {
   return getPulseAccountPortalUrl({
     feature,
+    locationHref,
     searchParams,
     service: PULSE_ACCOUNT_PORTAL_UPGRADE_SERVICE,
   });

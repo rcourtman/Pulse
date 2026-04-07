@@ -1261,3 +1261,33 @@ func TestCommercialProxy_UpstreamFailureReturnsBadGateway(t *testing.T) {
 		t.Fatalf("body = %q", got)
 	}
 }
+
+func TestCommercialProxy_AllowsPricingAndCheckoutGETRequests(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/v1/public/pricing-model" {
+			t.Fatalf("path = %s, want /v1/public/pricing-model", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("track"); got != "v6" {
+			t.Fatalf("track = %q, want v6", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"title":"pricing"}`))
+	}))
+	defer upstream.Close()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, PortalCommercialProxyPath+"v1/public/pricing-model?track=v6", nil)
+	req.SetPathValue("commercial_path", "v1/public/pricing-model")
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL})(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"title":"pricing"}` {
+		t.Fatalf("body = %q", got)
+	}
+}

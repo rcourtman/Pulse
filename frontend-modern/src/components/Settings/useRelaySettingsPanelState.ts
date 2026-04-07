@@ -1,11 +1,14 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import {
-  entitlements,
-  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
-  loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { showError, showSuccess } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
@@ -131,7 +134,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   };
 
   onMount(async () => {
-    await loadLicenseStatus();
+    await Promise.all([loadLicenseStatus(), loadCommercialLicenseStatus()]);
     if (!relayEnabled()) {
       setLoading(false);
       return;

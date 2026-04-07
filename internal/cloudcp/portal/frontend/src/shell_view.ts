@@ -152,26 +152,6 @@ function selfHostedUpgradeActionHighlights(featureKey: string): string[] {
     : ['Plan comparison', 'Checkout handoff'];
 }
 
-function selfHostedUpgradePricingURL(
-  bootstrap: PortalBootstrapData,
-  featureKey: string,
-): string {
-  var publicSiteURL = String(bootstrap.public_site_url || 'https://pulserelay.pro').trim();
-  var normalizedFeature = normalizeUpgradeFeatureKey(featureKey);
-  try {
-    var url = new URL('/pricing', publicSiteURL);
-    if (normalizedFeature) {
-      url.searchParams.set('feature', normalizedFeature);
-    }
-    url.searchParams.set('utm_source', 'pulse-account');
-    url.searchParams.set('utm_medium', 'portal');
-    url.searchParams.set('utm_campaign', 'self_hosted_upgrade');
-    return url.toString();
-  } catch {
-    return 'https://pulserelay.pro/pricing';
-  }
-}
-
 function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
   return renderBillingActionRow(
@@ -187,24 +167,14 @@ function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
 
 function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
   var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
-  var pricingURL = selfHostedUpgradePricingURL(context.bootstrap, featureKey);
-  var linkLabel = featureKey === 'max_monitored_systems'
-    ? 'Compare monitored-system plans'
-    : 'View self-hosted plans';
   var helperCopy = featureKey === 'max_monitored_systems'
-    ? 'Choose the self-hosted tier that matches the monitored-system allowance you need, then return to Pulse Pro to activate the new license.'
-    : 'Choose the self-hosted tier that fits this upgrade, then return to Pulse Pro to activate the new license.';
+    ? 'Choose the self-hosted tier that matches the monitored-system allowance you need, then send the completed purchase back to Pulse Pro for activation.'
+    : 'Choose the self-hosted tier that fits this upgrade, then send the completed purchase back to Pulse Pro for activation.';
   return renderBillingTaskPanel(
     selfHostedUpgradeActionTitle(featureKey),
-    'Pulse Account owns the commercial handoff. Plan selection and checkout continue on the public self-hosted pricing site.',
+    'Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.',
     'upgrade-billing-panel',
-    '<div class="form-actions">' +
-      '<a class="btn-primary" id="upgrade-billing-link" href="' +
-      escapeAttr(pricingURL) +
-      '" target="_blank" rel="noopener">' +
-      escapeHTML(linkLabel) +
-      '</a>' +
-    '</div>' +
+    '<div id="upgrade-billing-root"></div>' +
     '<div class="helper-text">' + escapeHTML(helperCopy) + '</div>',
   );
 }

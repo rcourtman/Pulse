@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { PortalBillingState, PortalBootstrapData, PortalLoginState } from './types';
+import { createPortalBillingState } from './state';
 import {
   renderAccountsHTML,
   renderAuthenticatedPortalHTML,
@@ -44,60 +45,7 @@ function createLoginState(overrides: Partial<PortalLoginState> = {}): PortalLogi
 
 function createBillingState(overrides: Partial<PortalBillingState> = {}): PortalBillingState {
   return {
-    openBillingPanelID: '',
-    upgradeFeatureKey: '',
-    flows: {
-      manage: {
-        pendingEmail: '',
-        request: { pending: false, error: '' },
-        confirm: { pending: false, error: '' },
-        step2Visible: false,
-        status: { visible: false, message: '', error: false },
-        result: null,
-        emailValue: '',
-        codeValue: '',
-        checkboxChecked: false,
-      },
-      retrieve: {
-        pendingEmail: '',
-        request: { pending: false, error: '' },
-        confirm: { pending: false, error: '' },
-        step2Visible: false,
-        status: { visible: false, message: '', error: false },
-        result: null,
-        emailValue: '',
-        codeValue: '',
-        checkboxChecked: false,
-      },
-      export: {
-        pendingEmail: '',
-        request: { pending: false, error: '' },
-        confirm: { pending: false, error: '' },
-        step2Visible: false,
-        status: { visible: false, message: '', error: false },
-        result: null,
-        emailValue: '',
-        codeValue: '',
-        checkboxChecked: false,
-      },
-      delete: {
-        pendingEmail: '',
-        request: { pending: false, error: '' },
-        confirm: { pending: false, error: '' },
-        step2Visible: false,
-        status: { visible: false, message: '', error: false },
-        result: null,
-        emailValue: '',
-        codeValue: '',
-        checkboxChecked: false,
-      },
-    },
-    refund: {
-      emailValue: '',
-      tokenValue: '',
-      submit: { pending: false, error: '' },
-      status: { visible: false, message: '', error: false },
-    },
+    ...createPortalBillingState(),
     ...overrides,
   };
 }
@@ -689,8 +637,8 @@ describe('shell view', function() {
 
     expect(html).toContain('Pulse Account owns the commercial handoff for self-hosted upgrades from the app.');
     expect(html).toContain('Upgrade monitored-system cap');
-    expect(html).toContain('Compare monitored-system plans');
-    expect(html).toContain('utm_source=pulse-account');
+    expect(html).toContain('id="upgrade-billing-root"');
+    expect(html).toContain('Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.');
     expect(html).not.toContain('id="open-manage-billing"');
     expect(html).not.toContain('id="open-retrieve-billing"');
   });

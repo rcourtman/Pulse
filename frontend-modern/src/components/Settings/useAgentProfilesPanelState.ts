@@ -11,13 +11,16 @@ import {
 import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import {
-  entitlements,
-  getUpgradeActionDestination,
   hasFeature as hasEntitlement,
   licenseLoaded,
   licenseLoading,
-  loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
@@ -235,6 +238,7 @@ export const useAgentProfilesPanelState = () => {
 
   onMount(async () => {
     await loadLicenseStatus();
+    await loadCommercialLicenseStatus();
 
     try {
       const aiSettings = await AIAPI.getSettings();

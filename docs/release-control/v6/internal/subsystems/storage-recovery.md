@@ -326,11 +326,12 @@ Browser-facing storage/recovery surfaces must also treat
 `/api/security/status.sessionCapabilities.demoMode` as the canonical
 public-demo bootstrap signal instead of inferring demo posture from headers,
 `/api/health`, or hostname heuristics.
-That same shared boundary now also owns the one redacted commercial exception:
-storage and recovery may inherit demo-safe `/api/license/entitlements`
-capability and history-retention reads, but they must not expect licensed
-identity, upgrade prompts, trial urgency, or observed usage counts to remain
-present once the public-demo contract is applied.
+That same shared boundary now also owns the one runtime-safe exception:
+storage and recovery may inherit demo-safe `/api/license/runtime-capabilities`
+reads for capability and history-retention truth, but
+`/api/license/entitlements` stays hidden and those surfaces must not expect
+licensed identity, upgrade prompts, trial urgency, or observed usage counts
+to remain present once the public-demo contract is applied.
 Physical-disk live I/O drawers now also sit on the canonical storage surface.
 Storage disk drawers may show read, write, busy, and SMART history, but every
 chart must route through the shared `HistoryChart` API contract using the disk

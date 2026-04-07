@@ -1498,4 +1498,24 @@ describe('Settings architecture guardrails', () => {
       'RecoverySettingsPanel should not wrap its single shell in an extra page spacer',
     ).not.toContain('<div class="space-y-6">');
   });
+
+  it('splits runtime capability reads from commercial entitlement reads across settings state owners', () => {
+    expect(settingsSource).toContain("from '@/stores/licenseCommercial';");
+    expect(settingsSource).not.toContain("getLimit, isPro, loadLicenseStatus } from '@/stores/license';");
+
+    expect(aiSettingsStateSource).toContain("} from '@/stores/license';");
+    expect(aiSettingsStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(aiSettingsStateSource).toContain('loadCommercialLicenseStatus();');
+
+    expect(reportingPanelStateSource).toContain("} from '@/stores/license';");
+    expect(reportingPanelStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(reportingPanelStateSource).toContain('loadCommercialLicenseStatus();');
+
+    expect(auditLogStateSource).toContain("} from '@/stores/license';");
+    expect(auditLogStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(auditWebhookStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(ssoProvidersStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(rbacFeatureGateStateSource).toContain("} from '@/stores/licenseCommercial';");
+    expect(nodeModalStateSource).toContain("from '@/stores/licenseCommercial';");
+  });
 });

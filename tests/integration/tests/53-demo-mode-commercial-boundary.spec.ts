@@ -19,7 +19,7 @@ const SECURITY_STATUS_DEMO_PAYLOAD = {
   },
 };
 
-const DEMO_PUBLIC_ENTITLEMENTS = {
+const DEMO_PUBLIC_RUNTIME_CAPABILITIES = {
   capabilities: ['ai_patrol', 'relay'],
   limits: [
     {
@@ -29,19 +29,8 @@ const DEMO_PUBLIC_ENTITLEMENTS = {
       state: 'ok',
     },
   ],
-  subscription_state: 'active',
-  upgrade_reasons: [],
-  tier: 'free',
   hosted_mode: false,
-  valid: false,
-  trial_eligible: false,
   max_history_days: 90,
-  legacy_connections: {
-    proxmox_nodes: 0,
-    docker_hosts: 0,
-    kubernetes_clusters: 0,
-  },
-  has_migration_gap: false,
 };
 
 const authenticatedTest = base.extend<{}, WorkerFixtures>({
@@ -112,6 +101,7 @@ base.describe('Demo mode commercial boundary', () => {
     async ({
     page,
   }, testInfo) => {
+    let runtimeCapabilitiesRequests = 0;
     let entitlementsRequests = 0;
     let licenseStatusRequests = 0;
     let monitoredSystemLedgerRequests = 0;
@@ -129,12 +119,21 @@ base.describe('Demo mode commercial boundary', () => {
       });
     });
 
-    await page.route('**/api/license/entitlements', async (route) => {
-      entitlementsRequests += 1;
+    await page.route('**/api/license/runtime-capabilities', async (route) => {
+      runtimeCapabilitiesRequests += 1;
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(DEMO_PUBLIC_ENTITLEMENTS),
+        body: JSON.stringify(DEMO_PUBLIC_RUNTIME_CAPABILITIES),
+      });
+    });
+
+    await page.route('**/api/license/entitlements', async (route) => {
+      entitlementsRequests += 1;
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ error: 'not found' }),
       });
     });
 
@@ -169,8 +168,11 @@ base.describe('Demo mode commercial boundary', () => {
     await page.waitForURL('**/settings/infrastructure/install', { timeout: 15_000 });
 
     await expect
-      .poll(() => entitlementsRequests, { message: 'expected demo shell to load entitlements' })
+      .poll(() => runtimeCapabilitiesRequests, {
+        message: 'expected demo shell to load runtime capabilities',
+      })
       .toBeGreaterThan(0);
+    expect(entitlementsRequests, 'demo settings route should not read commercial entitlements').toBe(0);
 
     await expect(
       page.getByText('Demo instance with mock data (read-only)', { exact: true }),
@@ -210,7 +212,7 @@ base.describe('Demo mode commercial boundary', () => {
   );
 
   authenticatedTest(
-    'exposes only the redacted commercial contract in the browser',
+    'exposes only the runtime capability contract in the browser',
     async ({ page }) => {
       await page.route('**/api/security/status', async (route) => {
         await route.fulfill({
@@ -220,11 +222,11 @@ base.describe('Demo mode commercial boundary', () => {
         });
       });
 
-      await page.route('**/api/license/entitlements', async (route) => {
+      await page.route('**/api/license/runtime-capabilities', async (route) => {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify(DEMO_PUBLIC_ENTITLEMENTS),
+          body: JSON.stringify(DEMO_PUBLIC_RUNTIME_CAPABILITIES),
         });
       });
 
@@ -240,6 +242,7 @@ base.describe('Demo mode commercial boundary', () => {
 
       await hiddenNotFound('**/api/license/status');
       await hiddenNotFound('**/api/license/features');
+      await hiddenNotFound('**/api/license/entitlements');
       await hiddenNotFound('**/api/license/activate');
       await hiddenNotFound('**/api/license/clear');
       await hiddenNotFound('**/api/license/trial/start');
@@ -266,9 +269,10 @@ base.describe('Demo mode commercial boundary', () => {
         };
 
         return {
-          entitlements: await probe('/api/license/entitlements'),
+          runtimeCapabilities: await probe('/api/license/runtime-capabilities'),
           status: await probe('/api/license/status'),
           features: await probe('/api/license/features'),
+          entitlements: await probe('/api/license/entitlements'),
           activate: await probe('/api/license/activate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -287,23 +291,21 @@ base.describe('Demo mode commercial boundary', () => {
         };
       });
 
-      expect(responses.entitlements.status).toBe(200);
-      expect(responses.entitlements.body).toMatchObject({
+      expect(responses.runtimeCapabilities.status).toBe(200);
+      expect(responses.runtimeCapabilities.body).toMatchObject({
         capabilities: ['ai_patrol', 'relay'],
-        subscription_state: 'active',
-        upgrade_reasons: [],
-        tier: 'free',
-        valid: false,
-        trial_eligible: false,
+        hosted_mode: false,
         max_history_days: 90,
       });
-      expect(responses.entitlements.body).not.toHaveProperty('licensed_email');
-      expect(responses.entitlements.body).not.toHaveProperty('trial_days_remaining');
-      expect(responses.entitlements.body).not.toHaveProperty('trial_expires_at');
-      expect((responses.entitlements.body as { limits?: Array<{ key: string; current: number; limit: number; state: string }> }).limits).toEqual([
+      expect(responses.runtimeCapabilities.body).not.toHaveProperty('licensed_email');
+      expect(responses.runtimeCapabilities.body).not.toHaveProperty('tier');
+      expect(responses.runtimeCapabilities.body).not.toHaveProperty('subscription_state');
+      expect(responses.runtimeCapabilities.body).not.toHaveProperty('upgrade_reasons');
+      expect((responses.runtimeCapabilities.body as { limits?: Array<{ key: string; current: number; limit: number; state: string }> }).limits).toEqual([
         { key: 'max_monitored_systems', limit: 0, current: 0, state: 'ok' },
       ]);
 
+      expect(responses.entitlements.status).toBe(404);
       expect(responses.status.status).toBe(404);
       expect(responses.features.status).toBe(404);
       expect(responses.activate.status).toBe(404);

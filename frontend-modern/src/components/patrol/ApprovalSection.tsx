@@ -5,11 +5,12 @@
  * States: Pending, Expired, Executed, Denied, Failed, Verified, VerificationFailed.
  */
 
-import { Component, Show, createSignal, createResource, createMemo } from 'solid-js';
+import { Component, Show, createSignal, createResource, createMemo, onMount } from 'solid-js';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { hasFeature, licenseStatus } from '@/stores/license';
+import { licenseStatus, loadLicenseStatus } from '@/stores/licenseCommercial';
+import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
 import { RemediationStatus } from './RemediationStatus';
@@ -27,6 +28,10 @@ interface ApprovalSectionProps {
 export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const [actionLoading, setActionLoading] = createSignal<string | null>(null);
   const [executionResult, setExecutionResult] = createSignal<ApprovalExecutionResult | null>(null);
+
+  onMount(() => {
+    void loadLicenseStatus();
+  });
 
   // Find the pending approval for this finding from the store
   const pendingApproval = createMemo(() => {

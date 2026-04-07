@@ -43,8 +43,16 @@ export interface CommercialMigrationStatus {
   recommended_action?: string;
 }
 
-// Mirrors internal/api/entitlement_handlers.go:EntitlementPayload
-export interface LicenseEntitlements {
+// Mirrors internal/api/subscription_entitlements.go:RuntimeCapabilitiesPayload
+export interface LicenseRuntimeCapabilities {
+  capabilities: string[];
+  limits: EntitlementLimitStatus[];
+  hosted_mode?: boolean;
+  max_history_days?: number;
+}
+
+// Mirrors internal/api/subscription_entitlements.go:EntitlementPayload
+export interface LicenseCommercialEntitlements {
   capabilities: string[];
   limits: EntitlementLimitStatus[];
   subscription_state: string;
@@ -70,6 +78,8 @@ export interface LicenseEntitlements {
   commercial_migration?: CommercialMigrationStatus;
 }
 
+export type LicenseEntitlements = LicenseCommercialEntitlements;
+
 export interface ActivateLicenseResponse {
   success: boolean;
   message?: string;
@@ -94,8 +104,18 @@ export class LicenseAPI {
     return apiFetchJSON(`${this.baseUrl}/status`) as Promise<LicenseStatus>;
   }
 
-  static async getEntitlements(): Promise<LicenseEntitlements> {
-    return apiFetchJSON(`${this.baseUrl}/entitlements`) as Promise<LicenseEntitlements>;
+  static async getRuntimeCapabilities(): Promise<LicenseRuntimeCapabilities> {
+    return apiFetchJSON(
+      `${this.baseUrl}/runtime-capabilities`,
+    ) as Promise<LicenseRuntimeCapabilities>;
+  }
+
+  static async getCommercialEntitlements(): Promise<LicenseCommercialEntitlements> {
+    return apiFetchJSON(`${this.baseUrl}/entitlements`) as Promise<LicenseCommercialEntitlements>;
+  }
+
+  static async getEntitlements(): Promise<LicenseCommercialEntitlements> {
+    return this.getCommercialEntitlements();
   }
 
   static async getFeatures(): Promise<LicenseFeatureStatus> {

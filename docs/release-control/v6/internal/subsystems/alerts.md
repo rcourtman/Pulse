@@ -535,3 +535,9 @@ state only through `frontend-modern/src/contexts/appRuntime.ts`; they must not
 import `@/App` or create reverse dependencies into the root shell chunk,
 because alerts surfaces must remain lazy-load safe and must not blank the app
 before auth/bootstrap finishes.
+Alert commercial handoffs now also follow the runtime-versus-commercial split.
+`frontend-modern/src/components/Alerts/InvestigateAlertButton.tsx` may resolve
+upgrade destinations through the shared commercial store, but alert runtime
+availability and chat enablement must stay governed by the non-commercial app
+runtime and assistant state instead of reusing the same commercial payload as
+feature truth.

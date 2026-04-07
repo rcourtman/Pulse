@@ -23,11 +23,14 @@ import { notificationStore } from '@/stores/notifications';
 import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import {
-  getUpgradeActionDestination,
   hasFeature,
-  licenseStatus,
   loadLicenseStatus,
 } from '@/stores/license';
+import {
+  getUpgradeActionDestination,
+  licenseStatus,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -670,6 +673,7 @@ export function usePatrolIntelligenceState() {
   onMount(async () => {
     await Promise.all([
       loadLicenseStatus(),
+      loadCommercialLicenseStatus(),
       loadAllData(),
       loadAutonomySettings(),
       loadModels(),

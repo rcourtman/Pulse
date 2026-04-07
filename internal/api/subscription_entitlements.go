@@ -14,6 +14,10 @@ import (
 // Frontend should use this instead of inferring capabilities from tier names.
 type EntitlementPayload = entitlementPayloadModel
 
+// RuntimeCapabilitiesPayload is the canonical non-commercial runtime capability
+// response for feature gating and operational limit checks.
+type RuntimeCapabilitiesPayload = runtimeCapabilitiesPayloadModel
+
 // LimitStatus represents a quantitative limit with current usage state.
 type LimitStatus = limitStatusModel
 
@@ -21,7 +25,7 @@ type LimitStatus = limitStatusModel
 type UpgradeReason = upgradeReasonModel
 
 // HandleEntitlements returns the normalized entitlement payload for the current tenant.
-// This is the primary endpoint the frontend should use for feature gating decisions.
+// This is the commercial entitlement endpoint for billing, trial, and upgrade presentation.
 func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
@@ -64,8 +68,37 @@ func (h *LicenseHandlers) HandleEntitlements(w http.ResponseWriter, r *http.Requ
 	}
 	payload.TrialEligible, payload.TrialEligibilityReason = h.trialStartEligibility(r.Context(), svc, existing)
 	payload.HostedMode = h != nil && h.hostedMode
-	if isPublicDemoCommercialRedactedRequest(r) {
-		payload = sanitizeEntitlementPayloadForPublicDemo(payload)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(payload)
+}
+
+// HandleRuntimeCapabilities returns the canonical non-commercial runtime capability payload.
+func (h *LicenseHandlers) HandleRuntimeCapabilities(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeErrorResponse(w, http.StatusMethodNotAllowed, "method_not_allowed", "Method not allowed", nil)
+		return
+	}
+
+	svc, _, err := h.getTenantComponents(r.Context())
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "internal_error", "Internal server error", nil)
+		return
+	}
+
+	status := svc.Status()
+	usage := h.entitlementUsageSnapshot(r.Context())
+
+	overflowGrantedAt := h.ensureOnboardingOverflow(r.Context(), status.Tier)
+	now := time.Now()
+	if bonus := overflowBonusFromLicensing(status.Tier, overflowGrantedAt, now); bonus > 0 {
+		status.MaxMonitoredSystems += bonus
+	}
+
+	payload := buildRuntimeCapabilitiesPayloadWithUsage(status, svc.SubscriptionState(), usage)
+	payload.HostedMode = h != nil && h.hostedMode
+	if h != nil && h.cfg != nil && h.cfg.DemoMode {
+		payload = sanitizeRuntimeCapabilitiesPayloadForPublicDemo(payload)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -131,6 +164,13 @@ func buildEntitlementPayload(status *licenseStatus, subscriptionState string) En
 	return buildEntitlementPayloadFromLicensing(status, subscriptionState)
 }
 
+func buildRuntimeCapabilitiesPayload(
+	status *licenseStatus,
+	subscriptionState string,
+) RuntimeCapabilitiesPayload {
+	return buildRuntimeCapabilitiesPayloadFromLicensing(status, subscriptionState)
+}
+
 // buildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.
 func buildEntitlementPayloadWithUsage(
 	status *licenseStatus,
@@ -139,6 +179,14 @@ func buildEntitlementPayloadWithUsage(
 	trialEndsAtUnix *int64,
 ) EntitlementPayload {
 	return buildEntitlementPayloadWithUsageFromLicensing(status, subscriptionState, usage, trialEndsAtUnix)
+}
+
+func buildRuntimeCapabilitiesPayloadWithUsage(
+	status *licenseStatus,
+	subscriptionState string,
+	usage entitlementUsageSnapshot,
+) RuntimeCapabilitiesPayload {
+	return buildRuntimeCapabilitiesPayloadWithUsageFromLicensing(status, subscriptionState, usage)
 }
 
 // limitState returns the over-limit UX state string.

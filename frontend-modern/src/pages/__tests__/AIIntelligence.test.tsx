@@ -129,8 +129,12 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
+  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),

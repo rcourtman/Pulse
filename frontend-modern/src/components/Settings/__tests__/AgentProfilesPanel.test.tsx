@@ -32,12 +32,18 @@ vi.mock('@/contexts/appRuntime', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
-  getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   hasFeature: () => true,
   licenseLoaded: () => true,
   loadLicenseStatus: () => Promise.resolve(),
   licenseLoading: () => false,
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
+  entitlements: () => ({ trial_eligible: true }),
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
+  getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
+  loadLicenseStatus: () => Promise.resolve(),
+  startProTrial: vi.fn(),
 }));
 
 vi.mock('@/api/agentProfiles', () => ({

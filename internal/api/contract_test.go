@@ -4824,6 +4824,7 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 		}{
 			{method: http.MethodGet, path: "/api/license/status"},
 			{method: http.MethodGet, path: "/api/license/features"},
+			{method: http.MethodGet, path: "/api/license/entitlements"},
 			{method: http.MethodPost, path: "/api/license/activate"},
 			{method: http.MethodPost, path: "/api/license/clear"},
 			{method: http.MethodPost, path: "/api/license/trial/start"},
@@ -4845,10 +4846,11 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 		}
 	})
 
-	t.Run("entitlements are redacted instead of hidden", func(t *testing.T) {
+	t.Run("runtime capabilities stay available but sanitize public demo limit details", func(t *testing.T) {
 		t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
 		handlers := createTestHandler(t)
+		handlers.SetConfig(&config.Config{DemoMode: true})
 		licenseKey, err := pkglicensing.GenerateLicenseForTesting("contract-demo@example.com", pkglicensing.TierPro, 24*time.Hour)
 		if err != nil {
 			t.Fatalf("GenerateLicenseForTesting: %v", err)
@@ -4857,32 +4859,19 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			t.Fatalf("Activate() error = %v", err)
 		}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
-		req = withPublicDemoCommercialContext(req, publicDemoCommercialExposureRedacted)
+		req := httptest.NewRequest(http.MethodGet, "/api/license/runtime-capabilities", nil)
 		rec := httptest.NewRecorder()
-		handlers.HandleEntitlements(rec, req)
+		handlers.HandleRuntimeCapabilities(rec, req)
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
 		}
 
-		var payload EntitlementPayload
+		var payload RuntimeCapabilitiesPayload
 		if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
 			t.Fatalf("decode payload: %v", err)
 		}
 		if len(payload.Capabilities) == 0 {
-			t.Fatalf("expected sanitized entitlements to preserve capabilities, got %+v", payload)
-		}
-		if payload.LicensedEmail != "" {
-			t.Fatalf("licensed_email=%q, want empty", payload.LicensedEmail)
-		}
-		if payload.Tier != string(pkglicensing.TierFree) {
-			t.Fatalf("tier=%q, want %q", payload.Tier, pkglicensing.TierFree)
-		}
-		if payload.SubscriptionState != string(pkglicensing.SubStateActive) {
-			t.Fatalf("subscription_state=%q, want %q", payload.SubscriptionState, pkglicensing.SubStateActive)
-		}
-		if len(payload.UpgradeReasons) != 0 {
-			t.Fatalf("upgrade_reasons=%v, want empty", payload.UpgradeReasons)
+			t.Fatalf("expected sanitized runtime capabilities to preserve capabilities, got %+v", payload)
 		}
 		for _, limit := range payload.Limits {
 			if limit.Limit != 0 || limit.Current != 0 || limit.State != "ok" {

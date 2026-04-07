@@ -79,7 +79,8 @@ describe('useReportingPanelState', () => {
   let useReportingPanelState: UseReportingPanelStateModule['useReportingPanelState'];
   let apiFetchMock: ReturnType<typeof vi.fn>;
   let hasReportingFeature: boolean;
-  let loadLicenseStatusMock: ReturnType<typeof vi.fn>;
+  let loadRuntimeLicenseStatusMock: ReturnType<typeof vi.fn>;
+  let loadCommercialLicenseStatusMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -88,7 +89,8 @@ describe('useReportingPanelState', () => {
       .fn()
       .mockResolvedValue(new Response(JSON.stringify(catalogPayload), { status: 200 }));
     hasReportingFeature = true;
-    loadLicenseStatusMock = vi.fn();
+    loadRuntimeLicenseStatusMock = vi.fn();
+    loadCommercialLicenseStatusMock = vi.fn();
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
@@ -112,15 +114,20 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadRuntimeLicenseStatusMock,
+    }));
+
+    vi.doMock('@/stores/licenseCommercial', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),
         external: true,
       })),
       getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
-      licenseLoaded: vi.fn(() => true),
-      loadLicenseStatus: loadLicenseStatusMock,
+      loadLicenseStatus: loadCommercialLicenseStatusMock,
+      startProTrial: vi.fn(),
     }));
 
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
@@ -149,7 +156,8 @@ describe('useReportingPanelState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(loadLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(loadCommercialLicenseStatusMock).toHaveBeenCalledOnce();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.performanceReport.defaultFormat).toBe('csv');
     expect(hookState.format()).toBe('csv');
@@ -180,7 +188,8 @@ describe('useReportingPanelState', () => {
       .fn()
       .mockResolvedValue(new Response(JSON.stringify(catalogPayload), { status: 200 }));
     hasReportingFeature = false;
-    loadLicenseStatusMock = vi.fn();
+    loadRuntimeLicenseStatusMock = vi.fn();
+    loadCommercialLicenseStatusMock = vi.fn();
 
     vi.doMock('@/utils/apiClient', async () => {
       const actual = await vi.importActual<typeof import('@/utils/apiClient')>('@/utils/apiClient');
@@ -204,15 +213,20 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
+      hasFeature: vi.fn(() => false),
+      licenseLoaded: vi.fn(() => false),
+      loadLicenseStatus: loadRuntimeLicenseStatusMock,
+    }));
+
+    vi.doMock('@/stores/licenseCommercial', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),
         external: true,
       })),
       getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
-      hasFeature: vi.fn(() => false),
-      licenseLoaded: vi.fn(() => false),
-      loadLicenseStatus: loadLicenseStatusMock,
+      loadLicenseStatus: loadCommercialLicenseStatusMock,
+      startProTrial: vi.fn(),
     }));
 
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
@@ -222,7 +236,8 @@ describe('useReportingPanelState', () => {
     await flushAsync();
     await flushAsync();
 
-    expect(loadLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(loadRuntimeLicenseStatusMock).toHaveBeenCalledOnce();
+    expect(loadCommercialLicenseStatusMock).toHaveBeenCalledOnce();
     expect(apiFetchMock).toHaveBeenCalledWith('/api/admin/reports/catalog');
     expect(hookState.reportingCatalog()?.title).toBe('Detailed Reporting');
     expect(hookState.isLocked()).toBe(false);
@@ -261,15 +276,20 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadRuntimeLicenseStatusMock,
+    }));
+
+    vi.doMock('@/stores/licenseCommercial', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),
         external: true,
       })),
       getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
-      licenseLoaded: vi.fn(() => true),
-      loadLicenseStatus: loadLicenseStatusMock,
+      loadLicenseStatus: loadCommercialLicenseStatusMock,
+      startProTrial: vi.fn(),
     }));
 
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
@@ -322,15 +342,20 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadRuntimeLicenseStatusMock,
+    }));
+
+    vi.doMock('@/stores/licenseCommercial', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),
         external: true,
       })),
       getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
-      licenseLoaded: vi.fn(() => true),
-      loadLicenseStatus: loadLicenseStatusMock,
+      loadLicenseStatus: loadCommercialLicenseStatusMock,
+      startProTrial: vi.fn(),
     }));
 
     ({ useReportingPanelState } = await import('../useReportingPanelState'));
@@ -372,15 +397,20 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/license', () => ({
+      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
+      licenseLoaded: vi.fn(() => true),
+      loadLicenseStatus: loadRuntimeLicenseStatusMock,
+    }));
+
+    vi.doMock('@/stores/licenseCommercial', () => ({
       entitlements: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),
         external: true,
       })),
       getUpgradeActionUrlOrFallback: vi.fn((feature?: string) => getPublicPricingUrl(feature)),
-      hasFeature: vi.fn((feature: string) => feature === 'advanced_reporting' && hasReportingFeature),
-      licenseLoaded: vi.fn(() => true),
-      loadLicenseStatus: loadLicenseStatusMock,
+      loadLicenseStatus: loadCommercialLicenseStatusMock,
+      startProTrial: vi.fn(),
     }));
 
     ({ useReportingPanelState } = await import('../useReportingPanelState'));

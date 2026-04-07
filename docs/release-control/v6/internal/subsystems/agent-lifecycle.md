@@ -312,11 +312,12 @@ lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces
 must also treat `/api/security/status.sessionCapabilities.demoMode` as the
 canonical public-demo bootstrap signal instead of inferring demo posture from
 headers, `/api/health`, or hostname heuristics.
-That same shared API boundary now owns the hidden-versus-redacted split as
-well: lifecycle-adjacent flows may inherit redacted `/api/license/entitlements`
-capability reads when demo-visible product behavior needs them, but they must
-not rely on licensed identity, plan labels, upgrade reasons, or observed
-usage counts surviving that public-demo contract.
+That same shared API boundary now owns the hidden-versus-runtime-only split as
+well: lifecycle-adjacent flows may inherit non-commercial
+`/api/license/runtime-capabilities` reads when demo-visible product behavior
+needs them, but `/api/license/entitlements` stays hidden in public demo mode
+and those lifecycle flows must not depend on licensed identity, plan labels,
+upgrade reasons, or observed usage counts surviving the public-demo contract.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered
 through shared drawers or lifecycle-adjacent resource context, those reads

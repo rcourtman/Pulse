@@ -21,12 +21,9 @@ func DemoModeMiddleware(cfg *config.Config, next http.Handler) http.Handler {
 		w.Header().Set("X-Demo-Mode", "true")
 
 		if exposure, ok := publicDemoCommercialPolicyForRequest(r); ok {
-			switch exposure {
-			case publicDemoCommercialExposureHidden:
+			if exposure == publicDemoCommercialExposureHidden {
 				http.NotFound(w, r)
 				return
-			case publicDemoCommercialExposureRedacted:
-				r = withPublicDemoCommercialContext(r, exposure)
 			}
 		}
 

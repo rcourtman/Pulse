@@ -23,10 +23,13 @@ vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   licenseLoaded: () => true,
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
-  getUpgradeActionUrlOrFallback: () => '/upgrade',
-  startProTrial: vi.fn(),
   entitlements: () => ({ trial_eligible: false }),
+  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  startProTrial: vi.fn(),
 }));
 
 vi.mock('@/api/relay', () => ({

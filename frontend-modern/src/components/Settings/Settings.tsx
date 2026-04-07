@@ -18,7 +18,7 @@ import { useSystemSettingsState } from './useSystemSettingsState';
 import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 
-import { getLimit, isPro, loadLicenseStatus } from '@/stores/license';
+import { getLimit, isPro, loadLicenseStatus } from '@/stores/licenseCommercial';
 
 interface SettingsProps {
   darkMode: () => boolean;

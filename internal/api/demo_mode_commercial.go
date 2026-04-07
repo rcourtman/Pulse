@@ -1,21 +1,15 @@
 package api
 
 import (
-	"context"
 	"net/http"
 	"strings"
-
-	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
 type publicDemoCommercialExposure string
 
 const (
-	publicDemoCommercialExposureHidden   publicDemoCommercialExposure = "hidden"
-	publicDemoCommercialExposureRedacted publicDemoCommercialExposure = "redacted"
+	publicDemoCommercialExposureHidden publicDemoCommercialExposure = "hidden"
 )
-
-type publicDemoCommercialContextKey struct{}
 
 type publicDemoCommercialRoutePolicy struct {
 	route    string
@@ -46,7 +40,7 @@ var publicDemoCommercialPolicies = []publicDemoCommercialRoutePolicy{
 	},
 	{
 		route:    "GET /api/license/entitlements",
-		exposure: publicDemoCommercialExposureRedacted,
+		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/license/entitlements"),
 	},
 	{
@@ -117,31 +111,6 @@ func publicDemoCommercialPolicyForRequest(
 	return "", false
 }
 
-func withPublicDemoCommercialContext(
-	r *http.Request,
-	exposure publicDemoCommercialExposure,
-) *http.Request {
-	if r == nil || exposure != publicDemoCommercialExposureRedacted {
-		return r
-	}
-
-	ctx := context.WithValue(
-		r.Context(),
-		publicDemoCommercialContextKey{},
-		exposure,
-	)
-	return r.WithContext(ctx)
-}
-
-func isPublicDemoCommercialRedactedRequest(r *http.Request) bool {
-	if r == nil {
-		return false
-	}
-
-	exposure, _ := r.Context().Value(publicDemoCommercialContextKey{}).(publicDemoCommercialExposure)
-	return exposure == publicDemoCommercialExposureRedacted
-}
-
 func publicDemoCommercialRouteInventory() []string {
 	routes := make([]string, 0, len(publicDemoCommercialPolicies))
 	for _, policy := range publicDemoCommercialPolicies {
@@ -150,35 +119,18 @@ func publicDemoCommercialRouteInventory() []string {
 	return routes
 }
 
-func sanitizeEntitlementPayloadForPublicDemo(payload EntitlementPayload) EntitlementPayload {
+func sanitizeRuntimeCapabilitiesPayloadForPublicDemo(
+	payload RuntimeCapabilitiesPayload,
+) RuntimeCapabilitiesPayload {
 	sanitized := payload
-	sanitized.Limits = sanitizeEntitlementLimitsForPublicDemo(payload.Limits)
-	sanitized.SubscriptionState = string(pkglicensing.SubStateActive)
-	sanitized.UpgradeReasons = []UpgradeReason{}
-	sanitized.PlanVersion = ""
-	sanitized.Tier = string(pkglicensing.TierFree)
-	sanitized.TrialExpiresAt = nil
-	sanitized.TrialDaysRemaining = nil
-	sanitized.Valid = false
-	sanitized.LicensedEmail = ""
-	sanitized.ExpiresAt = nil
-	sanitized.IsLifetime = false
-	sanitized.DaysRemaining = 0
-	sanitized.InGracePeriod = false
-	sanitized.GracePeriodEnd = nil
-	sanitized.TrialEligible = false
-	sanitized.TrialEligibilityReason = ""
-	sanitized.OverflowDaysRemaining = nil
-	sanitized.LegacyConnections = legacyConnectionCountsModel{}
-	sanitized.HasMigrationGap = false
-	sanitized.CommercialMigration = nil
+	sanitized.Limits = sanitizeLimitStatusesForPublicDemo(payload.Limits)
 	if sanitized.Capabilities == nil {
 		sanitized.Capabilities = []string{}
 	}
 	return sanitized
 }
 
-func sanitizeEntitlementLimitsForPublicDemo(limits []LimitStatus) []LimitStatus {
+func sanitizeLimitStatusesForPublicDemo(limits []LimitStatus) []LimitStatus {
 	if len(limits) == 0 {
 		return []LimitStatus{}
 	}

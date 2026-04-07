@@ -1,6 +1,6 @@
 import { Component, Show } from 'solid-js';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
-import { getUpgradeActionDestination } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import type { RBACFeatureGateCopy } from '@/utils/rbacPresentation';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {

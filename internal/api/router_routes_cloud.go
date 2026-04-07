@@ -74,6 +74,8 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	if r.licenseHandlers != nil {
 		// Hosted trial signup callback: signed token activation flow for self-hosted Pulse Pro trials.
 		r.mux.HandleFunc("/auth/trial-activate", r.licenseHandlers.HandleTrialActivation)
+		// Self-hosted commercial checkout return: complete purchase activation without manual key entry.
+		r.mux.HandleFunc("/auth/license-purchase-activate", r.licenseHandlers.HandleCheckoutActivation)
 	}
 	// Workspace switch handoff: control-plane posts a short-lived JWT for session exchange.
 	// Handler is token-authenticated, self-guards with the tenant handoff key, and

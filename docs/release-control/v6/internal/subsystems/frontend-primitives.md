@@ -406,6 +406,8 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
 `frontend-modern/src/stores/sessionCapabilities.ts`,
 `frontend-modern/src/stores/demoMode.ts`,
+`frontend-modern/src/stores/license.ts`,
+`frontend-modern/src/stores/licenseCommercial.ts`,
 `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/components/shared/useTrialBannerState.ts`, and
 `frontend-modern/src/components/shared/useMonitoredSystemLimitWarningBannerState.ts`,
@@ -423,6 +425,12 @@ response-header inference, hostname heuristics, or per-banner demo branching;
 the runtime bootstrap, shared session-capability store, and shared banner
 hooks stay on one canonical owner so suppression stays coherent across
 customer-facing surfaces.
+That same shared primitive boundary now also treats runtime capability reads
+and commercial reads as separate stores. Shared settings shells and banner
+hooks may read feature truth from `frontend-modern/src/stores/license.ts`, but
+commercial identity, upgrade routing, and trial state must stay in
+`frontend-modern/src/stores/licenseCommercial.ts`, which suppresses public-demo
+loads locally instead of depending on route-local guards.
 Storage disk drawers now also sit on that same shared-primitives floor.
 `frontend-modern/src/components/Storage/DiskDetail.tsx` must render physical-
 disk read, write, and busy charts through `HistoryChart` plus

@@ -1,10 +1,10 @@
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import type { NodeConfig } from '@/types/nodes';
 
 import { notificationStore } from '@/stores/notifications';
 import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
-import { licenseStatus } from '@/stores/license';
+import { licenseStatus, loadLicenseStatus } from '@/stores/licenseCommercial';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import {
@@ -42,6 +42,10 @@ export const useNodeModalState = (props: NodeModalProps) => {
   const [agentInstallCommand, setAgentInstallCommand] = createSignal('');
   const [loadingAgentCommand, setLoadingAgentCommand] = createSignal(false);
   const [agentCommandError, setAgentCommandError] = createSignal<string | null>(null);
+
+  onMount(() => {
+    void loadLicenseStatus();
+  });
 
   const isAdvancedSetupMode = () =>
     formData().setupMode === 'auto' || formData().setupMode === 'manual';

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const startProTrialMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 

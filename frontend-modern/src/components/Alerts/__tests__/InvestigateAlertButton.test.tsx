@@ -44,7 +44,7 @@ vi.mock('@/stores/aiChat', () => ({
   aiChatStore: mockAiChatStore,
 }));
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));

@@ -182,3 +182,8 @@ The RBAC feature-gate state now also depends on the shared
 success/error orchestration. Organization settings paywalls must not keep a
 lane-local `startProTrial()` branch once that shared helper covers the same
 runtime contract.
+That same RBAC paywall surface now also depends on the runtime-versus-
+commercial license split: RBAC enablement must stay on the runtime capability
+store, while free-trial eligibility and upgrade routing stay on the commercial
+store. Organization settings must not collapse those two concerns back into
+one payload just because the same paywall shell renders both.

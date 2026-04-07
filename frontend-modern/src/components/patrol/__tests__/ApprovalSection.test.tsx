@@ -55,7 +55,11 @@ vi.mock('@/stores/aiChat', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (feature: string) => feature === 'ai_autofix' && state.hasAutoFix,
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
   licenseStatus: () => state.entitlements,
+  loadLicenseStatus: vi.fn(),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 

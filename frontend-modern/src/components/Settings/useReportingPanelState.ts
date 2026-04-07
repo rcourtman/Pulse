@@ -3,12 +3,15 @@ import { apiErrorFromResponse, apiFetch } from '@/utils/apiClient';
 import { showSuccess, showWarning } from '@/utils/toast';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import {
-  entitlements,
-  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
-  loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getReportingCatalogErrorMessage,
@@ -67,6 +70,7 @@ export const useReportingPanelState = () => {
 
   onMount(() => {
     loadLicenseStatus();
+    loadCommercialLicenseStatus();
   });
 
   createEffect((wasVisible: boolean) => {

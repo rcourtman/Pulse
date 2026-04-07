@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
 	"net/url"
@@ -21,8 +22,9 @@ import (
 )
 
 const (
-	trialStartRateLimitBurst  = 6
-	trialStartRateLimitWindow = 15 * time.Minute
+	trialStartRateLimitBurst      = 6
+	trialStartRateLimitWindow     = 15 * time.Minute
+	licensePurchaseActivationPath = "/auth/license-purchase-activate"
 )
 
 // revocationFeedToken returns the relay feed token for revocation polling.
@@ -201,6 +203,36 @@ func trialSignupActionURLForRequest(cfg *config.Config, orgID, returnURL, instan
 	parsed.RawQuery = query.Encode()
 
 	return parsed.String(), nil
+}
+
+func licensePurchaseActivationRedirectPath(feature string) string {
+	normalizedFeature := strings.TrimSpace(feature)
+	switch normalizedFeature {
+	case "max_monitored_systems":
+		return "/settings/system/billing/plan?intent=max_monitored_systems"
+	default:
+		return "/settings/system/billing/plan"
+	}
+}
+
+func writeLicensePurchaseActivationFailurePage(w http.ResponseWriter, statusCode int, feature, message string) {
+	if statusCode < http.StatusBadRequest {
+		statusCode = http.StatusBadRequest
+	}
+	redirectPath := licensePurchaseActivationRedirectPath(feature)
+	escapedMessage := html.EscapeString(strings.TrimSpace(message))
+	if escapedMessage == "" {
+		escapedMessage = "Purchase activation could not be completed."
+	}
+	escapedLink := html.EscapeString(redirectPath)
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(statusCode)
+	_, _ = fmt.Fprintf(
+		w,
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Pro activation</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Pro activation failed</h1><p style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Open Pulse Pro billing</a></p></main></body></html>",
+		escapedMessage,
+		escapedLink,
+	)
 }
 
 func normalizeHostForTrial(raw string) string {
@@ -1008,63 +1040,25 @@ func userFriendlyActivationError(err error) string {
 
 // HandleActivateLicense handles POST /api/license/activate
 // Validates and activates a license key.
-func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	var req ActivateLicenseRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ActivateLicenseResponse{
-			Success: false,
-			Message: "Invalid request body",
-		})
-		return
-	}
-
-	if req.LicenseKey == "" {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ActivateLicenseResponse{
-			Success: false,
-			Message: "License key is required",
-		})
-		return
-	}
-
-	// Activate the license
-	service, persistence, err := h.getTenantComponents(r.Context())
+func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey string) (ActivateLicenseResponse, error) {
+	service, persistence, err := h.getTenantComponents(ctx)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to get license components")
-		http.Error(w, "Tenant error", http.StatusInternalServerError)
-		return
+		return ActivateLicenseResponse{}, fmt.Errorf("resolve tenant licensing components: %w", err)
 	}
 
-	orgID := GetOrgID(r.Context())
-	migratedLegacyKey := !strings.HasPrefix(strings.TrimSpace(req.LicenseKey), activationKeyPrefixValue)
+	orgID := GetOrgID(ctx)
+	trimmedKey := strings.TrimSpace(licenseKey)
+	migratedLegacyKey := !strings.HasPrefix(trimmedKey, activationKeyPrefixValue)
 
-	lic, err := service.Activate(req.LicenseKey)
+	lic, err := service.Activate(trimmedKey)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to activate license")
-
 		h.emitConversionEvent(orgID, conversionEvent{
 			Type:    conversionEventLicenseActivationFailed,
 			Surface: "license_api",
 		})
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		json.NewEncoder(w).Encode(ActivateLicenseResponse{
-			Success: false,
-			Message: userFriendlyActivationError(err),
-		})
-		return
+		return ActivateLicenseResponse{}, err
 	}
 
-	// Persist based on activation type.
 	if service.IsActivated() {
 		h.stopHostedEntitlementRefreshLoop(orgID)
 		if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
@@ -1075,12 +1069,10 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		if feedToken := revocationFeedToken(); feedToken != "" {
 			service.StartRevocationPoll(context.Background(), feedToken)
 		}
-		// Preserve migrated v5 keys for downgrade/recovery, but remove stale
-		// legacy persistence after a native v6 activation-key activation.
 		if persistence != nil {
-			if strings.HasPrefix(strings.TrimSpace(req.LicenseKey), activationKeyPrefixValue) {
+			if strings.HasPrefix(trimmedKey, activationKeyPrefixValue) {
 				_ = persistence.Delete()
-			} else if err := persistence.Save(req.LicenseKey); err != nil {
+			} else if err := persistence.Save(trimmedKey); err != nil {
 				log.Warn().Err(err).Msg("Failed to persist migrated legacy license for downgrade fallback")
 			}
 		}
@@ -1106,12 +1098,111 @@ func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.R
 		successMessage = "Pulse v5 license migrated and activated successfully"
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(ActivateLicenseResponse{
+	return ActivateLicenseResponse{
 		Success: true,
 		Message: successMessage,
 		Status:  service.Status(),
-	})
+	}, nil
+}
+
+func (h *LicenseHandlers) HandleActivateLicense(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req ActivateLicenseRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ActivateLicenseResponse{
+			Success: false,
+			Message: "Invalid request body",
+		})
+		return
+	}
+
+	if strings.TrimSpace(req.LicenseKey) == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ActivateLicenseResponse{
+			Success: false,
+			Message: "License key is required",
+		})
+		return
+	}
+
+	response, err := h.activateLicenseKey(r.Context(), req.LicenseKey)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to activate license")
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(ActivateLicenseResponse{
+			Success: false,
+			Message: userFriendlyActivationError(err),
+		})
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// HandleCheckoutActivation handles POST /auth/license-purchase-activate.
+// It redeems a completed commercial checkout session into a local activation
+// and returns the operator to the canonical billing route.
+func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, "", "Purchase activation request was invalid.")
+		return
+	}
+
+	sessionID := strings.TrimSpace(r.FormValue("session_id"))
+	feature := strings.TrimSpace(r.FormValue("feature"))
+	if sessionID == "" {
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, "Purchase activation requires a completed checkout session.")
+		return
+	}
+
+	lsClient := newLicenseServerClientFromLicensing("")
+	if lsClient == nil {
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, "Pulse could not contact the commercial activation service.")
+		return
+	}
+
+	checkoutResult, err := lsClient.GetCheckoutSessionResult(r.Context(), sessionID)
+	if err != nil {
+		log.Warn().Err(err).Str("checkout_session_id", sessionID).Msg("Failed to resolve checkout session during purchase activation")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, "Pulse could not confirm the completed checkout yet. Please try again in a moment.")
+		return
+	}
+
+	if checkoutResult == nil || strings.TrimSpace(checkoutResult.Status) != "fulfilled" {
+		message := "Checkout has not completed yet."
+		if checkoutResult != nil && strings.TrimSpace(checkoutResult.Message) != "" {
+			message = strings.TrimSpace(checkoutResult.Message)
+		}
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, message)
+		return
+	}
+
+	activationKey := strings.TrimSpace(checkoutResult.ActivationKey)
+	if activationKey == "" {
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, "The completed checkout did not return an activation key.")
+		return
+	}
+
+	if _, err := h.activateLicenseKey(r.Context(), activationKey); err != nil {
+		log.Warn().Err(err).Str("checkout_session_id", sessionID).Msg("Failed to activate completed checkout locally")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, userFriendlyActivationError(err))
+		return
+	}
+
+	http.Redirect(w, r, licensePurchaseActivationRedirectPath(feature), http.StatusSeeOther)
 }
 
 // HandleClearLicense handles POST /api/license/clear

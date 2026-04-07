@@ -53,6 +53,8 @@ describe('NodeModal guardrails', () => {
 
   it('routes proxmox agent-install commands through the canonical NodesAPI client for both PVE and PBS', () => {
     expect(nodeModalSource).toContain('useNodeModalState');
+    expect(nodeModalStateSource).toContain("from '@/stores/licenseCommercial';");
+    expect(nodeModalStateSource).not.toContain("from '@/stores/license';\n");
     expect(nodeModalStateSource).toContain('const copyProxmoxAgentInstallCommand = async (');
     expect(nodeModalStateSource).toContain("const data = await NodesAPI.getAgentInstallCommand({");
     expect(nodeModalStateSource).toContain('type,');
@@ -127,6 +129,9 @@ describe('NodeModal guardrails', () => {
     expect(nodeModalStateSource).toContain(
       'API-managed PVE/PBS/PMG connections are governed when the connection is',
     );
+    expect(nodeModalStateSource).toContain('const hostLimitReached = createMemo(() => false);');
+    expect(nodeModalStateSource).toContain("if (ent.subscription_state === 'active' || ent.subscription_state === 'trial')");
+    expect(nodeModalStateSource).toContain('return ent.trial_eligible !== false;');
     expect(nodeModalStateSource).toContain('monitored-system limit banner.');
     expect(nodeModalSettingsOwnerSource).not.toContain('Under agents-only counting');
     expect(nodeModalSettingsOwnerSource).not.toContain('the agent limit');

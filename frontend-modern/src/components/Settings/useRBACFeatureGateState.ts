@@ -1,10 +1,13 @@
 import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import {
-  entitlements,
   hasFeature,
   licenseLoaded,
-  loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { getRBACFeatureGateCopy, type RBACFeatureGateCopy } from '@/utils/rbacPresentation';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -36,6 +39,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
 
   onMount(() => {
     void loadLicenseStatus();
+    void loadCommercialLicenseStatus();
   });
 
   createEffect((wasPaywallVisible) => {

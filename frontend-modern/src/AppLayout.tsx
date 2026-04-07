@@ -6,6 +6,7 @@ import {
   createMemo,
   createSignal,
   onCleanup,
+  onMount,
 } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -39,7 +40,11 @@ import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
 import { demoModeEnabled } from '@/stores/demoMode';
-import { isMultiTenantEnabled, isPro } from '@/stores/license';
+import { isMultiTenantEnabled } from '@/stores/license';
+import {
+  isPro,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -172,6 +177,12 @@ export function AppLayout(props: AppLayoutProps) {
       headerHideTimeout = undefined;
     }
   };
+
+  onMount(() => {
+    if (!demoModeEnabled()) {
+      void loadCommercialLicenseStatus();
+    }
+  });
 
   const showHeader = () => {
     clearHeaderHideTimeout();

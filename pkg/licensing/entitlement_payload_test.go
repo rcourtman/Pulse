@@ -240,6 +240,45 @@ func TestBuildEntitlementPayload_NilStatus_MaxHistoryDays(t *testing.T) {
 	}
 }
 
+func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierRelay,
+		Features:            append([]string(nil), TierFeatures[TierRelay]...),
+		MaxMonitoredSystems: 12,
+	}
+
+	payload := BuildRuntimeCapabilitiesPayloadWithUsage(status, "", EntitlementUsageSnapshot{
+		MonitoredSystems: 5,
+	})
+
+	if !reflect.DeepEqual(payload.Capabilities, status.Features) {
+		t.Fatalf("expected capabilities to match status features")
+	}
+	if payload.MaxHistoryDays != TierHistoryDays[TierRelay] {
+		t.Fatalf("expected relay max history days %d, got %d", TierHistoryDays[TierRelay], payload.MaxHistoryDays)
+	}
+	if len(payload.Limits) != 1 {
+		t.Fatalf("expected one runtime limit, got %d", len(payload.Limits))
+	}
+	if payload.Limits[0].Key != MaxMonitoredSystemsLicenseGateKey {
+		t.Fatalf("expected runtime limit key %q, got %q", MaxMonitoredSystemsLicenseGateKey, payload.Limits[0].Key)
+	}
+	if payload.Limits[0].Current != 5 {
+		t.Fatalf("expected runtime current 5, got %d", payload.Limits[0].Current)
+	}
+}
+
+func TestBuildRuntimeCapabilitiesPayload_NilStatusDefaultsToFreeTier(t *testing.T) {
+	payload := BuildRuntimeCapabilitiesPayload(nil, "")
+	if payload.MaxHistoryDays != TierHistoryDays[TierFree] {
+		t.Fatalf("expected MaxHistoryDays=%d for nil status, got %d", TierHistoryDays[TierFree], payload.MaxHistoryDays)
+	}
+	if len(payload.Capabilities) != 0 {
+		t.Fatalf("expected no runtime capabilities for nil status, got %+v", payload.Capabilities)
+	}
+}
+
 func TestLimitState(t *testing.T) {
 	tests := []struct {
 		name    string

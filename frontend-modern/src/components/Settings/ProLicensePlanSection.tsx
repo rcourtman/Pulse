@@ -1,7 +1,7 @@
 import { Component, For, Show } from 'solid-js';
 import RefreshCw from 'lucide-solid/icons/refresh-cw';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
-import { getUpgradeActionDestination, licenseLoadError } from '@/stores/license';
+import { getUpgradeActionDestination, licenseLoadError } from '@/stores/licenseCommercial';
 import {
   getInactiveProUpsellNotice,
   getLicenseStatusLoadingState,

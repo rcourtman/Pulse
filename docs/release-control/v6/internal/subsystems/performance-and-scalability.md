@@ -702,3 +702,8 @@ consumption. `frontend-modern/src/components/Dashboard/useDashboardState.ts`
 may read connection and alert state only through
 `frontend-modern/src/contexts/appRuntime.ts`; it must not import `@/App` or
 create a reverse dependency into the root shell just to read websocket state.
+The same hot-path discipline now applies to public-demo commercial reads.
+Shared shells may consume the small `/api/license/runtime-capabilities`
+contract for feature truth, but commercial demo routes stay hidden and the
+browser must not keep retrying `/api/license/entitlements` or other hidden
+commercial endpoints from performance-sensitive settings or dashboard shells.

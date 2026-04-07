@@ -53,7 +53,7 @@ vi.mock('@/utils/url', () => ({
   getPulseBaseUrl: () => 'https://pulse.example.com',
 }));
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   entitlements: () => ({ relay: false }),
   getUpgradeActionUrlOrFallback: () => 'https://pulse.example.com/upgrade',

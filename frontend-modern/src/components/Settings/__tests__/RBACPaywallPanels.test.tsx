@@ -6,6 +6,7 @@ import { UserAssignmentsPanel } from '../UserAssignmentsPanel';
 
 const hasFeatureMock = vi.fn();
 const loadLicenseStatusMock = vi.fn();
+const loadCommercialLicenseStatusMock = vi.fn();
 const startProTrialMock = vi.fn();
 const entitlementsMock = vi.fn();
 const trackPaywallViewedMock = vi.fn();
@@ -19,14 +20,18 @@ const notificationErrorMock = vi.fn();
 const loggerErrorMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
+  hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
+  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  licenseLoaded: () => true,
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (feature: string) => ({
     href: `https://example.com/upgrade?feature=${feature}`,
     external: true,
   }),
   getUpgradeActionUrlOrFallback: (feature: string) => `/upgrade?feature=${feature}`,
-  hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  licenseLoaded: () => true,
+  loadLicenseStatus: (...args: unknown[]) => loadCommercialLicenseStatusMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   entitlements: (...args: unknown[]) => entitlementsMock(...args),
 }));
@@ -66,6 +71,7 @@ describe('RBAC paywall settings panels', () => {
   beforeEach(() => {
     hasFeatureMock.mockReset();
     loadLicenseStatusMock.mockReset();
+    loadCommercialLicenseStatusMock.mockReset();
     startProTrialMock.mockReset();
     entitlementsMock.mockReset();
     trackPaywallViewedMock.mockReset();
@@ -80,6 +86,7 @@ describe('RBAC paywall settings panels', () => {
 
     hasFeatureMock.mockReturnValue(true);
     loadLicenseStatusMock.mockResolvedValue(undefined);
+    loadCommercialLicenseStatusMock.mockResolvedValue(undefined);
     startProTrialMock.mockResolvedValue({ outcome: 'started' });
     entitlementsMock.mockReturnValue({ trial_eligible: false });
     getRolesMock.mockResolvedValue([

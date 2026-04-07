@@ -3,6 +3,7 @@ import setupCompletionPanelSource from '../SetupCompletionPanel.tsx?raw';
 
 describe('SetupCompletionPanel guardrails', () => {
   it('keeps setup completion aligned with the canonical infrastructure install workspace', () => {
+    expect(setupCompletionPanelSource).toContain("from '@/stores/licenseCommercial';");
     expect(setupCompletionPanelSource).toContain(
       "const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';",
     );
@@ -24,6 +25,7 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Use the Platform connections workspace when:');
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
     expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
+    expect(setupCompletionPanelSource).toContain('await loadLicenseStatus(true);');
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 

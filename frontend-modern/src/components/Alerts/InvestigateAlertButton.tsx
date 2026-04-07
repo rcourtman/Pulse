@@ -5,7 +5,7 @@ import { useUpgradeNavigation } from '@/components/shared/useUpgradeNavigation';
 import { getCanonicalAlertId } from '@/features/alerts/identity';
 import { formatAlertValue } from '@/utils/alertFormatters';
 import { resolveAlertTargetType } from '@/utils/alertTargetTypes';
-import { getUpgradeActionDestination } from '@/stores/license';
+import { getUpgradeActionDestination } from '@/stores/licenseCommercial';
 import { trackUpgradeClicked } from '@/utils/upgradeMetrics';
 
 interface InvestigateAlertButtonProps {

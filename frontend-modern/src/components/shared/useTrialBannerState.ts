@@ -1,6 +1,10 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { demoModeEnabled } from '@/stores/demoMode';
-import { getUpgradeActionDestination, licenseStatus, loadLicenseStatus } from '@/stores/license';
+import {
+  getUpgradeActionDestination,
+  licenseStatus,
+  loadLicenseStatus,
+} from '@/stores/licenseCommercial';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
   getTrialBannerToneClass,

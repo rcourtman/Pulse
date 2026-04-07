@@ -39,8 +39,9 @@ vi.mock('@/components/shared/Dialog', () => ({
     props.isOpen ? <div>{props.children}</div> : null,
 }));
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   licenseStatus: () => 'active',
+  loadLicenseStatus: vi.fn(),
   startProTrial: vi.fn(),
 }));
 

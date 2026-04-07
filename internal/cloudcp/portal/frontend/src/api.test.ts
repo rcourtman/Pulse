@@ -114,4 +114,31 @@ describe('portal api', function() {
     );
     expect(result.message).toContain('If that email is registered');
   });
+
+  it('supports commercial GET requests for pricing and checkout resolution', async function() {
+    var fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async function() {
+        return { title: 'pricing' };
+      },
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    var api = createPortalAPI({
+      getBootstrap: function() {
+        return bootstrap;
+      },
+    });
+
+    var result = await api.getCommercialJSON<{ title: string }>('/v1/public/pricing-model?track=v6');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/portal/commercial/v1/public/pricing-model?track=v6',
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    );
+    expect(result.title).toBe('pricing');
+  });
 });

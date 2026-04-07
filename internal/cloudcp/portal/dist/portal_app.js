@@ -662,6 +662,11 @@
           method: "POST"
         }, "Failed to sign out.");
       },
+      getCommercialJSON: function(path) {
+        return request(bootstrap().commercial_api_base_url + path, {
+          headers: { Accept: "application/json" }
+        }, "Commercial request failed.");
+      },
       postCommercialJSON: function(path, body) {
         return request(bootstrap().commercial_api_base_url + path, {
           method: "POST",
@@ -826,6 +831,12 @@
     return {
       openBillingPanelID: "",
       upgradeFeatureKey: "",
+      upgradeReturnURL: "",
+      upgradeCheckoutSessionID: "",
+      upgradeCheckoutStatus: "",
+      upgradePricing: createQueryState(null),
+      upgradeCheckout: createMutationState(),
+      upgradeCheckoutResult: createQueryState(null),
       flows: {
         manage: newVerificationFlowState(),
         retrieve: newVerificationFlowState(),
@@ -1388,6 +1399,82 @@
     el.textContent = status.message;
     el.className = "billing-status visible" + (status.error ? " error" : " success");
   }
+  function formatCheckoutDate(value) {
+    if (!value) return "";
+    var parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toLocaleDateString(void 0, { month: "short", day: "numeric", year: "numeric" });
+  }
+  function renderUpgradePlansHTML(billingState) {
+    var pricing = billingState.upgradePricing.data;
+    if (!pricing || !Array.isArray(pricing.plans)) {
+      return "";
+    }
+    var plans = pricing.plans.filter(function(plan) {
+      return Array.isArray(plan.buttons) && plan.buttons.some(function(button) {
+        return button.kind === "checkout" && button.planKey && button.billingCycle;
+      });
+    });
+    if (plans.length === 0) {
+      return "";
+    }
+    return '<div class="billing-upgrade-plan-grid">' + plans.map(function(plan) {
+      var buttons = Array.isArray(plan.buttons) ? plan.buttons : [];
+      var checkoutButtons = buttons.filter(function(button) {
+        return button.kind === "checkout" && button.planKey && button.billingCycle;
+      });
+      return '<article class="billing-upgrade-plan-card' + (plan.highlight ? " highlight" : "") + '">' + (plan.badge ? '<div class="billing-upgrade-plan-badge">' + escapeText(plan.badge) + "</div>" : "") + '<div class="billing-upgrade-plan-header"><div class="billing-upgrade-plan-kicker">' + escapeText(plan.tierKicker) + "</div><h4>" + escapeText(plan.title) + '</h4><div class="billing-upgrade-plan-price">' + escapeText(plan.price) + '</div><div class="billing-upgrade-plan-period">' + escapeText(plan.period) + '</div></div><p class="billing-upgrade-plan-blurb">' + escapeText(plan.blurb) + '</p><ul class="billing-upgrade-plan-features">' + plan.features.map(function(feature) {
+        return '<li class="billing-upgrade-plan-feature tone-' + escapeAttribute(feature.tone) + '"><span class="billing-upgrade-plan-feature-copy">' + String(feature.html || "") + "</span></li>";
+      }).join("") + "</ul>" + (plan.note ? '<div class="helper-text">' + escapeText(plan.note) + "</div>" : "") + '<div class="form-actions">' + checkoutButtons.map(function(button) {
+        return '<button type="button" class="' + escapeAttribute(button.className || "btn-primary") + '" data-account-billing-action="upgrade-start-checkout" data-upgrade-plan-key="' + escapeAttribute(button.planKey || "") + '" data-upgrade-tier="' + escapeAttribute(button.tier || "") + '" data-upgrade-billing-cycle="' + escapeAttribute(button.billingCycle || "") + '"' + (billingState.upgradeCheckout.pending ? " disabled" : "") + ">" + escapeText(button.label) + "</button>";
+      }).join("") + "</div></article>";
+    }).join("") + "</div>";
+  }
+  function renderUpgradePanel(billingState, bootstrap) {
+    var root = getElement3("upgrade-billing-root");
+    if (!root) return;
+    var featureKey = String(billingState.upgradeFeatureKey || "").trim();
+    var pricingState = billingState.upgradePricing;
+    var checkoutResultState = billingState.upgradeCheckoutResult;
+    var result = checkoutResultState.data;
+    var returnURL = String(billingState.upgradeReturnURL || "").trim();
+    var sessionID = String(billingState.upgradeCheckoutSessionID || "").trim();
+    var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : "";
+    var summaryItems = [];
+    if (billingState.upgradeCheckoutStatus === "cancelled") {
+      summaryItems.push('<div class="billing-status visible">Checkout was cancelled before completion.</div>');
+    }
+    if (billingState.upgradeCheckout.pending) {
+      summaryItems.push('<div class="billing-status visible">Redirecting to secure checkout...</div>');
+    }
+    if (billingState.upgradeCheckout.error) {
+      summaryItems.push('<div class="billing-status visible error">' + escapeText(billingState.upgradeCheckout.error) + "</div>");
+    }
+    if (pricingState.status === "loading" && !pricingState.data) {
+      summaryItems.push("<p>Loading self-hosted plan options...</p>");
+    }
+    if (pricingState.status === "error") {
+      summaryItems.push(
+        '<div class="billing-status visible error">' + escapeText(pricingState.error || "Failed to load self-hosted plans.") + '</div><div class="form-actions"><button type="button" class="btn-secondary" data-account-billing-action="upgrade-reload-pricing">Retry plan load</button></div>'
+      );
+    }
+    if (explainer) {
+      summaryItems.push('<div class="helper-text">' + explainer + "</div>");
+    }
+    if (checkoutResultState.status === "loading") {
+      summaryItems.push('<div class="billing-status visible">Finalizing the completed checkout...</div>');
+    } else if (checkoutResultState.status === "error") {
+      summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutResultState.error || "Could not confirm the completed checkout.") + "</div>");
+    } else if (result && result.status === "fulfilled") {
+      var activationForm = returnURL && sessionID ? '<form method="POST" action="' + escapeAttribute(returnURL) + '"><input type="hidden" name="session_id" value="' + escapeAttribute(sessionID) + '"><input type="hidden" name="feature" value="' + escapeAttribute(featureKey) + '"><div class="form-actions"><button class="btn-primary" type="submit">Activate in Pulse Pro</button></div></form>' : '<div class="helper-text">Return to Pulse Pro billing, then use Pulse Account to retrieve the latest active license if automatic activation is unavailable.</div>';
+      summaryItems.push(
+        '<div class="billing-result"><h4>Checkout complete</h4><div class="result-grid"><div><div class="result-meta-label">Plan</div><div class="result-meta-value">' + escapeText(result.tier || result.plan_key || "Purchased") + '</div></div><div><div class="result-meta-label">Purchase email</div><div class="result-meta-value">' + escapeText(result.owner_email || bootstrap.email || "") + '</div></div><div><div class="result-meta-label">Activation key</div><div class="result-meta-value">' + escapeText(result.activation_key_prefix || "Issued") + '</div></div><div><div class="result-meta-label">Monitored systems</div><div class="result-meta-value">' + escapeText(typeof result.max_monitored_systems === "number" && result.max_monitored_systems > 0 ? String(result.max_monitored_systems) : "Included") + "</div></div></div>" + activationForm + "</div>"
+      );
+    } else if (result && result.message) {
+      summaryItems.push('<div class="billing-status visible">' + escapeText(result.message) + "</div>");
+    }
+    root.innerHTML = '<div class="billing-upgrade-root">' + summaryItems.join("") + renderUpgradePlansHTML(billingState) + (pricingState.status === "ready" && pricingState.data && pricingState.data.description ? '<div class="helper-text">' + escapeText(pricingState.data.description) + "</div>" : "") + (result && result.status === "fulfilled" && formatCheckoutDate(result.current_period_end) ? '<div class="helper-text">Next renewal: ' + escapeText(formatCheckoutDate(result.current_period_end)) + "</div>" : "") + "</div>";
+  }
   function renderButton(id, disabled, label) {
     if (!id || !label) return;
     var button = getElement3(id);
@@ -1544,6 +1631,18 @@
           event.preventDefault();
           deps.submitRefund();
           return;
+        case "upgrade-reload-pricing":
+          event.preventDefault();
+          deps.reloadUpgradePricing();
+          return;
+        case "upgrade-start-checkout":
+          event.preventDefault();
+          deps.startUpgradeCheckout(
+            target.getAttribute("data-upgrade-plan-key") || "",
+            target.getAttribute("data-upgrade-tier") || "",
+            target.getAttribute("data-upgrade-billing-cycle") || ""
+          );
+          return;
         case "data-export-request":
           event.preventDefault();
           deps.requestVerificationCode("export");
@@ -1592,6 +1691,13 @@
       if (!billingState.flows) {
         var nextState = createPortalBillingState();
         billingState.openBillingPanelID = nextState.openBillingPanelID;
+        billingState.upgradeFeatureKey = nextState.upgradeFeatureKey;
+        billingState.upgradeReturnURL = nextState.upgradeReturnURL;
+        billingState.upgradeCheckoutSessionID = nextState.upgradeCheckoutSessionID;
+        billingState.upgradeCheckoutStatus = nextState.upgradeCheckoutStatus;
+        billingState.upgradePricing = nextState.upgradePricing;
+        billingState.upgradeCheckout = nextState.upgradeCheckout;
+        billingState.upgradeCheckoutResult = nextState.upgradeCheckoutResult;
         billingState.flows = nextState.flows;
         billingState.refund = nextState.refund;
       }
@@ -1630,6 +1736,7 @@
       }
     }
     function renderAllFlows() {
+      renderUpgrade();
       renderFlow("manage");
       renderFlow("retrieve");
       renderFlow("export");
@@ -1642,6 +1749,9 @@
       renderButton("refund-inline-submit", refundState.submit.pending, refundState.submit.pending ? "Processing..." : "Process Refund");
       renderBillingStatus("refund-inline-status", refundState.status);
     }
+    function renderUpgrade() {
+      renderUpgradePanel(getBillingState(), store.getBootstrap());
+    }
     function resetVerificationFlow(flowID) {
       var flow = verificationFlows[flowID];
       if (!flow) return;
@@ -1650,6 +1760,117 @@
       }, false);
       if (flow.codeInputID) {
         setValue(flow.codeInputID, "");
+      }
+    }
+    function currentPortalBaseURL() {
+      try {
+        var locationURL = new URL(window.location.href);
+        var portalPath = String(store.getBootstrap().portal_path || "/portal").trim() || "/portal";
+        var portalURL = new URL(portalPath, locationURL.origin);
+        return portalURL.toString();
+      } catch {
+        return String(store.getBootstrap().portal_path || "/portal");
+      }
+    }
+    function buildUpgradeCheckoutReturnURL(status) {
+      var url = new URL(currentPortalBaseURL());
+      var billingState = getBillingState();
+      if (billingState.flows.manage.emailValue) {
+        url.searchParams.set("email", billingState.flows.manage.emailValue);
+      }
+      if (billingState.upgradeFeatureKey) {
+        url.searchParams.set("feature", billingState.upgradeFeatureKey);
+      }
+      if (billingState.upgradeReturnURL) {
+        url.searchParams.set("return_url", billingState.upgradeReturnURL);
+      }
+      url.searchParams.set("service", "upgrade");
+      url.searchParams.set("checkout", status);
+      if (status === "success") {
+        url.searchParams.set("session_id", "{CHECKOUT_SESSION_ID}");
+      }
+      return url.toString();
+    }
+    async function loadUpgradePricing(force) {
+      var billingState = getBillingState();
+      if (!force && (billingState.upgradePricing.status === "loading" || billingState.upgradePricing.status === "ready")) {
+        return;
+      }
+      updateBillingState(function(nextBillingState) {
+        beginQueryState(nextBillingState.upgradePricing, null);
+      });
+      try {
+        var pricing = await api.getCommercialJSON("/v1/public/pricing-model?track=v6");
+        updateBillingState(function(nextBillingState) {
+          resolveQueryState(nextBillingState.upgradePricing, pricing);
+        });
+      } catch (err) {
+        updateBillingState(function(nextBillingState) {
+          failQueryState(
+            nextBillingState.upgradePricing,
+            null,
+            err instanceof Error ? err.message : "Failed to load self-hosted plans."
+          );
+        });
+      }
+    }
+    async function resolveCompletedCheckout(force) {
+      var billingState = getBillingState();
+      var sessionID = billingState.upgradeCheckoutSessionID;
+      if (!sessionID) return;
+      if (!force && (billingState.upgradeCheckoutResult.status === "loading" || billingState.upgradeCheckoutResult.status === "ready")) {
+        return;
+      }
+      updateBillingState(function(nextBillingState) {
+        beginQueryState(nextBillingState.upgradeCheckoutResult, null);
+      });
+      try {
+        var result = await api.getCommercialJSON(
+          "/v1/checkout/session?session_id=" + encodeURIComponent(sessionID)
+        );
+        updateBillingState(function(nextBillingState) {
+          resolveQueryState(nextBillingState.upgradeCheckoutResult, result);
+        });
+      } catch (err) {
+        updateBillingState(function(nextBillingState) {
+          failQueryState(
+            nextBillingState.upgradeCheckoutResult,
+            null,
+            err instanceof Error ? err.message : "Failed to confirm the completed checkout."
+          );
+        });
+      }
+    }
+    async function startUpgradeCheckout(planKey, tier, billingCycle) {
+      if (!planKey || !tier || !billingCycle) return;
+      updateBillingState(function(nextBillingState) {
+        beginMutationState(nextBillingState.upgradeCheckout);
+        nextBillingState.upgradeCheckoutResult = createPortalBillingState().upgradeCheckoutResult;
+        nextBillingState.upgradeCheckoutSessionID = "";
+        nextBillingState.upgradeCheckoutStatus = "";
+      });
+      try {
+        var data = await api.postCommercialJSON("/v1/checkout/session", {
+          plan_key: planKey,
+          tier,
+          billing_cycle: billingCycle,
+          success_url: buildUpgradeCheckoutReturnURL("success"),
+          cancel_url: buildUpgradeCheckoutReturnURL("cancelled")
+        });
+        if (!data || !data.url) {
+          throw new Error("Checkout URL was not returned.");
+        }
+        updateBillingState(function(nextBillingState) {
+          succeedMutationState(nextBillingState.upgradeCheckout);
+        });
+        window.location.href = data.url;
+      } catch (err) {
+        updateBillingState(function(nextBillingState) {
+          failMutationState(
+            nextBillingState.upgradeCheckout,
+            err instanceof Error ? err.message : "Failed to start checkout."
+          );
+        });
       }
     }
     var verificationFlows = {
@@ -1931,6 +2152,13 @@
       }
     }
     function renderBillingRuntime() {
+      var billingState = getBillingState();
+      if (billingState.openBillingPanelID === "upgrade-billing-panel" || !!billingState.upgradeFeatureKey || billingState.upgradeCheckoutStatus === "success") {
+        void loadUpgradePricing(false);
+      }
+      if (billingState.upgradeCheckoutStatus === "success" && billingState.upgradeCheckoutSessionID) {
+        void resolveCompletedCheckout(false);
+      }
       renderOpenBillingPanels(getBillingState().openBillingPanelID);
       renderAllFlows();
     }
@@ -1958,6 +2186,12 @@
       },
       submitRefund: function() {
         void submitRefund();
+      },
+      reloadUpgradePricing: function() {
+        void loadUpgradePricing(true);
+      },
+      startUpgradeCheckout: function(planKey, tier, billingCycle) {
+        void startUpgradeCheckout(planKey, tier, billingCycle);
       },
       updateInputValue: function(inputKind, value) {
         updateBillingState(function(billingState) {
@@ -2030,22 +2264,6 @@
   function selfHostedUpgradeActionHighlights(featureKey) {
     return normalizeUpgradeFeatureKey(featureKey) === "max_monitored_systems" ? ["Monitored-system cap", "Plan comparison"] : ["Plan comparison", "Checkout handoff"];
   }
-  function selfHostedUpgradePricingURL(bootstrap, featureKey) {
-    var publicSiteURL = String(bootstrap.public_site_url || "https://pulserelay.pro").trim();
-    var normalizedFeature = normalizeUpgradeFeatureKey(featureKey);
-    try {
-      var url = new URL("/pricing", publicSiteURL);
-      if (normalizedFeature) {
-        url.searchParams.set("feature", normalizedFeature);
-      }
-      url.searchParams.set("utm_source", "pulse-account");
-      url.searchParams.set("utm_medium", "portal");
-      url.searchParams.set("utm_campaign", "self_hosted_upgrade");
-      return url.toString();
-    } catch {
-      return "https://pulserelay.pro/pricing";
-    }
-  }
   function renderSelfHostedUpgradeActionRow(context) {
     var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
     return renderBillingActionRow(
@@ -2060,14 +2278,12 @@
   }
   function renderSelfHostedUpgradeBillingPanel(context) {
     var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
-    var pricingURL = selfHostedUpgradePricingURL(context.bootstrap, featureKey);
-    var linkLabel = featureKey === "max_monitored_systems" ? "Compare monitored-system plans" : "View self-hosted plans";
-    var helperCopy = featureKey === "max_monitored_systems" ? "Choose the self-hosted tier that matches the monitored-system allowance you need, then return to Pulse Pro to activate the new license." : "Choose the self-hosted tier that fits this upgrade, then return to Pulse Pro to activate the new license.";
+    var helperCopy = featureKey === "max_monitored_systems" ? "Choose the self-hosted tier that matches the monitored-system allowance you need, then send the completed purchase back to Pulse Pro for activation." : "Choose the self-hosted tier that fits this upgrade, then send the completed purchase back to Pulse Pro for activation.";
     return renderBillingTaskPanel(
       selfHostedUpgradeActionTitle(featureKey),
-      "Pulse Account owns the commercial handoff. Plan selection and checkout continue on the public self-hosted pricing site.",
+      "Pulse Account owns self-hosted plan selection and checkout for Pulse Pro upgrades.",
       "upgrade-billing-panel",
-      '<div class="form-actions"><a class="btn-primary" id="upgrade-billing-link" href="' + escapeAttr(pricingURL) + '" target="_blank" rel="noopener">' + escapeHTML(linkLabel) + '</a></div><div class="helper-text">' + escapeHTML(helperCopy) + "</div>"
+      '<div id="upgrade-billing-root"></div><div class="helper-text">' + escapeHTML(helperCopy) + "</div>"
     );
   }
   function countWorkspaces(accounts) {
@@ -2739,19 +2955,41 @@
   function normalizeUpgradeFeatureKey2(value) {
     return String(value || "").trim();
   }
+  function normalizeUpgradeReturnURL(value) {
+    return String(value || "").trim();
+  }
+  function normalizeUpgradeCheckoutSessionID(value) {
+    return String(value || "").trim();
+  }
+  function normalizeUpgradeCheckoutStatus(value) {
+    switch (String(value || "").trim()) {
+      case "success":
+        return "success";
+      case "cancelled":
+        return "cancelled";
+      default:
+        return "";
+    }
+  }
   function readPortalRuntimeHandoff(locationHref = window.location.href) {
     try {
       var params = new URL(locationHref).searchParams;
       return {
         email: normalizeHandoffEmail(params.get("email")),
         openBillingPanelID: normalizeHandoffBillingPanel(params.get("service")),
-        upgradeFeatureKey: normalizeUpgradeFeatureKey2(params.get("feature"))
+        upgradeFeatureKey: normalizeUpgradeFeatureKey2(params.get("feature")),
+        upgradeReturnURL: normalizeUpgradeReturnURL(params.get("return_url")),
+        upgradeCheckoutSessionID: normalizeUpgradeCheckoutSessionID(params.get("session_id")),
+        upgradeCheckoutStatus: normalizeUpgradeCheckoutStatus(params.get("checkout"))
       };
     } catch {
       return {
         email: "",
         openBillingPanelID: "",
-        upgradeFeatureKey: ""
+        upgradeFeatureKey: "",
+        upgradeReturnURL: "",
+        upgradeCheckoutSessionID: "",
+        upgradeCheckoutStatus: ""
       };
     }
   }
@@ -2791,11 +3029,17 @@
       store.updateBillingState(function(billingState) {
         billingState.openBillingPanelID = handoff.openBillingPanelID;
         billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+        billingState.upgradeReturnURL = handoff.upgradeReturnURL;
+        billingState.upgradeCheckoutSessionID = handoff.upgradeCheckoutSessionID;
+        billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
       }, { notify: false });
     } else if (handoff.upgradeFeatureKey) {
       store.setActiveShellSection("billing");
       store.updateBillingState(function(billingState) {
         billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+        billingState.upgradeReturnURL = handoff.upgradeReturnURL;
+        billingState.upgradeCheckoutSessionID = handoff.upgradeCheckoutSessionID;
+        billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
       }, { notify: false });
     }
     return {

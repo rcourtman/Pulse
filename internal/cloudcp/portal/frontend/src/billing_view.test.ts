@@ -9,8 +9,10 @@ import {
   renderRefundPanel,
   renderRetrievePanel,
   renderBillingStatus,
+  renderUpgradePanel,
 } from './billing_view';
 import type { PortalBootstrapData, RefundState, BillingStatus, VerificationFlowState } from './types';
+import { createPortalBillingState } from './state';
 
 function createBootstrap(overrides: Partial<PortalBootstrapData> = {}): PortalBootstrapData {
   return {
@@ -219,5 +221,55 @@ describe('services view', function() {
     expect((document.getElementById('manage-inline-step2') as HTMLElement).hidden).toBe(false);
     expect(document.getElementById('manage-inline-status')?.className).toContain('success');
     expect(document.getElementById('manage-inline-status')?.textContent).toBe('Code sent.');
+  });
+
+  it('renders upgrade panel with canonical plans and a return-to-product activation form', function() {
+    document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
+
+    var billingState = createPortalBillingState();
+    billingState.upgradeFeatureKey = 'max_monitored_systems';
+    billingState.upgradeReturnURL = 'https://pulse.example.com/auth/license-purchase-activate';
+    billingState.upgradeCheckoutSessionID = 'cs_success';
+    billingState.upgradePricing.status = 'ready';
+    billingState.upgradePricing.data = {
+      title: 'Pricing',
+      description: 'Canonical pricing model',
+      explainer: 'Pulse counts <strong>monitored systems</strong>.',
+      plans: [
+        {
+          tierKicker: 'Pro+',
+          title: 'Pro+',
+          price: '$14.99',
+          period: '$129/year available too',
+          blurb: 'More room.',
+          features: [{ tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' }],
+          buttons: [
+            {
+              kind: 'checkout',
+              className: 'btn btn-primary',
+              tier: 'pro_plus',
+              planKey: 'price_pro_plus_annual',
+              billingCycle: 'annual',
+              label: 'Buy Annual',
+            },
+          ],
+        },
+      ],
+    };
+    billingState.upgradeCheckoutResult.status = 'ready';
+    billingState.upgradeCheckoutResult.data = {
+      status: 'fulfilled',
+      owner_email: 'buyer@example.com',
+      tier: 'pro_plus',
+      activation_key_prefix: 'ppk_live_preview',
+      max_monitored_systems: 50,
+    };
+
+    renderUpgradePanel(billingState, createBootstrap());
+
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Buy Annual');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('Activate in Pulse Pro');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('session_id');
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('ppk_live_preview');
   });
 });

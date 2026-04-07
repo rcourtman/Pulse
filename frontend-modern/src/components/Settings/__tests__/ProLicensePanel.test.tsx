@@ -39,9 +39,12 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
+  isMultiTenantEnabled: () => true,
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
-  isMultiTenantEnabled: () => true,
   licenseLoadError: () => false,
   licenseStatus: () => mockEntitlements,
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),

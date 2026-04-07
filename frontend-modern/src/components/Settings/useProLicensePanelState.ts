@@ -2,11 +2,11 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
 import {
-  isMultiTenantEnabled,
   licenseLoadError,
   licenseStatus,
   loadLicenseStatus,
-} from '@/stores/license';
+} from '@/stores/licenseCommercial';
+import { isMultiTenantEnabled } from '@/stores/license';
 import { LicenseAPI } from '@/api/license';
 import {
   formatLicensePlanVersion,

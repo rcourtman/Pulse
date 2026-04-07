@@ -7,12 +7,15 @@ import {
 } from 'solid-js';
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
 import {
-  getUpgradeActionDestination,
   isRangeLocked,
-  licenseStatus,
   loadLicenseStatus,
   maxHistoryDays,
 } from '@/stores/license';
+import {
+  getUpgradeActionDestination,
+  licenseStatus,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
 import { calculateOptimalPoints } from '@/utils/downsample';
 import { setupCanvasDPR } from '@/utils/canvasRenderQueue';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
@@ -76,6 +79,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
 
   onMount(() => {
     loadLicenseStatus();
+    loadCommercialLicenseStatus();
   });
 
   createEffect(() => {

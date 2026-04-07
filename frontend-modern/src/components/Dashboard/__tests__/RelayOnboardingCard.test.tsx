@@ -44,10 +44,13 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
   loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
   licenseLoaded: (...args: unknown[]) => licenseLoadedMock(...args),
+}));
+
+vi.mock('@/stores/licenseCommercial', () => ({
+  getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));

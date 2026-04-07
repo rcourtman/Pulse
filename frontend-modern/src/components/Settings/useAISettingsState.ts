@@ -11,11 +11,14 @@ import {
 } from '@/components/Settings/aiSettingsModel';
 import { aiChatStore } from '@/stores/aiChat';
 import {
-  entitlements,
-  getUpgradeActionDestination,
   hasFeature,
   loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
 import { notificationStore } from '@/stores/notifications';
 import type { AISettings as AISettingsType, AIProvider, AuthMethod } from '@/types/ai';
 import {
@@ -828,6 +831,7 @@ export const useAISettingsState = () => {
 
   onMount(() => {
     loadLicenseStatus();
+    loadCommercialLicenseStatus();
 
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);

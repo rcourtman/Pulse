@@ -12,16 +12,41 @@ import (
 
 const defaultCommercialProxyBaseURL = "https://license.pulserelay.pro"
 
-var allowedCommercialProxyEndpoints = map[string]string{
-	"/v1/manage/request":           http.MethodPost,
-	"/v1/manage":                   http.MethodPost,
-	"/v1/retrieve-license/request": http.MethodPost,
-	"/v1/retrieve-license":         http.MethodPost,
-	"/v1/gdpr/request-export":      http.MethodPost,
-	"/v1/gdpr/export":              http.MethodPost,
-	"/v1/gdpr/request-delete":      http.MethodPost,
-	"/v1/gdpr/confirm-delete":      http.MethodPost,
-	"/v1/self-refund":              http.MethodPost,
+var allowedCommercialProxyEndpoints = map[string]map[string]struct{}{
+	"/v1/public/pricing-model": {
+		http.MethodGet: {},
+	},
+	"/v1/checkout/session": {
+		http.MethodGet:  {},
+		http.MethodPost: {},
+	},
+	"/v1/manage/request": {
+		http.MethodPost: {},
+	},
+	"/v1/manage": {
+		http.MethodPost: {},
+	},
+	"/v1/retrieve-license/request": {
+		http.MethodPost: {},
+	},
+	"/v1/retrieve-license": {
+		http.MethodPost: {},
+	},
+	"/v1/gdpr/request-export": {
+		http.MethodPost: {},
+	},
+	"/v1/gdpr/export": {
+		http.MethodPost: {},
+	},
+	"/v1/gdpr/request-delete": {
+		http.MethodPost: {},
+	},
+	"/v1/gdpr/confirm-delete": {
+		http.MethodPost: {},
+	},
+	"/v1/self-refund": {
+		http.MethodPost: {},
+	},
 }
 
 type CommercialProxyConfig struct {
@@ -37,15 +62,14 @@ func HandleCommercialProxy(cfg CommercialProxyConfig) http.HandlerFunc {
 	client := &http.Client{Timeout: 15 * time.Second}
 
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		targetPath := normalizeCommercialProxyPath(r.PathValue("commercial_path"))
+		allowedMethods, ok := allowedCommercialProxyEndpoints[targetPath]
+		if !ok {
+			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
-
-		targetPath := normalizeCommercialProxyPath(r.PathValue("commercial_path"))
-		expectedMethod, ok := allowedCommercialProxyEndpoints[targetPath]
-		if !ok || expectedMethod != r.Method {
-			http.Error(w, "Not found", http.StatusNotFound)
+		if _, allowed := allowedMethods[r.Method]; !allowed {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
@@ -60,6 +84,7 @@ func HandleCommercialProxy(cfg CommercialProxyConfig) http.HandlerFunc {
 			http.Error(w, "internal error", http.StatusInternalServerError)
 			return
 		}
+		upstreamURL.RawQuery = strings.TrimSpace(r.URL.RawQuery)
 
 		req, err := http.NewRequestWithContext(r.Context(), r.Method, upstreamURL.String(), bytes.NewReader(body))
 		if err != nil {

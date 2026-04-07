@@ -84,6 +84,22 @@ type EntitlementPayload struct {
 	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
 }
 
+// RuntimeCapabilitiesPayload is the canonical non-commercial license contract
+// for feature gating and runtime retention/limit decisions.
+type RuntimeCapabilitiesPayload struct {
+	// Capabilities lists all granted capability keys.
+	Capabilities []string `json:"capabilities"`
+
+	// Limits lists quantitative limits with current usage.
+	Limits []LimitStatus `json:"limits"`
+
+	// HostedMode indicates that this server is running in Pulse hosted mode.
+	HostedMode bool `json:"hosted_mode"`
+
+	// MaxHistoryDays is the maximum metrics history retention in days for the current tier.
+	MaxHistoryDays int `json:"max_history_days"`
+}
+
 // LimitStatus represents a quantitative limit with current usage state.
 type LimitStatus struct {
 	// Key is the limit identifier (e.g., "max_monitored_systems").
@@ -139,6 +155,35 @@ func (s EntitlementUsageSnapshot) monitoredSystemCount() int64 {
 // BuildEntitlementPayload constructs the normalized payload from LicenseStatus.
 func BuildEntitlementPayload(status *LicenseStatus, subscriptionState string) EntitlementPayload {
 	return BuildEntitlementPayloadWithUsage(status, subscriptionState, EntitlementUsageSnapshot{}, nil)
+}
+
+// BuildRuntimeCapabilitiesPayload constructs the canonical non-commercial
+// runtime capability payload from LicenseStatus.
+func BuildRuntimeCapabilitiesPayload(
+	status *LicenseStatus,
+	subscriptionState string,
+) RuntimeCapabilitiesPayload {
+	return BuildRuntimeCapabilitiesPayloadWithUsage(
+		status,
+		subscriptionState,
+		EntitlementUsageSnapshot{},
+	)
+}
+
+// BuildRuntimeCapabilitiesPayloadWithUsage constructs the canonical
+// non-commercial runtime capability payload from LicenseStatus and observed usage.
+func BuildRuntimeCapabilitiesPayloadWithUsage(
+	status *LicenseStatus,
+	subscriptionState string,
+	usage EntitlementUsageSnapshot,
+) RuntimeCapabilitiesPayload {
+	entitlementPayload := BuildEntitlementPayloadWithUsage(status, subscriptionState, usage, nil)
+	return RuntimeCapabilitiesPayload{
+		Capabilities:   append([]string(nil), entitlementPayload.Capabilities...),
+		Limits:         append([]LimitStatus(nil), entitlementPayload.Limits...),
+		HostedMode:     entitlementPayload.HostedMode,
+		MaxHistoryDays: entitlementPayload.MaxHistoryDays,
+	}
 }
 
 // BuildEntitlementPayloadWithUsage constructs the normalized payload from LicenseStatus and observed usage.

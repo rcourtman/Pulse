@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 import PricingHandoff from '@/pages/PricingHandoff';
+import { getPulseAccountPortalUpgradeUrl } from '@/utils/pricingHandoff';
 
 const trackPaywallViewedMock = vi.fn();
 const handoffToExternalPricingMock = vi.fn();
@@ -34,6 +35,11 @@ describe('PricingHandoff', () => {
 
   it('hands self-hosted upgrade requests off to Pulse Account', async () => {
     window.history.replaceState({}, '', '/pricing?feature=relay');
+    const expectedDestination = getPulseAccountPortalUpgradeUrl(
+      'relay',
+      undefined,
+      'http://localhost:3000/pricing?feature=relay',
+    );
 
     render(() => (
       <Router>
@@ -43,14 +49,14 @@ describe('PricingHandoff', () => {
 
     await waitFor(() => {
       expect(handoffToExternalPricingMock).toHaveBeenCalledWith(
-        'https://cloud.pulserelay.pro/portal?feature=relay&service=upgrade',
+        expectedDestination,
       );
     });
 
     expect(screen.getByRole('heading', { name: 'Redirecting to Pulse Account' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /continue to Pulse Account/i })).toHaveAttribute(
       'href',
-      'https://cloud.pulserelay.pro/portal?feature=relay&service=upgrade',
+      expectedDestination,
     );
   });
 

@@ -270,6 +270,58 @@ func TestClientExchangeLegacyLicense(t *testing.T) {
 	})
 }
 
+func TestClientGetCheckoutSessionResult(t *testing.T) {
+	t.Run("successful checkout session lookup", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Errorf("Method = %q, want GET", r.Method)
+			}
+			if r.URL.Path != "/v1/checkout/session" {
+				t.Errorf("Path = %q, want /v1/checkout/session", r.URL.Path)
+			}
+			if got := r.URL.Query().Get("session_id"); got != "cs_test_123" {
+				t.Errorf("session_id = %q, want cs_test_123", got)
+			}
+			if r.Header.Get("Accept") != "application/json" {
+				t.Errorf("Accept = %q, want application/json", r.Header.Get("Accept"))
+			}
+
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(CheckoutSessionResult{
+				Status:              "fulfilled",
+				CheckoutStatus:      "complete",
+				PaymentStatus:       "paid",
+				ActivationKeyPrefix: "ppk_live_",
+				Tier:                "pro",
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		result, err := client.GetCheckoutSessionResult(context.Background(), " cs_test_123 ")
+		if err != nil {
+			t.Fatalf("GetCheckoutSessionResult failed: %v", err)
+		}
+		if result.Status != "fulfilled" {
+			t.Fatalf("Status = %q, want fulfilled", result.Status)
+		}
+		if result.CheckoutStatus != "complete" {
+			t.Fatalf("CheckoutStatus = %q, want complete", result.CheckoutStatus)
+		}
+	})
+
+	t.Run("empty session id fails before transport", func(t *testing.T) {
+		client := NewLicenseServerClient("https://license.example.com")
+		_, err := client.GetCheckoutSessionResult(context.Background(), "   ")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+		if err.Error() != "checkout session id is required" {
+			t.Fatalf("err = %q, want checkout session id is required", err.Error())
+		}
+	})
+}
+
 func TestClientRefreshGrant(t *testing.T) {
 	t.Run("successful refresh", func(t *testing.T) {
 		newGrantJWT := makeTestGrantJWT(t, &GrantClaims{

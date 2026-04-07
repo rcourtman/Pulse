@@ -592,3 +592,8 @@ through `frontend-modern/src/routing/resourceLinks.ts` where those surfaces
 exist, rather than forcing operators to pivot manually through search or
 assistant prompts to continue investigating API-backed platforms such as
 TrueNAS.
+Patrol upgrade and trial posture now follows the same runtime-versus-
+commercial split as the rest of the app. Patrol runtime availability must stay
+on the non-commercial capability store, while approval/trial CTAs use the
+shared commercial store and trial-start helper. Patrol surfaces must not
+recombine those two contracts into one entitlement payload.

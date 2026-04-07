@@ -23,6 +23,8 @@ describe('services controller', function() {
       confirmVerificationCode: vi.fn(),
       copyRetrievedLicense: vi.fn(),
       submitRefund: vi.fn(),
+      reloadUpgradePricing: vi.fn(),
+      startUpgradeCheckout: vi.fn(),
       updateInputValue: vi.fn(),
       updateDeleteConfirmation: vi.fn(),
     };
@@ -37,6 +39,8 @@ describe('services controller', function() {
       '<button id="confirm" data-account-billing-action="retrieve-inline-confirm">Confirm</button>' +
       '<button id="copy" data-account-billing-action="retrieve-inline-copy">Copy</button>' +
       '<button id="refund" data-account-billing-action="refund-inline-submit">Refund</button>' +
+      '<button id="reload" data-account-billing-action="upgrade-reload-pricing">Reload</button>' +
+      '<button id="checkout" data-account-billing-action="upgrade-start-checkout" data-upgrade-plan-key="relay_professional" data-upgrade-tier="professional" data-upgrade-billing-cycle="monthly">Checkout</button>' +
       '<div id="retrieve-billing-panel"></div>';
 
     var scrollIntoView = vi.fn();
@@ -68,6 +72,16 @@ describe('services controller', function() {
 
     document.getElementById('refund')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(deps.submitRefund).toHaveBeenCalled();
+
+    document.getElementById('reload')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(deps.reloadUpgradePricing).toHaveBeenCalled();
+
+    document.getElementById('checkout')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    expect(deps.startUpgradeCheckout).toHaveBeenCalledWith(
+      'relay_professional',
+      'professional',
+      'monthly',
+    );
   });
 
   it('routes input and checkbox changes into state update hooks', function() {
@@ -81,6 +95,8 @@ describe('services controller', function() {
       confirmVerificationCode: vi.fn(),
       copyRetrievedLicense: vi.fn(),
       submitRefund: vi.fn(),
+      reloadUpgradePricing: vi.fn(),
+      startUpgradeCheckout: vi.fn(),
       updateInputValue: vi.fn(),
       updateDeleteConfirmation: vi.fn(),
     };

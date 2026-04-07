@@ -7,7 +7,7 @@ import {
   hasMigrationGap,
   legacyConnections,
   loadLicenseStatus,
-} from '@/stores/license';
+} from '@/stores/licenseCommercial';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
   scopeSelfHostedBillingDestination,

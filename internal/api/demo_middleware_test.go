@@ -53,10 +53,12 @@ func TestDemoModeMiddleware(t *testing.T) {
 		{"demo on oidc provider callback", true, http.MethodPost, "/api/oidc/acme/callback", "", true, http.StatusOK, true},
 		{"demo on logout", true, http.MethodPost, "/api/logout", "", true, http.StatusOK, true},
 
-		// Demo mode enabled - commercial surfaces are hidden or redacted centrally
+		// Demo mode enabled - commercial surfaces are hidden centrally
 		{"demo on hidden license status", true, http.MethodGet, "/api/license/status", "", false, http.StatusNotFound, true},
+		{"demo on hidden license entitlements", true, http.MethodGet, "/api/license/entitlements", "", false, http.StatusNotFound, true},
 		{"demo on hidden license activate", true, http.MethodPost, "/api/license/activate", "", false, http.StatusNotFound, true},
 		{"demo on hidden trial activation", true, http.MethodGet, "/auth/trial-activate", "", false, http.StatusNotFound, true},
+		{"demo on runtime capabilities", true, http.MethodGet, "/api/license/runtime-capabilities", "", true, http.StatusOK, true},
 
 		// Demo mode enabled - modification requests blocked
 		{"demo on POST", true, http.MethodPost, "/api/users", "", false, http.StatusForbidden, true},
@@ -110,28 +112,6 @@ func TestDemoModeMiddleware(t *testing.T) {
 				t.Errorf("X-Demo-Mode header present = %v, want %v", hasDemoHeader, tt.wantDemoHeader)
 			}
 		})
-	}
-}
-
-func TestDemoModeMiddleware_RedactsCommercialEntitlements(t *testing.T) {
-	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isPublicDemoCommercialRedactedRequest(r) {
-			t.Fatal("expected demo middleware to mark entitlements request as redacted")
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	middleware := DemoModeMiddleware(&config.Config{DemoMode: true}, nextHandler)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil)
-	rr := httptest.NewRecorder()
-	middleware.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusNoContent {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNoContent)
-	}
-	if rr.Header().Get("X-Demo-Mode") != "true" {
-		t.Fatalf("X-Demo-Mode header = %q, want %q", rr.Header().Get("X-Demo-Mode"), "true")
 	}
 }
 

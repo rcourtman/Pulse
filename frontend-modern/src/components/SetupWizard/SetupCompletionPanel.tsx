@@ -4,6 +4,7 @@ import {
   createEffect,
   createMemo,
   onCleanup,
+  onMount,
   Show,
   For,
 } from 'solid-js';
@@ -33,7 +34,7 @@ import {
 import {
   loadLicenseStatus,
   entitlements,
-} from '@/stores/license';
+} from '@/stores/licenseCommercial';
 import {
   RELAY_ONBOARDING_SETUP_LABEL,
   RELAY_ONBOARDING_SETUP_WIZARD_TRIAL_LABEL,
@@ -129,6 +130,10 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const [trialStarted, setTrialStarted] = createSignal(false);
   const [relayPaywallTracked, setRelayPaywallTracked] = createSignal(false);
   let firstConnectionTracked = false;
+
+  onMount(() => {
+    void loadLicenseStatus();
+  });
 
   createEffect(() => {
     if (connectedAgents().length > 0 && !relayPaywallTracked()) {

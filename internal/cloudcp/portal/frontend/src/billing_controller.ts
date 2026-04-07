@@ -10,6 +10,8 @@ export interface BillingControllerDeps {
   confirmVerificationCode: (flowID: 'manage' | 'retrieve' | 'export' | 'delete') => void;
   copyRetrievedLicense: () => void;
   submitRefund: () => void;
+  reloadUpgradePricing: () => void;
+  startUpgradeCheckout: (planKey: string, tier: string, billingCycle: string) => void;
   updateInputValue: (inputKind: string, value: string) => void;
   updateDeleteConfirmation: (checked: boolean) => void;
 }
@@ -82,6 +84,18 @@ export function installBillingController(deps: BillingControllerDeps): void {
       case 'refund-inline-submit':
         event.preventDefault();
         deps.submitRefund();
+        return;
+      case 'upgrade-reload-pricing':
+        event.preventDefault();
+        deps.reloadUpgradePricing();
+        return;
+      case 'upgrade-start-checkout':
+        event.preventDefault();
+        deps.startUpgradeCheckout(
+          target.getAttribute('data-upgrade-plan-key') || '',
+          target.getAttribute('data-upgrade-tier') || '',
+          target.getAttribute('data-upgrade-billing-cycle') || '',
+        );
         return;
       case 'data-export-request':
         event.preventDefault();

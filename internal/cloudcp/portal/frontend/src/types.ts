@@ -44,6 +44,63 @@ export interface PortalBootstrapData {
   accounts: PortalAccountSummary[];
 }
 
+export interface PortalUpgradePricingFeature {
+  tone: string;
+  html: string;
+}
+
+export interface PortalUpgradePricingButton {
+  kind: string;
+  href?: string;
+  className: string;
+  tier?: string;
+  planKey?: string;
+  billingCycle?: string;
+  label: string;
+}
+
+export interface PortalUpgradePricingPlan {
+  badge?: string;
+  highlight?: boolean;
+  tierKicker: string;
+  title: string;
+  price: string;
+  period: string;
+  blurb: string;
+  features: PortalUpgradePricingFeature[];
+  buttons?: PortalUpgradePricingButton[];
+  note?: string;
+}
+
+export interface PortalUpgradePricingModel {
+  title: string;
+  description: string;
+  explainer?: string;
+  plans: PortalUpgradePricingPlan[];
+}
+
+export type PortalUpgradeCheckoutStatus = '' | 'success' | 'cancelled';
+
+export interface PortalCheckoutSessionCreateResponse {
+  url?: string;
+  plan_key?: string;
+  tier?: string;
+  billing_cycle?: string;
+}
+
+export interface PortalCheckoutSessionResult {
+  status?: string;
+  message?: string;
+  checkout_status?: string;
+  payment_status?: string;
+  owner_email?: string;
+  tier?: string;
+  plan_key?: string;
+  activation_key_prefix?: string;
+  max_monitored_systems?: number;
+  current_period_end?: string;
+}
+
 export interface PortalLoginState {
   emailValue: string;
   request: PortalMutationState;
@@ -116,6 +173,12 @@ export interface RefundState {
 export interface PortalBillingState {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
+  upgradeReturnURL: string;
+  upgradeCheckoutSessionID: string;
+  upgradeCheckoutStatus: PortalUpgradeCheckoutStatus;
+  upgradePricing: PortalQueryState<PortalUpgradePricingModel | null>;
+  upgradeCheckout: PortalMutationState;
+  upgradeCheckoutResult: PortalQueryState<PortalCheckoutSessionResult | null>;
   flows: Record<PortalBillingFlowID, VerificationFlowState>;
   refund: RefundState;
 }

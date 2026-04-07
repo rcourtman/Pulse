@@ -3466,21 +3466,22 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/security/validate-bootstrap-token",
 				"/api/security/quick-setup", // Handler does its own auth (bootstrap token or session)
 				"/api/version",
-				"/api/login",                     // Add login endpoint as public
-				"/api/public/signup",             // Hosted mode: public signup
-				"/api/public/magic-link/request", // Hosted mode: request magic link
-				"/api/public/magic-link/verify",  // Hosted mode: verify magic link
-				"/api/cloud/handoff/exchange",    // Hosted mode: control-plane workspace handoff (token-authenticated)
-				"/api/webhooks/stripe",           // Hosted mode: Stripe webhook (signature verification is auth)
-				"/install.sh",                    // Unified agent installer
-				"/install.ps1",                   // Unified agent Windows installer
-				"/download/pulse-agent",          // Unified agent binary
-				"/api/agent/version",             // Agent update checks need to work before auth
-				"/api/agent/ws",                  // Agent WebSocket has its own auth via registration
-				"/api/server/info",               // Server info for installer script
-				"/api/ai/oauth/callback",         // OAuth callback from Anthropic for Claude subscription auth
-				"/auth/cloud-handoff",            // Cloud control plane handoff (token-authenticated)
-				"/auth/trial-activate",           // Hosted trial signup callback (token-authenticated)
+				"/api/login",                      // Add login endpoint as public
+				"/api/public/signup",              // Hosted mode: public signup
+				"/api/public/magic-link/request",  // Hosted mode: request magic link
+				"/api/public/magic-link/verify",   // Hosted mode: verify magic link
+				"/api/cloud/handoff/exchange",     // Hosted mode: control-plane workspace handoff (token-authenticated)
+				"/api/webhooks/stripe",            // Hosted mode: Stripe webhook (signature verification is auth)
+				"/install.sh",                     // Unified agent installer
+				"/install.ps1",                    // Unified agent Windows installer
+				"/download/pulse-agent",           // Unified agent binary
+				"/api/agent/version",              // Agent update checks need to work before auth
+				"/api/agent/ws",                   // Agent WebSocket has its own auth via registration
+				"/api/server/info",                // Server info for installer script
+				"/api/ai/oauth/callback",          // OAuth callback from Anthropic for Claude subscription auth
+				"/auth/cloud-handoff",             // Cloud control plane handoff (token-authenticated)
+				"/auth/trial-activate",            // Hosted trial signup callback (token-authenticated)
+				"/auth/license-purchase-activate", // Self-hosted checkout return (session-authenticated via commercial backend)
 			}
 
 			// Also allow static assets without auth (JS, CSS, etc)
@@ -3636,6 +3637,10 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		}
 		// Skip CSRF for hosted trial activation callback (GET with signed token).
 		if req.URL.Path == "/auth/trial-activate" {
+			skipCSRF = true
+		}
+		// Skip CSRF for self-hosted checkout activation return (POST from Pulse Account, no prior session required).
+		if req.URL.Path == "/auth/license-purchase-activate" {
 			skipCSRF = true
 		}
 		// Skip CSRF for control-plane workspace handoff exchange (POST with signed handoff token).

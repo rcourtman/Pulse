@@ -173,13 +173,16 @@ That same public-demo boundary now also owns route-level commercial
 classification. `internal/api/demo_middleware.go` and
 `internal/api/demo_mode_commercial.go` must decide centrally which commercial
 endpoints are fully hidden (`404`) and which remain available only as a
-redacted public contract. `/api/license/entitlements` is the canonical
-redacted exception: it may continue to carry capability and history-retention
-fields needed for demo-visible product behavior, but it must not expose
+non-commercial public contract. `/api/license/runtime-capabilities` is the
+canonical public exception: it may carry capability and history-retention
+fields needed for demo-visible product behavior, but
+`/api/license/entitlements` must stay hidden and public browsers must not see
 licensed identity, plan labels, upgrade reasons, trial urgency, or observed
-usage counts to public browsers. The governed browser proof for that posture
-lives in `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts`
-and is expected to stay runnable through
+usage counts. The commercial store must also fail closed locally in demo mode
+so hidden routes are not probed from the browser shell. The governed browser
+proof for that posture lives in
+`tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
+expected to stay runnable through
 `tests/integration/scripts/run-tests.sh demo-contract`.
 Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan

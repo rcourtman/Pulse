@@ -3,12 +3,15 @@ import { apiFetchJSON } from '@/utils/apiClient';
 import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
 import {
-  entitlements,
-  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
-  loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getAuditWebhookDuplicateUrlMessage,
@@ -99,6 +102,7 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
 
   onMount(() => {
     loadLicenseStatus();
+    loadCommercialLicenseStatus();
   });
 
   createEffect((wasPaywallVisible: boolean) => {

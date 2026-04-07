@@ -8,12 +8,15 @@ import {
 import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showToast, showWarning } from '@/utils/toast';
 import {
-  entitlements,
-  getUpgradeActionDestination,
   hasFeature,
   licenseLoaded,
-  loadLicenseStatus,
 } from '@/stores/license';
+import {
+  entitlements,
+  getUpgradeActionDestination,
+  loadLicenseStatus as loadCommercialLicenseStatus,
+} from '@/stores/licenseCommercial';
+import { loadLicenseStatus } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 
@@ -542,6 +545,7 @@ export const useAuditLogPanelState = () => {
   onMount(() => {
     setIsMounted(true);
     void loadLicenseStatus();
+    void loadCommercialLicenseStatus();
   });
 
   createEffect(() => {

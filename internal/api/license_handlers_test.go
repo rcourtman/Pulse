@@ -673,6 +673,119 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 	}
 }
 
+func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndRedirectsToBilling(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_checkout_success",
+		Tier:                "pro_plus",
+		State:               "active",
+		Features:            []string{"relay", "ai_alerts"},
+		MaxMonitoredSystems: 50,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "buyer@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	license.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { license.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checkout/session":
+			if r.Method != http.MethodGet {
+				t.Fatalf("checkout session method = %s, want GET", r.Method)
+			}
+			if got := r.URL.Query().Get("session_id"); got != "cs_success" {
+				t.Fatalf("session_id = %q, want cs_success", got)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"fulfilled","activation_key":"ppk_live_checkout_activation"}`))
+		case "/v1/activate":
+			if r.Method != http.MethodPost {
+				t.Fatalf("activate method = %s, want POST", r.Method)
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"license": map[string]any{
+					"license_id":            "lic_checkout_success",
+					"state":                 "active",
+					"tier":                  "pro_plus",
+					"features":              []string{"relay", "ai_alerts"},
+					"max_monitored_systems": 50,
+				},
+				"installation": map[string]any{
+					"installation_id":    "inst_checkout_success",
+					"installation_token": "pit_live_checkout_success",
+					"status":             "active",
+				},
+				"grant": map[string]any{
+					"jwt":        grantJWT,
+					"jti":        "grant_checkout_success",
+					"expires_at": time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+			})
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	handler := createTestHandler(t)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		licensePurchaseActivationPath,
+		strings.NewReader("session_id=cs_success&feature=max_monitored_systems"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutActivation(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusSeeOther, rec.Body.String())
+	}
+	if got := rec.Header().Get("Location"); got != "/settings/system/billing/plan?intent=max_monitored_systems" {
+		t.Fatalf("location = %q, want monitored-system billing plan route", got)
+	}
+	if !handler.Service(context.Background()).IsActivated() {
+		t.Fatal("expected completed checkout to activate the local license")
+	}
+}
+
+func TestHandleCheckoutActivation_RendersFailurePageWhenCheckoutIsNotFulfilled(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/session" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"pending","message":"Checkout is not complete yet."}`))
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	handler := createTestHandler(t)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		licensePurchaseActivationPath,
+		strings.NewReader("session_id=cs_pending"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutActivation(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "Checkout is not complete yet.") {
+		t.Fatalf("body = %q, want pending checkout message", rec.Body.String())
+	}
+}
+
 // ========================================
 // userFriendlyActivationError tests
 // ========================================

@@ -78,4 +78,5 @@ var csrfSkipAllowlist = []string{
 	"/api/setup-script-url",
 	"/auth/cloud-handoff",
 	"/auth/trial-activate",
+	licensePurchaseActivationPath,
 }

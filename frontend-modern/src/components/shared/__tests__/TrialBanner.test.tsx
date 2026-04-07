@@ -26,7 +26,7 @@ const {
     snoozeUpsellMock: vi.fn(),
   }));
 
-vi.mock('@/stores/license', () => ({
+vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
