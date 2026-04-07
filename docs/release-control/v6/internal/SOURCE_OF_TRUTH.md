@@ -142,6 +142,12 @@ item, findings, approvals, reconnect state, instance switching, and contextual
 AI handoff.
 Public/store copy and primary mobile shell labels must reinforce that narrower
 job instead of promising a pocket dashboard with full desktop parity.
+Mobile earns broader authority only after short operator validation confirms
+that users can open `Now`, tell what needs attention, act, and recover trust
+without desktop fallback.
+Until that validation and the remaining hardware proof gates pass, widen mobile
+through clearer ops cues and trust repair only, not through extra tabs, graphs,
+or desktop-parity surface expansion.
 
 ## Release Definition
 
