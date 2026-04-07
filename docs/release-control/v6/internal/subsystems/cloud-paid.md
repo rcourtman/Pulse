@@ -64,7 +64,7 @@ agreement, and cloud-specific enforcement rules.
 42. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
 43. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
 44. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-45. `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`
+45. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
 46. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
 47. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
 48. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
@@ -109,7 +109,7 @@ agreement, and cloud-specific enforcement rules.
 13. Add or change hosted billing-admin presentation through `frontend-modern/src/components/Settings/BillingAdminPanel.tsx`, `frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx`, and `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-16. Add or change self-hosted Pro activation, trial, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+16. Add or change self-hosted Pro plan, trial, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
 17. Add or change monitored-system ledger presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 18. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
@@ -362,14 +362,15 @@ That same helper boundary also owns generic settings-paywall CTA labels such as
 shared upgrade presentation owner instead of embedding those CTA strings
 locally.
 The same shared self-hosted commercial presentation boundary also owns the
-activation-surface copy for `SelfHostedCommercialActivationSection.tsx`,
-including the activation field label/help text, legacy-key exchange notice,
-and self-serve trial panel labels, so that activation wording does not drift
-separately from the rest of the Pro billing surface.
-That same activation boundary also owns the linked legal surface:
-`SelfHostedCommercialActivationSection.tsx` must route its Terms-of-Service
-link through the shipped `TERMS.md` docs asset instead of sending operators to
-GitHub `main`, so the activation trust surface stays version-matched and
+recovery-surface copy for `SelfHostedCommercialRecoverySection.tsx`,
+including the existing-key field label/help text and legacy-key exchange
+notice, while `selfHostedBillingPresentation.ts` owns the first-class plan and
+trial copy that belongs on the primary billing surface. That split prevents
+manual key redemption from drifting back into the main purchase or trial path.
+That same recovery boundary also owns the linked legal surface:
+`SelfHostedCommercialRecoverySection.tsx` must route its Terms-of-Service link
+through the shipped `TERMS.md` docs asset instead of sending operators to
+GitHub `main`, so the recovery trust surface stays version-matched and
 available on restricted installs.
 Hosted self-serve trial leases are also part of that same contract. A redeemed
 hosted trial must carry the canonical Pro capability set and the authoritative
@@ -427,11 +428,14 @@ checkout-session creation, and the purchase return handoff back into Pulse via
 public pricing surface inside the runtime, and the authenticated portal shell
 must not collapse back into a public-site-only waystation for new-purchase
 depth. That handoff now starts through Pulse-owned `GET /auth/license-purchase-start`,
-which mints a signed `purchase_return_token` for the local instance before the
-browser leaves for `Pulse Account`. `Pulse Account` must resolve that signed
-state through Pulse-owned `GET /auth/license-purchase-handoff` before it
-starts checkout, so the portal never trusts loose `feature` or `return_url`
-query parameters for self-hosted purchase completion. Stripe success now lands
+which mints a signed `purchase_return_token` for the local instance, wraps it
+inside a short-lived Pulse-owned purchase handoff record, and sends
+`Pulse Account` an absolute `purchase_handoff_url` before the browser leaves
+for the portal. `Pulse Account` must resolve that server-owned handoff record
+through Pulse-owned `GET /auth/license-purchase-handoff` before it starts
+checkout, so the portal never trusts browser referrer state or loose
+`feature` / `return_url` query parameters for self-hosted purchase completion.
+Stripe success now lands
 on Pulse's public `GET /auth/license-purchase-activate` bridge, which
 auto-submits into the owned POST activation path; the portal must not render a
 second manual `Activate in Pulse Pro` step after checkout. The owned
@@ -621,8 +625,8 @@ license status, usage, and activation state; `Pulse Account` owns the commerce
 flow itself.
 That same ownership split is explicit in the governed registry as well:
 `CommercialBillingSections.tsx` is part of the shared commercial shell/model
-surface, while `SelfHostedCommercialActivationSection.tsx` stays on the
-self-hosted Pro activation surface with `ProLicensePanel.tsx` rather than
+surface, while `SelfHostedCommercialRecoverySection.tsx` stays on the
+self-hosted Pro recovery surface with `ProLicensePanel.tsx` rather than
 floating as an unowned settings fragment.
 Hosted tenant browser bootstrap is part of that same cloud-paid boundary as
 well. After control-plane or magic-link handoff, the browser client must

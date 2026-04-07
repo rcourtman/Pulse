@@ -165,10 +165,11 @@ querying, and the operator-facing storage health presentation layer.
     or `internal/api/demo_mode_commercial.go` evolve
     `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
     `/auth/license-purchase-activate`, storage and recovery may coexist with
-    those shared public-route helpers but must not reuse purchase-return tokens,
-    activation-bridge callbacks, or demo-hidden commercial route policy as
-    recovery identity, restore proof, preview framing, or backup/recovery-local
-    transport.
+    those shared public-route helpers but must not reuse the commercial-owned
+    `purchase_handoff_id` record, the resolved `activation_url_template`,
+    purchase-return tokens, activation-bridge callbacks, or demo-hidden
+    commercial route policy as recovery identity, restore proof, preview
+    framing, or backup/recovery-local transport.
 
 ## Forbidden Paths
 
@@ -346,6 +347,11 @@ reads for capability and history-retention truth, but
 licensed identity, upgrade prompts, trial urgency, checkout handoff state, or
 observed usage counts to remain present once the public-demo contract is
 applied.
+That same adjacent commercial boundary also owns one-time checkout-return
+lookup. Storage and recovery may coexist with the shared purchase return routes
+in the app shell, but they must not cache, derive, or replay the
+server-resolved `purchase_handoff_id` or activation template as recovery route
+state, restore evidence, or storage-local navigation context.
 Storage- or recovery-adjacent commercial helpers must therefore wait for the
 shared presentation policy to resolve before attempting any read that could
 otherwise hit a hidden commercial route during bootstrap.

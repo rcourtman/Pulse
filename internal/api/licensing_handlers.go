@@ -26,12 +26,14 @@ const (
 	trialStartRateLimitBurst                = 6
 	trialStartRateLimitWindow               = 15 * time.Minute
 	licensePurchaseHandoffPath              = "/auth/license-purchase-handoff"
+	licensePurchaseHandoffIDField           = "purchase_handoff_id"
 	licensePurchaseStartPath                = "/auth/license-purchase-start"
 	licensePurchaseActivationPath           = "/auth/license-purchase-activate"
 	licensePurchaseSessionIDField           = "session_id"
 	licensePurchaseReturnTokenField         = "purchase_return_token"
 	pulseAccountUpgradeService              = "upgrade"
 	pulseAccountPortalFeatureQueryParam     = "feature"
+	pulseAccountPortalHandoffURLQueryParam  = "purchase_handoff_url"
 	pulseAccountPortalServiceQueryParam     = "service"
 	pulseAccountPortalReturnTokenQueryParam = "purchase_return_token"
 	purchaseReturnKeyPurpose                = "pulse-license-purchase-return"
@@ -52,6 +54,7 @@ type LicenseHandlers struct {
 	trialLimiter       *RateLimiter
 	trialReplay        *jtiReplayStore
 	trialInitiations   *trialSignupInitiationStore
+	purchaseHandoffs   *purchaseCheckoutHandoffStore
 	trialRedeemer      func(token string) (*hostedTrialRedemptionResponse, error)
 	monitor            *monitoring.Monitor
 	mtMonitor          *monitoring.MultiTenantMonitor
@@ -70,9 +73,11 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 
 	var trialReplay *jtiReplayStore
 	var trialInitiations *trialSignupInitiationStore
+	var purchaseHandoffs *purchaseCheckoutHandoffStore
 	if mtp != nil {
 		trialReplay = &jtiReplayStore{configDir: mtp.BaseDataDir()}
 		trialInitiations = &trialSignupInitiationStore{configDir: mtp.BaseDataDir()}
+		purchaseHandoffs = &purchaseCheckoutHandoffStore{configDir: mtp.BaseDataDir()}
 	}
 
 	return &LicenseHandlers{
@@ -82,6 +87,7 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 		trialLimiter:     NewRateLimiter(trialStartRateLimitBurst, trialStartRateLimitWindow),
 		trialReplay:      trialReplay,
 		trialInitiations: trialInitiations,
+		purchaseHandoffs: purchaseHandoffs,
 	}
 }
 
@@ -264,7 +270,22 @@ func (h *LicenseHandlers) purchaseReturnSigningKey() ([]byte, error) {
 	return signingKey, nil
 }
 
-func pulseAccountUpgradeURLForRequest(returnToken string, query url.Values) (string, error) {
+func (h *LicenseHandlers) purchaseCheckoutHandoffStore() *purchaseCheckoutHandoffStore {
+	if h == nil {
+		return nil
+	}
+	if h.purchaseHandoffs != nil {
+		return h.purchaseHandoffs
+	}
+	dataDir := h.purchaseReturnDataDir()
+	if strings.TrimSpace(dataDir) == "" {
+		return nil
+	}
+	h.purchaseHandoffs = &purchaseCheckoutHandoffStore{configDir: dataDir}
+	return h.purchaseHandoffs
+}
+
+func pulseAccountUpgradeURLForRequest(handoffURL string, query url.Values) (string, error) {
 	portalURL := strings.TrimSpace(pulseAccountPortalURLFromLicensing(""))
 	if portalURL == "" {
 		return "", fmt.Errorf("pulse account portal url is unavailable")
@@ -279,6 +300,7 @@ func pulseAccountUpgradeURLForRequest(returnToken string, query url.Values) (str
 	for key, values := range query {
 		switch key {
 		case pulseAccountPortalFeatureQueryParam,
+			pulseAccountPortalHandoffURLQueryParam,
 			pulseAccountPortalServiceQueryParam,
 			pulseAccountPortalReturnTokenQueryParam,
 			"checkout",
@@ -295,8 +317,27 @@ func pulseAccountUpgradeURLForRequest(returnToken string, query url.Values) (str
 	}
 
 	params.Set(pulseAccountPortalServiceQueryParam, pulseAccountUpgradeService)
-	params.Set(pulseAccountPortalReturnTokenQueryParam, strings.TrimSpace(returnToken))
+	params.Set(pulseAccountPortalHandoffURLQueryParam, strings.TrimSpace(handoffURL))
 	parsed.RawQuery = params.Encode()
+	return parsed.String(), nil
+}
+
+func licensePurchaseHandoffURLForRequest(
+	r *http.Request,
+	cfg *config.Config,
+	handoffID string,
+) (string, error) {
+	baseURL := publicBaseURLForRequest(r, cfg)
+	if baseURL == "" {
+		return "", fmt.Errorf("purchase handoff base url is unavailable")
+	}
+	parsed, err := url.Parse(baseURL + licensePurchaseHandoffPath)
+	if err != nil || parsed == nil {
+		return "", fmt.Errorf("parse purchase handoff url: %w", err)
+	}
+	query := parsed.Query()
+	query.Set(licensePurchaseHandoffIDField, strings.TrimSpace(handoffID))
+	parsed.RawQuery = query.Encode()
 	return parsed.String(), nil
 }
 
@@ -1357,7 +1398,37 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	destination, err := pulseAccountUpgradeURLForRequest(returnToken, r.URL.Query())
+	activationURLTemplate, err := licensePurchaseActivationTemplateURL(returnURL, returnToken)
+	if err != nil {
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account activation template")
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	handoffStore := h.purchaseCheckoutHandoffStore()
+	if handoffStore == nil {
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	handoffID, err := handoffStore.issue(
+		feature,
+		activationURLTemplate,
+		time.Now().UTC().Add(purchaseCheckoutHandoffTTL),
+	)
+	if err != nil {
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to issue Pulse Account handoff record")
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	handoffURL, err := licensePurchaseHandoffURLForRequest(r, h.cfg, handoffID)
+	if err != nil {
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account handoff url")
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	destination, err := pulseAccountUpgradeURLForRequest(handoffURL, r.URL.Query())
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account upgrade destination")
 		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
@@ -1380,9 +1451,34 @@ func (h *LicenseHandlers) HandleCheckoutHandoff(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	if handoffID := strings.TrimSpace(r.URL.Query().Get(licensePurchaseHandoffIDField)); handoffID != "" {
+		handoffStore := h.purchaseCheckoutHandoffStore()
+		if handoffStore == nil {
+			http.Error(w, "purchase handoff is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		record, found, err := handoffStore.resolve(handoffID, time.Now().UTC())
+		if err != nil {
+			log.Warn().Err(err).Msg("Purchase handoff record lookup failed")
+			http.Error(w, "purchase handoff is invalid", http.StatusBadRequest)
+			return
+		}
+		if !found || record == nil {
+			http.Error(w, "purchase handoff is invalid", http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"activation_url_template": strings.TrimSpace(record.ActivationURLTemplate),
+			"feature":                 strings.TrimSpace(record.Feature),
+		})
+		return
+	}
+
 	returnToken := strings.TrimSpace(r.URL.Query().Get(licensePurchaseReturnTokenField))
 	if returnToken == "" {
-		http.Error(w, "purchase return token is required", http.StatusBadRequest)
+		http.Error(w, "purchase handoff id or return token is required", http.StatusBadRequest)
 		return
 	}
 	claims, err := h.verifiedPurchaseReturnClaims(r, returnToken)

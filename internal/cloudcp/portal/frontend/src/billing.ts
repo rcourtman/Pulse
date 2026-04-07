@@ -88,8 +88,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       var nextState = createPortalBillingState();
       billingState.openBillingPanelID = nextState.openBillingPanelID;
       billingState.upgradeFeatureKey = nextState.upgradeFeatureKey;
-      billingState.upgradeInstanceOrigin = nextState.upgradeInstanceOrigin;
-      billingState.upgradePurchaseReturnToken = nextState.upgradePurchaseReturnToken;
+      billingState.upgradeHandoffURL = nextState.upgradeHandoffURL;
       billingState.upgradeActivationURLTemplate = nextState.upgradeActivationURLTemplate;
       billingState.upgradeHandoff = nextState.upgradeHandoff;
       billingState.upgradeCheckoutStatus = nextState.upgradeCheckoutStatus;
@@ -186,8 +185,8 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (billingState.flows.manage.emailValue) {
       url.searchParams.set('email', billingState.flows.manage.emailValue);
     }
-    if (billingState.upgradePurchaseReturnToken) {
-      url.searchParams.set('purchase_return_token', billingState.upgradePurchaseReturnToken);
+    if (billingState.upgradeHandoffURL) {
+      url.searchParams.set('purchase_handoff_url', billingState.upgradeHandoffURL);
     }
     url.searchParams.set('service', 'upgrade');
     url.searchParams.set('checkout', 'cancelled');
@@ -220,29 +219,16 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
 
   async function resolveUpgradeHandoff(force: boolean) {
     var billingState = getBillingState();
-    var returnToken = billingState.upgradePurchaseReturnToken;
-    if (!returnToken) return;
+    var handoffURL = String(billingState.upgradeHandoffURL || '').trim();
+    if (!handoffURL) return;
     if (!force && (billingState.upgradeHandoff.status === 'loading' || billingState.upgradeHandoff.status === 'ready')) {
-      return;
-    }
-    if (!billingState.upgradeInstanceOrigin) {
-      updateBillingState(function(nextBillingState) {
-        failQueryState(
-          nextBillingState.upgradeHandoff,
-          null,
-          'Reopen this upgrade from Pulse Pro billing so Pulse Account can verify the return path.',
-        );
-        nextBillingState.upgradeActivationURLTemplate = '';
-      });
       return;
     }
     updateBillingState(function(nextBillingState) {
       beginQueryState(nextBillingState.upgradeHandoff, null);
     });
     try {
-      var handoffURL = new URL('/auth/license-purchase-handoff', billingState.upgradeInstanceOrigin);
-      handoffURL.searchParams.set('purchase_return_token', returnToken);
-      var response = await fetch(handoffURL.toString(), {
+      var response = await fetch(handoffURL, {
         headers: { Accept: 'application/json' },
       });
       if (!response.ok) {
@@ -606,7 +592,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (
       billingState.openBillingPanelID === 'upgrade-billing-panel' ||
       !!billingState.upgradeFeatureKey ||
-      !!billingState.upgradePurchaseReturnToken
+      !!billingState.upgradeHandoffURL
     ) {
       void loadUpgradePricing(false);
       void resolveUpgradeHandoff(false);

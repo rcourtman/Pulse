@@ -17,7 +17,7 @@ import apiAccessPanelSource from '@/components/Settings/APIAccessPanel.tsx?raw';
 import aiRuntimeControlsSectionSource from '@/components/Settings/AIRuntimeControlsSection.tsx?raw';
 import apiTokenManagerModelSource from '@/components/Settings/apiTokenManagerModel.ts?raw';
 import securityOverviewPanelSource from '@/components/Settings/SecurityOverviewPanel.tsx?raw';
-import selfHostedCommercialActivationSectionSource from '@/components/Settings/SelfHostedCommercialActivationSection.tsx?raw';
+import selfHostedCommercialRecoverySectionSource from '@/components/Settings/SelfHostedCommercialRecoverySection.tsx?raw';
 import securityWarningSource from '@/components/SecurityWarning.tsx?raw';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -109,8 +109,8 @@ describe('docsLinks', () => {
     expect(aiRuntimeControlsSectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
-    expect(selfHostedCommercialActivationSectionSource).toContain('TERMS_DOC_URL');
-    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+    expect(selfHostedCommercialRecoverySectionSource).toContain('TERMS_DOC_URL');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
   });

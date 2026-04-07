@@ -79,16 +79,9 @@ export interface SelfHostedActivationNoticeCopy {
   body: string;
 }
 
-export interface SelfHostedActivationTrialCopy {
-  title: string;
-  body: string;
-  idleActionLabel: string;
-  pendingActionLabel: string;
-}
-
-export interface SelfHostedActivationPresentation {
-  sectionTitle: string;
-  sectionDescription: string;
+export interface SelfHostedRecoveryPresentation {
+  disclosureLabel: string;
+  disclosureDescription: string;
   fieldLabel: string;
   fieldPlaceholder: string;
   helpTextBeforeTerms: string;
@@ -99,7 +92,6 @@ export interface SelfHostedActivationPresentation {
   clearIdleLabel: string;
   clearPendingLabel: string;
   legacyNotice: SelfHostedActivationNoticeCopy;
-  trial: SelfHostedActivationTrialCopy;
 }
 
 const GRANDFATHERED_V5_PLAN_LABELS: Record<string, string> = {
@@ -336,11 +328,11 @@ export const getInactiveProUpsellNotice = (): LicenseActionNotice => ({
   actionLabel: 'View Pro plans',
 });
 
-export const SELF_HOSTED_ACTIVATION_PRESENTATION: SelfHostedActivationPresentation = {
-  sectionTitle: 'Activation',
-  sectionDescription:
-    'Activate, clear, or start a trial for the self-hosted Pulse Pro entitlement that controls paid features on this instance.',
-  fieldLabel: 'License / Activation Key',
+export const SELF_HOSTED_RECOVERY_PRESENTATION: SelfHostedRecoveryPresentation = {
+  disclosureLabel: 'Redeem existing key',
+  disclosureDescription:
+    'Use this only if you already have a Pulse Pro key or need to recover a legacy self-hosted purchase on this instance.',
+  fieldLabel: 'Pulse Pro Key',
   fieldPlaceholder: 'Paste your license key or activation key',
   helpTextBeforeTerms:
     'Paste the Pulse v6 activation key shown on the hosted checkout success page. A backup copy is also sent by email, but the hosted success page is the primary handoff. You can also paste a legacy Pulse v5 Pro/Lifetime license key and Pulse will exchange it automatically during activation when migration is available. By activating a license, you agree to the',
@@ -353,12 +345,6 @@ export const SELF_HOSTED_ACTIVATION_PRESENTATION: SelfHostedActivationPresentati
   legacyNotice: {
     title: 'Legacy v5 license detected',
     body: 'Pulse will try to exchange this key into the v6 activation model automatically. If the exchange cannot complete immediately, retry from this panel or use the self-serve retrieval flow to get the current v6 activation key.',
-  },
-  trial: {
-    title: 'Try Pro for free',
-    body: 'Start a 14-day Pro trial for this organization.',
-    idleActionLabel: 'Start 14-day Pro Trial',
-    pendingActionLabel: 'Starting...',
   },
 };
 

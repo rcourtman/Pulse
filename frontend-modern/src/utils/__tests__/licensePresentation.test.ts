@@ -18,7 +18,7 @@ import {
   getTrialEndedProLicenseNotice,
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
-  SELF_HOSTED_ACTIVATION_PRESENTATION,
+  SELF_HOSTED_RECOVERY_PRESENTATION,
 } from '@/utils/licensePresentation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from '@/components/Settings/selfHostedBillingPresentation';
 
@@ -49,17 +49,13 @@ describe('licensePresentation', () => {
       body: 'Unlock Pulse Patrol, alert analysis, auto-fix, and more.',
       actionLabel: 'View Pro plans',
     });
-    expect(SELF_HOSTED_ACTIVATION_PRESENTATION).toMatchObject({
-      sectionTitle: 'Activation',
-      fieldLabel: 'License / Activation Key',
+    expect(SELF_HOSTED_RECOVERY_PRESENTATION).toMatchObject({
+      disclosureLabel: 'Redeem existing key',
+      fieldLabel: 'Pulse Pro Key',
       activateIdleLabel: 'Activate License',
       clearIdleLabel: 'Clear License',
       legacyNotice: {
         title: 'Legacy v5 license detected',
-      },
-      trial: {
-        title: 'Try Pro for free',
-        idleActionLabel: 'Start 14-day Pro Trial',
       },
     });
     expect(SELF_HOSTED_PRO_BILLING_PRESENTATION).toEqual({
@@ -77,6 +73,17 @@ describe('licensePresentation', () => {
       planSectionDescription:
         'Review your active plan, expiry, included limits, and paid capabilities.',
       usageSectionTitle: 'Usage',
+      monitoredSystemUpgradeArrivalTitle: 'Need a higher monitored-system cap?',
+      monitoredSystemUpgradeArrivalBody:
+        'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
+      monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
+      trialStartTitle: 'Try Pro for free',
+      trialStartBody: 'Start a 14-day Pro trial for this organization.',
+      trialStartIdleActionLabel: 'Start 14-day Pro Trial',
+      trialStartPendingActionLabel: 'Starting...',
+      recoverySectionTitle: 'Recovery',
+      recoverySectionDescription:
+        'Use recovery tools only when you already have a Pulse Pro key or need to remove a local key from this instance.',
     });
   });
 

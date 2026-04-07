@@ -165,8 +165,7 @@ export interface RefundState {
 export interface PortalBillingState {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
-  upgradeInstanceOrigin: string;
-  upgradePurchaseReturnToken: string;
+  upgradeHandoffURL: string;
   upgradeActivationURLTemplate: string;
   upgradeHandoff: PortalQueryState<PortalUpgradeHandoffModel | null>;
   upgradeCheckoutStatus: PortalUpgradeCheckoutStatus;

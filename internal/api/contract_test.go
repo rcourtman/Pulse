@@ -4888,6 +4888,129 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
 
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://pulse.example.com"+licensePurchaseStartPath+
+			"?feature=max_monitored_systems&utm_content=legacy-bookmark",
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutStart(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusSeeOther, rec.Body.String())
+	}
+
+	location := rec.Header().Get("Location")
+	redirectURL, err := url.Parse(location)
+	if err != nil {
+		t.Fatalf("parse redirect location: %v", err)
+	}
+	if redirectURL.Scheme != "https" || redirectURL.Host != "cloud.pulserelay.pro" || redirectURL.Path != "/portal" {
+		t.Fatalf("redirect location=%q, want Pulse Account portal", location)
+	}
+	if got := redirectURL.Query().Get("feature"); got != "" {
+		t.Fatalf("feature=%q, want omitted portal query", got)
+	}
+	if got := redirectURL.Query().Get("return_url"); got != "" {
+		t.Fatalf("return_url=%q, want omitted portal query", got)
+	}
+	if got := redirectURL.Query().Get("purchase_return_token"); got != "" {
+		t.Fatalf("purchase_return_token=%q, want omitted portal query", got)
+	}
+
+	handoffURL := strings.TrimSpace(redirectURL.Query().Get("purchase_handoff_url"))
+	if handoffURL == "" {
+		t.Fatal("expected purchase_handoff_url in Pulse Account redirect")
+	}
+
+	handoffReq := httptest.NewRequest(http.MethodGet, handoffURL, nil)
+	handoffRec := httptest.NewRecorder()
+	handler.HandleCheckoutHandoff(handoffRec, handoffReq)
+
+	if handoffRec.Code != http.StatusOK {
+		t.Fatalf("handoff status=%d, want %d: %s", handoffRec.Code, http.StatusOK, handoffRec.Body.String())
+	}
+
+	var handoffPayload struct {
+		Feature               string `json:"feature"`
+		ActivationURLTemplate string `json:"activation_url_template"`
+	}
+	if err := json.NewDecoder(handoffRec.Body).Decode(&handoffPayload); err != nil {
+		t.Fatalf("decode handoff payload: %v", err)
+	}
+
+	handoffURLParsed, err := url.Parse(handoffURL)
+	if err != nil {
+		t.Fatalf("parse purchase_handoff_url: %v", err)
+	}
+	handoffID := strings.TrimSpace(handoffURLParsed.Query().Get(licensePurchaseHandoffIDField))
+	if handoffID == "" {
+		t.Fatal("expected purchase_handoff_id in purchase_handoff_url")
+	}
+	handoffQuery := handoffURLParsed.Query()
+	handoffQuery.Set(licensePurchaseHandoffIDField, "placeholder")
+	handoffURLParsed.RawQuery = handoffQuery.Encode()
+
+	activationURL, err := url.Parse(handoffPayload.ActivationURLTemplate)
+	if err != nil {
+		t.Fatalf("parse activation_url_template: %v", err)
+	}
+	returnToken := strings.TrimSpace(activationURL.Query().Get(licensePurchaseReturnTokenField))
+	if returnToken == "" {
+		t.Fatal("expected signed purchase_return_token in activation_url_template")
+	}
+	signingKey, err := handler.purchaseReturnSigningKey()
+	if err != nil {
+		t.Fatalf("purchaseReturnSigningKey: %v", err)
+	}
+	claims, err := verifyPurchaseReturnTokenFromLicensing(returnToken, signingKey, "pulse.example.com", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("verifyPurchaseReturnTokenFromLicensing: %v", err)
+	}
+	if claims.Feature != "max_monitored_systems" {
+		t.Fatalf("claims.Feature=%q, want max_monitored_systems", claims.Feature)
+	}
+	if claims.OrgID != "default" {
+		t.Fatalf("claims.OrgID=%q, want default", claims.OrgID)
+	}
+	activationQuery := activationURL.Query()
+	activationQuery.Set(licensePurchaseReturnTokenField, "placeholder")
+	activationURL.RawQuery = activationQuery.Encode()
+
+	got, err := json.Marshal(struct {
+		PortalService         string `json:"portal_service"`
+		PortalUtmContent      string `json:"portal_utm_content"`
+		PortalHandoffURL      string `json:"portal_handoff_url"`
+		HandoffFeature        string `json:"handoff_feature"`
+		ActivationURLTemplate string `json:"activation_url_template"`
+	}{
+		PortalService:         redirectURL.Query().Get("service"),
+		PortalUtmContent:      redirectURL.Query().Get("utm_content"),
+		PortalHandoffURL:      handoffURLParsed.String(),
+		HandoffFeature:        handoffPayload.Feature,
+		ActivationURLTemplate: activationURL.String(),
+	})
+	if err != nil {
+		t.Fatalf("marshal normalized handoff snapshot: %v", err)
+	}
+
+	const want = `{
+		"portal_service":"upgrade",
+		"portal_utm_content":"legacy-bookmark",
+		"portal_handoff_url":"https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=placeholder",
+		"handoff_feature":"max_monitored_systems",
+		"activation_url_template":"https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=placeholder\u0026session_id=%7BCHECKOUT_SESSION_ID%7D"
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_SelfHostedPurchaseLegacyHandoffJSONSnapshot(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+
 	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
 	req := httptest.NewRequest(
 		http.MethodGet,

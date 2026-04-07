@@ -228,7 +228,8 @@ describe('services view', function() {
 
     var billingState = createPortalBillingState();
     billingState.upgradeFeatureKey = 'max_monitored_systems';
-    billingState.upgradePurchaseReturnToken = 'prt_signed';
+    billingState.upgradeHandoffURL =
+      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed';
     billingState.upgradeActivationURLTemplate = 'https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}';
     billingState.upgradeHandoff.status = 'ready';
     billingState.upgradeHandoff.data = {
@@ -279,7 +280,8 @@ describe('services view', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
-    billingState.upgradePurchaseReturnToken = 'prt_signed';
+    billingState.upgradeHandoffURL =
+      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed';
     billingState.upgradeHandoff.status = 'error';
     billingState.upgradeHandoff.error = 'Pulse Account could not verify the secure return path.';
     billingState.upgradePricing.status = 'ready';

@@ -7,6 +7,8 @@ const PULSE_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
 const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
 const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
 const PURCHASE_RETURN_TOKEN = 'prt_signed_checkout_return';
+const PURCHASE_HANDOFF_URL =
+  `${DEV_SERVER_URL}/auth/license-purchase-handoff?purchase_handoff_id=pch1_checkout_return`;
 
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],
@@ -169,7 +171,7 @@ test.describe('Self-hosted upgrade return flow', () => {
         headers: {
           location:
             `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade` +
-            `&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+            `&purchase_handoff_url=${encodeURIComponent(PURCHASE_HANDOFF_URL)}`,
         },
         body: '',
       });
@@ -180,7 +182,7 @@ test.describe('Self-hosted upgrade return flow', () => {
       expect(requestUrl.searchParams.get('service')).toBe('upgrade');
       expect(requestUrl.searchParams.get('feature')).toBeNull();
       expect(requestUrl.searchParams.get('return_url')).toBeNull();
-      expect(requestUrl.searchParams.get('purchase_return_token')).toBe(PURCHASE_RETURN_TOKEN);
+      expect(requestUrl.searchParams.get('purchase_handoff_url')).toBe(PURCHASE_HANDOFF_URL);
 
       await route.fulfill({
         status: 200,
@@ -248,7 +250,7 @@ test.describe('Self-hosted upgrade return flow', () => {
     );
 
     await page.goto(
-      `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+      `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade&purchase_handoff_url=${encodeURIComponent(PURCHASE_HANDOFF_URL)}`,
       {
         waitUntil: 'domcontentloaded',
       },

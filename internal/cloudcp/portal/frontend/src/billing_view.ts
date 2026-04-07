@@ -141,7 +141,7 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
   var pricingState = billingState.upgradePricing;
   var handoffState = billingState.upgradeHandoff;
   var activationURLTemplate = String(billingState.upgradeActivationURLTemplate || '').trim();
-  var returnToken = String(billingState.upgradePurchaseReturnToken || '').trim();
+  var handoffURL = String(billingState.upgradeHandoffURL || '').trim();
   var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : '';
   var summaryItems = [] as string[];
 
@@ -154,7 +154,7 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
   if (billingState.upgradeCheckout.error) {
     summaryItems.push('<div class="billing-status visible error">' + escapeText(billingState.upgradeCheckout.error) + '</div>');
   }
-  if (!returnToken) {
+  if (!handoffURL) {
     summaryItems.push(
       '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the return path before checkout.</div>',
     );

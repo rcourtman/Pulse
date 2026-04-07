@@ -729,12 +729,53 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	if got := redirectURL.Query().Get("return_url"); got != "" {
 		t.Fatalf("return_url = %q, want omitted portal query", got)
 	}
+	handoffURL := redirectURL.Query().Get("purchase_handoff_url")
+	if strings.TrimSpace(handoffURL) == "" {
+		t.Fatal("expected purchase_handoff_url in redirect")
+	}
 	if got := redirectURL.Query().Get("utm_content"); got != "legacy-bookmark" {
 		t.Fatalf("utm_content = %q, want preserved query value", got)
 	}
-	returnToken := redirectURL.Query().Get("purchase_return_token")
+	if got := redirectURL.Query().Get("purchase_return_token"); got != "" {
+		t.Fatalf("purchase_return_token = %q, want omitted portal query", got)
+	}
+
+	handoffURLParsed, err := url.Parse(handoffURL)
+	if err != nil {
+		t.Fatalf("parse purchase_handoff_url: %v", err)
+	}
+	if handoffURLParsed.Scheme != "https" || handoffURLParsed.Host != "pulse.example.com" || handoffURLParsed.Path != licensePurchaseHandoffPath {
+		t.Fatalf("purchase_handoff_url = %q, want Pulse handoff endpoint", handoffURL)
+	}
+	handoffID := handoffURLParsed.Query().Get(licensePurchaseHandoffIDField)
+	if strings.TrimSpace(handoffID) == "" {
+		t.Fatal("expected purchase_handoff_id in purchase_handoff_url")
+	}
+
+	handoffReq := httptest.NewRequest(http.MethodGet, handoffURL, nil)
+	handoffRec := httptest.NewRecorder()
+	handler.HandleCheckoutHandoff(handoffRec, handoffReq)
+	if handoffRec.Code != http.StatusOK {
+		t.Fatalf("handoff status = %d, want %d (body=%q)", handoffRec.Code, http.StatusOK, handoffRec.Body.String())
+	}
+	var handoffResp struct {
+		Feature               string `json:"feature"`
+		ActivationURLTemplate string `json:"activation_url_template"`
+	}
+	if err := json.Unmarshal(handoffRec.Body.Bytes(), &handoffResp); err != nil {
+		t.Fatalf("unmarshal handoff response: %v", err)
+	}
+	if handoffResp.Feature != "relay" {
+		t.Fatalf("handoff feature = %q, want relay", handoffResp.Feature)
+	}
+
+	activationURL, err := url.Parse(handoffResp.ActivationURLTemplate)
+	if err != nil {
+		t.Fatalf("parse activation_url_template: %v", err)
+	}
+	returnToken := activationURL.Query().Get(licensePurchaseReturnTokenField)
 	if strings.TrimSpace(returnToken) == "" {
-		t.Fatal("expected signed purchase_return_token in redirect")
+		t.Fatal("expected signed purchase_return_token in activation template")
 	}
 	signingKey, err := handler.purchaseReturnSigningKey()
 	if err != nil {
@@ -749,6 +790,50 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 	if claims.Feature != "relay" {
 		t.Fatalf("claims.Feature = %q, want relay", claims.Feature)
+	}
+}
+
+func TestHandleCheckoutHandoff_ResolvesServerOwnedPurchaseRecord(t *testing.T) {
+	handler := createTestHandler(t)
+	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+
+	store := handler.purchaseCheckoutHandoffStore()
+	if store == nil {
+		t.Fatal("expected purchase checkout handoff store")
+	}
+	handoffID, err := store.issue(
+		"max_monitored_systems",
+		"https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}",
+		time.Now().UTC().Add(time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("issue purchase handoff: %v", err)
+	}
+
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"https://pulse.example.com"+licensePurchaseHandoffPath+"?purchase_handoff_id="+url.QueryEscape(handoffID),
+		nil,
+	)
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutHandoff(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp struct {
+		Feature               string `json:"feature"`
+		ActivationURLTemplate string `json:"activation_url_template"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	if resp.Feature != "max_monitored_systems" {
+		t.Fatalf("feature = %q, want max_monitored_systems", resp.Feature)
+	}
+	if resp.ActivationURLTemplate != "https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}" {
+		t.Fatalf("activation_url_template = %q", resp.ActivationURLTemplate)
 	}
 }
 

@@ -1638,7 +1638,7 @@
         "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
         "frontend-modern/src/components/Settings/RelayPairingSection.tsx",
         "frontend-modern/src/components/Settings/RelaySettingsPanel.tsx",
-        "frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx",
+        "frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
         "frontend-modern/src/components/Settings/useBillingAdminPanelState.ts",
         "frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts",
         "frontend-modern/src/components/Settings/useProLicensePanelState.ts",
@@ -2126,7 +2126,7 @@
               "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePanel.tsx",
               "frontend-modern/src/components/Settings/ProLicensePlanSection.tsx",
-              "frontend-modern/src/components/Settings/SelfHostedCommercialActivationSection.tsx",
+              "frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx",
               "frontend-modern/src/components/Settings/useProLicensePanelState.ts"
             ],
             "allow_same_subsystem_tests": false,

@@ -64,15 +64,17 @@ describe('portal runtime', function() {
 
   it('derives canonical email and billing handoff from the portal URL', function() {
     var handoff = readPortalRuntimeHandoff(
-      'https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=upgrade&purchase_return_token=prt_signed&checkout=cancelled',
-      'https://pulse.example.com/auth/license-purchase-start?feature=max_monitored_systems',
+      'https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=upgrade&purchase_handoff_url=' +
+        encodeURIComponent('https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed') +
+        '&checkout=cancelled',
     );
 
     expect(handoff.email).toBe('buyer@example.com');
     expect(handoff.openBillingPanelID).toBe('upgrade-billing-panel');
-    expect(handoff.upgradeInstanceOrigin).toBe('https://pulse.example.com');
+    expect(handoff.upgradeHandoffURL).toBe(
+      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed',
+    );
     expect(handoff.upgradeFeatureKey).toBe('');
-    expect(handoff.upgradePurchaseReturnToken).toBe('prt_signed');
     expect(handoff.upgradeCheckoutStatus).toBe('cancelled');
   });
 
@@ -87,9 +89,8 @@ describe('portal runtime', function() {
       {
         email: 'buyer@example.com',
         openBillingPanelID: 'refund-billing-panel',
-        upgradeInstanceOrigin: '',
+        upgradeHandoffURL: '',
         upgradeFeatureKey: '',
-        upgradePurchaseReturnToken: '',
         upgradeCheckoutStatus: '',
       }
     );
@@ -111,18 +112,19 @@ describe('portal runtime', function() {
       {
         email: '',
         openBillingPanelID: 'upgrade-billing-panel',
-        upgradeInstanceOrigin: 'https://pulse.example.com',
+        upgradeHandoffURL:
+          'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed',
         upgradeFeatureKey: '',
-        upgradePurchaseReturnToken: 'prt_signed',
         upgradeCheckoutStatus: 'cancelled',
       }
     );
 
     expect(runtime.store.getShellState().activeSection).toBe('billing');
     expect(runtime.store.getBillingState().openBillingPanelID).toBe('upgrade-billing-panel');
-    expect(runtime.store.getBillingState().upgradeInstanceOrigin).toBe('https://pulse.example.com');
+    expect(runtime.store.getBillingState().upgradeHandoffURL).toBe(
+      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed',
+    );
     expect(runtime.store.getBillingState().upgradeFeatureKey).toBe('');
-    expect(runtime.store.getBillingState().upgradePurchaseReturnToken).toBe('prt_signed');
     expect(runtime.store.getBillingState().upgradeCheckoutStatus).toBe('cancelled');
   });
 });

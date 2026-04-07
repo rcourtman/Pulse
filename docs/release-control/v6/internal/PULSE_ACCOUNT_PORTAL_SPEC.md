@@ -472,9 +472,9 @@ Accepted as sufficient for RC and GA:
    billing route automatically
 5. `Pulse Account` must not render a second manual `Activate in Pulse Pro`
    step after hosted checkout success; the portal must resolve a verified
-   Pulse return template first and let checkout success flow straight into
-   Pulse's activation bridge
-5. commercial surfaces are functional but still fragmented outside the owned
+   Pulse return template from a Pulse-owned purchase handoff record first and
+   let checkout success flow straight into Pulse's activation bridge
+6. commercial surfaces are functional but still fragmented outside the owned
    checkout-return path
 
 ### Candidate lane target

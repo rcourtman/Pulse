@@ -518,19 +518,22 @@ hosted-only accounts do not render self-hosted license, refund, privacy, or
 self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
 That same runtime handoff contract now also covers product-originated
-self-hosted upgrade arrivals: `/portal?service=upgrade&purchase_return_token=...`
+self-hosted upgrade arrivals: `/portal?service=upgrade&purchase_handoff_url=...`
 may open a portal-owned upgrade job inside `Billing`, but it must not
 fabricate broader self-hosted commercial history or reveal
 retrieve/refund/privacy panels for a hosted-only account that only arrived
 through an upgrade CTA.
 That same commercial contract now also includes the self-hosted purchase
 return path. Product-originated upgrade handoffs must include a canonical
-signed `purchase_return_token` bound to the originating Pulse instance. The
-portal runtime must derive the originating Pulse origin from the browser
-referrer, resolve a verified `activation_url_template` through Pulse-owned
-`GET /auth/license-purchase-handoff`, and use that verified template as the
-checkout success target instead of trusting loose `feature` or `return_url`
-query parameters. Pulse's public `GET /auth/license-purchase-activate`
+server-owned `purchase_handoff_url` that points at a Pulse-owned handoff
+record. Pulse still binds checkout completion to a signed
+`purchase_return_token`, but that token must stay inside the Pulse-owned
+handoff record and verified activation template rather than leaking into the
+portal arrival URL. The portal runtime must resolve a verified
+`activation_url_template` through Pulse-owned `GET /auth/license-purchase-handoff`
+and use that verified template as the checkout success target instead of
+trusting browser referrer state or loose `feature` / `return_url` query
+parameters. Pulse's public `GET /auth/license-purchase-activate`
 callback then serves an auto-submitting bridge into the owned POST activation
 path, which redeems the completed checkout through the shared
 license/commercial API before returning the browser to the owned billing plan

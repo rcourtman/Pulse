@@ -190,6 +190,8 @@ test.describe('Monitored-system billing focus', () => {
       'true',
     );
     await expect(page.getByText('Need a higher monitored-system cap?')).toBeVisible();
+    await expect(page.getByText('Redeem existing key')).toBeVisible();
+    await expect(page.getByLabel('Pulse Pro Key')).toBeHidden();
     await expect(page.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
       '/auth/license-purchase-start?feature=max_monitored_systems',

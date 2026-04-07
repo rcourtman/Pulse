@@ -96,7 +96,7 @@ import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import monitoredSystemDefinitionDisclosureSource from '@/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import commercialBillingSectionsSource from '../CommercialBillingSections.tsx?raw';
-import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
+import selfHostedCommercialRecoverySectionSource from '../SelfHostedCommercialRecoverySection.tsx?raw';
 import commercialBillingModelSource from '@/utils/commercialBillingModel.ts?raw';
 import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
@@ -551,7 +551,7 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelSource).toContain('./CommercialBillingSections');
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
-    expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
+    expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
     expect(proLicensePanelSource).toContain('MonitoredSystemLedgerPanel');
     expect(proLicensePanelSource).toContain('CommercialBillingShell');
     expect(proLicensePanelSource).toContain('CommercialSection');
@@ -609,12 +609,12 @@ describe('Settings architecture guardrails', () => {
     expect(monitoredSystemPresentationSource).toContain(
       'export function getMonitoredSystemDisclosureToggleLabel',
     );
-    expect(selfHostedCommercialActivationSectionSource).toContain('@/utils/licensePresentation');
-    expect(selfHostedCommercialActivationSectionSource).toContain(
-      'SELF_HOSTED_ACTIVATION_PRESENTATION',
+    expect(selfHostedCommercialRecoverySectionSource).toContain('@/utils/licensePresentation');
+    expect(selfHostedCommercialRecoverySectionSource).toContain(
+      'SELF_HOSTED_RECOVERY_PRESENTATION',
     );
-    expect(selfHostedCommercialActivationSectionSource).not.toContain('License / Activation Key');
-    expect(selfHostedCommercialActivationSectionSource).not.toContain('Start 14-day Pro Trial');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('License / Activation Key');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('Start 14-day Pro Trial');
     expect(organizationBillingPanelSource).toContain('./CommercialBillingSections');
     expect(organizationBillingPanelSource).toContain('./OrganizationBillingLoadingState');
     expect(organizationBillingPanelSource).toContain('./useOrganizationBillingPanelState');
@@ -1353,8 +1353,8 @@ describe('Settings architecture guardrails', () => {
     expect(securityOverviewPanelSource).toContain("label: 'Open security guide'");
     expect(securityOverviewPanelSource).toContain("tone={hardeningTone()}");
     expect(securityOverviewPanelSource).toContain("criticalHardeningActions() > 0 ? 'danger' : 'info'");
-    expect(selfHostedCommercialActivationSectionSource).toContain('@/utils/docsLinks');
-    expect(selfHostedCommercialActivationSectionSource).toContain('TERMS_DOC_URL');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('@/utils/docsLinks');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('TERMS_DOC_URL');
     expect(apiTokenManagerModelSource).toContain('@/utils/docsLinks');
     expect(apiTokenManagerModelSource).toContain('API_TOKEN_SCOPES_DOC_URL');
     expect(recoverySettingsPanelSource).toContain('@/utils/systemSettingsPresentation');

@@ -1233,7 +1233,10 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
-  var showSelfHostedUpgradeHandoff = !!normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
+  var showSelfHostedUpgradeHandoff =
+    context.billingState.openBillingPanelID === 'upgrade-billing-panel' ||
+    !!normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey) ||
+    !!String(context.billingState.upgradeHandoffURL || '').trim();
   var showSelfHostedBillingShell = showSelfHostedCommercial || showSelfHostedUpgradeHandoff;
   var shellSections = visibleShellSections(context.bootstrap);
   var preferredSection = context.activeSection || preferredPortalShellSection(context.bootstrap);

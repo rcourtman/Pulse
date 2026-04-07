@@ -7,7 +7,7 @@ import { ProLicensePanel } from '../ProLicensePanel';
 import proLicensePanelSource from '../ProLicensePanel.tsx?raw';
 import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
-import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
+import selfHostedCommercialRecoverySectionSource from '../SelfHostedCommercialRecoverySection.tsx?raw';
 import {
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
@@ -332,7 +332,9 @@ describe('ProLicensePanel', () => {
   it('shows migration guidance when the pasted key looks like a legacy v5 license', async () => {
     renderPanel();
 
-    fireEvent.input(screen.getByLabelText(/license \/ activation key/i), {
+    fireEvent.click(screen.getByText('Redeem existing key'));
+
+    fireEvent.input(screen.getByLabelText(/pulse pro key/i), {
       target: { value: 'header.payload.signature' },
     });
 
@@ -549,7 +551,7 @@ describe('ProLicensePanel', () => {
   it('keeps Pro license split into shell, runtime, and plan owners', () => {
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
-    expect(proLicensePanelSource).toContain('SelfHostedCommercialActivationSection');
+    expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
     expect(proLicensePanelSource).toContain("value={state.activeSection()}");
     expect(proLicensePanelSource).toContain('<Subtabs');
@@ -566,10 +568,13 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
+    expect(proLicensePanelStateSource).toContain("'A Pulse Pro key is required'");
     expect(proLicensePlanSectionSource).toContain('getLicenseStatusLoadingState');
     expect(proLicensePlanSectionSource).toContain('getNoActiveProLicenseState');
     expect(proLicensePlanSectionSource).toContain('getTrialEndedProLicenseNotice');
     expect(proLicensePlanSectionSource).toContain('getInactiveProUpsellNotice');
+    expect(proLicensePlanSectionSource).toContain('trialStartTitle');
+    expect(proLicensePlanSectionSource).toContain('trialStartIdleActionLabel');
     expect(proLicensePlanSectionSource).not.toContain(
       'const trialEndedNotice = getTrialEndedProLicenseNotice();',
     );
@@ -590,15 +595,17 @@ describe('ProLicensePanel', () => {
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
-    expect(selfHostedCommercialActivationSectionSource).toContain(
-      'SELF_HOSTED_ACTIVATION_PRESENTATION',
+    expect(selfHostedCommercialRecoverySectionSource).toContain(
+      'SELF_HOSTED_RECOVERY_PRESENTATION',
     );
-    expect(selfHostedCommercialActivationSectionSource).toContain('TERMS_DOC_URL');
-    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+    expect(selfHostedCommercialRecoverySectionSource).toContain('TERMS_DOC_URL');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('disclosureLabel');
+    expect(selfHostedCommercialRecoverySectionSource).toContain('recoverySectionTitle');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
-    expect(selfHostedCommercialActivationSectionSource).not.toContain('Start 14-day Pro Trial');
-    expect(selfHostedCommercialActivationSectionSource).not.toContain(
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('Start 14-day Pro Trial');
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
       'Legacy v5 license detected',
     );
     expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}');

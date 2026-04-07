@@ -196,10 +196,11 @@ management, and fleet control surfaces.
     or `internal/api/demo_mode_commercial.go` evolve public
     `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
     `/auth/license-purchase-activate`, lifecycle-adjacent setup and fleet
-    surfaces may rely on that public-route wiring but must not reinterpret
-    purchase-return tokens, activation-bridge form state, or demo-hidden
-    commercial route policy as installer credentials, registration state, or
-    fleet enrollment authority.
+    surfaces may rely on that public-route wiring but must not reinterpret the
+    commercial-owned `purchase_handoff_id` record, the resolved
+    `activation_url_template`, purchase-return tokens, activation-bridge form
+    state, or demo-hidden commercial route policy as installer credentials,
+    registration state, or fleet enrollment authority.
 
 ## Forbidden Paths
 
@@ -336,6 +337,11 @@ Lifecycle-owned browser shells must also defer any commercial helper reads
 until that presentation policy resolves so demo suppression stays fail-closed
 during first render instead of racing hidden commercial endpoints from shared
 setup or install surfaces.
+That same shared boundary now also owns the one-time checkout-return lookup:
+lifecycle-adjacent surfaces may initiate billing or account handoff through
+shared public routes, but they must never persist, derive, or replay the
+server-owned `purchase_handoff_id` or resolved activation template as lifecycle
+state.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered
 through shared drawers or lifecycle-adjacent resource context, those reads

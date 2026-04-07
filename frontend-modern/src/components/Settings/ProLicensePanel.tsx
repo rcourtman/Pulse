@@ -4,7 +4,7 @@ import ShieldCheck from 'lucide-solid/icons/shield-check';
 import { MonitoredSystemLedgerPanel } from './MonitoredSystemLedgerPanel';
 import { CommercialBillingShell, CommercialSection } from './CommercialBillingSections';
 import { ProLicensePlanSection } from './ProLicensePlanSection';
-import { SelfHostedCommercialActivationSection } from './SelfHostedCommercialActivationSection';
+import { SelfHostedCommercialRecoverySection } from './SelfHostedCommercialRecoverySection';
 import { useProLicensePanelState } from './useProLicensePanelState';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 import { Subtabs } from '@/components/shared/Subtabs';
@@ -63,16 +63,19 @@ export const ProLicensePanel: Component = () => {
                 commercialPlanModel={state.commercialPlanModel()}
                 entitlements={state.entitlements()}
                 formattedFeatures={state.formattedFeatures()}
-              grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
-              hasLicenseDetails={state.hasLicenseDetails()}
-              hasPaidFeatures={state.hasPaidFeatures()}
-              loading={state.loading()}
-              onReload={() => void state.loadPanelData()}
-              showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
-              statusPresentation={state.statusPresentation()}
-              trialActivationNotice={state.trialActivationNotice()}
-              trialEnded={state.trialEnded()}
-            />
+                grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
+                hasLicenseDetails={state.hasLicenseDetails()}
+                hasPaidFeatures={state.hasPaidFeatures()}
+                loading={state.loading()}
+                onReload={() => void state.loadPanelData()}
+                showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
+                showTrialStart={state.showTrialStart()}
+                startingTrial={state.startingTrial()}
+                statusPresentation={state.statusPresentation()}
+                onStartTrial={() => void state.handleStartTrial()}
+                trialActivationNotice={state.trialActivationNotice()}
+                trialEnded={state.trialEnded()}
+              />
             </CommercialSection>
           </Show>
 
@@ -89,19 +92,16 @@ export const ProLicensePanel: Component = () => {
             </CommercialSection>
           </Show>
 
-          <SelfHostedCommercialActivationSection
+          <SelfHostedCommercialRecoverySection
             licenseKey={state.licenseKey()}
             activating={state.activating()}
             clearing={state.clearing()}
             loading={state.loading()}
             hasLicenseDetails={state.hasLicenseDetails()}
-            showTrialStart={state.showTrialStart()}
-            startingTrial={state.startingTrial()}
             looksLikeLegacyLicenseKey={state.looksLikeLegacyLicenseKey()}
             onLicenseKeyInput={state.setLicenseKey}
             onActivate={state.handleActivate}
             onClear={state.handleClear}
-            onStartTrial={() => void state.handleStartTrial()}
           />
         </div>
       </CommercialBillingShell>

@@ -35,11 +35,14 @@ interface ProLicensePlanSectionProps {
   hasPaidFeatures: boolean;
   loading: boolean;
   onReload: () => void;
+  onStartTrial: () => void;
   statusPresentation: {
     badgeClass: string;
     label: string;
   };
   showMonitoredSystemUpgradeArrival: boolean;
+  showTrialStart: boolean;
+  startingTrial: boolean;
   trialActivationNotice: Notice | null;
   trialEnded: boolean;
 }
@@ -83,6 +86,26 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
             <p class="mt-1 text-xs opacity-90">{notice().body}</p>
           </div>
         )}
+      </Show>
+      <Show when={props.showTrialStart}>
+        <div class="mb-4 rounded-md border border-border bg-surface-alt p-3">
+          <p class="text-sm font-medium text-base-content">
+            {SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartTitle}
+          </p>
+          <p class="mt-1 text-xs text-muted">
+            {SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartBody}
+          </p>
+          <button
+            type="button"
+            class="mt-3 inline-flex min-h-10 sm:min-h-9 items-center justify-center px-4 py-2.5 text-sm font-medium rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            disabled={props.startingTrial}
+            onClick={props.onStartTrial}
+          >
+            {props.startingTrial
+              ? SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartPendingActionLabel
+              : SELF_HOSTED_PRO_BILLING_PRESENTATION.trialStartIdleActionLabel}
+          </button>
+        </div>
       </Show>
       <Show when={props.commercialMigrationNotice}>
         {(notice) => (

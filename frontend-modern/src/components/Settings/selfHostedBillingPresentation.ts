@@ -13,6 +13,12 @@ export interface SelfHostedProBillingPresentation {
   monitoredSystemUpgradeArrivalTitle: string;
   monitoredSystemUpgradeArrivalBody: string;
   monitoredSystemUpgradeArrivalActionLabel: string;
+  trialStartTitle: string;
+  trialStartBody: string;
+  trialStartIdleActionLabel: string;
+  trialStartPendingActionLabel: string;
+  recoverySectionTitle: string;
+  recoverySectionDescription: string;
 }
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
@@ -33,4 +39,11 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   monitoredSystemUpgradeArrivalBody:
     'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
   monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
+  trialStartTitle: 'Try Pro for free',
+  trialStartBody: 'Start a 14-day Pro trial for this organization.',
+  trialStartIdleActionLabel: 'Start 14-day Pro Trial',
+  trialStartPendingActionLabel: 'Starting...',
+  recoverySectionTitle: 'Recovery',
+  recoverySectionDescription:
+    'Use recovery tools only when you already have a Pulse Pro key or need to remove a local key from this instance.',
 };
