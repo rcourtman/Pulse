@@ -498,6 +498,11 @@ self-hosted commercial history is relevant to the signed-in account, so
 hosted-only accounts do not render self-hosted license, refund, privacy, or
 self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
+That same runtime handoff contract now also covers product-originated
+self-hosted upgrade arrivals: `/portal?service=upgrade&feature=...` may open a
+portal-owned upgrade job inside `Billing`, but it must not fabricate broader
+self-hosted commercial history or reveal retrieve/refund/privacy panels for a
+hosted-only account that only arrived through an upgrade CTA.
 That same typed bootstrap/runtime contract must also derive the default signed-
 in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and the signed-in shell keeps

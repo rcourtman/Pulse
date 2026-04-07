@@ -32,7 +32,7 @@ describe('PricingHandoff', () => {
     window.history.replaceState({}, '', '/');
   });
 
-  it('hands public pricing requests off to the website', async () => {
+  it('hands self-hosted upgrade requests off to Pulse Account', async () => {
     window.history.replaceState({}, '', '/pricing?feature=relay');
 
     render(() => (
@@ -43,14 +43,14 @@ describe('PricingHandoff', () => {
 
     await waitFor(() => {
       expect(handoffToExternalPricingMock).toHaveBeenCalledWith(
-        'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=relay',
+        'https://cloud.pulserelay.pro/portal?feature=relay&service=upgrade',
       );
     });
 
-    expect(screen.getByRole('heading', { name: 'Redirecting to pricing' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /continue to the public pricing site/i })).toHaveAttribute(
+    expect(screen.getByRole('heading', { name: 'Redirecting to Pulse Account' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /continue to Pulse Account/i })).toHaveAttribute(
       'href',
-      'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=relay',
+      'https://cloud.pulserelay.pro/portal?feature=relay&service=upgrade',
     );
   });
 

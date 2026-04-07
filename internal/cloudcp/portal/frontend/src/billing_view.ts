@@ -78,7 +78,13 @@ export function renderButton(id: string | undefined, disabled: boolean, label: s
 export function renderOpenBillingPanels(openBillingPanelID: string): void {
   var shell = document.querySelector('.billing-shell') as HTMLElement | null;
   var detailShell = getElement('billing-detail-shell');
-  var panels = ['manage-billing-panel', 'retrieve-billing-panel', 'refund-billing-panel', 'data-billing-panel'];
+  var panels = [
+    'upgrade-billing-panel',
+    'manage-billing-panel',
+    'retrieve-billing-panel',
+    'refund-billing-panel',
+    'data-billing-panel',
+  ];
   var hasOpenPanel = !!openBillingPanelID;
   if (shell) {
     shell.classList.toggle('billing-shell-job-open', hasOpenPanel);

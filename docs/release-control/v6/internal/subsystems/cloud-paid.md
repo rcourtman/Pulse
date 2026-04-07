@@ -407,9 +407,13 @@ The same commercial handoff rule also covers the legacy `/pricing` route in
 `frontend-modern/src/pages/PricingHandoff.tsx` and
 `frontend-modern/src/utils/pricingHandoff.ts`: compatibility handoff may keep
 product-owned destinations such as monitored-system billing or Cloud plans
-inside the app, but public self-hosted pricing must leave the product for the
-canonical website rather than rendering a second public pricing surface inside
-Pulse.
+inside the app, but self-hosted commercial upgrade intents now hand off to
+`Pulse Account` first instead of treating the public pricing page as the app's
+canonical destination. The portal may continue the next step on the public
+self-hosted pricing site while the authenticated account shell is still
+absorbing new-purchase depth, but Pulse itself must not render a second public
+pricing surface inside the runtime or dump upgrade CTAs straight to marketing
+as though that were the product-owned commercial surface.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial
@@ -1074,6 +1078,15 @@ Inline workspace counts and shell copy follow the same account-shape and
 permission rule: hosted-only accounts must not mention self-hosted billing
 utilities by default, and hosted view-only roles must say when hosted billing
 still needs owner/admin authority.
+That same portal runtime contract now also owns explicit self-hosted upgrade
+arrivals from the product: when Pulse hands a self-hosted commercial upgrade
+intent into `/portal`, the billing shell may expose an `Upgrade` job even when
+the signed-in account has no existing self-hosted commercial history, but that
+arrival must stay narrower than the full self-hosted utility set. Hosted-only
+accounts may not suddenly render retrieve/refund/privacy tools by default just
+because they arrived from an upgrade CTA; only the specific portal-owned
+upgrade path may appear until the account actually has relevant self-hosted
+history.
 The same rule applies to the compact account-context strip: it must describe
 the current user's effective hosted tasks, not restate full access-control and
 billing capability when those actions are blocked behind owner/admin roles.

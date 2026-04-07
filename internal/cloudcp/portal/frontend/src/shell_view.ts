@@ -1,5 +1,6 @@
 import type {
   PortalAccountSummary,
+  PortalBillingState,
   PortalBootstrapData,
   PortalLoginState,
   PortalShellSection,
@@ -11,6 +12,7 @@ import { workspaceHealthLabel, workspaceHealthState, workspaceRowNote, workspace
 
 export interface ShellViewContext {
   bootstrap: PortalBootstrapData;
+  billingState: PortalBillingState;
   loginState: PortalLoginState;
   signupPath: string;
   accountAPIBasePath: string;
@@ -126,6 +128,85 @@ function hasHostedAccounts(accounts: PortalAccountSummary[]): boolean {
 function hasSelfHostedCommercial(bootstrap: PortalBootstrapData): boolean {
   var accounts = Array.isArray(bootstrap.accounts) ? bootstrap.accounts : [];
   return bootstrap.has_self_hosted_commercial === true || !hasHostedAccounts(accounts);
+}
+
+function normalizeUpgradeFeatureKey(featureKey: string): string {
+  return String(featureKey || '').trim();
+}
+
+function selfHostedUpgradeActionTitle(featureKey: string): string {
+  return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
+    ? 'Upgrade monitored-system cap'
+    : 'Upgrade self-hosted plan';
+}
+
+function selfHostedUpgradeActionDescription(featureKey: string): string {
+  return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
+    ? 'Compare self-hosted plans and choose a higher monitored-system allowance.'
+    : 'Compare self-hosted plans and continue into the commercial checkout path.';
+}
+
+function selfHostedUpgradeActionHighlights(featureKey: string): string[] {
+  return normalizeUpgradeFeatureKey(featureKey) === 'max_monitored_systems'
+    ? ['Monitored-system cap', 'Plan comparison']
+    : ['Plan comparison', 'Checkout handoff'];
+}
+
+function selfHostedUpgradePricingURL(
+  bootstrap: PortalBootstrapData,
+  featureKey: string,
+): string {
+  var publicSiteURL = String(bootstrap.public_site_url || 'https://pulserelay.pro').trim();
+  var normalizedFeature = normalizeUpgradeFeatureKey(featureKey);
+  try {
+    var url = new URL('/pricing', publicSiteURL);
+    if (normalizedFeature) {
+      url.searchParams.set('feature', normalizedFeature);
+    }
+    url.searchParams.set('utm_source', 'pulse-account');
+    url.searchParams.set('utm_medium', 'portal');
+    url.searchParams.set('utm_campaign', 'self_hosted_upgrade');
+    return url.toString();
+  } catch {
+    return 'https://pulserelay.pro/pricing';
+  }
+}
+
+function renderSelfHostedUpgradeActionRow(context: ShellViewContext): string {
+  var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
+  return renderBillingActionRow(
+    'open-upgrade-billing',
+    selfHostedUpgradeActionTitle(featureKey),
+    'Open',
+    selfHostedUpgradeActionDescription(featureKey),
+    'upgrade-billing-panel',
+    'upgrade-billing-link',
+    selfHostedUpgradeActionHighlights(featureKey),
+  );
+}
+
+function renderSelfHostedUpgradeBillingPanel(context: ShellViewContext): string {
+  var featureKey = normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
+  var pricingURL = selfHostedUpgradePricingURL(context.bootstrap, featureKey);
+  var linkLabel = featureKey === 'max_monitored_systems'
+    ? 'Compare monitored-system plans'
+    : 'View self-hosted plans';
+  var helperCopy = featureKey === 'max_monitored_systems'
+    ? 'Choose the self-hosted tier that matches the monitored-system allowance you need, then return to Pulse Pro to activate the new license.'
+    : 'Choose the self-hosted tier that fits this upgrade, then return to Pulse Pro to activate the new license.';
+  return renderBillingTaskPanel(
+    selfHostedUpgradeActionTitle(featureKey),
+    'Pulse Account owns the commercial handoff. Plan selection and checkout continue on the public self-hosted pricing site.',
+    'upgrade-billing-panel',
+    '<div class="form-actions">' +
+      '<a class="btn-primary" id="upgrade-billing-link" href="' +
+      escapeAttr(pricingURL) +
+      '" target="_blank" rel="noopener">' +
+      escapeHTML(linkLabel) +
+      '</a>' +
+    '</div>' +
+    '<div class="helper-text">' + escapeHTML(helperCopy) + '</div>',
+  );
 }
 
 function countWorkspaces(accounts: PortalAccountSummary[]): number {
@@ -1182,6 +1263,8 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var accounts = Array.isArray(context.bootstrap.accounts) ? context.bootstrap.accounts : [];
   var hosted = hasHostedAccounts(accounts);
   var showSelfHostedCommercial = hasSelfHostedCommercial(context.bootstrap);
+  var showSelfHostedUpgradeHandoff = !!normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey);
+  var showSelfHostedBillingShell = showSelfHostedCommercial || showSelfHostedUpgradeHandoff;
   var shellSections = visibleShellSections(context.bootstrap);
   var preferredSection = context.activeSection || preferredPortalShellSection(context.bootstrap);
   var activeSection = shellSections.some(function(entry) {
@@ -1215,6 +1298,51 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
       );
     }).join('')
     : renderNoHostedAccessSection();
+  var selfHostedBillingLeadCopy = showSelfHostedCommercial
+    ? 'Use self-hosted billing only for self-hosted purchases.'
+    : 'Pulse Account owns the commercial handoff for self-hosted upgrades from the app.';
+  var selfHostedBillingActionsHTML = renderSelfHostedUpgradeActionRow(context);
+  if (showSelfHostedCommercial) {
+    selfHostedBillingActionsHTML +=
+      renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Open', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
+      renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Open', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
+      renderBillingActionRow('open-refund-billing', 'Refund requests', 'Open', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
+      renderBillingActionRow('open-data-billing', 'Data and privacy', 'Open', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']);
+  }
+  var selfHostedBillingPanelsHTML = renderSelfHostedUpgradeBillingPanel(context);
+  if (showSelfHostedCommercial) {
+    selfHostedBillingPanelsHTML +=
+      renderBillingTaskPanel(
+        'Manage subscriptions',
+        'Open Stripe for self-hosted plan, invoice, and payment changes.',
+        'manage-billing-panel',
+        '<div id="manage-billing-root"></div>'
+      ) +
+      renderBillingTaskPanel(
+        'Retrieve licenses',
+        'Recover the latest active self-hosted license and invoice link.',
+        'retrieve-billing-panel',
+        '<div id="retrieve-billing-root"></div>'
+      ) +
+      renderBillingTaskPanel(
+        'Refund requests',
+        'Request a self-serve refund when the purchase is still eligible.',
+        'refund-billing-panel',
+        '<div id="refund-billing-root"></div>'
+      ) +
+      renderBillingTaskPanel(
+        'Data and privacy',
+        'Request export or deletion for commercial account data.',
+        'data-billing-panel',
+        '<div class="subsection"><div id="data-export-root"></div></div>' +
+        '<div class="subsection"><div id="data-delete-root"></div></div>' +
+        '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
+        escapeAttr(context.bootstrap.support_email || '') +
+        '">' +
+        escapeHTML(context.bootstrap.support_email || '') +
+        '</a>.</div>'
+      );
+  }
 
   return (
     '<div class="portal-shell" data-shell-section="' + activeSection + '">' +
@@ -1236,19 +1364,14 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
           : '') +
         '<section class="portal-content-panel portal-content-panel-billing billing-section" id="billing-section">' +
           (hosted ? renderHostedBillingCards(accounts, showSelfHostedCommercial) : '') +
-          (showSelfHostedCommercial
+          (showSelfHostedBillingShell
             ? ('<div class="billing-shell billing-shell-idle">' +
             '<div class="billing-shell-main">' +
               '<div class="billing-shell-main-head">' +
                 '<h3>Self-hosted billing</h3>' +
-                '<p>Use self-hosted billing only for self-hosted purchases.</p>' +
+                '<p>' + escapeHTML(selfHostedBillingLeadCopy) + '</p>' +
               '</div>' +
-              '<div class="billing-action-list">' +
-                renderBillingActionRow('open-manage-billing', 'Manage subscriptions', 'Open', 'Open Stripe for self-hosted plan, invoice, and payment changes.', 'manage-billing-panel', 'manage-inline-email', ['Plan changes', 'Invoices']) +
-                renderBillingActionRow('open-retrieve-billing', 'Retrieve licenses', 'Open', 'Recover the latest active self-hosted license and invoice link.', 'retrieve-billing-panel', 'retrieve-inline-email', ['Latest active license', 'Invoice lookup']) +
-                renderBillingActionRow('open-refund-billing', 'Refund requests', 'Open', 'Request a self-serve refund when the purchase is still eligible.', 'refund-billing-panel', 'refund-inline-email', ['Eligibility check', 'Revocation']) +
-                renderBillingActionRow('open-data-billing', 'Data and privacy', 'Open', 'Request export or deletion for commercial account data.', 'data-billing-panel', 'data-export-email', ['Export', 'Deletion']) +
-              '</div>' +
+              '<div class="billing-action-list">' + selfHostedBillingActionsHTML + '</div>' +
               '<div class="billing-inline-support">' +
                 '<h4>Support</h4>' +
                 '<p>' + selfHostedBillingEscalationCopy + '</p>' +
@@ -1262,38 +1385,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
                 '</div>' +
               '</div>' +
             '</div>' +
-            '<div class="billing-shell-detail" id="billing-detail-shell" hidden>' +
-              renderBillingTaskPanel(
-                'Manage subscriptions',
-                'Open Stripe for self-hosted plan, invoice, and payment changes.',
-                'manage-billing-panel',
-                '<div id="manage-billing-root"></div>'
-              ) +
-              renderBillingTaskPanel(
-                'Retrieve licenses',
-                'Recover the latest active self-hosted license and invoice link.',
-                'retrieve-billing-panel',
-                '<div id="retrieve-billing-root"></div>'
-              ) +
-              renderBillingTaskPanel(
-                'Refund requests',
-                'Request a self-serve refund when the purchase is still eligible.',
-                'refund-billing-panel',
-                '<div id="refund-billing-root"></div>'
-              ) +
-              renderBillingTaskPanel(
-                'Data and privacy',
-                'Request export or deletion for commercial account data.',
-                'data-billing-panel',
-                '<div class="subsection"><div id="data-export-root"></div></div>' +
-                '<div class="subsection"><div id="data-delete-root"></div></div>' +
-                '<div class="helper-text">Payment-card data stays with Stripe. For Stripe deletion support, contact <a href="mailto:' +
-                escapeAttr(context.bootstrap.support_email || '') +
-                '">' +
-                escapeHTML(context.bootstrap.support_email || '') +
-                '</a>.</div>'
-              ) +
-            '</div>' +
+            '<div class="billing-shell-detail" id="billing-detail-shell" hidden>' + selfHostedBillingPanelsHTML + '</div>' +
           '</div>')
             : '') +
         '</section>' +

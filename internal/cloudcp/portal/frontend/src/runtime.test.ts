@@ -63,10 +63,11 @@ describe('portal runtime', function() {
   });
 
   it('derives canonical email and billing handoff from the portal URL', function() {
-    var handoff = readPortalRuntimeHandoff('https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=retrieve');
+    var handoff = readPortalRuntimeHandoff('https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=upgrade&feature=max_monitored_systems');
 
     expect(handoff.email).toBe('buyer@example.com');
-    expect(handoff.openBillingPanelID).toBe('retrieve-billing-panel');
+    expect(handoff.openBillingPanelID).toBe('upgrade-billing-panel');
+    expect(handoff.upgradeFeatureKey).toBe('max_monitored_systems');
   });
 
   it('applies email and billing handoff to the initial portal store', function() {
@@ -80,6 +81,7 @@ describe('portal runtime', function() {
       {
         email: 'buyer@example.com',
         openBillingPanelID: 'refund-billing-panel',
+        upgradeFeatureKey: '',
       }
     );
 
@@ -87,5 +89,25 @@ describe('portal runtime', function() {
     expect(runtime.store.getLoginState().emailValue).toBe('buyer@example.com');
     expect(runtime.store.getBillingState().refund.emailValue).toBe('buyer@example.com');
     expect(runtime.store.getBillingState().openBillingPanelID).toBe('refund-billing-panel');
+  });
+
+  it('promotes upgrade handoff intents into the billing shell state', function() {
+    var runtime = createPortalRuntime(
+      {
+        authenticated: false,
+        email: '',
+        has_self_hosted_commercial: false,
+        accounts: [],
+      },
+      {
+        email: '',
+        openBillingPanelID: 'upgrade-billing-panel',
+        upgradeFeatureKey: 'max_monitored_systems',
+      }
+    );
+
+    expect(runtime.store.getShellState().activeSection).toBe('billing');
+    expect(runtime.store.getBillingState().openBillingPanelID).toBe('upgrade-billing-panel');
+    expect(runtime.store.getBillingState().upgradeFeatureKey).toBe('max_monitored_systems');
   });
 });

@@ -46,6 +46,7 @@ export function installShell(deps: ShellDeps): void {
     var portalBootstrap = deps.store.getBootstrap();
     userInfo.innerHTML = renderHeaderHTML({
       bootstrap: portalBootstrap,
+      billingState: deps.store.getBillingState(),
       loginState: deps.store.getLoginState(),
       signupPath: portalBootstrap.signup_path,
       accountAPIBasePath: portalBootstrap.account_api_base_path,
@@ -59,6 +60,7 @@ export function installShell(deps: ShellDeps): void {
     var portalBootstrap = deps.store.getBootstrap();
     var context = {
       bootstrap: portalBootstrap,
+      billingState: deps.store.getBillingState(),
       loginState: deps.store.getLoginState(),
       signupPath: portalBootstrap.signup_path,
       accountAPIBasePath: portalBootstrap.account_api_base_path,

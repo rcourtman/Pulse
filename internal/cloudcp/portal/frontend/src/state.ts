@@ -117,6 +117,7 @@ export function syncPortalAccountStateBootstrap(accountState: PortalAccountState
 export function createPortalBillingState(): PortalBillingState {
   return {
     openBillingPanelID: '',
+    upgradeFeatureKey: '',
     flows: {
       manage: newVerificationFlowState(),
       retrieve: newVerificationFlowState(),

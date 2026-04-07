@@ -3,6 +3,7 @@ import {
   getSelfHostedBillingHref,
   getSelfHostedBillingPlanIntent,
   getSelfHostedBillingUsageDetail,
+  getPulseAccountPortalUpgradeUrl,
   getPricingRouteDestination,
   getPublicPricingUrl,
   getUpgradeFallbackDestination,
@@ -30,9 +31,9 @@ describe('pricingHandoff', () => {
     expect(getUpgradeFallbackDestination('cloud')).toBe('/cloud');
   });
 
-  it('routes self-hosted upgrades to the public pricing site', () => {
+  it('routes self-hosted upgrades to Pulse Account first', () => {
     expect(getUpgradeFallbackDestination('relay')).toBe(
-      'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=relay',
+      getPulseAccountPortalUpgradeUrl('relay'),
     );
   });
 
@@ -44,7 +45,10 @@ describe('pricingHandoff', () => {
 
   it('preserves extra query parameters when handing off the legacy pricing route', () => {
     expect(getPricingRouteDestination('?feature=relay&utm_content=legacy-bookmark')).toBe(
-      'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=relay&utm_content=legacy-bookmark',
+      getPulseAccountPortalUpgradeUrl(
+        'relay',
+        new URLSearchParams('feature=relay&utm_content=legacy-bookmark'),
+      ),
     );
   });
 
@@ -118,22 +122,18 @@ describe('pricingHandoff', () => {
     });
     expect(
       scopeSelfHostedBillingDestination(
-        { href: getPublicPricingUrl('relay'), external: true },
+        { href: getPulseAccountPortalUpgradeUrl('relay'), external: true },
         'usage',
         { detail: SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL },
       ),
     ).toEqual({
-      href: getPublicPricingUrl('relay'),
+      href: getPulseAccountPortalUpgradeUrl('relay'),
       external: true,
     });
   });
 
   it('detects external pricing destinations', () => {
-    expect(
-      isExternalPricingDestination(
-        'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade',
-      ),
-    ).toBe(true);
+    expect(isExternalPricingDestination(getPulseAccountPortalUpgradeUrl('relay'))).toBe(true);
     expect(isExternalPricingDestination('/cloud')).toBe(false);
   });
 });

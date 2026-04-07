@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { PortalBootstrapData, PortalLoginState } from './types';
+import type { PortalBillingState, PortalBootstrapData, PortalLoginState } from './types';
 import {
   renderAccountsHTML,
   renderAuthenticatedPortalHTML,
@@ -42,9 +42,70 @@ function createLoginState(overrides: Partial<PortalLoginState> = {}): PortalLogi
   };
 }
 
+function createBillingState(overrides: Partial<PortalBillingState> = {}): PortalBillingState {
+  return {
+    openBillingPanelID: '',
+    upgradeFeatureKey: '',
+    flows: {
+      manage: {
+        pendingEmail: '',
+        request: { pending: false, error: '' },
+        confirm: { pending: false, error: '' },
+        step2Visible: false,
+        status: { visible: false, message: '', error: false },
+        result: null,
+        emailValue: '',
+        codeValue: '',
+        checkboxChecked: false,
+      },
+      retrieve: {
+        pendingEmail: '',
+        request: { pending: false, error: '' },
+        confirm: { pending: false, error: '' },
+        step2Visible: false,
+        status: { visible: false, message: '', error: false },
+        result: null,
+        emailValue: '',
+        codeValue: '',
+        checkboxChecked: false,
+      },
+      export: {
+        pendingEmail: '',
+        request: { pending: false, error: '' },
+        confirm: { pending: false, error: '' },
+        step2Visible: false,
+        status: { visible: false, message: '', error: false },
+        result: null,
+        emailValue: '',
+        codeValue: '',
+        checkboxChecked: false,
+      },
+      delete: {
+        pendingEmail: '',
+        request: { pending: false, error: '' },
+        confirm: { pending: false, error: '' },
+        step2Visible: false,
+        status: { visible: false, message: '', error: false },
+        result: null,
+        emailValue: '',
+        codeValue: '',
+        checkboxChecked: false,
+      },
+    },
+    refund: {
+      emailValue: '',
+      tokenValue: '',
+      submit: { pending: false, error: '' },
+      status: { visible: false, message: '', error: false },
+    },
+    ...overrides,
+  };
+}
+
 function createContext(overrides: Partial<ShellViewContext> = {}): ShellViewContext {
   return {
     bootstrap: createBootstrap(),
+    billingState: createBillingState(),
     loginState: createLoginState(),
     signupPath: '/signup',
     accountAPIBasePath: '/api/accounts',
@@ -253,9 +314,11 @@ describe('shell view', function() {
 
     expect(html).toContain('Self-hosted billing');
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases.');
+    expect(html).toContain('id="open-upgrade-billing"');
     expect(html).toContain('id="open-retrieve-billing"');
     expect(html).toContain('id="billing-detail-shell" hidden');
     expect(html).toContain('data-account-billing-action="clear-billing-panel"');
+    expect(html).toContain('id="upgrade-billing-panel"');
     expect(html).toContain('id="data-billing-panel"');
     expect(html).toContain('licenses, refunds, or privacy');
     expect(html).toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
@@ -588,12 +651,48 @@ describe('shell view', function() {
     expect(html).not.toContain('data-shell-section="access"');
     expect(html).toContain('Self-hosted billing');
     expect(html).toContain('Use self-hosted billing only for self-hosted purchases.');
+    expect(html).toContain('Upgrade self-hosted plan');
     expect(html).toContain('Escalate with the same self-hosted billing path and the exact failed step.');
     expect(html).toContain('Billing');
     expect(html).not.toContain('Escalate with the same hosted billing action or self-hosted path and the exact failed step.');
     expect(html).not.toContain('Workspace or access path failed');
     expect(html).not.toContain('Hosted workspace or access');
     expect(html).not.toContain('Self-hosted commercial services');
+  });
+
+  it('renders a portal-owned self-hosted upgrade path when the app hands off an upgrade intent', function() {
+    var html = renderAuthenticatedPortalHTML(
+      createContext({
+        bootstrap: createBootstrap({
+          has_self_hosted_commercial: false,
+          accounts: [
+            {
+              id: 'acct_hosted',
+              name: 'Hosted Account',
+              kind: 'cloud',
+              kind_label: 'Cloud',
+              role: 'owner',
+              can_manage: true,
+              has_billing: true,
+              members: [],
+              workspaces: [],
+            },
+          ],
+        }),
+        billingState: createBillingState({
+          openBillingPanelID: 'upgrade-billing-panel',
+          upgradeFeatureKey: 'max_monitored_systems',
+        }),
+        activeSection: 'billing',
+      })
+    );
+
+    expect(html).toContain('Pulse Account owns the commercial handoff for self-hosted upgrades from the app.');
+    expect(html).toContain('Upgrade monitored-system cap');
+    expect(html).toContain('Compare monitored-system plans');
+    expect(html).toContain('utm_source=pulse-account');
+    expect(html).not.toContain('id="open-manage-billing"');
+    expect(html).not.toContain('id="open-retrieve-billing"');
   });
 
   it('renders signed-out portal with error and success login states', function() {

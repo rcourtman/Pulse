@@ -34,6 +34,7 @@ describe('portal state', function() {
     expect(billingState.flows.manage.request.pending).toBe(false);
     expect(billingState.flows.manage.confirm.pending).toBe(false);
     expect(billingState.refund.submit.pending).toBe(false);
+    expect(billingState.upgradeFeatureKey).toBe('');
 
     billingState.flows.manage.emailValue = 'override@example.com';
     syncBillingStateBootstrapEmail(billingState, 'owner@example.com');

@@ -5,6 +5,7 @@ import type { PortalBootstrapData } from './types';
 export interface PortalRuntimeHandoff {
   email: string;
   openBillingPanelID: string;
+  upgradeFeatureKey: string;
 }
 
 export interface PortalRuntime {
@@ -32,6 +33,8 @@ function normalizeHandoffEmail(value: string | null): string {
 
 function normalizeHandoffBillingPanel(value: string | null): string {
   switch (String(value || '').trim()) {
+    case 'upgrade':
+      return 'upgrade-billing-panel';
     case 'manage':
       return 'manage-billing-panel';
     case 'retrieve':
@@ -45,17 +48,23 @@ function normalizeHandoffBillingPanel(value: string | null): string {
   }
 }
 
+function normalizeUpgradeFeatureKey(value: string | null): string {
+  return String(value || '').trim();
+}
+
 export function readPortalRuntimeHandoff(locationHref: string | undefined = window.location.href): PortalRuntimeHandoff {
   try {
     var params = new URL(locationHref).searchParams;
     return {
       email: normalizeHandoffEmail(params.get('email')),
       openBillingPanelID: normalizeHandoffBillingPanel(params.get('service')),
+      upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
     };
   } catch {
     return {
       email: '',
       openBillingPanelID: '',
+      upgradeFeatureKey: '',
     };
   }
 }
@@ -100,8 +109,15 @@ export function createPortalRuntime(
     }, { notify: false });
   }
   if (handoff.openBillingPanelID) {
+    store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
       billingState.openBillingPanelID = handoff.openBillingPanelID;
+      billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
+    }, { notify: false });
+  } else if (handoff.upgradeFeatureKey) {
+    store.setActiveShellSection('billing');
+    store.updateBillingState(function(billingState) {
+      billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
     }, { notify: false });
   }
   return {

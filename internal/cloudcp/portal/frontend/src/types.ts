@@ -115,6 +115,7 @@ export interface RefundState {
 
 export interface PortalBillingState {
   openBillingPanelID: string;
+  upgradeFeatureKey: string;
   flows: Record<PortalBillingFlowID, VerificationFlowState>;
   refund: RefundState;
 }

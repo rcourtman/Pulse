@@ -426,7 +426,10 @@ Transition rule:
 
 1. existing utility pages may remain as entry points or compatibility shims
 2. new commercial/account workflows should prefer the Pulse Account shell
-3. utility pages should shrink toward redirects or lightweight recovery
+3. in-product self-hosted upgrade CTAs should hand off into `Pulse Account`
+   billing first, even when plan comparison or checkout still continues on the
+   public site as the next step
+4. utility pages should shrink toward redirects or lightweight recovery
    handoffs once equivalent Pulse Account areas exist
 
 ## Forbidden Drift
@@ -457,7 +460,9 @@ Accepted as sufficient for RC and GA:
 
 1. Cloud/MSP control-plane portal exists
 2. self-hosted recovery and billing utilities exist
-3. commercial surfaces are functional but fragmented
+3. in-product self-hosted upgrade surfaces may hand off into `Pulse Account`
+   billing before the portal absorbs full purchase depth
+4. commercial surfaces are functional but fragmented
 
 ### Candidate lane target
 

@@ -8,6 +8,7 @@ import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import {
+  getPulseAccountPortalUpgradeUrl,
   getPublicPricingUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
@@ -360,7 +361,7 @@ describe('ProLicensePanel', () => {
     expect(screen.getByText('Need a higher monitored-system cap?')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
-      getPublicPricingUrl('max_monitored_systems'),
+      getPulseAccountPortalUpgradeUrl('max_monitored_systems'),
     );
   });
 
@@ -554,7 +555,9 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain(
       'monitoredSystemUpgradeArrivalTitle',
     );
-    expect(proLicensePlanSectionSource).toContain("getUpgradeActionDestination('max_monitored_systems')");
+    expect(proLicensePlanSectionSource).toContain(
+      "getPulseAccountPortalUpgradeUrl('max_monitored_systems')",
+    );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
     expect(selfHostedCommercialActivationSectionSource).toContain(

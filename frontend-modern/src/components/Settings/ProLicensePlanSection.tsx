@@ -8,7 +8,7 @@ import {
   getNoActiveProLicenseState,
   getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
-import { getPublicPricingUrl } from '@/utils/pricingHandoff';
+import { getPulseAccountPortalUpgradeUrl } from '@/utils/pricingHandoff';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import { CommercialStatGrid } from './CommercialBillingSections';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
@@ -55,13 +55,8 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
   const trialEndedNotice = props.trialEnded ? getTrialEndedProLicenseNotice() : null;
   const inactiveProUpsellNotice =
     !props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;
-  const monitoredSystemUpgradeDestination = () => {
-    const destination = getUpgradeActionDestination('max_monitored_systems');
-    if (destination.external) {
-      return destination;
-    }
-    return resolveUpgradeDestination(getPublicPricingUrl('max_monitored_systems'));
-  };
+  const monitoredSystemUpgradeDestination = () =>
+    resolveUpgradeDestination(getPulseAccountPortalUpgradeUrl('max_monitored_systems'));
 
   return (
     <>
