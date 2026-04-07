@@ -210,6 +210,52 @@ export const isPro = createRoot(() =>
   }),
 );
 
+/**
+ * Used by non-billing upgrade surfaces that can render a trial CTA unless the
+ * current posture explicitly denies trial eligibility.
+ */
+export function canOfferCommercialTrial(): boolean {
+  return commercialPostureState()?.trial_eligible !== false;
+}
+
+/**
+ * Used by surfaces that should only offer trial start when the current
+ * commercial posture is loaded and not already active/trial-backed.
+ */
+export function canStartCommercialTrial(): boolean {
+  const current = commercialPostureState();
+  if (!current) return false;
+  if (current.subscription_state === 'active' || current.subscription_state === 'trial') {
+    return false;
+  }
+  return current.trial_eligible !== false;
+}
+
+export function isCommercialTrialActive(): boolean {
+  return commercialPostureState()?.subscription_state === 'trial';
+}
+
+export function commercialTrialDaysRemaining(): number | null {
+  const current = commercialPostureState()?.trial_days_remaining;
+  return typeof current === 'number' && Number.isFinite(current) ? current : null;
+}
+
+export function commercialOverflowDaysRemaining(): number | null {
+  const current = commercialPostureState()?.overflow_days_remaining;
+  return typeof current === 'number' && Number.isFinite(current) ? current : null;
+}
+
+export function canShowActiveUseTrialNudge(): boolean {
+  const current = commercialPostureState();
+  if (!current) return false;
+  return (
+    current.tier === 'free' &&
+    current.subscription_state !== 'trial' &&
+    current.subscription_state !== 'active' &&
+    current.trial_eligible !== false
+  );
+}
+
 export function getUpgradeReason(key: string) {
   const current = commercialPostureState();
   if (!current?.upgrade_reasons?.length) return undefined;

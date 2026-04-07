@@ -12,7 +12,7 @@ import {
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -119,7 +119,7 @@ export const useAuditLogPanelState = () => {
   const showUpgradePaywall = createMemo(
     () => runtimeCapabilitiesLoaded() && !auditLoggingEnabled() && !loading(),
   );
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
   const upgradeDestination = createMemo(() => getUpgradeActionDestination('audit_logging'));
 
   const fetchAuditEvents = async (options?: { limit?: number; offset?: number }) => {

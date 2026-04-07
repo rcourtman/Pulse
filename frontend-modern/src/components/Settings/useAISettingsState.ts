@@ -15,7 +15,7 @@ import {
   loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { notificationStore } from '@/stores/notifications';
@@ -156,7 +156,7 @@ export const useAISettingsState = () => {
   const quickstartBlockedReason = createMemo(() =>
     normalizeQuickstartReason(settings()?.quickstart_blocked_reason),
   );
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
   const upgradeAutofixDestination = () => getUpgradeActionDestination('ai_autofix');
 
   const hasProviderBackedModels = (data: AISettingsType | null | undefined) =>

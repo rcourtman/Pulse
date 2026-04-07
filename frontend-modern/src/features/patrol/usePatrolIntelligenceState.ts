@@ -27,7 +27,7 @@ import {
   loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canStartCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
@@ -169,17 +169,7 @@ export function usePatrolIntelligenceState() {
   const alertAnalysisLocked = createMemo(() => !hasFeature('ai_alerts'));
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
 
-  const canStartTrial = createMemo(() => {
-    const posture = commercialPosture();
-    if (!posture) return false;
-    if (
-      posture.subscription_state === 'active' ||
-      posture.subscription_state === 'trial'
-    ) {
-      return false;
-    }
-    return posture.trial_eligible !== false;
-  });
+  const canStartTrial = createMemo(() => canStartCommercialTrial());
 
   async function handleStartTrial() {
     if (startingTrial()) return;

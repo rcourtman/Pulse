@@ -13,7 +13,6 @@ const {
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
   commercialPostureMock,
-  loadCommercialPostureMock,
   isUpsellSnoozedMock,
   snoozeUpsellMock,
 } =
@@ -22,16 +21,16 @@ const {
     getUpgradeActionDestinationMock: vi.fn(),
     getUpgradeActionUrlOrFallbackMock: vi.fn(),
     commercialPostureMock: vi.fn(),
-    loadCommercialPostureMock: vi.fn(),
     isUpsellSnoozedMock: vi.fn(),
     snoozeUpsellMock: vi.fn(),
   }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  commercialTrialDaysRemaining: () => commercialPostureMock()?.trial_days_remaining ?? null,
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
-  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
+  isCommercialTrialActive: () => commercialPostureMock()?.subscription_state === 'trial',
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
@@ -57,7 +56,6 @@ describe('TrialBanner', () => {
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     commercialPostureMock.mockReset();
-    loadCommercialPostureMock.mockReset();
     isUpsellSnoozedMock.mockReset();
     snoozeUpsellMock.mockReset();
     getUpgradeActionDestinationMock.mockReturnValue({
@@ -66,7 +64,6 @@ describe('TrialBanner', () => {
     });
     presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
     getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
-    loadCommercialPostureMock.mockResolvedValue(undefined);
     isUpsellSnoozedMock.mockReturnValue(false);
   });
 
@@ -88,7 +85,8 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
-    expect(trialBannerStateSource).toContain('commercialPosture');
+    expect(trialBannerStateSource).toContain('isCommercialTrialActive');
+    expect(trialBannerStateSource).toContain('commercialTrialDaysRemaining');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
 

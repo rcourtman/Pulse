@@ -42,9 +42,8 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  canStartCommercialTrial: () => false,
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
-  commercialPosture: () => ({ subscription_state: 'active' }),
-  loadCommercialPosture: vi.fn(),
   startProTrial: vi.fn(),
 }));
 
@@ -77,7 +76,7 @@ describe('HistoryChart', () => {
     expect(historyChartStateSource).toContain('export function useHistoryChartState');
     expect(historyChartStateSource).toContain('HISTORY_CHART_RANGES');
     expect(historyChartStateSource).toContain("'mock_synthetic' | null");
-    expect(historyChartStateSource).toContain('return ent.trial_eligible !== false;');
+    expect(historyChartStateSource).toContain('const canStartTrial = createMemo(() => canStartCommercialTrial());');
     expect(historyChartStateSource).toContain('runStartProTrialAction({');
     expect(historyChartStateSource).not.toContain('startProTrial()');
     expect(historyChartStateSource).not.toContain('getTrialAlreadyUsedMessage()');

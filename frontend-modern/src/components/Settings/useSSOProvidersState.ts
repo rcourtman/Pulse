@@ -7,7 +7,7 @@ import {
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -71,7 +71,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
 
   const hasAdvancedSSO = createMemo(() => hasFeature('advanced_sso'));
   const canManage = () => props.canManage !== false;
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
 
   const handleStartTrial = async () => {
     if (startingTrial()) {

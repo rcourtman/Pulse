@@ -608,3 +608,7 @@ commercial split as the rest of the app. Patrol runtime availability must stay
 on the non-commercial capability store, while approval/trial CTAs use the
 shared commercial-posture store and trial-start helper. Patrol surfaces must not
 recombine those two contracts into one entitlement payload.
+Patrol approval and trial shells should consume selector helpers such as
+`canStartCommercialTrial()` from
+`frontend-modern/src/stores/licenseCommercial.ts` instead of branching on raw
+commercial-posture fields in leaf components.

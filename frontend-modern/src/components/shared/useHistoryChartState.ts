@@ -12,7 +12,7 @@ import {
   maxHistoryDays,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canStartCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { calculateOptimalPoints } from '@/utils/downsample';
@@ -53,12 +53,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [hoveredPoint, setHoveredPoint] = createSignal<HistoryChartHoverPoint | null>(null);
 
-  const canStartTrial = createMemo(() => {
-    const ent = commercialPosture();
-    if (!ent) return false;
-    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
-    return ent.trial_eligible !== false;
-  });
+  const canStartTrial = createMemo(() => canStartCommercialTrial());
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;

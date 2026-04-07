@@ -56,7 +56,9 @@ describe('NodeModal guardrails', () => {
     expect(nodeModalStateSource).toContain("from '@/stores/licenseCommercial';");
     expect(nodeModalStateSource).not.toContain("from '@/stores/license';\n");
     expect(nodeModalStateSource).not.toContain('loadCommercialPosture(');
-    expect(nodeModalStateSource).toContain('const ent = commercialPosture();');
+    expect(nodeModalStateSource).toContain('canStartCommercialTrial');
+    expect(nodeModalStateSource).toContain('const canStartTrial = createMemo(() => canStartCommercialTrial());');
+    expect(nodeModalStateSource).not.toContain('commercialPosture()');
     expect(nodeModalStateSource).toContain('const copyProxmoxAgentInstallCommand = async (');
     expect(nodeModalStateSource).toContain("const data = await NodesAPI.getAgentInstallCommand({");
     expect(nodeModalStateSource).toContain('type,');
@@ -132,8 +134,9 @@ describe('NodeModal guardrails', () => {
       'API-managed PVE/PBS/PMG connections are governed when the connection is',
     );
     expect(nodeModalStateSource).toContain('const hostLimitReached = createMemo(() => false);');
-    expect(nodeModalStateSource).toContain("if (ent.subscription_state === 'active' || ent.subscription_state === 'trial')");
-    expect(nodeModalStateSource).toContain('return ent.trial_eligible !== false;');
+    expect(nodeModalStateSource).toContain('canStartCommercialTrial');
+    expect(nodeModalStateSource).not.toContain('subscription_state');
+    expect(nodeModalStateSource).not.toContain('trial_eligible');
     expect(nodeModalStateSource).toContain('monitored-system limit banner.');
     expect(nodeModalSettingsOwnerSource).not.toContain('Under agents-only counting');
     expect(nodeModalSettingsOwnerSource).not.toContain('the agent limit');

@@ -27,6 +27,7 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  canOfferCommercialTrial: () => commercialPostureMock()?.trial_eligible !== false,
   commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
   getUpgradeActionDestination: (feature: string) => ({
     href: `https://example.com/upgrade?feature=${feature}`,

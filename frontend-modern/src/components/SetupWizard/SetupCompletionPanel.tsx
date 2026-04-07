@@ -32,7 +32,7 @@ import {
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
-  commercialPosture,
+  isCommercialTrialActive,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import {
@@ -735,7 +735,7 @@ Keep these credentials secure!
                   Relay.
                 </p>
                 <Show
-                  when={!trialStarted() && commercialPosture()?.subscription_state !== 'trial'}
+                  when={!trialStarted() && !isCommercialTrialActive()}
                   fallback={
                     <button
                       type="button"

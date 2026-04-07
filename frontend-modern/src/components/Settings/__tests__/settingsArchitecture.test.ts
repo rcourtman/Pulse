@@ -1508,21 +1508,37 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain("} from '@/stores/license';");
     expect(aiSettingsStateSource).toContain("} from '@/stores/licenseCommercial';");
     expect(aiSettingsStateSource).not.toContain('loadCommercialPosture();');
+    expect(aiSettingsStateSource).toContain('canOfferCommercialTrial');
+    expect(aiSettingsStateSource).not.toContain('commercialPosture()?.trial_eligible');
 
     expect(reportingPanelStateSource).toContain("} from '@/stores/license';");
     expect(reportingPanelStateSource).toContain("} from '@/stores/licenseCommercial';");
     expect(reportingPanelStateSource).not.toContain('loadCommercialPosture();');
+    expect(reportingPanelStateSource).toContain('canOfferCommercialTrial');
+    expect(reportingPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
 
     expect(auditLogStateSource).toContain("} from '@/stores/license';");
     expect(auditLogStateSource).toContain("} from '@/stores/licenseCommercial';");
     expect(auditLogStateSource).not.toContain('loadCommercialPosture();');
+    expect(auditLogStateSource).toContain('canOfferCommercialTrial');
+    expect(auditLogStateSource).not.toContain('commercialPosture()?.trial_eligible');
     expect(auditWebhookStateSource).toContain("} from '@/stores/licenseCommercial';");
     expect(auditWebhookStateSource).not.toContain('loadCommercialPosture();');
+    expect(auditWebhookStateSource).toContain('canOfferCommercialTrial');
+    expect(auditWebhookStateSource).not.toContain('commercialPosture()?.trial_eligible');
     expect(ssoProvidersStateSource).toContain("} from '@/stores/licenseCommercial';");
     expect(ssoProvidersStateSource).not.toContain('loadCommercialPosture();');
+    expect(ssoProvidersStateSource).toContain('canOfferCommercialTrial');
+    expect(ssoProvidersStateSource).not.toContain('commercialPosture()?.trial_eligible');
     expect(rbacFeatureGateStateSource).toContain("} from '@/stores/licenseCommercial';");
     expect(rbacFeatureGateStateSource).not.toContain('loadCommercialPosture();');
+    expect(rbacFeatureGateStateSource).toContain('canOfferCommercialTrial');
+    expect(rbacFeatureGateStateSource).not.toContain('commercialPosture()?.trial_eligible');
     expect(nodeModalStateSource).toContain("from '@/stores/licenseCommercial';");
     expect(nodeModalStateSource).not.toContain('loadCommercialPosture();');
+    expect(nodeModalStateSource).toContain('canStartCommercialTrial');
+    expect(nodeModalStateSource).not.toContain('commercialPosture()');
+    expect(relaySettingsPanelStateSource).toContain('canOfferCommercialTrial');
+    expect(relaySettingsPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
   });
 });

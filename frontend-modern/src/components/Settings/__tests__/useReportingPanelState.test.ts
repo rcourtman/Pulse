@@ -120,6 +120,7 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/licenseCommercial', () => ({
+      canOfferCommercialTrial: vi.fn(() => true),
       commercialPosture: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),
@@ -219,6 +220,7 @@ describe('useReportingPanelState', () => {
     }));
 
     vi.doMock('@/stores/licenseCommercial', () => ({
+      canOfferCommercialTrial: vi.fn(() => true),
       commercialPosture: vi.fn(() => ({ trial_eligible: true })),
       getUpgradeActionDestination: vi.fn((feature?: string) => ({
         href: getPublicPricingUrl(feature),

@@ -9,7 +9,7 @@ import { Component, Show, createSignal, createResource, createMemo } from 'solid
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
-import { commercialPosture } from '@/stores/licenseCommercial';
+import { canStartCommercialTrial } from '@/stores/licenseCommercial';
 import { hasFeature } from '@/stores/license';
 import { AIAPI, type ApprovalRequest, type ApprovalExecutionResult } from '@/api/ai';
 import { getApprovalRiskPresentation } from '@/utils/approvalRiskPresentation';
@@ -43,12 +43,7 @@ export const ApprovalSection: Component<ApprovalSectionProps> = (props) => {
   const canAutoFix = createMemo(() => hasFeature('ai_autofix'));
 
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = createMemo(() => {
-    const ent = commercialPosture();
-    if (!ent) return false;
-    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
-    return ent.trial_eligible !== false;
-  });
+  const canStartTrial = createMemo(() => canStartCommercialTrial());
 
   const handleStartTrial = async (e: Event) => {
     e.stopPropagation();

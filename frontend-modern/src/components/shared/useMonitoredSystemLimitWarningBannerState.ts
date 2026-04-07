@@ -5,7 +5,7 @@ import {
   loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  commercialOverflowDaysRemaining,
   getUpgradeActionDestination,
   hasMigrationGap,
   legacyConnections,
@@ -54,7 +54,7 @@ export function useMonitoredSystemLimitWarningBannerState() {
     getMonitoredSystemMigrationMessage(migrationCounts()),
   );
   const overflowSummary = createMemo(() =>
-    getMonitoredSystemOverflowSummary(commercialPosture()?.overflow_days_remaining),
+    getMonitoredSystemOverflowSummary(commercialOverflowDaysRemaining()),
   );
   const toneClass = createMemo(() => getMonitoredSystemBannerToneClass(isUrgent()));
   const migrationTextClass = createMemo(() =>

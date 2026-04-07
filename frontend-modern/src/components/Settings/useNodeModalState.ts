@@ -4,7 +4,7 @@ import type { NodeConfig } from '@/types/nodes';
 import { notificationStore } from '@/stores/notifications';
 import { NodesAPI } from '@/api/nodes';
 import type { ProxmoxSetupCommandResponse } from '@/api/nodes';
-import { commercialPosture } from '@/stores/licenseCommercial';
+import { canStartCommercialTrial } from '@/stores/licenseCommercial';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import {
@@ -55,12 +55,7 @@ export const useNodeModalState = (props: NodeModalProps) => {
   // monitored-system limit banner.
   const [startingTrial, setStartingTrial] = createSignal(false);
   const hostLimitReached = createMemo(() => false);
-  const canStartTrial = createMemo(() => {
-    const ent = commercialPosture();
-    if (!ent) return false;
-    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
-    return ent.trial_eligible !== false;
-  });
+  const canStartTrial = createMemo(() => canStartCommercialTrial());
 
   const handleStartTrial = async () => {
     if (startingTrial()) return;

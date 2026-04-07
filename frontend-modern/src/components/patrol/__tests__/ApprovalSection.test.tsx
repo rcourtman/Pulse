@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApprovalExecutionResult, ApprovalRequest, InvestigationSession } from '@/api/ai';
+import approvalSectionSource from '../ApprovalSection.tsx?raw';
 import ApprovalSection from '../ApprovalSection';
 
 const state = vi.hoisted(() => ({
@@ -22,7 +23,6 @@ const notificationSuccessMock = vi.hoisted(() => vi.fn());
 const notificationErrorMock = vi.hoisted(() => vi.fn());
 const openWithPromptMock = vi.hoisted(() => vi.fn());
 const startProTrialMock = vi.hoisted(() => vi.fn());
-const loadCommercialPostureMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@/api/ai', () => ({
   AIAPI: {
@@ -59,10 +59,12 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  commercialPosture: () => state.entitlements,
-  licenseStatus: () => state.entitlements,
-  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadRuntimeCapabilities: (...args: unknown[]) => loadCommercialPostureMock(...args),
+  canStartCommercialTrial: () => {
+    const ent = state.entitlements;
+    if (!ent) return false;
+    if (ent.subscription_state === 'active' || ent.subscription_state === 'trial') return false;
+    return ent.trial_eligible !== false;
+  },
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 
@@ -89,12 +91,15 @@ describe('ApprovalSection', () => {
     notificationErrorMock.mockReset();
     openWithPromptMock.mockReset();
     startProTrialMock.mockReset();
-    loadCommercialPostureMock.mockReset();
-    loadCommercialPostureMock.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('keeps patrol trial gating on shared commercial selector helpers', () => {
+    expect(approvalSectionSource).toContain('canStartCommercialTrial');
+    expect(approvalSectionSource).not.toContain('commercialPosture');
   });
 
   it('keeps fix_queued findings actionable when approval and investigation details are unavailable', async () => {

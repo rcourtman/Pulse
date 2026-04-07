@@ -348,6 +348,9 @@ lifecycle-adjacent authenticated-shell surfaces such as
 `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts` must
 consume the shared posture owner instead of reintroducing their own mount-time
 commercial reads.
+Even on that governed first-run exception, render-time trial gating should stay
+on shared selectors such as `isCommercialTrialActive()` instead of reading raw
+commercial-posture fields inside `SetupCompletionPanel.tsx`.
 That same shared boundary now also owns the one-time checkout-return lookup:
 lifecycle-adjacent surfaces may initiate billing or account handoff through
 shared public routes, but they must never persist, derive, or replay the

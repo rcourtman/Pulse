@@ -40,8 +40,7 @@ vi.mock('@/components/shared/Dialog', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  commercialPosture: () => ({ subscription_state: 'active', trial_eligible: false }),
-  loadCommercialPosture: vi.fn(),
+  canStartCommercialTrial: () => false,
   startProTrial: vi.fn(),
 }));
 

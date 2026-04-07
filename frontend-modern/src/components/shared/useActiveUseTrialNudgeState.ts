@@ -1,5 +1,5 @@
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
-import { commercialPosture } from '@/stores/licenseCommercial';
+import { canShowActiveUseTrialNudge } from '@/stores/licenseCommercial';
 import { notificationStore } from '@/stores/notifications';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
@@ -7,7 +7,6 @@ import {
   ACTIVE_USE_TRIAL_NUDGE_FIRST_SEEN_KEY,
   ACTIVE_USE_TRIAL_NUDGE_REFRESH_MS,
   ACTIVE_USE_TRIAL_NUDGE_SNOOZE_KEY,
-  isActiveUseTrialNudgeEligible,
   isActiveUseTrialNudgeOldEnough,
 } from './activeUseTrialNudgeModel';
 
@@ -46,7 +45,7 @@ export function useActiveUseTrialNudgeState() {
   const shouldShow = createMemo(() => {
     return (
       isActiveUseTrialNudgeOldEnough(now(), firstSeen()) &&
-      isActiveUseTrialNudgeEligible(commercialPosture()) &&
+      canShowActiveUseTrialNudge() &&
       !snoozed()
     );
   });

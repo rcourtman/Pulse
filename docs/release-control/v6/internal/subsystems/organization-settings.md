@@ -202,3 +202,6 @@ it must not issue its own mount-time `loadCommercialPosture()` read.
 Authenticated-shell bootstrap belongs to
 `frontend-modern/src/useAppRuntimeState.ts`, with only the governed first-run
 setup completion surface allowed to bootstrap posture outside that shell.
+RBAC paywall state should also consume intent-level selectors such as
+`canOfferCommercialTrial()` from `frontend-modern/src/stores/licenseCommercial.ts`
+instead of reading raw posture fields locally.

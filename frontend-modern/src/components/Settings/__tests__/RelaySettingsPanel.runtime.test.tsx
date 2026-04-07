@@ -5,7 +5,6 @@ import relaySettingsPanelSource from '../RelaySettingsPanel.tsx?raw';
 import relaySettingsPanelStateSource from '../useRelaySettingsPanelState.ts?raw';
 
 const loadLicenseStatusMock = vi.fn();
-const loadCommercialPostureMock = vi.fn();
 const hasFeatureMock = vi.fn();
 const getRelayConfigMock = vi.fn();
 const getRelayStatusMock = vi.fn();
@@ -27,11 +26,9 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  commercialPosture: () => ({ trial_eligible: false }),
+  canOfferCommercialTrial: () => false,
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   entitlements: () => ({ trial_eligible: false }),
-  loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: vi.fn(),
 }));
 
@@ -82,7 +79,6 @@ import { RelaySettingsPanel } from '../RelaySettingsPanel';
 describe('RelaySettingsPanel runtime', () => {
   beforeEach(() => {
     loadLicenseStatusMock.mockReset();
-    loadCommercialPostureMock.mockReset();
     hasFeatureMock.mockReset();
     getRelayConfigMock.mockReset();
     getRelayStatusMock.mockReset();
@@ -99,7 +95,6 @@ describe('RelaySettingsPanel runtime', () => {
 
     hasFeatureMock.mockReturnValue(true);
     loadLicenseStatusMock.mockResolvedValue(undefined);
-    loadCommercialPostureMock.mockResolvedValue(undefined);
     getRelayConfigMock.mockResolvedValue({
       enabled: true,
       server_url: 'wss://relay.example.test/ws/instance',
@@ -157,6 +152,8 @@ describe('RelaySettingsPanel runtime', () => {
 
   it('relies on shared commercial posture bootstrap for relay settings', () => {
     expect(relaySettingsPanelStateSource).not.toContain('loadCommercialPosture(');
+    expect(relaySettingsPanelStateSource).toContain('canOfferCommercialTrial');
+    expect(relaySettingsPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
   });
 
   it('shows supported Pulse Mobile pairing copy on the relay paywall', async () => {
@@ -186,7 +183,6 @@ describe('RelaySettingsPanel runtime', () => {
       expect(screen.getByDisplayValue('wss://relay.example.test/ws/instance')).toBeInTheDocument();
     });
 
-    expect(loadCommercialPostureMock).not.toHaveBeenCalled();
     expect(screen.getByText('Pair Pulse Mobile through Relay')).toBeInTheDocument();
     expect(
       screen.getByText(

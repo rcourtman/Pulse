@@ -31,7 +31,6 @@ const mockLegacyConnections = vi.hoisted(() =>
 const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadRuntimeLicenseStatus = vi.hoisted(() => vi.fn());
-const mockLoadCommercialPosture = vi.hoisted(() => vi.fn());
 const mockPresentationPolicyHidesCommercialSurfaces = vi.hoisted(() => vi.fn(() => false));
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
@@ -42,12 +41,11 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  commercialPosture: mockEntitlements,
+  commercialOverflowDaysRemaining: () => mockEntitlements().overflow_days_remaining ?? null,
   getUpgradeActionDestination: (...args: unknown[]) => mockGetUpgradeActionDestination(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => mockGetUpgradeActionUrlOrFallback(...args),
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
-  loadCommercialPosture: (...args: unknown[]) => mockLoadCommercialPosture(...args),
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
@@ -78,8 +76,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     mockPresentationPolicyHidesCommercialSurfaces.mockReturnValue(false);
     mockLoadRuntimeLicenseStatus.mockReset();
     mockLoadRuntimeLicenseStatus.mockResolvedValue(undefined);
-    mockLoadCommercialPosture.mockReset();
-    mockLoadCommercialPosture.mockResolvedValue(undefined);
     mockGetUpgradeActionDestination.mockReset();
     mockGetUpgradeActionUrlOrFallback.mockReset();
     mockGetUpgradeActionDestination.mockReturnValue({
@@ -119,6 +115,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'presentationPolicyHidesCommercialSurfaces',
     );
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'commercialOverflowDaysRemaining',
+    );
+    expect(monitoredSystemLimitWarningBannerStateSource).not.toContain(
+      'commercialPosture()?.overflow_days_remaining',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('scopeSelfHostedBillingDestination');
@@ -155,7 +157,6 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ));
 
     expect(mockLoadRuntimeLicenseStatus).toHaveBeenCalled();
-    expect(mockLoadCommercialPosture).not.toHaveBeenCalled();
     expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
   });
 

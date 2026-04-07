@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { ensureAuthenticated } from "./helpers";
+import { ensureAuthenticated, trackBrowserRequests } from "./helpers";
 
 const PATROL_BLOCK_REASON =
   "Quickstart credits exhausted. Connect your API key to continue using AI Patrol.";
@@ -483,10 +483,22 @@ test.describe("Patrol runtime-state browser contract", () => {
       "Desktop-only Patrol runtime coverage",
     );
 
+    const commercialPostureRequests = trackBrowserRequests(
+      page,
+      "/api/license/commercial-posture",
+    );
+    const entitlementsRequests = trackBrowserRequests(
+      page,
+      "/api/license/entitlements",
+    );
+
     await ensureAuthenticated(page);
+    commercialPostureRequests.clear();
+    entitlementsRequests.clear();
     await mockBlockedPatrolRuntimeState(page);
 
-    await page.goto("/ai", { waitUntil: "domcontentloaded" });
+    await page.getByRole("tab", { name: "Patrol" }).click();
+    await expect(page).toHaveURL(/\/ai/);
 
     await expect(page.getByText("Patrol Paused").first()).toBeVisible();
     await expect(page.getByText("Patrol paused").first()).toBeVisible();
@@ -496,6 +508,10 @@ test.describe("Patrol runtime-state browser contract", () => {
     ).toBeDisabled();
     await expect(page.getByText("Patrol quickstart exhausted")).toBeVisible();
     await expect(page.getByText("Health A · 100/100")).toHaveCount(0);
+    expect(commercialPostureRequests.count()).toBe(0);
+    expect(entitlementsRequests.count()).toBe(0);
+    commercialPostureRequests.stop();
+    entitlementsRequests.stop();
   });
 
   test("surfaces scoped trigger context inside the summary and split trigger controls on the Patrol page", async ({

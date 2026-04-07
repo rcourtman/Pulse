@@ -140,7 +140,9 @@ work extends shared components instead of creating new local variants.
 118. `frontend-modern/src/components/Login.tsx`
 119. `frontend-modern/src/stores/demoMode.ts`
 120. `frontend-modern/src/stores/sessionCapabilities.ts`
-121. `frontend-modern/src/useAppRuntimeState.ts`
+121. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
+122. `frontend-modern/src/stores/licenseCommercial.ts`
+123. `frontend-modern/src/useAppRuntimeState.ts`
 
 ## Shared Boundaries
 
@@ -678,6 +680,16 @@ handoff itself is now centralized in
 onboarding surfaces must use that owner for redirect, success-notification, and
 canonical denial handling instead of open-coding local `startProTrial()`
 branches or re-interpreting backend status codes.
+That same shared primitive boundary now also owns intent-level commercial
+selectors for non-billing surfaces. Leaf/shared state such as
+`useTrialBannerState.ts`, `useActiveUseTrialNudgeState.ts`,
+`useMonitoredSystemLimitWarningBannerState.ts`, settings panel state, and
+Patrol approval/header shells must consume selector helpers from
+`frontend-modern/src/stores/licenseCommercial.ts` such as
+`canOfferCommercialTrial()`, `canStartCommercialTrial()`,
+`isCommercialTrialActive()`, `commercialTrialDaysRemaining()`, and
+`commercialOverflowDaysRemaining()` instead of branching directly on raw
+`subscription_state`, `trial_eligible`, or day-count fields.
 That same owner also holds generic settings-paywall CTA labels. Runtime shells
 such as `AIRuntimeControlsSection.tsx` and `RelaySettingsPanel.tsx` must source
 shared labels like `Upgrade to Pro` and `Start free trial` from

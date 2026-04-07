@@ -40,6 +40,7 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  canOfferCommercialTrial: () => true,
   commercialPosture: () => ({ trial_eligible: true }),
   entitlements: () => ({ trial_eligible: true }),
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
@@ -265,6 +266,8 @@ afterEach(() => {
 describe('AgentProfilesPanel V6 agent ID handling', () => {
   it('relies on shared commercial posture bootstrap instead of local posture loads', () => {
     expect(agentProfilesPanelStateSource).not.toContain('loadCommercialPosture(');
+    expect(agentProfilesPanelStateSource).toContain('canOfferCommercialTrial');
+    expect(agentProfilesPanelStateSource).not.toContain('commercialPosture()?.trial_eligible');
   });
 
   it('maps assignments using actionable V6 agent ID instead of resource hash ID', async () => {

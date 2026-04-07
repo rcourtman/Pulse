@@ -4,7 +4,7 @@ import {
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
@@ -30,7 +30,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
     getRBACFeatureGateCopy(options.kind),
   );
   const licenseReady = createMemo(() => runtimeCapabilitiesLoaded());
-  const canStartTrial = createMemo(() => commercialPosture()?.trial_eligible !== false);
+  const canStartTrial = createMemo(() => canOfferCommercialTrial());
   const rbacEnabled = createMemo(() => licenseReady() && hasFeature('rbac'));
   const paywallVisible = createMemo(
     () => licenseReady() && !hasFeature('rbac') && !options.loading(),

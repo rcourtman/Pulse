@@ -777,6 +777,12 @@ for the NodeModal Pro upgrade path. The NodesAPI client remains the source of
 truth for setup/install requests, while hosted trial redirects and denial copy
 must flow through the shared trial-start owner rather than a second client-side
 status-code map inside node setup state.
+That same frontend/API split now also requires node setup state to consume
+shared commercial selectors for non-transport trial gating. `useNodeModalState.ts`
+may decide whether to show a trial CTA through
+`frontend-modern/src/stores/licenseCommercial.ts`, but it must not repurpose
+raw commercial-posture fields as if they were part of the NodesAPI transport
+contract.
 Canonical timeline entries now also preserve correlation context in
 `relatedResources`, so the history surface can explain which neighboring
 resources moved with restart, anomaly, config, state transition, and
@@ -1162,6 +1168,17 @@ monitored-system ledger endpoint, and TrueNAS/API-backed registration must all
 reflect deduped top-level monitored systems rather than agent-only
 installation count, and `legacy_connections` / `has_migration_gap` may not
 imply that API-backed monitoring sits outside the commercial cap.
+That same contract now also owns prospective admission and replacement
+projection. Config-backed PVE/PBS/PMG, TrueNAS, VMware, and other API-backed
+registration or update routes must project candidates or preview records
+through the canonical monitored-system resolver before persistence, including
+replacement of one existing source-owned surface, instead of rebuilding
+handler-local priority tables or platform-specific counters.
+When an active monitored-system cap is present and current usage cannot be
+resolved, those API contracts must fail closed for net-new admissions rather
+than serializing a fake zero. `/api/license/entitlements` therefore carries
+limit-level `current_available` truth so clients can distinguish unavailable
+monitored-system usage from a real `current: 0`.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring

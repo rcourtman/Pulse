@@ -214,6 +214,13 @@ the governed browser proof in
 `tests/integration/tests/journeys/01-smoke-bootstrap-login-dashboard.spec.ts`,
 and `tests/integration/tests/journeys/03-relay-pairing.spec.ts` must continue
 to assert zero browser-shell entitlement requests outside owned billing flows.
+That same browser/store boundary also owns typed non-billing commercial
+selectors. `frontend-modern/src/stores/licenseCommercial.ts` may interpret the
+commercial-posture payload once for browser consumers, but relay, Patrol,
+trial banners, monitored-system warnings, and settings paywall state must not
+branch directly on raw `subscription_state`, `trial_eligible`,
+`trial_days_remaining`, or `overflow_days_remaining` fields in each leaf
+surface.
 Legacy Cloud plan aliases are now expected to canonicalize to the `cloud_*`
 contract not only when Stripe metadata is parsed, but also when persisted plan
 versions are consumed at hosted entitlement and workspace-limit enforcement

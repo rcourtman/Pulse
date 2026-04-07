@@ -4,7 +4,7 @@ import {
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -36,7 +36,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => props.canManage !== false;
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
   const relayEnabled = () => hasFeature('relay');
   const upgradeDestination = () => getUpgradeActionDestination('relay');
   const connectionPresentation = createMemo(() =>

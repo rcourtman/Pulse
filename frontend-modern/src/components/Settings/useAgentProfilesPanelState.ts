@@ -16,7 +16,7 @@ import {
   runtimeCapabilitiesLoading,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -77,7 +77,7 @@ export const useAgentProfilesPanelState = () => {
   const checkingLicense = () => !runtimeCapabilitiesLoaded() || runtimeCapabilitiesLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
   const [startingTrial, setStartingTrial] = createSignal(false);
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
 
   const [aiAvailable, setAiAvailable] = createSignal(false);
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);

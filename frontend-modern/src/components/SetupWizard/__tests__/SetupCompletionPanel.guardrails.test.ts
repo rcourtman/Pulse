@@ -26,6 +26,8 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('configure TLS and custom CA options');
     expect(setupCompletionPanelSource).toContain('runStartProTrialAction({');
     expect(setupCompletionPanelSource).toContain('await loadCommercialPosture(true);');
+    expect(setupCompletionPanelSource).toContain('isCommercialTrialActive');
+    expect(setupCompletionPanelSource).not.toContain("commercialPosture()?.subscription_state !== 'trial'");
     expect(setupCompletionPanelSource).not.toContain('getUpgradeActionUrlOrFallback');
   });
 

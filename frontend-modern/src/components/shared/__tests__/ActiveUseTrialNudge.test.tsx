@@ -26,8 +26,17 @@ const {
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  canShowActiveUseTrialNudge: () => {
+    const posture = commercialPostureMock();
+    return Boolean(
+      posture &&
+        posture.tier === 'free' &&
+        posture.subscription_state !== 'trial' &&
+        posture.subscription_state !== 'active' &&
+        posture.trial_eligible !== false,
+    );
+  },
   commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
-  loadCommercialPosture: vi.fn(),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 
@@ -90,6 +99,8 @@ describe('ActiveUseTrialNudge', () => {
     expect(activeUseTrialNudgeStateSource).toContain('createMemo');
     expect(activeUseTrialNudgeStateSource).toContain('window.localStorage');
     expect(activeUseTrialNudgeStateSource).toContain('setInterval');
+    expect(activeUseTrialNudgeStateSource).toContain('canShowActiveUseTrialNudge');
+    expect(activeUseTrialNudgeStateSource).not.toContain('commercialPosture()');
     expect(activeUseTrialNudgeStateSource).toContain('runStartProTrialAction');
     expect(activeUseTrialNudgeStateSource).not.toContain('startProTrial()');
     expect(activeUseTrialNudgeStateSource).toContain('snoozeUpsell');

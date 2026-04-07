@@ -7,7 +7,7 @@ import {
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -57,7 +57,7 @@ export const useReportingPanelState = () => {
     runtimeCapabilitiesLoaded() &&
     reportingFeatureId() !== '' &&
     !hasFeature(reportingFeatureId());
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
   const isReportingEnabled = () =>
     runtimeCapabilitiesLoaded() &&
     reportingFeatureId() !== '' &&

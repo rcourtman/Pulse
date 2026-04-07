@@ -7,7 +7,7 @@ import {
   runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
-  commercialPosture,
+  canOfferCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
@@ -28,7 +28,7 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   const [startingTrial, setStartingTrial] = createSignal(false);
 
   const canManage = () => canManageOverride !== false;
-  const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
+  const canStartTrial = () => canOfferCommercialTrial();
   const isAuditLoggingEnabled = () => hasFeature('audit_logging');
   const upgradeDestination = () => getUpgradeActionDestination('audit_logging');
 
