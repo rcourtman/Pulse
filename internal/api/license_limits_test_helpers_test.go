@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,12 +13,16 @@ type staticLicenseProvider struct {
 	service *pkglicensing.Service
 }
 
+var testLicenseProviderMu sync.Mutex
+
 func (p *staticLicenseProvider) Service(context.Context) *pkglicensing.Service {
 	return p.service
 }
 
 func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int) {
 	t.Helper()
+
+	testLicenseProviderMu.Lock()
 
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "true")
 
@@ -36,5 +41,6 @@ func setMaxMonitoredSystemsLicenseForTests(t *testing.T, maxMonitoredSystems int
 	SetLicenseServiceProvider(&staticLicenseProvider{service: service})
 	t.Cleanup(func() {
 		SetLicenseServiceProvider(nil)
+		testLicenseProviderMu.Unlock()
 	})
 }

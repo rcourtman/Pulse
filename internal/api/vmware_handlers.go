@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
@@ -22,8 +23,10 @@ const vmwareConnectionsPathPrefix = "/api/vmware/connections/"
 // VMwareHandlers manages VMware vCenter connection CRUD and connectivity checks.
 type VMwareHandlers struct {
 	getPersistence func(ctx context.Context) *config.ConfigPersistence
+	getMonitor     func(ctx context.Context) *monitoring.Monitor
 	getPoller      func(ctx context.Context) *monitoring.VMwarePoller
 	newClient      func(vmware.ClientConfig) (vmwareClient, error)
+	previewRecords func(ctx context.Context, instance config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error)
 
 	statusMu sync.RWMutex
 	statuses map[string]vmwareConnectionRuntimeStatus
@@ -77,6 +80,9 @@ func (h *VMwareHandlers) HandleAdd(w http.ResponseWriter, r *http.Request) {
 
 	persistence := h.persistenceForRequest(w, r.Context())
 	if persistence == nil {
+		return
+	}
+	if h.enforceMonitoredSystemLimit(w, r, instance) {
 		return
 	}
 
@@ -254,6 +260,9 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	instance.PreserveMaskedSecrets(instances[index])
 	if err := instance.Validate(); err != nil {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+	if h.enforceMonitoredSystemLimitReplacement(w, r, instances[index], instance) {
 		return
 	}
 
@@ -500,6 +509,132 @@ func (h *VMwareHandlers) pollerForRequest(ctx context.Context) *monitoring.VMwar
 		return nil
 	}
 	return h.getPoller(ctx)
+}
+
+func (h *VMwareHandlers) monitorForRequest(ctx context.Context) *monitoring.Monitor {
+	if h == nil || h.getMonitor == nil {
+		return nil
+	}
+	return h.getMonitor(ctx)
+}
+
+func (h *VMwareHandlers) enforceMonitoredSystemLimit(
+	w http.ResponseWriter,
+	r *http.Request,
+	instance config.VMwareVCenterInstance,
+) bool {
+	if maxMonitoredSystemsLimitForContext(r.Context()) <= 0 {
+		return false
+	}
+
+	monitor := h.monitorForRequest(r.Context())
+	if monitor == nil {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+
+	records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)
+	if err != nil {
+		h.writeConnectionFailure(w, invalidConfig, err)
+		return true
+	}
+
+	decision := monitoredSystemLimitDecisionForRecords(r.Context(), monitor, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: records,
+	})
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
+		return false
+	}
+
+	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	return true
+}
+
+func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
+	w http.ResponseWriter,
+	r *http.Request,
+	current config.VMwareVCenterInstance,
+	next config.VMwareVCenterInstance,
+) bool {
+	limit := maxMonitoredSystemsLimitForContext(r.Context())
+	if limit <= 0 {
+		return false
+	}
+
+	monitor := h.monitorForRequest(r.Context())
+	if monitor == nil {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+
+	records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)
+	if err != nil {
+		h.writeConnectionFailure(w, invalidConfig, err)
+		return true
+	}
+
+	replacementID := strings.TrimSpace(current.ID)
+	decision := monitoredSystemLimitDecisionForRecordsReplacement(r.Context(), monitor, unifiedresources.MonitoredSystemReplacement{
+		Source: unifiedresources.SourceVMware,
+		Matches: func(resource unifiedresources.Resource) bool {
+			return resource.VMware != nil && strings.TrimSpace(resource.VMware.ConnectionID) == replacementID
+		},
+	}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: records,
+	})
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
+		return false
+	}
+
+	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	return true
+}
+
+func (h *VMwareHandlers) previewMonitoredSystemRecords(
+	ctx context.Context,
+	instance config.VMwareVCenterInstance,
+) ([]unifiedresources.IngestRecord, bool, error) {
+	if h != nil && h.previewRecords != nil {
+		records, err := h.previewRecords(ctx, instance)
+		return records, false, err
+	}
+
+	client, err := vmware.NewClient(vmware.ClientConfig{
+		Host:               instance.Host,
+		Port:               instance.Port,
+		Username:           instance.Username,
+		Password:           instance.Password,
+		InsecureSkipVerify: instance.InsecureSkipVerify,
+		Timeout:            20 * time.Second,
+	})
+	if err != nil {
+		return nil, true, err
+	}
+
+	provider := vmware.NewAPIProvider(vmware.ProviderMetadata{
+		ConnectionID:   strings.TrimSpace(instance.ID),
+		ConnectionName: strings.TrimSpace(instance.Name),
+		VCenterHost:    strings.TrimSpace(instance.Host),
+	}, client)
+	defer provider.Close()
+
+	refreshCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	if err := provider.Refresh(refreshCtx); err != nil {
+		return nil, false, err
+	}
+	return provider.Records(), false, nil
 }
 
 func (h *VMwareHandlers) runtimeStatus(connectionID string) vmwareConnectionRuntimeStatus {

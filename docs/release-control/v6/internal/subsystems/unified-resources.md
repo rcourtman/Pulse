@@ -261,6 +261,11 @@ canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the
 shared VMware signal-metadata and `resource-incident` timeline vocabulary that
 canonical resources expose to alerts, AI, and frontend consumers.
+That same runtime now also owns prospective monitored-system projection. Add
+and update consumers must ask the unified-resource layer whether candidate or
+preview records change the deduped top-level monitored-system count, including
+replacement-aware projection and VMware host-UUID identity, instead of
+rebuilding handler-local counting heuristics.
 That shared consumer ownership now includes same-tab summary hydration too.
 `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 may keep an in-memory remount cache for canonical resource charts, but the key
@@ -1374,6 +1379,15 @@ commercial entitlement and ledger surfaces. `MonitoredSystems(...)` must keep
 top-level counted-system identity, representative resource selection, and
 agent/API deduplication on unified-resource ownership instead of letting API
 handlers or licensing helpers rebuild their own counted-system grouping logic.
+That same registry-owned contract now also covers prospective admission and
+source replacement. Add/update handlers must project candidates or preview
+records through shared monitored-system projection helpers, including the
+delta from replacing one existing source-owned surface, instead of guessing
+from handler-local priority rules or transport-specific counters.
+VMware host previews are part of that same contract: canonical host identity
+must honor VMware host UUID plus normalized hostnames so a vCenter add or
+update cannot bypass the monitored-system cap by discovering host-backed
+systems only after persistence.
 
 Canonical source-owned identifiers must also normalize surrounding whitespace
 before they become by-source map keys or source-specific hash IDs. The same
@@ -1513,6 +1527,11 @@ canonical unified-resource roots, so read-state helpers that derive
 commercial-count groups must union agent, Proxmox, Docker, PBS, PMG, TrueNAS,
 and Kubernetes cluster views through canonical identity evidence instead of
 through transport-local counters or child-resource totals.
+When one counted group is being updated in place, the prospective projection
+must remove only the replaced source from that grouped root and preserve any
+remaining canonical source ownership that still keeps the monitored system
+counted, so replacement-aware admission stays aligned with final runtime
+counting.
 
 Canonical unified resources now also own first-class policy metadata for the
 v6 bridge release. Cloned and API-exported resources must carry

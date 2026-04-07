@@ -120,13 +120,38 @@ func maxMonitoredSystemsLimitForContext(ctx context.Context) int {
 // monitoredSystemCount returns the canonical number of counted top-level
 // monitored systems. Agent-backed and API-backed views share the same cap.
 func monitoredSystemCount(monitor *monitoring.Monitor) int {
+	return monitoredSystemUsage(monitor).count
+}
+
+type monitoredSystemUsageSnapshot struct {
+	count     int
+	readState unifiedresources.ReadState
+	available bool
+}
+
+func monitoredSystemUsage(monitor *monitoring.Monitor) monitoredSystemUsageSnapshot {
 	if monitor == nil {
-		return 0
+		return monitoredSystemUsageSnapshot{}
 	}
-	if rs := monitor.GetUnifiedReadStateOrSnapshot(); rs != nil {
-		return unifiedresources.MonitoredSystemCount(rs)
+
+	readState := monitor.GetUnifiedReadStateOrSnapshot()
+	if readState == nil {
+		return monitoredSystemUsageSnapshot{}
 	}
-	return 0
+
+	return monitoredSystemUsageSnapshot{
+		count:     unifiedresources.MonitoredSystemCount(readState),
+		readState: readState,
+		available: true,
+	}
+}
+
+type monitoredSystemLimitDecision struct {
+	current        int
+	limit          int
+	additional     int
+	usageAvailable bool
+	exceeded       bool
 }
 
 func legacyConnectionCounts(monitor *monitoring.Monitor) legacyConnectionCountsModel {
@@ -145,25 +170,160 @@ func writeMaxMonitoredSystemsLimitExceeded(w http.ResponseWriter, current, limit
 	)
 }
 
-func monitoredSystemLimitState(
+func writeMonitoredSystemUsageUnavailable(w http.ResponseWriter) {
+	writeErrorResponse(
+		w,
+		http.StatusServiceUnavailable,
+		"monitored_system_usage_unavailable",
+		"Unable to verify monitored-system capacity right now",
+		nil,
+	)
+}
+
+func monitoredSystemLimitDecisionFromAdditional(
+	ctx context.Context,
+	limit int,
+	current int,
+	additional int,
+) monitoredSystemLimitDecision {
+	if limit <= 0 {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			additional:     additional,
+			usageAvailable: true,
+		}
+	}
+
+	effectiveCurrent := current + deployReservedCount(ctx)
+	return monitoredSystemLimitDecision{
+		current:        effectiveCurrent,
+		limit:          limit,
+		additional:     additional,
+		usageAvailable: true,
+		exceeded:       additional > 0 && effectiveCurrent+additional > limit,
+	}
+}
+
+func monitoredSystemLimitDecisionForCandidate(
 	ctx context.Context,
 	monitor *monitoring.Monitor,
 	candidate unifiedresources.MonitoredSystemCandidate,
-) (current, limit int, exceeded bool) {
-	limit = maxMonitoredSystemsLimitForContext(ctx)
-	if limit <= 0 || monitor == nil {
-		return 0, limit, false
+) monitoredSystemLimitDecision {
+	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if limit <= 0 {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			usageAvailable: true,
+		}
 	}
 
-	rs := monitor.GetUnifiedReadStateOrSnapshot()
-	if rs != nil && unifiedresources.HasMatchingMonitoredSystem(rs, candidate) {
-		return 0, limit, false
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		return monitoredSystemLimitDecision{
+			limit: limit,
+		}
 	}
 
-	current = monitoredSystemCount(monitor)
-	reserved := deployReservedCount(ctx)
-	effective := current + reserved
-	return effective, limit, effective+1 > limit
+	projection := unifiedresources.ProjectMonitoredSystemCandidate(usage.readState, candidate)
+	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+}
+
+func monitoredSystemLimitDecisionForCandidateReplacement(
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	replacement unifiedresources.MonitoredSystemReplacement,
+	candidate unifiedresources.MonitoredSystemCandidate,
+) monitoredSystemLimitDecision {
+	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if limit <= 0 {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			usageAvailable: true,
+		}
+	}
+
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		return monitoredSystemLimitDecision{
+			limit: limit,
+		}
+	}
+
+	projection := unifiedresources.ProjectMonitoredSystemCandidateReplacement(usage.readState, replacement, candidate)
+	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+}
+
+func monitoredSystemLimitDecisionForRecords(
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord,
+) monitoredSystemLimitDecision {
+	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if limit <= 0 {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			usageAvailable: true,
+		}
+	}
+
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		return monitoredSystemLimitDecision{
+			limit: limit,
+		}
+	}
+
+	projection := unifiedresources.ProjectMonitoredSystemRecords(usage.readState, recordsBySource)
+	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+}
+
+func monitoredSystemLimitDecisionForRecordsReplacement(
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	replacement unifiedresources.MonitoredSystemReplacement,
+	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord,
+) monitoredSystemLimitDecision {
+	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if limit <= 0 {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			usageAvailable: true,
+		}
+	}
+
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		return monitoredSystemLimitDecision{
+			limit: limit,
+		}
+	}
+
+	projection := unifiedresources.ProjectMonitoredSystemRecordsReplacement(usage.readState, replacement, recordsBySource)
+	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+}
+
+func monitoredSystemLimitDecisionForAdditionalSlots(
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	additional int,
+) monitoredSystemLimitDecision {
+	limit := maxMonitoredSystemsLimitForContext(ctx)
+	if limit <= 0 {
+		return monitoredSystemLimitDecision{
+			limit:          limit,
+			additional:     additional,
+			usageAvailable: true,
+		}
+	}
+
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		return monitoredSystemLimitDecision{
+			limit: limit,
+		}
+	}
+
+	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, usage.count, additional)
 }
 
 func enforceMonitoredSystemLimitForConfigRegistration(
@@ -173,13 +333,38 @@ func enforceMonitoredSystemLimitForConfigRegistration(
 	monitor *monitoring.Monitor,
 	candidate unifiedresources.MonitoredSystemCandidate,
 ) bool {
-	current, limit, exceeded := monitoredSystemLimitState(ctx, monitor, candidate)
-	if !exceeded {
+	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, current, limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, current, limit)
+	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	return true
+}
+
+func enforceMonitoredSystemLimitForConfigReplacement(
+	w http.ResponseWriter,
+	ctx context.Context,
+	monitor *monitoring.Monitor,
+	replacement unifiedresources.MonitoredSystemReplacement,
+	candidate unifiedresources.MonitoredSystemCandidate,
+) bool {
+	decision := monitoredSystemLimitDecisionForCandidateReplacement(ctx, monitor, replacement, candidate)
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
+		return false
+	}
+
+	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
 	return true
 }
 
@@ -192,17 +377,12 @@ func enforceMonitoredSystemLimitForHostReport(
 	report agentshost.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	if monitor == nil {
-		return false
-	}
-
-	hosts := monitor.GetLiveHostsSnapshot()
-	// Updates to an already-known system are always permitted.
-	if hostReportTargetsExistingHost(hosts, report, tokenRecord) {
+	if monitor != nil && hostReportTargetsExistingHost(monitor.GetLiveHostsSnapshot(), report, tokenRecord) {
 		return false
 	}
 
 	candidate := unifiedresources.MonitoredSystemCandidate{
+		Source:     unifiedresources.SourceAgent,
 		Type:       unifiedresources.ResourceTypeAgent,
 		Name:       report.Host.DisplayName,
 		Hostname:   report.Host.Hostname,
@@ -211,13 +391,17 @@ func enforceMonitoredSystemLimitForHostReport(
 		MachineID:  report.Host.MachineID,
 		ResourceID: report.Host.ID,
 	}
-	current, limit, exceeded := monitoredSystemLimitState(ctx, monitor, candidate)
-	if !exceeded {
+	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, current, limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, current, limit)
+	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
 	return true
 }
 
@@ -270,19 +454,16 @@ func enforceMonitoredSystemLimitForDockerReport(
 	report agentsdocker.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	if monitor == nil {
-		return false
-	}
-
 	tokenID := ""
 	if tokenRecord != nil {
 		tokenID = tokenRecord.ID
 	}
-	if dockerReportTargetsExistingHostFromLicensing(monitor.ReadSnapshot(), report, tokenID) {
+	if monitor != nil && dockerReportTargetsExistingHostFromLicensing(monitor.ReadSnapshot(), report, tokenID) {
 		return false
 	}
 
 	candidate := unifiedresources.MonitoredSystemCandidate{
+		Source:     unifiedresources.SourceDocker,
 		Type:       unifiedresources.ResourceTypeAgent,
 		Name:       report.Host.Name,
 		Hostname:   report.Host.Hostname,
@@ -290,13 +471,17 @@ func enforceMonitoredSystemLimitForDockerReport(
 		MachineID:  report.Host.MachineID,
 		ResourceID: report.AgentKey(),
 	}
-	current, limit, exceeded := monitoredSystemLimitState(ctx, monitor, candidate)
-	if !exceeded {
+	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, current, limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, current, limit)
+	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
 	return true
 }
 
@@ -309,19 +494,16 @@ func enforceMonitoredSystemLimitForKubernetesReport(
 	report agentsk8s.Report,
 	tokenRecord *config.APITokenRecord,
 ) bool {
-	if monitor == nil {
-		return false
-	}
-
 	tokenID := ""
 	if tokenRecord != nil {
 		tokenID = tokenRecord.ID
 	}
-	if kubernetesReportTargetsExistingClusterFromLicensing(monitor.ReadSnapshot(), report, tokenID) {
+	if monitor != nil && kubernetesReportTargetsExistingClusterFromLicensing(monitor.ReadSnapshot(), report, tokenID) {
 		return false
 	}
 
 	candidate := unifiedresources.MonitoredSystemCandidate{
+		Source:     unifiedresources.SourceK8s,
 		Type:       unifiedresources.ResourceTypeK8sCluster,
 		Name:       report.Cluster.Name,
 		Hostname:   report.Cluster.Name,
@@ -329,13 +511,17 @@ func enforceMonitoredSystemLimitForKubernetesReport(
 		AgentID:    report.Agent.ID,
 		ResourceID: kubernetesReportIdentifierFromLicensing(report),
 	}
-	current, limit, exceeded := monitoredSystemLimitState(ctx, monitor, candidate)
-	if !exceeded {
+	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
 		return false
 	}
 
-	emitLimitBlockedEvent(ctx, current, limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, current, limit)
+	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
 	return true
 }
 

@@ -221,6 +221,12 @@ sampling work and drift out of sync with the governed history timeline.
 All governed performance-owned runtime files now require explicit registry
 path-policy coverage, so new protected hot paths must be mapped to a concrete
 proof route instead of falling back to subsystem-default verification.
+Monitored-system admission and entitlement usage now also sit on a protected
+backend hot path. `internal/api/monitored_system_limit_enforcement.go` and
+the unified-resource projection helpers must reuse one current monitored-
+system snapshot plus prospective candidate/preview projection for add and
+update checks instead of rescanning platform inventories per handler or
+falling back to zero when monitor state is unavailable.
 
 The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only

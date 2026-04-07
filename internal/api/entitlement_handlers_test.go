@@ -120,6 +120,9 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	if agentLimit.Current != 12 {
 		t.Fatalf("expected agent current 12, got %d", agentLimit.Current)
 	}
+	if agentLimit.CurrentAvailable == nil || !*agentLimit.CurrentAvailable {
+		t.Fatalf("expected agent current availability true, got %+v", agentLimit.CurrentAvailable)
+	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
 	}
@@ -128,6 +131,26 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if payload.HasMigrationGap {
 		t.Fatal("expected has_migration_gap=false under monitored-system counting")
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *testing.T) {
+	status := &license.LicenseStatus{
+		Valid:               true,
+		Tier:                license.TierPro,
+		Features:            append([]string(nil), license.TierFeatures[license.TierPro]...),
+		MaxMonitoredSystems: 50,
+	}
+
+	payload := buildEntitlementPayloadWithUsage(status, "", entitlementUsageSnapshot{}, nil)
+	if len(payload.Limits) != 1 {
+		t.Fatalf("expected one monitored-system limit, got %d", len(payload.Limits))
+	}
+	if payload.Limits[0].Current != 0 {
+		t.Fatalf("expected unresolved current to remain 0, got %d", payload.Limits[0].Current)
+	}
+	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
+		t.Fatalf("expected unresolved current availability false, got %+v", payload.Limits[0].CurrentAvailable)
 	}
 }
 

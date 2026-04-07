@@ -2059,6 +2059,62 @@ func TestRegistryHasMatchingMonitoredSystemUsesCanonicalHostIdentity(t *testing.
 	}
 }
 
+func TestProjectMonitoredSystemRecords_DedupesVMwareHostAgainstExistingAgentCount(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-host-1",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-01.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+
+	projection := ProjectMonitoredSystemRecords(rr, map[DataSource][]IngestRecord{
+		SourceVMware: {
+			{
+				SourceID: "vc-1:host:host-101",
+				Resource: Resource{
+					Type:     ResourceTypeAgent,
+					Name:     "esxi-01.lab.local",
+					Status:   StatusOnline,
+					LastSeen: now,
+					VMware: &VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-101",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-1",
+					},
+				},
+				Identity: ResourceIdentity{
+					DMIUUID:   "uuid-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		},
+	})
+
+	if projection.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
+	}
+	if projection.ProjectedCount != 1 {
+		t.Fatalf("ProjectedCount = %d, want 1", projection.ProjectedCount)
+	}
+	if projection.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
+	}
+}
+
 func TestResourceRegistry_WorkloadsIncludeCanonicalAppContainers(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)

@@ -38,6 +38,15 @@ func TestResolveTopLevelSystemsTopLevelSourceMatrix(t *testing.T) {
 			same:      [][2]string{{"agent-host", "truenas-system"}},
 		},
 		{
+			name: "agent and vmware host share one top-level system",
+			resources: []Resource{
+				topLevelTestAgent("agent-host", "esxi-01.lab.local", "machine-1", "agent-1"),
+				topLevelTestVMwareHost("vmware-host", "esxi-01.lab.local", "vc-1", "machine-1"),
+			},
+			wantCount: 1,
+			same:      [][2]string{{"agent-host", "vmware-host"}},
+		},
+		{
 			name: "agent and pbs share one top-level system",
 			resources: []Resource{
 				topLevelTestAgent("agent-host", "backup.local", "machine-1", "agent-1"),
@@ -299,6 +308,25 @@ func topLevelTestTrueNAS(id, hostname string) Resource {
 			Hostname: hostname,
 		},
 		Identity: ResourceIdentity{
+			Hostnames: []string{hostname},
+		},
+	}
+}
+
+func topLevelTestVMwareHost(id, hostname, connectionID, hostUUID string) Resource {
+	return Resource{
+		ID:     id,
+		Type:   ResourceTypeAgent,
+		Name:   hostname,
+		Status: StatusOnline,
+		VMware: &VMwareData{
+			ConnectionID:    connectionID,
+			ManagedObjectID: id,
+			EntityType:      "host",
+			HostUUID:        hostUUID,
+		},
+		Identity: ResourceIdentity{
+			DMIUUID:   hostUUID,
 			Hostnames: []string{hostname},
 		},
 	}

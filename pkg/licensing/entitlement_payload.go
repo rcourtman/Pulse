@@ -154,6 +154,10 @@ type LimitStatus struct {
 	// Current is the observed current usage.
 	Current int64 `json:"current"`
 
+	// CurrentAvailable reports whether Current reflects a resolved runtime
+	// usage value rather than an unavailable best-effort fallback.
+	CurrentAvailable *bool `json:"current_available,omitempty"`
+
 	// State describes the over-limit UX state.
 	// Values: "ok", "warning", "enforced"
 	State string `json:"state"`
@@ -182,10 +186,11 @@ func (c LegacyConnectionCounts) Total() int64 {
 }
 
 type EntitlementUsageSnapshot struct {
-	MonitoredSystems  int64
-	Nodes             int64 // legacy compatibility alias for monitored systems
-	Guests            int64
-	LegacyConnections LegacyConnectionCounts
+	MonitoredSystems          int64
+	MonitoredSystemsAvailable bool
+	Nodes                     int64 // legacy compatibility alias for monitored systems
+	Guests                    int64
+	LegacyConnections         LegacyConnectionCounts
 }
 
 func (s EntitlementUsageSnapshot) monitoredSystemCount() int64 {
@@ -193,6 +198,13 @@ func (s EntitlementUsageSnapshot) monitoredSystemCount() int64 {
 		return s.MonitoredSystems
 	}
 	return s.Nodes
+}
+
+func (s EntitlementUsageSnapshot) monitoredSystemCountAvailable() bool {
+	if s.MonitoredSystemsAvailable {
+		return true
+	}
+	return s.MonitoredSystems > 0 || s.Nodes > 0
 }
 
 // BuildEntitlementPayload constructs the normalized payload from LicenseStatus.
@@ -352,10 +364,11 @@ func BuildEntitlementPayloadWithUsage(
 	if status.MaxMonitoredSystems > 0 {
 		currentSystems := usage.monitoredSystemCount()
 		payload.Limits = append(payload.Limits, LimitStatus{
-			Key:     MaxMonitoredSystemsLicenseGateKey,
-			Limit:   int64(status.MaxMonitoredSystems),
-			Current: currentSystems,
-			State:   LimitState(currentSystems, int64(status.MaxMonitoredSystems)),
+			Key:              MaxMonitoredSystemsLicenseGateKey,
+			Limit:            int64(status.MaxMonitoredSystems),
+			Current:          currentSystems,
+			CurrentAvailable: boolPointer(usage.monitoredSystemCountAvailable()),
+			State:            LimitState(currentSystems, int64(status.MaxMonitoredSystems)),
 		})
 	}
 	if status.MaxGuests > 0 {
@@ -411,6 +424,11 @@ func remainingTrialDays(expiresAtUnix, nowUnix int64) int {
 		daysRemaining = 0
 	}
 	return daysRemaining
+}
+
+func boolPointer(value bool) *bool {
+	v := value
+	return &v
 }
 
 // LimitState returns the over-limit UX state string.

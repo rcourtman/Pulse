@@ -143,7 +143,7 @@ func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 			},
 		},
 	})
-	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
 	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
 		{ID: "existing", Host: "nas-a.local", APIKey: "a"},
 	}); err != nil {
@@ -169,6 +169,58 @@ func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	}
 	if len(stored) != 1 {
 		t.Fatalf("expected blocked TrueNAS add not to persist, got %d instances", len(stored))
+	}
+}
+
+func TestTrueNASHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "archive.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"archive.local"},
+				},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":   "archive",
+		"host":   "archive.local",
+		"apiKey": "super-secret",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected overlapping TrueNAS add to be allowed at limit, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		t.Fatalf("load persisted config: %v", err)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("expected overlapping TrueNAS add to persist, got %d instances", len(stored))
 	}
 }
 
@@ -439,6 +491,90 @@ func TestTrueNASHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t 
 	}
 }
 
+func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+	setMockModeForTrueNASTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:       "alpha",
+			Name:     "archive",
+			Host:     "archive.local",
+			APIKey:   "super-secret",
+			UseHTTPS: true,
+			Enabled:  true,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "archive.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"archive.local"},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, []unifiedresources.IngestRecord{
+		{
+			SourceID: "system:archive.local",
+			Resource: unifiedresources.Resource{
+				ID:     "truenas-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive",
+				Status: unifiedresources.StatusOnline,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: "archive.local",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":     "archive",
+		"host":     "backup.local",
+		"apiKey":   "********",
+		"useHttps": true,
+		"enabled":  true,
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/alpha", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdate(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		t.Fatalf("load persisted config: %v", err)
+	}
+	if stored[0].Host != "archive.local" {
+		t.Fatalf("expected blocked update to preserve original host, got %+v", stored[0])
+	}
+}
+
 func TestTrueNASHandlers_HandleUpdate_UnknownID(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 	setMockModeForTrueNASTest(t, false)
@@ -686,7 +822,7 @@ func newTrueNASHandlersForTest(t *testing.T, cfg *config.Config) (*TrueNASHandle
 	}
 
 	persistence := config.NewConfigPersistence(cfg.DataPath)
-	mon := &monitoring.Monitor{}
+	mon, _, _ := newTestMonitor(t)
 
 	handler := &TrueNASHandlers{
 		getPersistence: func(context.Context) *config.ConfigPersistence { return persistence },

@@ -215,32 +215,31 @@ func (r TopLevelSystemResolver) records() []MonitoredSystemRecord {
 }
 
 func (r TopLevelSystemResolver) HasMatchingCandidate(candidate MonitoredSystemCandidate) bool {
-	strongIDs := monitoredSystemCandidateStrongIDs(candidate)
-	for _, group := range r.groups {
-		if topLevelSystemSetsOverlap(group.strongIDs, strongIDs) {
-			return true
-		}
+	resource := monitoredSystemCandidateResource(candidate)
+	if resource == nil {
+		return false
 	}
-
-	if !monitoredSystemCandidateAllowsHostAttachment(candidate) {
+	if !monitoredSystemCandidateAllowsHostAttachment(candidate) &&
+		len(monitoredSystemCandidateStrongIDs(candidate)) == 0 {
 		return false
 	}
 
-	groupByID := make(map[string]topLevelSystemResolvedGroup, len(r.groups))
-	hostOwners := make(map[string]map[string]struct{})
-	ipOwners := make(map[string]map[string]struct{})
+	resources := r.resources()
+	resources = append(resources, *resource)
+	return ResolveTopLevelSystems(resources).Count() == r.Count()
+}
+
+func (r TopLevelSystemResolver) resources() []Resource {
+	resources := make([]Resource, 0, len(r.resourceToGroup))
 	for _, group := range r.groups {
-		groupByID[group.id] = group
-		for host := range group.exactHosts {
-			addTopLevelSystemOwner(hostOwners, host, group.id)
-		}
-		for ip := range group.exactIPs {
-			addTopLevelSystemOwner(ipOwners, ip, group.id)
+		for _, resource := range group.resources {
+			if resource == nil {
+				continue
+			}
+			resources = append(resources, cloneResource(resource))
 		}
 	}
-
-	targetIDs := candidateExactTargetGroups(candidate, hostOwners, ipOwners, groupByID, monitoredSystemCandidatePriority(candidate))
-	return len(targetIDs) == 1
+	return resources
 }
 
 func buildTopLevelSystemResolvedGroups(
@@ -374,6 +373,11 @@ func topLevelSystemStrongIDs(resource Resource) map[string]struct{} {
 			ids["k8s:"+clusterID] = struct{}{}
 		}
 	}
+	if resource.VMware != nil {
+		if hostUUID := strings.TrimSpace(resource.VMware.HostUUID); hostUUID != "" {
+			ids["vmware-host:"+hostUUID] = struct{}{}
+		}
+	}
 
 	return ids
 }
@@ -386,6 +390,7 @@ func topLevelSystemExactHosts(resource Resource) map[string]struct{} {
 		canonicalPBSHostname(resource),
 		canonicalPMGHostname(resource),
 		canonicalTrueNASHostname(resource),
+		canonicalVMwareHostname(resource),
 		canonicalProxmoxNodeName(resource),
 		extractHostname(firstTrimmed(topLevelSystemProxmoxHostURL(resource))),
 		extractHostname(firstTrimmed(topLevelSystemPBSHostURL(resource))),
@@ -646,16 +651,18 @@ func topLevelSystemStrongIDPriority(prefix string) int {
 		return 2
 	case "proxmox":
 		return 3
-	case "docker":
+	case "vmware-host":
 		return 4
-	case "pbs":
+	case "docker":
 		return 5
-	case "pmg":
+	case "pbs":
 		return 6
-	case "k8s":
+	case "pmg":
 		return 7
-	case "resource":
+	case "k8s":
 		return 8
+	case "resource":
+		return 9
 	default:
 		return 99
 	}
@@ -1026,4 +1033,11 @@ func topLevelSystemCanonicalHostname(resource Resource) string {
 		return ""
 	}
 	return strings.TrimSpace(resource.Canonical.Hostname)
+}
+
+func canonicalVMwareHostname(resource Resource) string {
+	if resource.VMware == nil {
+		return ""
+	}
+	return firstTrimmed(firstIdentityHostname(resource.Identity), resource.Name)
 }

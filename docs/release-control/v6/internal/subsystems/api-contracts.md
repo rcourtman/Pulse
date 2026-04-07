@@ -404,6 +404,13 @@ Own canonical runtime payload shapes between backend and frontend.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+Monitored-system commercial admission is now also part of that owned live
+contract. Add and update routes must project prospective candidates or
+previewed source records through the canonical monitored-system resolver
+before persistence, and `/api/license/entitlements` must expose
+`current_available` when an active monitored-system cap cannot resolve current
+usage so callers can fail closed without misreading unavailable usage as a
+real zero.
 The shared metrics-history contract now also owns physical-disk live I/O
 windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `30m` as a valid compact live range, and resolve `disk`, `diskread`,

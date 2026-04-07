@@ -361,6 +361,17 @@ decode-only compatibility inputs at the storage or grant boundary. Runtime
 enforcement, entitlement payload `current` usage, checkout/activation flows,
 and upgrade messaging must all treat the cap as deduped top-level monitored
 systems across agent, API, and Kubernetes views.
+That same counted-unit contract now also owns prospective API-backed
+admission. Proxmox/PBS/PMG config adds, TrueNAS adds, VMware inventory
+previews, and equivalent updates must ask the canonical monitored-system
+projection whether they increase counted systems before the runtime persists
+them, including replacement-aware projections for source swaps on an existing
+grouped host.
+Under an active monitored-system cap, inability to resolve current usage is
+not a free pass. Runtime enforcement and entitlement payloads must fail closed
+for net-new monitored-system admissions and surface usage availability
+explicitly through the governed limit payload instead of treating unavailable
+usage as `current: 0`.
 The monitored-system ledger settings surface now also has to explain those
 count decisions. Commercial usage UI may show grouped monitored systems, but
 it must render the canonical backend explanation for why one or more

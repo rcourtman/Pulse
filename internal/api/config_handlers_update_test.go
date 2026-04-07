@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
 func TestHandleUpdateNode(t *testing.T) {
@@ -140,5 +142,78 @@ func TestHandleUpdateNode(t *testing.T) {
 				tt.verifyConfig(t, dummyCfg)
 			}
 		})
+	}
+}
+
+func TestHandleUpdateNode_BlocksProjectedNetNewSystemAtLimit(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+		PVEInstances: []config.PVEInstance{{
+			Name:       "tower",
+			Host:       "https://tower.local:8006",
+			TokenName:  "root@pam!pulse",
+			TokenValue: "secret",
+		}},
+	}
+	handler := newTestConfigHandlers(t, cfg)
+
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceProxmox, []unifiedresources.IngestRecord{
+		{
+			SourceID: "pve-1",
+			Resource: unifiedresources.Resource{
+				ID:     "tower-resource",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "tower",
+				Status: unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{
+					Instance: "tower",
+					NodeName: "tower",
+					HostURL:  "https://tower.local:8006",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"tower.local"},
+			},
+		},
+	})
+	setUnexportedField(t, handler.defaultMonitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+	body, _ := json.Marshal(map[string]any{
+		"host": "https://backup.local:8006",
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/config/nodes/pve-0", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+
+	handler.HandleUpdateNode(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if got := cfg.PVEInstances[0].Host; got != "https://tower.local:8006" {
+		t.Fatalf("expected blocked update to preserve original host, got %q", got)
 	}
 }

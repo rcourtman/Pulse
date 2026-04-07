@@ -454,9 +454,10 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
+			Source:   unifiedresources.SourceProxmox,
 			Type:     unifiedresources.ResourceTypeAgent,
 			Name:     displayName,
-			Hostname: displayName,
+			Hostname: pulseTokenHostCandidate(host),
 			HostURL:  host,
 		}) {
 			return
@@ -586,9 +587,10 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
 		if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
+			Source:   unifiedresources.SourcePBS,
 			Type:     unifiedresources.ResourceTypePBS,
 			Name:     pbsDisplayName,
-			Hostname: pbsDisplayName,
+			Hostname: pulseTokenHostCandidate(host),
 			HostURL:  host,
 		}) {
 			return
@@ -676,9 +678,10 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 			TemperatureMonitoringEnabled: req.TemperatureMonitoringEnabled,
 		}
 		if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
+			Source:   unifiedresources.SourcePMG,
 			Type:     unifiedresources.ResourceTypePMG,
 			Name:     pmgDisplayName,
-			Hostname: pmgDisplayName,
+			Hostname: pulseTokenHostCandidate(host),
 			HostURL:  host,
 		}) {
 			return
@@ -708,6 +711,98 @@ func (h *ConfigHandlers) handleAddNode(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+func proxmoxMonitoredSystemCandidate(instance config.PVEInstance) unifiedresources.MonitoredSystemCandidate {
+	return unifiedresources.MonitoredSystemCandidate{
+		Source:   unifiedresources.SourceProxmox,
+		Type:     unifiedresources.ResourceTypeAgent,
+		Name:     instance.Name,
+		Hostname: pulseTokenHostCandidate(instance.Host),
+		HostURL:  instance.Host,
+	}
+}
+
+func pbsMonitoredSystemCandidate(instance config.PBSInstance) unifiedresources.MonitoredSystemCandidate {
+	return unifiedresources.MonitoredSystemCandidate{
+		Source:   unifiedresources.SourcePBS,
+		Type:     unifiedresources.ResourceTypePBS,
+		Name:     instance.Name,
+		Hostname: pulseTokenHostCandidate(instance.Host),
+		HostURL:  instance.Host,
+	}
+}
+
+func pmgMonitoredSystemCandidate(instance config.PMGInstance) unifiedresources.MonitoredSystemCandidate {
+	return unifiedresources.MonitoredSystemCandidate{
+		Source:   unifiedresources.SourcePMG,
+		Type:     unifiedresources.ResourceTypePMG,
+		Name:     instance.Name,
+		Hostname: pulseTokenHostCandidate(instance.Host),
+		HostURL:  instance.Host,
+	}
+}
+
+func proxmoxMonitoredSystemReplacement(instance config.PVEInstance) unifiedresources.MonitoredSystemReplacement {
+	name := strings.TrimSpace(instance.Name)
+	host := strings.TrimSpace(instance.Host)
+	hostname := pulseTokenHostCandidate(instance.Host)
+	return unifiedresources.MonitoredSystemReplacement{
+		Source: unifiedresources.SourceProxmox,
+		Matches: func(resource unifiedresources.Resource) bool {
+			if resource.Proxmox == nil {
+				return false
+			}
+			if name != "" && strings.EqualFold(strings.TrimSpace(resource.Proxmox.Instance), name) {
+				return true
+			}
+			if name != "" && strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), name) {
+				return true
+			}
+			if host != "" && strings.EqualFold(strings.TrimSpace(resource.Proxmox.HostURL), host) {
+				return true
+			}
+			return hostname != "" && strings.EqualFold(pulseTokenHostCandidate(resource.Proxmox.HostURL), hostname)
+		},
+	}
+}
+
+func pbsMonitoredSystemReplacement(instance config.PBSInstance) unifiedresources.MonitoredSystemReplacement {
+	name := strings.TrimSpace(instance.Name)
+	host := strings.TrimSpace(instance.Host)
+	hostname := pulseTokenHostCandidate(instance.Host)
+	return unifiedresources.MonitoredSystemReplacement{
+		Source: unifiedresources.SourcePBS,
+		Matches: func(resource unifiedresources.Resource) bool {
+			if resource.PBS == nil {
+				return false
+			}
+			if name != "" && strings.EqualFold(strings.TrimSpace(resource.PBS.InstanceID), name) {
+				return true
+			}
+			if host != "" && strings.EqualFold(strings.TrimSpace(resource.PBS.HostURL), host) {
+				return true
+			}
+			return hostname != "" && strings.EqualFold(strings.TrimSpace(resource.PBS.Hostname), hostname)
+		},
+	}
+}
+
+func pmgMonitoredSystemReplacement(instance config.PMGInstance) unifiedresources.MonitoredSystemReplacement {
+	name := strings.TrimSpace(instance.Name)
+	hostname := pulseTokenHostCandidate(instance.Host)
+	return unifiedresources.MonitoredSystemReplacement{
+		Source: unifiedresources.SourcePMG,
+		Matches: func(resource unifiedresources.Resource) bool {
+			if resource.PMG == nil {
+				return false
+			}
+			if name != "" && strings.EqualFold(strings.TrimSpace(resource.PMG.InstanceID), name) {
+				return true
+			}
+			return hostname != "" && strings.EqualFold(strings.TrimSpace(resource.PMG.Hostname), hostname)
+		},
+	}
 }
 
 // HandleTestConnection tests a node connection without saving
@@ -1057,10 +1152,12 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 	// Update the node
 	if nodeType == "pve" && index < len(h.getConfig(r.Context()).PVEInstances) {
 		pve := &h.getConfig(r.Context()).PVEInstances[index]
+		current := *pve
+		updated := current
 
 		// Only update name if provided
 		if req.Name != "" {
-			pve.Name = req.Name
+			updated.Name = req.Name
 		}
 
 		if req.Host != "" {
@@ -1069,76 +1166,89 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			pve.Host = host
+			updated.Host = host
 		}
 
 		// Update GuestURL if provided
-		pve.GuestURL = req.GuestURL
+		updated.GuestURL = req.GuestURL
 
 		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" || req.TokenValue != "" {
 			// Switching to or updating token authentication
 			if req.TokenName != "" {
-				pve.TokenName = req.TokenName
+				updated.TokenName = req.TokenName
 			}
 			if req.TokenValue != "" {
-				pve.TokenValue = req.TokenValue
+				updated.TokenValue = req.TokenValue
 			}
 			// Clear password to avoid conflicts
-			pve.Password = ""
+			updated.Password = ""
 			if req.User != "" {
-				pve.User = req.User
+				updated.User = req.User
 			}
 		} else if req.Password != "" {
 			// Explicitly switching to password authentication
 			if req.User != "" {
-				pve.User = normalizePVEUser(req.User)
-			} else if pve.User != "" {
-				pve.User = normalizePVEUser(pve.User)
+				updated.User = normalizePVEUser(req.User)
+			} else if updated.User != "" {
+				updated.User = normalizePVEUser(updated.User)
 			}
-			pve.Password = req.Password
+			updated.Password = req.Password
 			// Clear token fields when switching to password auth
-			pve.TokenName = ""
-			pve.TokenValue = ""
+			updated.TokenName = ""
+			updated.TokenValue = ""
 		} else {
 			// No authentication changes - preserve existing auth fields
 			// Only normalize user if it exists
-			if pve.User != "" {
-				pve.User = normalizePVEUser(pve.User)
+			if updated.User != "" {
+				updated.User = normalizePVEUser(updated.User)
 			}
 		}
 
-		pve.Fingerprint = req.Fingerprint
+		updated.Fingerprint = req.Fingerprint
 		if req.VerifySSL != nil {
-			pve.VerifySSL = *req.VerifySSL
+			updated.VerifySSL = *req.VerifySSL
 		}
 		if req.MonitorVMs != nil {
-			pve.MonitorVMs = *req.MonitorVMs
+			updated.MonitorVMs = *req.MonitorVMs
 		}
 		if req.MonitorContainers != nil {
-			pve.MonitorContainers = *req.MonitorContainers
+			updated.MonitorContainers = *req.MonitorContainers
 		}
 		if req.MonitorStorage != nil {
-			pve.MonitorStorage = *req.MonitorStorage
+			updated.MonitorStorage = *req.MonitorStorage
 		}
 		if req.MonitorBackups != nil {
-			pve.MonitorBackups = *req.MonitorBackups
+			updated.MonitorBackups = *req.MonitorBackups
 		}
 		if req.MonitorPhysicalDisks != nil {
-			pve.MonitorPhysicalDisks = req.MonitorPhysicalDisks
+			updated.MonitorPhysicalDisks = req.MonitorPhysicalDisks
 		}
 		if req.PhysicalDiskPollingMinutes != nil {
-			pve.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
+			updated.PhysicalDiskPollingMinutes = *req.PhysicalDiskPollingMinutes
 		}
 		if req.TemperatureMonitoringEnabled != nil {
-			pve.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
 		}
+
+		if enforceMonitoredSystemLimitForConfigReplacement(
+			w,
+			r.Context(),
+			h.getMonitor(r.Context()),
+			proxmoxMonitoredSystemReplacement(current),
+			proxmoxMonitoredSystemCandidate(updated),
+		) {
+			return
+		}
+		*pve = updated
 	} else if nodeType == "pbs" && index < len(h.getConfig(r.Context()).PBSInstances) {
 		pbs := &h.getConfig(r.Context()).PBSInstances[index]
+		current := *pbs
+		updated := current
 
 		// Only update name if provided
 		if req.Name != "" {
-			pbs.Name = req.Name
+			updated.Name = req.Name
 		}
 
 		if req.Host != "" {
@@ -1147,38 +1257,38 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			pbs.Host = host
+			updated.Host = host
 		}
 
 		// Update GuestURL if provided
-		pbs.GuestURL = req.GuestURL
+		updated.GuestURL = req.GuestURL
 
 		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Switching to token authentication
-			pbs.TokenName = req.TokenName
-			pbs.TokenValue = req.TokenValue
+			updated.TokenName = req.TokenName
+			updated.TokenValue = req.TokenValue
 			// Clear user/password when switching to token auth
-			pbs.User = ""
-			pbs.Password = ""
+			updated.User = ""
+			updated.Password = ""
 		} else if req.TokenName != "" {
 			// Token name provided without new value - keep existing token value
-			pbs.TokenName = req.TokenName
+			updated.TokenName = req.TokenName
 			// Clear user/password when using token auth
-			pbs.User = ""
-			pbs.Password = ""
+			updated.User = ""
+			updated.Password = ""
 		} else if req.Password != "" {
 			// Switching to password authentication
-			pbs.Password = req.Password
+			updated.Password = req.Password
 			// Ensure user has realm for PBS
 			pbsUser := req.User
 			if req.User != "" && !strings.Contains(req.User, "@") {
 				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
 			}
-			pbs.User = pbsUser
+			updated.User = pbsUser
 			// Clear token fields when switching to password auth
-			pbs.TokenName = ""
-			pbs.TokenValue = ""
+			updated.TokenName = ""
+			updated.TokenValue = ""
 		} else if req.User != "" {
 			// User provided - assume password auth but keep existing password
 			// Ensure user has realm for PBS
@@ -1186,47 +1296,60 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 			if !strings.Contains(req.User, "@") {
 				pbsUser = req.User + "@pbs" // Default to @pbs realm if not specified
 			}
-			pbs.User = pbsUser
+			updated.User = pbsUser
 			// Clear token fields when using password auth
-			pbs.TokenName = ""
-			pbs.TokenValue = ""
+			updated.TokenName = ""
+			updated.TokenValue = ""
 		}
 		// else: No authentication changes - preserve existing auth fields
 
-		pbs.Fingerprint = req.Fingerprint
+		updated.Fingerprint = req.Fingerprint
 		if req.VerifySSL != nil {
-			pbs.VerifySSL = *req.VerifySSL
+			updated.VerifySSL = *req.VerifySSL
 		}
 		if req.MonitorBackups != nil {
-			pbs.MonitorBackups = *req.MonitorBackups
+			updated.MonitorBackups = *req.MonitorBackups
 		} else {
-			pbs.MonitorBackups = true // Enable by default for PBS
+			updated.MonitorBackups = true // Enable by default for PBS
 		}
 		if req.MonitorDatastores != nil {
-			pbs.MonitorDatastores = *req.MonitorDatastores
+			updated.MonitorDatastores = *req.MonitorDatastores
 		}
 		if req.MonitorSyncJobs != nil {
-			pbs.MonitorSyncJobs = *req.MonitorSyncJobs
+			updated.MonitorSyncJobs = *req.MonitorSyncJobs
 		}
 		if req.MonitorVerifyJobs != nil {
-			pbs.MonitorVerifyJobs = *req.MonitorVerifyJobs
+			updated.MonitorVerifyJobs = *req.MonitorVerifyJobs
 		}
 		if req.MonitorPruneJobs != nil {
-			pbs.MonitorPruneJobs = *req.MonitorPruneJobs
+			updated.MonitorPruneJobs = *req.MonitorPruneJobs
 		}
 		if req.MonitorGarbageJobs != nil {
-			pbs.MonitorGarbageJobs = *req.MonitorGarbageJobs
+			updated.MonitorGarbageJobs = *req.MonitorGarbageJobs
 		}
 		if req.TemperatureMonitoringEnabled != nil {
-			pbs.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
 		}
 		// Update datastore exclusion list
 		if req.ExcludeDatastores != nil {
-			pbs.ExcludeDatastores = req.ExcludeDatastores
+			updated.ExcludeDatastores = req.ExcludeDatastores
 		}
+
+		if enforceMonitoredSystemLimitForConfigReplacement(
+			w,
+			r.Context(),
+			h.getMonitor(r.Context()),
+			pbsMonitoredSystemReplacement(current),
+			pbsMonitoredSystemCandidate(updated),
+		) {
+			return
+		}
+		*pbs = updated
 	} else if nodeType == "pmg" && index < len(h.getConfig(r.Context()).PMGInstances) {
 		pmgInst := &h.getConfig(r.Context()).PMGInstances[index]
-		pmgInst.Name = req.Name
+		current := *pmgInst
+		updated := current
+		updated.Name = req.Name
 
 		if req.Host != "" {
 			host, err := normalizeNodeHost(req.Host, nodeType)
@@ -1234,20 +1357,20 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			pmgInst.Host = host
+			updated.Host = host
 		}
 
 		// Update GuestURL if provided
-		pmgInst.GuestURL = req.GuestURL
+		updated.GuestURL = req.GuestURL
 
 		// Handle authentication updates - only switch auth method if explicitly provided
 		if req.TokenName != "" && req.TokenValue != "" {
 			// Switching to token authentication
-			pmgInst.TokenName = req.TokenName
-			pmgInst.TokenValue = req.TokenValue
+			updated.TokenName = req.TokenName
+			updated.TokenValue = req.TokenValue
 			// Clear user/password when switching to token auth
-			pmgInst.User = ""
-			pmgInst.Password = ""
+			updated.User = ""
+			updated.Password = ""
 		} else if req.Password != "" {
 			// Switching to password authentication
 			if req.User != "" {
@@ -1255,50 +1378,61 @@ func (h *ConfigHandlers) handleUpdateNode(w http.ResponseWriter, r *http.Request
 				if !strings.Contains(user, "@") {
 					user = user + "@pmg"
 				}
-				pmgInst.User = user
+				updated.User = user
 			}
-			pmgInst.Password = req.Password
+			updated.Password = req.Password
 			// Clear token fields when switching to password auth
-			pmgInst.TokenName = ""
-			pmgInst.TokenValue = ""
+			updated.TokenName = ""
+			updated.TokenValue = ""
 		} else if req.User != "" {
 			// User provided - assume password auth but keep existing password
 			user := req.User
 			if !strings.Contains(user, "@") {
 				user = user + "@pmg"
 			}
-			pmgInst.User = user
+			updated.User = user
 			// Clear token fields when using password auth
-			pmgInst.TokenName = ""
-			pmgInst.TokenValue = ""
+			updated.TokenName = ""
+			updated.TokenValue = ""
 		}
 		// else: No authentication changes - preserve existing auth fields
 
-		pmgInst.Fingerprint = req.Fingerprint
+		updated.Fingerprint = req.Fingerprint
 		if req.VerifySSL != nil {
-			pmgInst.VerifySSL = *req.VerifySSL
+			updated.VerifySSL = *req.VerifySSL
 		}
 		// Special logic for MonitorMailStats: default to true if all monitor flags are false/unset
 		if req.MonitorMailStats != nil {
-			pmgInst.MonitorMailStats = *req.MonitorMailStats
+			updated.MonitorMailStats = *req.MonitorMailStats
 		} else if (req.MonitorMailStats == nil || !*req.MonitorMailStats) &&
 			(req.MonitorQueues == nil || !*req.MonitorQueues) &&
 			(req.MonitorQuarantine == nil || !*req.MonitorQuarantine) &&
 			(req.MonitorDomainStats == nil || !*req.MonitorDomainStats) {
-			pmgInst.MonitorMailStats = true
+			updated.MonitorMailStats = true
 		}
 		if req.MonitorQueues != nil {
-			pmgInst.MonitorQueues = *req.MonitorQueues
+			updated.MonitorQueues = *req.MonitorQueues
 		}
 		if req.MonitorQuarantine != nil {
-			pmgInst.MonitorQuarantine = *req.MonitorQuarantine
+			updated.MonitorQuarantine = *req.MonitorQuarantine
 		}
 		if req.MonitorDomainStats != nil {
-			pmgInst.MonitorDomainStats = *req.MonitorDomainStats
+			updated.MonitorDomainStats = *req.MonitorDomainStats
 		}
 		if req.TemperatureMonitoringEnabled != nil {
-			pmgInst.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
+			updated.TemperatureMonitoringEnabled = req.TemperatureMonitoringEnabled
 		}
+
+		if enforceMonitoredSystemLimitForConfigReplacement(
+			w,
+			r.Context(),
+			h.getMonitor(r.Context()),
+			pmgMonitoredSystemReplacement(current),
+			pmgMonitoredSystemCandidate(updated),
+		) {
+			return
+		}
+		*pmgInst = updated
 	} else {
 		http.Error(w, "Node not found", http.StatusNotFound)
 		return

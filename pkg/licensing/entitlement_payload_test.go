@@ -100,6 +100,9 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	if agentLimit.Current != 12 {
 		t.Fatalf("expected agent current 12, got %d", agentLimit.Current)
 	}
+	if agentLimit.CurrentAvailable == nil || !*agentLimit.CurrentAvailable {
+		t.Fatalf("expected agent current availability to be true, got %+v", agentLimit.CurrentAvailable)
+	}
 	if guestLimit.Current != 44 {
 		t.Fatalf("expected guest current 44, got %d", guestLimit.Current)
 	}
@@ -142,6 +145,26 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 	}
 	if *payload.TrialDaysRemaining != 2 {
 		t.Fatalf("expected trial_days_remaining 2, got %d", *payload.TrialDaysRemaining)
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 50,
+	}
+
+	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{}, nil)
+	if len(payload.Limits) != 1 {
+		t.Fatalf("expected one limit, got %d", len(payload.Limits))
+	}
+	if payload.Limits[0].Current != 0 {
+		t.Fatalf("expected unresolved current to fall back to 0, got %d", payload.Limits[0].Current)
+	}
+	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
+		t.Fatalf("expected unresolved current availability to be false, got %+v", payload.Limits[0].CurrentAvailable)
 	}
 }
 
@@ -352,6 +375,9 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 	if payload.Limits[0].Current != 5 {
 		t.Fatalf("expected runtime current 5, got %d", payload.Limits[0].Current)
+	}
+	if payload.Limits[0].CurrentAvailable == nil || !*payload.Limits[0].CurrentAvailable {
+		t.Fatalf("expected runtime current availability true, got %+v", payload.Limits[0].CurrentAvailable)
 	}
 }
 

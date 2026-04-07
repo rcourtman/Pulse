@@ -325,6 +325,12 @@ querying, and the operator-facing storage health presentation layer.
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
 engine stop hiding inside broader monitoring and E2E buckets.
+That same shared `internal/api/` dependency now also expects replacement-aware
+monitored-system admission and fail-closed usage availability. Storage- or
+recovery-adjacent setup, deploy, and API-backed update helpers may reuse the
+canonical monitored-system cap boundary, but they must preserve remaining
+grouped sources on a counted host and must not reinterpret unavailable usage as
+an empty estate.
 That same adjacent `internal/api/` boundary now also governs public-demo
 commercial redaction for storage and recovery viewers. Shared storage/recovery
 surfaces may run beside a demo runtime that has real internal entitlements,
@@ -1420,6 +1426,12 @@ shared setup, deploy, entitlement, and API-backed monitoring helpers may not
 preserve an API-only exemption that would let storage- or recovery-adjacent
 systems consume no commercial slot when the same monitored system is visible
 through canonical unified-resource roots.
+That same shared boundary now also assumes replacement-aware monitored-system
+projection. When a storage- or recovery-adjacent update replaces one source on
+an already-counted host, the API helper must strip only that source from the
+prospective grouped system and preserve any remaining top-level evidence such
+as agent or sibling API ownership, rather than briefly freeing a slot or
+double-counting the same monitored system.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

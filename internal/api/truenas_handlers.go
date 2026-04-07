@@ -248,6 +248,9 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
 		return
 	}
+	if h.enforceMonitoredSystemLimitReplacement(w, r, instances[index], instance) {
+		return
+	}
 
 	instances[index] = instance
 	if err := persistence.SaveTrueNASConfig(instances); err != nil {
@@ -467,37 +470,64 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimit(
 	r *http.Request,
 	instance config.TrueNASInstance,
 ) bool {
-	if h == nil || h.getMonitor == nil {
+	var monitor *monitoring.Monitor
+	if h != nil && h.getMonitor != nil {
+		monitor = h.getMonitor(r.Context())
+	}
+
+	decision := monitoredSystemLimitDecisionForCandidate(r.Context(), monitor, trueNASMonitoredSystemCandidate(instance))
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
 		return false
 	}
 
-	monitor := h.getMonitor(r.Context())
-	limit := maxMonitoredSystemsLimitForContext(r.Context())
-	if monitor == nil || limit <= 0 {
-		return false
-	}
-
-	if rs := monitor.GetUnifiedReadStateOrSnapshot(); rs != nil {
-		candidate := unifiedresources.MonitoredSystemCandidate{
-			Type:     unifiedresources.ResourceTypeAgent,
-			Name:     instance.Name,
-			Hostname: instance.Host,
-			HostURL:  instance.Host,
-		}
-		if unifiedresources.HasMatchingMonitoredSystem(rs, candidate) {
-			return false
-		}
-	}
-
-	current := monitoredSystemCount(monitor)
-	effective := current + deployReservedCount(r.Context())
-	if effective+1 <= limit {
-		return false
-	}
-
-	emitLimitBlockedEvent(r.Context(), effective, limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, effective, limit)
+	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
 	return true
+}
+
+func (h *TrueNASHandlers) enforceMonitoredSystemLimitReplacement(
+	w http.ResponseWriter,
+	r *http.Request,
+	current config.TrueNASInstance,
+	next config.TrueNASInstance,
+) bool {
+	var monitor *monitoring.Monitor
+	if h != nil && h.getMonitor != nil {
+		monitor = h.getMonitor(r.Context())
+	}
+
+	replacementHost := pulseTokenHostCandidate(current.Host)
+	decision := monitoredSystemLimitDecisionForCandidateReplacement(r.Context(), monitor, unifiedresources.MonitoredSystemReplacement{
+		Source: unifiedresources.SourceTrueNAS,
+		Matches: func(resource unifiedresources.Resource) bool {
+			return resource.TrueNAS != nil && strings.EqualFold(strings.TrimSpace(resource.TrueNAS.Hostname), replacementHost)
+		},
+	}, trueNASMonitoredSystemCandidate(next))
+	if !decision.usageAvailable {
+		writeMonitoredSystemUsageUnavailable(w)
+		return true
+	}
+	if !decision.exceeded {
+		return false
+	}
+
+	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	return true
+}
+
+func trueNASMonitoredSystemCandidate(instance config.TrueNASInstance) unifiedresources.MonitoredSystemCandidate {
+	return unifiedresources.MonitoredSystemCandidate{
+		Source:   unifiedresources.SourceTrueNAS,
+		Type:     unifiedresources.ResourceTypeAgent,
+		Name:     instance.Name,
+		Hostname: pulseTokenHostCandidate(instance.Host),
+		HostURL:  instance.Host,
+	}
 }
 
 func trueNASConnectionIDFromPath(path string) (string, bool) {

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/alerts"
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
@@ -28,6 +29,9 @@ func newTestConfigHandlers(t *testing.T, cfg *config.Config) *ConfigHandlers {
 	h := NewConfigHandlers(nil, nil, func() error { return nil }, nil, nil, func() {})
 	h.defaultConfig = cfg
 	h.defaultPersistence = config.NewConfigPersistence(cfg.DataPath)
+	monitor, _, _ := newTestMonitor(t)
+	setUnexportedField(t, monitor, "alertManager", alerts.NewManager())
+	h.defaultMonitor = monitor
 
 	return h
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 	"github.com/rcourtman/pulse-go-rewrite/internal/mock"
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	"github.com/rcourtman/pulse-go-rewrite/internal/vmware"
 )
 
@@ -116,6 +117,166 @@ func TestVMwareHandlers_HandleAdd_ValidationAndFeatureGate(t *testing.T) {
 			t.Fatalf("expected explicit disable message, got %s", rec.Body.String())
 		}
 	})
+}
+
+func TestVMwareHandlers_HandleAdd_BlocksProjectedNetNewSystemsAtLimit(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "existing.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "existing.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"existing.local"},
+				},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		return []unifiedresources.IngestRecord{
+			{
+				SourceID: "vc-1-host-1",
+				Resource: unifiedresources.Resource{
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "esxi-02.lab.local",
+					Status: unifiedresources.StatusOnline,
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						ManagedObjectID: "host-1",
+						EntityType:      "host",
+						HostUUID:        "vmware-host-2",
+					},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					DMIUUID:   "vmware-host-2",
+					Hostnames: []string{"esxi-02.lab.local"},
+				},
+			},
+		}, nil
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"id":       "vc-1",
+		"name":     "lab-vcenter",
+		"host":     "vcsa.lab.local",
+		"port":     443,
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+		"enabled":  true,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 once projected VMware inventory exceeds the cap, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		t.Fatalf("load vmware config: %v", err)
+	}
+	if len(stored) != 0 {
+		t.Fatalf("expected blocked VMware add not to persist, got %d connections", len(stored))
+	}
+}
+
+func TestVMwareHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "esxi-01.lab.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "esxi-01.lab.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		return []unifiedresources.IngestRecord{
+			{
+				SourceID: "vc-1-host-1",
+				Resource: unifiedresources.Resource{
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "esxi-01.lab.local",
+					Status: unifiedresources.StatusOnline,
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						ManagedObjectID: "host-1",
+						EntityType:      "host",
+						HostUUID:        "vmware-host-1",
+					},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					DMIUUID:   "vmware-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		}, nil
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"id":       "vc-1",
+		"name":     "lab-vcenter",
+		"host":     "vcsa.lab.local",
+		"port":     443,
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+		"enabled":  true,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAdd(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected overlapping VMware add to be allowed at limit, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		t.Fatalf("load vmware config: %v", err)
+	}
+	if len(stored) != 1 {
+		t.Fatalf("expected allowed VMware add to persist, got %d connections", len(stored))
+	}
 }
 
 func TestVMwareHandlers_HandleList_RedactsSensitiveFieldsAndIncludesRuntimeSummary(t *testing.T) {
@@ -377,6 +538,123 @@ func TestVMwareHandlers_HandleUpdate_PreservesMaskedSecretsAndReplacesFields(t *
 	}
 	if !stored[0].InsecureSkipVerify {
 		t.Fatalf("expected insecureSkipVerify update to persist")
+	}
+}
+
+func TestVMwareHandlers_HandleUpdate_BlocksProjectedNetNewSystemsAtLimit(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMockModeForVMwareTest(t, false)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{{
+		ID:                 "alpha",
+		Name:               "vc-a",
+		Host:               "vc-a.lab.local",
+		Port:               443,
+		Username:           "administrator@vsphere.local",
+		Password:           "super-secret",
+		InsecureSkipVerify: true,
+		Enabled:            true,
+	}}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	monitor := &monitoring.Monitor{}
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "archive.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"archive.local"},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceVMware, []unifiedresources.IngestRecord{
+		{
+			SourceID: "vmware:alpha:host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "vmware-host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: unifiedresources.StatusOnline,
+				VMware: &unifiedresources.VMwareData{
+					ConnectionID:    "alpha",
+					ConnectionName:  "vc-a",
+					VCenterHost:     "vc-a.lab.local",
+					ManagedObjectID: "host-1",
+					EntityType:      "host",
+					HostUUID:        "vmware-host-1",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		return []unifiedresources.IngestRecord{
+			{
+				SourceID: "vmware:alpha:host-2",
+				Resource: unifiedresources.Resource{
+					ID:     "vmware-host-2",
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "backup.local",
+					Status: unifiedresources.StatusOnline,
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "alpha",
+						ConnectionName:  "vc-a",
+						VCenterHost:     "vc-b.lab.local",
+						ManagedObjectID: "host-2",
+						EntityType:      "host",
+						HostUUID:        "vmware-host-2",
+					},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					Hostnames: []string{"backup.local"},
+				},
+			},
+		}, nil
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"name":               "vc-b",
+		"host":               "vc-b.lab.local",
+		"port":               443,
+		"username":           "administrator@vsphere.local",
+		"password":           "********",
+		"insecureSkipVerify": true,
+		"enabled":            true,
+	})
+	req := httptest.NewRequest(http.MethodPut, "/api/vmware/connections/alpha", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandleUpdate(rec, req)
+
+	if rec.Code != http.StatusPaymentRequired {
+		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	stored, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		t.Fatalf("load persisted config: %v", err)
+	}
+	if stored[0].Host != "vc-a.lab.local" {
+		t.Fatalf("expected blocked update to preserve original host, got %+v", stored[0])
 	}
 }
 
@@ -674,8 +952,13 @@ func newVMwareHandlersForTest(t *testing.T) (*VMwareHandlers, *config.ConfigPers
 	t.Helper()
 
 	persistence := config.NewConfigPersistence(t.TempDir())
+	monitor, _, _ := newTestMonitor(t)
 	handler := &VMwareHandlers{
 		getPersistence: func(context.Context) *config.ConfigPersistence { return persistence },
+		getMonitor:     func(context.Context) *monitoring.Monitor { return monitor },
+		previewRecords: func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+			return nil, nil
+		},
 	}
 
 	return handler, persistence

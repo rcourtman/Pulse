@@ -312,6 +312,85 @@ func TestHandleAddNode_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	}
 }
 
+func TestHandleAddNode_AllowsCanonicalOverlapAtLimit(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.defaultMonitor = monitor
+
+	body, _ := json.Marshal(map[string]any{
+		"name":       "tower",
+		"type":       "pve",
+		"host":       "tower.local",
+		"tokenName":  "root@pam!pulse",
+		"tokenValue": "secret",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAddNode(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected overlapping Proxmox registration to be allowed at limit, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestHandleAddNode_FailsClosedWhenUsageUnavailable(t *testing.T) {
+	stubAutoRegisterNetworkDeps(t)
+
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	cfg := &config.Config{
+		DataPath: t.TempDir(),
+	}
+	handler := newTestConfigHandlers(t, cfg)
+	handler.defaultMonitor = nil
+
+	body, _ := json.Marshal(map[string]any{
+		"name":       "new-node",
+		"type":       "pve",
+		"host":       "10.0.0.2",
+		"tokenName":  "root@pam!pulse",
+		"tokenValue": "secret",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/api/config/nodes", bytes.NewBuffer(body))
+	rec := httptest.NewRecorder()
+	handler.HandleAddNode(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503 when monitored-system usage cannot be resolved, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
 func TestHandleAddNodeConsolidatesStandaloneOverlapIntoClusterInMemory(t *testing.T) {
 	tempDir := t.TempDir()
 

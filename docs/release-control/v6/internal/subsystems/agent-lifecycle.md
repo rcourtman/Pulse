@@ -1002,6 +1002,13 @@ completion may proceed only when it either dedupes onto an already-counted
 top-level monitored system or fits within the deduped monitored-system limit;
 the lifecycle surface may not preserve a special exemption that keeps API-
 backed monitored systems outside the self-hosted commercial cap.
+That admission decision must come from the same canonical prospective
+monitored-system projection the runtime uses for final grouped counting.
+Auto-register may preview its own candidate, but it must not keep a
+lifecycle-local counter, drift on source priority, or treat missing monitored-
+system usage as zero; when an active cap is present and usage cannot be
+resolved, the route must fail closed with retryable unavailable guidance
+instead of silently admitting a net-new monitored system.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent

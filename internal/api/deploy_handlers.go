@@ -1092,9 +1092,12 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	// License slot check.
 	maxLimit := maxMonitoredSystemsLimitForContext(ctx)
 	if maxLimit > 0 {
-		currentCount := monitoredSystemCount(h.monitor)
-		reservedCount := h.reservation.ReservedForOrg(orgID)
-		available := maxLimit - currentCount - reservedCount
+		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
+		if !decision.usageAvailable {
+			writeMonitoredSystemUsageUnavailable(w)
+			return
+		}
+		available := decision.limit - decision.current
 		if available < 0 {
 			available = 0
 		}
@@ -1589,9 +1592,12 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 	// License slot re-check.
 	maxLimit := maxMonitoredSystemsLimitForContext(ctx)
 	if maxLimit > 0 {
-		currentCount := monitoredSystemCount(h.monitor)
-		reservedCount := h.reservation.ReservedForOrg(orgID)
-		available := maxLimit - currentCount - reservedCount
+		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
+		if !decision.usageAvailable {
+			writeMonitoredSystemUsageUnavailable(w)
+			return
+		}
+		available := decision.limit - decision.current
 		if available < 0 {
 			available = 0
 		}

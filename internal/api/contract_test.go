@@ -4771,6 +4771,38 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(t *testing.T) {
+	payload := buildEntitlementPayloadWithUsage(&licenseStatus{
+		Valid:               true,
+		Tier:                pkglicensing.TierPro,
+		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
+		MaxMonitoredSystems: 15,
+	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{}, nil)
+
+	got, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal entitlement payload: %v", err)
+	}
+
+	const want = `{
+		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
+		"limits":[{"key":"max_monitored_systems","limit":15,"current":0,"current_available":false,"state":"ok"}],
+		"subscription_state":"active",
+		"upgrade_reasons":[],
+		"tier":"pro",
+		"hosted_mode":false,
+		"valid":true,
+		"is_lifetime":false,
+		"days_remaining":0,
+		"trial_eligible":false,
+		"max_history_days":90,
+		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
+		"has_migration_gap":false
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 	baseDir := t.TempDir()
 	store := config.NewFileBillingStore(baseDir)

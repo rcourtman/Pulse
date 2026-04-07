@@ -860,9 +860,10 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			log.Info().Str("host", host).Str("type", "pve").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else {
 			if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
+				Source:   unifiedresources.SourceProxmox,
 				Type:     unifiedresources.ResourceTypeAgent,
 				Name:     serverName,
-				Hostname: serverName,
+				Hostname: pulseTokenHostCandidate(host),
 				HostURL:  host,
 			}) {
 				return
@@ -934,9 +935,10 @@ func (h *ConfigHandlers) handleCanonicalAutoRegister(w http.ResponseWriter, r *h
 			log.Info().Str("host", host).Str("type", "pbs").Msg(canonicalAutoRegisterMatchMessage("host; updated token in-place"))
 		} else {
 			if enforceMonitoredSystemLimitForConfigRegistration(w, r.Context(), h.getConfig(r.Context()), h.getMonitor(r.Context()), unifiedresources.MonitoredSystemCandidate{
+				Source:   unifiedresources.SourcePBS,
 				Type:     unifiedresources.ResourceTypePBS,
 				Name:     serverName,
-				Hostname: serverName,
+				Hostname: pulseTokenHostCandidate(host),
 				HostURL:  host,
 			}) {
 				return

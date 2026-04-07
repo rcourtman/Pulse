@@ -9,6 +9,7 @@ import (
 // MonitoredSystemCandidate describes a prospective top-level monitored system
 // that may be added through an agent report or API-backed registration.
 type MonitoredSystemCandidate struct {
+	Source     DataSource
 	Type       ResourceType
 	Name       string
 	Hostname   string
@@ -112,7 +113,7 @@ func MonitoredSystems(rs ReadState) []MonitoredSystemRecord {
 // HasMatchingMonitoredSystem reports whether a prospective monitored system
 // would dedupe onto an already-counted top-level monitored system.
 func HasMatchingMonitoredSystem(rs ReadState, candidate MonitoredSystemCandidate) bool {
-	return resolveMonitoredSystemTopLevelSystems(rs).HasMatchingCandidate(candidate)
+	return ProjectMonitoredSystemCandidate(rs, candidate).AdditionalCount == 0
 }
 
 type monitoredSystemGroup struct {

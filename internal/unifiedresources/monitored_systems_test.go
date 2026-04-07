@@ -212,3 +212,176 @@ func TestMonitoredSystemCountExactHostnameFallbackDoesNotMergeEqualPriorityHosts
 		t.Fatalf("MonitoredSystemCount() = %d, want 2", got)
 	}
 }
+
+func TestProjectMonitoredSystemCandidateUsesCanonicalPlatformProjection(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+
+	testCases := []struct {
+		name      string
+		candidate MonitoredSystemCandidate
+	}{
+		{
+			name: "proxmox node overlapping agent host",
+			candidate: MonitoredSystemCandidate{
+				Source:   SourceProxmox,
+				Type:     ResourceTypeAgent,
+				Name:     "tower",
+				Hostname: "tower.local",
+				HostURL:  "https://tower.local:8006",
+			},
+		},
+		{
+			name: "truenas appliance overlapping agent host",
+			candidate: MonitoredSystemCandidate{
+				Source:   SourceTrueNAS,
+				Type:     ResourceTypeAgent,
+				Name:     "tower storage",
+				Hostname: "tower.local",
+				HostURL:  "https://tower.local",
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			projection := ProjectMonitoredSystemCandidate(registry, tc.candidate)
+			if projection.CurrentCount != 1 {
+				t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
+			}
+			if projection.ProjectedCount != 1 {
+				t.Fatalf("ProjectedCount = %d, want 1", projection.ProjectedCount)
+			}
+			if projection.AdditionalCount != 0 {
+				t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
+			}
+		})
+	}
+}
+
+func TestProjectMonitoredSystemCandidateReplacementPreservesOverlappingSources(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "archive.local",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"archive.local"},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "system:archive.local",
+			Resource: Resource{
+				ID:     "truenas-1",
+				Type:   ResourceTypeAgent,
+				Name:   "archive",
+				Status: StatusOnline,
+				TrueNAS: &TrueNASData{
+					Hostname: "archive.local",
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+
+	projection := ProjectMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
+		Source: SourceTrueNAS,
+		Matches: func(resource Resource) bool {
+			return resource.TrueNAS != nil && resource.TrueNAS.Hostname == "archive.local"
+		},
+	}, MonitoredSystemCandidate{
+		Source:   SourceTrueNAS,
+		Type:     ResourceTypeAgent,
+		Name:     "backup",
+		Hostname: "backup.local",
+		HostURL:  "https://backup.local",
+	})
+
+	if projection.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
+	}
+	if projection.ProjectedCount != 2 {
+		t.Fatalf("ProjectedCount = %d, want 2", projection.ProjectedCount)
+	}
+	if projection.AdditionalCount != 1 {
+		t.Fatalf("AdditionalCount = %d, want 1", projection.AdditionalCount)
+	}
+}
+
+func TestProjectMonitoredSystemCandidateReplacementRemovesStandaloneSource(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourcePBS, []IngestRecord{
+		{
+			SourceID: "pbs-1",
+			Resource: Resource{
+				ID:     "pbs-1",
+				Type:   ResourceTypePBS,
+				Name:   "pbs-a",
+				Status: StatusOnline,
+				PBS: &PBSData{
+					InstanceID: "pbs-a",
+					Hostname:   "pbs-a.local",
+					HostURL:    "https://pbs-a.local:8007",
+				},
+			},
+		},
+	})
+
+	projection := ProjectMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
+		Source: SourcePBS,
+		Matches: func(resource Resource) bool {
+			return resource.PBS != nil && resource.PBS.InstanceID == "pbs-a"
+		},
+	}, MonitoredSystemCandidate{
+		Source:   SourcePBS,
+		Type:     ResourceTypePBS,
+		Name:     "pbs-b",
+		Hostname: "pbs-b.local",
+		HostURL:  "https://pbs-b.local:8007",
+	})
+
+	if projection.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
+	}
+	if projection.ProjectedCount != 1 {
+		t.Fatalf("ProjectedCount = %d, want 1", projection.ProjectedCount)
+	}
+	if projection.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
+	}
+}
