@@ -25,6 +25,7 @@ ENABLE_AUTO_UPDATES=false
 FORCE_VERSION=""
 FORCE_CHANNEL=""
 SOURCE_BRANCH="main"
+LOCAL_ARCHIVE=""
 CURRENT_INSTALL_CTID=""
 CONTAINER_CREATED_FOR_CLEANUP=false
 BUILD_FROM_SOURCE_MARKER="$INSTALL_DIR/BUILD_FROM_SOURCE"
@@ -2078,66 +2079,90 @@ download_pulse() {
         
         # Download architecture-specific release
         ARCHIVE_NAME="pulse-${LATEST_RELEASE}-linux-${PULSE_ARCH}.tar.gz"
-        DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/${ARCHIVE_NAME}"
-        CHECKSUMS_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/checksums.txt"
-        print_info "Downloading from: $DOWNLOAD_URL"
-        
-        # Detect and stop existing service BEFORE downloading (to free the binary)
-        EXISTING_SERVICE=$(detect_service_name)
-        if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
-            print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
-            safe_systemctl stop $EXISTING_SERVICE || true
-            sleep 2  # Give the process time to fully stop and release the binary
-        fi
-        
-        cd /tmp
-
-        if ! command -v sha256sum >/dev/null 2>&1; then
-            print_error "sha256sum is required but not installed"
-            exit 1
-        fi
-
-        # Download with timeout (60 seconds should be enough for ~5MB file)
         ARCHIVE_PATH="/tmp/$ARCHIVE_NAME"
-        if ! wget -q --timeout=60 --tries=2 -O "$ARCHIVE_PATH" "$DOWNLOAD_URL"; then
-            print_error "Failed to download Pulse release"
-            print_info "This can happen due to network issues or GitHub rate limiting"
-            print_info "You can try downloading manually from: $DOWNLOAD_URL"
-            exit 1
-        fi
 
-        # Download and verify checksum (try new format first, fall back to old)
-        EXPECTED_CHECKSUM=""
-
-        # Try checksums.txt first (v4.29.0+)
-        if wget -q --timeout=60 --tries=2 -O "/tmp/checksums.txt" "$CHECKSUMS_URL" 2>/dev/null; then
-            EXPECTED_CHECKSUM=$(grep -w "${ARCHIVE_NAME}" /tmp/checksums.txt 2>/dev/null | awk '{print $1}')
-            rm -f /tmp/checksums.txt
-        fi
-
-        # Fall back to individual .sha256 file (v4.28.0 and earlier)
-        if [ -z "$EXPECTED_CHECKSUM" ]; then
-            CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
-            if wget -q --timeout=60 --tries=2 -O "${ARCHIVE_PATH}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
-                EXPECTED_CHECKSUM=$(awk '{print $1}' "${ARCHIVE_PATH}.sha256")
-                rm -f "${ARCHIVE_PATH}.sha256"
+        if [[ -n "${LOCAL_ARCHIVE:-}" ]]; then
+            # Use a pre-downloaded archive, skip network download
+            if [[ ! -f "$LOCAL_ARCHIVE" ]]; then
+                print_error "Local archive not found: $LOCAL_ARCHIVE"
+                exit 1
             fi
-        fi
+            ARCHIVE_PATH="$LOCAL_ARCHIVE"
+            print_info "Using local archive: $LOCAL_ARCHIVE"
+        else
+            DOWNLOAD_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/${ARCHIVE_NAME}"
+            CHECKSUMS_URL="https://github.com/$GITHUB_REPO/releases/download/$LATEST_RELEASE/checksums.txt"
+            print_info "Downloading from: $DOWNLOAD_URL"
 
-        # If we still don't have a checksum, fail
-        if [ -z "$EXPECTED_CHECKSUM" ]; then
-            print_error "Failed to download checksum for Pulse release"
-            print_info "Refusing to install without checksum verification"
-            exit 1
-        fi
+            # Detect and stop existing service BEFORE downloading (to free the binary)
+            EXISTING_SERVICE=$(detect_service_name)
+            if timeout 5 systemctl is-active --quiet $EXISTING_SERVICE 2>/dev/null; then
+                print_info "Stopping existing Pulse service ($EXISTING_SERVICE)..."
+                safe_systemctl stop $EXISTING_SERVICE || true
+                sleep 2  # Give the process time to fully stop and release the binary
+            fi
 
-        # Verify the downloaded archive
-        ACTUAL_CHECKSUM=$(sha256sum "${ARCHIVE_PATH}" | awk '{print $1}')
-        if [ "$ACTUAL_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
-            print_error "Checksum verification failed for downloaded Pulse release"
-            print_error "Expected: $EXPECTED_CHECKSUM"
-            print_error "Got: $ACTUAL_CHECKSUM"
-            exit 1
+            cd /tmp
+
+            if ! command -v sha256sum >/dev/null 2>&1; then
+                print_error "sha256sum is required but not installed"
+                exit 1
+            fi
+
+            # Download with retries and backoff
+            _download_ok=false
+            for _attempt in 1 2 3; do
+                if wget -q --timeout=120 --tries=1 -O "$ARCHIVE_PATH" "$DOWNLOAD_URL"; then
+                    _download_ok=true
+                    break
+                fi
+                if [[ $_attempt -lt 3 ]]; then
+                    _wait=$(( _attempt * 15 ))
+                    print_warn "Download attempt $_attempt failed, retrying in ${_wait}s..."
+                    sleep "$_wait"
+                fi
+            done
+            if [[ "$_download_ok" != "true" ]]; then
+                print_error "Failed to download Pulse release"
+                print_info "This can happen due to network issues or GitHub rate limiting"
+                print_info "Download manually: wget -O /tmp/$ARCHIVE_NAME $DOWNLOAD_URL"
+                print_info "Then re-run with: --local-archive /tmp/$ARCHIVE_NAME"
+                exit 1
+            fi
+
+            # Download and verify checksum (try new format first, fall back to old)
+            EXPECTED_CHECKSUM=""
+
+            # Try checksums.txt first (v4.29.0+)
+            if wget -q --timeout=120 --tries=2 -O "/tmp/checksums.txt" "$CHECKSUMS_URL" 2>/dev/null; then
+                EXPECTED_CHECKSUM=$(grep -w "${ARCHIVE_NAME}" /tmp/checksums.txt 2>/dev/null | awk '{print $1}')
+                rm -f /tmp/checksums.txt
+            fi
+
+            # Fall back to individual .sha256 file (v4.28.0 and earlier)
+            if [ -z "$EXPECTED_CHECKSUM" ]; then
+                CHECKSUM_URL="${DOWNLOAD_URL}.sha256"
+                if wget -q --timeout=120 --tries=2 -O "${ARCHIVE_PATH}.sha256" "$CHECKSUM_URL" 2>/dev/null; then
+                    EXPECTED_CHECKSUM=$(awk '{print $1}' "${ARCHIVE_PATH}.sha256")
+                    rm -f "${ARCHIVE_PATH}.sha256"
+                fi
+            fi
+
+            # If we still don't have a checksum, fail
+            if [ -z "$EXPECTED_CHECKSUM" ]; then
+                print_error "Failed to download checksum for Pulse release"
+                print_info "Refusing to install without checksum verification"
+                exit 1
+            fi
+
+            # Verify the downloaded archive
+            ACTUAL_CHECKSUM=$(sha256sum "${ARCHIVE_PATH}" | awk '{print $1}')
+            if [ "$ACTUAL_CHECKSUM" != "$EXPECTED_CHECKSUM" ]; then
+                print_error "Checksum verification failed for downloaded Pulse release"
+                print_error "Expected: $EXPECTED_CHECKSUM"
+                print_error "Got: $ACTUAL_CHECKSUM"
+                exit 1
+            fi
         fi
         
         # Extract to temporary directory first
@@ -2287,7 +2312,8 @@ download_pulse() {
         restore_selinux_contexts
 
         # Cleanup
-        rm -rf "$TEMP_EXTRACT" "$ARCHIVE_PATH"
+        rm -rf "$TEMP_EXTRACT"
+        [[ -z "${LOCAL_ARCHIVE:-}" ]] && rm -f "$ARCHIVE_PATH"
     fi  # End of SKIP_DOWNLOAD check
 }
 
@@ -3752,6 +3778,10 @@ while [[ $# -gt 0 ]]; do
             ENABLE_AUTO_UPDATES=true
             shift
             ;;
+        --local-archive)
+            LOCAL_ARCHIVE="$2"
+            shift 2
+            ;;
         --source|--from-source|--branch)
             BUILD_FROM_SOURCE=true
             # Optional: specify branch
@@ -3771,6 +3801,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --stable           Install latest stable version (default)"
             echo "  --version VERSION  Install specific version (e.g., v4.4.0-rc.1)"
             echo "  --source [BRANCH]  Build and install from source (default: main)"
+            echo "  --local-archive FILE  Install from a local .tar.gz archive (skip download)"
             echo "  --enable-auto-updates  Enable automatic stable updates (via systemd timer)"
             echo ""
             echo "Management options:"
