@@ -8,7 +8,7 @@
 import { createSignal, createMemo, onCleanup } from 'solid-js';
 import { AgentDeployAPI } from '@/api/agentDeploy';
 import { useDeployStream } from '@/hooks/useDeployStream';
-import { getLimit } from '@/stores/license';
+import { getRuntimeLimit } from '@/stores/license';
 import type {
   CandidateNode,
   SourceAgentInfo,
@@ -122,7 +122,7 @@ export function useDeployWizard(opts: UseDeployWizardOptions) {
   const canceledTargets = createMemo(() => jobTargets().filter((t) => t.status === 'canceled'));
 
   const maxAgentSlots = createMemo(() => {
-    const limit = getLimit('max_monitored_systems');
+    const limit = getRuntimeLimit('max_monitored_systems');
     return limit?.limit ?? 0;
   });
 

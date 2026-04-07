@@ -1,4 +1,4 @@
-import { Component, createSignal, onMount, Show, Suspense, createMemo } from 'solid-js';
+import { Component, createSignal, onMount, Show, Suspense, createMemo, createEffect } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useNavigate, useLocation } from '@solidjs/router';
 import { useWebSocket } from '@/contexts/appRuntime';
@@ -19,10 +19,14 @@ import { useSettingsNavigation } from './useSettingsNavigation';
 import { getSettingsLoadingState } from '@/utils/settingsShellPresentation';
 
 import {
-  getLimit,
-  loadLicenseStatus as loadRuntimeLicenseStatus,
+  getRuntimeLimit,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
 import { isPro, loadCommercialPosture } from '@/stores/licenseCommercial';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 
 interface SettingsProps {
   darkMode: () => boolean;
@@ -51,9 +55,9 @@ const Settings: Component<SettingsProps> = (props) => {
     setSearchQuery,
   } = useSettingsShellState({ activeTab });
   const organizationMonitoredSystemUsage = createMemo(
-    () => getLimit('max_monitored_systems')?.current ?? 0,
+    () => getRuntimeLimit('max_monitored_systems')?.current ?? 0,
   );
-  const organizationGuestUsage = createMemo(() => getLimit('max_guests')?.current ?? 0);
+  const organizationGuestUsage = createMemo(() => getRuntimeLimit('max_guests')?.current ?? 0);
   const discoverySettings = useDiscoverySettingsState();
 
   // Security
@@ -153,7 +157,16 @@ const Settings: Component<SettingsProps> = (props) => {
   });
 
   onMount(() => {
-    void loadRuntimeLicenseStatus();
+    void loadRuntimeCapabilities();
+  });
+
+  createEffect(() => {
+    if (!sessionPresentationPolicyResolved()) {
+      return;
+    }
+    if (presentationPolicyHidesCommercialSurfaces()) {
+      return;
+    }
     void loadCommercialPosture();
   });
 

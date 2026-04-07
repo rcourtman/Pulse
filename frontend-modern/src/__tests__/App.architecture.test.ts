@@ -56,7 +56,8 @@ describe('App architecture', () => {
     expect(appLayoutSource).toContain('const utilityTabs = createMemo(() =>');
     expect(appLayoutSource).toContain("import { isMultiTenantEnabled } from '@/stores/license';");
     expect(appLayoutSource).toContain("loadCommercialPosture");
-    expect(appLayoutSource).toContain('if (!demoModeEnabled()) {');
+    expect(appLayoutSource).toContain('sessionPresentationPolicyResolved');
+    expect(appLayoutSource).toContain('if (presentationPolicyHidesCommercialSurfaces()) {');
     expect(appLayoutSource).toContain('void loadCommercialPosture();');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
@@ -71,7 +72,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain('const loadOrganizations = async () =>');
     expect(appRuntimeStateSource).toContain('const handleOrgSwitch = (nextOrgID: string) =>');
     expect(appRuntimeStateSource).toContain(
-      "import {\n  isHostedModeEnabled,\n  isMultiTenantEnabled,\n  licenseLoaded,\n  loadLicenseStatus,\n} from '@/stores/license';",
+      "import {\n  isHostedModeEnabled,\n  isMultiTenantEnabled,\n  runtimeCapabilitiesLoaded,\n  loadRuntimeCapabilities,\n} from '@/stores/license';",
     );
     expect(appRuntimeStateSource).toContain(
       'const [activeOrgID, setActiveOrgID] = createSignal(',

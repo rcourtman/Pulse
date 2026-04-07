@@ -62,7 +62,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('organization-overview', {
         hasFeature: hasFeatures([]),
-        licenseLoaded: () => false,
+        runtimeCapabilitiesLoaded: () => false,
         hostedModeEnabled: false,
       }),
     ).toBe(true);
@@ -70,7 +70,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('organization-overview', {
         hasFeature: hasFeatures(['multi_tenant']),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
       }),
     ).toBe(false);
@@ -80,7 +80,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('organization-billing-admin', {
         hasFeature: hasFeatures(['multi_tenant']),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilities: { billingAdmin: true },
       }),
@@ -89,7 +89,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('organization-billing-admin', {
         hasFeature: hasFeatures(['multi_tenant']),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: true,
         settingsCapabilities: { billingAdmin: true },
       }),
@@ -100,8 +100,8 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('system-billing', {
         hasFeature: hasFeatures([]),
-        licenseLoaded: () => true,
-        demoModeEnabled: true,
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyHidesCommercial: true,
         hostedModeEnabled: false,
       }),
     ).toBe(true);
@@ -109,8 +109,8 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('organization-billing', {
         hasFeature: hasFeatures(['multi_tenant']),
-        licenseLoaded: () => true,
-        demoModeEnabled: true,
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyHidesCommercial: true,
         hostedModeEnabled: true,
       }),
     ).toBe(true);
@@ -120,8 +120,8 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('system-billing', {
         hasFeature: hasFeatures([]),
-        licenseLoaded: () => true,
-        demoModeResolved: false,
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: false,
         hostedModeEnabled: false,
       }),
     ).toBe(true);
@@ -129,8 +129,8 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('organization-billing', {
         hasFeature: hasFeatures(['multi_tenant']),
-        licenseLoaded: () => true,
-        demoModeResolved: false,
+        runtimeCapabilitiesLoaded: () => true,
+        presentationPolicyResolved: false,
         hostedModeEnabled: true,
       }),
     ).toBe(true);
@@ -140,7 +140,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('api', {
         hasFeature: hasFeatures([]),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilitiesResolved: true,
         settingsCapabilities: { apiAccessRead: false },
@@ -150,7 +150,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('security-roles', {
         hasFeature: hasFeatures(['rbac']),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilitiesResolved: true,
         settingsCapabilities: { roles: false },
@@ -162,7 +162,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('api', {
         hasFeature: hasFeatures([]),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilitiesResolved: false,
         settingsCapabilities: null,
@@ -172,7 +172,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('security-auth', {
         hasFeature: hasFeatures([]),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilitiesResolved: false,
         settingsCapabilities: null,
@@ -184,7 +184,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('security-audit', {
         hasFeature: hasFeatures(['audit_logging']),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilitiesResolved: true,
         settingsCapabilities: { auditLog: true },
@@ -194,7 +194,7 @@ describe('settingsNavigation integration scaffold', () => {
     expect(
       shouldHideSettingsNavItem('system-relay', {
         hasFeature: hasFeatures(['relay']),
-        licenseLoaded: () => true,
+        runtimeCapabilitiesLoaded: () => true,
         hostedModeEnabled: false,
         settingsCapabilitiesResolved: true,
         settingsCapabilities: { relayRead: true, relayWrite: false },
@@ -274,12 +274,12 @@ describe('settingsNavigation integration scaffold', () => {
     });
   });
 
-  it('verifies Settings.tsx bootstrap calls only loadLicenseStatus', async () => {
+  it('verifies Settings.tsx bootstrap calls only loadRuntimeCapabilities', async () => {
     const settingsSource = (await import('../Settings.tsx?raw')).default;
     const onMountMatch = settingsSource.match(/onMount\(\(\)\s*=>\s*\{([^}]+)\}/);
     expect(onMountMatch).toBeTruthy();
     const onMountBody = onMountMatch![1];
-    expect(onMountBody).toContain('loadLicenseStatus');
+    expect(onMountBody).toContain('loadRuntimeCapabilities');
     expect(onMountBody).not.toContain('runDiagnostics');
     expect(settingsSource).toContain('useSettingsAccess');
     expect(settingsSource).toContain('useSettingsPanelRegistry');

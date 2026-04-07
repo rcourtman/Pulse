@@ -10,14 +10,14 @@ import {
 } from '@/components/shared/activeUseTrialNudgeModel';
 
 const {
-  licenseStatusMock,
+  commercialPostureMock,
   startProTrialMock,
   showSuccessMock,
   showErrorMock,
   isUpsellSnoozedMock,
   snoozeUpsellMock,
 } = vi.hoisted(() => ({
-  licenseStatusMock: vi.fn(),
+  commercialPostureMock: vi.fn(),
   startProTrialMock: vi.fn(),
   showSuccessMock: vi.fn(),
   showErrorMock: vi.fn(),
@@ -26,8 +26,8 @@ const {
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
-  loadLicenseStatus: vi.fn(),
+  commercialPosture: (...args: unknown[]) => commercialPostureMock(...args),
+  loadCommercialPosture: vi.fn(),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 
@@ -53,7 +53,7 @@ vi.mock('@/utils/upgradePresentation', () => ({
 import { ActiveUseTrialNudge } from '@/components/shared/ActiveUseTrialNudge';
 
 function setEligibleFreeLicense() {
-  licenseStatusMock.mockReturnValue({
+  commercialPostureMock.mockReturnValue({
     tier: 'free',
     subscription_state: 'expired',
     trial_eligible: true,
@@ -63,7 +63,7 @@ function setEligibleFreeLicense() {
 describe('ActiveUseTrialNudge', () => {
   beforeEach(() => {
     localStorage.clear();
-    licenseStatusMock.mockReset();
+    commercialPostureMock.mockReset();
     startProTrialMock.mockReset();
     showSuccessMock.mockReset();
     showErrorMock.mockReset();

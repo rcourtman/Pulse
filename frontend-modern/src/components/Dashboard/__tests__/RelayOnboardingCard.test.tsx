@@ -20,7 +20,7 @@ const {
   hasFeatureMock,
   licenseLoadedMock,
   getUpgradeActionUrlOrFallbackMock,
-  demoModeEnabledMock,
+  presentationPolicyHidesCommercialSurfacesMock,
 } = vi.hoisted(() => ({
   getUpgradeActionDestinationMock: vi.fn(),
   mockNavigate: vi.fn(),
@@ -36,7 +36,7 @@ const {
   hasFeatureMock: vi.fn(),
   licenseLoadedMock: vi.fn(),
   getUpgradeActionUrlOrFallbackMock: vi.fn(),
-  demoModeEnabledMock: vi.fn(),
+  presentationPolicyHidesCommercialSurfacesMock: vi.fn(),
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -45,8 +45,8 @@ vi.mock('@solidjs/router', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  licenseLoaded: (...args: unknown[]) => licenseLoadedMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  runtimeCapabilitiesLoaded: (...args: unknown[]) => licenseLoadedMock(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -55,8 +55,9 @@ vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));
 
-vi.mock('@/stores/demoMode', () => ({
-  demoModeEnabled: () => demoModeEnabledMock(),
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () =>
+    presentationPolicyHidesCommercialSurfacesMock(),
 }));
 
 vi.mock('@/api/relay', () => ({
@@ -110,8 +111,8 @@ function resetAllMocks() {
   licenseLoadedMock.mockReset();
   getUpgradeActionDestinationMock.mockReset();
   getUpgradeActionUrlOrFallbackMock.mockReset();
-  demoModeEnabledMock.mockReset();
-  demoModeEnabledMock.mockReturnValue(false);
+  presentationPolicyHidesCommercialSurfacesMock.mockReset();
+  presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
 }
 
 /**
@@ -219,7 +220,7 @@ describe('RelayOnboardingCard', () => {
 
     it('hides the relay paywall entirely in demo mode', async () => {
       setupWithoutRelayFeature();
-      demoModeEnabledMock.mockReturnValue(true);
+      presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
       render(() => <RelayOnboardingCard />);
 
       await waitFor(() => {

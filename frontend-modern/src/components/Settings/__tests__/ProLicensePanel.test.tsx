@@ -48,7 +48,7 @@ vi.mock('@solidjs/router', async (importOriginal) => {
 
 vi.mock('@/stores/license', () => ({
   isMultiTenantEnabled: () => true,
-  loadLicenseStatus: (...args: unknown[]) => loadRuntimeLicenseStatusMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadRuntimeLicenseStatusMock(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -562,7 +562,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: SelfHostedBillingSection) => {');
     expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
     expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
-    expect(proLicensePanelStateSource).toContain('loadRuntimeLicenseStatus(true)');
+    expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');

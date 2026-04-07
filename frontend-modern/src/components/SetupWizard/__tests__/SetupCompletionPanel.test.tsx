@@ -54,8 +54,8 @@ vi.mock('@/utils/url', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  entitlements: () => ({ relay: false }),
+  loadCommercialPosture: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  commercialPosture: () => ({ relay: false }),
   getUpgradeActionUrlOrFallback: () => 'https://pulse.example.com/upgrade',
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));

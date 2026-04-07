@@ -22,8 +22,8 @@ const qrToDataUrlMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  licenseLoaded: () => true,
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  runtimeCapabilitiesLoaded: () => true,
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -31,7 +31,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   entitlements: () => ({ trial_eligible: false }),
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: vi.fn(),
 }));
 

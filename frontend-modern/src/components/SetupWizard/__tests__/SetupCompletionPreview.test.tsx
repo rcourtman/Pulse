@@ -18,7 +18,7 @@ vi.mock('@/utils/apiClient', () => ({
 }));
 
 vi.mock('@/stores/license', () => ({
-  loadLicenseStatus: vi.fn(),
+  loadRuntimeCapabilities: vi.fn(),
   entitlements: () => ({ relay: false }),
   getUpgradeActionUrlOrFallback: () => 'https://pulse.example.com/upgrade',
   startProTrial: vi.fn(),

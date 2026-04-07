@@ -4,7 +4,6 @@ import {
   type EntitlementLegacyConnections,
   type LicenseCommercialPosture,
 } from '@/api/license';
-import { demoModeEnabled } from '@/stores/demoMode';
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 import {
@@ -16,8 +15,12 @@ import {
   resolveUpgradeDestination,
   type UpgradeDestination,
 } from '@/utils/upgradeNavigation';
-import { loadLicenseStatus as loadRuntimeLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { loadLicenseEntitlements } from '@/stores/licenseEntitlements';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 
 const FREE_COMMERCIAL_POSTURE_FALLBACK: LicenseCommercialPosture = {
   subscription_state: 'expired',
@@ -77,12 +80,19 @@ function parseRetryAfterSeconds(value: string | null | undefined): number | unde
  * Load the commercial posture payload used by non-billing trial and upgrade UI.
  */
 export async function loadCommercialPosture(force = false): Promise<void> {
-  if (demoModeEnabled()) {
+  if (!sessionPresentationPolicyResolved()) {
+    logger.debug(
+      '[licenseCommercialStore] Commercial posture deferred until presentation policy resolves',
+    );
+    return;
+  }
+
+  if (presentationPolicyHidesCommercialSurfaces()) {
     setCommercialPostureState(FREE_COMMERCIAL_POSTURE_FALLBACK);
     setLoadError(null);
     setLoaded(true);
     setLoading(false);
-    logger.debug('[licenseCommercialStore] Commercial posture suppressed in demo mode');
+    logger.debug('[licenseCommercialStore] Commercial posture suppressed by presentation policy');
     return;
   }
 
@@ -112,10 +122,12 @@ export async function loadCommercialPosture(force = false): Promise<void> {
  * Start a Pro trial for the current org, then refresh both runtime and commercial state.
  */
 export async function startProTrial(): Promise<StartProTrialResult> {
-  if (demoModeEnabled()) {
-    const err = new Error('Trial activation unavailable in demo mode') as TrialStartRequestError;
+  if (!sessionPresentationPolicyResolved() || presentationPolicyHidesCommercialSurfaces()) {
+    const err = new Error(
+      'Trial activation unavailable under the current presentation policy',
+    ) as TrialStartRequestError;
     err.status = 404;
-    err.code = 'demo_mode_unavailable';
+    err.code = 'presentation_policy_unavailable';
     throw err;
   }
 
@@ -150,7 +162,7 @@ export async function startProTrial(): Promise<StartProTrialResult> {
   }
   await Promise.all([
     loadCommercialPosture(true),
-    loadRuntimeLicenseStatus(true),
+    loadRuntimeCapabilities(true),
     loadLicenseEntitlements(true),
   ]);
   return { outcome: 'activated' };
@@ -236,13 +248,7 @@ eventBus.on('org_switched', () => {
 
 export {
   commercialPostureState as commercialPosture,
-  commercialPostureState as entitlements,
-  commercialPostureState as licenseStatus,
-  loadCommercialPosture as loadLicenseStatus,
   loading as commercialPostureLoading,
-  loading as licenseLoading,
   loaded as commercialPostureLoaded,
-  loaded as licenseLoaded,
   loadError as commercialPostureLoadError,
-  loadError as licenseLoadError,
 };

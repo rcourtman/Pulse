@@ -137,10 +137,13 @@ internal-versus-external navigation semantics to `frontend-primitives` once a
 Patrol feature can resolve to either product-owned routes or public pricing.
 That same Patrol-owned commercial boundary must also fail closed in public
 demo runtimes. Patrol header and banner upgrade/trial affordances may render
-for real customer workspaces, but when
-`/api/security/status.sessionCapabilities.demoMode` is true they must suppress
-upgrade CTAs, trial nudges, and Pro-only helper copy instead of leaking
-commercial posture into the public demo presentation.
+for real customer workspaces, but the browser-owned trigger for that
+suppression is now the shared resolved `presentationPolicy` from
+`/api/security/status`, seeded by the backend capability fact
+`sessionCapabilities.demoMode`. Patrol surfaces must therefore suppress
+upgrade CTAs, trial nudges, and Pro-only helper copy only from that shared
+policy instead of reviving local demo heuristics or issuing early commercial
+reads before the policy resolves.
 That degraded empty-state copy must also interpret the finding state rather
 than simply replaying the primary assessment sentence verbatim: when coverage
 is incomplete, the findings panel should tell the operator that Patrol has not

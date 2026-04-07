@@ -463,12 +463,12 @@ describe('monitored-system model guardrails', () => {
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_SETUP_LABEL');
     expect(relayOnboardingCardSource).toContain('RELAY_ONBOARDING_DISCONNECTED_LABEL');
     expect(relayOnboardingCardSource).not.toContain('createSignal(');
-    expect(relayOnboardingCardSource).not.toContain('loadLicenseStatus()');
+    expect(relayOnboardingCardSource).not.toContain('loadRuntimeCapabilities()');
     expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardSource).not.toContain('startProTrial()');
     expect(relayOnboardingCardSource).not.toContain('Pair Your Mobile Device');
     expect(relayOnboardingCardSource).not.toContain('Relay is currently disconnected.');
-    expect(relayOnboardingCardStateSource).toContain('loadLicenseStatus()');
+    expect(relayOnboardingCardStateSource).toContain('loadRuntimeCapabilities()');
     expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardStateSource).toContain('trackPaywallViewed');
     expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');

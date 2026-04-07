@@ -1,8 +1,8 @@
 import { createEffect, createMemo, onMount } from 'solid-js';
-import { demoModeEnabled } from '@/stores/demoMode';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import {
-  getLimit,
-  loadLicenseStatus as loadRuntimeLicenseStatus,
+  getRuntimeLimit,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
   commercialPosture,
@@ -36,14 +36,16 @@ import {
 
 export function useMonitoredSystemLimitWarningBannerState() {
   onMount(() => {
-    void loadRuntimeLicenseStatus();
+    void loadRuntimeCapabilities();
     void loadCommercialPosture();
   });
 
-  const monitoredSystemLimit = createMemo(() => getLimit(MONITORED_SYSTEM_LIMIT_KEY));
+  const monitoredSystemLimit = createMemo(() => getRuntimeLimit(MONITORED_SYSTEM_LIMIT_KEY));
   const isUrgent = createMemo(() => isMonitoredSystemLimitUrgent(monitoredSystemLimit()));
   const showBanner = createMemo(
-    () => !demoModeEnabled() && shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit()),
+    () =>
+      !presentationPolicyHidesCommercialSurfaces() &&
+      shouldShowMonitoredSystemLimitBanner(monitoredSystemLimit()),
   );
   const migrationGap = createMemo(() => hasMigrationGap());
   const migrationCounts = createMemo(() => legacyConnections());

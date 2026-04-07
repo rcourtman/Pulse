@@ -1557,12 +1557,14 @@ describe('frontend resource type boundaries', () => {
     expect(billingAdminPanelSource).toContain('./useBillingAdminPanelState');
     expect(billingAdminPanelSource).toContain('./BillingAdminOrganizationsTable');
     expect(relayOnboardingCardSource).toContain('./useRelayOnboardingCardState');
-    expect(relayOnboardingCardSource).toContain('demoModeEnabled');
-    expect(relayOnboardingCardSource).toContain('!demoModeEnabled() || state.hasRelay()');
+    expect(relayOnboardingCardSource).toContain('presentationPolicyHidesCommercialSurfaces');
+    expect(relayOnboardingCardSource).toContain(
+      '!presentationPolicyHidesCommercialSurfaces() || state.hasRelay()',
+    );
     expect(relayOnboardingCardSource).not.toContain('createSignal(');
     expect(relayOnboardingCardSource).not.toContain('RelayAPI.getStatus()');
     expect(relayOnboardingCardStateSource).toContain('RelayAPI.getStatus()');
-    expect(relayOnboardingCardStateSource).toContain('loadLicenseStatus()');
+    expect(relayOnboardingCardStateSource).toContain('loadRuntimeCapabilities()');
     expect(relayOnboardingCardStateSource).toContain('runStartProTrialAction({');
     expect(relayOnboardingCardStateSource).not.toContain('startProTrial()');
     expect(organizationBillingPanelSource).not.toContain('normalizeOrgScope(getOrgID())');
@@ -2852,13 +2854,14 @@ describe('frontend resource type boundaries', () => {
     expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
     expect(trialBannerSource).not.toContain('createSignal');
     expect(trialBannerSource).not.toContain('createMemo');
-    expect(trialBannerSource).not.toContain('loadLicenseStatus');
+    expect(trialBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(trialBannerSource).not.toContain('licenseStatus');
     expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).toContain('loadLicenseStatus');
-    expect(trialBannerStateSource).toContain('licenseStatus');
+    expect(trialBannerStateSource).toContain('loadCommercialPosture');
+    expect(trialBannerStateSource).toContain('commercialPosture');
+    expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
     expect(trialBannerModelSource).toContain('TRIAL_BANNER_SNOOZE_KEY');
@@ -2991,12 +2994,12 @@ describe('frontend resource type boundaries', () => {
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
@@ -3181,7 +3184,7 @@ describe('frontend resource type boundaries', () => {
     expect(historyChartModelSource).toContain('getHistoryChartScale');
     expect(historyChartHeaderSource).toContain('formatHistoryChartTooltipValue');
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
-    expect(historyChartOverlaySource).toContain('demoModeEnabled');
+    expect(historyChartOverlaySource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
     expect(historyChartOverlaySource).toContain(
       'Historical data beyond {props.chart.lockDays()} days is hidden in this demo.',
@@ -4218,7 +4221,7 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPanelSource).not.toContain('No audit webhooks configured yet.');
     expect(auditWebhookPanelSource).not.toContain('Loading audit webhooks…');
     expect(auditWebhookPanelSource).not.toContain('Audit Webhooks (Pro)');
-    expect(auditWebhookPanelSource).not.toContain('loadLicenseStatus();');
+    expect(auditWebhookPanelSource).not.toContain('loadRuntimeCapabilities();');
     expect(auditWebhookPanelSource).not.toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookPanelSource).not.toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookPresentationSource).toContain(
@@ -4243,7 +4246,7 @@ describe('frontend resource type boundaries', () => {
     expect(auditWebhookPresentationSource).toContain('AUDIT_WEBHOOK_SECURITY_NOTE_TITLE');
     expect(auditWebhookPresentationSource).toContain('AUDIT_WEBHOOK_SECURITY_NOTE_BODY');
     expect(auditWebhookStateSource).toContain('export const useAuditWebhookPanelState =');
-    expect(auditWebhookStateSource).toContain('loadLicenseStatus();');
+    expect(auditWebhookStateSource).toContain('loadRuntimeCapabilities();');
     expect(auditWebhookStateSource).toContain('trackPaywallViewed');
     expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
@@ -4402,16 +4405,16 @@ describe('frontend resource type boundaries', () => {
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceBanners');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceSummary');
     expect(patrolIntelligenceSurfaceSource).toContain('./PatrolIntelligenceWorkspace');
-    expect(patrolIntelligenceBannersSource).toContain('demoModeEnabled');
+    expect(patrolIntelligenceBannersSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceBannersSource).toContain(
-      '!demoModeEnabled() && state.licenseRequired()',
+      '!presentationPolicyHidesUpgradePrompts() && state.licenseRequired()',
     );
-    expect(patrolIntelligenceHeaderSource).toContain('demoModeEnabled');
+    expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceHeaderSource).toContain(
-      '!demoModeEnabled() && state.autoFixLocked()',
+      '!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()',
     );
     expect(patrolIntelligenceHeaderSource).toContain(
-      '!demoModeEnabled() && state.alertAnalysisLocked()',
+      '!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()',
     );
     expect(operationsPageRouteSource).toContain(
       "import { OperationsPageSurface } from '@/features/operations/OperationsPageSurface';",

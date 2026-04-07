@@ -36,7 +36,7 @@ const { agentDeployAPIMock, nodesAPIMock, getLimitMock, copyToClipboardMock, log
 
 vi.mock('@/api/agentDeploy', () => ({ AgentDeployAPI: agentDeployAPIMock }));
 vi.mock('@/api/nodes', () => ({ NodesAPI: nodesAPIMock }));
-vi.mock('@/stores/license', () => ({ getLimit: getLimitMock }));
+vi.mock('@/stores/license', () => ({ getRuntimeLimit: getLimitMock }));
 vi.mock('@/utils/clipboard', () => ({ copyToClipboard: copyToClipboardMock }));
 vi.mock('@/utils/logger', () => ({ logger: loggerMock }));
 

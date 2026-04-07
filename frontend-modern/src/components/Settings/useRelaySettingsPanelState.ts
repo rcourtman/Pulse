@@ -1,14 +1,14 @@
 import { createEffect, createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import {
   hasFeature,
-  licenseLoaded,
+  runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { showError, showSuccess } from '@/utils/toast';
 import { RelayAPI, type RelayConfig, type RelayStatus } from '@/api/relay';
@@ -46,7 +46,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   const canShowPairing = createMemo(() => Boolean(config()?.enabled && status()?.connected));
 
   createEffect((wasPaywallVisible: boolean) => {
-    const isPaywallVisible = licenseLoaded() && !relayEnabled();
+    const isPaywallVisible = runtimeCapabilitiesLoaded() && !relayEnabled();
     if (isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('relay', 'settings_relay_panel');
     }
@@ -134,7 +134,7 @@ export function useRelaySettingsPanelState(props: RelaySettingsPanelProps) {
   };
 
   onMount(async () => {
-    await Promise.all([loadLicenseStatus(), loadCommercialPosture()]);
+    await Promise.all([loadRuntimeCapabilities(), loadCommercialPosture()]);
     if (!relayEnabled()) {
       setLoading(false);
       return;

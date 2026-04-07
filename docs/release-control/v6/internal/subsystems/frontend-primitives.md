@@ -405,6 +405,7 @@ That same shared settings-shell and banner boundary now also owns demo-mode
 commercial suppression. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
 `frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
 `frontend-modern/src/stores/sessionCapabilities.ts`,
+`frontend-modern/src/stores/sessionPresentationPolicy.ts`,
 `frontend-modern/src/stores/demoMode.ts`,
 `frontend-modern/src/stores/license.ts`,
 `frontend-modern/src/stores/licenseCommercial.ts`,
@@ -415,14 +416,16 @@ commercial suppression. `frontend-modern/src/components/Settings/settingsNavCata
 `frontend-modern/src/components/shared/HistoryChartOverlay.tsx`,
 `frontend-modern/src/features/patrol/PatrolIntelligenceBanners.tsx`, and
 `frontend-modern/src/features/patrol/PatrolIntelligenceHeader.tsx`
-must consume one shared bootstrap truth from
-`/api/security/status.sessionCapabilities.demoMode` and hide billing tabs,
-trial nudges, monitored-system warning banners, dashboard upsells, Patrol
-upgrade CTAs, history-lock paywalls, and other public-demo commercial
-affordances when the browser is rendering a public demo runtime.
+must consume one shared bootstrap truth from `/api/security/status`. The
+backend capability fact `sessionCapabilities.demoMode` remains part of that
+payload, but the browser-owned shared primitive is now the resolved
+`sessionPresentationPolicy` contract, which hides billing tabs, trial nudges,
+monitored-system warning banners, dashboard upsells, Patrol upgrade CTAs,
+history-lock paywalls, and other public-demo commercial affordances when the
+browser is rendering a public demo runtime.
 Shared primitives must not perform their own ad hoc `/api/health` polling,
 response-header inference, hostname heuristics, or per-banner demo branching;
-the runtime bootstrap, shared session-capability store, and shared banner
+the runtime bootstrap, shared presentation-policy store, and shared banner
 hooks stay on one canonical owner so suppression stays coherent across
 customer-facing surfaces.
 That same shared primitive boundary now also treats runtime capability reads
@@ -430,7 +433,8 @@ and commercial reads as separate stores. Shared settings shells and banner
 hooks may read feature truth from `frontend-modern/src/stores/license.ts`, but
 commercial identity, upgrade routing, and trial state must stay in
 `frontend-modern/src/stores/licenseCommercial.ts`, which suppresses public-demo
-loads locally instead of depending on route-local guards.
+loads locally and defers its first fetch until the presentation policy has
+resolved instead of depending on route-local guards.
 Storage disk drawers now also sit on that same shared-primitives floor.
 `frontend-modern/src/components/Storage/DiskDetail.tsx` must render physical-
 disk read, write, and busy charts through `HistoryChart` plus

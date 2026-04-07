@@ -14,7 +14,7 @@ import { useAlertHistoryState } from '../useAlertHistoryState';
 
 export interface HistoryTabProps {
   hasAIAlertsFeature: () => boolean;
-  licenseLoading: () => boolean;
+  runtimeCapabilitiesLoading: () => boolean;
   getResource: (resourceId: string) => Resource | undefined;
   allResources: () => Resource[];
 }
@@ -76,7 +76,7 @@ export function HistoryTab(props: HistoryTabProps) {
       <AlertHistoryTableSection
         state={historyState}
         hasAIAlertsFeature={props.hasAIAlertsFeature}
-        licenseLoading={props.licenseLoading}
+        runtimeCapabilitiesLoading={props.runtimeCapabilitiesLoading}
       />
       <AlertHistoryAdministrationCard state={historyState} />
     </div>

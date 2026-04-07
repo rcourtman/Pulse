@@ -460,16 +460,16 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
     expect(trialBannerSource).not.toContain('createSignal');
     expect(trialBannerSource).not.toContain('createMemo');
-    expect(trialBannerSource).not.toContain('loadLicenseStatus');
+    expect(trialBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(trialBannerSource).not.toContain('licenseStatus');
     expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
 
     expect(trialBannerStateSource).toContain('export function useTrialBannerState');
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
-    expect(trialBannerStateSource).toContain('loadLicenseStatus');
-    expect(trialBannerStateSource).toContain('licenseStatus');
-    expect(trialBannerStateSource).toContain('demoModeEnabled');
+    expect(trialBannerStateSource).toContain('loadCommercialPosture');
+    expect(trialBannerStateSource).toContain('commercialPosture');
+    expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
     expect(trialBannerStateSource).not.toContain("fetch('/api/health'");
@@ -483,7 +483,8 @@ describe('shared primitive guardrails', () => {
 
   it('keeps upgrade navigation split across shell, runtime, and utility owners', () => {
     expect(upgradeLinkSource).toContain('destination.external');
-    expect(upgradeLinkSource).toContain("target={local.target ?? '_blank'}");
+    expect(upgradeLinkSource).toContain("return local.target ?? '_blank';");
+    expect(upgradeLinkSource).toContain('target={target()}');
     expect(upgradeLinkSource).not.toContain('window.open');
     expect(upgradeLinkSource).not.toContain('useNavigate(');
 
@@ -653,7 +654,7 @@ describe('shared primitive guardrails', () => {
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
 
@@ -662,8 +663,10 @@ describe('shared primitive guardrails', () => {
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'presentationPolicyHidesCommercialSurfaces',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(

@@ -1,10 +1,10 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
-import { demoModeEnabled } from '@/stores/demoMode';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
+import { presentationPolicyHidesCommercialSurfaces } from '@/stores/sessionPresentationPolicy';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
 import {
   getTrialBannerToneClass,
@@ -21,7 +21,9 @@ export function useTrialBannerState() {
   });
 
   const isTrial = createMemo(
-    () => !demoModeEnabled() && commercialPosture()?.subscription_state === 'trial',
+    () =>
+      !presentationPolicyHidesCommercialSurfaces() &&
+      commercialPosture()?.subscription_state === 'trial',
   );
   const daysRemaining = createMemo(() =>
     normalizeTrialBannerDaysRemaining(commercialPosture()?.trial_days_remaining),
@@ -40,7 +42,7 @@ export function useTrialBannerState() {
     daysRemaining,
     handleSnooze,
     isTrial,
-    showActions: () => !demoModeEnabled() && !snoozed(),
+    showActions: () => !presentationPolicyHidesCommercialSurfaces() && !snoozed(),
     toneClass,
     upgradeDestination,
   };

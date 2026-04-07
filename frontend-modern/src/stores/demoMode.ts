@@ -1,18 +1,14 @@
 import type { SecurityStatus } from '@/types/config';
 import {
-  sessionCapabilities,
-  sessionCapabilitiesResolved as demoModeResolved,
-  syncSessionCapabilities,
-} from '@/stores/sessionCapabilities';
+  presentationPolicyIsDemoMode as demoModeEnabled,
+  sessionPresentationPolicyResolved as demoModeResolved,
+  syncSessionPresentationPolicy,
+} from '@/stores/sessionPresentationPolicy';
 
 export function syncDemoModeFromSecurityStatus(
-  status?: Pick<SecurityStatus, 'sessionCapabilities'> | null,
+  status?: Pick<SecurityStatus, 'sessionCapabilities' | 'presentationPolicy'> | null,
 ): boolean {
-  return syncSessionCapabilities(status).demoMode;
+  return syncSessionPresentationPolicy(status).demoMode;
 }
 
-export function demoModeEnabled(): boolean {
-  return sessionCapabilities().demoMode;
-}
-
-export { demoModeResolved };
+export { demoModeEnabled, demoModeResolved };

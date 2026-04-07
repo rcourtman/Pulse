@@ -1,5 +1,5 @@
 import { createSignal, onMount, Show } from 'solid-js';
-import { demoModeEnabled } from '@/stores/demoMode';
+import { presentationPolicyIsDemoMode } from '@/stores/sessionPresentationPolicy';
 
 export function DemoBanner() {
   const [dismissed, setDismissed] = createSignal(false);
@@ -17,7 +17,7 @@ export function DemoBanner() {
   };
 
   return (
-    <Show when={demoModeEnabled() && !dismissed()}>
+    <Show when={presentationPolicyIsDemoMode() && !dismissed()}>
       <div class="bg-blue-50 dark:bg-blue-900 border-b border-blue-200 dark:border-blue-800 px-3 py-2">
         <div class="container mx-auto flex items-center justify-between text-sm">
           <div class="flex items-center gap-2 text-blue-700 dark:text-blue-300">

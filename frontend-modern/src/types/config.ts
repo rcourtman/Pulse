@@ -121,6 +121,13 @@ export interface SecurityStatusSessionCapabilities {
   demoMode: boolean;
 }
 
+export interface SecurityStatusPresentationPolicy {
+  demoMode: boolean;
+  readOnly: boolean;
+  hideCommercial: boolean;
+  hideUpgrade: boolean;
+}
+
 export interface SecurityStatus {
   hasAuthentication: boolean;
   apiTokenConfigured: boolean;
@@ -158,6 +165,7 @@ export interface SecurityStatus {
   // Token auth scopes (for kiosk/limited-access mode)
   tokenScopes?: string[];
   sessionCapabilities?: SecurityStatusSessionCapabilities;
+  presentationPolicy?: SecurityStatusPresentationPolicy;
   settingsCapabilities?: SecurityStatusSettingsCapabilities;
 }
 

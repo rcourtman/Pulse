@@ -1,5 +1,5 @@
 import { Component, Show } from 'solid-js';
-import { demoModeEnabled } from '@/stores/demoMode';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { UpgradeLink } from './UpgradeLink';
 import type { HistoryChartState } from './useHistoryChartState';
 
@@ -71,7 +71,7 @@ export const HistoryChartOverlay: Component<HistoryChartOverlayProps> = (props) 
           </div>
           <h3 class="text-lg font-bold text-base-content mb-1">{props.chart.lockDays()}-Day History</h3>
           <Show
-            when={!demoModeEnabled()}
+            when={!presentationPolicyHidesUpgradePrompts()}
             fallback={
               <p class="text-sm text-muted text-center max-w-[220px] mb-4">
                 Historical data beyond {props.chart.lockDays()} days is hidden in this demo.

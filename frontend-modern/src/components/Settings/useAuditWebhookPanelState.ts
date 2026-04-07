@@ -4,14 +4,14 @@ import { logger } from '@/utils/logger';
 import { showSuccess, showWarning } from '@/utils/toast';
 import {
   hasFeature,
-  licenseLoaded,
+  runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getAuditWebhookDuplicateUrlMessage,
@@ -101,12 +101,12 @@ export const useAuditWebhookPanelState = (canManageOverride?: boolean) => {
   };
 
   onMount(() => {
-    loadLicenseStatus();
+    loadRuntimeCapabilities();
     loadCommercialPosture();
   });
 
   createEffect((wasPaywallVisible: boolean) => {
-    const isPaywallVisible = licenseLoaded() && !hasFeature('audit_logging');
+    const isPaywallVisible = runtimeCapabilitiesLoaded() && !hasFeature('audit_logging');
     if (isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('audit_logging', 'settings_audit_webhook_panel');
     }

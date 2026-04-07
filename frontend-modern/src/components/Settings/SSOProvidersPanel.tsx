@@ -81,7 +81,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
     canTest,
     fetchMetadataPreview,
     getUpgradeActionDestination,
-    licenseLoaded,
+    runtimeCapabilitiesLoaded,
     trackUpgradeClicked,
   } = useSSOProvidersState(props);
 
@@ -147,7 +147,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
       </Show>
 
       {/* License banner */}
-      <Show when={licenseLoaded() && !hasAdvancedSSO() && !loading()}>
+      <Show when={runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading()}>
         <div class="p-4 bg-surface-alt border border-border rounded-md">
           <div class="flex flex-col sm:flex-row items-center gap-4">
             <div class="flex-1">
@@ -208,7 +208,7 @@ export const SSOProvidersPanel: Component<SSOProvidersPanelProps> = (props) => {
                 {getSSOProviderAddButtonLabel('saml')}
               </button>
             </Show>
-            <Show when={licenseLoaded() && !hasAdvancedSSO()}>
+            <Show when={runtimeCapabilitiesLoaded() && !hasAdvancedSSO()}>
               <button
                 type="button"
                 onClick={() => setShowSamlUpsell(true)}

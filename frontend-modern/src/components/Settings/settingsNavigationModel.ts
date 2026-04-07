@@ -49,7 +49,7 @@ export interface SettingsNavItem {
   locked?: boolean;
   hideWhenUnavailable?: boolean;
   hostedOnly?: boolean;
-  hideInDemoMode?: boolean;
+  hideWhenCommercialHidden?: boolean;
   requiredCapability?: keyof SecurityStatusSettingsCapabilities;
   badge?: string;
   features?: string[];

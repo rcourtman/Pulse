@@ -460,6 +460,23 @@ handoffs. API-backed Patrol surfaces may consume canonical commercial hrefs
 from the shared license/commercial contract, but they must not re-decide
 internal-versus-external navigation behavior inside API-adjacent page or hook
 owners once the contract can resolve to both in-app and public destinations.
+That same shared `internal/api/` boundary now also owns browser presentation
+policy for public-demo and commercial suppression. `/api/security/status` must
+continue to expose the raw session capability fact
+`sessionCapabilities.demoMode`, but browser shells and shared frontend stores
+now consume the explicit `presentationPolicy` payload from that same response
+as the canonical runtime contract for `demoMode`, `readOnly`,
+`hideCommercial`, and `hideUpgrade`. Commercial posture and billing stores
+must therefore defer their first read until that policy has resolved, so
+public demos fail closed without probing hidden commercial routes during
+bootstrap.
+That same contract split also makes the licensing boundary explicit:
+`/api/license/runtime-capabilities` is the public runtime feature contract,
+`/api/license/commercial-posture` is the non-billing upgrade/trial posture
+contract for real customer workspaces, and `/api/license/entitlements`
+remains billing-only. New callers must extend one of those owned shapes
+instead of reviving a combined entitlement payload for mixed runtime,
+commercial, and billing concerns.
 `/portal` is now one bootstrap-driven shell for both anonymous and
 authenticated users, so new account frontend work must extend that shared
 contract rather than inventing a second local payload shape, reviving separate

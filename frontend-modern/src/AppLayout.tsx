@@ -6,7 +6,6 @@ import {
   createMemo,
   createSignal,
   onCleanup,
-  onMount,
 } from 'solid-js';
 import type { JSX } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
@@ -39,12 +38,16 @@ import { buildStorageRecoveryTabSpecs } from '@/routing/platformTabs';
 import { getKioskModePreference, setKioskMode } from '@/utils/url';
 import { updateStore } from '@/stores/updates';
 import { aiChatStore } from '@/stores/aiChat';
-import { demoModeEnabled } from '@/stores/demoMode';
 import { isMultiTenantEnabled } from '@/stores/license';
 import {
   isPro,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  presentationPolicyHidesUpgradePrompts,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 import type { AppConnectionStatus } from '@/useAppRuntimeState';
 
 const ROOT_INFRASTRUCTURE_PATH = buildInfrastructurePath();
@@ -178,10 +181,14 @@ export function AppLayout(props: AppLayoutProps) {
     }
   };
 
-  onMount(() => {
-    if (!demoModeEnabled()) {
-      void loadCommercialPosture();
+  createEffect(() => {
+    if (!sessionPresentationPolicyResolved()) {
+      return;
     }
+    if (presentationPolicyHidesCommercialSurfaces()) {
+      return;
+    }
+    void loadCommercialPosture();
   });
 
   const showHeader = () => {
@@ -736,7 +743,9 @@ export function AppLayout(props: AppLayoutProps) {
                           />
                         </span>
                       </Show>
-                      <Show when={tab.badge === 'pro' && !demoModeEnabled()}>
+                      <Show
+                        when={tab.badge === 'pro' && !presentationPolicyHidesUpgradePrompts()}
+                      >
                         <span class="ml-1.5 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900 rounded">
                           Pro
                         </span>

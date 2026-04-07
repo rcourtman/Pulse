@@ -9,7 +9,7 @@ import { TRIAL_BANNER_SNOOZE_KEY } from '@/components/shared/trialBannerModel';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 const {
-  demoModeEnabledMock,
+  presentationPolicyHidesCommercialSurfacesMock,
   getUpgradeActionDestinationMock,
   getUpgradeActionUrlOrFallbackMock,
   commercialPostureMock,
@@ -18,7 +18,7 @@ const {
   snoozeUpsellMock,
 } =
   vi.hoisted(() => ({
-    demoModeEnabledMock: vi.fn(),
+    presentationPolicyHidesCommercialSurfacesMock: vi.fn(),
     getUpgradeActionDestinationMock: vi.fn(),
     getUpgradeActionUrlOrFallbackMock: vi.fn(),
     commercialPostureMock: vi.fn(),
@@ -34,8 +34,9 @@ vi.mock('@/stores/licenseCommercial', () => ({
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
 }));
 
-vi.mock('@/stores/demoMode', () => ({
-  demoModeEnabled: () => demoModeEnabledMock(),
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () =>
+    presentationPolicyHidesCommercialSurfacesMock(),
 }));
 
 vi.mock('@/utils/snooze', () => ({
@@ -52,7 +53,7 @@ describe('TrialBanner', () => {
 
   beforeEach(() => {
     cleanup();
-    demoModeEnabledMock.mockReset();
+    presentationPolicyHidesCommercialSurfacesMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
     getUpgradeActionUrlOrFallbackMock.mockReset();
     commercialPostureMock.mockReset();
@@ -63,7 +64,7 @@ describe('TrialBanner', () => {
       href: getPublicPricingUrl('trial_banner'),
       external: true,
     });
-    demoModeEnabledMock.mockReturnValue(false);
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
     getUpgradeActionUrlOrFallbackMock.mockReturnValue(getPublicPricingUrl('trial_banner'));
     loadCommercialPostureMock.mockResolvedValue(undefined);
     isUpsellSnoozedMock.mockReturnValue(false);
@@ -78,7 +79,7 @@ describe('TrialBanner', () => {
     expect(trialBannerSource).toContain('TRIAL_BANNER_TITLE');
     expect(trialBannerSource).not.toContain('createSignal');
     expect(trialBannerSource).not.toContain('createMemo');
-    expect(trialBannerSource).not.toContain('loadLicenseStatus');
+    expect(trialBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(trialBannerSource).not.toContain('licenseStatus');
     expect(trialBannerSource).not.toContain('getUpgradeActionUrlOrFallback');
 
@@ -86,7 +87,7 @@ describe('TrialBanner', () => {
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).toContain('loadCommercialPosture');
-    expect(trialBannerStateSource).toContain('demoModeEnabled');
+    expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('commercialPosture');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
@@ -130,7 +131,7 @@ describe('TrialBanner', () => {
   });
 
   it('stays hidden in demo mode even when the workspace is on trial', () => {
-    demoModeEnabledMock.mockReturnValue(true);
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
     commercialPostureMock.mockReturnValue({
       subscription_state: 'trial',
       trial_days_remaining: 2,

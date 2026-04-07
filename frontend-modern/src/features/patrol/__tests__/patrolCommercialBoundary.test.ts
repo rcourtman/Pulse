@@ -4,17 +4,19 @@ import patrolIntelligenceHeaderSource from '../PatrolIntelligenceHeader.tsx?raw'
 
 describe('patrol commercial boundary', () => {
   it('suppresses patrol upgrade surfaces in demo mode', () => {
-    expect(patrolIntelligenceBannersSource).toContain('demoModeEnabled');
+    expect(patrolIntelligenceBannersSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceBannersSource).toContain(
-      '!demoModeEnabled() && state.licenseRequired()',
+      '!presentationPolicyHidesUpgradePrompts() && state.licenseRequired()',
     );
-    expect(patrolIntelligenceHeaderSource).toContain('demoModeEnabled');
+    expect(patrolIntelligenceHeaderSource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(patrolIntelligenceHeaderSource).toContain(
-      '!demoModeEnabled() && state.autoFixLocked()',
+      '!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()',
     );
     expect(patrolIntelligenceHeaderSource).toContain(
-      '!demoModeEnabled() && state.alertAnalysisLocked()',
+      '!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()',
     );
-    expect(patrolIntelligenceHeaderSource).toContain('!demoModeEnabled() && isProLocked()');
+    expect(patrolIntelligenceHeaderSource).toContain(
+      '!presentationPolicyHidesUpgradePrompts() && isProLocked()',
+    );
   });
 });

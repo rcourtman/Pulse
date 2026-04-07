@@ -62,7 +62,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
   commercialPosture: () => state.entitlements,
   licenseStatus: () => state.entitlements,
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadCommercialPostureMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadCommercialPostureMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
 }));
 

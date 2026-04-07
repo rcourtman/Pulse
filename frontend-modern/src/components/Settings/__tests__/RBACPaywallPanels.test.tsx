@@ -22,8 +22,8 @@ const loggerErrorMock = vi.fn();
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
-  licenseLoaded: () => true,
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  runtimeCapabilitiesLoaded: () => true,
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -34,7 +34,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
   }),
   getUpgradeActionUrlOrFallback: (feature: string) => `/upgrade?feature=${feature}`,
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadCommercialPostureMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadCommercialPostureMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   entitlements: (...args: unknown[]) => entitlementsMock(...args),
 }));

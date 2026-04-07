@@ -122,6 +122,13 @@ the canonical `ai_alerts` destination from the shared license/commercial
 contract, but it must delegate the actual open behavior to the
 `frontend-primitives` typed upgrade-navigation owner instead of reintroducing
 alert-local `window.open(...)` or raw external-tab assumptions.
+Alert-adjacent shared helpers also inherit the runtime-versus-commercial split
+now carried by the shared licensing stores. Alert pages may consume runtime
+feature truth from `frontend-modern/src/stores/license.ts`, but any
+upgrade/trial posture must come from the dedicated commercial-posture
+contract, and public-demo suppression must flow from the shared resolved
+`presentationPolicy` contract instead of alert-local demo checks or
+entitlement reads.
 That shared alert presentation boundary now also has explicit alerts ownership.
 `frontend-modern/src/utils/alertWebhookPresentation.ts` is the canonical owner
 for webhook setup copy, service labels, mention-help phrasing, custom-field

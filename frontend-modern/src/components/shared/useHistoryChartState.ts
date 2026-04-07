@@ -8,7 +8,7 @@ import {
 import { ChartsAPI, type HistoryTimeRange } from '@/api/charts';
 import {
   isRangeLocked,
-  loadLicenseStatus,
+  loadRuntimeCapabilities,
   maxHistoryDays,
 } from '@/stores/license';
 import {
@@ -78,7 +78,7 @@ export function useHistoryChartState(props: HistoryChartProps, refs: HistoryChar
   const refreshIntervalMs = createMemo(() => getHistoryChartRefreshIntervalMs(range()));
 
   onMount(() => {
-    loadLicenseStatus();
+    loadRuntimeCapabilities();
     loadCommercialPosture();
   });
 

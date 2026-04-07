@@ -21,7 +21,7 @@ interface AlertHistoryTableAlertRowProps {
   alert: AlertHistoryAlert;
   state: AlertHistoryState;
   hasAIAlertsFeature: () => boolean;
-  licenseLoading: () => boolean;
+  runtimeCapabilitiesLoading: () => boolean;
 }
 
 export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps) {
@@ -140,7 +140,7 @@ export function AlertHistoryTableAlertRow(props: AlertHistoryTableAlertRowProps)
                 resourceType={props.alert.resourceType}
                 variant="icon"
                 size="sm"
-                licenseLocked={!props.hasAIAlertsFeature() && !props.licenseLoading()}
+                licenseLocked={!props.hasAIAlertsFeature() && !props.runtimeCapabilitiesLoading()}
               />
             </Show>
           </div>

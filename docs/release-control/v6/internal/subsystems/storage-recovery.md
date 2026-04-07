@@ -333,9 +333,11 @@ commercial identity or upgrade posture into a public demo. Storage/recovery
 must consume that redacted boundary as presentation truth rather than
 reintroducing mock-only license bypasses or page-local commercial fallbacks.
 Browser-facing storage/recovery surfaces must also treat
-`/api/security/status.sessionCapabilities.demoMode` as the canonical
-public-demo bootstrap signal instead of inferring demo posture from headers,
-`/api/health`, or hostname heuristics.
+`/api/security/status` as the canonical public-demo bootstrap contract. The
+backend capability fact remains `sessionCapabilities.demoMode`, but storage
+and recovery browsers must consume the shared resolved `presentationPolicy`
+instead of inferring demo posture from headers, `/api/health`, or hostname
+heuristics.
 That same shared boundary now also owns the one runtime-safe exception:
 storage and recovery may inherit demo-safe `/api/license/runtime-capabilities`
 reads for capability and history-retention truth, but
@@ -344,6 +346,9 @@ reads for capability and history-retention truth, but
 licensed identity, upgrade prompts, trial urgency, checkout handoff state, or
 observed usage counts to remain present once the public-demo contract is
 applied.
+Storage- or recovery-adjacent commercial helpers must therefore wait for the
+shared presentation policy to resolve before attempting any read that could
+otherwise hit a hidden commercial route during bootstrap.
 Physical-disk live I/O drawers now also sit on the canonical storage surface.
 Storage disk drawers may show read, write, busy, and SMART history, but every
 chart must route through the shared `HistoryChart` API contract using the disk

@@ -5,17 +5,20 @@ import {
   type LicenseCommercialPosture,
   type LicenseRuntimeCapabilities,
 } from '@/api/license';
-import { demoModeEnabled } from '@/stores/demoMode';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 import { getUpgradeFallbackDestination } from '@/utils/pricingHandoff';
 import {
-  getLimit,
+  getRuntimeLimit,
   hasFeature,
   isHostedModeEnabled,
   isMultiTenantEnabled,
   isRangeLocked,
-  licenseLoadError as runtimeLicenseLoadError,
-  licenseLoaded as runtimeLicenseLoaded,
-  loadLicenseStatus as loadRuntimeLicenseStatus,
+  runtimeCapabilitiesLoadError as runtimeLicenseLoadError,
+  runtimeCapabilitiesLoaded as runtimeLicenseLoaded,
+  loadRuntimeCapabilities,
   maxHistoryDays,
   runtimeCapabilities,
 } from '@/stores/license';
@@ -39,8 +42,9 @@ import {
 } from '@/stores/licenseEntitlements';
 
 vi.mock('@/api/license');
-vi.mock('@/stores/demoMode', () => ({
-  demoModeEnabled: vi.fn(() => false),
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: vi.fn(() => false),
+  sessionPresentationPolicyResolved: vi.fn(() => true),
 }));
 vi.mock('@/stores/events', () => ({
   eventBus: { on: vi.fn() },
@@ -99,14 +103,15 @@ describe('license stores', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(demoModeEnabled).mockReturnValue(false);
+    vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(false);
+    vi.mocked(sessionPresentationPolicyResolved).mockReturnValue(true);
   });
 
   describe('runtime capability store', () => {
     it('loads runtime capabilities from API', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
 
-      await loadRuntimeLicenseStatus();
+      await loadRuntimeCapabilities();
 
       expect(LicenseAPI.getRuntimeCapabilities).toHaveBeenCalled();
       expect(runtimeCapabilities()).toEqual(mockRuntimeCapabilities);
@@ -116,8 +121,8 @@ describe('license stores', () => {
     it('returns early if already loaded without force', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
 
-      await loadRuntimeLicenseStatus(true);
-      await loadRuntimeLicenseStatus();
+      await loadRuntimeCapabilities(true);
+      await loadRuntimeCapabilities();
 
       expect(LicenseAPI.getRuntimeCapabilities).toHaveBeenCalledTimes(1);
     });
@@ -125,7 +130,7 @@ describe('license stores', () => {
     it('sets fallback runtime capabilities on error', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockRejectedValue(new Error('API error'));
 
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
 
       expect(runtimeCapabilities()).toEqual({
         capabilities: ['update_alerts', 'sso', 'ai_patrol'],
@@ -138,7 +143,7 @@ describe('license stores', () => {
     it('sets loadError on runtime API failure', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockRejectedValue(new Error('Network timeout'));
 
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
 
       expect(runtimeLicenseLoadError()).toBeInstanceOf(Error);
       expect(runtimeLicenseLoadError()?.message).toBe('Network timeout');
@@ -146,35 +151,35 @@ describe('license stores', () => {
 
     it('clears runtime loadError on successful load after failure', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockRejectedValue(new Error('Network timeout'));
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(runtimeLicenseLoadError()).toBeInstanceOf(Error);
 
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(runtimeLicenseLoadError()).toBeNull();
     });
 
     it('returns true when feature is in capabilities', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(hasFeature('feature1')).toBe(true);
     });
 
     it('returns false when feature is not in capabilities', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(hasFeature('missing_feature')).toBe(false);
     });
 
     it('returns true when multi_tenant feature exists', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isMultiTenantEnabled()).toBe(true);
     });
 
     it('returns false when multi_tenant feature does not exist', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockFreeRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isMultiTenantEnabled()).toBe(false);
     });
 
@@ -183,14 +188,14 @@ describe('license stores', () => {
         ...mockRuntimeCapabilities,
         hosted_mode: true,
       });
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isHostedModeEnabled()).toBe(true);
     });
 
     it('returns limit by key', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
-      expect(getLimit('limit1')?.limit).toBe(100);
+      await loadRuntimeCapabilities(true);
+      expect(getRuntimeLimit('limit1')?.limit).toBe(100);
     });
 
     it('returns false for ranges within free limit (7d)', async () => {
@@ -198,7 +203,7 @@ describe('license stores', () => {
         ...mockFreeRuntimeCapabilities,
         max_history_days: 7,
       });
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isRangeLocked('1h')).toBe(false);
       expect(isRangeLocked('7d')).toBe(false);
       expect(isRangeLocked('168h')).toBe(false);
@@ -209,7 +214,7 @@ describe('license stores', () => {
         ...mockFreeRuntimeCapabilities,
         max_history_days: 7,
       });
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isRangeLocked('8d')).toBe(true);
       expect(isRangeLocked('200h')).toBe(true);
     });
@@ -219,7 +224,7 @@ describe('license stores', () => {
         ...mockRuntimeCapabilities,
         max_history_days: 14,
       });
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isRangeLocked('14d')).toBe(false);
       expect(isRangeLocked('15d')).toBe(true);
       expect(maxHistoryDays()).toBe(14);
@@ -227,7 +232,7 @@ describe('license stores', () => {
 
     it('uses tier-specific max_history_days (pro = 90d)', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isRangeLocked('90d')).toBe(false);
       expect(isRangeLocked('91d')).toBe(true);
       expect(maxHistoryDays()).toBe(90);
@@ -238,21 +243,30 @@ describe('license stores', () => {
         ...mockFreeRuntimeCapabilities,
         max_history_days: undefined,
       });
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(maxHistoryDays()).toBe(7);
       expect(isRangeLocked('8d')).toBe(true);
     });
 
     it('handles invalid range strings', async () => {
       vi.mocked(LicenseAPI.getRuntimeCapabilities).mockResolvedValue(mockFreeRuntimeCapabilities);
-      await loadRuntimeLicenseStatus(true);
+      await loadRuntimeCapabilities(true);
       expect(isRangeLocked('invalid')).toBe(false);
     });
   });
 
   describe('commercial posture store', () => {
-    it('suppresses commercial posture reads in demo mode', async () => {
-      vi.mocked(demoModeEnabled).mockReturnValue(true);
+    it('defers commercial posture reads until presentation policy resolves', async () => {
+      vi.mocked(sessionPresentationPolicyResolved).mockReturnValue(false);
+
+      await loadCommercialPosture(true);
+
+      expect(LicenseAPI.getCommercialPosture).not.toHaveBeenCalled();
+      expect(commercialPosture()).toBeNull();
+    });
+
+    it('suppresses commercial posture reads when commercial surfaces are hidden', async () => {
+      vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(true);
 
       await loadCommercialPosture(true);
 
@@ -322,13 +336,13 @@ describe('license stores', () => {
       await expect(startProTrial()).rejects.toThrow('Failed to start trial');
     });
 
-    it('startProTrial fails closed in demo mode', async () => {
-      vi.mocked(demoModeEnabled).mockReturnValue(true);
+    it('startProTrial fails closed when commercial surfaces are hidden', async () => {
+      vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(true);
 
       await expect(startProTrial()).rejects.toMatchObject({
-        message: 'Trial activation unavailable in demo mode',
+        message: 'Trial activation unavailable under the current presentation policy',
         status: 404,
-        code: 'demo_mode_unavailable',
+        code: 'presentation_policy_unavailable',
       });
       expect(LicenseAPI.startTrial).not.toHaveBeenCalled();
     });
@@ -519,8 +533,18 @@ describe('license stores', () => {
   });
 
   describe('billing entitlements store', () => {
-    it('suppresses full entitlements reads in demo mode', async () => {
-      vi.mocked(demoModeEnabled).mockReturnValue(true);
+    it('defers full entitlements reads until presentation policy resolves', async () => {
+      vi.mocked(sessionPresentationPolicyResolved).mockReturnValue(false);
+      const previous = licenseEntitlements();
+
+      await loadLicenseEntitlements(true);
+
+      expect(LicenseAPI.getCommercialEntitlements).not.toHaveBeenCalled();
+      expect(licenseEntitlements()).toBe(previous);
+    });
+
+    it('suppresses full entitlements reads when commercial surfaces are hidden', async () => {
+      vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(true);
 
       await loadLicenseEntitlements(true);
 

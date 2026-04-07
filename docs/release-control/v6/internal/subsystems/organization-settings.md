@@ -133,6 +133,13 @@ settings surfaces. The organization settings panels now also normalize org
 scope through `frontend-modern/src/utils/orgScope.ts` instead of carrying
 their own `getOrgID() || 'default'` fallbacks, so access, overview, and
 sharing views stay aligned with the shared multi-tenant org context contract.
+That same settings surface now also inherits the runtime-versus-commercial
+licensing split. Organization settings may consume runtime capability truth
+from the shared runtime-capabilities contract, but billing identity and
+upgrade posture stay outside this subsystem on the dedicated commercial
+surfaces, and any public-demo suppression must come from the shared resolved
+`presentationPolicy` rather than settings-local demo checks or billing
+entitlement probes.
 The organization sharing surface now also sources resource quick-pick labels
 from the shared preferred resource display helper, so governed resources do
 not fall back to raw names inside share creation.

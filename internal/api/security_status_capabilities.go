@@ -29,6 +29,13 @@ type securityStatusSessionCapabilities struct {
 	DemoMode bool `json:"demoMode"`
 }
 
+type securityStatusPresentationPolicy struct {
+	DemoMode       bool `json:"demoMode"`
+	ReadOnly       bool `json:"readOnly"`
+	HideCommercial bool `json:"hideCommercial"`
+	HideUpgrade    bool `json:"hideUpgrade"`
+}
+
 type securityStatusAuthSnapshot struct {
 	request        *http.Request
 	authenticated  bool
@@ -232,7 +239,18 @@ func (r *Router) securityStatusSettingsCapabilities(req *http.Request) securityS
 }
 
 func (r *Router) securityStatusSessionCapabilities() securityStatusSessionCapabilities {
+	demoMode := r != nil && r.config != nil && r.config.DemoMode
 	return securityStatusSessionCapabilities{
-		DemoMode: r != nil && r.config != nil && r.config.DemoMode,
+		DemoMode: demoMode,
+	}
+}
+
+func (r *Router) securityStatusPresentationPolicy() securityStatusPresentationPolicy {
+	demoMode := r != nil && r.config != nil && r.config.DemoMode
+	return securityStatusPresentationPolicy{
+		DemoMode:       demoMode,
+		ReadOnly:       demoMode,
+		HideCommercial: demoMode,
+		HideUpgrade:    demoMode,
 	}
 }

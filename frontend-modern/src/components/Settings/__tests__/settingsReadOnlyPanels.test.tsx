@@ -22,8 +22,8 @@ vi.mock('../QuickSecuritySetup', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  licenseLoaded: () => true,
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  runtimeCapabilitiesLoaded: () => true,
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   getUpgradeActionUrlOrFallback: () => '/upgrade',
   startProTrial: vi.fn(),

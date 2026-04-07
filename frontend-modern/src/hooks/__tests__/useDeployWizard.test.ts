@@ -19,7 +19,7 @@ const { apiMock, loggerMock, getLimitMock } = vi.hoisted(() => ({
 
 vi.mock('@/api/agentDeploy', () => ({ AgentDeployAPI: apiMock }));
 vi.mock('@/utils/logger', () => ({ logger: loggerMock }));
-vi.mock('@/stores/license', () => ({ getLimit: getLimitMock }));
+vi.mock('@/stores/license', () => ({ getRuntimeLimit: getLimitMock }));
 
 // Stub useDeployStream — wizard only needs the returned state, not real SSE.
 vi.mock('@/hooks/useDeployStream', () => ({

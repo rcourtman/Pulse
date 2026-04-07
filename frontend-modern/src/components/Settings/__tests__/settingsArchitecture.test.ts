@@ -581,7 +581,7 @@ describe('Settings architecture guardrails', () => {
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
     expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
     expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
-    expect(proLicensePanelStateSource).toContain('loadRuntimeLicenseStatus(true)');
+    expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
     expect(proLicensePanelStateSource).toContain('runStartProTrialAction({');
     expect(proLicensePanelStateSource).not.toContain('startProTrial()');
     expect(proLicensePanelSource).not.toContain('title="Pulse Pro"');
@@ -628,7 +628,7 @@ describe('Settings architecture guardrails', () => {
     expect(organizationBillingStateSource).toContain("eventBus.on('org_switched'");
     expect(organizationBillingLoadingStateSource).toContain('animate-pulse');
     expect(settingsSource).toContain('organizationMonitoredSystemUsage');
-    expect(settingsSource).toContain("getLimit('max_monitored_systems')?.current ?? 0");
+    expect(settingsSource).toContain("getRuntimeLimit('max_monitored_systems')?.current ?? 0");
     expect(settingsSource).not.toContain('organizationAgentUsage');
   });
 
@@ -1202,12 +1202,12 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelSource).toContain('@/components/Settings/reportingPanelModel');
     expect(reportingPanelSource).toContain('reportingCatalog');
     expect(reportingPanelSource).toContain('title="Reporting"');
-    expect(reportingPanelSource).not.toContain('loadLicenseStatus()');
+    expect(reportingPanelSource).not.toContain('loadRuntimeCapabilities()');
     expect(reportingPanelSource).not.toContain('startProTrial()');
     expect(reportingPanelSource).not.toContain("apiFetch('/api/admin/reports/generate");
     expect(reportingPanelSource).not.toContain('window.URL.createObjectURL');
     expect(reportingPanelStateSource).toContain('export const useReportingPanelState =');
-    expect(reportingPanelStateSource).toContain('loadLicenseStatus');
+    expect(reportingPanelStateSource).toContain('loadRuntimeCapabilities');
     expect(reportingPanelStateSource).toContain('runStartProTrialAction({');
     expect(reportingPanelStateSource).toContain('getUpgradeActionDestination(');
     expect(reportingPanelStateSource).not.toContain('startProTrial()');
@@ -1218,7 +1218,7 @@ describe('Settings architecture guardrails', () => {
     expect(reportingPanelStateSource).toContain('reportingFeatureId');
     expect(reportingPanelStateSource).toContain('loadReportingCatalog = async');
     expect(reportingPanelSource).toContain('Retry');
-    expect(reportingPanelStateSource).not.toContain('!licenseLoaded()');
+    expect(reportingPanelStateSource).not.toContain('!runtimeCapabilitiesLoaded()');
     expect(reportingPanelStateSource).not.toContain('!isReportingEnabled()');
     expect(reportingPanelStateSource).toContain('buildVMInventoryExportRequest');
     expect(reportingPanelStateSource).toContain('apiErrorFromResponse');
@@ -1284,13 +1284,13 @@ describe('Settings architecture guardrails', () => {
   it('keeps the audit webhook shell behind an extracted runtime owner', () => {
     expect(auditWebhookPanelSource).toContain('@/components/Settings/useAuditWebhookPanelState');
     expect(auditWebhookPanelSource).toContain('@/components/shared/UpgradeLink');
-    expect(auditWebhookPanelSource).not.toContain('loadLicenseStatus();');
+    expect(auditWebhookPanelSource).not.toContain('loadRuntimeCapabilities();');
     expect(auditWebhookPanelSource).not.toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookPanelSource).not.toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookPanelSource).not.toContain('trackPaywallViewed');
     expect(auditWebhookPanelSource).not.toContain('target="_blank"');
     expect(auditWebhookStateSource).toContain('export const useAuditWebhookPanelState =');
-    expect(auditWebhookStateSource).toContain('loadLicenseStatus();');
+    expect(auditWebhookStateSource).toContain('loadRuntimeCapabilities();');
     expect(auditWebhookStateSource).toContain('const fetchWebhooks = async () =>');
     expect(auditWebhookStateSource).toContain('const saveWebhooks = async (urls: string[]) =>');
     expect(auditWebhookStateSource).toContain('trackPaywallViewed');
@@ -1445,13 +1445,13 @@ describe('Settings architecture guardrails', () => {
   });
 
   it('keeps demo-mode billing visibility on the shared settings shell owner', () => {
-    expect(settingsNavigationModelSource).toContain('hideInDemoMode?: boolean;');
-    expect(settingsNavVisibilitySource).toContain('if (item.hideInDemoMode)');
-    expect(settingsNavVisibilitySource).toContain('context.demoModeResolved === false');
-    expect(settingsNavVisibilitySource).toContain('if (context.demoModeEnabled)');
-    expect(getSettingsNavItem('system-billing')?.hideInDemoMode).toBe(true);
-    expect(getSettingsNavItem('organization-billing')?.hideInDemoMode).toBe(true);
-    expect(getSettingsNavItem('organization-billing-admin')?.hideInDemoMode).toBe(true);
+    expect(settingsNavigationModelSource).toContain('hideWhenCommercialHidden?: boolean;');
+    expect(settingsNavVisibilitySource).toContain('if (item.hideWhenCommercialHidden)');
+    expect(settingsNavVisibilitySource).toContain('context.presentationPolicyResolved === false');
+    expect(settingsNavVisibilitySource).toContain('if (context.presentationPolicyHidesCommercial)');
+    expect(getSettingsNavItem('system-billing')?.hideWhenCommercialHidden).toBe(true);
+    expect(getSettingsNavItem('organization-billing')?.hideWhenCommercialHidden).toBe(true);
+    expect(getSettingsNavItem('organization-billing-admin')?.hideWhenCommercialHidden).toBe(true);
   });
 
   it('keeps relay shell copy on the shared relay presentation owner', () => {
@@ -1503,7 +1503,7 @@ describe('Settings architecture guardrails', () => {
 
   it('splits runtime capability reads from commercial entitlement reads across settings state owners', () => {
     expect(settingsSource).toContain("from '@/stores/licenseCommercial';");
-    expect(settingsSource).not.toContain("getLimit, isPro, loadLicenseStatus } from '@/stores/license';");
+    expect(settingsSource).not.toContain("getRuntimeLimit, isPro, loadRuntimeCapabilities } from '@/stores/license';");
 
     expect(aiSettingsStateSource).toContain("} from '@/stores/license';");
     expect(aiSettingsStateSource).toContain("} from '@/stores/licenseCommercial';");

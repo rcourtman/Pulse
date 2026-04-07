@@ -4,14 +4,14 @@ import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
   hasFeature,
-  licenseLoaded,
+  runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import {
   getSSOCopySuccessMessage,
@@ -90,7 +90,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   };
 
   createEffect((wasBannerVisible) => {
-    const isBannerVisible = licenseLoaded() && !hasAdvancedSSO() && !loading();
+    const isBannerVisible = runtimeCapabilitiesLoaded() && !hasAdvancedSSO() && !loading();
     if (isBannerVisible && !wasBannerVisible) {
       trackPaywallViewed('advanced_sso', 'settings_sso_providers_banner');
     }
@@ -130,7 +130,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
   };
 
   onMount(() => {
-    loadLicenseStatus();
+    loadRuntimeCapabilities();
     loadCommercialPosture();
     void loadProviders();
   });
@@ -366,7 +366,7 @@ export const useSSOProvidersState = (props: SSOProvidersPanelProps) => {
     canTest,
     fetchMetadataPreview,
     getUpgradeActionDestination,
-    licenseLoaded,
+    runtimeCapabilitiesLoaded,
     trackUpgradeClicked,
   };
 };

@@ -271,7 +271,9 @@ export const Login: Component<LoginProps> = (props) => {
               oidcLoading,
               oidcError,
               oidcMessage,
-              demoModeEnabled: authStatus()?.sessionCapabilities?.demoMode === true,
+              demoModeEnabled:
+                authStatus()?.presentationPolicy?.demoMode === true ||
+                authStatus()?.sessionCapabilities?.demoMode === true,
               showLocalLogin: shouldShowLocalLogin(),
               ssoProviders: ssoProviders(),
             }}

@@ -12,7 +12,7 @@ import {
 import { aiChatStore } from '@/stores/aiChat';
 import {
   hasFeature,
-  loadLicenseStatus,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
   commercialPosture,
@@ -830,7 +830,7 @@ export const useAISettingsState = () => {
   };
 
   onMount(() => {
-    loadLicenseStatus();
+    loadRuntimeCapabilities();
     loadCommercialPosture();
 
     if (typeof window !== 'undefined') {

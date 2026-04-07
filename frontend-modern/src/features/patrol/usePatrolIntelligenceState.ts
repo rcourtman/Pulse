@@ -24,7 +24,7 @@ import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
 import {
   hasFeature,
-  loadLicenseStatus,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
 import {
   commercialPosture,
@@ -171,15 +171,15 @@ export function usePatrolIntelligenceState() {
   const autoFixLocked = createMemo(() => !hasFeature('ai_autofix'));
 
   const canStartTrial = createMemo(() => {
-    const entitlements = commercialPosture();
-    if (!entitlements) return false;
+    const posture = commercialPosture();
+    if (!posture) return false;
     if (
-      entitlements.subscription_state === 'active' ||
-      entitlements.subscription_state === 'trial'
+      posture.subscription_state === 'active' ||
+      posture.subscription_state === 'trial'
     ) {
       return false;
     }
-    return entitlements.trial_eligible !== false;
+    return posture.trial_eligible !== false;
   });
 
   async function handleStartTrial() {
@@ -672,7 +672,7 @@ export function usePatrolIntelligenceState() {
 
   onMount(async () => {
     await Promise.all([
-      loadLicenseStatus(),
+      loadRuntimeCapabilities(),
       loadCommercialPosture(),
       loadAllData(),
       loadAutonomySettings(),

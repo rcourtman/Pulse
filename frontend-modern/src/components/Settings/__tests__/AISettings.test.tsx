@@ -71,7 +71,7 @@ vi.mock('@/utils/logger', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -79,7 +79,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
   entitlements: (...args: unknown[]) => entitlementsMock(...args),
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
 }));
 
 vi.mock('@/utils/trialStartAction', () => ({

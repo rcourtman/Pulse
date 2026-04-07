@@ -52,7 +52,7 @@ describe('HistoryTab', () => {
     render(() => (
       <HistoryTab
         hasAIAlertsFeature={() => true}
-        licenseLoading={() => false}
+        runtimeCapabilitiesLoading={() => false}
         getResource={() => undefined}
         allResources={() => []}
       />

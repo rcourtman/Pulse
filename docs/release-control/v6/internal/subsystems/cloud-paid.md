@@ -163,15 +163,17 @@ monitored-system ledgers, upgrade nudges, or activation controls just because
 the underlying runtime is commercially enabled.
 `internal/api/router_routes_auth_security.go`,
 `internal/api/security_status_capabilities.go`,
-`frontend-modern/src/useAppRuntimeState.ts`, and the shared session-capability
-stores must treat `/api/security/status.sessionCapabilities.demoMode` as the
-canonical browser bootstrap signal, and shared billing or upgrade surfaces
-must hide or suppress themselves from that contract rather than teaching mock
-mode, response-header inference, or frontend-only feature flags to bypass the
-real licensing model. That includes settings billing tabs, public-demo banner
-and monitored-system/trial nudges, dashboard relay paywalls, Patrol upgrade
-CTAs, and history-lock upsells. Demo readiness therefore means presentation
-isolation, not a license exemption.
+`frontend-modern/src/useAppRuntimeState.ts`, and
+`frontend-modern/src/stores/sessionPresentationPolicy.ts` must treat
+`/api/security/status` as the canonical browser bootstrap contract. The
+backend capability fact `sessionCapabilities.demoMode` still seeds that
+contract, but shared billing and upgrade surfaces now hide or suppress
+themselves from the resolved `presentationPolicy` payload instead of teaching
+mock mode, response-header inference, or frontend-only feature flags to
+bypass the real licensing model. That includes settings billing tabs,
+public-demo banner and monitored-system/trial nudges, dashboard relay
+paywalls, Patrol upgrade CTAs, and history-lock upsells. Demo readiness
+therefore means presentation isolation, not a license exemption.
 That same public-demo boundary now also owns route-level commercial
 classification. `internal/api/demo_middleware.go` and
 `internal/api/demo_mode_commercial.go` must decide centrally which commercial
@@ -185,7 +187,8 @@ commercial routes, plus `/auth/license-purchase-start`, must stay hidden and
 public browsers must not see licensed identity, plan labels, upgrade reasons,
 trial urgency, observed usage counts, or checkout handoff state. The
 commercial posture store and billing-entitlements store must also fail closed
-locally in demo mode so hidden routes are not probed from the browser shell.
+locally until the shared presentation policy resolves, then stay fail-closed
+in demo mode so hidden routes are not probed from the browser shell.
 The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through

@@ -3,8 +3,8 @@ import { useNavigate } from '@solidjs/router';
 import { RelayAPI, type RelayStatus } from '@/api/relay';
 import {
   hasFeature,
-  licenseLoaded,
-  loadLicenseStatus,
+  runtimeCapabilitiesLoaded,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
 import { logger } from '@/utils/logger';
 import { isUpsellSnoozed, snoozeUpsell } from '@/utils/snooze';
@@ -18,7 +18,7 @@ const RELAY_SETTINGS_PATH = '/settings/system-relay';
 export function useRelayOnboardingCardState() {
   const navigate = useNavigate();
   const [dismissed, setDismissed] = createSignal(isUpsellSnoozed(SNOOZE_KEY));
-  const [licenseReady, setLicenseReady] = createSignal<boolean>(licenseLoaded());
+  const [licenseReady, setLicenseReady] = createSignal<boolean>(runtimeCapabilitiesLoaded());
   const [status, setStatus] = createSignal<RelayStatus | null>(null);
   const [statusLoaded, setStatusLoaded] = createSignal(false);
   const [statusLoading, setStatusLoading] = createSignal(false);
@@ -63,7 +63,7 @@ export function useRelayOnboardingCardState() {
 
   onMount(async () => {
     try {
-      await loadLicenseStatus();
+      await loadRuntimeCapabilities();
     } finally {
       setLicenseReady(true);
     }
@@ -115,7 +115,7 @@ export function useRelayOnboardingCardState() {
         showError,
       });
       if (outcome === 'activated') {
-        await loadLicenseStatus(true);
+        await loadRuntimeCapabilities(true);
         setStatusLoaded(false);
         void loadRelayStatusOnce();
       }

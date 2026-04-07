@@ -4,9 +4,9 @@ import type { JSX } from 'solid-js';
 
 import {
   hasFeature,
-  licenseLoaded,
-  licenseLoading as entitlementsLoading,
-  loadLicenseStatus,
+  runtimeCapabilitiesLoaded,
+  runtimeCapabilitiesLoading as entitlementsLoading,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { logger } from '@/utils/logger';
@@ -167,12 +167,12 @@ export function Alerts() {
     localStorage.getItem('hideAlertsQuickTip') !== 'true',
   );
 
-  const licenseLoading = createMemo(() => !licenseLoaded() || entitlementsLoading());
-  const hasAIAlertsFeature = createMemo(() => !licenseLoaded() || hasFeature('ai_alerts'));
+  const runtimeCapabilitiesLoading = createMemo(() => !runtimeCapabilitiesLoaded() || entitlementsLoading());
+  const hasAIAlertsFeature = createMemo(() => !runtimeCapabilitiesLoaded() || hasFeature('ai_alerts'));
 
   createEffect((wasPaywallVisible) => {
     const isPaywallVisible =
-      licenseLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
+      runtimeCapabilitiesLoaded() && aiChatStore.enabled === true && !hasFeature('ai_alerts');
     if (isPaywallVisible && !wasPaywallVisible) {
       trackPaywallViewed('ai_alerts', 'alerts_page');
     }
@@ -180,7 +180,7 @@ export function Alerts() {
   }, false);
 
   onMount(() => {
-    void loadLicenseStatus();
+    void loadRuntimeCapabilities();
   });
 
   const dismissQuickTip = () => {
@@ -421,7 +421,7 @@ export function Alerts() {
                   setShowAcknowledged={setShowAcknowledged}
                   alertsDisabled={areAlertsDisabled}
                   hasAIAlertsFeature={hasAIAlertsFeature}
-                  licenseLoading={licenseLoading}
+                  runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
                 />
               </Show>
 
@@ -442,7 +442,7 @@ export function Alerts() {
               <Show when={activeTab() === 'history'}>
                 <HistoryTab
                   hasAIAlertsFeature={hasAIAlertsFeature}
-                  licenseLoading={licenseLoading}
+                  runtimeCapabilitiesLoading={runtimeCapabilitiesLoading}
                   getResource={getResource}
                   allResources={allResources}
                 />

@@ -4,14 +4,14 @@ import { showSuccess, showWarning } from '@/utils/toast';
 import type { SelectedResource } from '@/components/Settings/ResourcePicker';
 import {
   hasFeature,
-  licenseLoaded,
+  runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import {
   getReportingCatalogErrorMessage,
@@ -55,12 +55,12 @@ export const useReportingPanelState = () => {
   const reportingFeatureId = () => reportingCatalog()?.id ?? '';
 
   const isLocked = () =>
-    licenseLoaded() &&
+    runtimeCapabilitiesLoaded() &&
     reportingFeatureId() !== '' &&
     !hasFeature(reportingFeatureId());
   const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
   const isReportingEnabled = () =>
-    licenseLoaded() &&
+    runtimeCapabilitiesLoaded() &&
     reportingFeatureId() !== '' &&
     hasFeature(reportingFeatureId());
   const upgradeDestination = () =>
@@ -69,7 +69,7 @@ export const useReportingPanelState = () => {
       : getUpgradeActionDestination(reportingFeatureId());
 
   onMount(() => {
-    loadLicenseStatus();
+    loadRuntimeCapabilities();
     loadCommercialPosture();
   });
 

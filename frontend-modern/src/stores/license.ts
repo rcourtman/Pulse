@@ -19,7 +19,7 @@ const [loadError, setLoadError] = createSignal<Error | null>(null);
 /**
  * Load the canonical runtime capability payload from the server.
  */
-export async function loadLicenseStatus(force = false): Promise<void> {
+export async function loadRuntimeCapabilities(force = false): Promise<void> {
   if (loaded() && !force) return;
 
   setLoading(true);
@@ -60,7 +60,7 @@ export function isHostedModeEnabled(): boolean {
   return Boolean(runtimeCapabilities()?.hosted_mode);
 }
 
-export function getLimit(key: string) {
+export function getRuntimeLimit(key: string) {
   const current = runtimeCapabilities();
   if (!current?.limits?.length) return undefined;
   return current.limits.find((limit) => limit.key === key);
@@ -95,12 +95,12 @@ eventBus.on('org_switched', () => {
   setRuntimeCapabilities(null);
   setLoaded(false);
   setLoadError(null);
-  void loadLicenseStatus(true);
+  void loadRuntimeCapabilities(true);
 });
 
 export {
   runtimeCapabilities,
-  loading as licenseLoading,
-  loaded as licenseLoaded,
-  loadError as licenseLoadError,
+  loading as runtimeCapabilitiesLoading,
+  loaded as runtimeCapabilitiesLoaded,
+  loadError as runtimeCapabilitiesLoadError,
 };

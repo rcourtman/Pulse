@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/shared/PageHeader';
 import { UpgradeLink } from '@/components/shared/UpgradeLink';
 import { Toggle, TogglePrimitive } from '@/components/shared/Toggle';
 import { CountdownTimer } from '@/components/patrol';
-import { demoModeEnabled } from '@/stores/demoMode';
+import { presentationPolicyHidesUpgradePrompts } from '@/stores/sessionPresentationPolicy';
 import { formatRelativeTime } from '@/utils/format';
 import { groupModelsByProvider } from '@/utils/patrolFormat';
 import {
@@ -269,7 +269,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                             onClick={() => state.handleAutonomyChange(level)}
                             disabled={isDisabled()}
                             title={
-                              !demoModeEnabled() && isProLocked()
+                              !presentationPolicyHidesUpgradePrompts() && isProLocked()
                                 ? level === 'approval'
                                   ? 'Upgrade to Pro to investigate findings'
                                   : 'Upgrade to Pro for automatic fixes'
@@ -287,7 +287,7 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                       }}
                     </For>
                   </div>
-                  <Show when={!demoModeEnabled() && state.autoFixLocked()}>
+                  <Show when={!presentationPolicyHidesUpgradePrompts() && state.autoFixLocked()}>
                     <div class="pl-1 text-[11px] text-slate-500">
                       <UpgradeLink
                         destination={state.upgradeDestination()}
@@ -330,7 +330,9 @@ export function PatrolIntelligenceHeader(props: { state: PatrolIntelligenceState
                     />
                   </div>
 
-                  <Show when={!demoModeEnabled() && state.alertAnalysisLocked()}>
+                  <Show
+                    when={!presentationPolicyHidesUpgradePrompts() && state.alertAnalysisLocked()}
+                  >
                     <div class="-my-1 pl-1 text-[11px]">
                       <UpgradeLink
                         destination={state.alertAnalysisUpgradeDestination()}

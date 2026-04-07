@@ -1,9 +1,12 @@
 import { Accessor, createEffect, createMemo, createSignal } from 'solid-js';
-import { syncDemoModeFromSecurityStatus } from '@/stores/demoMode';
-import { sessionCapabilities, sessionCapabilitiesResolved } from '@/stores/sessionCapabilities';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+  syncSessionPresentationPolicy,
+} from '@/stores/sessionPresentationPolicy';
 import type { SecurityStatus } from '@/types/config';
 import { logger } from '@/utils/logger';
-import { hasFeature, isHostedModeEnabled, licenseLoaded } from '@/stores/license';
+import { hasFeature, isHostedModeEnabled, runtimeCapabilitiesLoaded } from '@/stores/license';
 import { DEFAULT_SETTINGS_TAB, type SettingsTab } from './settingsNavigationModel';
 import { tabFeatureRequirements } from './settingsFeatureGates';
 import { SETTINGS_HEADER_META } from './settingsHeaderMeta';
@@ -23,15 +26,18 @@ export function useSettingsAccess({
 }: UseSettingsAccessParams) {
   const [securityStatus, setSecurityStatus] = createSignal<SecurityStatus | null>(null);
   const [securityStatusLoading, setSecurityStatusLoading] = createSignal(true);
-  const demoModeEnabled = createMemo(() => {
+  const commercialSurfacesHidden = createMemo(() => {
     const resolvedSecurityStatus = securityStatus();
     if (resolvedSecurityStatus) {
-      return resolvedSecurityStatus.sessionCapabilities?.demoMode === true;
+      return (
+        resolvedSecurityStatus.presentationPolicy?.hideCommercial === true ||
+        resolvedSecurityStatus.sessionCapabilities?.demoMode === true
+      );
     }
-    return sessionCapabilities().demoMode;
+    return presentationPolicyHidesCommercialSurfaces();
   });
-  const demoModeResolved = createMemo(
-    () => securityStatus() !== null || sessionCapabilitiesResolved(),
+  const presentationPolicyResolved = createMemo(
+    () => securityStatus() !== null || sessionPresentationPolicyResolved(),
   );
 
   const visibleTabGroups = createMemo(() => {
@@ -46,9 +52,9 @@ export function useSettingsAccess({
           (item) =>
             !shouldHideSettingsNavItem(item.id, {
               hasFeature,
-              licenseLoaded,
-              demoModeEnabled: demoModeEnabled(),
-              demoModeResolved: demoModeResolved(),
+              runtimeCapabilitiesLoaded,
+              presentationPolicyHidesCommercial: commercialSurfacesHidden(),
+              presentationPolicyResolved: presentationPolicyResolved(),
               hostedModeEnabled,
               settingsCapabilities,
               settingsCapabilitiesResolved,
@@ -84,11 +90,13 @@ export function useSettingsAccess({
     const current = activeTab();
     const requiresFeatureResolution = Boolean(tabFeatureRequirements[current]?.length);
     const requiresCapabilityResolution = Boolean(getSettingsNavItem(current)?.requiredCapability);
-    const requiresDemoModeResolution = Boolean(getSettingsNavItem(current)?.hideInDemoMode);
+    const requiresPresentationPolicyResolution = Boolean(
+      getSettingsNavItem(current)?.hideWhenCommercialHidden,
+    );
     if (
-      (requiresFeatureResolution && !licenseLoaded()) ||
+      (requiresFeatureResolution && !runtimeCapabilitiesLoaded()) ||
       (requiresCapabilityResolution && securityStatusLoading()) ||
-      (requiresDemoModeResolution && !demoModeResolved())
+      (requiresPresentationPolicyResolution && !presentationPolicyResolved())
     ) {
       return;
     }
@@ -106,7 +114,7 @@ export function useSettingsAccess({
       if (response.ok) {
         const status = (await response.json()) as SecurityStatus;
         logger.debug('Security status loaded', status);
-        syncDemoModeFromSecurityStatus(status);
+        syncSessionPresentationPolicy(status);
         setSecurityStatus(status);
       } else {
         logger.error('Failed to fetch security status', { status: response.status });

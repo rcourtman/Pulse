@@ -1,13 +1,13 @@
 import { Accessor, createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import {
   hasFeature,
-  licenseLoaded,
+  runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
   commercialPosture,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { notificationStore } from '@/stores/notifications';
 import { getRBACFeatureGateCopy, type RBACFeatureGateCopy } from '@/utils/rbacPresentation';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
@@ -30,7 +30,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
   const featureGateCopy = createMemo<RBACFeatureGateCopy>(() =>
     getRBACFeatureGateCopy(options.kind),
   );
-  const licenseReady = createMemo(() => licenseLoaded());
+  const licenseReady = createMemo(() => runtimeCapabilitiesLoaded());
   const canStartTrial = createMemo(() => commercialPosture()?.trial_eligible !== false);
   const rbacEnabled = createMemo(() => licenseReady() && hasFeature('rbac'));
   const paywallVisible = createMemo(
@@ -38,7 +38,7 @@ export function useRBACFeatureGateState(options: UseRBACFeatureGateStateOptions)
   );
 
   onMount(() => {
-    void loadLicenseStatus();
+    void loadRuntimeCapabilities();
     void loadCommercialPosture();
   });
 

@@ -9,14 +9,14 @@ import { apiFetch } from '@/utils/apiClient';
 import { showSuccess, showToast, showWarning } from '@/utils/toast';
 import {
   hasFeature,
-  licenseLoaded,
+  runtimeCapabilitiesLoaded,
 } from '@/stores/license';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import { trackPaywallViewed, trackUpgradeClicked } from '@/utils/upgradeMetrics';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 
@@ -116,9 +116,9 @@ export const useAuditLogPanelState = () => {
   );
   const [startingTrial, setStartingTrial] = createSignal(false);
 
-  const auditLoggingEnabled = createMemo(() => licenseLoaded() && hasFeature('audit_logging'));
+  const auditLoggingEnabled = createMemo(() => runtimeCapabilitiesLoaded() && hasFeature('audit_logging'));
   const showUpgradePaywall = createMemo(
-    () => licenseLoaded() && !auditLoggingEnabled() && !loading(),
+    () => runtimeCapabilitiesLoaded() && !auditLoggingEnabled() && !loading(),
   );
   const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
   const upgradeDestination = createMemo(() => getUpgradeActionDestination('audit_logging'));
@@ -544,12 +544,12 @@ export const useAuditLogPanelState = () => {
 
   onMount(() => {
     setIsMounted(true);
-    void loadLicenseStatus();
+    void loadRuntimeCapabilities();
     void loadCommercialPosture();
   });
 
   createEffect(() => {
-    if (!licenseLoaded()) {
+    if (!runtimeCapabilitiesLoaded()) {
       setLoading(true);
       return;
     }

@@ -319,9 +319,11 @@ instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
 demo readiness therefore comes from hiding commercial presentation on the
 shared API boundary, not from introducing a second fake-entitlement path into
 lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces
-must also treat `/api/security/status.sessionCapabilities.demoMode` as the
-canonical public-demo bootstrap signal instead of inferring demo posture from
-headers, `/api/health`, or hostname heuristics.
+must also treat `/api/security/status` as the canonical public-demo bootstrap
+contract. The backend source-of-truth fact remains
+`sessionCapabilities.demoMode`, but lifecycle surfaces must consume the shared
+resolved `presentationPolicy` instead of inferring demo posture from headers,
+`/api/health`, or hostname heuristics.
 That same shared API boundary now owns the hidden-versus-runtime-only split as
 well: lifecycle-adjacent flows may inherit non-commercial
 `/api/license/runtime-capabilities` reads when demo-visible product behavior
@@ -330,6 +332,10 @@ needs them, but `/api/license/commercial-posture`,
 public demo mode and those lifecycle flows must not depend on licensed
 identity, plan labels, upgrade reasons, checkout handoff state, or observed
 usage counts surviving the public-demo contract.
+Lifecycle-owned browser shells must also defer any commercial helper reads
+until that presentation policy resolves so demo suppression stays fail-closed
+during first render instead of racing hidden commercial endpoints from shared
+setup or install surfaces.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered
 through shared drawers or lifecycle-adjacent resource context, those reads

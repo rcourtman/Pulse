@@ -12,15 +12,15 @@ import { useResources } from '@/hooks/useResources';
 import { notificationStore } from '@/stores/notifications';
 import {
   hasFeature as hasEntitlement,
-  licenseLoaded,
-  licenseLoading,
+  runtimeCapabilitiesLoaded,
+  runtimeCapabilitiesLoading,
 } from '@/stores/license';
 import {
   commercialPosture,
   getUpgradeActionDestination,
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
-import { loadLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
@@ -75,7 +75,7 @@ export const useAgentProfilesPanelState = () => {
   const { resources } = useResources();
   const { state } = useWebSocket();
 
-  const checkingLicense = () => !licenseLoaded() || licenseLoading();
+  const checkingLicense = () => !runtimeCapabilitiesLoaded() || runtimeCapabilitiesLoading();
   const hasAgentProfiles = () => hasEntitlement('agent_profiles');
   const [startingTrial, setStartingTrial] = createSignal(false);
   const canStartTrial = () => commercialPosture()?.trial_eligible !== false;
@@ -237,7 +237,7 @@ export const useAgentProfilesPanelState = () => {
   }, false);
 
   onMount(async () => {
-    await loadLicenseStatus();
+    await loadRuntimeCapabilities();
     await loadCommercialPosture();
 
     try {

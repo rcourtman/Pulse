@@ -199,8 +199,8 @@ describe('useAppRuntimeState', () => {
     vi.doMock('@/stores/license', () => ({
       isHostedModeEnabled: isHostedModeEnabledMock,
       isMultiTenantEnabled: isMultiTenantEnabledMock,
-      licenseLoaded: vi.fn().mockReturnValue(true),
-      loadLicenseStatus: loadLicenseStatusMock,
+      runtimeCapabilitiesLoaded: vi.fn().mockReturnValue(true),
+      loadRuntimeCapabilities: loadLicenseStatusMock,
     }));
 
     vi.doMock('@/utils/layout', () => ({

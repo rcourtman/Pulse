@@ -1,8 +1,11 @@
 import { createSignal } from 'solid-js';
 import { LicenseAPI, type LicenseCommercialEntitlements } from '@/api/license';
-import { demoModeEnabled } from '@/stores/demoMode';
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 
 const FREE_LICENSE_ENTITLEMENTS_FALLBACK: LicenseCommercialEntitlements = {
   capabilities: ['update_alerts', 'sso', 'ai_patrol'],
@@ -30,12 +33,21 @@ const [loadError, setLoadError] = createSignal<Error | null>(null);
  * Load the full commercial entitlement payload used only by billing/identity surfaces.
  */
 export async function loadLicenseEntitlements(force = false): Promise<void> {
-  if (demoModeEnabled()) {
+  if (!sessionPresentationPolicyResolved()) {
+    logger.debug(
+      '[licenseEntitlementsStore] Full entitlements deferred until presentation policy resolves',
+    );
+    return;
+  }
+
+  if (presentationPolicyHidesCommercialSurfaces()) {
     setLicenseEntitlementsState(FREE_LICENSE_ENTITLEMENTS_FALLBACK);
     setLoadError(null);
     setLoaded(true);
     setLoading(false);
-    logger.debug('[licenseEntitlementsStore] Full entitlements suppressed in demo mode');
+    logger.debug(
+      '[licenseEntitlementsStore] Full entitlements suppressed by presentation policy',
+    );
     return;
   }
 

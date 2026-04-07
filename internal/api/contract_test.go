@@ -6087,6 +6087,40 @@ func TestContract_SecurityStatusIncludesSessionCapabilitiesDemoMode(t *testing.T
 	}
 }
 
+func TestContract_SecurityStatusPresentationPolicyDefaultsClosedOutsideDemo(t *testing.T) {
+	cfg := newTestConfigWithTokens(t)
+	cfg.DemoMode = false
+
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("security status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode security status payload: %v", err)
+	}
+
+	presentationPolicy, ok := payload["presentationPolicy"].(map[string]any)
+	if !ok {
+		t.Fatalf("presentationPolicy = %#v, want object", payload["presentationPolicy"])
+	}
+	for key, want := range map[string]bool{
+		"demoMode":       false,
+		"readOnly":       false,
+		"hideCommercial": false,
+		"hideUpgrade":    false,
+	} {
+		if got, _ := presentationPolicy[key].(bool); got != want {
+			t.Fatalf("presentationPolicy.%s = %v, want %v", key, presentationPolicy[key], want)
+		}
+	}
+}
+
 func TestContract_SetupScriptURLRejectsNonCanonicalRequestJSON(t *testing.T) {
 	handler := newTestConfigHandlers(t, &config.Config{DataPath: t.TempDir()})
 

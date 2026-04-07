@@ -131,7 +131,7 @@ vi.mock('@/utils/apiClient', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: (...args: unknown[]) => hasFeatureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -139,7 +139,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
   commercialPosture: (...args: unknown[]) => licenseStatusMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
   loadCommercialPosture: (...args: unknown[]) => loadCommercialPostureMock(...args),
-  loadLicenseStatus: (...args: unknown[]) => loadLicenseStatusMock(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => loadLicenseStatusMock(...args),
   startProTrial: (...args: unknown[]) => startProTrialMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
 }));

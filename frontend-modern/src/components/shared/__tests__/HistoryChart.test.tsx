@@ -37,19 +37,19 @@ HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
 
 vi.mock('@/stores/license', () => ({
   isRangeLocked: () => false,
-  loadLicenseStatus: vi.fn(),
+  loadRuntimeCapabilities: vi.fn(),
   maxHistoryDays: () => 30,
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: () => ({ href: 'https://example.com/upgrade', external: true }),
-  licenseStatus: () => ({ subscription_state: 'active' }),
-  loadLicenseStatus: vi.fn(),
+  commercialPosture: () => ({ subscription_state: 'active' }),
+  loadCommercialPosture: vi.fn(),
   startProTrial: vi.fn(),
 }));
 
-vi.mock('@/stores/demoMode', () => ({
-  demoModeEnabled: () => false,
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesUpgradePrompts: () => false,
 }));
 
 vi.mock('@/api/charts', () => ({
@@ -94,7 +94,7 @@ describe('HistoryChart', () => {
 
     expect(historyChartOverlaySource).toContain('Collecting data... History will appear here.');
     expect(historyChartOverlaySource).toContain('Unlock {props.chart.lockTierLabel()} Features');
-    expect(historyChartOverlaySource).toContain('demoModeEnabled');
+    expect(historyChartOverlaySource).toContain('presentationPolicyHidesUpgradePrompts');
     expect(historyChartOverlaySource).toContain('Historical data beyond {props.chart.lockDays()} days is hidden in this demo.');
     expect(historyChartOverlaySource).not.toContain('ChartsAPI.getMetricsHistory');
     expect(historyChartOverlaySource).not.toContain('setupCanvasDPR');

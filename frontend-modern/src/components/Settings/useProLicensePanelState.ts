@@ -5,7 +5,7 @@ import {
   loadCommercialPosture,
 } from '@/stores/licenseCommercial';
 import { isMultiTenantEnabled } from '@/stores/license';
-import { loadLicenseStatus as loadRuntimeLicenseStatus } from '@/stores/license';
+import { loadRuntimeCapabilities } from '@/stores/license';
 import {
   licenseEntitlements,
   licenseEntitlementsLoadError,
@@ -273,7 +273,7 @@ export function useProLicensePanelState() {
       await Promise.all([
         loadPanelData(),
         loadCommercialPosture(true),
-        loadRuntimeLicenseStatus(true),
+        loadRuntimeCapabilities(true),
       ]);
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to activate license');
@@ -293,7 +293,7 @@ export function useProLicensePanelState() {
       await Promise.all([
         loadPanelData(),
         loadCommercialPosture(true),
-        loadRuntimeLicenseStatus(true),
+        loadRuntimeCapabilities(true),
       ]);
     } catch (error) {
       notificationStore.error(error instanceof Error ? error.message : 'Failed to clear license');

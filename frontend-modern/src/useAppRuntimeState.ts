@@ -49,10 +49,10 @@ import { syncKioskMode } from '@/hooks/useKioskMode';
 import {
   isHostedModeEnabled,
   isMultiTenantEnabled,
-  licenseLoaded,
-  loadLicenseStatus,
+  runtimeCapabilitiesLoaded,
+  loadRuntimeCapabilities,
 } from '@/stores/license';
-import { syncDemoModeFromSecurityStatus } from '@/stores/demoMode';
+import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { layoutStore } from '@/utils/layout';
 import {
   markSystemSettingsLoadedWithDefaults,
@@ -297,8 +297,8 @@ export const useAppRuntimeState = () => {
   const loadOrganizations = async () => {
     setOrgsLoading(true);
     try {
-      if (!licenseLoaded()) {
-        await loadLicenseStatus();
+      if (!runtimeCapabilitiesLoaded()) {
+        await loadRuntimeCapabilities();
       }
 
       if (!isMultiTenantEnabled()) {
@@ -580,7 +580,7 @@ export const useAppRuntimeState = () => {
         logger.debug('[App] User logged out, showing login page');
         if (securityResponse.ok) {
           const securityData = (await securityResponse.json()) as SecurityStatus;
-          syncDemoModeFromSecurityStatus(securityData);
+          syncSessionPresentationPolicy(securityData);
           setSecurityStatus(securityData);
         }
         setHasAuth(true);
@@ -603,7 +603,7 @@ export const useAppRuntimeState = () => {
         ssoLogoutURL?: string;
       };
       logger.debug('[App] Security status fetched', securityData);
-      syncDemoModeFromSecurityStatus(securityData);
+      syncSessionPresentationPolicy(securityData);
       setSecurityStatus(securityData);
 
       const authConfigured = securityData.hasAuthentication || false;

@@ -32,13 +32,13 @@ const mockTrackUpgradeMetricEvent = vi.hoisted(() => vi.fn());
 const mockTrackUpgradeClicked = vi.hoisted(() => vi.fn());
 const mockLoadRuntimeLicenseStatus = vi.hoisted(() => vi.fn());
 const mockLoadCommercialPosture = vi.hoisted(() => vi.fn());
-const mockDemoModeEnabled = vi.hoisted(() => vi.fn(() => false));
+const mockPresentationPolicyHidesCommercialSurfaces = vi.hoisted(() => vi.fn(() => false));
 const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/license', () => ({
-  getLimit: (...args: unknown[]) => mockGetLimit(...args),
-  loadLicenseStatus: (...args: unknown[]) => mockLoadRuntimeLicenseStatus(...args),
+  getRuntimeLimit: (...args: unknown[]) => mockGetLimit(...args),
+  loadRuntimeCapabilities: (...args: unknown[]) => mockLoadRuntimeLicenseStatus(...args),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -50,8 +50,9 @@ vi.mock('@/stores/licenseCommercial', () => ({
   loadCommercialPosture: (...args: unknown[]) => mockLoadCommercialPosture(...args),
 }));
 
-vi.mock('@/stores/demoMode', () => ({
-  demoModeEnabled: () => mockDemoModeEnabled(),
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () =>
+    mockPresentationPolicyHidesCommercialSurfaces(),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -73,8 +74,8 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       docker_hosts: 0,
       kubernetes_clusters: 0,
     });
-    mockDemoModeEnabled.mockReset();
-    mockDemoModeEnabled.mockReturnValue(false);
+    mockPresentationPolicyHidesCommercialSurfaces.mockReset();
+    mockPresentationPolicyHidesCommercialSurfaces.mockReturnValue(false);
     mockLoadRuntimeLicenseStatus.mockReset();
     mockLoadRuntimeLicenseStatus.mockResolvedValue(undefined);
     mockLoadCommercialPosture.mockReset();
@@ -104,7 +105,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     );
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerSource).not.toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerSource).not.toContain('legacyConnections()');
 
@@ -113,9 +114,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createEffect');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('createMemo');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadLicenseStatus');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadRuntimeCapabilities');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('loadCommercialPosture');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'presentationPolicyHidesCommercialSurfaces',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('scopeSelfHostedBillingDestination');
@@ -235,7 +238,7 @@ describe('MonitoredSystemLimitWarningBanner', () => {
   });
 
   it('stays hidden in demo mode even when usage is urgent', async () => {
-    mockDemoModeEnabled.mockReturnValue(true);
+    mockPresentationPolicyHidesCommercialSurfaces.mockReturnValue(true);
     mockGetLimit.mockReturnValue({
       key: 'max_monitored_systems',
       limit: 6,

@@ -5,10 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 /*  Mocks                                                              */
 /* ------------------------------------------------------------------ */
 
-const demoModeEnabledMock = vi.hoisted(() => vi.fn());
+const presentationPolicyIsDemoModeMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@/stores/demoMode', () => ({
-  demoModeEnabled: () => demoModeEnabledMock(),
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyIsDemoMode: () => presentationPolicyIsDemoModeMock(),
 }));
 
 vi.mock('@/utils/logger', () => ({
@@ -21,8 +21,8 @@ vi.mock('@/utils/logger', () => ({
 
 describe('DemoBanner', () => {
   beforeEach(() => {
-    demoModeEnabledMock.mockReset();
-    demoModeEnabledMock.mockReturnValue(false);
+    presentationPolicyIsDemoModeMock.mockReset();
+    presentationPolicyIsDemoModeMock.mockReturnValue(false);
     sessionStorage.clear();
   });
 
@@ -36,7 +36,7 @@ describe('DemoBanner', () => {
   /* ---------- Visibility ---------- */
 
   it('shows the banner when demo mode is enabled', async () => {
-    demoModeEnabledMock.mockReturnValue(true);
+    presentationPolicyIsDemoModeMock.mockReturnValue(true);
 
     await renderBanner();
 
@@ -52,7 +52,7 @@ describe('DemoBanner', () => {
   /* ---------- Dismiss ---------- */
 
   it('hides the banner when the dismiss button is clicked', async () => {
-    demoModeEnabledMock.mockReturnValue(true);
+    presentationPolicyIsDemoModeMock.mockReturnValue(true);
 
     await renderBanner();
 
@@ -69,7 +69,7 @@ describe('DemoBanner', () => {
   });
 
   it('persists dismissal to sessionStorage', async () => {
-    demoModeEnabledMock.mockReturnValue(true);
+    presentationPolicyIsDemoModeMock.mockReturnValue(true);
 
     await renderBanner();
 
@@ -82,7 +82,7 @@ describe('DemoBanner', () => {
 
   it('stays hidden when sessionStorage already has dismissal flag', async () => {
     sessionStorage.setItem('demoBannerDismissed', 'true');
-    demoModeEnabledMock.mockReturnValue(true);
+    presentationPolicyIsDemoModeMock.mockReturnValue(true);
 
     await renderBanner();
 

@@ -33,9 +33,9 @@ vi.mock('@/contexts/appRuntime', () => ({
 
 vi.mock('@/stores/license', () => ({
   hasFeature: () => true,
-  licenseLoaded: () => true,
-  loadLicenseStatus: () => Promise.resolve(),
-  licenseLoading: () => false,
+  runtimeCapabilitiesLoaded: () => true,
+  loadRuntimeCapabilities: () => Promise.resolve(),
+  runtimeCapabilitiesLoading: () => false,
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
@@ -44,7 +44,7 @@ vi.mock('@/stores/licenseCommercial', () => ({
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   getUpgradeActionUrlOrFallback: (...args: unknown[]) => getUpgradeActionUrlOrFallbackMock(...args),
   loadCommercialPosture: () => Promise.resolve(),
-  loadLicenseStatus: () => Promise.resolve(),
+  loadRuntimeCapabilities: () => Promise.resolve(),
   startProTrial: vi.fn(),
 }));
 

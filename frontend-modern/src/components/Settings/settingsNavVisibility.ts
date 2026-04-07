@@ -5,9 +5,9 @@ import type { SettingsTab } from './settingsNavigationModel';
 
 export interface SettingsNavVisibilityContext {
   hasFeature: (feature: string) => boolean;
-  licenseLoaded: () => boolean;
-  demoModeEnabled?: boolean;
-  demoModeResolved?: boolean;
+  runtimeCapabilitiesLoaded: () => boolean;
+  presentationPolicyHidesCommercial?: boolean;
+  presentationPolicyResolved?: boolean;
   hostedModeEnabled?: boolean;
   settingsCapabilities?: Partial<SecurityStatusSettingsCapabilities> | null;
   settingsCapabilitiesResolved?: boolean;
@@ -32,12 +32,12 @@ export function shouldHideSettingsNavItem(
     return true;
   }
 
-  if (item.hideInDemoMode) {
-    if (context.demoModeResolved === false) {
+  if (item.hideWhenCommercialHidden) {
+    if (context.presentationPolicyResolved === false) {
       return true;
     }
 
-    if (context.demoModeEnabled) {
+    if (context.presentationPolicyHidesCommercial) {
       return true;
     }
   }
@@ -66,5 +66,5 @@ export function isSettingsNavItemLocked(
     return false;
   }
 
-  return isTabLocked(tab, context.hasFeature, context.licenseLoaded);
+  return isTabLocked(tab, context.hasFeature, context.runtimeCapabilitiesLoaded);
 }

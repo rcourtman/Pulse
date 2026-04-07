@@ -401,6 +401,7 @@ func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
 
 	var payload struct {
 		SessionCapabilities securityStatusSessionCapabilities `json:"sessionCapabilities"`
+		PresentationPolicy  securityStatusPresentationPolicy  `json:"presentationPolicy"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode response: %v", err)
@@ -408,5 +409,11 @@ func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
 
 	if !payload.SessionCapabilities.DemoMode {
 		t.Fatalf("expected sessionCapabilities.demoMode to be true, got %#v", payload.SessionCapabilities)
+	}
+	if !payload.PresentationPolicy.DemoMode ||
+		!payload.PresentationPolicy.ReadOnly ||
+		!payload.PresentationPolicy.HideCommercial ||
+		!payload.PresentationPolicy.HideUpgrade {
+		t.Fatalf("expected demo presentation policy, got %#v", payload.PresentationPolicy)
 	}
 }

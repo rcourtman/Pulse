@@ -115,6 +115,12 @@ The security transport surfaces remain intentionally shared with
 `api-contracts`: token, auth, and telemetry settings payloads are still API
 contracts, but they now also count as first-class security/privacy runtime
 behavior that `L14` must govern directly.
+That shared settings/auth boundary now also inherits the runtime-versus-
+commercial licensing split. Security/privacy settings may consume runtime
+capability truth where feature availability matters, but billing identity,
+trial posture, and upgrade routing stay on the dedicated commercial boundary,
+and public-demo suppression must resolve from the shared `presentationPolicy`
+contract instead of security-surface entitlement reads or local demo flags.
 That shared token-management boundary now also includes
 `frontend-modern/src/utils/apiTokenPresentation.ts`, so API-token load,
 generate, and revoke errors stay on one governed customer-facing wording path
