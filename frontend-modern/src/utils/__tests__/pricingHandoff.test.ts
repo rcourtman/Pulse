@@ -4,6 +4,7 @@ import {
   getSelfHostedPurchaseReturnUrl,
   getSelfHostedBillingHref,
   getSelfHostedBillingPlanIntent,
+  getSelfHostedBillingPurchaseArrival,
   getSelfHostedBillingUsageDetail,
   getPulseAccountPortalUpgradeUrl,
   getPricingRouteDestination,
@@ -18,6 +19,7 @@ import {
   SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_ROUTE,
   SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
@@ -38,15 +40,13 @@ describe('pricingHandoff', () => {
   });
 
   it('routes self-hosted upgrades to Pulse Account first', () => {
-    expect(getUpgradeFallbackDestination('relay')).toBe(
-      getSelfHostedPurchaseStartUrl('relay'),
-    );
+    expect(getUpgradeFallbackDestination('relay')).toBe(getSelfHostedPurchaseStartUrl('relay'));
   });
 
   it('derives the canonical self-hosted purchase return URL from the app origin', () => {
-    expect(getSelfHostedPurchaseReturnUrl('https://pulse.example.com/settings/system/billing/plan')).toBe(
-      `https://pulse.example.com${SELF_HOSTED_PURCHASE_RETURN_PATH}`,
-    );
+    expect(
+      getSelfHostedPurchaseReturnUrl('https://pulse.example.com/settings/system/billing/plan'),
+    ).toBe(`https://pulse.example.com${SELF_HOSTED_PURCHASE_RETURN_PATH}`);
   });
 
   it('returns the canonical public pricing URL when no feature is provided', () => {
@@ -79,17 +79,16 @@ describe('pricingHandoff', () => {
     expect(
       getSelfHostedBillingHref('plan', {
         intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+        purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
       }),
-    ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF);
+    ).toBe(
+      `${SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF}&purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}`,
+    );
   });
 
   it('canonicalizes legacy self-hosted billing aliases to route-owned states', () => {
     expect(
-      resolveCanonicalSelfHostedBillingHref(
-        SELF_HOSTED_PRO_BILLING_ROUTE,
-        '',
-        '#pulse-pro-usage',
-      ),
+      resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE, '', '#pulse-pro-usage'),
     ).toBe(SELF_HOSTED_PRO_BILLING_USAGE_HREF);
     expect(resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE)).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
@@ -100,15 +99,16 @@ describe('pricingHandoff', () => {
     expect(resolveSelfHostedBillingSection(SELF_HOSTED_PRO_BILLING_USAGE_HREF)).toBe('usage');
     expect(resolveSelfHostedBillingSection(SELF_HOSTED_PRO_BILLING_PLAN_HREF)).toBe('plan');
     expect(
-      getSelfHostedBillingUsageDetail(
-        '?details=' + SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
-      ),
+      getSelfHostedBillingUsageDetail('?details=' + SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL),
     ).toBe(SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL);
     expect(
-      getSelfHostedBillingPlanIntent(
-        '?intent=' + SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
-      ),
+      getSelfHostedBillingPlanIntent('?intent=' + SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT),
     ).toBe(SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT);
+    expect(
+      getSelfHostedBillingPurchaseArrival(
+        '?purchase=' + SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
+      ),
+    ).toBe(SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED);
   });
 
   it('scopes in-product billing destinations to canonical routes and leaves external ones alone', () => {
@@ -154,9 +154,7 @@ describe('pricingHandoff', () => {
   });
 
   it('detects the internal self-hosted purchase start destination', () => {
-    expect(isSelfHostedPurchaseStartDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(
-      true,
-    );
+    expect(isSelfHostedPurchaseStartDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(true);
     expect(isSelfHostedPurchaseStartDestination(SELF_HOSTED_PURCHASE_START_PATH)).toBe(true);
     expect(isSelfHostedPurchaseStartDestination(getPulseAccountPortalUpgradeUrl('relay'))).toBe(
       false,
@@ -172,7 +170,8 @@ describe('pricingHandoff', () => {
     expect(withOrigin).toContain('feature=relay');
     expect(withOrigin).toContain('service=upgrade');
     expect(withOrigin).toContain(
-      'return_url=' + encodeURIComponent(`https://pulse.example.com${SELF_HOSTED_PURCHASE_RETURN_PATH}`),
+      'return_url=' +
+        encodeURIComponent(`https://pulse.example.com${SELF_HOSTED_PURCHASE_RETURN_PATH}`),
     );
   });
 });

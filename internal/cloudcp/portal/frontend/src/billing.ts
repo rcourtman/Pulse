@@ -41,7 +41,7 @@ import type {
   PortalBillingFlowID,
   PortalBillingState,
   PortalCheckoutSessionCreateResponse,
-  PortalUpgradeHandoffModel,
+  PortalUpgradeCheckoutIntentModel,
   PortalUpgradePricingModel,
   VerificationFlowState,
 } from './types';
@@ -88,10 +88,8 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       var nextState = createPortalBillingState();
       billingState.openBillingPanelID = nextState.openBillingPanelID;
       billingState.upgradeFeatureKey = nextState.upgradeFeatureKey;
-      billingState.upgradeHandoffURL = nextState.upgradeHandoffURL;
-      billingState.upgradeActivationURLTemplate = nextState.upgradeActivationURLTemplate;
-      billingState.upgradeHandoff = nextState.upgradeHandoff;
-      billingState.upgradeCheckoutStatus = nextState.upgradeCheckoutStatus;
+      billingState.upgradeCheckoutIntentID = nextState.upgradeCheckoutIntentID;
+      billingState.upgradeCheckoutIntent = nextState.upgradeCheckoutIntent;
       billingState.upgradePricing = nextState.upgradePricing;
       billingState.upgradeCheckout = nextState.upgradeCheckout;
       billingState.flows = nextState.flows;
@@ -168,31 +166,6 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     }
   }
 
-  function currentPortalBaseURL(): string {
-    try {
-      var locationURL = new URL(window.location.href);
-      var portalPath = String(store.getBootstrap().portal_path || '/portal').trim() || '/portal';
-      var portalURL = new URL(portalPath, locationURL.origin);
-      return portalURL.toString();
-    } catch {
-      return String(store.getBootstrap().portal_path || '/portal');
-    }
-  }
-
-  function buildUpgradeCheckoutCancelURL(): string {
-    var url = new URL(currentPortalBaseURL());
-    var billingState = getBillingState();
-    if (billingState.flows.manage.emailValue) {
-      url.searchParams.set('email', billingState.flows.manage.emailValue);
-    }
-    if (billingState.upgradeHandoffURL) {
-      url.searchParams.set('purchase_handoff_url', billingState.upgradeHandoffURL);
-    }
-    url.searchParams.set('service', 'upgrade');
-    url.searchParams.set('checkout', 'cancelled');
-    return url.toString();
-  }
-
   async function loadUpgradePricing(force: boolean) {
     var billingState = getBillingState();
     if (!force && (billingState.upgradePricing.status === 'loading' || billingState.upgradePricing.status === 'ready')) {
@@ -217,75 +190,62 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     }
   }
 
-  async function resolveUpgradeHandoff(force: boolean) {
+  async function resolveUpgradeCheckoutIntent(force: boolean) {
     var billingState = getBillingState();
-    var handoffURL = String(billingState.upgradeHandoffURL || '').trim();
-    if (!handoffURL) return;
-    if (!force && (billingState.upgradeHandoff.status === 'loading' || billingState.upgradeHandoff.status === 'ready')) {
+    var checkoutIntentID = String(billingState.upgradeCheckoutIntentID || '').trim();
+    if (!checkoutIntentID) return;
+    if (!force && (billingState.upgradeCheckoutIntent.status === 'loading' || billingState.upgradeCheckoutIntent.status === 'ready')) {
       return;
     }
     updateBillingState(function(nextBillingState) {
-      beginQueryState(nextBillingState.upgradeHandoff, null);
+      beginQueryState(nextBillingState.upgradeCheckoutIntent, null);
     });
     try {
-      var response = await fetch(handoffURL, {
-        headers: { Accept: 'application/json' },
-      });
-      if (!response.ok) {
-        var errorText = '';
-        try {
-          errorText = (await response.text()).trim();
-        } catch {
-          errorText = '';
-        }
-        throw new Error(errorText || 'Failed to verify the Pulse Pro upgrade return path.');
+      var result = await api.getCommercialJSON<PortalUpgradeCheckoutIntentModel>(
+        '/v1/checkout/intent?checkout_intent_id=' + encodeURIComponent(checkoutIntentID),
+      );
+      var resolvedCheckoutIntentID = String(result.checkout_intent_id || '').trim();
+      if (!resolvedCheckoutIntentID) {
+        throw new Error('Pulse Account could not verify the secure Pulse Pro checkout intent.');
       }
-      var result = await response.json() as PortalUpgradeHandoffModel;
       var resolvedFeature = String(result.feature || '').trim();
-      var activationURLTemplate = String(result.activation_url_template || '').trim();
-      if (!activationURLTemplate) {
-        throw new Error('Pulse Account could not verify the Pulse Pro checkout return path.');
-      }
       updateBillingState(function(nextBillingState) {
-        resolveQueryState(nextBillingState.upgradeHandoff, result);
+        resolveQueryState(nextBillingState.upgradeCheckoutIntent, result);
+        nextBillingState.upgradeCheckoutIntentID = resolvedCheckoutIntentID;
         nextBillingState.upgradeFeatureKey = resolvedFeature;
-        nextBillingState.upgradeActivationURLTemplate = activationURLTemplate;
       });
     } catch (err) {
       updateBillingState(function(nextBillingState) {
         failQueryState(
-          nextBillingState.upgradeHandoff,
+          nextBillingState.upgradeCheckoutIntent,
           null,
-          err instanceof Error ? err.message : 'Failed to verify the Pulse Pro upgrade return path.',
+          err instanceof Error ? err.message : 'Failed to verify the secure Pulse Pro checkout intent.',
         );
-        nextBillingState.upgradeActivationURLTemplate = '';
       });
     }
   }
 
   async function startUpgradeCheckout(planKey: string, tier: string, billingCycle: string) {
     if (!planKey || !tier || !billingCycle) return;
-    var activationURLTemplate = String(getBillingState().upgradeActivationURLTemplate || '').trim();
-    if (!activationURLTemplate) {
+    var checkoutIntentID = String(getBillingState().upgradeCheckoutIntentID || '').trim();
+    if (!checkoutIntentID) {
       updateBillingState(function(nextBillingState) {
         failMutationState(
           nextBillingState.upgradeCheckout,
-          'Pulse Account could not verify the secure return path. Reopen the upgrade flow from Pulse Pro billing.',
+          'Pulse Account could not verify the secure checkout intent. Reopen the upgrade flow from Pulse Pro billing.',
         );
       });
       return;
     }
     updateBillingState(function(nextBillingState) {
       beginMutationState(nextBillingState.upgradeCheckout);
-      nextBillingState.upgradeCheckoutStatus = '';
     });
     try {
       var data = await api.postCommercialJSON<PortalCheckoutSessionCreateResponse>('/v1/checkout/session', {
         plan_key: planKey,
         tier: tier,
         billing_cycle: billingCycle,
-        success_url: activationURLTemplate,
-        cancel_url: buildUpgradeCheckoutCancelURL(),
+        checkout_intent_id: checkoutIntentID,
       });
       if (!data || !data.url) {
         throw new Error('Checkout URL was not returned.');
@@ -592,10 +552,10 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (
       billingState.openBillingPanelID === 'upgrade-billing-panel' ||
       !!billingState.upgradeFeatureKey ||
-      !!billingState.upgradeHandoffURL
+      !!billingState.upgradeCheckoutIntentID
     ) {
       void loadUpgradePricing(false);
-      void resolveUpgradeHandoff(false);
+      void resolveUpgradeCheckoutIntent(false);
     }
     renderOpenBillingPanels(getBillingState().openBillingPanelID);
     renderAllFlows();

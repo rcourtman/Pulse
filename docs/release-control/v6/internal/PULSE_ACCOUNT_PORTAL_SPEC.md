@@ -429,8 +429,9 @@ Transition rule:
 3. in-product self-hosted upgrade CTAs should hand off into `Pulse Account`
    billing first, with `Pulse Account` owning self-hosted plan comparison and
    checkout before returning through Pulse's activation callback
-   via a signed instance-bound handoff token rather than loose return query
-   parameters
+   via a signed instance-bound return token plus an opaque commercial-owned
+   `checkout_intent_id` rather than loose return query parameters or a
+   browser-visible Pulse handoff URL
 4. utility pages should shrink toward redirects or lightweight recovery
    handoffs once equivalent Pulse Account areas exist
 
@@ -472,9 +473,11 @@ Accepted as sufficient for RC and GA:
    billing route automatically
 5. `Pulse Account` must not render a second manual `Activate in Pulse Pro`
    step after hosted checkout success; the portal must resolve a verified
-   Pulse return template from a Pulse-owned purchase handoff record first and
-   let checkout success flow straight into Pulse's activation bridge
-6. commercial surfaces are functional but still fragmented outside the owned
+   commercial-owned `checkout_intent_id` first and let checkout success flow
+   straight into Pulse's activation bridge
+6. owned billing must surface explicit self-hosted purchase arrival states
+   (`activated`, `cancelled`, `expired`, `failed`) after checkout return
+7. commercial surfaces are functional but still fragmented outside the owned
    checkout-return path
 
 ### Candidate lane target

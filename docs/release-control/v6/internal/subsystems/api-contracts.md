@@ -527,29 +527,31 @@ hosted-only accounts do not render self-hosted license, refund, privacy, or
 self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
 That same runtime handoff contract now also covers product-originated
-self-hosted upgrade arrivals: `/portal?service=upgrade&purchase_handoff_url=...`
+self-hosted upgrade arrivals: `/portal?service=upgrade&checkout_intent_id=...`
 may open a portal-owned upgrade job inside `Billing`, but it must not
 fabricate broader self-hosted commercial history or reveal
 retrieve/refund/privacy panels for a hosted-only account that only arrived
 through an upgrade CTA.
 That same commercial contract now also includes the self-hosted purchase
 return path. Product-originated upgrade handoffs must include a canonical
-server-owned `purchase_handoff_url` that points at a Pulse-owned handoff
-record. Pulse still binds checkout completion to a signed
-`purchase_return_token`, but that token must stay inside the Pulse-owned
-handoff record and verified activation template rather than leaking into the
-portal arrival URL. The portal runtime must resolve a verified
-`activation_url_template` through Pulse-owned `GET /auth/license-purchase-handoff`
-and use that verified template as the checkout success target instead of
-trusting browser referrer state or loose `feature` / `return_url` query
-parameters. Pulse's public `GET /auth/license-purchase-activate`
+commercial-owned `checkout_intent_id`. Pulse still binds checkout completion
+to a signed `purchase_return_token`, but that token must stay inside the
+Pulse-owned activation callback path rather than leaking into the portal
+arrival URL. The portal runtime must resolve the verified checkout intent
+through the shared commercial API and use only that opaque intent when it
+starts checkout instead of trusting browser referrer state or loose `feature`
+/ `return_url` parameters. Pulse's public `GET /auth/license-purchase-activate`
 callback then serves an auto-submitting bridge into the owned POST activation
 path, which redeems the completed checkout through the shared
 license/commercial API before returning the browser to the owned billing plan
-route. When the upgrade flow was opened in a secondary tab, the callback may
-refresh the originating billing tab and close itself; when no opener is
-available, the callback must still return the current tab to the owned billing
-route automatically instead of leaving the operator on a dead success page.
+route. Stripe cancel must return directly to owned billing with
+`purchase=cancelled`; activation success, expiry, and failure must return to
+owned billing with explicit arrival states so the billing runtime can surface
+those results in-product. When the upgrade flow was opened in a secondary tab,
+the callback may refresh the originating billing tab and close itself; when no
+opener is available, the callback must still return the current tab to the
+owned billing route automatically instead of leaving the operator on a dead
+success page.
 That same typed bootstrap/runtime contract must also derive the default signed-
 in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and the signed-in shell keeps

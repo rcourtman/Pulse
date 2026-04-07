@@ -4754,7 +4754,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 
 	const want = `{
 		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
-		"limits":[{"key":"max_monitored_systems","limit":15,"current":7,"state":"ok"}],
+		"limits":[{"key":"max_monitored_systems","limit":15,"current":7,"current_available":true,"state":"ok"}],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
 		"tier":"pro",
@@ -4887,6 +4887,27 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+	var capturedReq struct {
+		Feature    string `json:"feature"`
+		SuccessURL string `json:"success_url"`
+		CancelURL  string `json:"cancel_url"`
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/intent" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
+			t.Fatalf("decode checkout intent request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"checkout_intent_id": "cki_placeholder",
+			"feature":            capturedReq.Feature,
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -4919,47 +4940,20 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	if got := redirectURL.Query().Get("purchase_return_token"); got != "" {
 		t.Fatalf("purchase_return_token=%q, want omitted portal query", got)
 	}
-
-	handoffURL := strings.TrimSpace(redirectURL.Query().Get("purchase_handoff_url"))
-	if handoffURL == "" {
-		t.Fatal("expected purchase_handoff_url in Pulse Account redirect")
+	if got := redirectURL.Query().Get("purchase_handoff_url"); got != "" {
+		t.Fatalf("purchase_handoff_url=%q, want omitted portal query", got)
+	}
+	if got := redirectURL.Query().Get("checkout_intent_id"); got != "cki_placeholder" {
+		t.Fatalf("checkout_intent_id=%q, want cki_placeholder", got)
 	}
 
-	handoffReq := httptest.NewRequest(http.MethodGet, handoffURL, nil)
-	handoffRec := httptest.NewRecorder()
-	handler.HandleCheckoutHandoff(handoffRec, handoffReq)
-
-	if handoffRec.Code != http.StatusOK {
-		t.Fatalf("handoff status=%d, want %d: %s", handoffRec.Code, http.StatusOK, handoffRec.Body.String())
-	}
-
-	var handoffPayload struct {
-		Feature               string `json:"feature"`
-		ActivationURLTemplate string `json:"activation_url_template"`
-	}
-	if err := json.NewDecoder(handoffRec.Body).Decode(&handoffPayload); err != nil {
-		t.Fatalf("decode handoff payload: %v", err)
-	}
-
-	handoffURLParsed, err := url.Parse(handoffURL)
+	activationURL, err := url.Parse(capturedReq.SuccessURL)
 	if err != nil {
-		t.Fatalf("parse purchase_handoff_url: %v", err)
-	}
-	handoffID := strings.TrimSpace(handoffURLParsed.Query().Get(licensePurchaseHandoffIDField))
-	if handoffID == "" {
-		t.Fatal("expected purchase_handoff_id in purchase_handoff_url")
-	}
-	handoffQuery := handoffURLParsed.Query()
-	handoffQuery.Set(licensePurchaseHandoffIDField, "placeholder")
-	handoffURLParsed.RawQuery = handoffQuery.Encode()
-
-	activationURL, err := url.Parse(handoffPayload.ActivationURLTemplate)
-	if err != nil {
-		t.Fatalf("parse activation_url_template: %v", err)
+		t.Fatalf("parse success_url: %v", err)
 	}
 	returnToken := strings.TrimSpace(activationURL.Query().Get(licensePurchaseReturnTokenField))
 	if returnToken == "" {
-		t.Fatal("expected signed purchase_return_token in activation_url_template")
+		t.Fatal("expected signed purchase_return_token in success_url")
 	}
 	signingKey, err := handler.purchaseReturnSigningKey()
 	if err != nil {
@@ -4980,17 +4974,19 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	activationURL.RawQuery = activationQuery.Encode()
 
 	got, err := json.Marshal(struct {
-		PortalService         string `json:"portal_service"`
-		PortalUtmContent      string `json:"portal_utm_content"`
-		PortalHandoffURL      string `json:"portal_handoff_url"`
-		HandoffFeature        string `json:"handoff_feature"`
-		ActivationURLTemplate string `json:"activation_url_template"`
+		PortalService      string `json:"portal_service"`
+		PortalUtmContent   string `json:"portal_utm_content"`
+		CheckoutIntentID   string `json:"checkout_intent_id"`
+		IntentFeature      string `json:"intent_feature"`
+		SuccessURLTemplate string `json:"success_url_template"`
+		CancelURL          string `json:"cancel_url"`
 	}{
-		PortalService:         redirectURL.Query().Get("service"),
-		PortalUtmContent:      redirectURL.Query().Get("utm_content"),
-		PortalHandoffURL:      handoffURLParsed.String(),
-		HandoffFeature:        handoffPayload.Feature,
-		ActivationURLTemplate: activationURL.String(),
+		PortalService:      redirectURL.Query().Get("service"),
+		PortalUtmContent:   redirectURL.Query().Get("utm_content"),
+		CheckoutIntentID:   redirectURL.Query().Get("checkout_intent_id"),
+		IntentFeature:      capturedReq.Feature,
+		SuccessURLTemplate: activationURL.String(),
+		CancelURL:          capturedReq.CancelURL,
 	})
 	if err != nil {
 		t.Fatalf("marshal normalized handoff snapshot: %v", err)
@@ -4999,9 +4995,10 @@ func TestContract_SelfHostedPurchaseHandoffJSONSnapshot(t *testing.T) {
 	const want = `{
 		"portal_service":"upgrade",
 		"portal_utm_content":"legacy-bookmark",
-		"portal_handoff_url":"https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=placeholder",
-		"handoff_feature":"max_monitored_systems",
-		"activation_url_template":"https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=placeholder\u0026session_id=%7BCHECKOUT_SESSION_ID%7D"
+		"checkout_intent_id":"cki_placeholder",
+		"intent_feature":"max_monitored_systems",
+		"success_url_template":"https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=placeholder\u0026session_id=%7BCHECKOUT_SESSION_ID%7D",
+		"cancel_url":"https://pulse.example.com/settings/system/billing/plan?intent=max_monitored_systems\u0026purchase=cancelled"
 	}`
 
 	assertJSONSnapshot(t, got, want)

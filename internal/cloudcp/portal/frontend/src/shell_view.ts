@@ -1236,7 +1236,7 @@ export function renderAuthenticatedPortalHTML(context: ShellViewContext): string
   var showSelfHostedUpgradeHandoff =
     context.billingState.openBillingPanelID === 'upgrade-billing-panel' ||
     !!normalizeUpgradeFeatureKey(context.billingState.upgradeFeatureKey) ||
-    !!String(context.billingState.upgradeHandoffURL || '').trim();
+    !!String(context.billingState.upgradeCheckoutIntentID || '').trim();
   var showSelfHostedBillingShell = showSelfHostedCommercial || showSelfHostedUpgradeHandoff;
   var shellSections = visibleShellSections(context.bootstrap);
   var preferredSection = context.activeSection || preferredPortalShellSection(context.bootstrap);

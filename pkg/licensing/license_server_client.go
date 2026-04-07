@@ -36,6 +36,22 @@ type CheckoutSessionResult struct {
 	PlanKey             string `json:"plan_key,omitempty"`
 }
 
+// CheckoutIntentRequest is the canonical server-owned request for a hosted
+// self-hosted checkout handoff.
+type CheckoutIntentRequest struct {
+	Feature    string `json:"feature,omitempty"`
+	SuccessURL string `json:"success_url"`
+	CancelURL  string `json:"cancel_url"`
+}
+
+// CheckoutIntentResponse is the canonical opaque checkout handoff returned by
+// the license server.
+type CheckoutIntentResponse struct {
+	CheckoutIntentID string `json:"checkout_intent_id"`
+	Feature          string `json:"feature,omitempty"`
+	ExpiresAt        int64  `json:"expires_at,omitempty"`
+}
+
 // NewLicenseServerClient creates a client for the license server.
 // The base URL defaults to DefaultLicenseServerURL. The PULSE_LICENSE_SERVER_URL
 // env var override is only allowed in non-release builds.
@@ -188,6 +204,38 @@ func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sess
 	var result CheckoutSessionResult
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode checkout session result response: %w", err)
+	}
+	return &result, nil
+}
+
+// CreateCheckoutIntent stores a server-owned self-hosted checkout handoff and
+// returns an opaque checkout_intent_id for Pulse Account browser flows.
+func (c *LicenseServerClient) CreateCheckoutIntent(ctx context.Context, req CheckoutIntentRequest) (*CheckoutIntentResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal checkout intent request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/checkout/intent", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create checkout intent request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("checkout intent request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result CheckoutIntentResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode checkout intent response: %w", err)
 	}
 	return &result, nil
 }

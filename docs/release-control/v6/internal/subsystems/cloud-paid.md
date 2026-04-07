@@ -449,21 +449,23 @@ checkout-session creation, and the purchase return handoff back into Pulse via
 public pricing surface inside the runtime, and the authenticated portal shell
 must not collapse back into a public-site-only waystation for new-purchase
 depth. That handoff now starts through Pulse-owned `GET /auth/license-purchase-start`,
-which mints a signed `purchase_return_token` for the local instance, wraps it
-inside a short-lived Pulse-owned purchase handoff record, and sends
-`Pulse Account` an absolute `purchase_handoff_url` before the browser leaves
-for the portal. `Pulse Account` must resolve that server-owned handoff record
-through Pulse-owned `GET /auth/license-purchase-handoff` before it starts
-checkout, so the portal never trusts browser referrer state or loose
-`feature` / `return_url` query parameters for self-hosted purchase completion.
-Stripe success now lands
-on Pulse's public `GET /auth/license-purchase-activate` bridge, which
-auto-submits into the owned POST activation path; the portal must not render a
-second manual `Activate in Pulse Pro` step after checkout. The owned
-activation callback must accept that signed state, redeem the completed
-checkout, and return the operator to the canonical billing plan route
-automatically whether checkout completed in a secondary tab or in the current
-tab fallback path.
+which mints a signed `purchase_return_token`, creates a commercial-owned
+`checkout_intent_id` that already contains the resolved Pulse success/cancel
+targets, and sends only that opaque `checkout_intent_id` to `Pulse Account`
+before the browser leaves for the portal. `Pulse Account` must resolve that
+checkout intent through the shared commercial API before it starts checkout,
+so the portal never trusts browser referrer state, loose `feature` /
+`return_url` query parameters, or a Pulse-local handoff URL for self-hosted
+purchase completion. Stripe success now lands on Pulse's public
+`GET /auth/license-purchase-activate` bridge, which auto-submits into the
+owned POST activation path; the portal must not render a second manual
+`Activate in Pulse Pro` step after checkout. Stripe cancel must return
+directly to the owned Pulse billing plan route rather than back into the
+portal. The owned activation callback must accept the signed state, redeem the
+completed checkout, and return the operator to the canonical billing plan
+route with an explicit owned purchase arrival state (`purchase=activated`,
+`purchase=expired`, or `purchase=failed`) whether checkout completed in a
+secondary tab or in the current-tab fallback path.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial

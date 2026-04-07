@@ -228,13 +228,11 @@ describe('services view', function() {
 
     var billingState = createPortalBillingState();
     billingState.upgradeFeatureKey = 'max_monitored_systems';
-    billingState.upgradeHandoffURL =
-      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed';
-    billingState.upgradeActivationURLTemplate = 'https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}';
-    billingState.upgradeHandoff.status = 'ready';
-    billingState.upgradeHandoff.data = {
+    billingState.upgradeCheckoutIntentID = 'cki_signed';
+    billingState.upgradeCheckoutIntent.status = 'ready';
+    billingState.upgradeCheckoutIntent.data = {
+      checkout_intent_id: 'cki_signed',
       feature: 'max_monitored_systems',
-      activation_url_template: billingState.upgradeActivationURLTemplate,
     };
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
@@ -280,10 +278,9 @@ describe('services view', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
-    billingState.upgradeHandoffURL =
-      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed';
-    billingState.upgradeHandoff.status = 'error';
-    billingState.upgradeHandoff.error = 'Pulse Account could not verify the secure return path.';
+    billingState.upgradeCheckoutIntentID = 'cki_signed';
+    billingState.upgradeCheckoutIntent.status = 'error';
+    billingState.upgradeCheckoutIntent.error = 'Pulse Account could not verify the secure checkout intent.';
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
       title: 'Pricing',
@@ -313,7 +310,7 @@ describe('services view', function() {
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account could not verify the secure return path.',
+      'Pulse Account could not verify the secure checkout intent.',
     );
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,

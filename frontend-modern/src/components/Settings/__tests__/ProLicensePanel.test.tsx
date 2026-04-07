@@ -12,6 +12,10 @@ import {
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
@@ -79,11 +83,12 @@ vi.mock('@/stores/notifications', () => ({
 }));
 
 describe('ProLicensePanel', () => {
-  const renderPanel = () => render(() => (
-    <Router>
-      <Route path="/" component={() => <ProLicensePanel />} />
-    </Router>
-  ));
+  const renderPanel = () =>
+    render(() => (
+      <Router>
+        <Route path="/" component={() => <ProLicensePanel />} />
+      </Router>
+    ));
 
   beforeEach(() => {
     mockEntitlements = {
@@ -119,7 +124,9 @@ describe('ProLicensePanel', () => {
       href: getPublicPricingUrl(feature),
       external: true,
     }));
-    getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
+    getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) =>
+      getPublicPricingUrl(feature),
+    );
     useLocationMock.mockReturnValue({
       search: '',
       pathname: '/settings/system/billing/plan',
@@ -363,6 +370,39 @@ describe('ProLicensePanel', () => {
     });
   });
 
+  it.each([
+    {
+      purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
+      title: 'Pulse Pro activated',
+    },
+    {
+      purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
+      title: 'Checkout cancelled',
+    },
+    {
+      purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
+      title: 'Upgrade return expired',
+    },
+    {
+      purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
+      title: 'Activation needs attention',
+    },
+  ])('shows the purchase arrival notice for $purchase', async ({ purchase, title }) => {
+    useLocationMock.mockReturnValue({
+      search: `?purchase=${purchase}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    renderPanel();
+
+    expect(screen.getByText(title)).toBeInTheDocument();
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
+      replace: true,
+      scroll: false,
+    });
+  });
+
   it('focuses the usage billing section when the usage route requests counting rules', async () => {
     useLocationMock.mockReturnValue({
       search: '?details=counting-rules',
@@ -373,7 +413,9 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getByRole('tab', { name: 'Usage' })).toHaveAttribute('aria-selected', 'true');
-    expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeInTheDocument();
+    expect(
+      document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID),
+    ).not.toBeInTheDocument();
     expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
     expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
@@ -553,7 +595,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');
-    expect(proLicensePanelSource).toContain("value={state.activeSection()}");
+    expect(proLicensePanelSource).toContain('value={state.activeSection()}');
     expect(proLicensePanelSource).toContain('<Subtabs');
     expect(proLicensePanelSource).not.toContain('createSignal(');
     expect(proLicensePanelSource).not.toContain('useLocation()');
@@ -561,7 +603,7 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelStateSource).toContain('resolveSelfHostedBillingSection');
     expect(proLicensePanelStateSource).toContain('getSelfHostedBillingPlanIntent');
     expect(proLicensePanelStateSource).toContain('getSelfHostedBillingUsageDetail');
-    expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: SelfHostedBillingSection) => {');
+    expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: string) => {');
     expect(proLicensePanelStateSource).toContain('loadLicenseEntitlements(true)');
     expect(proLicensePanelStateSource).toContain('loadCommercialPosture(true)');
     expect(proLicensePanelStateSource).toContain('loadRuntimeCapabilities(true)');
@@ -587,14 +629,14 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain(
       '!props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;',
     );
-    expect(proLicensePlanSectionSource).toContain(
-      'monitoredSystemUpgradeArrivalTitle',
-    );
+    expect(proLicensePlanSectionSource).toContain('monitoredSystemUpgradeArrivalTitle');
     expect(proLicensePlanSectionSource).toContain(
       "resolveSelfHostedPurchaseStartDestination('max_monitored_systems')",
     );
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
-    expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
+    expect(proLicensePlanSectionSource).not.toContain(
+      'Unlock Pulse Patrol, alert analysis, auto-fix, and more.',
+    );
     expect(selfHostedCommercialRecoverySectionSource).toContain(
       'SELF_HOSTED_RECOVERY_PRESENTATION',
     );
@@ -605,9 +647,7 @@ describe('ProLicensePanel', () => {
       'https://github.com/rcourtman/Pulse/blob/main/TERMS.md',
     );
     expect(selfHostedCommercialRecoverySectionSource).not.toContain('Start 14-day Pro Trial');
-    expect(selfHostedCommercialRecoverySectionSource).not.toContain(
-      'Legacy v5 license detected',
-    );
+    expect(selfHostedCommercialRecoverySectionSource).not.toContain('Legacy v5 license detected');
     expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}');
     expect(proLicensePanelSource).toContain('id={SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}');
   });

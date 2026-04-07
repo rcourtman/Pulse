@@ -44,11 +44,7 @@ const FEATURE_MIN_TIER_LABELS: Record<string, string> = {
   multi_tenant: 'MSP',
 };
 
-const NON_DISPLAYABLE_FEATURES = new Set([
-  'multi_user',
-  'white_label',
-  'unlimited',
-]);
+const NON_DISPLAYABLE_FEATURES = new Set(['multi_user', 'white_label', 'unlimited']);
 
 export interface LicenseSubscriptionStatusPresentation {
   label: string;
@@ -262,6 +258,37 @@ export const getTrialActivationNotice = (result?: string | null): LicenseInlineN
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
         title: 'Trial not available',
         body: 'This organization is not eligible for another Pro trial. Review the current license state below or upgrade instead.',
+      };
+    default:
+      return null;
+  }
+};
+
+export const getPurchaseActivationNotice = (result?: string | null): LicenseInlineNotice | null => {
+  switch ((result || '').trim().toLowerCase()) {
+    case 'activated':
+      return {
+        tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+        title: 'Pulse Pro activated',
+        body: 'Pulse finished checkout and activated this instance automatically. The plan state below is live.',
+      };
+    case 'cancelled':
+      return {
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'Checkout cancelled',
+        body: 'Checkout was cancelled before completion. The current plan state below is unchanged.',
+      };
+    case 'expired':
+      return {
+        tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+        title: 'Upgrade return expired',
+        body: 'That secure checkout return link expired or was already used. Start the upgrade again from this instance if you still need it.',
+      };
+    case 'failed':
+      return {
+        tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
+        title: 'Activation needs attention',
+        body: 'Checkout completed, but Pulse could not finish local activation automatically. Review the plan state below, then retry the upgrade or use recovery if needed.',
       };
     default:
       return null;

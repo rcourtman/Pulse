@@ -32,10 +32,16 @@ const (
 	licensePurchaseSessionIDField           = "session_id"
 	licensePurchaseReturnTokenField         = "purchase_return_token"
 	pulseAccountUpgradeService              = "upgrade"
+	pulseAccountPortalCheckoutIntentField   = "checkout_intent_id"
 	pulseAccountPortalFeatureQueryParam     = "feature"
 	pulseAccountPortalHandoffURLQueryParam  = "purchase_handoff_url"
 	pulseAccountPortalServiceQueryParam     = "service"
 	pulseAccountPortalReturnTokenQueryParam = "purchase_return_token"
+	selfHostedBillingPurchaseQueryParam     = "purchase"
+	selfHostedBillingPurchaseActivated      = "activated"
+	selfHostedBillingPurchaseCancelled      = "cancelled"
+	selfHostedBillingPurchaseExpired        = "expired"
+	selfHostedBillingPurchaseFailed         = "failed"
 	purchaseReturnKeyPurpose                = "pulse-license-purchase-return"
 )
 
@@ -285,7 +291,7 @@ func (h *LicenseHandlers) purchaseCheckoutHandoffStore() *purchaseCheckoutHandof
 	return h.purchaseHandoffs
 }
 
-func pulseAccountUpgradeURLForRequest(handoffURL string, query url.Values) (string, error) {
+func pulseAccountUpgradeURLForRequest(checkoutIntentID string, query url.Values) (string, error) {
 	portalURL := strings.TrimSpace(pulseAccountPortalURLFromLicensing(""))
 	if portalURL == "" {
 		return "", fmt.Errorf("pulse account portal url is unavailable")
@@ -300,9 +306,11 @@ func pulseAccountUpgradeURLForRequest(handoffURL string, query url.Values) (stri
 	for key, values := range query {
 		switch key {
 		case pulseAccountPortalFeatureQueryParam,
+			pulseAccountPortalCheckoutIntentField,
 			pulseAccountPortalHandoffURLQueryParam,
 			pulseAccountPortalServiceQueryParam,
 			pulseAccountPortalReturnTokenQueryParam,
+			"return_url",
 			"checkout",
 			"session_id":
 			continue
@@ -317,9 +325,25 @@ func pulseAccountUpgradeURLForRequest(handoffURL string, query url.Values) (stri
 	}
 
 	params.Set(pulseAccountPortalServiceQueryParam, pulseAccountUpgradeService)
-	params.Set(pulseAccountPortalHandoffURLQueryParam, strings.TrimSpace(handoffURL))
+	params.Set(pulseAccountPortalCheckoutIntentField, strings.TrimSpace(checkoutIntentID))
 	parsed.RawQuery = params.Encode()
 	return parsed.String(), nil
+}
+
+func publicAbsoluteURLForPath(r *http.Request, cfg *config.Config, path string) (string, error) {
+	baseURL := publicBaseURLForRequest(r, cfg)
+	if baseURL == "" {
+		return "", fmt.Errorf("public base url is unavailable")
+	}
+	base, err := url.Parse(baseURL)
+	if err != nil || base == nil {
+		return "", fmt.Errorf("parse public base url: %w", err)
+	}
+	relative, err := url.Parse(strings.TrimSpace(path))
+	if err != nil || relative == nil {
+		return "", fmt.Errorf("parse relative public path: %w", err)
+	}
+	return base.ResolveReference(relative).String(), nil
 }
 
 func licensePurchaseHandoffURLForRequest(
@@ -353,21 +377,38 @@ func licensePurchaseActivationTemplateURL(returnURL, returnToken string) (string
 	return parsed.String(), nil
 }
 
-func licensePurchaseActivationRedirectPath(feature string) string {
+func licensePurchaseActivationRedirectPath(feature, purchaseResult string) string {
 	normalizedFeature := strings.TrimSpace(feature)
+	query := url.Values{}
 	switch normalizedFeature {
 	case "max_monitored_systems":
-		return "/settings/system/billing/plan?intent=max_monitored_systems"
-	default:
+		query.Set("intent", "max_monitored_systems")
+	}
+	switch strings.TrimSpace(purchaseResult) {
+	case selfHostedBillingPurchaseActivated,
+		selfHostedBillingPurchaseCancelled,
+		selfHostedBillingPurchaseExpired,
+		selfHostedBillingPurchaseFailed:
+		query.Set(selfHostedBillingPurchaseQueryParam, strings.TrimSpace(purchaseResult))
+	}
+	encoded := query.Encode()
+	if encoded == "" {
 		return "/settings/system/billing/plan"
 	}
+	return "/settings/system/billing/plan?" + encoded
 }
 
-func writeLicensePurchaseActivationFailurePage(w http.ResponseWriter, statusCode int, feature, message string) {
+func writeLicensePurchaseActivationFailurePage(
+	w http.ResponseWriter,
+	statusCode int,
+	feature string,
+	purchaseResult string,
+	message string,
+) {
 	if statusCode < http.StatusBadRequest {
 		statusCode = http.StatusBadRequest
 	}
-	redirectPath := licensePurchaseActivationRedirectPath(feature)
+	redirectPath := licensePurchaseActivationRedirectPath(feature, purchaseResult)
 	escapedMessage := html.EscapeString(strings.TrimSpace(message))
 	if escapedMessage == "" {
 		escapedMessage = "Purchase activation could not be completed."
@@ -377,14 +418,16 @@ func writeLicensePurchaseActivationFailurePage(w http.ResponseWriter, statusCode
 	w.WriteHeader(statusCode)
 	_, _ = fmt.Fprintf(
 		w,
-		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Pro activation</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Pro activation failed</h1><p style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Open Pulse Pro billing</a></p></main></body></html>",
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Pulse Pro activation</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Pulse Pro activation needs attention</h1><p id=\"purchase-return-status\" style=\"margin-bottom:1rem\">%s</p><p><a href=\"%s\">Open Pulse Pro billing</a></p></main><script>(function(){var redirectPath=%q;var statusEl=document.getElementById('purchase-return-status');var redirectedOriginalTab=false;try{if(window.opener&&!window.opener.closed){redirectedOriginalTab=true;window.opener.postMessage({type:'pulse-license-purchase-return',redirectPath:redirectPath,result:%q},window.location.origin);window.opener.location.assign(redirectPath);}}catch(_){redirectedOriginalTab=false;}if(redirectedOriginalTab){setTimeout(function(){try{window.close();}catch(_){ }if(statusEl){statusEl.textContent='Pulse Pro billing has been reopened in the original tab. You can close this window if it stays open.';}},75);return;}if(statusEl){statusEl.textContent='Returning to Pulse Pro billing.';}setTimeout(function(){window.location.replace(redirectPath);},150);}());</script></body></html>",
 		escapedMessage,
 		escapedLink,
+		redirectPath,
+		strings.TrimSpace(purchaseResult),
 	)
 }
 
 func writeLicensePurchaseActivationSuccessPage(w http.ResponseWriter, feature string) {
-	redirectPath := licensePurchaseActivationRedirectPath(feature)
+	redirectPath := licensePurchaseActivationRedirectPath(feature, selfHostedBillingPurchaseActivated)
 	escapedLink := html.EscapeString(redirectPath)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -1405,30 +1448,41 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	handoffStore := h.purchaseCheckoutHandoffStore()
-	if handoffStore == nil {
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	handoffID, err := handoffStore.issue(
-		feature,
-		activationURLTemplate,
-		time.Now().UTC().Add(purchaseCheckoutHandoffTTL),
+	cancelURL, err := publicAbsoluteURLForPath(
+		r,
+		h.cfg,
+		licensePurchaseActivationRedirectPath(feature, selfHostedBillingPurchaseCancelled),
 	)
 	if err != nil {
-		log.Error().Err(err).Str("feature", feature).Msg("Failed to issue Pulse Account handoff record")
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account cancellation return url")
 		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
-	handoffURL, err := licensePurchaseHandoffURLForRequest(r, h.cfg, handoffID)
+	lsClient := newLicenseServerClientFromLicensing("")
+	if lsClient == nil {
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	checkoutIntent, err := lsClient.CreateCheckoutIntent(r.Context(), checkoutIntentRequestModel{
+		Feature:    feature,
+		SuccessURL: activationURLTemplate,
+		CancelURL:  cancelURL,
+	})
 	if err != nil {
-		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account handoff url")
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to create Pulse Account checkout intent")
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	checkoutIntentID := strings.TrimSpace(checkoutIntent.CheckoutIntentID)
+	if checkoutIntentID == "" {
+		log.Error().Str("feature", feature).Msg("Pulse Account checkout intent response omitted id")
 		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
-	destination, err := pulseAccountUpgradeURLForRequest(handoffURL, r.URL.Query())
+	destination, err := pulseAccountUpgradeURLForRequest(checkoutIntentID, r.URL.Query())
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account upgrade destination")
 		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
@@ -1512,13 +1566,13 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		feature := strings.TrimSpace(r.URL.Query().Get("feature"))
 		returnToken := strings.TrimSpace(r.URL.Query().Get(licensePurchaseReturnTokenField))
 		if returnToken == "" || sessionID == "" {
-			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
 			return
 		}
 		claims, err := h.verifiedPurchaseReturnClaims(r, returnToken)
 		if err != nil {
 			log.Warn().Err(err).Msg("Purchase return token verification failed during GET bridge")
-			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Pulse Pro billing.")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Pulse Pro billing.")
 			return
 		}
 		if claims != nil && strings.TrimSpace(claims.Feature) != "" {
@@ -1532,7 +1586,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		return
 	}
 	if err := r.ParseForm(); err != nil {
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, "", "Purchase activation request was invalid.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, "", selfHostedBillingPurchaseFailed, "Purchase activation request was invalid.")
 		return
 	}
 
@@ -1540,25 +1594,25 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	feature := strings.TrimSpace(r.FormValue("feature"))
 	returnToken := strings.TrimSpace(r.FormValue(licensePurchaseReturnTokenField))
 	if returnToken == "" {
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is missing required state. Reopen the upgrade flow from Pulse Pro billing.")
 		return
 	}
 
 	claims, err := h.verifiedPurchaseReturnClaims(r, returnToken)
 	if err != nil {
 		log.Warn().Err(err).Msg("Purchase return token verification failed")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Pulse Pro billing.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseExpired, "Purchase activation link expired or is invalid. Reopen the upgrade flow from Pulse Pro billing.")
 		return
 	}
 	if claims != nil && strings.TrimSpace(claims.Feature) != "" {
 		if feature != "" && feature != strings.TrimSpace(claims.Feature) {
-			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, strings.TrimSpace(claims.Feature), "Purchase activation state did not match the completed upgrade flow.")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, strings.TrimSpace(claims.Feature), selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow.")
 			return
 		}
 		feature = strings.TrimSpace(claims.Feature)
 	}
 	if sessionID == "" {
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, "Purchase activation requires a completed checkout session.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseFailed, "Purchase activation requires a completed checkout session.")
 		return
 	}
 
@@ -1577,7 +1631,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		}
 	}
 	if replayStore == nil || replaySubject == "" {
-		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, "Pulse could not verify the purchase activation state for this checkout.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not verify the purchase activation state for this checkout.")
 		return
 	}
 
@@ -1589,12 +1643,12 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	stored, err := replayStore.checkAndStore(replayID, expiresAt)
 	if err != nil {
 		log.Error().Err(err).Msg("Purchase activation replay-store failure")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, "Pulse could not verify the purchase activation state for this checkout.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not verify the purchase activation state for this checkout.")
 		return
 	}
 	if !stored {
 		log.Warn().Str("replay_id_prefix", replayID[:24]).Msg("Purchase activation replay blocked")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, "This completed purchase was already returned to Pulse Pro. Reopen billing if you need to confirm the current entitlement.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseActivated, "This completed purchase was already returned to Pulse Pro. Reopen billing if you need to confirm the current entitlement.")
 		return
 	}
 	clearReplay := func(reason string, replayErr error) {
@@ -1610,7 +1664,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	lsClient := newLicenseServerClientFromLicensing("")
 	if lsClient == nil {
 		clearReplay("license_server_unavailable", nil)
-		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, "Pulse could not contact the commercial activation service.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not contact the commercial activation service.")
 		return
 	}
 
@@ -1623,7 +1677,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	if err != nil {
 		clearReplay("checkout_lookup_failed", err)
 		log.Warn().Err(err).Str("checkout_session_id", sessionID).Msg("Failed to resolve checkout session during purchase activation")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, "Pulse could not confirm the completed checkout yet. Please try again in a moment.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, selfHostedBillingPurchaseFailed, "Pulse could not confirm the completed checkout yet. Please try again in a moment.")
 		return
 	}
 
@@ -1633,21 +1687,21 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 			message = strings.TrimSpace(checkoutResult.Message)
 		}
 		clearReplay("checkout_not_fulfilled", nil)
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, message)
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseFailed, message)
 		return
 	}
 
 	activationKey := strings.TrimSpace(checkoutResult.ActivationKey)
 	if activationKey == "" {
 		clearReplay("activation_key_missing", nil)
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, "The completed checkout did not return an activation key.")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, selfHostedBillingPurchaseFailed, "The completed checkout did not return an activation key.")
 		return
 	}
 
 	if _, err := h.activateLicenseKey(ctx, activationKey); err != nil {
 		clearReplay("license_activation_failed", err)
 		log.Warn().Err(err).Str("checkout_session_id", sessionID).Msg("Failed to activate completed checkout locally")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, userFriendlyActivationError(err))
+		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseFailed, userFriendlyActivationError(err))
 		return
 	}
 

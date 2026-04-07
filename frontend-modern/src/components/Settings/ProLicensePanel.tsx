@@ -68,6 +68,7 @@ export const ProLicensePanel: Component = () => {
                 hasPaidFeatures={state.hasPaidFeatures()}
                 loading={state.loading()}
                 onReload={() => void state.loadPanelData()}
+                purchaseActivationNotice={state.purchaseActivationNotice()}
                 showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
                 showTrialStart={state.showTrialStart()}
                 startingTrial={state.startingTrial()}

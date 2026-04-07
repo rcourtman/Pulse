@@ -20,21 +20,27 @@ export const SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID = 'pulse-pro-plan';
 export const SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID = 'pulse-pro-usage';
 export const SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM = 'details';
 export const SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM = 'intent';
+export const SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM = 'purchase';
 export const SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL = 'counting-rules';
 export const SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'max_monitored_systems';
+export const SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED = 'activated';
+export const SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED = 'cancelled';
+export const SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED = 'expired';
+export const SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED = 'failed';
 
 export type SelfHostedBillingSection = 'plan' | 'usage';
-export type SelfHostedBillingUsageDetail =
-  typeof SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL;
-export type SelfHostedBillingPlanIntent =
-  typeof SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT;
+export type SelfHostedBillingUsageDetail = typeof SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL;
+export type SelfHostedBillingPlanIntent = typeof SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT;
+export type SelfHostedBillingPurchaseArrival =
+  | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED
+  | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED
+  | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED
+  | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED;
 
 export const SELF_HOSTED_PRO_BILLING_PLAN_HREF = SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
 export const SELF_HOSTED_PRO_BILLING_USAGE_HREF = SELF_HOSTED_PRO_BILLING_USAGE_ROUTE;
-export const SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF =
-  `${SELF_HOSTED_PRO_BILLING_USAGE_ROUTE}?${SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL}`;
-export const SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF =
-  `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`;
+export const SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF = `${SELF_HOSTED_PRO_BILLING_USAGE_ROUTE}?${SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL}`;
+export const SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`;
 
 const IN_PRODUCT_PRICING_DESTINATIONS: Record<string, string> = {
   max_monitored_systems: SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
@@ -155,14 +161,16 @@ export function getPublicPricingUrl(feature?: string | null): string {
   return url.toString();
 }
 
-export function getPulseAccountPortalUrl(options: {
-  email?: string | null;
-  feature?: string | null;
-  locationHref?: string;
-  returnUrl?: string | null;
-  service?: string | null;
-  searchParams?: URLSearchParams;
-} = {}): string {
+export function getPulseAccountPortalUrl(
+  options: {
+    email?: string | null;
+    feature?: string | null;
+    locationHref?: string;
+    returnUrl?: string | null;
+    service?: string | null;
+    searchParams?: URLSearchParams;
+  } = {},
+): string {
   const url = new URL(DEFAULT_PULSE_ACCOUNT_PORTAL_URL);
   if (options.searchParams) {
     for (const [key, value] of options.searchParams.entries()) {
@@ -188,7 +196,8 @@ export function getPulseAccountPortalUrl(options: {
     url.searchParams.set('service', normalizedService);
   }
 
-  const normalizedReturnUrl = options.returnUrl?.trim() || getSelfHostedPurchaseReturnUrl(options.locationHref);
+  const normalizedReturnUrl =
+    options.returnUrl?.trim() || getSelfHostedPurchaseReturnUrl(options.locationHref);
   if (normalizedReturnUrl) {
     url.searchParams.set(PULSE_ACCOUNT_PORTAL_RETURN_URL_QUERY_PARAM, normalizedReturnUrl);
   }
@@ -222,13 +231,24 @@ export function getSelfHostedBillingUsageDetail(
   return detail === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL ? detail : null;
 }
 
-export function getSelfHostedBillingPlanIntent(
-  search: string,
-): SelfHostedBillingPlanIntent | null {
-  const intent = billingSearch(search)
-    .get(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM)
-    ?.trim();
+export function getSelfHostedBillingPlanIntent(search: string): SelfHostedBillingPlanIntent | null {
+  const intent = billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM)?.trim();
   return intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT ? intent : null;
+}
+
+export function getSelfHostedBillingPurchaseArrival(
+  search: string,
+): SelfHostedBillingPurchaseArrival | null {
+  const purchase = billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM)?.trim();
+  switch (purchase) {
+    case SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED:
+    case SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED:
+    case SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED:
+    case SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED:
+      return purchase;
+    default:
+      return null;
+  }
 }
 
 export function getSelfHostedBillingHref(
@@ -236,12 +256,11 @@ export function getSelfHostedBillingHref(
   options: {
     detail?: SelfHostedBillingUsageDetail | null;
     intent?: SelfHostedBillingPlanIntent | null;
+    purchase?: SelfHostedBillingPurchaseArrival | null;
   } = {},
 ): string {
   const baseRoute =
-    section === 'usage'
-      ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
-      : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
+    section === 'usage' ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
   const params = new URLSearchParams();
 
   if (section === 'usage' && options.detail === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL) {
@@ -251,14 +270,15 @@ export function getSelfHostedBillingHref(
     );
   }
 
-  if (
-    section === 'plan' &&
-    options.intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT
-  ) {
+  if (section === 'plan' && options.intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT) {
     params.set(
       SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM,
       SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
     );
+  }
+
+  if (options.purchase) {
+    params.set(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM, options.purchase);
   }
 
   const search = params.toString();
@@ -307,9 +327,7 @@ export function resolveCanonicalSelfHostedBillingHref(
 
   const section = resolveSelfHostedBillingSection(normalizedPath, search, hash);
   const canonicalPath =
-    section === 'usage'
-      ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
-      : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
+    section === 'usage' ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
   const normalizedSearch = normalizeSearch(search);
 
   return `${canonicalPath}${normalizedSearch ? `?${normalizedSearch}` : ''}`;
@@ -321,6 +339,7 @@ export function scopeSelfHostedBillingDestination(
   options: {
     detail?: SelfHostedBillingUsageDetail | null;
     intent?: SelfHostedBillingPlanIntent | null;
+    purchase?: SelfHostedBillingPurchaseArrival | null;
   } = {},
 ): UpgradeDestination {
   if (destination.external) {

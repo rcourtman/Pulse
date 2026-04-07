@@ -197,9 +197,9 @@ management, and fleet control surfaces.
     `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
     `/auth/license-purchase-activate`, lifecycle-adjacent setup and fleet
     surfaces may rely on that public-route wiring but must not reinterpret the
-    commercial-owned `purchase_handoff_id` record, the resolved
-    `activation_url_template`, purchase-return tokens, activation-bridge form
-    state, or demo-hidden commercial route policy as installer credentials,
+    commercial-owned `checkout_intent_id`, purchase-return tokens,
+    activation-bridge form state, owned billing purchase-arrival states, or
+    demo-hidden commercial route policy as installer credentials,
     registration state, or fleet enrollment authority.
 
 ## Forbidden Paths
@@ -351,8 +351,8 @@ commercial reads.
 That same shared boundary now also owns the one-time checkout-return lookup:
 lifecycle-adjacent surfaces may initiate billing or account handoff through
 shared public routes, but they must never persist, derive, or replay the
-server-owned `purchase_handoff_id` or resolved activation template as lifecycle
-state.
+server-owned `checkout_intent_id` or owned billing purchase-arrival state as
+lifecycle state.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered
 through shared drawers or lifecycle-adjacent resource context, those reads

@@ -58,6 +58,8 @@ type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
 type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
+type checkoutIntentRequestModel = pkglicensing.CheckoutIntentRequest
+type checkoutIntentResponseModel = pkglicensing.CheckoutIntentResponse
 
 const (
 	featureMultiTenantKey             = pkglicensing.FeatureMultiTenant

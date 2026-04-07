@@ -15,6 +15,7 @@ import {
   getNoActiveProLicenseState,
   getOrganizationBillingLicenseStatusLabel,
   getInactiveProUpsellNotice,
+  getPurchaseActivationNotice,
   getTrialEndedProLicenseNotice,
   getTrialActivationNotice,
   isDisplayableLicenseFeature,
@@ -184,6 +185,26 @@ describe('licensePresentation', () => {
       tone: expect.stringContaining('red'),
     });
     expect(getTrialActivationNotice('')).toBeNull();
+  });
+
+  it('returns canonical purchase activation notices', () => {
+    expect(getPurchaseActivationNotice('activated')).toMatchObject({
+      title: 'Pulse Pro activated',
+      tone: expect.stringContaining('green'),
+    });
+    expect(getPurchaseActivationNotice('cancelled')).toMatchObject({
+      title: 'Checkout cancelled',
+      tone: expect.stringContaining('amber'),
+    });
+    expect(getPurchaseActivationNotice('expired')).toMatchObject({
+      title: 'Upgrade return expired',
+      body: expect.stringContaining('Start the upgrade again'),
+    });
+    expect(getPurchaseActivationNotice('failed')).toMatchObject({
+      title: 'Activation needs attention',
+      tone: expect.stringContaining('red'),
+    });
+    expect(getPurchaseActivationNotice('')).toBeNull();
   });
 
   it('returns canonical organization and billing-admin billing vocabulary', () => {

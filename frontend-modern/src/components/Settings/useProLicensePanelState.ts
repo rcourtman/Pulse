@@ -1,9 +1,7 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { notificationStore } from '@/stores/notifications';
-import {
-  loadCommercialPosture,
-} from '@/stores/licenseCommercial';
+import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import { isMultiTenantEnabled } from '@/stores/license';
 import { loadRuntimeCapabilities } from '@/stores/license';
 import {
@@ -17,6 +15,7 @@ import {
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
   getLicenseFeatureLabel,
+  getPurchaseActivationNotice,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
   getTrialActivationNotice,
@@ -24,11 +23,13 @@ import {
 } from '@/utils/licensePresentation';
 import {
   getSelfHostedBillingPlanIntent,
+  getSelfHostedBillingPurchaseArrival,
   getSelfHostedBillingUsageDetail,
   resolveSelfHostedBillingSection,
   SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
   SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
+  SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
@@ -58,6 +59,7 @@ export function useProLicensePanelState() {
   const [clearing, setClearing] = createSignal(false);
   const [startingTrial, setStartingTrial] = createSignal(false);
   const [trialActivationResult, setTrialActivationResult] = createSignal('');
+  const [purchaseActivationResult, setPurchaseActivationResult] = createSignal('');
 
   const entitlements = createMemo(() => licenseEntitlements());
   const subscriptionState = createMemo(() => entitlements()?.subscription_state);
@@ -72,10 +74,17 @@ export function useProLicensePanelState() {
 
   onMount(() => {
     const params = new URLSearchParams(location.search);
-    const result = params.get('trial')?.trim().toLowerCase() ?? '';
-    if (result) {
-      setTrialActivationResult(result);
+    const trialResult = params.get('trial')?.trim().toLowerCase() ?? '';
+    const purchaseResult = getSelfHostedBillingPurchaseArrival(location.search) ?? '';
+    if (trialResult) {
+      setTrialActivationResult(trialResult);
       params.delete('trial');
+    }
+    if (purchaseResult) {
+      setPurchaseActivationResult(purchaseResult);
+      params.delete(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM);
+    }
+    if (trialResult || purchaseResult) {
       const nextSearch = params.toString();
       const nextPath = `${location.pathname}${nextSearch ? `?${nextSearch}` : ''}${location.hash ?? ''}`;
       navigate(nextPath, { replace: true, scroll: false });
@@ -87,7 +96,10 @@ export function useProLicensePanelState() {
     return resolveSelfHostedBillingSection(location.pathname, location.search, location.hash);
   });
 
-  const setActiveSection = (section: SelfHostedBillingSection) => {
+  const setActiveSection = (section: string) => {
+    if (section !== 'plan' && section !== 'usage') {
+      return;
+    }
     const nextPath =
       section === 'usage'
         ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
@@ -142,9 +154,9 @@ export function useProLicensePanelState() {
     if (!current) return false;
     return Boolean(
       current.licensed_email ||
-        current.expires_at ||
-        current.trial_expires_at ||
-        current.tier !== 'free',
+      current.expires_at ||
+      current.trial_expires_at ||
+      current.tier !== 'free',
     );
   });
 
@@ -154,7 +166,9 @@ export function useProLicensePanelState() {
     return getLicenseTierLabel(current.tier);
   });
 
-  const formattedPlanTerms = createMemo(() => formatLicensePlanVersion(entitlements()?.plan_version));
+  const formattedPlanTerms = createMemo(() =>
+    formatLicensePlanVersion(entitlements()?.plan_version),
+  );
 
   const formattedFeatures = createMemo(() => {
     const current = entitlements();
@@ -214,6 +228,9 @@ export function useProLicensePanelState() {
 
   const trialActivationNotice = createMemo(() => {
     return getTrialActivationNotice(trialActivationResult());
+  });
+  const purchaseActivationNotice = createMemo(() => {
+    return getPurchaseActivationNotice(purchaseActivationResult());
   });
 
   const commercialMigrationNotice = createMemo(() =>
@@ -276,7 +293,9 @@ export function useProLicensePanelState() {
         loadRuntimeCapabilities(true),
       ]);
     } catch (error) {
-      notificationStore.error(error instanceof Error ? error.message : 'Failed to activate license');
+      notificationStore.error(
+        error instanceof Error ? error.message : 'Failed to activate license',
+      );
     } finally {
       setActivating(false);
     }
@@ -320,6 +339,7 @@ export function useProLicensePanelState() {
     loadPanelData,
     loading,
     looksLikeLegacyLicenseKey,
+    purchaseActivationNotice,
     setActiveSection,
     setLicenseKey,
     showCountingRulesByDefault,

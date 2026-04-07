@@ -89,8 +89,9 @@ function renderUpgradePlansHTML(billingState: PortalBillingState): string {
   }
 
   var checkoutDisabled = billingState.upgradeCheckout.pending ||
-    billingState.upgradeHandoff.status === 'loading' ||
-    !String(billingState.upgradeActivationURLTemplate || '').trim();
+    billingState.upgradeCheckoutIntent.status === 'loading' ||
+    !String(billingState.upgradeCheckoutIntentID || '').trim() ||
+    billingState.upgradeCheckoutIntent.status !== 'ready';
 
   return '<div class="billing-upgrade-plan-grid">' + plans.map(function(plan) {
     var buttons = Array.isArray(plan.buttons) ? plan.buttons : [];
@@ -139,30 +140,26 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
 
   var featureKey = String(billingState.upgradeFeatureKey || '').trim();
   var pricingState = billingState.upgradePricing;
-  var handoffState = billingState.upgradeHandoff;
-  var activationURLTemplate = String(billingState.upgradeActivationURLTemplate || '').trim();
-  var handoffURL = String(billingState.upgradeHandoffURL || '').trim();
+  var checkoutIntentState = billingState.upgradeCheckoutIntent;
+  var checkoutIntentID = String(billingState.upgradeCheckoutIntentID || '').trim();
   var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : '';
   var summaryItems = [] as string[];
 
-  if (billingState.upgradeCheckoutStatus === 'cancelled') {
-    summaryItems.push('<div class="billing-status visible">Checkout was cancelled before completion.</div>');
-  }
   if (billingState.upgradeCheckout.pending) {
     summaryItems.push('<div class="billing-status visible">Redirecting to secure checkout...</div>');
   }
   if (billingState.upgradeCheckout.error) {
     summaryItems.push('<div class="billing-status visible error">' + escapeText(billingState.upgradeCheckout.error) + '</div>');
   }
-  if (!handoffURL) {
+  if (!checkoutIntentID) {
     summaryItems.push(
-      '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the return path before checkout.</div>',
+      '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure checkout intent before checkout.</div>',
     );
-  } else if (handoffState.status === 'loading' && !activationURLTemplate) {
-    summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro return path...</div>');
-  } else if (handoffState.status === 'error') {
-    summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || 'Failed to verify the secure Pulse Pro return path.') + '</div>');
-  } else if (handoffState.status === 'ready' && activationURLTemplate) {
+  } else if (checkoutIntentState.status === 'loading') {
+    summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro checkout intent...</div>');
+  } else if (checkoutIntentState.status === 'error') {
+    summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutIntentState.error || 'Failed to verify the secure Pulse Pro checkout intent.') + '</div>');
+  } else if (checkoutIntentState.status === 'ready') {
     summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
   }
   if (pricingState.status === 'loading' && !pricingState.data) {

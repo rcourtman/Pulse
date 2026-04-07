@@ -64,18 +64,13 @@ describe('portal runtime', function() {
 
   it('derives canonical email and billing handoff from the portal URL', function() {
     var handoff = readPortalRuntimeHandoff(
-      'https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=upgrade&purchase_handoff_url=' +
-        encodeURIComponent('https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed') +
-        '&checkout=cancelled',
+      'https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=upgrade&checkout_intent_id=cki_signed',
     );
 
     expect(handoff.email).toBe('buyer@example.com');
     expect(handoff.openBillingPanelID).toBe('upgrade-billing-panel');
-    expect(handoff.upgradeHandoffURL).toBe(
-      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed',
-    );
+    expect(handoff.upgradeCheckoutIntentID).toBe('cki_signed');
     expect(handoff.upgradeFeatureKey).toBe('');
-    expect(handoff.upgradeCheckoutStatus).toBe('cancelled');
   });
 
   it('applies email and billing handoff to the initial portal store', function() {
@@ -89,9 +84,8 @@ describe('portal runtime', function() {
       {
         email: 'buyer@example.com',
         openBillingPanelID: 'refund-billing-panel',
-        upgradeHandoffURL: '',
+        upgradeCheckoutIntentID: '',
         upgradeFeatureKey: '',
-        upgradeCheckoutStatus: '',
       }
     );
 
@@ -112,19 +106,14 @@ describe('portal runtime', function() {
       {
         email: '',
         openBillingPanelID: 'upgrade-billing-panel',
-        upgradeHandoffURL:
-          'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed',
+        upgradeCheckoutIntentID: 'cki_signed',
         upgradeFeatureKey: '',
-        upgradeCheckoutStatus: 'cancelled',
       }
     );
 
     expect(runtime.store.getShellState().activeSection).toBe('billing');
     expect(runtime.store.getBillingState().openBillingPanelID).toBe('upgrade-billing-panel');
-    expect(runtime.store.getBillingState().upgradeHandoffURL).toBe(
-      'https://pulse.example.com/auth/license-purchase-handoff?purchase_handoff_id=pch1_signed',
-    );
+    expect(runtime.store.getBillingState().upgradeCheckoutIntentID).toBe('cki_signed');
     expect(runtime.store.getBillingState().upgradeFeatureKey).toBe('');
-    expect(runtime.store.getBillingState().upgradeCheckoutStatus).toBe('cancelled');
   });
 });

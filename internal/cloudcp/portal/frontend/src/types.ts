@@ -79,12 +79,10 @@ export interface PortalUpgradePricingModel {
   plans: PortalUpgradePricingPlan[];
 }
 
-export interface PortalUpgradeHandoffModel {
+export interface PortalUpgradeCheckoutIntentModel {
+  checkout_intent_id: string;
   feature?: string;
-  activation_url_template?: string;
 }
-
-export type PortalUpgradeCheckoutStatus = '' | 'success' | 'cancelled';
 
 export interface PortalCheckoutSessionCreateResponse {
   url?: string;
@@ -165,10 +163,8 @@ export interface RefundState {
 export interface PortalBillingState {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
-  upgradeHandoffURL: string;
-  upgradeActivationURLTemplate: string;
-  upgradeHandoff: PortalQueryState<PortalUpgradeHandoffModel | null>;
-  upgradeCheckoutStatus: PortalUpgradeCheckoutStatus;
+  upgradeCheckoutIntentID: string;
+  upgradeCheckoutIntent: PortalQueryState<PortalUpgradeCheckoutIntentModel | null>;
   upgradePricing: PortalQueryState<PortalUpgradePricingModel | null>;
   upgradeCheckout: PortalMutationState;
   flows: Record<PortalBillingFlowID, VerificationFlowState>;

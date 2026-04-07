@@ -5,9 +5,8 @@ import type { PortalBootstrapData } from './types';
 export interface PortalRuntimeHandoff {
   email: string;
   openBillingPanelID: string;
-  upgradeHandoffURL: string;
+  upgradeCheckoutIntentID: string;
   upgradeFeatureKey: string;
-  upgradeCheckoutStatus: '' | 'success' | 'cancelled';
 }
 
 export interface PortalRuntime {
@@ -33,20 +32,12 @@ function normalizeHandoffEmail(value: string | null): string {
   return String(value || '').trim();
 }
 
-function normalizeUpgradeHandoffURL(
+function normalizeUpgradeCheckoutIntentID(
   value: string | null | undefined,
 ): string {
   var trimmed = String(value || '').trim();
   if (!trimmed) return '';
-  try {
-    var parsed = new URL(trimmed);
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-      return '';
-    }
-    return parsed.toString();
-  } catch {
-    return '';
-  }
+  return /^[A-Za-z0-9_-]+$/.test(trimmed) ? trimmed : '';
 }
 
 function normalizeHandoffBillingPanel(value: string | null): string {
@@ -70,17 +61,6 @@ function normalizeUpgradeFeatureKey(value: string | null): string {
   return String(value || '').trim();
 }
 
-function normalizeUpgradeCheckoutStatus(value: string | null): '' | 'success' | 'cancelled' {
-  switch (String(value || '').trim()) {
-    case 'success':
-      return 'success';
-    case 'cancelled':
-      return 'cancelled';
-    default:
-      return '';
-  }
-}
-
 export function readPortalRuntimeHandoff(
   locationHref: string | undefined = window.location.href,
 ): PortalRuntimeHandoff {
@@ -89,17 +69,15 @@ export function readPortalRuntimeHandoff(
     return {
       email: normalizeHandoffEmail(params.get('email')),
       openBillingPanelID: normalizeHandoffBillingPanel(params.get('service')),
-      upgradeHandoffURL: normalizeUpgradeHandoffURL(params.get('purchase_handoff_url')),
+      upgradeCheckoutIntentID: normalizeUpgradeCheckoutIntentID(params.get('checkout_intent_id')),
       upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
-      upgradeCheckoutStatus: normalizeUpgradeCheckoutStatus(params.get('checkout')),
     };
   } catch {
     return {
       email: '',
       openBillingPanelID: '',
-      upgradeHandoffURL: '',
+      upgradeCheckoutIntentID: '',
       upgradeFeatureKey: '',
-      upgradeCheckoutStatus: '',
     };
   }
 }
@@ -147,18 +125,14 @@ export function createPortalRuntime(
     store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
       billingState.openBillingPanelID = handoff.openBillingPanelID;
-      billingState.upgradeHandoffURL = handoff.upgradeHandoffURL;
+      billingState.upgradeCheckoutIntentID = handoff.upgradeCheckoutIntentID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
-      billingState.upgradeActivationURLTemplate = '';
-      billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
     }, { notify: false });
-  } else if (handoff.upgradeFeatureKey || handoff.upgradeHandoffURL) {
+  } else if (handoff.upgradeFeatureKey || handoff.upgradeCheckoutIntentID) {
     store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
-      billingState.upgradeHandoffURL = handoff.upgradeHandoffURL;
+      billingState.upgradeCheckoutIntentID = handoff.upgradeCheckoutIntentID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
-      billingState.upgradeActivationURLTemplate = '';
-      billingState.upgradeCheckoutStatus = handoff.upgradeCheckoutStatus;
     }, { notify: false });
   }
   return {

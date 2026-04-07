@@ -696,6 +696,30 @@ func TestHandleActivateLicense_ValidKey(t *testing.T) {
 func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *testing.T) {
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
+	var capturedReq struct {
+		Feature    string `json:"feature"`
+		SuccessURL string `json:"success_url"`
+		CancelURL  string `json:"cancel_url"`
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/intent" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		if r.Method != http.MethodPost {
+			t.Fatalf("method = %s, want POST", r.Method)
+		}
+		if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
+			t.Fatalf("decode checkout intent request: %v", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"checkout_intent_id": "cki_test_upgrade",
+			"feature":            capturedReq.Feature,
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
@@ -729,9 +753,11 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	if got := redirectURL.Query().Get("return_url"); got != "" {
 		t.Fatalf("return_url = %q, want omitted portal query", got)
 	}
-	handoffURL := redirectURL.Query().Get("purchase_handoff_url")
-	if strings.TrimSpace(handoffURL) == "" {
-		t.Fatal("expected purchase_handoff_url in redirect")
+	if got := redirectURL.Query().Get("checkout_intent_id"); got != "cki_test_upgrade" {
+		t.Fatalf("checkout_intent_id = %q, want cki_test_upgrade", got)
+	}
+	if got := redirectURL.Query().Get("purchase_handoff_url"); got != "" {
+		t.Fatalf("purchase_handoff_url = %q, want omitted portal query", got)
 	}
 	if got := redirectURL.Query().Get("utm_content"); got != "legacy-bookmark" {
 		t.Fatalf("utm_content = %q, want preserved query value", got)
@@ -740,42 +766,20 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 		t.Fatalf("purchase_return_token = %q, want omitted portal query", got)
 	}
 
-	handoffURLParsed, err := url.Parse(handoffURL)
-	if err != nil {
-		t.Fatalf("parse purchase_handoff_url: %v", err)
-	}
-	if handoffURLParsed.Scheme != "https" || handoffURLParsed.Host != "pulse.example.com" || handoffURLParsed.Path != licensePurchaseHandoffPath {
-		t.Fatalf("purchase_handoff_url = %q, want Pulse handoff endpoint", handoffURL)
-	}
-	handoffID := handoffURLParsed.Query().Get(licensePurchaseHandoffIDField)
-	if strings.TrimSpace(handoffID) == "" {
-		t.Fatal("expected purchase_handoff_id in purchase_handoff_url")
+	if capturedReq.Feature != "relay" {
+		t.Fatalf("checkout intent feature = %q, want relay", capturedReq.Feature)
 	}
 
-	handoffReq := httptest.NewRequest(http.MethodGet, handoffURL, nil)
-	handoffRec := httptest.NewRecorder()
-	handler.HandleCheckoutHandoff(handoffRec, handoffReq)
-	if handoffRec.Code != http.StatusOK {
-		t.Fatalf("handoff status = %d, want %d (body=%q)", handoffRec.Code, http.StatusOK, handoffRec.Body.String())
-	}
-	var handoffResp struct {
-		Feature               string `json:"feature"`
-		ActivationURLTemplate string `json:"activation_url_template"`
-	}
-	if err := json.Unmarshal(handoffRec.Body.Bytes(), &handoffResp); err != nil {
-		t.Fatalf("unmarshal handoff response: %v", err)
-	}
-	if handoffResp.Feature != "relay" {
-		t.Fatalf("handoff feature = %q, want relay", handoffResp.Feature)
-	}
-
-	activationURL, err := url.Parse(handoffResp.ActivationURLTemplate)
+	activationURL, err := url.Parse(capturedReq.SuccessURL)
 	if err != nil {
-		t.Fatalf("parse activation_url_template: %v", err)
+		t.Fatalf("parse success_url: %v", err)
+	}
+	if activationURL.String() != capturedReq.SuccessURL {
+		t.Fatalf("success_url normalized unexpectedly: %q", capturedReq.SuccessURL)
 	}
 	returnToken := activationURL.Query().Get(licensePurchaseReturnTokenField)
 	if strings.TrimSpace(returnToken) == "" {
-		t.Fatal("expected signed purchase_return_token in activation template")
+		t.Fatal("expected signed purchase_return_token in success_url")
 	}
 	signingKey, err := handler.purchaseReturnSigningKey()
 	if err != nil {
@@ -790,6 +794,9 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 	if claims.Feature != "relay" {
 		t.Fatalf("claims.Feature = %q, want relay", claims.Feature)
+	}
+	if capturedReq.CancelURL != "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled" {
+		t.Fatalf("cancel_url = %q", capturedReq.CancelURL)
 	}
 }
 
@@ -1005,7 +1012,7 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	if !strings.Contains(rec.Body.String(), "window.close()") {
 		t.Fatalf("body = %q, want popup close bridge", rec.Body.String())
 	}
-	if !strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=max_monitored_systems") {
+	if !strings.Contains(rec.Body.String(), "/settings/system/billing/plan?intent=max_monitored_systems&purchase=activated") {
 		t.Fatalf("body = %q, want monitored-system billing route", rec.Body.String())
 	}
 	if !handler.Service(context.Background()).IsActivated() {
@@ -1063,6 +1070,9 @@ func TestHandleCheckoutActivation_RendersFailurePageWhenCheckoutIsNotFulfilled(t
 	}
 	if !strings.Contains(rec.Body.String(), "Checkout is not complete yet.") {
 		t.Fatalf("body = %q, want pending checkout message", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "purchase=failed") {
+		t.Fatalf("body = %q, want failed purchase billing redirect", rec.Body.String())
 	}
 }
 

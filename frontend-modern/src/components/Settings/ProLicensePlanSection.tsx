@@ -36,6 +36,7 @@ interface ProLicensePlanSectionProps {
   loading: boolean;
   onReload: () => void;
   onStartTrial: () => void;
+  purchaseActivationNotice: Notice | null;
   statusPresentation: {
     badgeClass: string;
     label: string;
@@ -63,6 +64,14 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
 
   return (
     <>
+      <Show when={props.purchaseActivationNotice}>
+        {(notice) => (
+          <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
+            <p class="font-medium">{notice().title}</p>
+            <p class="mt-1 text-xs opacity-90">{notice().body}</p>
+          </div>
+        )}
+      </Show>
       <Show when={props.showMonitoredSystemUpgradeArrival}>
         <div class="mb-4 rounded-md border border-primary/30 bg-primary/5 p-3 text-sm text-base-content">
           <p class="font-medium">
