@@ -142,7 +142,7 @@ test.describe('Monitored-system billing focus', () => {
     await expect(page.getByText('Need a higher monitored-system cap?')).toBeVisible();
     await expect(page.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
       'href',
-      'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade&feature=max_monitored_systems',
+      'https://cloud.pulserelay.pro/portal?feature=max_monitored_systems&service=upgrade&return_url=http%3A%2F%2F127.0.0.1%3A5173%2Fauth%2Flicense-purchase-activate',
     );
   });
 });

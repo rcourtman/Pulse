@@ -186,7 +186,7 @@ export function renderUpgradePanel(billingState: PortalBillingState, bootstrap: 
           '</div>' +
         '</form>'
       )
-      : '<div class="helper-text">Return to Pulse Pro billing, then use Pulse Account to retrieve the latest active license if automatic activation is unavailable.</div>';
+      : '<div class="helper-text">Return to Pulse Pro billing to refresh the upgraded entitlement. If automatic activation is unavailable, Pulse Account can still retrieve the latest active license.</div>';
     summaryItems.push(
       '<div class="billing-result">' +
         '<h4>Checkout complete</h4>' +

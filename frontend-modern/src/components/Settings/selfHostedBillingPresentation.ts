@@ -31,6 +31,6 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   usageSectionTitle: 'Usage',
   monitoredSystemUpgradeArrivalTitle: 'Need a higher monitored-system cap?',
   monitoredSystemUpgradeArrivalBody:
-    'Open Pulse Account to continue with self-hosted plan comparison and checkout, then activate the new Pulse Pro license key here once you purchase it.',
+    'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
   monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
 };

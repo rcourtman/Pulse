@@ -503,6 +503,12 @@ self-hosted upgrade arrivals: `/portal?service=upgrade&feature=...` may open a
 portal-owned upgrade job inside `Billing`, but it must not fabricate broader
 self-hosted commercial history or reveal retrieve/refund/privacy panels for a
 hosted-only account that only arrived through an upgrade CTA.
+That same commercial contract now also includes the self-hosted purchase
+return path. Product-originated upgrade handoffs must include a canonical
+`return_url` that points back to Pulse's public `POST /auth/license-purchase-activate`
+callback, and that callback must redeem the completed checkout through the
+shared license/commercial API before redirecting the browser back to the
+owned billing plan route.
 That same typed bootstrap/runtime contract must also derive the default signed-
 in shell section from account shape: hosted accounts open on `Workspaces`,
 self-hosted-only accounts open on `Billing`, and the signed-in shell keeps

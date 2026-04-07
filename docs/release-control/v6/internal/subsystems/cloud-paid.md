@@ -412,11 +412,12 @@ The same commercial handoff rule also covers the legacy `/pricing` route in
 product-owned destinations such as monitored-system billing or Cloud plans
 inside the app, but self-hosted commercial upgrade intents now hand off to
 `Pulse Account` first instead of treating the public pricing page as the app's
-canonical destination. The portal may continue the next step on the public
-self-hosted pricing site while the authenticated account shell is still
-absorbing new-purchase depth, but Pulse itself must not render a second public
-pricing surface inside the runtime or dump upgrade CTAs straight to marketing
-as though that were the product-owned commercial surface.
+canonical destination. `Pulse Account` now owns self-hosted plan comparison,
+checkout-session creation, and the purchase return handoff back into Pulse via
+`/auth/license-purchase-activate`; Pulse itself must not render a second
+public pricing surface inside the runtime, and the authenticated portal shell
+must not collapse back into a public-site-only waystation for new-purchase
+depth.
 That destination split is canonical commercial truth, but navigation semantics
 are not owned here. `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/stores/license.ts` decide which href each commercial
@@ -592,8 +593,11 @@ router contract: `/settings/system/billing/plan` is the canonical plan state,
 and `/settings/system/billing` remains a compatibility handoff rather than the
 primary owned destination. Arrival-specific UI affordances belong to that same
 owned billing surface: usage arrivals may open counting rules by default, and
-plan arrivals may surface an upgrade callout, but checkout still hands off to
-the public pricing surface rather than living inside the product runtime.
+plan arrivals may surface an upgrade callout that hands off into `Pulse Account`
+for self-hosted plan comparison and checkout before returning through the
+runtime-owned activation callback. Pulse product routes keep ownership of
+license status, usage, and activation state; `Pulse Account` owns the commerce
+flow itself.
 That same ownership split is explicit in the governed registry as well:
 `CommercialBillingSections.tsx` is part of the shared commercial shell/model
 surface, while `SelfHostedCommercialActivationSection.tsx` stays on the

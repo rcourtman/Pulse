@@ -272,4 +272,26 @@ describe('services view', function() {
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('session_id');
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain('ppk_live_preview');
   });
+
+  it('renders a product-refresh fallback when a completed checkout has no return URL', function() {
+    document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
+
+    var billingState = createPortalBillingState();
+    billingState.upgradeFeatureKey = 'max_monitored_systems';
+    billingState.upgradeCheckoutSessionID = 'cs_success';
+    billingState.upgradeCheckoutResult.status = 'ready';
+    billingState.upgradeCheckoutResult.data = {
+      status: 'fulfilled',
+      owner_email: 'buyer@example.com',
+      tier: 'pro_plus',
+      activation_key_prefix: 'ppk_live_preview',
+      max_monitored_systems: 50,
+    };
+
+    renderUpgradePanel(billingState, createBootstrap());
+
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
+      'Return to Pulse Pro billing to refresh the upgraded entitlement.',
+    );
+  });
 });
