@@ -63,15 +63,16 @@ export const ProLicensePanel: Component = () => {
                 commercialPlanModel={state.commercialPlanModel()}
                 entitlements={state.entitlements()}
                 formattedFeatures={state.formattedFeatures()}
-                grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
-                hasLicenseDetails={state.hasLicenseDetails()}
-                hasPaidFeatures={state.hasPaidFeatures()}
-                loading={state.loading()}
-                onReload={() => void state.loadPanelData()}
-                statusPresentation={state.statusPresentation()}
-                trialActivationNotice={state.trialActivationNotice()}
-                trialEnded={state.trialEnded()}
-              />
+              grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
+              hasLicenseDetails={state.hasLicenseDetails()}
+              hasPaidFeatures={state.hasPaidFeatures()}
+              loading={state.loading()}
+              onReload={() => void state.loadPanelData()}
+              showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
+              statusPresentation={state.statusPresentation()}
+              trialActivationNotice={state.trialActivationNotice()}
+              trialEnded={state.trialEnded()}
+            />
             </CommercialSection>
           </Show>
 
@@ -81,7 +82,10 @@ export const ProLicensePanel: Component = () => {
               title={SELF_HOSTED_PRO_BILLING_PRESENTATION.usageSectionTitle}
               description={getMonitoredSystemBriefSummary()}
             >
-              <MonitoredSystemLedgerPanel embedded />
+              <MonitoredSystemLedgerPanel
+                embedded
+                showCountingRulesByDefault={state.showCountingRulesByDefault()}
+              />
             </CommercialSection>
           </Show>
 

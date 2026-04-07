@@ -27,6 +27,7 @@ import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/Mon
 
 interface MonitoredSystemLedgerPanelProps {
   embedded?: boolean;
+  showCountingRulesByDefault?: boolean;
 }
 
 function usagePercent(total: number, limit: number): number {
@@ -72,6 +73,7 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
           <div class="space-y-1">
             <h3 class="text-sm font-semibold text-base-content">{presentation.sectionTitle}</h3>
             <MonitoredSystemDefinitionDisclosure
+              defaultOpen={props.showCountingRulesByDefault}
               buttonClass="text-xs font-medium text-muted underline-offset-2 transition-colors hover:text-base-content hover:underline"
               detailClass="max-w-xl text-xs text-muted"
             />

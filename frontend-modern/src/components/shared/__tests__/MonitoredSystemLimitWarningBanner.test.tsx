@@ -78,7 +78,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
       href: '/settings/system/billing',
       external: false,
     });
-    mockGetUpgradeActionUrlOrFallback.mockReturnValue('/settings/system/billing#pulse-pro-plan');
+    mockGetUpgradeActionUrlOrFallback.mockReturnValue(
+      '/settings/system/billing/plan?intent=max_monitored_systems',
+    );
   });
 
   afterEach(() => {
@@ -108,6 +110,10 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('demoModeEnabled');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain('scopeSelfHostedBillingDestination');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
@@ -172,12 +178,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(screen.getByText('Monitored systems: 5/6')).toBeInTheDocument();
     expect(screen.getByText('Learn more')).toHaveAttribute(
       'href',
-      '/settings/system/billing#pulse-pro-usage',
+      '/settings/system/billing/usage?details=counting-rules',
     );
     expect(screen.getByText('Upgrade to add more')).toBeInTheDocument();
     expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
       'href',
-      '/settings/system/billing#pulse-pro-plan',
+      '/settings/system/billing/plan?intent=max_monitored_systems',
     );
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
   });
@@ -211,11 +217,11 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Learn more')).toHaveAttribute(
       'href',
-      '/settings/system/billing#pulse-pro-usage',
+      '/settings/system/billing/usage?details=counting-rules',
     );
     expect(screen.getByText('Upgrade to add more')).toHaveAttribute(
       'href',
-      '/settings/system/billing#pulse-pro-plan',
+      '/settings/system/billing/plan?intent=max_monitored_systems',
     );
   });
 

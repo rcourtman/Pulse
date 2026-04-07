@@ -8,7 +8,7 @@ import {
   getMonitoredSystemLimitUpgradeLabel,
   type MonitoredSystemLegacyConnectionCounts,
 } from '@/utils/monitoredSystemPresentation';
-import { SELF_HOSTED_PRO_BILLING_USAGE_HREF } from '@/utils/pricingHandoff';
+import { SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF } from '@/utils/pricingHandoff';
 
 type LimitState = {
   current: number;
@@ -17,7 +17,8 @@ type LimitState = {
 };
 
 export const MONITORED_SYSTEM_LIMIT_KEY = 'max_monitored_systems';
-export const MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF = SELF_HOSTED_PRO_BILLING_USAGE_HREF;
+export const MONITORED_SYSTEM_LIMIT_LEARN_MORE_HREF =
+  SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF;
 export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF = '/settings';
 export const MONITORED_SYSTEM_LIMIT_LEARN_MORE_LABEL = getMonitoredSystemLimitLearnMoreLabel();
 export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL =

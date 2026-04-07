@@ -1290,6 +1290,10 @@ metadata and item lookup, `settingsNavVisibility.ts` owns
 feature/capability visibility and lock policy for settings navigation,
 `useSettingsNavigation.ts` owns reactive URL sync and canonical tab-selection
 state, `SettingsDialogs.tsx` owns shared settings modal composition,
+including the route-owned billing focus contract where
+`/settings/system/billing/plan` is the canonical settings-tab destination,
+`/settings/system/billing/usage` is a same-tab child state, and legacy billing
+base/hash links are compatibility inputs rather than primary runtime routes.
 `useSettingsShellState.ts` owns shell-local sidebar/search/password-modal
 state, and `settingsTabSaveBehavior.ts` owns settings tab save-behavior lookup,
 `frontend-modern/src/components/Settings/useSettingsSystemPanels.tsx` owns
@@ -1420,6 +1424,10 @@ owns monitored-system warning policy, count aggregation, and tone/text-class
 policy while sourcing customer-facing monitored-system copy from the canonical
 `frontend-modern/src/utils/monitoredSystemPresentation.ts` helper. Future
 warning-banner work should extend those owners instead of pushing entitlement
+state or route selection back into the render shell. When the warning points at
+Pulse Pro billing, the shared primitive must preserve distinct route-owned
+arrivals for usage explanation vs upgrade intent instead of re-collapsing both
+CTAs onto one generic billing href.
 orchestration, tracking, or naming math back into the shared shell or
 reintroducing banner-local monitored-system copy strings.
 Shared frontend label-formatting helpers now also have an explicit owner here.

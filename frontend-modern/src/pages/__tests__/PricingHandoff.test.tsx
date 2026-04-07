@@ -60,7 +60,10 @@ describe('PricingHandoff', () => {
     render(() => (
       <Router>
         <Route path="/pricing" component={PricingHandoff} />
-        <Route path="/settings/system/billing" component={() => <div>Billing destination</div>} />
+        <Route
+          path="/settings/system/billing/plan"
+          component={() => <div>Billing destination</div>}
+        />
       </Router>
     ));
 

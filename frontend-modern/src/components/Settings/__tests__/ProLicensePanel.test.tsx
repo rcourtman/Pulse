@@ -9,7 +9,9 @@ import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialActivationSectionSource from '../SelfHostedCommercialActivationSection.tsx?raw';
 import {
   getPublicPricingUrl,
+  SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
 } from '@/utils/pricingHandoff';
 
@@ -23,7 +25,7 @@ const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const useLocationMock = vi.fn(() => ({
   search: '',
-  pathname: '/settings/system/billing',
+  pathname: '/settings/system/billing/plan',
   hash: '',
 }));
 const navigateMock = vi.fn();
@@ -91,7 +93,7 @@ describe('ProLicensePanel', () => {
     getUpgradeActionUrlOrFallbackMock.mockImplementation((feature?: string) => getPublicPricingUrl(feature));
     useLocationMock.mockReturnValue({
       search: '',
-      pathname: '/settings/system/billing',
+      pathname: '/settings/system/billing/plan',
       hash: '',
     });
   });
@@ -185,7 +187,7 @@ describe('ProLicensePanel', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing#pulse-pro-usage', {
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_USAGE_HREF, {
       replace: false,
       scroll: false,
     });
@@ -314,7 +316,7 @@ describe('ProLicensePanel', () => {
   it('shows the hosted activation success banner on the Pro settings route', async () => {
     useLocationMock.mockReturnValue({
       search: '?trial=activated',
-      pathname: '/settings/system/billing',
+      pathname: '/settings/system/billing/plan',
       hash: '',
     });
 
@@ -324,17 +326,17 @@ describe('ProLicensePanel', () => {
     expect(
       screen.getByText(/Pulse activated the Pro trial for this instance/i),
     ).toBeInTheDocument();
-    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing', {
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
       scroll: false,
     });
   });
 
-  it('focuses the usage billing section when the route hash requests it', async () => {
+  it('focuses the usage billing section when the usage route requests counting rules', async () => {
     useLocationMock.mockReturnValue({
-      search: '',
-      pathname: '/settings/system/billing',
-      hash: `#${SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID}`,
+      search: '?details=counting-rules',
+      pathname: '/settings/system/billing/usage',
+      hash: '',
     });
 
     render(() => <ProLicensePanel />);
@@ -343,21 +345,37 @@ describe('ProLicensePanel', () => {
     expect(document.getElementById(SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID)).not.toBeInTheDocument();
     expect(document.getElementById(SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID)).toBeInTheDocument();
     expect(screen.getByText('Monitored Systems')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'View counting rules' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toBeInTheDocument();
+  });
+
+  it('shows a monitored-system upgrade arrival callout on the plan upgrade route', async () => {
+    useLocationMock.mockReturnValue({
+      search: '?intent=max_monitored_systems',
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    render(() => <ProLicensePanel />);
+
+    expect(screen.getByText('Need a higher monitored-system cap?')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Compare plans' })).toHaveAttribute(
+      'href',
+      getPublicPricingUrl('max_monitored_systems'),
+    );
   });
 
   it('navigates between plan and usage focus states through the billing subtabs', async () => {
     useLocationMock.mockReturnValue({
       search: '',
-      pathname: '/settings/system/billing',
-      hash: `#${SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID}`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
     });
 
     render(() => <ProLicensePanel />);
 
     fireEvent.click(screen.getByRole('tab', { name: 'Usage' }));
 
-    expect(navigateMock).toHaveBeenCalledWith('/settings/system/billing#pulse-pro-usage', {
+    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_USAGE_HREF, {
       replace: false,
       scroll: false,
     });
@@ -509,7 +527,9 @@ describe('ProLicensePanel', () => {
     expect(proLicensePanelSource).not.toContain('createSignal(');
     expect(proLicensePanelSource).not.toContain('useLocation()');
     expect(proLicensePanelStateSource).toContain('useLocation');
-    expect(proLicensePanelStateSource).toContain('const activeSection = createMemo<SelfHostedBillingSection>(() => {');
+    expect(proLicensePanelStateSource).toContain('resolveSelfHostedBillingSection');
+    expect(proLicensePanelStateSource).toContain('getSelfHostedBillingPlanIntent');
+    expect(proLicensePanelStateSource).toContain('getSelfHostedBillingUsageDetail');
     expect(proLicensePanelStateSource).toContain('const setActiveSection = (section: SelfHostedBillingSection) => {');
     expect(proLicensePanelStateSource).toContain('loadLicenseStatus(true)');
     expect(proLicensePanelStateSource).toContain('buildSelfHostedCommercialPlanModel');
@@ -531,6 +551,10 @@ describe('ProLicensePanel', () => {
     expect(proLicensePlanSectionSource).toContain(
       '!props.hasPaidFeatures && !props.trialEnded ? getInactiveProUpsellNotice() : null;',
     );
+    expect(proLicensePlanSectionSource).toContain(
+      'monitoredSystemUpgradeArrivalTitle',
+    );
+    expect(proLicensePlanSectionSource).toContain("getUpgradeActionDestination('max_monitored_systems')");
     expect(proLicensePlanSectionSource).not.toContain('Your Pro trial has ended');
     expect(proLicensePlanSectionSource).not.toContain('Unlock Pulse Patrol, alert analysis, auto-fix, and more.');
     expect(selfHostedCommercialActivationSectionSource).toContain(

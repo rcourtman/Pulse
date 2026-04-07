@@ -318,14 +318,14 @@ describe('license store', () => {
       );
     });
 
-    it('routes monitored-system limit fallbacks to billing usage', async () => {
+    it('routes monitored-system limit fallbacks to the billing upgrade arrival', async () => {
       vi.mocked(LicenseAPI.getEntitlements).mockResolvedValue({
         ...mockProEntitlements,
         upgrade_reasons: [{ key: 'reason1', reason: 'Reason 1', action_url: '/upgrade/reason1' }],
       });
       await loadLicenseStatus(true);
       expect(getUpgradeActionUrlOrFallback('max_monitored_systems')).toBe(
-        '/settings/system/billing#pulse-pro-plan',
+        '/settings/system/billing/plan?intent=max_monitored_systems',
       );
     });
 

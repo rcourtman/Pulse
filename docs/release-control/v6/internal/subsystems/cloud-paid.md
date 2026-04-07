@@ -128,7 +128,10 @@ agreement, and cloud-specific enforcement rules.
     and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
     therefore own a canonical two-state billing focus model (`plan` vs
     `usage`) that survives direct links, compatibility redirects, and
-    in-product CTA navigation.
+    in-product CTA navigation. The current canonical arrivals are
+    `/settings/system/billing/usage?details=counting-rules` for explanation and
+    `/settings/system/billing/plan?intent=max_monitored_systems` for upgrade
+    intent.
 
 ## Forbidden Paths
 
@@ -580,7 +583,10 @@ For self-hosted Pulse Pro specifically, the plan/usage split is now also a
 router contract: `/settings/system/billing/plan` is the canonical plan state,
 `/settings/system/billing/usage` is the canonical monitored-system usage state,
 and `/settings/system/billing` remains a compatibility handoff rather than the
-primary owned destination.
+primary owned destination. Arrival-specific UI affordances belong to that same
+owned billing surface: usage arrivals may open counting rules by default, and
+plan arrivals may surface an upgrade callout, but checkout still hands off to
+the public pricing surface rather than living inside the product runtime.
 That same ownership split is explicit in the governed registry as well:
 `CommercialBillingSections.tsx` is part of the shared commercial shell/model
 surface, while `SelfHostedCommercialActivationSection.tsx` stays on the

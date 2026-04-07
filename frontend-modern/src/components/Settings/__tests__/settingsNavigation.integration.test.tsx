@@ -14,7 +14,7 @@ const canonicalTabPaths = {
   'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
-  'system-billing': '/settings/system/billing',
+  'system-billing': '/settings/system/billing/plan',
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
   'organization-billing': '/settings/organization/billing',

@@ -1,4 +1,4 @@
-import { Show, createSignal, type Component } from 'solid-js';
+import { Show, createEffect, createSignal, type Component } from 'solid-js';
 import {
   getMonitoredSystemBriefSummary,
   getMonitoredSystemDisclosureDefinition,
@@ -7,6 +7,7 @@ import {
 
 interface MonitoredSystemDefinitionDisclosureProps {
   showSummary?: boolean;
+  defaultOpen?: boolean;
   class?: string;
   summaryClass?: string;
   buttonClass?: string;
@@ -16,7 +17,11 @@ interface MonitoredSystemDefinitionDisclosureProps {
 export const MonitoredSystemDefinitionDisclosure: Component<
   MonitoredSystemDefinitionDisclosureProps
 > = (props) => {
-  const [open, setOpen] = createSignal(false);
+  const [open, setOpen] = createSignal(Boolean(props.defaultOpen));
+
+  createEffect(() => {
+    setOpen(Boolean(props.defaultOpen));
+  });
 
   return (
     <div class={props.class ?? 'space-y-2'}>

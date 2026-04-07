@@ -24,7 +24,7 @@ const canonicalTabPaths = {
   'system-recovery': '/settings/system-recovery',
   'system-ai': '/settings/system-ai',
   'system-relay': '/settings/system-relay',
-  'system-billing': '/settings/system/billing',
+  'system-billing': '/settings/system/billing/plan',
   'organization-overview': '/settings/organization',
   'organization-access': '/settings/organization/access',
   'organization-billing': '/settings/organization/billing',
@@ -92,7 +92,12 @@ describe('settingsNavigationModel', () => {
     expect(resolveCanonicalSettingsPath('/settings/integrations/api')).toBe(
       '/settings/security/api',
     );
-    expect(resolveCanonicalSettingsPath('/settings/system-pro')).toBe('/settings/system/billing');
+    expect(resolveCanonicalSettingsPath('/settings/system/billing')).toBe(
+      '/settings/system/billing/plan',
+    );
+    expect(resolveCanonicalSettingsPath('/settings/system-pro')).toBe(
+      '/settings/system/billing/plan',
+    );
     expect(resolveCanonicalSettingsPath('/not-settings')).toBeNull();
   });
 
@@ -106,6 +111,11 @@ describe('settingsNavigationModel', () => {
     for (const [path, expectedTab] of organizationCases) {
       expect(deriveTabFromPath(path)).toBe(expectedTab);
     }
+  });
+
+  it('maps plan and usage billing subroutes back to the billing tab', () => {
+    expect(deriveTabFromPath('/settings/system/billing/plan')).toBe('system-billing');
+    expect(deriveTabFromPath('/settings/system/billing/usage')).toBe('system-billing');
   });
 
   it('maps query deep-links contract values', () => {

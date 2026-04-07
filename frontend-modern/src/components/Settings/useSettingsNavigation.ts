@@ -1,4 +1,5 @@
 import { createEffect, createSignal, on } from 'solid-js';
+import { resolveCanonicalSelfHostedBillingHref } from '@/utils/pricingHandoff';
 import {
   DEFAULT_SETTINGS_TAB,
   deriveAgentFromPath,
@@ -14,6 +15,7 @@ import {
 type SettingsDispatchableTab = Exclude<SettingsTab, 'proxmox'>;
 
 type SettingsLocation = {
+  hash: string;
   pathname: string;
   search: string;
 };
@@ -71,8 +73,8 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
   // Keep tab state in sync with canonical URLs, while preserving old deep links as aliases.
   createEffect(
     on(
-      () => [location.pathname, location.search] as const,
-      ([path, search]) => {
+      () => [location.pathname, location.search, location.hash] as const,
+      ([path, search, hash]) => {
         if (path === '/settings' || path === '/settings/') {
           const queryTab = deriveTabFromQuery(search);
           const resolvedTab = queryTab ?? DEFAULT_SETTINGS_TAB;
@@ -90,6 +92,16 @@ export function useSettingsNavigation({ navigate, location }: UseSettingsNavigat
           if (resolvedTab === 'proxmox') {
             setSelectedAgent('pve');
           }
+          return;
+        }
+
+        const currentHref = `${path}${search}${hash}`;
+        const canonicalBillingHref = resolveCanonicalSelfHostedBillingHref(path, search, hash);
+        if (canonicalBillingHref && canonicalBillingHref !== currentHref) {
+          navigate(canonicalBillingHref, {
+            replace: true,
+            scroll: false,
+          });
           return;
         }
 

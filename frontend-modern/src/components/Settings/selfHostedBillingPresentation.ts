@@ -10,6 +10,9 @@ export interface SelfHostedProBillingPresentation {
   planSectionTitle: string;
   planSectionDescription: string;
   usageSectionTitle: string;
+  monitoredSystemUpgradeArrivalTitle: string;
+  monitoredSystemUpgradeArrivalBody: string;
+  monitoredSystemUpgradeArrivalActionLabel: string;
 }
 
 export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentation = {
@@ -26,4 +29,8 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   planSectionTitle: 'Plan',
   planSectionDescription: 'Review your active plan, expiry, included limits, and paid capabilities.',
   usageSectionTitle: 'Usage',
+  monitoredSystemUpgradeArrivalTitle: 'Need a higher monitored-system cap?',
+  monitoredSystemUpgradeArrivalBody:
+    'Compare plans on the public pricing site, then activate the new Pulse Pro license key here once you purchase it.',
+  monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
 };

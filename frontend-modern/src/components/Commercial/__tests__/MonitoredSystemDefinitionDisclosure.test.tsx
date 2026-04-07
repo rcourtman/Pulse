@@ -36,4 +36,16 @@ describe('MonitoredSystemDefinitionDisclosure', () => {
       screen.queryByText('Billing is based on monitored systems. Child resources are included.'),
     ).not.toBeInTheDocument();
   });
+
+  it('supports route-driven default-open disclosure state', () => {
+    render(() => <MonitoredSystemDefinitionDisclosure defaultOpen />);
+
+    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(
+      screen.getByText(/a monitored system is a top-level machine or cluster/i),
+    ).toBeInTheDocument();
+  });
 });

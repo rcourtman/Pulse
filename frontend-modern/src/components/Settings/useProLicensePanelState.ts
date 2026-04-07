@@ -19,18 +19,17 @@ import {
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
 import {
-  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
-  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
+  getSelfHostedBillingPlanIntent,
+  getSelfHostedBillingUsageDetail,
+  resolveSelfHostedBillingSection,
+  SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
+  SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+  SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
+  SELF_HOSTED_PRO_BILLING_USAGE_ROUTE,
+  type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
-
-const SELF_HOSTED_PRO_BILLING_SECTION_IDS = new Set([
-  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
-  SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
-]);
-
-export type SelfHostedBillingSection = 'plan' | 'usage';
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Not available';
@@ -81,26 +80,29 @@ export function useProLicensePanelState() {
   });
 
   const activeSection = createMemo<SelfHostedBillingSection>(() => {
-    const hash = location.hash?.trim();
-    const sectionId = hash?.startsWith('#') ? hash.slice(1) : '';
-    if (sectionId === SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID) {
-      return 'usage';
-    }
-    return 'plan';
+    return resolveSelfHostedBillingSection(location.pathname, location.search, location.hash);
   });
 
   const setActiveSection = (section: SelfHostedBillingSection) => {
-    const sectionId =
+    const nextPath =
       section === 'usage'
-        ? SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID
-        : SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID;
-    if (!SELF_HOSTED_PRO_BILLING_SECTION_IDS.has(sectionId)) {
-      return;
-    }
-
-    const nextPath = `${location.pathname}${location.search}${`#${sectionId}`}`;
+        ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE
+        : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
     navigate(nextPath, { replace: false, scroll: false });
   };
+
+  const showMonitoredSystemUpgradeArrival = createMemo(
+    () =>
+      activeSection() === 'plan' &&
+      getSelfHostedBillingPlanIntent(location.search) ===
+        SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+  );
+  const showCountingRulesByDefault = createMemo(
+    () =>
+      activeSection() === 'usage' &&
+      getSelfHostedBillingUsageDetail(location.search) ===
+        SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
+  );
 
   const showTrialStart = createMemo(() => {
     const current = entitlements();
@@ -308,6 +310,8 @@ export function useProLicensePanelState() {
     looksLikeLegacyLicenseKey,
     setActiveSection,
     setLicenseKey,
+    showCountingRulesByDefault,
+    showMonitoredSystemUpgradeArrival,
     showTrialStart,
     startingTrial,
     statusPresentation,

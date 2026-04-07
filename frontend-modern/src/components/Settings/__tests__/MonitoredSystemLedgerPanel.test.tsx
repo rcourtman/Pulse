@@ -408,4 +408,26 @@ describe('MonitoredSystemLedgerPanel', () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it('opens counting rules by default for usage-focused billing arrivals', async () => {
+    getLedgerMock.mockResolvedValue({
+      systems: [],
+      total: 2,
+      limit: 5,
+    } as MonitoredSystemLedgerResponse);
+
+    render(() => <MonitoredSystemLedgerPanel showCountingRulesByDefault />);
+
+    await waitFor(() => {
+      expect(screen.getByText('2 / 5')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Hide counting rules' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+    expect(
+      screen.getByText(/a monitored system is a top-level machine or cluster/i),
+    ).toBeInTheDocument();
+  });
 });

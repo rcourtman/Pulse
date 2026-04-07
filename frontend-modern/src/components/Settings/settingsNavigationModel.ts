@@ -2,6 +2,10 @@ import type { Component } from 'solid-js';
 import type { SecurityStatusSettingsCapabilities } from '@/types/config';
 import { normalizeSourcePlatformKey } from '@/utils/sourcePlatforms';
 import type { PlatformType } from '@/types/resource';
+import {
+  SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
+  SELF_HOSTED_PRO_BILLING_ROUTE,
+} from '@/utils/pricingHandoff';
 
 export type SettingsTab =
   | 'proxmox'
@@ -79,7 +83,7 @@ const LEGACY_PROXMOX_PREFIX = '/settings/infrastructure/proxmox';
 const LEGACY_PROXMOX_API_PREFIX = '/settings/infrastructure/api';
 const LEGACY_INTEGRATIONS_API_PREFIX = '/settings/integrations/api';
 const SECURITY_API_PREFIX = '/settings/security/api';
-const SYSTEM_BILLING_PREFIX = '/settings/system/billing';
+const SYSTEM_BILLING_PREFIX = SELF_HOSTED_PRO_BILLING_ROUTE;
 const LEGACY_SYSTEM_PRO_PREFIX = '/settings/system-pro';
 
 const PROXMOX_AGENT_META: Record<
@@ -177,8 +181,11 @@ export function resolveCanonicalSettingsPath(path: string): string | null {
   if (normalizedPath === LEGACY_INTEGRATIONS_API_PREFIX) {
     return SECURITY_API_PREFIX;
   }
+  if (normalizedPath === SYSTEM_BILLING_PREFIX) {
+    return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
+  }
   if (normalizedPath === LEGACY_SYSTEM_PRO_PREFIX) {
-    return SYSTEM_BILLING_PREFIX;
+    return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
   }
   return normalizedPath;
 }
@@ -355,7 +362,7 @@ export function settingsTabPath(tab: SettingsTab): string {
     case 'system-relay':
       return '/settings/system-relay';
     case 'system-billing':
-      return SYSTEM_BILLING_PREFIX;
+      return SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
     default:
       return `/settings/${tab}`;
   }

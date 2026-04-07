@@ -10,8 +10,8 @@ import {
 } from '@/stores/license';
 import { resolveUpgradeDestination } from '@/utils/upgradeNavigation';
 import {
-  anchorSelfHostedBillingDestination,
-  SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  scopeSelfHostedBillingDestination,
+  SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
 } from '@/utils/pricingHandoff';
 import {
   trackUpgradeClicked,
@@ -63,9 +63,12 @@ export function useMonitoredSystemLimitWarningBannerState() {
     resolveUpgradeDestination(MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_HREF),
   );
   const upgradeDestination = createMemo(() =>
-    anchorSelfHostedBillingDestination(
+    scopeSelfHostedBillingDestination(
       getUpgradeActionDestination(MONITORED_SYSTEM_LIMIT_KEY),
-      SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+      'plan',
+      {
+        intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+      },
     ),
   );
 

@@ -667,10 +667,10 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'anchorSelfHostedBillingDestination',
+      'scopeSelfHostedBillingDestination',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID',
+      'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
     expect(monitoredSystemLimitWarningBannerStateSource).not.toContain("fetch('/api/health'");
@@ -688,7 +688,7 @@ describe('shared primitive guardrails', () => {
       'getMonitoredSystemLimitInstallCollectorsLabel',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      'SELF_HOSTED_PRO_BILLING_USAGE_HREF',
+      'SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF',
     );
   });
 
