@@ -6,6 +6,7 @@ import {
   onCleanup,
   onMount,
 } from 'solid-js';
+import { AIAPI } from '@/api/ai';
 import {
   getPatrolAutonomySettings,
   getPatrolRunHistory,
@@ -18,7 +19,13 @@ import {
   type PatrolStatus,
 } from '@/api/patrol';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
-import { apiFetchJSON } from '@/utils/apiClient';
+import {
+  aiRuntimeModels,
+  aiRuntimeSettings,
+  loadAIRuntimeModels,
+  loadAIRuntimeSettings,
+  syncAIRuntimeSettings,
+} from '@/stores/aiRuntimeState';
 import { notificationStore } from '@/stores/notifications';
 import { hasTriggeringAlert } from '@/utils/findingAlertIdentity';
 import { usePatrolStream } from '@/hooks/usePatrolStream';
@@ -30,30 +37,11 @@ import {
   canStartCommercialTrial,
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
+import type { AISettings } from '@/types/ai';
 import { getCanonicalScopeResourceIds } from '@/utils/patrolFormat';
 import { buildPatrolInvestigationContextSummary } from './patrolInvestigationContextModel';
 import { trackPaywallViewed } from '@/utils/upgradeMetrics';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
-
-interface ModelInfo {
-  id: string;
-  name: string;
-  description: string;
-  notable: boolean;
-}
-
-interface AISettings {
-  patrol_model?: string;
-  patrol_interval_minutes?: number;
-  patrol_enabled?: boolean;
-  model?: string;
-  alert_triggered_analysis?: boolean;
-  patrol_alert_triggers_enabled?: boolean;
-  patrol_anomaly_triggers_enabled?: boolean;
-  patrol_event_triggers_enabled?: boolean;
-  patrol_auto_fix?: boolean;
-  auto_fix_model?: string;
-}
 
 type PatrolTab = 'findings' | 'history';
 
@@ -75,7 +63,7 @@ export function usePatrolIntelligenceState() {
   const [showAdvancedSettings, setShowAdvancedSettings] = createSignal(false);
   const [isSavingAdvanced, setIsSavingAdvanced] = createSignal(false);
   const [fullModeUnlocked, setFullModeUnlocked] = createSignal(false);
-  const [availableModels, setAvailableModels] = createSignal<ModelInfo[]>([]);
+  const availableModels = aiRuntimeModels;
   const [patrolModel, setPatrolModel] = createSignal<string>('');
   const [defaultModel, setDefaultModel] = createSignal<string>('');
   const [patrolInterval, setPatrolInterval] = createSignal<number>(360);
@@ -185,31 +173,20 @@ export function usePatrolIntelligenceState() {
     }
   }
 
-  async function loadModels() {
-    try {
-      const data = await apiFetchJSON<{ models: ModelInfo[] }>('/api/ai/models');
-      setAvailableModels(data?.models || []);
-    } catch (err) {
-      console.error('Failed to load models:', err);
-    }
-  }
+  const applyPatrolAISettings = (data: AISettings | null | undefined) => {
+    setPatrolModel(data?.patrol_model || '');
+    setDefaultModel(data?.model || '');
+    setPatrolInterval(data?.patrol_interval_minutes ?? 360);
+    setPatrolEnabledLocal(data?.patrol_enabled ?? true);
+    setAlertTriggeredAnalysis(!alertAnalysisLocked() && data?.alert_triggered_analysis !== false);
+    const legacyEventTriggersEnabled = data?.patrol_event_triggers_enabled !== false;
+    setPatrolAlertTriggers(data?.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled);
+    setPatrolAnomalyTriggers(data?.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled);
+  };
 
-  async function loadAISettings() {
-    try {
-      const data = await apiFetchJSON<AISettings>('/api/settings/ai');
-      if (!data) return;
-      setPatrolModel(data.patrol_model || '');
-      setDefaultModel(data.model || '');
-      setPatrolInterval(data.patrol_interval_minutes ?? 360);
-      setPatrolEnabledLocal(data.patrol_enabled ?? true);
-      setAlertTriggeredAnalysis(!alertAnalysisLocked() && data.alert_triggered_analysis !== false);
-      const legacyEventTriggersEnabled = data.patrol_event_triggers_enabled !== false;
-      setPatrolAlertTriggers(data.patrol_alert_triggers_enabled ?? legacyEventTriggersEnabled);
-      setPatrolAnomalyTriggers(data.patrol_anomaly_triggers_enabled ?? legacyEventTriggersEnabled);
-    } catch (err) {
-      console.error('Failed to load AI settings:', err);
-    }
-  }
+  createEffect(() => {
+    applyPatrolAISettings(aiRuntimeSettings());
+  });
 
   async function handleTogglePatrol() {
     if (isTogglingPatrol()) return;
@@ -222,10 +199,8 @@ export function usePatrolIntelligenceState() {
       clearSafetyTimer();
     }
     try {
-      const data = await apiFetchJSON<AISettings>('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ patrol_enabled: newValue }),
-      });
+      const data = await AIAPI.updateSettings({ patrol_enabled: newValue });
+      syncAIRuntimeSettings(data);
       if (typeof data?.patrol_enabled === 'boolean') {
         setPatrolEnabledLocal(data.patrol_enabled);
       } else {
@@ -284,11 +259,9 @@ export function usePatrolIntelligenceState() {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
     try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ patrol_model: modelId }),
-      });
-      setPatrolModel(modelId);
+      const updated = await AIAPI.updateSettings({ patrol_model: modelId });
+      syncAIRuntimeSettings(updated);
+      setPatrolModel(updated.patrol_model || modelId);
     } catch (err) {
       console.error('Failed to update patrol model:', err);
       notificationStore.error('Failed to update patrol model');
@@ -301,12 +274,10 @@ export function usePatrolIntelligenceState() {
     if (isUpdatingSettings()) return;
     setIsUpdatingSettings(true);
     try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ patrol_interval_minutes: minutes }),
-      });
-      setPatrolInterval(minutes);
-      setPatrolEnabledLocal(minutes > 0);
+      const updated = await AIAPI.updateSettings({ patrol_interval_minutes: minutes });
+      syncAIRuntimeSettings(updated);
+      setPatrolInterval(updated.patrol_interval_minutes ?? minutes);
+      setPatrolEnabledLocal((updated.patrol_interval_minutes ?? minutes) > 0);
       refetchPatrolStatus();
     } catch (err) {
       console.error('Failed to update patrol interval:', err);
@@ -322,10 +293,8 @@ export function usePatrolIntelligenceState() {
     const previous = alertTriggeredAnalysis();
     setAlertTriggeredAnalysis(enabled);
     try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ alert_triggered_analysis: enabled }),
-      });
+      const updated = await AIAPI.updateSettings({ alert_triggered_analysis: enabled });
+      syncAIRuntimeSettings(updated);
     } catch (err) {
       console.error('Failed to update alert-triggered analysis:', err);
       setAlertTriggeredAnalysis(previous);
@@ -341,10 +310,8 @@ export function usePatrolIntelligenceState() {
     const previous = patrolAlertTriggers();
     setPatrolAlertTriggers(enabled);
     try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ patrol_alert_triggers_enabled: enabled }),
-      });
+      const updated = await AIAPI.updateSettings({ patrol_alert_triggers_enabled: enabled });
+      syncAIRuntimeSettings(updated);
     } catch (err) {
       console.error('Failed to update alert-triggered patrols:', err);
       setPatrolAlertTriggers(previous);
@@ -360,10 +327,8 @@ export function usePatrolIntelligenceState() {
     const previous = patrolAnomalyTriggers();
     setPatrolAnomalyTriggers(enabled);
     try {
-      await apiFetchJSON('/api/settings/ai/update', {
-        method: 'PUT',
-        body: JSON.stringify({ patrol_anomaly_triggers_enabled: enabled }),
-      });
+      const updated = await AIAPI.updateSettings({ patrol_anomaly_triggers_enabled: enabled });
+      syncAIRuntimeSettings(updated);
     } catch (err) {
       console.error('Failed to update anomaly-triggered patrols:', err);
       setPatrolAnomalyTriggers(previous);
@@ -664,8 +629,8 @@ export function usePatrolIntelligenceState() {
       loadRuntimeCapabilities(),
       loadAllData(),
       loadAutonomySettings(),
-      loadModels(),
-      loadAISettings(),
+      loadAIRuntimeModels(),
+      loadAIRuntimeSettings(),
     ]);
   });
 

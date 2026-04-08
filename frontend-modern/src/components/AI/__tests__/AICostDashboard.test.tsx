@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { AICostDashboard } from '../AICostDashboard';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AICostSummary, AISettings } from '@/types/ai';
 
 // ---- mock function handles ----
@@ -131,6 +132,7 @@ function renderDashboard() {
 
 describe('AICostDashboard', () => {
   beforeEach(() => {
+    resetAIRuntimeState();
     getCostSummaryMock.mockReset();
     getSettingsMock.mockReset();
     resetCostHistoryMock.mockReset();

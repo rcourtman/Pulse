@@ -106,6 +106,11 @@ semantics, and `frontend-modern/src/stores/aiIntelligenceSummaryModel.ts` now
 owns the canonical summary normalization so Patrol consumers inherit one
 governed recent-change and policy-posture snapshot instead of reintroducing
 hook-local fallback logic.
+That same Patrol hook boundary now consumes shared AI settings/model truth
+through `frontend-modern/src/stores/aiRuntimeState.ts` instead of mounting its
+own `/api/settings/ai` or `/api/ai/models` reads. Patrol-specific state still
+owns local toggle optimism, run-status orchestration, and Patrol-only copy, but
+the underlying AI runtime catalog must stay shared with chat and AI settings.
 The Patrol page now also treats Patrol runtime availability as a first-class
 render contract: the header chip, primary summary card, and status bar must
 all route through the shared `frontend-modern/src/utils/patrolRuntimePresentation.ts`

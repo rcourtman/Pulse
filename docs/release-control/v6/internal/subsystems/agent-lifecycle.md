@@ -417,6 +417,12 @@ request the canonical commercial destination from the shared license boundary,
 but they must leave internal-versus-external navigation semantics to
 `frontend-primitives` instead of hardcoding pricing URLs or tab-open behavior
 inside lifecycle-owned settings surfaces.
+That same lifecycle-owned settings surface must also keep assistant
+availability as an app-shell fact instead of an AI-runtime fetch. Agent
+Profiles may read the shared browser bootstrap availability state to decide
+whether assistant affordances render, but they must not mount
+`frontend-modern/src/stores/aiRuntimeState.ts` or call `/api/settings/ai`
+just to decide whether to show assistant-adjacent UI.
 That same platform-connections ownership now also includes mock-runtime
 continuity for API-backed platforms. When `/api/system/mock-mode` flips a
 running server between real and mock data, the canonical TrueNAS and VMware

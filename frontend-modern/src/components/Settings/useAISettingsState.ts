@@ -9,7 +9,13 @@ import {
   type ProviderHealthState,
   type ProviderTestResult,
 } from '@/components/Settings/aiSettingsModel';
-import { aiChatStore } from '@/stores/aiChat';
+import {
+  aiRuntimeModels,
+  aiRuntimeModelsError,
+  clearAIRuntimeModels,
+  loadAIRuntimeModels,
+  syncAIRuntimeSettings,
+} from '@/stores/aiRuntimeState';
 import {
   hasFeature,
   loadRuntimeCapabilities,
@@ -163,12 +169,14 @@ export const useAISettingsState = () => {
     (data?.configured_providers?.length ?? 0) > 0;
 
   const syncModelCatalogForSettings = (data: AISettingsType | null | undefined) => {
+    syncAIRuntimeSettings(data ?? null);
     if (hasProviderBackedModels(data)) {
       void loadModels();
       return;
     }
     setAvailableModels([]);
     setModelsError('');
+    clearAIRuntimeModels();
   };
 
   createEffect((wasPaywallVisible) => {
@@ -251,12 +259,13 @@ export const useAISettingsState = () => {
     setModelsLoading(true);
     setModelsError('');
     try {
-      const result = await AIAPI.getModels();
-      if (result.error) {
-        setModelsError(result.error);
-        logger.debug('[AISettings] API returned error for models:', result.error);
+      await loadAIRuntimeModels(true);
+      const nextError = aiRuntimeModelsError();
+      if (nextError) {
+        setModelsError(nextError);
+        logger.debug('[AISettings] API returned error for models:', nextError);
       }
-      setAvailableModels(result.models ?? []);
+      setAvailableModels(aiRuntimeModels());
     } catch (error) {
       const message = getAIModelsLoadErrorMessage(error instanceof Error ? error.message : '');
       setModelsError(message);
@@ -481,7 +490,6 @@ export const useAISettingsState = () => {
       void runProviderPreflight(updated);
       handleCloseSetupModal();
       notificationStore.success('Pulse Assistant enabled! You can customize settings below.');
-      aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error('[AISettings] Setup failed:', error);
       notificationStore.error(error instanceof Error ? error.message : 'Setup failed');
@@ -694,7 +702,6 @@ export const useAISettingsState = () => {
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       notificationStore.success('Pulse Assistant settings saved');
-      aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error('[AISettings] Failed to save settings:', error);
       notificationStore.error(getAISettingsSaveErrorMessage(error instanceof Error ? error.message : ''));
@@ -787,7 +794,6 @@ export const useAISettingsState = () => {
       if (provider === 'ollama') setForm('ollamaBaseUrl', '');
 
       notificationStore.success(`${provider} credentials cleared`);
-      aiChatStore.notifySettingsChanged();
     } catch (error) {
       logger.error(`[AISettings] Clear ${provider} failed:`, error);
       notificationStore.error(
@@ -806,7 +812,6 @@ export const useAISettingsState = () => {
       syncModelCatalogForSettings(updated);
       void runProviderPreflight(updated);
       notificationStore.success(newValue ? 'Pulse Assistant enabled' : 'Pulse Assistant disabled');
-      aiChatStore.notifySettingsChanged();
     } catch (error) {
       setForm('enabled', !newValue);
       logger.error('[AISettings] Failed to toggle AI:', error);

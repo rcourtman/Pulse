@@ -13,6 +13,15 @@ import { AIAPI } from '@/api/ai';
 import { AIChatAPI, type ChatSession } from '@/api/aiChat';
 import { notificationStore } from '@/stores/notifications';
 import { aiChatStore } from '@/stores/aiChat';
+import {
+  aiRuntimeModels,
+  aiRuntimeModelsError,
+  aiRuntimeModelsLoading,
+  aiRuntimeSettings,
+  loadAIRuntimeModels,
+  loadAIRuntimeSettings,
+  syncAIRuntimeSettings,
+} from '@/stores/aiRuntimeState';
 import { logger } from '@/utils/logger';
 import { AI_CHAT_SESSION_EMPTY_STATE } from '@/utils/aiChatPresentation';
 import {
@@ -26,7 +35,6 @@ import { isAppContainerDiscoveryResourceType } from '@/utils/discoveryTarget';
 import {
   getActionableAgentIdFromResource,
   isAgentFacetInfrastructureResource,
-  hasAgentFacet as resourceHasAgentFacet,
 } from '@/utils/agentResources';
 import { normalizeChatMentionKeyPart } from '@/utils/chatIdentifiers';
 import {
@@ -37,7 +45,7 @@ import { useChat } from './hooks/useChat';
 import { ChatMessages } from './ChatMessages';
 import { ModelSelector } from './ModelSelector';
 import { MentionAutocomplete, type MentionResource } from './MentionAutocomplete';
-import type { PendingApproval, PendingQuestion, ModelInfo } from './types';
+import type { PendingApproval, PendingQuestion } from './types';
 import { formatIdentifierLabel } from '@/utils/textPresentation';
 
 const MODEL_SESSION_STORAGE_KEY = 'pulse:ai_chat_models_by_session';
@@ -61,9 +69,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const [showSessions, setShowSessions] = createSignal(false);
   const [sessionDropdownPosition, setSessionDropdownPosition] = createSignal({ top: 0, right: 0 });
   let sessionButtonRef: HTMLButtonElement | undefined;
-  const [models, setModels] = createSignal<ModelInfo[]>([]);
-  const [modelsLoading, setModelsLoading] = createSignal(false);
-  const [modelsError, setModelsError] = createSignal('');
   const [defaultModel, setDefaultModel] = createSignal('');
   const [chatOverrideModel, setChatOverrideModel] = createSignal('');
   const [controlLevel, setControlLevel] = createSignal<AIControlLevel>('read_only');
@@ -139,14 +144,14 @@ export const AIChat: Component<AIChatProps> = (props) => {
   const defaultModelLabel = createMemo(() => {
     const fallback = defaultModel().trim();
     if (!fallback) return '';
-    const match = models().find((model) => model.id === fallback);
+    const match = aiRuntimeModels().find((model) => model.id === fallback);
     return match ? match.name || match.id.split(':').pop() || match.id : fallback;
   });
 
   const chatOverrideLabel = createMemo(() => {
     const override = chatOverrideModel().trim();
     if (!override) return '';
-    const match = models().find((model) => model.id === override);
+    const match = aiRuntimeModels().find((model) => model.id === override);
     return match ? match.name || match.id.split(':').pop() || match.id : override;
   });
 
@@ -156,45 +161,32 @@ export const AIChat: Component<AIChatProps> = (props) => {
     if (notify) {
       notificationStore.info('Refreshing models...', 2000);
     }
-    setModelsLoading(true);
-    setModelsError('');
     try {
-      const result = await AIAPI.getModels();
-      const nextModels = result.models || [];
-      setModels(nextModels);
-      if (result.error) {
-        setModelsError(result.error);
+      const nextModels = await loadAIRuntimeModels(true);
+      const modelLoadError = aiRuntimeModelsError();
+      if (modelLoadError) {
         if (notify) {
-          notificationStore.warning(result.error, 6000);
+          notificationStore.warning(modelLoadError, 6000);
         }
       } else if (notify) {
         notificationStore.success(`Models refreshed (${nextModels.length})`, 2000);
       }
     } catch (error) {
       logger.error('[AIChat] Failed to load models:', error);
-      setModels([]);
       const message = error instanceof Error ? error.message : 'Failed to load models.';
-      setModelsError(message);
       notificationStore.error(message);
-    } finally {
-      setModelsLoading(false);
     }
   };
 
-  const loadSettings = async () => {
-    try {
-      const settings = await AIAPI.getSettings();
-      const chatOverride = (settings.chat_model || '').trim();
-      const fallback = chatOverride || (settings.model || '').trim();
-      const resolvedControl = normalizeAIControlLevel(settings.control_level);
-      setDefaultModel(fallback);
-      setChatOverrideModel(chatOverride);
-      setControlLevel(resolvedControl);
-      setDiscoveryEnabled(settings.discovery_enabled ?? false);
-    } catch (error) {
-      logger.error('[AIChat] Failed to load AI settings:', error);
-    }
-  };
+  createEffect(() => {
+    const settings = aiRuntimeSettings();
+    const chatOverride = (settings?.chat_model || '').trim();
+    const fallback = chatOverride || (settings?.model || '').trim();
+    setDefaultModel(fallback);
+    setChatOverrideModel(chatOverride);
+    setControlLevel(normalizeAIControlLevel(settings?.control_level));
+    setDiscoveryEnabled(settings?.discovery_enabled ?? false);
+  });
 
   const updateControlLevel = async (nextLevel: 'read_only' | 'controlled' | 'autonomous') => {
     if (controlSaving() || nextLevel === controlLevel()) {
@@ -206,9 +198,9 @@ export const AIChat: Component<AIChatProps> = (props) => {
     try {
       const updated = await AIAPI.updateSettings({ control_level: nextLevel });
       const resolved = normalizeAIControlLevel(updated.control_level || nextLevel);
+      syncAIRuntimeSettings(updated);
       setControlLevel(resolved);
       if (resolved === 'autonomous') setAutonomousBannerDismissed(false);
-      aiChatStore.notifySettingsChanged();
       notificationStore.success(
         `Control mode set to ${getAIChatControlLevelPresentation(resolved).label}`,
         2000,
@@ -253,30 +245,17 @@ export const AIChat: Component<AIChatProps> = (props) => {
         // AI not running - silently clear dynamic state instead of logging on
         // unrelated routes or after the assistant is disabled.
         setSessions([]);
-        setModels([]);
-        setModelsError('');
+        setDefaultModel('');
+        setChatOverrideModel('');
+        setDiscoveryEnabled(false);
+        setControlLevel('read_only');
         return;
       }
-      await refreshSessions();
-      await loadSettings();
-      await loadModels();
+      await Promise.all([refreshSessions(), loadAIRuntimeSettings(), loadAIRuntimeModels()]);
     } catch (error) {
       logger.error('[AIChat] Failed to initialize:', error);
     }
   };
-
-  // Refresh models when AI settings change (e.g., new API key added)
-  createEffect(() => {
-    const version = aiChatStore.settingsVersionSignal();
-    if (!isOpen()) {
-      return;
-    }
-    // Skip the initial run (version 0)
-    if (version > 0) {
-      loadModels();
-      loadSettings();
-    }
-  });
 
   // Pre-fill input when opened with an initialPrompt (e.g., "Discuss with Assistant" from findings)
   createEffect(() => {
@@ -394,7 +373,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
       value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
     const asString = (value: unknown): string | undefined =>
       typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-    const hasAgentFacet = (resource: Resource): boolean => resourceHasAgentFacet(resource);
     const getAgentActionId = (resource: Resource): string => {
       return getActionableAgentIdFromResource(resource) || resource.id;
     };
@@ -549,7 +527,6 @@ export const AIChat: Component<AIChatProps> = (props) => {
     for (const runtime of dockerHosts) {
       const dockerActionId = getDockerActionId(runtime);
       const label = getPreferredResourceDisplayName(runtime);
-      const hostnameOrId = getPreferredResourceHostname(runtime) || runtime.id;
       const runtimeStatus =
         runtime.status === 'online' || runtime.status === 'running'
           ? 'online'
@@ -889,13 +866,13 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
             {/* Model selector */}
             <ModelSelector
-              models={models()}
+              models={aiRuntimeModels()}
               selectedModel={chat.model()}
               defaultModelLabel={defaultModelLabel()}
               chatOverrideModel={chatOverrideModel()}
               chatOverrideLabel={chatOverrideLabel()}
-              isLoading={modelsLoading()}
-              error={modelsError()}
+              isLoading={aiRuntimeModelsLoading()}
+              error={aiRuntimeModelsError()}
               onModelSelect={selectModel}
               onRefresh={() => loadModels(true)}
             />

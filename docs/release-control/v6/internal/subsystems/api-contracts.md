@@ -369,6 +369,10 @@ Own canonical runtime payload shapes between backend and frontend.
     the write-side settings owner. Non-AI settings surfaces such as
     `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`
     must not probe `/api/settings/ai` just to gate assistant affordances.
+    AI-owned refresh actions may still force a shared reload or sync that
+    store after an owned settings mutation, but they must not reintroduce
+    page-local mount loops that fetch `/api/settings/ai` or `/api/ai/models`
+    separately for chat, Patrol, and cost/budget views.
 23. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import { getPublicPricingUrl } from '@/utils/pricingHandoff';
 
 import { AIIntelligence } from '../AIIntelligence';
@@ -122,6 +123,9 @@ vi.mock('@/api/patrol', () => ({
 vi.mock('@/api/ai', () => ({
   AIAPI: {
     getCorrelations: (...args: unknown[]) => getCorrelationsMock(...args),
+    getModels: (...args: unknown[]) => apiFetchJSONMock('/api/ai/models', ...args),
+    getSettings: (...args: unknown[]) => apiFetchJSONMock('/api/settings/ai', ...args),
+    updateSettings: (...args: unknown[]) => apiFetchJSONMock('/api/settings/ai/update', ...args),
   },
 }));
 
@@ -135,6 +139,7 @@ vi.mock('@/stores/license', () => ({
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
+  canStartCommercialTrial: () => licenseStatusMock()?.trial_eligible !== false,
   getUpgradeActionDestination: (...args: unknown[]) => getUpgradeActionDestinationMock(...args),
   commercialPosture: (...args: unknown[]) => licenseStatusMock(...args),
   licenseStatus: (...args: unknown[]) => licenseStatusMock(...args),
@@ -317,6 +322,7 @@ const defaultAISettings = {
 
 describe('AIIntelligence entitlement gating', () => {
   beforeEach(() => {
+    resetAIRuntimeState();
     getPatrolStatusMock.mockReset();
     getPatrolAutonomySettingsMock.mockReset();
     updatePatrolAutonomySettingsMock.mockReset();

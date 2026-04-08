@@ -64,9 +64,9 @@ vi.mock('@/api/agentProfiles', () => ({
   },
 }));
 
-vi.mock('@/api/ai', () => ({
-  AIAPI: {
-    getSettings: () => Promise.resolve({ enabled: false, configured: false }),
+vi.mock('@/stores/aiChat', () => ({
+  aiChatStore: {
+    enabled: false,
   },
 }));
 

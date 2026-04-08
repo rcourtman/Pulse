@@ -1,6 +1,5 @@
 import { createEffect, createMemo, createSignal, onMount } from 'solid-js';
 import { useWebSocket } from '@/contexts/appRuntime';
-import { AIAPI } from '@/api/ai';
 import {
   AgentProfilesAPI,
   MISSING_AGENT_PROFILE_ASSIGNMENT_MESSAGE,
@@ -20,6 +19,7 @@ import {
   getUpgradeActionDestination,
 } from '@/stores/licenseCommercial';
 import { loadRuntimeCapabilities } from '@/stores/license';
+import { aiChatStore } from '@/stores/aiChat';
 import type { ConnectedInfrastructureItem } from '@/types/api';
 import type { Resource } from '@/types/resource';
 import { formatRelativeTime } from '@/utils/format';
@@ -42,7 +42,6 @@ import {
 import {
   getPreferredInfrastructureDisplayName,
   getPreferredNamedEntityLabel,
-  getPreferredResourceDisplayName,
   getPreferredResourceHostname,
 } from '@/utils/resourceIdentity';
 import {
@@ -79,7 +78,7 @@ export const useAgentProfilesPanelState = () => {
   const [startingTrial, setStartingTrial] = createSignal(false);
   const canStartTrial = () => canOfferCommercialTrial();
 
-  const [aiAvailable, setAiAvailable] = createSignal(false);
+  const aiAvailable = createMemo(() => aiChatStore.enabled === true);
   const [profiles, setProfiles] = createSignal<AgentProfile[]>([]);
   const [assignments, setAssignments] = createSignal<AgentProfileAssignment[]>([]);
   const [loading, setLoading] = createSignal(true);
@@ -237,13 +236,6 @@ export const useAgentProfilesPanelState = () => {
 
   onMount(async () => {
     await loadRuntimeCapabilities();
-
-    try {
-      const aiSettings = await AIAPI.getSettings();
-      setAiAvailable(aiSettings.enabled && aiSettings.configured);
-    } catch {
-      setAiAvailable(false);
-    }
 
     if (hasAgentProfiles()) {
       await loadData();

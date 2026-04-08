@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { Route, Router } from '@solidjs/router';
 
+import { resetAIRuntimeState } from '@/stores/aiRuntimeState';
 import type { AISettings as AISettingsType } from '@/types/ai';
 import { AISettings } from '../AISettings';
 
@@ -17,7 +18,6 @@ const revertSessionMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
 const notificationInfoMock = vi.fn();
-const notifySettingsChangedMock = vi.fn();
 const loggerDebugMock = vi.fn();
 const loggerErrorMock = vi.fn();
 const hasFeatureMock = vi.fn();
@@ -53,12 +53,6 @@ vi.mock('@/stores/notifications', () => ({
     success: (...args: unknown[]) => notificationSuccessMock(...args),
     error: (...args: unknown[]) => notificationErrorMock(...args),
     info: (...args: unknown[]) => notificationInfoMock(...args),
-  },
-}));
-
-vi.mock('@/stores/aiChat', () => ({
-  aiChatStore: {
-    notifySettingsChanged: (...args: unknown[]) => notifySettingsChangedMock(...args),
   },
 }));
 
@@ -129,7 +123,6 @@ const resetAllMocks = () => {
   notificationSuccessMock.mockReset();
   notificationErrorMock.mockReset();
   notificationInfoMock.mockReset();
-  notifySettingsChangedMock.mockReset();
   loggerDebugMock.mockReset();
   loggerErrorMock.mockReset();
   hasFeatureMock.mockReset();
@@ -164,6 +157,7 @@ const setupDefaultMocks = () => {
 
 describe('AISettings model loading error states', () => {
   beforeEach(() => {
+    resetAIRuntimeState();
     resetAllMocks();
     setupDefaultMocks();
   });
@@ -272,12 +266,15 @@ describe('AISettings model loading error states', () => {
 
     await waitFor(() => {
       expect(getModelsMock).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('Claude Sonnet')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /refresh/i })).not.toBeDisabled();
     });
 
     // Trigger a refresh that returns an error
     fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
 
     await waitFor(() => {
+      expect(getModelsMock).toHaveBeenCalledTimes(2);
       expect(screen.getByText(/Failed to load models: API key revoked/)).toBeInTheDocument();
     });
 

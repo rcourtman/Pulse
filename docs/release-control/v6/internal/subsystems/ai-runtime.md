@@ -38,6 +38,7 @@ runtime cost control, and shared AI transport surfaces.
 16. `frontend-modern/src/utils/aiProviderPresentation.ts`
 17. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
 18. `frontend-modern/src/utils/textPresentation.ts`
+19. `frontend-modern/src/stores/aiRuntimeState.ts`
 
 ## Shared Boundaries
 
@@ -186,6 +187,13 @@ availability fact used by the app shell. `internal/api/ai_handlers.go`,
 closed assistant affordance, so unrelated shells do not probe
 `/api/settings/ai` or `/api/ai/sessions` during ordinary route bootstrap just
 to decide whether the assistant drawer may be opened.
+That same frontend runtime boundary now also owns the shared AI read model for
+AI-owned surfaces. `frontend-modern/src/stores/aiRuntimeState.ts` is the
+canonical frontend owner for shared `/api/settings/ai` and `/api/ai/models`
+reads used by chat, Patrol, and AI usage surfaces, while
+`frontend-modern/src/components/Settings/useAISettingsState.ts` remains the
+write-side settings owner. AI-owned surfaces must not fork their own mount-time
+settings/model fetch loops once this store exists.
 That same settings/runtime boundary now also governs BYOK first-run setup:
 `frontend-modern/src/components/Settings/useAISettingsState.ts` may send only
 provider credentials or base URLs when the operator connects a provider, and

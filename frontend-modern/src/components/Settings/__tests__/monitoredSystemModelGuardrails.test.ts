@@ -236,7 +236,8 @@ describe('monitored-system model guardrails', () => {
     expect(agentProfilesPanelStateSource).toContain('const { resources } = useResources()');
     expect(agentProfilesPanelStateSource).toContain('const loadData = async () =>');
     expect(agentProfilesPanelStateSource).toContain('const handleSave = async () =>');
-    expect(agentProfilesPanelStateSource).toContain('AIAPI.getSettings()');
+    expect(agentProfilesPanelStateSource).toContain("aiChatStore.enabled === true");
+    expect(agentProfilesPanelStateSource).not.toContain('AIAPI.getSettings()');
     expect(agentProfilesPanelStateSource).toContain('AgentProfilesAPI.listProfiles()');
     expect(agentProfilesPanelStateSource).toContain('AgentProfilesAPI.listAssignments()');
     expect(agentProfilesPresentationSource).toContain('export function getAgentProfilesEmptyState');
@@ -929,18 +930,17 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps setup and node summary fallbacks aware of v6 agent facets', () => {
-    expect(setupCompletionPanelSource).toContain('const hasAgentFacet = (resource: Resource)');
-    expect(setupCompletionPanelSource).toContain("resource.type === 'agent'");
-    expect(setupCompletionPanelSource).toContain('const agentFacetResources = resources.filter(');
+    expect(setupCompletionPanelSource).toContain('buildSetupCompletionConnectedSystems');
+    expect(setupCompletionPanelSource).toContain('buildSetupCompletionViewModel');
     expect(setupCompletionPanelSource).toContain('Open Infrastructure Install');
+    expect(setupCompletionPanelSource).toContain('Open Platform connections');
     expect(setupCompletionPanelSource).toContain(
       'The canonical install flow now lives in Infrastructure Operations.',
     );
+    expect(setupCompletionPanelSource).not.toContain('const hasAgentFacet = (resource: Resource)');
+    expect(setupCompletionPanelSource).not.toContain('const agentFacetResources = resources.filter(');
     expect(setupCompletionPanelSource).not.toContain('state.nodes || []');
     expect(setupCompletionPanelSource).not.toContain('state.hosts || []');
-    expect(setupCompletionPanelSource).not.toContain(
-      '(state.hosts || []).length > 0\n            ? state.hosts\n            : resources',
-    );
     expect(infrastructureSelectorSource).toContain('useInfrastructureSelectorState');
     expect(infrastructureSelectorSource).not.toContain(
       'const hasAgentFacet = (resource: Resource): boolean =>',
@@ -992,8 +992,9 @@ describe('monitored-system model guardrails', () => {
   });
 
   it('keeps AI chat mention resources aware of agent facets beyond host type', () => {
-    expect(aiChatSource).toContain('const hasAgentFacet = (resource: Resource): boolean =>');
     expect(aiChatSource).toContain('isAgentFacetInfrastructureResource');
+    expect(aiChatSource).toContain('const agentResources = allResources().filter((resource) =>');
+    expect(aiChatSource).toContain('getActionableAgentIdFromResource(resource) || resource.id;');
     expect(aiChatSource).not.toContain("resource.type === 'truenas'");
     expect(aiChatSource).not.toContain("resource.type === 'host'");
     expect(aiChatSource).toContain("type: 'agent'");

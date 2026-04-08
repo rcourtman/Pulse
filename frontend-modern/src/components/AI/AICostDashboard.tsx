@@ -10,10 +10,11 @@ import {
 } from '@/components/shared/Table';
 import { SectionHeader } from '@/components/shared/SectionHeader';
 import { AIAPI } from '@/api/ai';
+import { aiRuntimeSettings, loadAIRuntimeSettings } from '@/stores/aiRuntimeState';
 import { formatNumber } from '@/utils/format';
 import { logger } from '@/utils/logger';
 import { notificationStore } from '@/stores/notifications';
-import type { AICostSummary, AISettings } from '@/types/ai';
+import type { AICostSummary } from '@/types/ai';
 import { getAIProviderDisplayName } from '@/utils/aiProviderPresentation';
 import {
   AI_COST_DAILY_TOKEN_EMPTY_STATE,
@@ -85,7 +86,6 @@ export const AICostDashboard: Component = () => {
   const [loading, setLoading] = createSignal(false);
   const [loadError, setLoadError] = createSignal<string | null>(null);
   const [summary, setSummary] = createSignal<AICostSummary | null>(null);
-  const [aiSettings, setAISettings] = createSignal<AISettings | null>(null);
   let requestSeq = 0;
 
   const anyPricingKnown = createMemo(() => {
@@ -170,11 +170,9 @@ export const AICostDashboard: Component = () => {
 
   const loadBudgetSettings = async () => {
     try {
-      const s = await AIAPI.getSettings();
-      setAISettings(s);
+      await loadAIRuntimeSettings();
     } catch (err) {
       logger.debug('[AICostDashboard] Failed to load AI settings for budget:', err);
-      setAISettings(null);
     }
   };
 
@@ -183,7 +181,7 @@ export const AICostDashboard: Component = () => {
   });
 
   const parsedBudgetUSD30d = createMemo(() => {
-    const s = aiSettings();
+    const s = aiRuntimeSettings();
     const n = s?.cost_budget_usd_30d;
     if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return null;
     return n;

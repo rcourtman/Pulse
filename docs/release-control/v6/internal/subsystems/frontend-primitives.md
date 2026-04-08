@@ -218,6 +218,15 @@ work extends shared components instead of creating new local variants.
     route bootstrap. Closed assistant chrome and non-AI settings panels may
     not initialize assistant runtime state until an owned assistant or Patrol
     surface is actually open.
+    AI-owned frontend surfaces that need shared settings or model-catalog
+    truth must route those reads through
+    `frontend-modern/src/stores/aiRuntimeState.ts` rather than each feature
+    bootstrapping `/api/settings/ai` or `/api/ai/models` independently.
+    Non-AI settings panels such as
+    `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`
+    must stay on the app-shell assistant-availability fact instead of
+    re-reading raw AI settings just to decide whether assistant affordances
+    should render.
 
 ## Forbidden Paths
 

@@ -79,8 +79,6 @@ const {
     },
     clearInitialPrompt: vi.fn(),
     clearFindingId: vi.fn(),
-    settingsVersionSignal: vi.fn(() => 0),
-    notifySettingsChanged: vi.fn(),
   };
 
   const mockByType = vi.fn((_type: string): Array<{ name: string }> => []);
@@ -151,7 +149,6 @@ vi.mock('../MentionAutocomplete', () => ({
       </button>
       {props.resources.map((resource) => (
         <button
-          key={resource.id}
           type="button"
           data-testid={`mention-select-${resource.id}`}
           onClick={() => props.onSelect(resource)}
@@ -177,10 +174,15 @@ vi.mock('@/hooks/useResources', () => ({
 // ── Lazy import after mocks ────────────────────────────────────────────────
 
 let AIChat: typeof import('../index').AIChat;
+let resetAIRuntimeState: typeof import('@/stores/aiRuntimeState').resetAIRuntimeState;
 
 beforeAll(async () => {
-  const mod = await import('../index');
-  AIChat = mod.AIChat;
+  const [chatModule, runtimeModule] = await Promise.all([
+    import('../index'),
+    import('@/stores/aiRuntimeState'),
+  ]);
+  AIChat = chatModule.AIChat;
+  resetAIRuntimeState = runtimeModule.resetAIRuntimeState;
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -193,9 +195,9 @@ function renderChat(onClose = vi.fn()) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  resetAIRuntimeState();
   mockAiChatStore.isOpenSignal.mockReturnValue(true);
   mockAiChatStore.context = { initialPrompt: undefined, findingId: undefined };
-  mockAiChatStore.settingsVersionSignal.mockReturnValue(0);
   mockChat.messages.mockReturnValue([]);
   mockChat.isLoading.mockReturnValue(false);
   mockChat.sessionId.mockReturnValue('');

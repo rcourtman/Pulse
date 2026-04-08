@@ -75,6 +75,7 @@ import aiSettingsModelSource from '../aiSettingsModel.ts?raw';
 import aiRuntimeControlsSectionSource from '../AIRuntimeControlsSection.tsx?raw';
 import aiSettingsStatusAndActionsSource from '../AISettingsStatusAndActions.tsx?raw';
 import aiSettingsStateSource from '../useAISettingsState.ts?raw';
+import aiRuntimeStateSource from '@/stores/aiRuntimeState.ts?raw';
 import diagnosticsModelSource from '../diagnosticsModel.ts?raw';
 import diagnosticsPanelSource from '../DiagnosticsPanel.tsx?raw';
 import diagnosticsResultsPanelSource from '../DiagnosticsResultsPanel.tsx?raw';
@@ -1132,8 +1133,12 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain(
       'const handleEnabledToggle = async (newValue: boolean) =>',
     );
+    expect(aiSettingsStateSource).toContain("} from '@/stores/aiRuntimeState';");
     expect(aiSettingsStateSource).toContain("getUpgradeActionDestination('ai_autofix')");
     expect(aiSettingsStateSource).toContain('AIAPI.getSettings()');
+    expect(aiSettingsStateSource).toContain('syncAIRuntimeSettings(data ?? null);');
+    expect(aiSettingsStateSource).toContain('await loadAIRuntimeModels(true);');
+    expect(aiSettingsStateSource).not.toContain('AIAPI.getModels()');
     expect(aiSettingsStateSource).toContain(
       'const payload: Record<string, unknown> = { enabled: true };',
     );
@@ -1146,6 +1151,11 @@ describe('Settings architecture guardrails', () => {
     expect(aiSettingsStateSource).toContain('runStartProTrialAction({');
     expect(aiSettingsStateSource).not.toContain('startProTrial()');
     expect(aiSettingsStateSource).not.toContain('getTrialAlreadyUsedMessage()');
+    expect(aiRuntimeStateSource).toContain('export async function loadAIRuntimeSettings');
+    expect(aiRuntimeStateSource).toContain('export async function loadAIRuntimeModels');
+    expect(aiRuntimeStateSource).toContain('const next = await AIAPI.getSettings()');
+    expect(aiRuntimeStateSource).toContain('const result = await AIAPI.getModels()');
+    expect(aiRuntimeStateSource).toContain("eventBus.on('org_switched'");
   });
 
   it('keeps the updates settings shell behind extracted install-guide owners', () => {
