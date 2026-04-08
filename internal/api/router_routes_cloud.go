@@ -74,8 +74,6 @@ func (r *Router) registerHostedRoutes(hostedSignupHandlers *HostedSignupHandlers
 	if r.licenseHandlers != nil {
 		// Self-hosted commercial checkout handoff: mint a signed return token and redirect into Pulse Account.
 		r.mux.HandleFunc("GET /auth/license-purchase-start", RequireAuth(routerConfig, r.licenseHandlers.HandleCheckoutStart))
-		// Public cross-origin handoff resolver: Pulse Account uses the signed token to recover the verified local activation URL.
-		r.mux.HandleFunc("/auth/license-purchase-handoff", r.licenseHandlers.HandleCheckoutHandoff)
 		// Hosted trial signup callback: signed token activation flow for self-hosted Pulse Pro trials.
 		r.mux.HandleFunc("/auth/trial-activate", r.licenseHandlers.HandleTrialActivation)
 		// Self-hosted commercial checkout return: complete purchase activation without manual key entry.

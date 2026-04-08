@@ -3482,7 +3482,6 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				"/api/ai/oauth/callback",          // OAuth callback from Anthropic for Claude subscription auth
 				"/auth/cloud-handoff",             // Cloud control plane handoff (token-authenticated)
 				"/auth/trial-activate",            // Hosted trial signup callback (token-authenticated)
-				"/auth/license-purchase-handoff",  // Self-hosted checkout handoff resolution for Pulse Account
 				"/auth/license-purchase-activate", // Self-hosted checkout return (session-authenticated via commercial backend)
 			}
 

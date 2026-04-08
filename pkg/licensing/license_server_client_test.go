@@ -326,61 +326,6 @@ func TestClientGetCheckoutSessionResult(t *testing.T) {
 	})
 }
 
-func TestClientCreateCheckoutIntent(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			t.Errorf("Method = %q, want POST", r.Method)
-		}
-		if r.URL.Path != "/v1/checkout/intent" {
-			t.Errorf("Path = %q, want /v1/checkout/intent", r.URL.Path)
-		}
-		if r.Header.Get("Content-Type") != "application/json" {
-			t.Errorf("Content-Type = %q, want application/json", r.Header.Get("Content-Type"))
-		}
-		if r.Header.Get("Accept") != "application/json" {
-			t.Errorf("Accept = %q, want application/json", r.Header.Get("Accept"))
-		}
-
-		var req CheckoutIntentRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if req.Feature != "max_monitored_systems" {
-			t.Fatalf("Feature = %q, want max_monitored_systems", req.Feature)
-		}
-		if req.SuccessURL != "https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}" {
-			t.Fatalf("SuccessURL = %q", req.SuccessURL)
-		}
-		if req.CancelURL != "https://pulse.example.com/settings/system/billing/plan?intent=max_monitored_systems&purchase=cancelled" {
-			t.Fatalf("CancelURL = %q", req.CancelURL)
-		}
-
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(CheckoutIntentResponse{
-			CheckoutIntentID: "cki_test_123",
-			Feature:          "max_monitored_systems",
-			ExpiresAt:        1_775_000_000,
-		})
-	}))
-	defer server.Close()
-
-	client := NewLicenseServerClient(server.URL)
-	result, err := client.CreateCheckoutIntent(context.Background(), CheckoutIntentRequest{
-		Feature:    "max_monitored_systems",
-		SuccessURL: "https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}",
-		CancelURL:  "https://pulse.example.com/settings/system/billing/plan?intent=max_monitored_systems&purchase=cancelled",
-	})
-	if err != nil {
-		t.Fatalf("CreateCheckoutIntent failed: %v", err)
-	}
-	if result.CheckoutIntentID != "cki_test_123" {
-		t.Fatalf("CheckoutIntentID = %q, want cki_test_123", result.CheckoutIntentID)
-	}
-	if result.Feature != "max_monitored_systems" {
-		t.Fatalf("Feature = %q, want max_monitored_systems", result.Feature)
-	}
-}
-
 func TestClientCreateCheckoutPortalHandoff(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {

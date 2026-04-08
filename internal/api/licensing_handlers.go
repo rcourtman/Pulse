@@ -25,8 +25,6 @@ import (
 const (
 	trialStartRateLimitBurst                = 6
 	trialStartRateLimitWindow               = 15 * time.Minute
-	licensePurchaseHandoffPath              = "/auth/license-purchase-handoff"
-	licensePurchaseHandoffIDField           = "purchase_handoff_id"
 	licensePurchaseStartPath                = "/auth/license-purchase-start"
 	licensePurchaseActivationPath           = "/auth/license-purchase-activate"
 	licensePurchaseSessionIDField           = "session_id"
@@ -60,7 +58,6 @@ type LicenseHandlers struct {
 	trialLimiter               *RateLimiter
 	trialReplay                *jtiReplayStore
 	trialInitiations           *trialSignupInitiationStore
-	purchaseHandoffs           *purchaseCheckoutHandoffStore
 	trialRedeemer              func(token string) (*hostedTrialRedemptionResponse, error)
 	monitor                    *monitoring.Monitor
 	mtMonitor                  *monitoring.MultiTenantMonitor
@@ -80,11 +77,9 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 
 	var trialReplay *jtiReplayStore
 	var trialInitiations *trialSignupInitiationStore
-	var purchaseHandoffs *purchaseCheckoutHandoffStore
 	if mtp != nil {
 		trialReplay = &jtiReplayStore{configDir: mtp.BaseDataDir()}
 		trialInitiations = &trialSignupInitiationStore{configDir: mtp.BaseDataDir()}
-		purchaseHandoffs = &purchaseCheckoutHandoffStore{configDir: mtp.BaseDataDir()}
 	}
 
 	return &LicenseHandlers{
@@ -94,7 +89,6 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 		trialLimiter:     NewRateLimiter(trialStartRateLimitBurst, trialStartRateLimitWindow),
 		trialReplay:      trialReplay,
 		trialInitiations: trialInitiations,
-		purchaseHandoffs: purchaseHandoffs,
 	}
 }
 
@@ -283,21 +277,6 @@ func (h *LicenseHandlers) purchaseReturnSigningKey() ([]byte, error) {
 	return signingKey, nil
 }
 
-func (h *LicenseHandlers) purchaseCheckoutHandoffStore() *purchaseCheckoutHandoffStore {
-	if h == nil {
-		return nil
-	}
-	if h.purchaseHandoffs != nil {
-		return h.purchaseHandoffs
-	}
-	dataDir := h.purchaseReturnDataDir()
-	if strings.TrimSpace(dataDir) == "" {
-		return nil
-	}
-	h.purchaseHandoffs = &purchaseCheckoutHandoffStore{configDir: dataDir}
-	return h.purchaseHandoffs
-}
-
 func pulseAccountUpgradeURLForRequest(portalHandoffID string, query url.Values) (string, error) {
 	portalURL := strings.TrimSpace(pulseAccountPortalURLFromLicensing(""))
 	if portalURL == "" {
@@ -350,25 +329,6 @@ func publicAbsoluteURLForPath(r *http.Request, cfg *config.Config, path string) 
 		return "", fmt.Errorf("parse relative public path: %w", err)
 	}
 	return base.ResolveReference(relative).String(), nil
-}
-
-func licensePurchaseHandoffURLForRequest(
-	r *http.Request,
-	cfg *config.Config,
-	handoffID string,
-) (string, error) {
-	baseURL := publicBaseURLForRequest(r, cfg)
-	if baseURL == "" {
-		return "", fmt.Errorf("purchase handoff base url is unavailable")
-	}
-	parsed, err := url.Parse(baseURL + licensePurchaseHandoffPath)
-	if err != nil || parsed == nil {
-		return "", fmt.Errorf("parse purchase handoff url: %w", err)
-	}
-	query := parsed.Query()
-	query.Set(licensePurchaseHandoffIDField, strings.TrimSpace(handoffID))
-	parsed.RawQuery = query.Encode()
-	return parsed.String(), nil
 }
 
 func licensePurchaseActivationTemplateURL(returnURL, returnToken string) (string, error) {
@@ -472,13 +432,6 @@ func writeLicensePurchaseActivationContinuePage(
 	)
 }
 
-func writePublicPurchaseHandoffHeaders(w http.ResponseWriter) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	w.Header().Set("Cache-Control", "no-store")
-}
-
 func (h *LicenseHandlers) verifiedPurchaseReturnClaims(
 	r *http.Request,
 	returnToken string,
@@ -522,7 +475,6 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
-		h.ensureLegacyGrandfatherReconcileLoop(orgID, svc)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		// We need persistence too, reconstruct it or cache it?
 		// Reconstructing persistence is cheap (just a struct with path).
@@ -539,6 +491,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	}
 
 	service := newLicenseService()
+	h.bindLegacyGrandfatherReconcileOwnership(orgID, service)
 
 	// Wire license server client and persistence so activation / refresh can use them.
 	lsClient := newLicenseServerClientFromLicensing("")
@@ -560,7 +513,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 			if err := service.RestoreActivation(activationState); err != nil {
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to restore activation")
 			} else {
-				h.ensureLegacyGrandfatherReconcileLoop(orgID, service)
+				h.reconcileLegacyMigrationGrandfatherFloor(ctx, orgID, service)
 				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after activation restore")
 				}
@@ -615,13 +568,16 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		service.StopGrantRefresh()   // stop our orphaned refresh loop if started
 		service.StopRevocationPoll() // stop our orphaned revocation poller if started
 		svc := actual.(*licenseService)
-		h.ensureLegacyGrandfatherReconcileLoop(orgID, svc)
+		// Re-home legacy continuity ownership onto the canonical service when
+		// concurrent first-request initialization races create an orphan.
+		h.stopLegacyGrandfatherReconcileLoop(orgID)
+		h.syncLegacyGrandfatherReconcileOwnership(orgID, svc)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		p, pErr := h.getPersistenceForOrg(orgID)
 		return svc, p, pErr
 	}
 
-	h.ensureLegacyGrandfatherReconcileLoop(orgID, service)
+	h.syncLegacyGrandfatherReconcileOwnership(orgID, service)
 	h.ensureHostedEntitlementRefreshForOrg(orgID, service)
 
 	return service, persistence, nil
@@ -1526,70 +1482,6 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 	}
 
 	http.Redirect(w, r, destination, http.StatusSeeOther)
-}
-
-// HandleCheckoutHandoff verifies the signed checkout handoff and returns the
-// canonical Pulse activation URL template for Pulse Account checkout success.
-func (h *LicenseHandlers) HandleCheckoutHandoff(w http.ResponseWriter, r *http.Request) {
-	writePublicPurchaseHandoffHeaders(w)
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusNoContent)
-		return
-	}
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	if handoffID := strings.TrimSpace(r.URL.Query().Get(licensePurchaseHandoffIDField)); handoffID != "" {
-		handoffStore := h.purchaseCheckoutHandoffStore()
-		if handoffStore == nil {
-			http.Error(w, "purchase handoff is unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		record, found, err := handoffStore.resolve(handoffID, time.Now().UTC())
-		if err != nil {
-			log.Warn().Err(err).Msg("Purchase handoff record lookup failed")
-			http.Error(w, "purchase handoff is invalid", http.StatusBadRequest)
-			return
-		}
-		if !found || record == nil {
-			http.Error(w, "purchase handoff is invalid", http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]string{
-			"activation_url_template": strings.TrimSpace(record.ActivationURLTemplate),
-			"feature":                 strings.TrimSpace(record.Feature),
-		})
-		return
-	}
-
-	returnToken := strings.TrimSpace(r.URL.Query().Get(licensePurchaseReturnTokenField))
-	if returnToken == "" {
-		http.Error(w, "purchase handoff id or return token is required", http.StatusBadRequest)
-		return
-	}
-	claims, err := h.verifiedPurchaseReturnClaims(r, returnToken)
-	if err != nil {
-		log.Warn().Err(err).Msg("Purchase handoff token verification failed")
-		http.Error(w, "purchase handoff is invalid", http.StatusBadRequest)
-		return
-	}
-
-	activationURLTemplate, err := licensePurchaseActivationTemplateURL(claims.ReturnURL, returnToken)
-	if err != nil {
-		log.Warn().Err(err).Msg("Purchase handoff activation template build failed")
-		http.Error(w, "purchase handoff is invalid", http.StatusBadRequest)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{
-		"activation_url_template": activationURLTemplate,
-		"feature":                 strings.TrimSpace(claims.Feature),
-	})
 }
 
 // HandleCheckoutActivation handles the local checkout return at

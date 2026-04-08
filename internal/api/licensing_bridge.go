@@ -34,6 +34,7 @@ type licenseFeatureChecker = pkglicensing.FeatureChecker
 type licenseFeaturesResponse = pkglicensing.LicenseFeaturesResponse
 type activateLicenseRequestModel = pkglicensing.ActivateLicenseRequest
 type activateLicenseResponseModel = pkglicensing.ActivateLicenseResponse
+type activationStateModel = pkglicensing.ActivationState
 type trialStartDecisionModel = pkglicensing.TrialStartDecision
 type trialStartDenialReasonModel = pkglicensing.TrialStartDenialReason
 type billingStoreModel = pkglicensing.BillingStore
@@ -58,8 +59,6 @@ type trialActivationClaimsModel = pkglicensing.TrialActivationClaims
 type purchaseReturnClaimsModel = pkglicensing.PurchaseReturnClaims
 type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
-type checkoutIntentRequestModel = pkglicensing.CheckoutIntentRequest
-type checkoutIntentResponseModel = pkglicensing.CheckoutIntentResponse
 type checkoutPortalHandoffRequestModel = pkglicensing.CheckoutPortalHandoffRequest
 type checkoutPortalHandoffResponseModel = pkglicensing.CheckoutPortalHandoffResponse
 

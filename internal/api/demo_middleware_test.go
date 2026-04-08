@@ -58,7 +58,6 @@ func TestDemoModeMiddleware(t *testing.T) {
 		{"demo on hidden commercial posture", true, http.MethodGet, "/api/license/commercial-posture", "", false, http.StatusNotFound, true},
 		{"demo on hidden license entitlements", true, http.MethodGet, "/api/license/entitlements", "", false, http.StatusNotFound, true},
 		{"demo on hidden checkout start", true, http.MethodGet, "/auth/license-purchase-start", "", false, http.StatusNotFound, true},
-		{"demo on hidden checkout handoff", true, http.MethodGet, "/auth/license-purchase-handoff", "", false, http.StatusNotFound, true},
 		{"demo on hidden license activate", true, http.MethodPost, "/api/license/activate", "", false, http.StatusNotFound, true},
 		{"demo on hidden purchase start", true, http.MethodGet, licensePurchaseStartPath, "", false, http.StatusNotFound, true},
 		{"demo on hidden trial activation", true, http.MethodGet, "/auth/trial-activate", "", false, http.StatusNotFound, true},

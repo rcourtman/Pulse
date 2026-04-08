@@ -204,10 +204,6 @@ export default defineConfig({
         target: backendUrl,
         changeOrigin: true,
       },
-      '/auth/license-purchase-handoff': {
-        target: backendUrl,
-        changeOrigin: true,
-      },
       '/auth/license-purchase-activate': {
         target: backendUrl,
         changeOrigin: true,

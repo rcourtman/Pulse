@@ -77,6 +77,7 @@ Own canonical runtime payload shapes between backend and frontend.
 53. `internal/api/demo_mode_commercial.go`
 54. `internal/api/security_status_capabilities.go`
 55. `internal/api/demo_middleware.go`
+56. `frontend-modern/src/stores/aiRuntimeState.ts`
 
 ## Shared Boundaries
 
@@ -357,6 +358,17 @@ Own canonical runtime payload shapes between backend and frontend.
     backend contract must keep provider test routes bound to the selected
     provider's configured model instead of whichever other provider currently
     owns the default `model` field.
+24. Keep shared AI runtime reads centralized on that same governed contract:
+    `frontend-modern/src/stores/aiRuntimeState.ts` is the canonical frontend
+    read owner for `/api/settings/ai` and `/api/ai/models`. AI-owned consumers
+    such as `frontend-modern/src/features/patrol/usePatrolIntelligenceState.ts`,
+    `frontend-modern/src/components/AI/Chat/index.tsx`, and
+    `frontend-modern/src/components/AI/AICostDashboard.tsx` must reuse that
+    shared store for read-side runtime truth, while
+    `frontend-modern/src/components/Settings/useAISettingsState.ts` remains
+    the write-side settings owner. Non-AI settings surfaces such as
+    `frontend-modern/src/components/Settings/useAgentProfilesPanelState.ts`
+    must not probe `/api/settings/ai` just to gate assistant affordances.
 23. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
@@ -558,7 +570,12 @@ browser-facing `GET /v1/checkout/portal-handoff` response must not expose the
 bound `checkout_intent_id`, and `POST /v1/checkout/session` must accept only
 `portal_handoff_id` for product-originated upgrade arrivals so the license
 server resolves the private checkout intent internally before Stripe session
-creation. Pulse's public `GET /auth/license-purchase-activate`
+creation. That same owned contract also retires the old compatibility
+bootstrap surfaces: Pulse must not expose a separate public
+`GET /auth/license-purchase-handoff` resolver, and the commercial server must
+not expose a direct browser bootstrap through `GET /v1/checkout/intent` once
+`portal_handoff_id` is canonical. Pulse's public
+`GET /auth/license-purchase-activate`
 callback then serves an auto-submitting bridge into the owned POST activation
 path, which redeems the completed checkout through the shared
 license/commercial API before returning the browser to the owned billing plan
@@ -1216,7 +1233,11 @@ than ordinary read handlers. `/api/license/status` and
 `capture_pending`, `captured_at`) and limit-level
 `current_unavailable_reason`, but those request paths must not seal the
 grandfather floor synchronously just because a billing read happened to arrive
-after the canonical usage view became available.
+after the canonical usage view became available. Those same read handlers must
+also stay side-effect free with respect to the reconciler lifecycle itself:
+they may observe pending continuity state, but only activation-state
+transitions such as activate, restore, grant refresh, and clear/revocation may
+bootstrap or tear down the pending-floor reconcile loop.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring

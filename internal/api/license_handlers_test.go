@@ -711,7 +711,7 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 			t.Fatalf("method = %s, want POST", r.Method)
 		}
 		if err := json.NewDecoder(r.Body).Decode(&capturedReq); err != nil {
-			t.Fatalf("decode checkout intent request: %v", err)
+			t.Fatalf("decode checkout portal handoff request: %v", err)
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -768,7 +768,7 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 
 	if capturedReq.Feature != "relay" {
-		t.Fatalf("checkout intent feature = %q, want relay", capturedReq.Feature)
+		t.Fatalf("checkout portal handoff feature = %q, want relay", capturedReq.Feature)
 	}
 
 	activationURL, err := url.Parse(capturedReq.SuccessURL)
@@ -801,91 +801,6 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 	if capturedReq.CancelURL != "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled" {
 		t.Fatalf("cancel_url = %q", capturedReq.CancelURL)
-	}
-}
-
-func TestHandleCheckoutHandoff_ResolvesServerOwnedPurchaseRecord(t *testing.T) {
-	handler := createTestHandler(t)
-	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
-
-	store := handler.purchaseCheckoutHandoffStore()
-	if store == nil {
-		t.Fatal("expected purchase checkout handoff store")
-	}
-	handoffID, err := store.issue(
-		"max_monitored_systems",
-		"https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}",
-		time.Now().UTC().Add(time.Hour),
-	)
-	if err != nil {
-		t.Fatalf("issue purchase handoff: %v", err)
-	}
-
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"https://pulse.example.com"+licensePurchaseHandoffPath+"?purchase_handoff_id="+url.QueryEscape(handoffID),
-		nil,
-	)
-	rec := httptest.NewRecorder()
-
-	handler.HandleCheckoutHandoff(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
-	}
-	var resp struct {
-		Feature               string `json:"feature"`
-		ActivationURLTemplate string `json:"activation_url_template"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
-	}
-	if resp.Feature != "max_monitored_systems" {
-		t.Fatalf("feature = %q, want max_monitored_systems", resp.Feature)
-	}
-	if resp.ActivationURLTemplate != "https://pulse.example.com/auth/license-purchase-activate?purchase_return_token=prt_signed&session_id={CHECKOUT_SESSION_ID}" {
-		t.Fatalf("activation_url_template = %q", resp.ActivationURLTemplate)
-	}
-}
-
-func TestHandleCheckoutHandoff_ReturnsVerifiedActivationTemplate(t *testing.T) {
-	handler := createTestHandler(t)
-	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
-
-	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"https://pulse.example.com"+licensePurchaseHandoffPath+"?purchase_return_token="+url.QueryEscape(returnToken),
-		nil,
-	)
-	rec := httptest.NewRecorder()
-
-	handler.HandleCheckoutHandoff(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
-	}
-
-	var resp struct {
-		Feature               string `json:"feature"`
-		ActivationURLTemplate string `json:"activation_url_template"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("unmarshal response: %v", err)
-	}
-	if resp.Feature != "max_monitored_systems" {
-		t.Fatalf("feature = %q, want max_monitored_systems", resp.Feature)
-	}
-
-	expectedTemplate, err := licensePurchaseActivationTemplateURL(
-		"https://pulse.example.com"+licensePurchaseActivationPath,
-		returnToken,
-	)
-	if err != nil {
-		t.Fatalf("licensePurchaseActivationTemplateURL: %v", err)
-	}
-	if resp.ActivationURLTemplate != expectedTemplate {
-		t.Fatalf("activation_url_template = %q, want %q", resp.ActivationURLTemplate, expectedTemplate)
 	}
 }
 

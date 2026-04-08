@@ -187,8 +187,8 @@ regression protection.
     commercial/router boundary, not the summary-chart hot path. When
     `internal/api/router.go`, `internal/api/router_routes_cloud.go`, or
     `internal/api/licensing_handlers.go` evolve
-    `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
-    `/auth/license-purchase-activate`, performance work may keep those routes
+    `/auth/license-purchase-start` or `/auth/license-purchase-activate`,
+    performance work may keep those routes
     cheap and redirect-safe, but it must not treat purchase-return callbacks as
     chart-transport hot paths, fold summary-card caching into commercial
     callback behavior, or reuse those public auth endpoints as a justification

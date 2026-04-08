@@ -476,8 +476,8 @@ before it starts checkout, so the portal never trusts browser referrer state,
 loose `feature` / `return_url` query parameters, or a raw browser-supplied
 `checkout_intent_id` for self-hosted purchase completion. The portal proxy
 must expose `GET /v1/checkout/portal-handoff` as the canonical browser
-bootstrap and must not keep the retired `GET /v1/checkout/intent` bootstrap
-path alive once `portal_handoff_id` is the owned contract. The browser-facing
+bootstrap, and the retired `GET /v1/checkout/intent` bootstrap must stay
+removed once `portal_handoff_id` is the owned contract. The browser-facing
 portal handoff response must reveal only `portal_handoff_id`, feature, and
 expiry metadata; it must not disclose the bound `checkout_intent_id`, and
 browser checkout creation must post only `portal_handoff_id` so Pulse Account
@@ -801,7 +801,10 @@ status or entitlement reads may expose pending continuity state, but they must
 not persist the grandfather floor directly from the request path once a
 migrated installation is running. The owning licensing reconciler may backfill
 the floor asynchronously after canonical monitored-system usage becomes
-settled.
+settled. The reconcile loop itself is activation-state-owned as well:
+activation, restore, grant refresh, and revocation/clear transitions may
+start or stop continuity reconciliation, but ordinary billing reads must stay
+observer-only and must not bootstrap that background work on demand.
 That continuity rule cannot depend on webhook metadata being perfect. The
 canonical Stripe price-to-plan lookup in `pkg/licensing/features.go` and
 `pkg/licensing/stripe_subscription.go` must recognize the still-renewing

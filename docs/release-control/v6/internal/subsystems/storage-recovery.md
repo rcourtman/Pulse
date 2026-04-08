@@ -163,8 +163,8 @@ querying, and the operator-facing storage health presentation layer.
     adjacent commercial/auth boundary. When `internal/api/router.go`,
     `internal/api/router_routes_cloud.go`, `internal/api/licensing_handlers.go`,
     or `internal/api/demo_mode_commercial.go` evolve
-    `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
-    `/auth/license-purchase-activate`, storage and recovery may coexist with
+    `/auth/license-purchase-start` or `/auth/license-purchase-activate`,
+    storage and recovery may coexist with
     those shared public-route helpers but must not reuse the commercial-owned
     `portal_handoff_id`, server-resolved checkout intent, purchase-return tokens, activation-bridge
     callbacks, owned billing purchase-arrival states, or demo-hidden
@@ -176,8 +176,9 @@ querying, and the operator-facing storage health presentation layer.
     backup counts, or recovery-point presence when commercial continuity is
     already defined by the canonical monitored-system resolver and activation
     persistence. They also must not rely on billing-status reads to finalize a
-    pending grandfather floor or collapse continuity-verification payloads
-    into a real `0 / limit` monitored-system reading.
+    pending grandfather floor, use those reads to restart continuity
+    reconciliation, or collapse continuity-verification payloads into a real
+    `0 / limit` monitored-system reading.
 
 ## Forbidden Paths
 
