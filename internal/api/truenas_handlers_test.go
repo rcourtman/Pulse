@@ -797,6 +797,30 @@ func TestTrueNASHandlers_HandlePreviewConnection_ReturnsCanonicalImpact(t *testi
 	}
 }
 
+func TestTrueNASHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplementalInventoryUnsettled(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, _, monitor := newTrueNASHandlersForTest(t, nil)
+	provider := newTestSupplementalUsageProvider(unifiedresources.SourceTrueNAS)
+	bindTestSupplementalUsageProvider(monitor, unifiedresources.SourceTrueNAS, provider)
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":   "tower",
+		"host":   "tower.local",
+		"apiKey": "super-secret",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewConnection(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
+		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
+	}
+}
+
 func TestTrueNASHandlers_HandlePreviewSavedConnection_UsesReplacementProjection(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 
@@ -876,6 +900,37 @@ func TestTrueNASHandlers_HandlePreviewSavedConnection_UsesReplacementProjection(
 	}
 	if preview.Effect != "splits_existing" {
 		t.Fatalf("Effect = %q, want splits_existing", preview.Effect)
+	}
+}
+
+func TestTrueNASHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSupplementalInventoryUnsettled(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	provider := newTestSupplementalUsageProvider(unifiedresources.SourceTrueNAS)
+	bindTestSupplementalUsageProvider(monitor, unifiedresources.SourceTrueNAS, provider)
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:       "conn-1",
+			Name:     "archive",
+			Host:     "archive.local",
+			APIKey:   "super-secret",
+			Enabled:  true,
+			UseHTTPS: true,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/preview", nil)
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewSavedConnection(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
+		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
 	}
 }
 
