@@ -13,6 +13,7 @@ const PULSE_ACCOUNT_PORTAL_URL = "https://cloud.pulserelay.pro/portal";
 const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
 const PORTAL_HANDOFF_ID = "cph_checkout_return";
 const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=activated`;
+const CANCELLED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=cancelled`;
 const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
 const PURCHASE_RETURN_TOKEN = "prt_signed_checkout_return";
 
@@ -299,5 +300,57 @@ test.describe("Self-hosted upgrade return flow", () => {
     await expect(
       page.getByText("Pulse Pro activated", { exact: true }),
     ).toBeVisible();
+  });
+
+  test("returns cancelled checkout directly to the owned billing plan route", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    const context = page.context();
+    await configureBillingFixtures(context, page);
+
+    await context.route(`${PURCHASE_START_URL}**`, async (route) => {
+      await route.fulfill({
+        status: 303,
+        headers: {
+          location: `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
+        },
+        body: "",
+      });
+    });
+
+    await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body:
+          "<!doctype html><html><body>" +
+          "<h1>Pulse Account</h1>" +
+          "<p>Checkout cancelled. Returning to Pulse Pro.</p>" +
+          `<script>setTimeout(function(){window.location.replace(${JSON.stringify(
+            CANCELLED_BILLING_URL,
+          )});},150);</script>` +
+          "</body></html>",
+      });
+    });
+
+    await openMonitoredSystemUpgradeArrival(page);
+
+    const comparePlansLink = page.getByRole("link", { name: "Compare plans" });
+    await comparePlansLink.click();
+
+    await page.goto(
+      `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
+      {
+        waitUntil: "domcontentloaded",
+      },
+    );
+
+    await expect(page).toHaveURL(CANCELLED_BILLING_URL);
+    await expect(page.getByText("Checkout cancelled", { exact: true })).toBeVisible();
   });
 });

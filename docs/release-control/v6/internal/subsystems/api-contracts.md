@@ -574,7 +574,12 @@ browser-facing `GET /v1/checkout/portal-handoff` response must not expose the
 bound `checkout_intent_id`, and `POST /v1/checkout/session` must accept only
 `portal_handoff_id` for product-originated upgrade arrivals so the license
 server resolves the private checkout intent internally before Stripe session
-creation. That same owned contract also retires the old compatibility
+creation. That handoff response is now intentionally narrowly stateful: first
+resolution must stamp `resolved_at`, the portal-facing lifecycle must stay
+derived from the owned handoff plus the private checkout intent
+(`created`, `resolved`, `checkout_started`, `completed`), and completed
+handoffs must refuse browser checkout replay instead of silently reopening
+commercial state. That same owned contract also retires the old compatibility
 bootstrap surfaces: Pulse must not expose a separate public
 `GET /auth/license-purchase-handoff` resolver, and the commercial server must
 not expose a direct browser bootstrap through `GET /v1/checkout/intent` once

@@ -119,4 +119,23 @@ test.describe("Pulse Account upgrade bootstrap", () => {
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Buy Annual" }).first()).toBeDisabled();
   });
+
+  test("blocks a completed secure portal handoff from reopening checkout", async ({ page }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    await page.goto(
+      `${PORTAL_PREVIEW_URL}/?scenario=managed&portal_handoff_id=cph_preview_completed`,
+      { waitUntil: "domcontentloaded" },
+    );
+
+    await expect(
+      page.getByText(
+        "This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.",
+      ),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Buy Annual" }).first()).toBeDisabled();
+  });
 });

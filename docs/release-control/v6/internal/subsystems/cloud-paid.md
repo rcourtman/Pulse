@@ -478,10 +478,17 @@ loose `feature` / `return_url` query parameters, or a raw browser-supplied
 must expose `GET /v1/checkout/portal-handoff` as the canonical browser
 bootstrap, and the retired `GET /v1/checkout/intent` bootstrap must stay
 removed once `portal_handoff_id` is the owned contract. The browser-facing
-portal handoff response must reveal only `portal_handoff_id`, feature, and
-expiry metadata; it must not disclose the bound `checkout_intent_id`, and
-browser checkout creation must post only `portal_handoff_id` so Pulse Account
+portal handoff response must reveal only portal-owned bootstrap metadata such
+as `portal_handoff_id`, feature, handoff lifecycle state, resolve timestamp,
+and expiry; it must not disclose the bound `checkout_intent_id`, and browser
+checkout creation must post only `portal_handoff_id` so Pulse Account
 resolves the private checkout intent server-side before contacting Stripe.
+That portal handoff is now intentionally narrowly stateful rather than a bare
+lookup row: lookup must stamp a first `resolved_at`, and the reported handoff
+lifecycle must stay derived from the owned portal handoff plus the bound
+checkout intent (`created`, `resolved`, `checkout_started`, `completed`) so
+Pulse Account can distinguish a fresh upgrade bootstrap from a resumed or
+already-completed checkout without reviving browser-owned commercial state.
 Stripe success now lands on Pulse's public
 `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/pages/PricingHandoff.tsx` may only hand operators into

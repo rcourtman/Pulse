@@ -539,13 +539,18 @@ function routeCommercialAPI(request, response, url, scenario) {
 
   if (request.method === 'GET' && route === '/v1/checkout/portal-handoff') {
     const portalHandoffID = String(url.searchParams.get('portal_handoff_id') || '').trim();
-    if (portalHandoffID !== 'cph_preview_upgrade') {
+    if (
+      portalHandoffID !== 'cph_preview_upgrade' &&
+      portalHandoffID !== 'cph_preview_completed'
+    ) {
       sendJSON(response, 400, { error: 'portal_handoff_id is invalid' });
       return;
     }
     sendJSON(response, 200, {
       portal_handoff_id: portalHandoffID,
       feature: 'max_monitored_systems',
+      status: portalHandoffID === 'cph_preview_completed' ? 'completed' : 'resolved',
+      resolved_at: Math.floor(Date.now() / 1000) - 30,
       expires_at: Math.floor(Date.now() / 1000) + 3600,
     });
     return;
@@ -626,7 +631,12 @@ function routeCommercialAPI(request, response, url, scenario) {
 
   if (route === '/v1/checkout/session') {
     readJSONBody(request).then(function(body) {
-      if (String(body.portal_handoff_id || '').trim() !== 'cph_preview_upgrade') {
+      const portalHandoffID = String(body.portal_handoff_id || '').trim();
+      if (portalHandoffID === 'cph_preview_completed') {
+        sendJSON(response, 409, { error: 'This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.' });
+        return;
+      }
+      if (portalHandoffID !== 'cph_preview_upgrade') {
         sendJSON(response, 400, { error: 'Pulse Account could not verify the secure Pulse Pro upgrade handoff.' });
         return;
       }

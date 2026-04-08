@@ -1411,7 +1411,10 @@
       return "";
     }
     var portalHandoffID = String(billingState.upgradePortalHandoffID || "").trim();
-    var checkoutDisabled = billingState.upgradeCheckout.pending || !portalHandoffID || billingState.upgradePortalHandoff.status === "loading" || billingState.upgradePortalHandoff.status !== "ready";
+    var handoffLifecycle = String(
+      billingState.upgradePortalHandoff.data && billingState.upgradePortalHandoff.data.status || ""
+    ).trim();
+    var checkoutDisabled = billingState.upgradeCheckout.pending || !portalHandoffID || billingState.upgradePortalHandoff.status === "loading" || billingState.upgradePortalHandoff.status !== "ready" || handoffLifecycle === "completed";
     return '<div class="billing-upgrade-plan-grid">' + plans.map(function(plan) {
       var buttons = Array.isArray(plan.buttons) ? plan.buttons : [];
       var checkoutButtons = buttons.filter(function(button) {
@@ -1431,6 +1434,7 @@
     var portalHandoffID = String(billingState.upgradePortalHandoffID || "").trim();
     var pricingState = billingState.upgradePricing;
     var handoffState = billingState.upgradePortalHandoff;
+    var handoffLifecycle = String(handoffState.data && handoffState.data.status || "").trim();
     var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : "";
     var summaryItems = [];
     if (billingState.upgradeCheckout.pending) {
@@ -1448,7 +1452,13 @@
     } else if (handoffState.status === "error") {
       summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || "Failed to verify the secure Pulse Pro upgrade handoff.") + "</div>");
     } else if (handoffState.status === "ready") {
-      summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
+      if (handoffLifecycle === "completed") {
+        summaryItems.push('<div class="billing-status visible success">This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.</div>');
+      } else if (handoffLifecycle === "checkout_started") {
+        summaryItems.push('<div class="billing-status visible">Secure checkout is already prepared for this upgrade. Continue below if you still need to reopen it.</div>');
+      } else {
+        summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
+      }
     }
     if (pricingState.status === "loading" && !pricingState.data) {
       summaryItems.push("<p>Loading self-hosted plan options...</p>");
@@ -1801,12 +1811,25 @@
     }
     async function startUpgradeCheckout(planKey, tier, billingCycle) {
       if (!planKey || !tier || !billingCycle) return;
-      var portalHandoffID = String(getBillingState().upgradePortalHandoffID || "").trim();
-      if (!portalHandoffID || getBillingState().upgradePortalHandoff.status !== "ready") {
+      var billingState = getBillingState();
+      var portalHandoffID = String(billingState.upgradePortalHandoffID || "").trim();
+      var handoffLifecycle = String(
+        billingState.upgradePortalHandoff.data && billingState.upgradePortalHandoff.data.status || ""
+      ).trim();
+      if (!portalHandoffID || billingState.upgradePortalHandoff.status !== "ready") {
         updateBillingState(function(nextBillingState) {
           failMutationState(
             nextBillingState.upgradeCheckout,
             "Pulse Account could not verify the secure upgrade handoff. Reopen the upgrade flow from Pulse Pro billing."
+          );
+        });
+        return;
+      }
+      if (handoffLifecycle === "completed") {
+        updateBillingState(function(nextBillingState) {
+          failMutationState(
+            nextBillingState.upgradeCheckout,
+            "This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state."
           );
         });
         return;

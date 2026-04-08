@@ -82,6 +82,8 @@ export interface PortalUpgradePricingModel {
 export interface PortalUpgradePortalHandoffModel {
   portal_handoff_id: string;
   feature?: string;
+  status?: string;
+  resolved_at?: number;
   expires_at?: number;
 }
 

@@ -233,6 +233,7 @@ describe('services view', function() {
     billingState.upgradePortalHandoff.data = {
       portal_handoff_id: 'cph_signed',
       feature: 'max_monitored_systems',
+      status: 'resolved',
     };
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
@@ -311,6 +312,53 @@ describe('services view', function() {
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
       'Pulse Account could not verify the secure upgrade handoff.',
+    );
+    expect(
+      (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('blocks a completed secure upgrade handoff from starting checkout again', function() {
+    document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
+
+    var billingState = createPortalBillingState();
+    billingState.upgradePortalHandoffID = 'cph_completed';
+    billingState.upgradePortalHandoff.status = 'ready';
+    billingState.upgradePortalHandoff.data = {
+      portal_handoff_id: 'cph_completed',
+      feature: 'max_monitored_systems',
+      status: 'completed',
+    };
+    billingState.upgradePricing.status = 'ready';
+    billingState.upgradePricing.data = {
+      title: 'Pricing',
+      description: 'Canonical pricing model',
+      plans: [
+        {
+          tierKicker: 'Pro+',
+          title: 'Pro+',
+          price: '$14.99',
+          period: '$129/year available too',
+          blurb: 'More room.',
+          features: [{ tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' }],
+          buttons: [
+            {
+              kind: 'checkout',
+              className: 'btn btn-primary',
+              tier: 'pro_plus',
+              planKey: 'price_pro_plus_annual',
+              billingCycle: 'annual',
+              label: 'Buy Annual',
+            },
+          ],
+        },
+      ],
+    };
+
+    renderUpgradePanel(billingState, createBootstrap());
+
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
+      'This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.',
     );
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,

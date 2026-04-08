@@ -221,12 +221,25 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
 
   async function startUpgradeCheckout(planKey: string, tier: string, billingCycle: string) {
     if (!planKey || !tier || !billingCycle) return;
-    var portalHandoffID = String(getBillingState().upgradePortalHandoffID || '').trim();
-    if (!portalHandoffID || getBillingState().upgradePortalHandoff.status !== 'ready') {
+    var billingState = getBillingState();
+    var portalHandoffID = String(billingState.upgradePortalHandoffID || '').trim();
+    var handoffLifecycle = String(
+      (billingState.upgradePortalHandoff.data && billingState.upgradePortalHandoff.data.status) || '',
+    ).trim();
+    if (!portalHandoffID || billingState.upgradePortalHandoff.status !== 'ready') {
       updateBillingState(function(nextBillingState) {
         failMutationState(
           nextBillingState.upgradeCheckout,
           'Pulse Account could not verify the secure upgrade handoff. Reopen the upgrade flow from Pulse Pro billing.',
+        );
+      });
+      return;
+    }
+    if (handoffLifecycle === 'completed') {
+      updateBillingState(function(nextBillingState) {
+        failMutationState(
+          nextBillingState.upgradeCheckout,
+          'This secure upgrade handoff already completed. Return to Pulse Pro billing to review the live plan state.',
         );
       });
       return;
