@@ -652,14 +652,59 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 
 	handlers := NewLicenseHandlers(mtp, false)
 	handlers.SetMonitors(monitor, nil)
+	t.Cleanup(handlers.StopAllBackgroundLoops)
 	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
 
-	svc := handlers.Service(ctx)
-	if svc == nil {
-		t.Fatal("expected non-nil service")
+	readStatus := func() pkglicensing.LicenseStatus {
+		req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+		handlers.HandleLicenseStatus(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("license status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var status pkglicensing.LicenseStatus
+		if err := json.Unmarshal(rec.Body.Bytes(), &status); err != nil {
+			t.Fatalf("decode license status: %v", err)
+		}
+		return status
 	}
-	if got := svc.Status().MaxMonitoredSystems; got != 10 {
+	readEntitlements := func() EntitlementPayload {
+		req := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+		rec := httptest.NewRecorder()
+		handlers.HandleEntitlements(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("license entitlements=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+		}
+		var payload EntitlementPayload
+		if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("decode entitlements: %v", err)
+		}
+		return payload
+	}
+
+	status := readStatus()
+	if got := status.MaxMonitoredSystems; got != 10 {
 		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 10 while supplemental inventory is unsettled", got)
+	}
+	if status.MonitoredSystemContinuity == nil || !status.MonitoredSystemContinuity.CapturePending {
+		t.Fatalf("expected pending continuity in status payload, got %+v", status.MonitoredSystemContinuity)
+	}
+	if status.MonitoredSystemContinuity.PlanLimit != 10 || status.MonitoredSystemContinuity.EffectiveLimit != 10 {
+		t.Fatalf("unexpected pending continuity status payload: %+v", status.MonitoredSystemContinuity)
+	}
+
+	payload := readEntitlements()
+	if payload.MonitoredSystemContinuity == nil || !payload.MonitoredSystemContinuity.CapturePending {
+		t.Fatalf("expected pending continuity in entitlements payload, got %+v", payload.MonitoredSystemContinuity)
+	}
+	if len(payload.Limits) != 1 {
+		t.Fatalf("expected one monitored-system limit, got %+v", payload.Limits)
+	}
+	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
+		t.Fatalf("expected unavailable monitored-system usage while supplemental inventory is unsettled, got %+v", payload.Limits[0])
+	}
+	if payload.Limits[0].CurrentUnavailableReason != "supplemental_inventory_unsettled" {
+		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "supplemental_inventory_unsettled")
 	}
 
 	activationState, err := persistence.LoadActivationState()
@@ -674,32 +719,55 @@ func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySet
 	}
 
 	provider.settle(23)
-	svc = handlers.Service(ctx)
-	if got := svc.Status().MaxMonitoredSystems; got != 10 {
+	status = readStatus()
+	if got := status.MaxMonitoredSystems; got != 10 {
 		t.Fatalf("stale supplemental store should not capture grandfather floor yet, got %d", got)
 	}
 
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
-	svc = handlers.Service(ctx)
-	if got := svc.Status().MaxMonitoredSystems; got != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after supplemental store rebuild", got)
+	status = readStatus()
+	if got := status.MaxMonitoredSystems; got != 10 {
+		t.Fatalf("status read should not capture grandfather floor directly after canonical store rebuild, got %d", got)
 	}
 
-	activationState, err = persistence.LoadActivationState()
-	if err != nil {
-		t.Fatalf("reload activation state: %v", err)
-	}
-	if activationState == nil {
-		t.Fatal("expected activation state after grandfather capture")
-	}
-	if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
-		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
-	}
-	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
-		t.Fatal("expected grandfather capture timestamp after supplemental store rebuild")
+	deadline := time.Now().Add(8 * time.Second)
+	for {
+		activationState, err = persistence.LoadActivationState()
+		if err != nil {
+			t.Fatalf("reload activation state: %v", err)
+		}
+		if activationState != nil &&
+			activationState.Continuity.GrandfatheredMaxMonitoredSystems == 23 &&
+			activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected async grandfather capture after canonical store rebuild, last activation state=%+v", activationState)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
-	handlers.StopAllBackgroundLoops()
+	status = readStatus()
+	if got := status.MaxMonitoredSystems; got != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after async grandfather capture", got)
+	}
+	if status.MonitoredSystemContinuity == nil || status.MonitoredSystemContinuity.CapturePending {
+		t.Fatalf("expected settled continuity in status payload after async capture, got %+v", status.MonitoredSystemContinuity)
+	}
+	if status.MonitoredSystemContinuity.GrandfatheredFloor != 23 || status.MonitoredSystemContinuity.EffectiveLimit != 23 {
+		t.Fatalf("unexpected settled continuity status payload: %+v", status.MonitoredSystemContinuity)
+	}
+
+	payload = readEntitlements()
+	if payload.MonitoredSystemContinuity == nil || payload.MonitoredSystemContinuity.CapturePending {
+		t.Fatalf("expected settled continuity in entitlements payload after async capture, got %+v", payload.MonitoredSystemContinuity)
+	}
+	if len(payload.Limits) != 1 || payload.Limits[0].Current != 23 {
+		t.Fatalf("expected settled monitored-system usage in entitlements payload, got %+v", payload.Limits)
+	}
+	if payload.Limits[0].CurrentAvailable == nil || !*payload.Limits[0].CurrentAvailable {
+		t.Fatalf("expected available monitored-system usage after async capture, got %+v", payload.Limits[0])
+	}
 }
 
 func buildGrandfatherFloorMonitor(count int) *monitoring.Monitor {

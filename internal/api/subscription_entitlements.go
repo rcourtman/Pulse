@@ -174,6 +174,8 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 				usage.MonitoredSystemsAvailable = true
 				usage.LegacyConnections = legacyConnectionCountsFromReadState(state.ReadState)
 				monitorResolved = true
+			} else if usage.MonitoredSystemsUnavailableReason == "" {
+				usage.MonitoredSystemsUnavailableReason = state.UnavailableReason
 			}
 		}
 	}
@@ -183,6 +185,8 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 			usage.MonitoredSystems = int64(state.Count)
 			usage.MonitoredSystemsAvailable = true
 			usage.LegacyConnections = legacyConnectionCountsFromReadState(state.ReadState)
+		} else if usage.MonitoredSystemsUnavailableReason == "" {
+			usage.MonitoredSystemsUnavailableReason = state.UnavailableReason
 		}
 	}
 

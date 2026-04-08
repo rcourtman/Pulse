@@ -4824,7 +4824,14 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		Tier:                pkglicensing.TierPro,
 		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 		MaxMonitoredSystems: 15,
-	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{}, nil)
+		MonitoredSystemContinuity: &pkglicensing.MonitoredSystemContinuityStatus{
+			PlanLimit:      15,
+			EffectiveLimit: 15,
+			CapturePending: true,
+		},
+	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{
+		MonitoredSystemsUnavailableReason: "supplemental_inventory_unsettled",
+	}, nil)
 
 	got, err := json.Marshal(payload)
 	if err != nil {
@@ -4833,7 +4840,7 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 
 	const want = `{
 		"capabilities":["update_alerts","sso","ai_patrol","relay","mobile_app","push_notifications","long_term_metrics","ai_alerts","ai_autofix","kubernetes_ai","agent_profiles","advanced_sso","rbac","audit_logging","advanced_reporting"],
-		"limits":[{"key":"max_monitored_systems","limit":15,"current":0,"current_available":false,"state":"ok"}],
+		"limits":[{"key":"max_monitored_systems","limit":15,"current":0,"current_available":false,"current_unavailable_reason":"supplemental_inventory_unsettled","state":"ok"}],
 		"subscription_state":"active",
 		"upgrade_reasons":[],
 		"tier":"pro",
@@ -4844,7 +4851,8 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 		"trial_eligible":false,
 		"max_history_days":90,
 		"legacy_connections":{"proxmox_nodes":0,"docker_hosts":0,"kubernetes_clusters":0},
-		"has_migration_gap":false
+		"has_migration_gap":false,
+		"monitored_system_continuity":{"plan_limit":15,"effective_limit":15,"capture_pending":true}
 	}`
 
 	assertJSONSnapshot(t, got, want)
@@ -4973,42 +4981,64 @@ func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
 	if err := json.Unmarshal(entRec.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode entitlements: %v", err)
 	}
+	statusContinuity := status.MonitoredSystemContinuity
+	if statusContinuity != nil {
+		copied := *statusContinuity
+		if copied.CapturedAt > 0 {
+			copied.CapturedAt = 123
+		}
+		statusContinuity = &copied
+	}
+	payloadContinuity := payload.MonitoredSystemContinuity
+	if payloadContinuity != nil {
+		copied := *payloadContinuity
+		if copied.CapturedAt > 0 {
+			copied.CapturedAt = 123
+		}
+		payloadContinuity = &copied
+	}
 
 	got, err := json.Marshal(struct {
 		Status struct {
-			Tier                pkglicensing.Tier `json:"tier"`
-			PlanVersion         string            `json:"plan_version"`
-			MaxMonitoredSystems int               `json:"max_monitored_systems"`
-			Valid               bool              `json:"valid"`
+			Tier                      pkglicensing.Tier                             `json:"tier"`
+			PlanVersion               string                                        `json:"plan_version"`
+			MaxMonitoredSystems       int                                           `json:"max_monitored_systems"`
+			Valid                     bool                                          `json:"valid"`
+			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
 		} `json:"status"`
 		Entitlements struct {
-			Tier              string                     `json:"tier"`
-			PlanVersion       string                     `json:"plan_version"`
-			SubscriptionState string                     `json:"subscription_state"`
-			Limits            []pkglicensing.LimitStatus `json:"limits"`
+			Tier                      string                                        `json:"tier"`
+			PlanVersion               string                                        `json:"plan_version"`
+			SubscriptionState         string                                        `json:"subscription_state"`
+			Limits                    []pkglicensing.LimitStatus                    `json:"limits"`
+			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
 		} `json:"entitlements"`
 	}{
 		Status: struct {
-			Tier                pkglicensing.Tier `json:"tier"`
-			PlanVersion         string            `json:"plan_version"`
-			MaxMonitoredSystems int               `json:"max_monitored_systems"`
-			Valid               bool              `json:"valid"`
+			Tier                      pkglicensing.Tier                             `json:"tier"`
+			PlanVersion               string                                        `json:"plan_version"`
+			MaxMonitoredSystems       int                                           `json:"max_monitored_systems"`
+			Valid                     bool                                          `json:"valid"`
+			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
 		}{
-			Tier:                status.Tier,
-			PlanVersion:         status.PlanVersion,
-			MaxMonitoredSystems: status.MaxMonitoredSystems,
-			Valid:               status.Valid,
+			Tier:                      status.Tier,
+			PlanVersion:               status.PlanVersion,
+			MaxMonitoredSystems:       status.MaxMonitoredSystems,
+			Valid:                     status.Valid,
+			MonitoredSystemContinuity: statusContinuity,
 		},
 		Entitlements: struct {
-			Tier              string                     `json:"tier"`
-			PlanVersion       string                     `json:"plan_version"`
-			SubscriptionState string                     `json:"subscription_state"`
-			Limits            []pkglicensing.LimitStatus `json:"limits"`
+			Tier                      string                                        `json:"tier"`
+			PlanVersion               string                                        `json:"plan_version"`
+			SubscriptionState         string                                        `json:"subscription_state"`
+			Limits                    []pkglicensing.LimitStatus                    `json:"limits"`
+			MonitoredSystemContinuity *pkglicensing.MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
 		}{
-			Tier:              payload.Tier,
-			PlanVersion:       payload.PlanVersion,
-			SubscriptionState: payload.SubscriptionState,
-			Limits:            payload.Limits,
+			Tier:                      payload.Tier,
+			PlanVersion:               payload.PlanVersion,
+			SubscriptionState:         payload.SubscriptionState,
+			Limits:                    payload.Limits,
+			MonitoredSystemContinuity: payloadContinuity,
 		},
 	})
 	if err != nil {
@@ -5020,13 +5050,15 @@ func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
 			"tier":"pro",
 			"plan_version":"v5_pro_monthly_grandfathered",
 			"max_monitored_systems":23,
-			"valid":true
+			"valid":true,
+			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123}
 		},
 		"entitlements":{
 			"tier":"pro",
 			"plan_version":"v5_pro_monthly_grandfathered",
 			"subscription_state":"active",
-			"limits":[{"key":"max_monitored_systems","limit":23,"current":23,"current_available":true,"state":"enforced"}]
+			"limits":[{"key":"max_monitored_systems","limit":23,"current":23,"current_available":true,"state":"enforced"}],
+			"monitored_system_continuity":{"plan_limit":10,"grandfathered_floor":23,"effective_limit":23,"capture_pending":false,"captured_at":123}
 		}
 	}`
 

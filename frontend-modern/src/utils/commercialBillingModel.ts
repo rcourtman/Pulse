@@ -1,4 +1,5 @@
 import type { LicenseStatus } from '@/api/license';
+import type { MonitoredSystemContinuityStatus } from '@/api/license';
 
 export interface CommercialStatValue {
   label: string;
@@ -28,15 +29,19 @@ export interface SelfHostedCommercialModelInput {
   planTerms?: string;
   expires: string;
   daysRemaining: string | number;
-  monitoredSystems: number;
-  monitoredSystemLimit?: number;
+  monitoredSystemsSummary: string | number;
   remainingSystemCapacity: string | number;
   maxMonitoredSystems: string | number;
   maxGuests: string | number;
+  monitoredSystemContinuity?: MonitoredSystemContinuityStatus | null;
+  continuityCapturedAt?: string;
 }
 
 export interface HostedCommercialModelInput {
-  status?: Pick<LicenseStatus, 'email' | 'is_lifetime' | 'expires_at' | 'max_monitored_systems' | 'max_guests'> | null;
+  status?: Pick<
+    LicenseStatus,
+    'email' | 'is_lifetime' | 'expires_at' | 'max_monitored_systems' | 'max_guests'
+  > | null;
   tierLabel: string;
   licenseStatusLabel: string;
   organizationCount: number;
@@ -55,10 +60,7 @@ export const buildSelfHostedCommercialPlanModel = (
   summary: [
     {
       label: 'Monitored Systems',
-      value:
-        typeof input.monitoredSystemLimit === 'number' && input.monitoredSystemLimit > 0
-          ? `${input.monitoredSystems} / ${input.monitoredSystemLimit}`
-          : input.monitoredSystems,
+      value: input.monitoredSystemsSummary,
     },
     {
       label: 'Remaining System Capacity',
@@ -94,10 +96,44 @@ export const buildSelfHostedCommercialPlanModel = (
       label: 'Days Remaining',
       value: input.daysRemaining,
     },
-    {
-      label: 'Included Monitored Systems',
-      value: input.maxMonitoredSystems,
-    },
+    ...(input.monitoredSystemContinuity
+      ? [
+          {
+            label: 'Plan Monitored System Limit',
+            value:
+              input.monitoredSystemContinuity.plan_limit > 0
+                ? input.monitoredSystemContinuity.plan_limit
+                : 'Unlimited',
+          },
+          {
+            label: 'Effective Monitored System Limit',
+            value:
+              input.monitoredSystemContinuity.effective_limit > 0
+                ? input.monitoredSystemContinuity.effective_limit
+                : 'Unlimited',
+          },
+          ...(typeof input.monitoredSystemContinuity.grandfathered_floor === 'number' &&
+          input.monitoredSystemContinuity.grandfathered_floor > 0
+            ? [
+                {
+                  label: 'Grandfathered Floor',
+                  value: input.monitoredSystemContinuity.grandfathered_floor,
+                },
+              ]
+            : []),
+          {
+            label: 'Continuity Capture',
+            value: input.monitoredSystemContinuity.capture_pending
+              ? 'Pending'
+              : input.continuityCapturedAt || 'Captured',
+          },
+        ]
+      : [
+          {
+            label: 'Included Monitored Systems',
+            value: input.maxMonitoredSystems,
+          },
+        ]),
     {
       label: 'Max Guests',
       value: input.maxGuests,

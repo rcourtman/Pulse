@@ -49,6 +49,42 @@ describe('LicenseAPI', () => {
     });
   });
 
+  it('preserves monitored-system continuity fields from the entitlement payload', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      tier: 'pro',
+      subscription_state: 'active',
+      capabilities: ['relay'],
+      limits: [
+        {
+          key: 'max_monitored_systems',
+          limit: 10,
+          current: 0,
+          current_available: false,
+          current_unavailable_reason: 'supplemental_inventory_unsettled',
+          state: 'ok',
+        },
+      ],
+      upgrade_reasons: [],
+      monitored_system_continuity: {
+        plan_limit: 10,
+        effective_limit: 10,
+        capture_pending: true,
+      },
+    });
+
+    const result = await LicenseAPI.getCommercialEntitlements();
+
+    expect(result.monitored_system_continuity).toMatchObject({
+      plan_limit: 10,
+      effective_limit: 10,
+      capture_pending: true,
+    });
+    expect(result.limits[0]).toMatchObject({
+      current_available: false,
+      current_unavailable_reason: 'supplemental_inventory_unsettled',
+    });
+  });
+
   it('reads commercial posture from the public-safe commercial endpoint', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       tier: 'pro',

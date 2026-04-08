@@ -156,7 +156,9 @@ func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *tes
 		MaxMonitoredSystems: 50,
 	}
 
-	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{}, nil)
+	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
+		MonitoredSystemsUnavailableReason: "supplemental_inventory_unsettled",
+	}, nil)
 	if len(payload.Limits) != 1 {
 		t.Fatalf("expected one limit, got %d", len(payload.Limits))
 	}
@@ -165,6 +167,46 @@ func TestBuildEntitlementPayloadWithUsage_MonitoredSystemUsageUnavailable(t *tes
 	}
 	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
 		t.Fatalf("expected unresolved current availability to be false, got %+v", payload.Limits[0].CurrentAvailable)
+	}
+	if payload.Limits[0].CurrentUnavailableReason != "supplemental_inventory_unsettled" {
+		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "supplemental_inventory_unsettled")
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_CopiesMonitoredSystemContinuity(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 23,
+		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
+			PlanLimit:          10,
+			GrandfatheredFloor: 23,
+			EffectiveLimit:     23,
+			CapturePending:     false,
+			CapturedAt:         123,
+		},
+	}
+
+	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
+		MonitoredSystems:          23,
+		MonitoredSystemsAvailable: true,
+	}, nil)
+
+	if payload.MonitoredSystemContinuity == nil {
+		t.Fatal("expected monitored-system continuity to be copied")
+	}
+	if payload.MonitoredSystemContinuity.PlanLimit != 10 {
+		t.Fatalf("PlanLimit=%d, want %d", payload.MonitoredSystemContinuity.PlanLimit, 10)
+	}
+	if payload.MonitoredSystemContinuity.EffectiveLimit != 23 {
+		t.Fatalf("EffectiveLimit=%d, want %d", payload.MonitoredSystemContinuity.EffectiveLimit, 23)
+	}
+	if payload.MonitoredSystemContinuity.GrandfatheredFloor != 23 {
+		t.Fatalf("GrandfatheredFloor=%d, want %d", payload.MonitoredSystemContinuity.GrandfatheredFloor, 23)
+	}
+	if payload.MonitoredSystemContinuity.CapturePending {
+		t.Fatal("expected continuity capture to be settled")
 	}
 }
 

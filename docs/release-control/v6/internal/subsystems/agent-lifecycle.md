@@ -205,7 +205,10 @@ management, and fleet control surfaces.
     grandfathering: lifecycle surfaces may react to the resulting license or
     entitlements payloads, but they must not cache their own pre-activation
     host counts, synthesize a second grandfather floor, or treat install-time
-    fleet inventory as the authority for commercial continuity.
+    fleet inventory as the authority for commercial continuity. They also must
+    not depend on a status or entitlements read to seal pending grandfather
+    continuity, or reinterpret continuity-verification payloads as a real
+    `0 / limit` monitored-system state.
 
 ## Forbidden Paths
 

@@ -1,5 +1,10 @@
 import type { BillingState, HostedOrganizationSummary } from '@/api/billingAdmin';
-import type { CommercialMigrationStatus, LicenseStatus } from '@/api/license';
+import type {
+  CommercialMigrationStatus,
+  EntitlementLimitStatus,
+  LicenseStatus,
+  MonitoredSystemContinuityStatus,
+} from '@/api/license';
 import { CLOUD_PLAN_LABELS } from '@/utils/cloudPlans';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
@@ -152,6 +157,51 @@ export const getGrandfatheredPriceContinuityNotice = (
     title: 'Grandfathered v5 pricing',
     body: 'This migrated v5 Pro subscription keeps its existing recurring price until you cancel. If you cancel and return later, current v6 pricing applies.',
   };
+};
+
+const monitoredSystemUnavailableReasonBody = (reason?: string): string => {
+  switch ((reason || '').trim().toLowerCase()) {
+    case 'supplemental_inventory_unsettled':
+      return 'Pulse is still collecting the first supplemental inventory baseline for this installation. Current monitored-system usage will appear after that baseline completes.';
+    case 'supplemental_inventory_rebuild_pending':
+      return 'Pulse has collected supplemental inventory, but it is still rebuilding the canonical monitored-system ledger. Current usage will appear when that rebuild finishes.';
+    case 'monitor_state_unavailable':
+    default:
+      return 'Pulse cannot currently verify monitored-system usage for this installation. Refresh after the monitoring runtime settles.';
+  }
+};
+
+export const getMonitoredSystemContinuityNotice = (
+  continuity?: MonitoredSystemContinuityStatus | null,
+  limit?: Pick<EntitlementLimitStatus, 'current_available' | 'current_unavailable_reason'> | null,
+): LicenseInlineNotice | null => {
+  const currentAvailable = limit?.current_available !== false;
+  if (!currentAvailable) {
+    const title =
+      continuity?.capture_pending === true
+        ? 'Migration continuity verification pending'
+        : 'Monitored-system usage unavailable';
+    return {
+      tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
+      title,
+      body: monitoredSystemUnavailableReasonBody(limit?.current_unavailable_reason),
+    };
+  }
+
+  if (
+    continuity &&
+    typeof continuity.grandfathered_floor === 'number' &&
+    continuity.grandfathered_floor > 0 &&
+    continuity.effective_limit > continuity.plan_limit
+  ) {
+    return {
+      tone: 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-900 text-green-900 dark:text-green-100',
+      title: 'Grandfathered monitored-system floor',
+      body: `This migrated v5 installation keeps an effective monitored-system limit of ${continuity.effective_limit}. The current plan includes ${continuity.plan_limit}, and the observed legacy estate was grandfathered at ${continuity.grandfathered_floor}.`,
+    };
+  }
+
+  return null;
 };
 
 export const getCommercialMigrationActionText = (action?: string): string => {

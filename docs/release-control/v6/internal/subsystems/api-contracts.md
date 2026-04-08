@@ -1204,6 +1204,14 @@ first non-nil read-state. If provider-owned supplemental inventories are still
 between initial wiring and the first canonical store rebuild, the API must
 keep the grandfather floor uncaptured and expose usage as unavailable rather
 than sealing continuity against a partial startup graph.
+That continuity capture is owned by the shared licensing reconciler rather
+than ordinary read handlers. `/api/license/status` and
+`/api/license/entitlements` may expose `monitored_system_continuity`
+(`plan_limit`, `effective_limit`, optional `grandfathered_floor`,
+`capture_pending`, `captured_at`) and limit-level
+`current_unavailable_reason`, but those request paths must not seal the
+grandfather floor synchronously just because a billing read happened to arrive
+after the canonical usage view became available.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring

@@ -98,11 +98,17 @@ func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
 			"SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)",
 		},
 		"monitored_system_usage.go": {
+			"MonitoredSystemUsageUnavailableMonitorState",
+			"MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled",
+			"MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending",
 			"func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {",
 			"readyAt, settled := m.supplementalInventoryReadyAt(orgID)",
 			"if !settled {",
+			"UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,",
 			"if freshness.IsZero() || freshness.Before(readyAt) {",
-			"return MonitoredSystemUsageSnapshot{ReadState: readState}",
+			"UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,",
+			"Count:     unifiedresources.MonitoredSystemCount(readState),",
+			"Available: true,",
 		},
 		"truenas_poller.go": {
 			"func (p *TrueNASPoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {",

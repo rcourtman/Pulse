@@ -230,6 +230,48 @@ func TestClaims_EffectiveLimitsPreservesNonCloudPlanLimits(t *testing.T) {
 	}
 }
 
+func TestLicenseStatusJSON_EncodesMonitoredSystemContinuity(t *testing.T) {
+	status := LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		MaxMonitoredSystems: 23,
+		MonitoredSystemContinuity: &MonitoredSystemContinuityStatus{
+			PlanLimit:          10,
+			GrandfatheredFloor: 23,
+			EffectiveLimit:     23,
+			CapturePending:     false,
+			CapturedAt:         123,
+		},
+	}
+
+	data, err := json.Marshal(status)
+	if err != nil {
+		t.Fatalf("marshal status: %v", err)
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("decode status json: %v", err)
+	}
+
+	continuity, ok := decoded["monitored_system_continuity"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected monitored_system_continuity object, got %#v", decoded["monitored_system_continuity"])
+	}
+	if got := continuity["plan_limit"]; got != float64(10) {
+		t.Fatalf("plan_limit=%v, want %v", got, float64(10))
+	}
+	if got := continuity["effective_limit"]; got != float64(23) {
+		t.Fatalf("effective_limit=%v, want %v", got, float64(23))
+	}
+	if got := continuity["grandfathered_floor"]; got != float64(23) {
+		t.Fatalf("grandfathered_floor=%v, want %v", got, float64(23))
+	}
+	if got := continuity["capture_pending"]; got != false {
+		t.Fatalf("capture_pending=%v, want false", got)
+	}
+}
+
 func TestClaims_EffectiveLimitsMissingCloudPlanFailsClosed(t *testing.T) {
 	claims := Claims{
 		Tier:        TierCloud,

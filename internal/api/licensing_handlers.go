@@ -53,20 +53,21 @@ func revocationFeedToken() string {
 
 // LicenseHandlers handles license management API endpoints.
 type LicenseHandlers struct {
-	mtPersistence      *config.MultiTenantPersistence
-	hostedMode         bool
-	cfg                *config.Config
-	services           sync.Map // map[string]*licenseService
-	trialLimiter       *RateLimiter
-	trialReplay        *jtiReplayStore
-	trialInitiations   *trialSignupInitiationStore
-	purchaseHandoffs   *purchaseCheckoutHandoffStore
-	trialRedeemer      func(token string) (*hostedTrialRedemptionResponse, error)
-	monitor            *monitoring.Monitor
-	mtMonitor          *monitoring.MultiTenantMonitor
-	conversionRecorder *conversionRecorder
-	conversionHealth   *conversionPipelineHealth
-	hostedLeaseRefresh sync.Map // map[string]*hostedEntitlementRefreshLoop
+	mtPersistence              *config.MultiTenantPersistence
+	hostedMode                 bool
+	cfg                        *config.Config
+	services                   sync.Map // map[string]*licenseService
+	trialLimiter               *RateLimiter
+	trialReplay                *jtiReplayStore
+	trialInitiations           *trialSignupInitiationStore
+	purchaseHandoffs           *purchaseCheckoutHandoffStore
+	trialRedeemer              func(token string) (*hostedTrialRedemptionResponse, error)
+	monitor                    *monitoring.Monitor
+	mtMonitor                  *monitoring.MultiTenantMonitor
+	conversionRecorder         *conversionRecorder
+	conversionHealth           *conversionPipelineHealth
+	hostedLeaseRefresh         sync.Map // map[string]*hostedEntitlementRefreshLoop
+	legacyGrandfatherReconcile sync.Map // map[string]*legacyGrandfatherReconcileLoop
 }
 
 // NewLicenseHandlers creates a new license handlers instance.
@@ -162,6 +163,12 @@ func (h *LicenseHandlers) StopAllBackgroundLoops() {
 	h.hostedLeaseRefresh.Range(func(key, value any) bool {
 		if orgID, ok := key.(string); ok {
 			h.stopHostedEntitlementRefreshLoop(orgID)
+		}
+		return true
+	})
+	h.legacyGrandfatherReconcile.Range(func(key, value any) bool {
+		if orgID, ok := key.(string); ok {
+			h.stopLegacyGrandfatherReconcileLoop(orgID)
 		}
 		return true
 	})
@@ -515,7 +522,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
-		h.ensureLegacyMigrationGrandfatherFloor(ctx, svc)
+		h.ensureLegacyGrandfatherReconcileLoop(orgID, svc)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		// We need persistence too, reconstruct it or cache it?
 		// Reconstructing persistence is cheap (just a struct with path).
@@ -553,7 +560,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 			if err := service.RestoreActivation(activationState); err != nil {
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to restore activation")
 			} else {
-				h.ensureLegacyMigrationGrandfatherFloor(ctx, service)
+				h.ensureLegacyGrandfatherReconcileLoop(orgID, service)
 				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after activation restore")
 				}
@@ -583,7 +590,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 				}
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to auto-exchange persisted legacy license")
 			} else if service.IsActivated() {
-				h.ensureLegacyMigrationGrandfatherFloor(ctx, service)
+				h.reconcileLegacyMigrationGrandfatherFloor(ctx, orgID, service)
 				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after successful auto-exchange")
 				}
@@ -608,11 +615,13 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		service.StopGrantRefresh()   // stop our orphaned refresh loop if started
 		service.StopRevocationPoll() // stop our orphaned revocation poller if started
 		svc := actual.(*licenseService)
+		h.ensureLegacyGrandfatherReconcileLoop(orgID, svc)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		p, pErr := h.getPersistenceForOrg(orgID)
 		return svc, p, pErr
 	}
 
+	h.ensureLegacyGrandfatherReconcileLoop(orgID, service)
 	h.ensureHostedEntitlementRefreshForOrg(orgID, service)
 
 	return service, persistence, nil
@@ -627,29 +636,6 @@ func (h *LicenseHandlers) canonicalMonitoredSystemGrandfatherFloor(ctx context.C
 		return 0, false
 	}
 	return int(usage.MonitoredSystems), true
-}
-
-func (h *LicenseHandlers) ensureLegacyMigrationGrandfatherFloor(ctx context.Context, service *licenseService) {
-	if h == nil || service == nil {
-		return
-	}
-
-	count, ok := h.canonicalMonitoredSystemGrandfatherFloor(ctx)
-	if !ok {
-		return
-	}
-
-	if err := service.CaptureLegacyMonitoredSystemGrandfatherFloor(count); err != nil {
-		orgID := GetOrgID(ctx)
-		if orgID == "" {
-			orgID = "default"
-		}
-		log.Warn().
-			Str("org_id", orgID).
-			Int("monitored_systems", count).
-			Err(err).
-			Msg("Failed to persist migrated monitored-system grandfather floor")
-	}
 }
 
 func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseService) error {
@@ -1350,7 +1336,7 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 
 	if service.IsActivated() {
 		if migratedLegacyKey {
-			h.ensureLegacyMigrationGrandfatherFloor(ctx, service)
+			h.reconcileLegacyMigrationGrandfatherFloor(ctx, orgID, service)
 		}
 		h.stopHostedEntitlementRefreshLoop(orgID)
 		if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
@@ -1813,6 +1799,7 @@ func (h *LicenseHandlers) HandleClearLicense(w http.ResponseWriter, r *http.Requ
 	// Preserve trial_started_at and free-tier bookkeeping so the effective trial
 	// ends immediately but trial reuse remains blocked.
 	if h != nil && h.mtPersistence != nil {
+		h.stopLegacyGrandfatherReconcileLoop(orgID)
 		h.stopHostedEntitlementRefreshLoop(orgID)
 		billingStore := config.NewFileBillingStore(h.mtPersistence.BaseDataDir())
 		existing, err := billingStore.GetBillingState(orgID)

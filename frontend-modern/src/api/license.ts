@@ -13,6 +13,7 @@ export interface LicenseStatus {
   max_guests?: number;
   in_grace_period?: boolean;
   grace_period_end?: string | null;
+  monitored_system_continuity?: MonitoredSystemContinuityStatus;
 }
 
 export interface EntitlementLimitStatus {
@@ -20,6 +21,8 @@ export interface EntitlementLimitStatus {
   // 0 means unlimited
   limit: number;
   current: number;
+  current_available?: boolean;
+  current_unavailable_reason?: string;
   // "ok" | "warning" | "enforced" (string for forward-compat)
   state: string;
 }
@@ -41,6 +44,14 @@ export interface CommercialMigrationStatus {
   state?: string;
   reason?: string;
   recommended_action?: string;
+}
+
+export interface MonitoredSystemContinuityStatus {
+  plan_limit: number;
+  grandfathered_floor?: number;
+  effective_limit: number;
+  capture_pending: boolean;
+  captured_at?: number;
 }
 
 // Mirrors internal/api/subscription_entitlements.go:RuntimeCapabilitiesPayload
@@ -80,6 +91,7 @@ export interface LicenseCommercialEntitlements extends LicenseCommercialPosture 
   in_grace_period?: boolean;
   grace_period_end?: string;
   max_history_days?: number;
+  monitored_system_continuity?: MonitoredSystemContinuityStatus;
 }
 
 export type LicenseEntitlements = LicenseCommercialEntitlements;

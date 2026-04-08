@@ -266,6 +266,92 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 	}
 }
 
+func TestServiceStatus_ExposesMonitoredSystemContinuity(t *testing.T) {
+	setupTestPublicKey(t)
+
+	grantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_continuity_status",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	tests := []struct {
+		name               string
+		continuity         ActivationContinuity
+		wantPlanLimit      int
+		wantEffectiveLimit int
+		wantFloor          int
+		wantCapturePending bool
+		wantMaxSystems     int
+	}{
+		{
+			name: "pending capture",
+			continuity: ActivationContinuity{
+				LegacyMigration: true,
+			},
+			wantPlanLimit:      10,
+			wantEffectiveLimit: 10,
+			wantFloor:          0,
+			wantCapturePending: true,
+			wantMaxSystems:     10,
+		},
+		{
+			name: "captured floor",
+			continuity: ActivationContinuity{
+				LegacyMigration:                         true,
+				GrandfatheredMaxMonitoredSystems:        23,
+				GrandfatheredMonitoredSystemsCapturedAt: 123,
+			},
+			wantPlanLimit:      10,
+			wantEffectiveLimit: 23,
+			wantFloor:          23,
+			wantCapturePending: false,
+			wantMaxSystems:     23,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewService()
+			if err := svc.RestoreActivation(&ActivationState{
+				InstallationID:      "inst_continuity_status",
+				InstallationToken:   "pit_live_continuity_status",
+				LicenseID:           "lic_continuity_status",
+				GrantJWT:            grantJWT,
+				GrantJTI:            "grant_continuity_status",
+				InstanceFingerprint: "fp-continuity-status",
+				Continuity:          tt.continuity,
+			}); err != nil {
+				t.Fatalf("RestoreActivation: %v", err)
+			}
+
+			status := svc.Status()
+			if status.MaxMonitoredSystems != tt.wantMaxSystems {
+				t.Fatalf("status.MaxMonitoredSystems=%d, want %d", status.MaxMonitoredSystems, tt.wantMaxSystems)
+			}
+			if status.MonitoredSystemContinuity == nil {
+				t.Fatal("expected monitored-system continuity in status")
+			}
+			if status.MonitoredSystemContinuity.PlanLimit != tt.wantPlanLimit {
+				t.Fatalf("PlanLimit=%d, want %d", status.MonitoredSystemContinuity.PlanLimit, tt.wantPlanLimit)
+			}
+			if status.MonitoredSystemContinuity.EffectiveLimit != tt.wantEffectiveLimit {
+				t.Fatalf("EffectiveLimit=%d, want %d", status.MonitoredSystemContinuity.EffectiveLimit, tt.wantEffectiveLimit)
+			}
+			if status.MonitoredSystemContinuity.GrandfatheredFloor != tt.wantFloor {
+				t.Fatalf("GrandfatheredFloor=%d, want %d", status.MonitoredSystemContinuity.GrandfatheredFloor, tt.wantFloor)
+			}
+			if status.MonitoredSystemContinuity.CapturePending != tt.wantCapturePending {
+				t.Fatalf("CapturePending=%v, want %v", status.MonitoredSystemContinuity.CapturePending, tt.wantCapturePending)
+			}
+		})
+	}
+}
+
 func TestServiceActivate_RejectsMalformedLegacyKeyOutsideDevMode(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 

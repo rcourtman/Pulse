@@ -39,15 +39,16 @@ truth for live infrastructure data.
 15. `docker-entrypoint.sh`
 16. `internal/monitoring/truenas_poller.go`
 17. `internal/monitoring/vmware_poller.go`
-18. `internal/dockeragent/swarm.go`
-19. `internal/monitoring/guest_memory_sources.go`
-20. `internal/monitoring/guest_memory_stability.go`
-21. `internal/monitoring/monitor_polling_vm.go`
-22. `internal/monitoring/monitor_pve_guest_builders.go`
-23. `internal/monitoring/monitor_pve_guest_poll.go`
-24. `internal/monitoring/guest_disk_stability.go`
-25. `internal/monitoring/mock_metrics_history.go`
-26. `internal/monitoring/mock_chart_history.go`
+18. `internal/monitoring/monitored_system_usage.go`
+19. `internal/dockeragent/swarm.go`
+20. `internal/monitoring/guest_memory_sources.go`
+21. `internal/monitoring/guest_memory_stability.go`
+22. `internal/monitoring/monitor_polling_vm.go`
+23. `internal/monitoring/monitor_pve_guest_builders.go`
+24. `internal/monitoring/monitor_pve_guest_poll.go`
+25. `internal/monitoring/guest_disk_stability.go`
+26. `internal/monitoring/mock_metrics_history.go`
+27. `internal/monitoring/mock_chart_history.go`
 
 ## Shared Boundaries
 
@@ -101,6 +102,13 @@ settling: monitoring must fail closed until every active connection in that
 provider has reached an initial baseline and the canonical monitor store has
 rebuilt at or after that provider watermark, otherwise billing and upgrade
 continuity can freeze against a transient startup undercount.
+That same monitoring boundary also owns the machine-readable unavailable-state
+contract for monitored-system usage. `internal/monitoring/monitored_system_usage.go`
+must emit canonical reason codes such as
+`monitor_state_unavailable`, `supplemental_inventory_unsettled`, and
+`supplemental_inventory_rebuild_pending` when usage cannot yet be resolved, so
+commercial surfaces can show verification or recovery state without inventing
+their own readiness heuristics or falling back to a fake `0 / limit`.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

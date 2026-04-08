@@ -175,7 +175,9 @@ querying, and the operator-facing storage health presentation layer.
     but they must not infer a second capacity floor from protected inventory,
     backup counts, or recovery-point presence when commercial continuity is
     already defined by the canonical monitored-system resolver and activation
-    persistence.
+    persistence. They also must not rely on billing-status reads to finalize a
+    pending grandfather floor or collapse continuity-verification payloads
+    into a real `0 / limit` monitored-system reading.
 
 ## Forbidden Paths
 

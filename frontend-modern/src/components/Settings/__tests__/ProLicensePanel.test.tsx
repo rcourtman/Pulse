@@ -272,6 +272,93 @@ describe('ProLicensePanel', () => {
     }
   });
 
+  it('shows continuity verification while the migrated monitored-system floor is still pending', async () => {
+    mockEntitlements = {
+      capabilities: ['relay'],
+      limits: [
+        {
+          key: 'max_monitored_systems',
+          limit: 10,
+          current: 0,
+          current_available: false,
+          current_unavailable_reason: 'supplemental_inventory_unsettled',
+          state: 'ok',
+        },
+      ],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'v5_pro_monthly_grandfathered',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+      monitored_system_continuity: {
+        plan_limit: 10,
+        effective_limit: 10,
+        capture_pending: true,
+      },
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Migration continuity verification pending')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/still collecting the first supplemental inventory baseline/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Verifying…')).toBeInTheDocument();
+    expect(screen.getByText('Unavailable')).toBeInTheDocument();
+    expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
+    expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
+    expect(screen.getByText('Continuity Capture')).toBeInTheDocument();
+    expect(screen.getByText('Pending')).toBeInTheDocument();
+    expect(screen.queryByText('0 / 10')).not.toBeInTheDocument();
+  });
+
+  it('shows grandfathered monitored-system continuity once the migrated floor is captured', async () => {
+    mockEntitlements = {
+      capabilities: ['relay'],
+      limits: [
+        {
+          key: 'max_monitored_systems',
+          limit: 23,
+          current: 23,
+          current_available: true,
+          state: 'enforced',
+        },
+      ],
+      subscription_state: 'active',
+      upgrade_reasons: [],
+      tier: 'pro',
+      plan_version: 'v5_pro_monthly_grandfathered',
+      licensed_email: 'owner@example.com',
+      trial_eligible: false,
+      monitored_system_continuity: {
+        plan_limit: 10,
+        grandfathered_floor: 23,
+        effective_limit: 23,
+        capture_pending: false,
+        captured_at: 1_768_000_000,
+      },
+    };
+
+    renderPanel();
+
+    await waitFor(() => {
+      expect(screen.getByText('Grandfathered monitored-system floor')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(/keeps an effective monitored-system limit of 23/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText('23 / 23')).toBeInTheDocument();
+    expect(screen.getByText('Plan Monitored System Limit')).toBeInTheDocument();
+    expect(screen.getByText('Effective Monitored System Limit')).toBeInTheDocument();
+    expect(screen.getByText('Grandfathered Floor')).toBeInTheDocument();
+    expect(screen.queryByText('Included Monitored Systems')).not.toBeInTheDocument();
+  });
+
   it('renders all capability strings as human-readable labels (no raw snake_case)', async () => {
     mockEntitlements = {
       capabilities: [

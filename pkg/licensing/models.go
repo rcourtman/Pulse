@@ -194,16 +194,27 @@ const (
 
 // LicenseStatus is the JSON response for license status API.
 type LicenseStatus struct {
-	Valid               bool     `json:"valid"`
-	Tier                Tier     `json:"tier"`
-	PlanVersion         string   `json:"plan_version,omitempty"`
-	Email               string   `json:"email,omitempty"`
-	ExpiresAt           *string  `json:"expires_at,omitempty"`
-	IsLifetime          bool     `json:"is_lifetime"`
-	DaysRemaining       int      `json:"days_remaining"`
-	Features            []string `json:"features"`
-	MaxMonitoredSystems int      `json:"max_monitored_systems,omitempty"`
-	MaxGuests           int      `json:"max_guests,omitempty"`
-	InGracePeriod       bool     `json:"in_grace_period,omitempty"`
-	GracePeriodEnd      *string  `json:"grace_period_end,omitempty"`
+	Valid                     bool                             `json:"valid"`
+	Tier                      Tier                             `json:"tier"`
+	PlanVersion               string                           `json:"plan_version,omitempty"`
+	Email                     string                           `json:"email,omitempty"`
+	ExpiresAt                 *string                          `json:"expires_at,omitempty"`
+	IsLifetime                bool                             `json:"is_lifetime"`
+	DaysRemaining             int                              `json:"days_remaining"`
+	Features                  []string                         `json:"features"`
+	MaxMonitoredSystems       int                              `json:"max_monitored_systems,omitempty"`
+	MaxGuests                 int                              `json:"max_guests,omitempty"`
+	InGracePeriod             bool                             `json:"in_grace_period,omitempty"`
+	GracePeriodEnd            *string                          `json:"grace_period_end,omitempty"`
+	MonitoredSystemContinuity *MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
+}
+
+// MonitoredSystemContinuityStatus describes the effective monitored-system
+// limit continuity applied to a migrated legacy installation.
+type MonitoredSystemContinuityStatus struct {
+	PlanLimit          int   `json:"plan_limit"`
+	GrandfatheredFloor int   `json:"grandfathered_floor,omitempty"`
+	EffectiveLimit     int   `json:"effective_limit"`
+	CapturePending     bool  `json:"capture_pending"`
+	CapturedAt         int64 `json:"captured_at,omitempty"`
 }

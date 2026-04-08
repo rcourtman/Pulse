@@ -11,10 +11,17 @@ import (
 // supply a canonical monitored-system count that is safe for billing and
 // admission enforcement to consume.
 type MonitoredSystemUsageSnapshot struct {
-	Count     int
-	ReadState unifiedresources.ReadState
-	Available bool
+	Count             int
+	ReadState         unifiedresources.ReadState
+	Available         bool
+	UnavailableReason string
 }
+
+const (
+	MonitoredSystemUsageUnavailableMonitorState                        = "monitor_state_unavailable"
+	MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled      = "supplemental_inventory_unsettled"
+	MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending = "supplemental_inventory_rebuild_pending"
+)
 
 // MonitoredSystemUsage returns the canonical monitored-system count only when
 // the current unified view is settled enough for billing boundaries. When
@@ -22,23 +29,29 @@ type MonitoredSystemUsageSnapshot struct {
 // closed with Available=false.
 func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {
 	if m == nil {
-		return MonitoredSystemUsageSnapshot{}
+		return MonitoredSystemUsageSnapshot{UnavailableReason: MonitoredSystemUsageUnavailableMonitorState}
 	}
 
 	readState := m.GetUnifiedReadStateOrSnapshot()
 	if readState == nil {
-		return MonitoredSystemUsageSnapshot{}
+		return MonitoredSystemUsageSnapshot{UnavailableReason: MonitoredSystemUsageUnavailableMonitorState}
 	}
 
 	orgID := normalizedMonitorUsageOrgID(m)
 	readyAt, settled := m.supplementalInventoryReadyAt(orgID)
 	if !settled {
-		return MonitoredSystemUsageSnapshot{ReadState: readState}
+		return MonitoredSystemUsageSnapshot{
+			ReadState:         readState,
+			UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		}
 	}
 	if !readyAt.IsZero() {
 		freshness := m.currentUnifiedResourceFreshness()
 		if freshness.IsZero() || freshness.Before(readyAt) {
-			return MonitoredSystemUsageSnapshot{ReadState: readState}
+			return MonitoredSystemUsageSnapshot{
+				ReadState:         readState,
+				UnavailableReason: MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+			}
 		}
 	}
 

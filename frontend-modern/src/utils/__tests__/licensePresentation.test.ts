@@ -12,6 +12,7 @@ import {
   getLicenseStatusLoadingState,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
+  getMonitoredSystemContinuityNotice,
   getNoActiveProLicenseState,
   getOrganizationBillingLicenseStatusLabel,
   getInactiveProUpsellNotice,
@@ -156,11 +157,51 @@ describe('licensePresentation', () => {
       title: 'Grandfathered v5 pricing',
       tone: expect.stringContaining('green'),
     });
-    expect(getGrandfatheredPriceContinuityNotice('v5_pro_annual_grandfathered', 'grace')).toMatchObject({
+    expect(
+      getGrandfatheredPriceContinuityNotice('v5_pro_annual_grandfathered', 'grace'),
+    ).toMatchObject({
       title: 'Grandfathered v5 pricing',
     });
     expect(getGrandfatheredPriceContinuityNotice('v5_lifetime_grandfathered', 'active')).toBeNull();
-    expect(getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'expired')).toBeNull();
+    expect(
+      getGrandfatheredPriceContinuityNotice('v5_pro_monthly_grandfathered', 'expired'),
+    ).toBeNull();
+  });
+
+  it('returns monitored-system continuity notices for pending verification and captured grandfathering', () => {
+    expect(
+      getMonitoredSystemContinuityNotice(
+        {
+          plan_limit: 10,
+          effective_limit: 10,
+          capture_pending: true,
+        },
+        {
+          current_available: false,
+          current_unavailable_reason: 'supplemental_inventory_unsettled',
+        },
+      ),
+    ).toMatchObject({
+      title: 'Migration continuity verification pending',
+      tone: expect.stringContaining('amber'),
+    });
+    expect(
+      getMonitoredSystemContinuityNotice(
+        {
+          plan_limit: 10,
+          grandfathered_floor: 23,
+          effective_limit: 23,
+          capture_pending: false,
+          captured_at: 123,
+        },
+        {
+          current_available: true,
+        },
+      ),
+    ).toMatchObject({
+      title: 'Grandfathered monitored-system floor',
+      tone: expect.stringContaining('green'),
+    });
   });
 
   it('returns canonical trial activation notices', () => {
@@ -221,12 +262,12 @@ describe('licensePresentation', () => {
       } as never),
     ).toContain('Trial (ends');
     expect(getBillingAdminTrialStatus({ subscription_state: 'active' } as never)).toBe('No trial');
-    expect(getBillingAdminOrganizationBadges({ soft_deleted: true, suspended: true } as never)).toMatchObject([
-      { label: 'soft-deleted' },
-    ]);
-    expect(getBillingAdminOrganizationBadges({ soft_deleted: false, suspended: true } as never)).toMatchObject([
-      { label: 'suspended' },
-    ]);
+    expect(
+      getBillingAdminOrganizationBadges({ soft_deleted: true, suspended: true } as never),
+    ).toMatchObject([{ label: 'soft-deleted' }]);
+    expect(
+      getBillingAdminOrganizationBadges({ soft_deleted: false, suspended: true } as never),
+    ).toMatchObject([{ label: 'suspended' }]);
     expect(getBillingAdminStateUpdateSuccessMessage('active')).toBe(
       'Organization billing activated',
     );

@@ -469,6 +469,59 @@ func (s *Service) CaptureLegacyMonitoredSystemGrandfatherFloor(count int) error 
 	return nil
 }
 
+func (s *Service) needsLegacyMonitoredSystemCaptureLocked() bool {
+	if s == nil || s.activationState == nil {
+		return false
+	}
+	return normalizeActivationContinuity(s.activationState.Continuity).needsLegacyMonitoredSystemCapture()
+}
+
+// NeedsLegacyMonitoredSystemCapture reports whether a migrated activation is
+// still waiting for its one-time monitored-system continuity capture.
+func (s *Service) NeedsLegacyMonitoredSystemCapture() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.needsLegacyMonitoredSystemCaptureLocked()
+}
+
+func (s *Service) monitoredSystemContinuityStatusLocked() *MonitoredSystemContinuityStatus {
+	if s == nil || s.activationState == nil {
+		return nil
+	}
+
+	continuity := normalizeActivationContinuity(s.activationState.Continuity)
+	if !continuity.LegacyMigration {
+		return nil
+	}
+
+	planLimit := 0
+	if gc, err := verifyAndParseGrantJWT(s.activationState.GrantJWT); err == nil && gc != nil {
+		planLimit = gc.MaxMonitoredSystems
+	}
+
+	effectiveLimit := planLimit
+	if s.license != nil {
+		effectiveLimit = monitoredSystemLimitFromClaims(s.license.Claims)
+	}
+	if effectiveLimit <= 0 {
+		effectiveLimit = planLimit
+	}
+
+	status := &MonitoredSystemContinuityStatus{
+		PlanLimit:      planLimit,
+		EffectiveLimit: effectiveLimit,
+		CapturePending: continuity.needsLegacyMonitoredSystemCapture(),
+		CapturedAt:     continuity.GrandfatheredMonitoredSystemsCapturedAt,
+	}
+	if continuity.GrandfatheredMaxMonitoredSystems > 0 {
+		status.GrandfatheredFloor = continuity.GrandfatheredMaxMonitoredSystems
+	}
+	return status
+}
+
 // Clear removes the current license.
 // If an activation-key license is present, it also stops the refresh loop and clears the state.
 func (s *Service) Clear() {
@@ -704,6 +757,7 @@ func (s *Service) Status() *LicenseStatus {
 		if isDemoMode() || isDevMode() {
 			status.Features = devModeFeatures()
 		}
+		status.MonitoredSystemContinuity = s.monitoredSystemContinuityStatusLocked()
 		return status
 	}
 
@@ -720,6 +774,7 @@ func (s *Service) Status() *LicenseStatus {
 	if maxGuests, ok := s.license.Claims.EffectiveLimits()["max_guests"]; ok {
 		status.MaxGuests = safeIntFromInt64(maxGuests)
 	}
+	status.MonitoredSystemContinuity = s.monitoredSystemContinuityStatusLocked()
 
 	// Apply the tier default monitored-system limit when claims don't specify one.
 	// For recognized tiers, use their defined limit (0 = unlimited for Cloud/MSP/Enterprise).

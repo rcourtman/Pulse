@@ -15,6 +15,7 @@ import {
   getCommercialMigrationNotice,
   getGrandfatheredPriceContinuityNotice,
   getLicenseFeatureLabel,
+  getMonitoredSystemContinuityNotice,
   getPurchaseActivationNotice,
   getLicenseSubscriptionStatusPresentation,
   getLicenseTierLabel,
@@ -212,12 +213,37 @@ export function useProLicensePanelState() {
 
   const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
 
-  const monitoredSystemUsage = createMemo(() => limitStatus('max_monitored_systems')?.current ?? 0);
-  const monitoredSystemLimit = createMemo(() => limitStatus('max_monitored_systems')?.limit ?? 0);
+  const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
+  const monitoredSystemUsageAvailable = createMemo(
+    () => monitoredSystemLimitStatus()?.current_available !== false,
+  );
+  const monitoredSystemUsage = createMemo(() => monitoredSystemLimitStatus()?.current ?? 0);
+  const monitoredSystemLimit = createMemo(() => monitoredSystemLimitStatus()?.limit ?? 0);
+  const monitoredSystemUsageSummary = createMemo(() => {
+    if (!monitoredSystemUsageAvailable()) {
+      return 'Verifying…';
+    }
+    const limit = monitoredSystemLimit();
+    if (limit > 0) {
+      return `${monitoredSystemUsage()} / ${limit}`;
+    }
+    return monitoredSystemUsage();
+  });
   const remainingSystemCapacity = createMemo(() => {
+    if (!monitoredSystemUsageAvailable()) return 'Unavailable';
     const limit = monitoredSystemLimit();
     if (limit <= 0) return 'Unlimited';
     return Math.max(limit - monitoredSystemUsage(), 0);
+  });
+  const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
+  const monitoredSystemContinuityNotice = createMemo(() =>
+    getMonitoredSystemContinuityNotice(monitoredSystemContinuity(), monitoredSystemLimitStatus()),
+  );
+  const continuityCapturedAt = createMemo(() => {
+    const capturedAt = monitoredSystemContinuity()?.captured_at;
+    return typeof capturedAt === 'number' && capturedAt > 0
+      ? formatUnixDate(capturedAt)
+      : undefined;
   });
 
   const trialEnded = createMemo(
@@ -257,8 +283,7 @@ export function useProLicensePanelState() {
       planTerms: formattedPlanTerms() || undefined,
       expires: displayedExpiry(),
       daysRemaining: displayedDaysRemaining() ?? 'Unknown',
-      monitoredSystems: monitoredSystemUsage(),
-      monitoredSystemLimit: monitoredSystemLimit() > 0 ? monitoredSystemLimit() : undefined,
+      monitoredSystemsSummary: monitoredSystemUsageSummary(),
       remainingSystemCapacity: remainingSystemCapacity(),
       maxMonitoredSystems:
         typeof limitStatus('max_monitored_systems')?.limit === 'number' &&
@@ -269,6 +294,8 @@ export function useProLicensePanelState() {
         typeof limitStatus('max_guests')?.limit === 'number' && limitStatus('max_guests')!.limit > 0
           ? limitStatus('max_guests')!.limit
           : 'Unlimited',
+      monitoredSystemContinuity: monitoredSystemContinuity() ?? null,
+      continuityCapturedAt: continuityCapturedAt(),
     }),
   );
 
@@ -327,6 +354,7 @@ export function useProLicensePanelState() {
     clearing,
     commercialMigrationNotice,
     commercialPlanModel,
+    monitoredSystemContinuityNotice,
     entitlements,
     formattedFeatures,
     grandfatheredPriceNotice,

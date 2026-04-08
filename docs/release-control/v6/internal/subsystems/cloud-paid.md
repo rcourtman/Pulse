@@ -792,6 +792,12 @@ supplemental inventories such as TrueNAS or VMware are still between initial
 provider wiring and the first canonical store rebuild after their baseline
 poll, cloud-paid continuity must keep usage unavailable and delay floor
 capture rather than sealing a lower count forever.
+That continuity capture is reconciler-owned rather than read-owned. Ordinary
+status or entitlement reads may expose pending continuity state, but they must
+not persist the grandfather floor directly from the request path once a
+migrated installation is running. The owning licensing reconciler may backfill
+the floor asynchronously after canonical monitored-system usage becomes
+settled.
 That continuity rule cannot depend on webhook metadata being perfect. The
 canonical Stripe price-to-plan lookup in `pkg/licensing/features.go` and
 `pkg/licensing/stripe_subscription.go` must recognize the still-renewing
@@ -811,6 +817,12 @@ the monitored-system model as well. `ProLicensePanel.tsx`,
 retail capacity as monitored systems rather than agents for Community, Relay,
 Pro, and Pro+, while leaving Cloud/MSP pricing semantics unchanged and
 preserving grandfathered v5 continuity copy as an explicit boundary policy.
+That same settings-owned presentation must make monitored-system continuity
+explicit when migrated estates are involved: the plan surface must render the
+base plan limit, the effective monitored-system limit, any grandfathered
+floor, and whether continuity capture is still pending. When monitored-system
+usage is unavailable during continuity verification, the shell must present a
+verification state rather than implying `0 / limit`.
 That same pricing boundary now also owns the shared frontend plan-definition
 models. `frontend-modern/src/utils/cloudPlans.ts` and
 `frontend-modern/src/utils/selfHostedPlans.ts` are the canonical frontend

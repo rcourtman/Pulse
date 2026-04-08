@@ -82,6 +82,10 @@ type EntitlementPayload struct {
 	// CommercialMigration reports unresolved paid-license migration work entering
 	// from v5-era commercial state.
 	CommercialMigration *CommercialMigrationStatus `json:"commercial_migration,omitempty"`
+
+	// MonitoredSystemContinuity exposes migrated monitored-system continuity
+	// state for billing and support-grade plan-limit presentation.
+	MonitoredSystemContinuity *MonitoredSystemContinuityStatus `json:"monitored_system_continuity,omitempty"`
 }
 
 // CommercialPosturePayload is the canonical non-billing commercial contract
@@ -158,6 +162,10 @@ type LimitStatus struct {
 	// usage value rather than an unavailable best-effort fallback.
 	CurrentAvailable *bool `json:"current_available,omitempty"`
 
+	// CurrentUnavailableReason explains why Current is unavailable when
+	// CurrentAvailable is false.
+	CurrentUnavailableReason string `json:"current_unavailable_reason,omitempty"`
+
 	// State describes the over-limit UX state.
 	// Values: "ok", "warning", "enforced"
 	State string `json:"state"`
@@ -186,11 +194,12 @@ func (c LegacyConnectionCounts) Total() int64 {
 }
 
 type EntitlementUsageSnapshot struct {
-	MonitoredSystems          int64
-	MonitoredSystemsAvailable bool
-	Nodes                     int64 // legacy compatibility alias for monitored systems
-	Guests                    int64
-	LegacyConnections         LegacyConnectionCounts
+	MonitoredSystems                  int64
+	MonitoredSystemsAvailable         bool
+	MonitoredSystemsUnavailableReason string
+	Nodes                             int64 // legacy compatibility alias for monitored systems
+	Guests                            int64
+	LegacyConnections                 LegacyConnectionCounts
 }
 
 func (s EntitlementUsageSnapshot) monitoredSystemCount() int64 {
@@ -205,6 +214,10 @@ func (s EntitlementUsageSnapshot) monitoredSystemCountAvailable() bool {
 		return true
 	}
 	return s.MonitoredSystems > 0 || s.Nodes > 0
+}
+
+func (s EntitlementUsageSnapshot) monitoredSystemCountUnavailableReason() string {
+	return s.MonitoredSystemsUnavailableReason
 }
 
 // BuildEntitlementPayload constructs the normalized payload from LicenseStatus.
@@ -334,6 +347,10 @@ func BuildEntitlementPayloadWithUsage(
 		LegacyConnections: usage.LegacyConnections,
 		HasMigrationGap:   false,
 	}
+	if status.MonitoredSystemContinuity != nil {
+		continuity := *status.MonitoredSystemContinuity
+		payload.MonitoredSystemContinuity = &continuity
+	}
 
 	if payload.Capabilities == nil {
 		payload.Capabilities = []string{}
@@ -363,13 +380,17 @@ func BuildEntitlementPayloadWithUsage(
 	// Build limits.
 	if status.MaxMonitoredSystems > 0 {
 		currentSystems := usage.monitoredSystemCount()
-		payload.Limits = append(payload.Limits, LimitStatus{
+		limit := LimitStatus{
 			Key:              MaxMonitoredSystemsLicenseGateKey,
 			Limit:            int64(status.MaxMonitoredSystems),
 			Current:          currentSystems,
 			CurrentAvailable: boolPointer(usage.monitoredSystemCountAvailable()),
 			State:            LimitState(currentSystems, int64(status.MaxMonitoredSystems)),
-		})
+		}
+		if !usage.monitoredSystemCountAvailable() {
+			limit.CurrentUnavailableReason = usage.monitoredSystemCountUnavailableReason()
+		}
+		payload.Limits = append(payload.Limits, limit)
 	}
 	if status.MaxGuests > 0 {
 		payload.Limits = append(payload.Limits, LimitStatus{
