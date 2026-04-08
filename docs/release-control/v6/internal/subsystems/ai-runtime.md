@@ -194,6 +194,10 @@ reads used by chat, Patrol, and AI usage surfaces, while
 `frontend-modern/src/components/Settings/useAISettingsState.ts` remains the
 write-side settings owner. AI-owned surfaces must not fork their own mount-time
 settings/model fetch loops once this store exists.
+`docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
+`frontend-modern/src/stores/aiRuntimeState.ts` and
+`frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof
+route instead of leaving the shared read model or chat shell unowned.
 That same settings/runtime boundary now also governs BYOK first-run setup:
 `frontend-modern/src/components/Settings/useAISettingsState.ts` may send only
 provider credentials or base URLs when the operator connects a provider, and

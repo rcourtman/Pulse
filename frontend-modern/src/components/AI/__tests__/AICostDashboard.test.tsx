@@ -301,6 +301,29 @@ describe('AICostDashboard', () => {
     expect(budgetCard.textContent).toMatch(/10\.00/);
   });
 
+  it('reloads shared runtime settings after the runtime store resets', async () => {
+    getSettingsMock
+      .mockResolvedValueOnce(baseSettings({ cost_budget_usd_30d: 10 }))
+      .mockResolvedValueOnce(baseSettings({ cost_budget_usd_30d: 25 }));
+
+    const firstMount = renderDashboard();
+    await waitFor(() => {
+      expect(screen.getByText('Budget alert (USD per 30d)')).toBeInTheDocument();
+    });
+    let budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    expect(budgetCard.textContent).toMatch(/10\.00/);
+
+    firstMount.unmount();
+    resetAIRuntimeState();
+
+    renderDashboard();
+    await waitFor(() => {
+      expect(getSettingsMock).toHaveBeenCalledTimes(2);
+    });
+    budgetCard = screen.getByText('Budget alert (USD per 30d)').closest('.p-3')!;
+    expect(budgetCard.textContent).toMatch(/25\.00/);
+  });
+
   it('shows over-budget warning when spend exceeds budget', async () => {
     getCostSummaryMock.mockResolvedValue(
       baseSummary({

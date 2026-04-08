@@ -954,12 +954,14 @@
       "lane": "L6",
       "contract": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
       "owned_prefixes": [
+        "frontend-modern/src/components/AI/Chat/",
         "internal/ai/"
       ],
       "owned_files": [
         "frontend-modern/src/api/ai.ts",
         "frontend-modern/src/api/patrol.ts",
         "frontend-modern/src/components/AI/AICostDashboard.tsx",
+        "frontend-modern/src/stores/aiRuntimeState.ts",
         "frontend-modern/src/utils/aiChatPresentation.ts",
         "frontend-modern/src/utils/aiControlLevelPresentation.ts",
         "frontend-modern/src/utils/aiCostPresentation.ts",
@@ -1013,6 +1015,24 @@
               "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
               "frontend-modern/src/utils/__tests__/aiCostPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts"
+            ]
+          },
+          {
+            "id": "ai-chat-runtime-read-model",
+            "label": "AI chat and shared runtime read model proof",
+            "match_prefixes": [
+              "frontend-modern/src/components/AI/Chat/"
+            ],
+            "match_files": [
+              "frontend-modern/src/stores/aiRuntimeState.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [
+              "frontend-modern/src/components/AI/Chat/__tests__/"
+            ],
+            "exact_files": [
+              "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
+              "tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts"
             ]
           },
           {

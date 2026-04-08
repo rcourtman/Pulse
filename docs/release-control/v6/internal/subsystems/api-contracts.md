@@ -10,6 +10,7 @@
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
   "dependency_subsystem_ids": [
+    "ai-runtime",
     "cloud-paid",
     "patrol-intelligence"
   ]
@@ -373,6 +374,10 @@ Own canonical runtime payload shapes between backend and frontend.
     store after an owned settings mutation, but they must not reintroduce
     page-local mount loops that fetch `/api/settings/ai` or `/api/ai/models`
     separately for chat, Patrol, and cost/budget views.
+    The shared chat shell under `frontend-modern/src/components/AI/Chat/`
+    stays on that same read-side contract: it may coordinate assistant UI
+    state, but it must not reopen page-local fetch loops against
+    `/api/settings/ai` or `/api/ai/models` outside the shared runtime store.
 23. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
