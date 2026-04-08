@@ -41,7 +41,6 @@ import type {
   PortalBillingFlowID,
   PortalBillingState,
   PortalCheckoutSessionCreateResponse,
-  PortalUpgradeCheckoutIntentModel,
   PortalUpgradePortalHandoffModel,
   PortalUpgradePricingModel,
   VerificationFlowState,
@@ -196,39 +195,25 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
   async function resolveUpgradeCheckoutIntent(force: boolean) {
     var billingState = getBillingState();
     var portalHandoffID = String(billingState.upgradePortalHandoffID || '').trim();
-    var checkoutIntentID = String(billingState.upgradeCheckoutIntentID || '').trim();
-    if (!portalHandoffID && !checkoutIntentID) return;
+    if (!portalHandoffID) return;
     if (!force && (billingState.upgradeCheckoutIntent.status === 'loading' || billingState.upgradeCheckoutIntent.status === 'ready')) {
       return;
     }
     updateBillingState(function(nextBillingState) {
-      if (portalHandoffID) {
-        beginQueryState(nextBillingState.upgradePortalHandoff, null);
-      }
+      beginQueryState(nextBillingState.upgradePortalHandoff, null);
       beginQueryState(nextBillingState.upgradeCheckoutIntent, null);
     });
     try {
-      var resolvedCheckoutIntentID = checkoutIntentID;
+      var resolvedCheckoutIntentID = '';
       var resolvedFeature = '';
-      if (portalHandoffID) {
-        var handoff = await api.getCommercialJSON<PortalUpgradePortalHandoffModel>(
-          '/v1/checkout/portal-handoff?portal_handoff_id=' + encodeURIComponent(portalHandoffID),
-        );
-        resolvedCheckoutIntentID = String(handoff.checkout_intent_id || '').trim();
-        resolvedFeature = String(handoff.feature || '').trim();
-        updateBillingState(function(nextBillingState) {
-          resolveQueryState(nextBillingState.upgradePortalHandoff, handoff);
-        }, false);
-      } else {
-        var legacyResult = await api.getCommercialJSON<PortalUpgradeCheckoutIntentModel>(
-          '/v1/checkout/intent?checkout_intent_id=' + encodeURIComponent(checkoutIntentID),
-        );
-        resolvedCheckoutIntentID = String(legacyResult.checkout_intent_id || '').trim();
-        resolvedFeature = String(legacyResult.feature || '').trim();
-        updateBillingState(function(nextBillingState) {
-          resolveQueryState(nextBillingState.upgradeCheckoutIntent, legacyResult);
-        }, false);
-      }
+      var handoff = await api.getCommercialJSON<PortalUpgradePortalHandoffModel>(
+        '/v1/checkout/portal-handoff?portal_handoff_id=' + encodeURIComponent(portalHandoffID),
+      );
+      resolvedCheckoutIntentID = String(handoff.checkout_intent_id || '').trim();
+      resolvedFeature = String(handoff.feature || '').trim();
+      updateBillingState(function(nextBillingState) {
+        resolveQueryState(nextBillingState.upgradePortalHandoff, handoff);
+      }, false);
       if (!resolvedCheckoutIntentID) {
         throw new Error('Pulse Account could not verify the secure Pulse Pro upgrade handoff.');
       }
@@ -242,13 +227,12 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
       });
     } catch (err) {
       updateBillingState(function(nextBillingState) {
-        if (portalHandoffID) {
-          failQueryState(
-            nextBillingState.upgradePortalHandoff,
-            null,
-            err instanceof Error ? err.message : 'Failed to verify the secure Pulse Pro upgrade handoff.',
-          );
-        }
+        nextBillingState.upgradeCheckoutIntentID = '';
+        failQueryState(
+          nextBillingState.upgradePortalHandoff,
+          null,
+          err instanceof Error ? err.message : 'Failed to verify the secure Pulse Pro upgrade handoff.',
+        );
         failQueryState(
           nextBillingState.upgradeCheckoutIntent,
           null,
@@ -260,8 +244,9 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
 
   async function startUpgradeCheckout(planKey: string, tier: string, billingCycle: string) {
     if (!planKey || !tier || !billingCycle) return;
+    var portalHandoffID = String(getBillingState().upgradePortalHandoffID || '').trim();
     var checkoutIntentID = String(getBillingState().upgradeCheckoutIntentID || '').trim();
-    if (!checkoutIntentID) {
+    if (!portalHandoffID || !checkoutIntentID) {
       updateBillingState(function(nextBillingState) {
         failMutationState(
           nextBillingState.upgradeCheckout,
@@ -585,8 +570,7 @@ export function installBillingRuntime(deps: BillingRuntimeDeps): void {
     if (
       billingState.openBillingPanelID === 'upgrade-billing-panel' ||
       !!billingState.upgradeFeatureKey ||
-      !!billingState.upgradePortalHandoffID ||
-      !!billingState.upgradeCheckoutIntentID
+      !!billingState.upgradePortalHandoffID
     ) {
       void loadUpgradePricing(false);
       void resolveUpgradeCheckoutIntent(false);

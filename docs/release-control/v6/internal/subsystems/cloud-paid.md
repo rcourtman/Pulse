@@ -468,13 +468,16 @@ public pricing surface inside the runtime, and the authenticated portal shell
 must not collapse back into a public-site-only waystation for new-purchase
 depth. That handoff now starts through Pulse-owned `GET /auth/license-purchase-start`,
 which mints a signed `purchase_return_token`, creates a commercial-owned
-`checkout_intent_id` that already contains the resolved Pulse success/cancel
-targets, and sends only that opaque `checkout_intent_id` to `Pulse Account`
-before the browser leaves for the portal. `Pulse Account` must resolve that
-checkout intent through the shared commercial API before it starts checkout,
-so the portal never trusts browser referrer state, loose `feature` /
-`return_url` query parameters, or a Pulse-local handoff URL for self-hosted
-purchase completion. Stripe success now lands on Pulse's public
+`portal_handoff_id` that resolves to the bound checkout intent plus Pulse
+success/cancel targets, and sends only that opaque `portal_handoff_id` to
+`Pulse Account` before the browser leaves for the portal. `Pulse Account`
+must resolve that server-owned handoff through the shared commercial API
+before it starts checkout, so the portal never trusts browser referrer state,
+loose `feature` / `return_url` query parameters, or a raw browser-supplied
+`checkout_intent_id` for self-hosted purchase completion. The portal proxy
+must expose `GET /v1/checkout/portal-handoff` as the canonical browser
+bootstrap and must not keep the retired `GET /v1/checkout/intent` bootstrap
+path alive once `portal_handoff_id` is the owned contract. Stripe success now lands on Pulse's public
 `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/pages/PricingHandoff.tsx` may only hand operators into
 Pulse-owned `GET /auth/license-purchase-start`; they must not construct

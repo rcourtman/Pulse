@@ -539,20 +539,21 @@ hosted-only accounts do not render self-hosted license, refund, privacy, or
 self-hosted escalation paths by default, and self-hosted-only accounts do not
 front-load an empty hosted-billing block before the real self-hosted jobs.
 That same runtime handoff contract now also covers product-originated
-self-hosted upgrade arrivals: `/portal?service=upgrade&checkout_intent_id=...`
+self-hosted upgrade arrivals: `/portal?portal_handoff_id=...`
 may open a portal-owned upgrade job inside `Billing`, but it must not
 fabricate broader self-hosted commercial history or reveal
 retrieve/refund/privacy panels for a hosted-only account that only arrived
 through an upgrade CTA.
 That same commercial contract now also includes the self-hosted purchase
 return path. Product-originated upgrade handoffs must include a canonical
-commercial-owned `checkout_intent_id`. Pulse still binds checkout completion
-to a signed `purchase_return_token`, but that token must stay inside the
-Pulse-owned activation callback path rather than leaking into the portal
-arrival URL. The portal runtime must resolve the verified checkout intent
-through the shared commercial API and use only that opaque intent when it
-starts checkout instead of trusting browser referrer state or loose `feature`
-/ `return_url` parameters. Pulse's public `GET /auth/license-purchase-activate`
+commercial-owned `portal_handoff_id` that resolves server-side to the bound
+checkout intent. Pulse still binds checkout completion to a signed
+`purchase_return_token`, but that token must stay inside the Pulse-owned
+activation callback path rather than leaking into the portal arrival URL. The
+portal runtime must resolve the verified portal handoff through the shared
+commercial API and use only that owned handoff-derived checkout intent when it
+starts checkout instead of trusting browser referrer state, raw
+`checkout_intent_id`, or loose `feature` / `return_url` parameters. Pulse's public `GET /auth/license-purchase-activate`
 callback then serves an auto-submitting bridge into the owned POST activation
 path, which redeems the completed checkout through the shared
 license/commercial API before returning the browser to the owned billing plan

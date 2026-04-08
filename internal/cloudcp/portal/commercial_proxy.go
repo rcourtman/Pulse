@@ -20,9 +20,8 @@ var allowedCommercialProxyEndpoints = map[string]map[string]struct{}{
 		http.MethodGet:  {},
 		http.MethodPost: {},
 	},
-	"/v1/checkout/intent": {
-		http.MethodGet:  {},
-		http.MethodPost: {},
+	"/v1/checkout/portal-handoff": {
+		http.MethodGet: {},
 	},
 	"/v1/manage/request": {
 		http.MethodPost: {},

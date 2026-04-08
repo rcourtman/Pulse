@@ -6,7 +6,6 @@ export interface PortalRuntimeHandoff {
   email: string;
   openBillingPanelID: string;
   upgradePortalHandoffID: string;
-  upgradeCheckoutIntentID: string;
   upgradeFeatureKey: string;
 }
 
@@ -31,14 +30,6 @@ function readEmbeddedBootstrap(): Partial<PortalBootstrapData> {
 
 function normalizeHandoffEmail(value: string | null): string {
   return String(value || '').trim();
-}
-
-function normalizeUpgradeCheckoutIntentID(
-  value: string | null | undefined,
-): string {
-  var trimmed = String(value || '').trim();
-  if (!trimmed) return '';
-  return /^[A-Za-z0-9_-]+$/.test(trimmed) ? trimmed : '';
 }
 
 function normalizeUpgradePortalHandoffID(
@@ -84,7 +75,6 @@ export function readPortalRuntimeHandoff(
       email: normalizeHandoffEmail(params.get('email')),
       openBillingPanelID: openBillingPanelID,
       upgradePortalHandoffID: upgradePortalHandoffID,
-      upgradeCheckoutIntentID: normalizeUpgradeCheckoutIntentID(params.get('checkout_intent_id')),
       upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
     };
   } catch {
@@ -92,7 +82,6 @@ export function readPortalRuntimeHandoff(
       email: '',
       openBillingPanelID: '',
       upgradePortalHandoffID: '',
-      upgradeCheckoutIntentID: '',
       upgradeFeatureKey: '',
     };
   }
@@ -142,14 +131,12 @@ export function createPortalRuntime(
     store.updateBillingState(function(billingState) {
       billingState.openBillingPanelID = handoff.openBillingPanelID;
       billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
-      billingState.upgradeCheckoutIntentID = handoff.upgradeCheckoutIntentID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
     }, { notify: false });
-  } else if (handoff.upgradeFeatureKey || handoff.upgradePortalHandoffID || handoff.upgradeCheckoutIntentID) {
+  } else if (handoff.upgradeFeatureKey || handoff.upgradePortalHandoffID) {
     store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
       billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
-      billingState.upgradeCheckoutIntentID = handoff.upgradeCheckoutIntentID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
     }, { notify: false });
   }

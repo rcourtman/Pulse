@@ -317,4 +317,50 @@ describe('services view', function() {
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
     ).toBe(true);
   });
+
+  it('blocks legacy checkout-intent arrivals without a verified portal handoff', function() {
+    document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
+
+    var billingState = createPortalBillingState();
+    billingState.upgradeCheckoutIntentID = 'cki_legacy';
+    billingState.upgradeCheckoutIntent.status = 'ready';
+    billingState.upgradeCheckoutIntent.data = {
+      checkout_intent_id: 'cki_legacy',
+      feature: 'max_monitored_systems',
+    };
+    billingState.upgradePricing.status = 'ready';
+    billingState.upgradePricing.data = {
+      title: 'Pricing',
+      description: 'Canonical pricing model',
+      plans: [
+        {
+          tierKicker: 'Pro+',
+          title: 'Pro+',
+          price: '$14.99',
+          period: '$129/year available too',
+          blurb: 'More room.',
+          features: [{ tone: 'check', html: 'Up to <strong>50 monitored systems</strong>' }],
+          buttons: [
+            {
+              kind: 'checkout',
+              className: 'btn btn-primary',
+              tier: 'pro_plus',
+              planKey: 'price_pro_plus_annual',
+              billingCycle: 'annual',
+              label: 'Buy Annual',
+            },
+          ],
+        },
+      ],
+    };
+
+    renderUpgradePanel(billingState, createBootstrap());
+
+    expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
+      'Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.',
+    );
+    expect(
+      (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
 });

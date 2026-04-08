@@ -1291,3 +1291,45 @@ func TestCommercialProxy_AllowsPricingAndCheckoutGETRequests(t *testing.T) {
 		t.Fatalf("body = %q", got)
 	}
 }
+
+func TestCommercialProxy_AllowsPortalHandoffGETRequests(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Fatalf("method = %s, want GET", r.Method)
+		}
+		if r.URL.Path != "/v1/checkout/portal-handoff" {
+			t.Fatalf("path = %s, want /v1/checkout/portal-handoff", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("portal_handoff_id"); got != "cph_upgrade" {
+			t.Fatalf("portal_handoff_id = %q, want cph_upgrade", got)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"portal_handoff_id":"cph_upgrade","checkout_intent_id":"cki_upgrade","feature":"max_monitored_systems"}`))
+	}))
+	defer upstream.Close()
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, PortalCommercialProxyPath+"v1/checkout/portal-handoff?portal_handoff_id=cph_upgrade", nil)
+	req.SetPathValue("commercial_path", "v1/checkout/portal-handoff")
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: upstream.URL})(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"portal_handoff_id":"cph_upgrade","checkout_intent_id":"cki_upgrade","feature":"max_monitored_systems"}` {
+		t.Fatalf("body = %q", got)
+	}
+}
+
+func TestCommercialProxy_RejectsLegacyCheckoutIntentBootstrap(t *testing.T) {
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, PortalCommercialProxyPath+"v1/checkout/intent?checkout_intent_id=cki_legacy", nil)
+	req.SetPathValue("commercial_path", "v1/checkout/intent")
+
+	HandleCommercialProxy(CommercialProxyConfig{BaseURL: "https://license.pulserelay.pro"})(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
