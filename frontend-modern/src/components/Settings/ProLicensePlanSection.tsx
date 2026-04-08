@@ -10,6 +10,7 @@ import {
   getTrialEndedProLicenseNotice,
 } from '@/utils/licensePresentation';
 import { resolveSelfHostedPurchaseStartDestination } from '@/utils/pricingHandoff';
+import type { UpgradeDestination } from '@/utils/upgradeNavigation';
 import { CommercialStatGrid } from './CommercialBillingSections';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
@@ -38,6 +39,10 @@ interface ProLicensePlanSectionProps {
   onReload: () => void;
   onStartTrial: () => void;
   purchaseActivationNotice: Notice | null;
+  purchaseActivationAction: {
+    label: string;
+    destination: UpgradeDestination;
+  } | null;
   statusPresentation: {
     badgeClass: string;
     label: string;
@@ -70,6 +75,16 @@ export const ProLicensePlanSection: Component<ProLicensePlanSectionProps> = (pro
           <div class={`mb-4 rounded-md border p-3 text-sm ${notice().tone}`}>
             <p class="font-medium">{notice().title}</p>
             <p class="mt-1 text-xs opacity-90">{notice().body}</p>
+            <Show when={props.purchaseActivationAction}>
+              {(action) => (
+                <UpgradeLink
+                  class="inline-flex items-center gap-1 mt-3 min-h-10 sm:min-h-9 rounded-md border border-current/20 px-3 py-2 text-xs font-medium hover:bg-black/5 dark:hover:bg-white/5"
+                  destination={action().destination}
+                >
+                  {action().label}
+                </UpgradeLink>
+              )}
+            </Show>
           </div>
         )}
       </Show>

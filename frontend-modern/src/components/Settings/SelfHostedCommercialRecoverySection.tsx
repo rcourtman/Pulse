@@ -6,6 +6,7 @@ import { CommercialSection } from './CommercialBillingSections';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
 
 interface SelfHostedCommercialRecoverySectionProps {
+  sectionId?: string;
   licenseKey: string;
   activating: boolean;
   clearing: boolean;
@@ -21,6 +22,7 @@ export const SelfHostedCommercialRecoverySection: Component<
   SelfHostedCommercialRecoverySectionProps
 > = (props) => (
   <CommercialSection
+    id={props.sectionId}
     title={SELF_HOSTED_PRO_BILLING_PRESENTATION.recoverySectionTitle}
     description={SELF_HOSTED_PRO_BILLING_PRESENTATION.recoverySectionDescription}
   >

@@ -12,6 +12,8 @@ import {
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
+  SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
+  SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
@@ -461,20 +463,28 @@ describe('ProLicensePanel', () => {
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
       title: 'Pulse Pro activated',
+      actionLabel: null,
+      actionHref: null,
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
       title: 'Checkout cancelled',
+      actionLabel: 'Compare plans',
+      actionHref: getSelfHostedPurchaseStartUrl(),
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
       title: 'Upgrade return expired',
+      actionLabel: 'Restart upgrade',
+      actionHref: getSelfHostedPurchaseStartUrl(),
     },
     {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
       title: 'Activation needs attention',
+      actionLabel: 'Open recovery',
+      actionHref: SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF,
     },
-  ])('shows the purchase arrival notice for $purchase', async ({ purchase, title }) => {
+  ])('shows the purchase arrival notice for $purchase', async ({ purchase, title, actionLabel, actionHref }) => {
     useLocationMock.mockReturnValue({
       search: `?purchase=${purchase}`,
       pathname: '/settings/system/billing/plan',
@@ -484,10 +494,32 @@ describe('ProLicensePanel', () => {
     renderPanel();
 
     expect(screen.getByText(title)).toBeInTheDocument();
+    if (actionLabel && actionHref) {
+      expect(screen.getByRole('link', { name: actionLabel })).toHaveAttribute('href', actionHref);
+    } else {
+      expect(screen.queryByRole('link', { name: 'Review usage' })).not.toBeInTheDocument();
+    }
     expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
       replace: true,
       scroll: false,
     });
+  });
+
+  it('shows a monitored-system activation success action and suppresses the compare-plans arrival callout', async () => {
+    useLocationMock.mockReturnValue({
+      search: `?purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}&intent=max_monitored_systems`,
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    renderPanel();
+
+    expect(screen.getByText('Pulse Pro activated')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review usage' })).toHaveAttribute(
+      'href',
+      SELF_HOSTED_PRO_BILLING_USAGE_HREF,
+    );
+    expect(screen.queryByText('Need a higher monitored-system cap?')).not.toBeInTheDocument();
   });
 
   it('focuses the usage billing section when the usage route requests counting rules', async () => {

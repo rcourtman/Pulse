@@ -326,7 +326,7 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
       return {
         tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
         title: 'Checkout cancelled',
-        body: 'Checkout was cancelled before completion. The current plan state below is unchanged.',
+        body: 'Checkout was cancelled before completion. The current plan state below is unchanged until you start the upgrade again.',
       };
     case 'expired':
       return {
@@ -338,7 +338,7 @@ export const getPurchaseActivationNotice = (result?: string | null): LicenseInli
       return {
         tone: 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-900 text-red-900 dark:text-red-100',
         title: 'Activation needs attention',
-        body: 'Checkout completed, but Pulse could not finish local activation automatically. Review the plan state below, then retry the upgrade or use recovery if needed.',
+        body: 'Checkout completed, but Pulse could not finish local activation automatically. Review the plan state below, then open recovery if you already have a key from this purchase.',
       };
     default:
       return null;

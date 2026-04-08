@@ -13,6 +13,10 @@ export interface SelfHostedProBillingPresentation {
   monitoredSystemUpgradeArrivalTitle: string;
   monitoredSystemUpgradeArrivalBody: string;
   monitoredSystemUpgradeArrivalActionLabel: string;
+  purchaseActivatedUsageActionLabel: string;
+  purchaseCancelledActionLabel: string;
+  purchaseExpiredActionLabel: string;
+  purchaseFailedActionLabel: string;
   trialStartTitle: string;
   trialStartBody: string;
   trialStartIdleActionLabel: string;
@@ -39,6 +43,10 @@ export const SELF_HOSTED_PRO_BILLING_PRESENTATION: SelfHostedProBillingPresentat
   monitoredSystemUpgradeArrivalBody:
     'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
   monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
+  purchaseActivatedUsageActionLabel: 'Review usage',
+  purchaseCancelledActionLabel: 'Compare plans',
+  purchaseExpiredActionLabel: 'Restart upgrade',
+  purchaseFailedActionLabel: 'Open recovery',
   trialStartTitle: 'Try Pro for free',
   trialStartBody: 'Start a 14-day Pro trial for this organization.',
   trialStartIdleActionLabel: 'Start 14-day Pro Trial',

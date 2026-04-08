@@ -11,6 +11,7 @@ import { Subtabs } from '@/components/shared/Subtabs';
 import { getMonitoredSystemBriefSummary } from '@/utils/monitoredSystemPresentation';
 import {
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
+  SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
 } from '@/utils/pricingHandoff';
 
@@ -69,6 +70,7 @@ export const ProLicensePanel: Component = () => {
                 loading={state.loading()}
                 monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
                 onReload={() => void state.loadPanelData()}
+                purchaseActivationAction={state.purchaseActivationAction()}
                 purchaseActivationNotice={state.purchaseActivationNotice()}
                 showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
                 showTrialStart={state.showTrialStart()}
@@ -95,6 +97,7 @@ export const ProLicensePanel: Component = () => {
           </Show>
 
           <SelfHostedCommercialRecoverySection
+            sectionId={SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID}
             licenseKey={state.licenseKey()}
             activating={state.activating()}
             clearing={state.clearing()}

@@ -79,6 +79,10 @@ describe('licensePresentation', () => {
       monitoredSystemUpgradeArrivalBody:
         'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
       monitoredSystemUpgradeArrivalActionLabel: 'Compare plans',
+      purchaseActivatedUsageActionLabel: 'Review usage',
+      purchaseCancelledActionLabel: 'Compare plans',
+      purchaseExpiredActionLabel: 'Restart upgrade',
+      purchaseFailedActionLabel: 'Open recovery',
       trialStartTitle: 'Try Pro for free',
       trialStartBody: 'Start a 14-day Pro trial for this organization.',
       trialStartIdleActionLabel: 'Start 14-day Pro Trial',
@@ -235,6 +239,7 @@ describe('licensePresentation', () => {
     });
     expect(getPurchaseActivationNotice('cancelled')).toMatchObject({
       title: 'Checkout cancelled',
+      body: expect.stringContaining('start the upgrade again'),
       tone: expect.stringContaining('amber'),
     });
     expect(getPurchaseActivationNotice('expired')).toMatchObject({
@@ -243,6 +248,7 @@ describe('licensePresentation', () => {
     });
     expect(getPurchaseActivationNotice('failed')).toMatchObject({
       title: 'Activation needs attention',
+      body: expect.stringContaining('open recovery'),
       tone: expect.stringContaining('red'),
     });
     expect(getPurchaseActivationNotice('')).toBeNull();
