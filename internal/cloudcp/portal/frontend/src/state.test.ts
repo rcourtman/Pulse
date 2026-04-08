@@ -35,6 +35,8 @@ describe('portal state', function() {
     expect(billingState.flows.manage.confirm.pending).toBe(false);
     expect(billingState.refund.submit.pending).toBe(false);
     expect(billingState.upgradeFeatureKey).toBe('');
+    expect(billingState.upgradePortalHandoffID).toBe('');
+    expect(billingState.upgradePortalHandoff.status).toBe('idle');
     expect(billingState.upgradeCheckoutIntentID).toBe('');
     expect(billingState.upgradeCheckoutIntent.status).toBe('idle');
     expect(billingState.upgradePricing.status).toBe('idle');

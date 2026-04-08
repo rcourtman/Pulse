@@ -64,12 +64,13 @@ describe('portal runtime', function() {
 
   it('derives canonical email and billing handoff from the portal URL', function() {
     var handoff = readPortalRuntimeHandoff(
-      'https://cloud.pulserelay.pro/portal?email=buyer%40example.com&service=upgrade&checkout_intent_id=cki_signed',
+      'https://cloud.pulserelay.pro/portal?email=buyer%40example.com&portal_handoff_id=cph_signed',
     );
 
     expect(handoff.email).toBe('buyer@example.com');
     expect(handoff.openBillingPanelID).toBe('upgrade-billing-panel');
-    expect(handoff.upgradeCheckoutIntentID).toBe('cki_signed');
+    expect(handoff.upgradePortalHandoffID).toBe('cph_signed');
+    expect(handoff.upgradeCheckoutIntentID).toBe('');
     expect(handoff.upgradeFeatureKey).toBe('');
   });
 
@@ -84,6 +85,7 @@ describe('portal runtime', function() {
       {
         email: 'buyer@example.com',
         openBillingPanelID: 'refund-billing-panel',
+        upgradePortalHandoffID: '',
         upgradeCheckoutIntentID: '',
         upgradeFeatureKey: '',
       }
@@ -106,14 +108,16 @@ describe('portal runtime', function() {
       {
         email: '',
         openBillingPanelID: 'upgrade-billing-panel',
-        upgradeCheckoutIntentID: 'cki_signed',
+        upgradePortalHandoffID: 'cph_signed',
+        upgradeCheckoutIntentID: '',
         upgradeFeatureKey: '',
       }
     );
 
     expect(runtime.store.getShellState().activeSection).toBe('billing');
     expect(runtime.store.getBillingState().openBillingPanelID).toBe('upgrade-billing-panel');
-    expect(runtime.store.getBillingState().upgradeCheckoutIntentID).toBe('cki_signed');
+    expect(runtime.store.getBillingState().upgradePortalHandoffID).toBe('cph_signed');
+    expect(runtime.store.getBillingState().upgradeCheckoutIntentID).toBe('');
     expect(runtime.store.getBillingState().upgradeFeatureKey).toBe('');
   });
 });

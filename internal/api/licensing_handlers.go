@@ -32,8 +32,8 @@ const (
 	licensePurchaseSessionIDField           = "session_id"
 	licensePurchaseReturnTokenField         = "purchase_return_token"
 	pulseAccountUpgradeService              = "upgrade"
-	pulseAccountPortalCheckoutIntentField   = "checkout_intent_id"
 	pulseAccountPortalFeatureQueryParam     = "feature"
+	pulseAccountPortalHandoffIDField        = "portal_handoff_id"
 	pulseAccountPortalHandoffURLQueryParam  = "purchase_handoff_url"
 	pulseAccountPortalServiceQueryParam     = "service"
 	pulseAccountPortalReturnTokenQueryParam = "purchase_return_token"
@@ -291,7 +291,7 @@ func (h *LicenseHandlers) purchaseCheckoutHandoffStore() *purchaseCheckoutHandof
 	return h.purchaseHandoffs
 }
 
-func pulseAccountUpgradeURLForRequest(checkoutIntentID string, query url.Values) (string, error) {
+func pulseAccountUpgradeURLForRequest(portalHandoffID string, query url.Values) (string, error) {
 	portalURL := strings.TrimSpace(pulseAccountPortalURLFromLicensing(""))
 	if portalURL == "" {
 		return "", fmt.Errorf("pulse account portal url is unavailable")
@@ -306,7 +306,7 @@ func pulseAccountUpgradeURLForRequest(checkoutIntentID string, query url.Values)
 	for key, values := range query {
 		switch key {
 		case pulseAccountPortalFeatureQueryParam,
-			pulseAccountPortalCheckoutIntentField,
+			pulseAccountPortalHandoffIDField,
 			pulseAccountPortalHandoffURLQueryParam,
 			pulseAccountPortalServiceQueryParam,
 			pulseAccountPortalReturnTokenQueryParam,
@@ -324,8 +324,7 @@ func pulseAccountUpgradeURLForRequest(checkoutIntentID string, query url.Values)
 		}
 	}
 
-	params.Set(pulseAccountPortalServiceQueryParam, pulseAccountUpgradeService)
-	params.Set(pulseAccountPortalCheckoutIntentField, strings.TrimSpace(checkoutIntentID))
+	params.Set(pulseAccountPortalHandoffIDField, strings.TrimSpace(portalHandoffID))
 	parsed.RawQuery = params.Encode()
 	return parsed.String(), nil
 }
@@ -1505,24 +1504,35 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	checkoutIntent, err := lsClient.CreateCheckoutIntent(r.Context(), checkoutIntentRequestModel{
-		Feature:    feature,
-		SuccessURL: activationURLTemplate,
-		CancelURL:  cancelURL,
-	})
-	if err != nil {
-		log.Error().Err(err).Str("feature", feature).Msg("Failed to create Pulse Account checkout intent")
-		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
-		return
+	purchaseReturnJTI := ""
+	if claims, verifyErr := h.verifiedPurchaseReturnClaims(r, returnToken); verifyErr == nil && claims != nil {
+		purchaseReturnJTI = strings.TrimSpace(claims.ID)
 	}
-	checkoutIntentID := strings.TrimSpace(checkoutIntent.CheckoutIntentID)
-	if checkoutIntentID == "" {
-		log.Error().Str("feature", feature).Msg("Pulse Account checkout intent response omitted id")
+	if purchaseReturnJTI == "" {
+		log.Error().Str("feature", feature).Msg("Pulse Account purchase return token omitted jti")
 		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
 		return
 	}
 
-	destination, err := pulseAccountUpgradeURLForRequest(checkoutIntentID, r.URL.Query())
+	portalHandoff, err := lsClient.CreateCheckoutPortalHandoff(r.Context(), checkoutPortalHandoffRequestModel{
+		Feature:           feature,
+		SuccessURL:        activationURLTemplate,
+		CancelURL:         cancelURL,
+		PurchaseReturnJTI: purchaseReturnJTI,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("feature", feature).Msg("Failed to create Pulse Account checkout portal handoff")
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	portalHandoffID := strings.TrimSpace(portalHandoff.PortalHandoffID)
+	if portalHandoffID == "" {
+		log.Error().Str("feature", feature).Msg("Pulse Account checkout portal handoff response omitted id")
+		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	destination, err := pulseAccountUpgradeURLForRequest(portalHandoffID, r.URL.Query())
 	if err != nil {
 		log.Error().Err(err).Str("feature", feature).Msg("Failed to build Pulse Account upgrade destination")
 		http.Error(w, "Pulse Account handoff unavailable", http.StatusServiceUnavailable)
@@ -1728,6 +1738,24 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		}
 		clearReplay("checkout_not_fulfilled", nil)
 		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseFailed, message)
+		return
+	}
+	expectedPurchaseReturnJTI := ""
+	if claims != nil {
+		expectedPurchaseReturnJTI = strings.TrimSpace(claims.ID)
+	}
+	resolvedPurchaseReturnJTI := ""
+	if checkoutResult != nil {
+		resolvedPurchaseReturnJTI = strings.TrimSpace(checkoutResult.PurchaseReturnJTI)
+	}
+	if expectedPurchaseReturnJTI == "" || resolvedPurchaseReturnJTI == "" || expectedPurchaseReturnJTI != resolvedPurchaseReturnJTI {
+		clearReplay("purchase_return_jti_mismatch", nil)
+		log.Warn().
+			Str("checkout_session_id", sessionID).
+			Str("expected_purchase_return_jti", expectedPurchaseReturnJTI).
+			Str("resolved_purchase_return_jti", resolvedPurchaseReturnJTI).
+			Msg("Rejected checkout activation due to purchase return binding mismatch")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
 		return
 	}
 

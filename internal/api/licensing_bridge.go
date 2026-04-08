@@ -60,6 +60,8 @@ type entitlementLeaseClaimsModel = pkglicensing.EntitlementLeaseClaims
 type licenseTier = pkglicensing.Tier
 type checkoutIntentRequestModel = pkglicensing.CheckoutIntentRequest
 type checkoutIntentResponseModel = pkglicensing.CheckoutIntentResponse
+type checkoutPortalHandoffRequestModel = pkglicensing.CheckoutPortalHandoffRequest
+type checkoutPortalHandoffResponseModel = pkglicensing.CheckoutPortalHandoffResponse
 
 const (
 	featureMultiTenantKey             = pkglicensing.FeatureMultiTenant

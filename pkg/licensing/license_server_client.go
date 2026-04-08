@@ -28,6 +28,8 @@ type CheckoutSessionResult struct {
 	Message             string `json:"message,omitempty"`
 	CheckoutStatus      string `json:"checkout_status,omitempty"`
 	PaymentStatus       string `json:"payment_status,omitempty"`
+	CheckoutIntentID    string `json:"checkout_intent_id,omitempty"`
+	PurchaseReturnJTI   string `json:"purchase_return_jti,omitempty"`
 	LicenseID           string `json:"license_id,omitempty"`
 	ActivationKey       string `json:"activation_key,omitempty"`
 	ActivationKeyPrefix string `json:"activation_key_prefix,omitempty"`
@@ -44,10 +46,29 @@ type CheckoutIntentRequest struct {
 	CancelURL  string `json:"cancel_url"`
 }
 
-// CheckoutIntentResponse is the canonical opaque checkout handoff returned by
+// CheckoutIntentResponse is the canonical checkout-intent record returned by
 // the license server.
 type CheckoutIntentResponse struct {
 	CheckoutIntentID string `json:"checkout_intent_id"`
+	Feature          string `json:"feature,omitempty"`
+	ExpiresAt        int64  `json:"expires_at,omitempty"`
+}
+
+// CheckoutPortalHandoffRequest is the canonical server-owned request for a
+// Pulse Account portal bootstrap record that hides commercial flow state from
+// the browser.
+type CheckoutPortalHandoffRequest struct {
+	Feature           string `json:"feature,omitempty"`
+	SuccessURL        string `json:"success_url"`
+	CancelURL         string `json:"cancel_url"`
+	PurchaseReturnJTI string `json:"purchase_return_jti"`
+}
+
+// CheckoutPortalHandoffResponse is the canonical opaque portal handoff used to
+// bootstrap the hosted Pulse Account billing flow.
+type CheckoutPortalHandoffResponse struct {
+	PortalHandoffID  string `json:"portal_handoff_id"`
+	CheckoutIntentID string `json:"checkout_intent_id,omitempty"`
 	Feature          string `json:"feature,omitempty"`
 	ExpiresAt        int64  `json:"expires_at,omitempty"`
 }
@@ -208,8 +229,8 @@ func (c *LicenseServerClient) GetCheckoutSessionResult(ctx context.Context, sess
 	return &result, nil
 }
 
-// CreateCheckoutIntent stores a server-owned self-hosted checkout handoff and
-// returns an opaque checkout_intent_id for Pulse Account browser flows.
+// CreateCheckoutIntent stores a server-owned self-hosted checkout intent and
+// returns its commercial checkout_intent_id.
 func (c *LicenseServerClient) CreateCheckoutIntent(ctx context.Context, req CheckoutIntentRequest) (*CheckoutIntentResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -236,6 +257,38 @@ func (c *LicenseServerClient) CreateCheckoutIntent(ctx context.Context, req Chec
 	var result CheckoutIntentResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
 		return nil, fmt.Errorf("decode checkout intent response: %w", err)
+	}
+	return &result, nil
+}
+
+// CreateCheckoutPortalHandoff stores a server-owned Pulse Account bootstrap
+// record and returns an opaque portal_handoff_id for browser navigation.
+func (c *LicenseServerClient) CreateCheckoutPortalHandoff(ctx context.Context, req CheckoutPortalHandoffRequest) (*CheckoutPortalHandoffResponse, error) {
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal checkout portal handoff request: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/checkout/portal-handoff", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create checkout portal handoff request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("checkout portal handoff request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		return nil, c.parseError(resp)
+	}
+
+	var result CheckoutPortalHandoffResponse
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode checkout portal handoff response: %w", err)
 	}
 	return &result, nil
 }

@@ -84,6 +84,12 @@ export interface PortalUpgradeCheckoutIntentModel {
   feature?: string;
 }
 
+export interface PortalUpgradePortalHandoffModel {
+  portal_handoff_id: string;
+  checkout_intent_id: string;
+  feature?: string;
+}
+
 export interface PortalCheckoutSessionCreateResponse {
   url?: string;
   plan_key?: string;
@@ -163,6 +169,8 @@ export interface RefundState {
 export interface PortalBillingState {
   openBillingPanelID: string;
   upgradeFeatureKey: string;
+  upgradePortalHandoffID: string;
+  upgradePortalHandoff: PortalQueryState<PortalUpgradePortalHandoffModel | null>;
   upgradeCheckoutIntentID: string;
   upgradeCheckoutIntent: PortalQueryState<PortalUpgradeCheckoutIntentModel | null>;
   upgradePricing: PortalQueryState<PortalUpgradePricingModel | null>;

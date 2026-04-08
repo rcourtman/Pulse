@@ -118,6 +118,8 @@ export function createPortalBillingState(): PortalBillingState {
   return {
     openBillingPanelID: '',
     upgradeFeatureKey: '',
+    upgradePortalHandoffID: '',
+    upgradePortalHandoff: createQueryState(null),
     upgradeCheckoutIntentID: '',
     upgradeCheckoutIntent: createQueryState(null),
     upgradePricing: createQueryState(null),

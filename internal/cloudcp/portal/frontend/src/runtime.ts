@@ -5,6 +5,7 @@ import type { PortalBootstrapData } from './types';
 export interface PortalRuntimeHandoff {
   email: string;
   openBillingPanelID: string;
+  upgradePortalHandoffID: string;
   upgradeCheckoutIntentID: string;
   upgradeFeatureKey: string;
 }
@@ -40,6 +41,14 @@ function normalizeUpgradeCheckoutIntentID(
   return /^[A-Za-z0-9_-]+$/.test(trimmed) ? trimmed : '';
 }
 
+function normalizeUpgradePortalHandoffID(
+  value: string | null | undefined,
+): string {
+  var trimmed = String(value || '').trim();
+  if (!trimmed) return '';
+  return /^[A-Za-z0-9_-]+$/.test(trimmed) ? trimmed : '';
+}
+
 function normalizeHandoffBillingPanel(value: string | null): string {
   switch (String(value || '').trim()) {
     case 'upgrade':
@@ -66,9 +75,15 @@ export function readPortalRuntimeHandoff(
 ): PortalRuntimeHandoff {
   try {
     var params = new URL(locationHref).searchParams;
+    var upgradePortalHandoffID = normalizeUpgradePortalHandoffID(params.get('portal_handoff_id'));
+    var openBillingPanelID = normalizeHandoffBillingPanel(params.get('service'));
+    if (!openBillingPanelID && upgradePortalHandoffID) {
+      openBillingPanelID = 'upgrade-billing-panel';
+    }
     return {
       email: normalizeHandoffEmail(params.get('email')),
-      openBillingPanelID: normalizeHandoffBillingPanel(params.get('service')),
+      openBillingPanelID: openBillingPanelID,
+      upgradePortalHandoffID: upgradePortalHandoffID,
       upgradeCheckoutIntentID: normalizeUpgradeCheckoutIntentID(params.get('checkout_intent_id')),
       upgradeFeatureKey: normalizeUpgradeFeatureKey(params.get('feature')),
     };
@@ -76,6 +91,7 @@ export function readPortalRuntimeHandoff(
     return {
       email: '',
       openBillingPanelID: '',
+      upgradePortalHandoffID: '',
       upgradeCheckoutIntentID: '',
       upgradeFeatureKey: '',
     };
@@ -125,12 +141,14 @@ export function createPortalRuntime(
     store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
       billingState.openBillingPanelID = handoff.openBillingPanelID;
+      billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
       billingState.upgradeCheckoutIntentID = handoff.upgradeCheckoutIntentID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
     }, { notify: false });
-  } else if (handoff.upgradeFeatureKey || handoff.upgradeCheckoutIntentID) {
+  } else if (handoff.upgradeFeatureKey || handoff.upgradePortalHandoffID || handoff.upgradeCheckoutIntentID) {
     store.setActiveShellSection('billing');
     store.updateBillingState(function(billingState) {
+      billingState.upgradePortalHandoffID = handoff.upgradePortalHandoffID;
       billingState.upgradeCheckoutIntentID = handoff.upgradeCheckoutIntentID;
       billingState.upgradeFeatureKey = handoff.upgradeFeatureKey;
     }, { notify: false });

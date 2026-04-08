@@ -228,6 +228,7 @@ describe('services view', function() {
 
     var billingState = createPortalBillingState();
     billingState.upgradeFeatureKey = 'max_monitored_systems';
+    billingState.upgradePortalHandoffID = 'cph_signed';
     billingState.upgradeCheckoutIntentID = 'cki_signed';
     billingState.upgradeCheckoutIntent.status = 'ready';
     billingState.upgradeCheckoutIntent.data = {
@@ -278,9 +279,9 @@ describe('services view', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
-    billingState.upgradeCheckoutIntentID = 'cki_signed';
+    billingState.upgradePortalHandoffID = 'cph_signed';
     billingState.upgradeCheckoutIntent.status = 'error';
-    billingState.upgradeCheckoutIntent.error = 'Pulse Account could not verify the secure checkout intent.';
+    billingState.upgradeCheckoutIntent.error = 'Pulse Account could not verify the secure upgrade handoff.';
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
       title: 'Pricing',
@@ -310,7 +311,7 @@ describe('services view', function() {
     renderUpgradePanel(billingState, createBootstrap());
 
     expect(document.getElementById('upgrade-billing-root')?.innerHTML).toContain(
-      'Pulse Account could not verify the secure checkout intent.',
+      'Pulse Account could not verify the secure upgrade handoff.',
     );
     expect(
       (document.querySelector('[data-account-billing-action="upgrade-start-checkout"]') as HTMLButtonElement).disabled,

@@ -139,6 +139,7 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
   if (!root) return;
 
   var featureKey = String(billingState.upgradeFeatureKey || '').trim();
+  var portalHandoffID = String(billingState.upgradePortalHandoffID || '').trim();
   var pricingState = billingState.upgradePricing;
   var checkoutIntentState = billingState.upgradeCheckoutIntent;
   var checkoutIntentID = String(billingState.upgradeCheckoutIntentID || '').trim();
@@ -151,14 +152,14 @@ export function renderUpgradePanel(billingState: PortalBillingState, _bootstrap:
   if (billingState.upgradeCheckout.error) {
     summaryItems.push('<div class="billing-status visible error">' + escapeText(billingState.upgradeCheckout.error) + '</div>');
   }
-  if (!checkoutIntentID) {
+  if (!portalHandoffID && !checkoutIntentID) {
     summaryItems.push(
-      '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure checkout intent before checkout.</div>',
+      '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.</div>',
     );
   } else if (checkoutIntentState.status === 'loading') {
-    summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro checkout intent...</div>');
+    summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro upgrade handoff...</div>');
   } else if (checkoutIntentState.status === 'error') {
-    summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutIntentState.error || 'Failed to verify the secure Pulse Pro checkout intent.') + '</div>');
+    summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutIntentState.error || 'Failed to verify the secure Pulse Pro upgrade handoff.') + '</div>');
   } else if (checkoutIntentState.status === 'ready') {
     summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
   }

@@ -11,7 +11,7 @@ const PURCHASE_START_PATH = "/auth/license-purchase-start";
 const PURCHASE_START_URL = `${DEV_SERVER_URL}${PURCHASE_START_PATH}`;
 const PULSE_ACCOUNT_PORTAL_URL = "https://cloud.pulserelay.pro/portal";
 const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
-const CHECKOUT_INTENT_ID = "cki_checkout_return";
+const PORTAL_HANDOFF_ID = "cph_checkout_return";
 const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=activated`;
 const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
 const PURCHASE_RETURN_TOKEN = "prt_signed_checkout_return";
@@ -194,7 +194,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       await route.fulfill({
         status: 303,
         headers: {
-          location: `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade&checkout_intent_id=${CHECKOUT_INTENT_ID}`,
+          location: `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
         },
         body: "",
       });
@@ -202,13 +202,14 @@ test.describe("Self-hosted upgrade return flow", () => {
 
     await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
       const requestUrl = new URL(route.request().url());
-      expect(requestUrl.searchParams.get("service")).toBe("upgrade");
+      expect(requestUrl.searchParams.get("service")).toBeNull();
       expect(requestUrl.searchParams.get("feature")).toBeNull();
       expect(requestUrl.searchParams.get("return_url")).toBeNull();
       expect(requestUrl.searchParams.get("purchase_handoff_url")).toBeNull();
-      expect(requestUrl.searchParams.get("checkout_intent_id")).toBe(
-        CHECKOUT_INTENT_ID,
+      expect(requestUrl.searchParams.get("portal_handoff_id")).toBe(
+        PORTAL_HANDOFF_ID,
       );
+      expect(requestUrl.searchParams.get("checkout_intent_id")).toBeNull();
 
       await route.fulfill({
         status: 200,
@@ -280,7 +281,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       .toBe(`${PURCHASE_START_URL}?feature=max_monitored_systems`);
 
     await page.goto(
-      `${PULSE_ACCOUNT_PORTAL_URL}?service=upgrade&checkout_intent_id=${CHECKOUT_INTENT_ID}`,
+      `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
       {
         waitUntil: "domcontentloaded",
       },

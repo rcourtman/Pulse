@@ -697,13 +697,14 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	handler := createTestHandler(t)
 	handler.SetConfig(&config.Config{PublicURL: "https://pulse.example.com"})
 	var capturedReq struct {
-		Feature    string `json:"feature"`
-		SuccessURL string `json:"success_url"`
-		CancelURL  string `json:"cancel_url"`
+		Feature           string `json:"feature"`
+		SuccessURL        string `json:"success_url"`
+		CancelURL         string `json:"cancel_url"`
+		PurchaseReturnJTI string `json:"purchase_return_jti"`
 	}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/checkout/intent" {
+		if r.URL.Path != "/v1/checkout/portal-handoff" {
 			t.Fatalf("unexpected path %q", r.URL.Path)
 		}
 		if r.Method != http.MethodPost {
@@ -714,8 +715,8 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"checkout_intent_id": "cki_test_upgrade",
-			"feature":            capturedReq.Feature,
+			"portal_handoff_id": "cph_test_upgrade",
+			"feature":           capturedReq.Feature,
 		})
 	}))
 	defer server.Close()
@@ -747,14 +748,14 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	if got := redirectURL.Query().Get("feature"); got != "" {
 		t.Fatalf("feature = %q, want omitted portal query", got)
 	}
-	if got := redirectURL.Query().Get("service"); got != "upgrade" {
-		t.Fatalf("service = %q, want upgrade", got)
+	if got := redirectURL.Query().Get("service"); got != "" {
+		t.Fatalf("service = %q, want omitted portal query", got)
 	}
 	if got := redirectURL.Query().Get("return_url"); got != "" {
 		t.Fatalf("return_url = %q, want omitted portal query", got)
 	}
-	if got := redirectURL.Query().Get("checkout_intent_id"); got != "cki_test_upgrade" {
-		t.Fatalf("checkout_intent_id = %q, want cki_test_upgrade", got)
+	if got := redirectURL.Query().Get("portal_handoff_id"); got != "cph_test_upgrade" {
+		t.Fatalf("portal_handoff_id = %q, want cph_test_upgrade", got)
 	}
 	if got := redirectURL.Query().Get("purchase_handoff_url"); got != "" {
 		t.Fatalf("purchase_handoff_url = %q, want omitted portal query", got)
@@ -794,6 +795,9 @@ func TestHandleCheckoutStart_RedirectsToPulseAccountWithSignedReturnState(t *tes
 	}
 	if claims.Feature != "relay" {
 		t.Fatalf("claims.Feature = %q, want relay", claims.Feature)
+	}
+	if capturedReq.PurchaseReturnJTI != claims.ID {
+		t.Fatalf("purchase_return_jti = %q, want %q", capturedReq.PurchaseReturnJTI, claims.ID)
 	}
 	if capturedReq.CancelURL != "https://pulse.example.com/settings/system/billing/plan?purchase=cancelled" {
 		t.Fatalf("cancel_url = %q", capturedReq.CancelURL)
@@ -1073,6 +1077,40 @@ func TestHandleCheckoutActivation_RendersFailurePageWhenCheckoutIsNotFulfilled(t
 	}
 	if !strings.Contains(rec.Body.String(), "purchase=failed") {
 		t.Fatalf("body = %q, want failed purchase billing redirect", rec.Body.String())
+	}
+}
+
+func TestHandleCheckoutActivation_RejectsPurchaseReturnBindingMismatch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/session" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"fulfilled","purchase_return_jti":"wrong_purchase_return_jti","activation_key":"ppk_live_should_not_activate"}`))
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://pulse.example.com"+licensePurchaseActivationPath,
+		strings.NewReader("session_id=cs_success&purchase_return_token="+url.QueryEscape(returnToken)),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutActivation(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "did not match the completed upgrade flow") {
+		t.Fatalf("body = %q, want binding mismatch message", rec.Body.String())
+	}
+	if handler.Service(context.Background()).IsActivated() {
+		t.Fatal("expected mismatched checkout return to leave the local license inactive")
 	}
 }
 
