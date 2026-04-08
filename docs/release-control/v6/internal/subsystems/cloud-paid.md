@@ -475,6 +475,12 @@ checkout intent through the shared commercial API before it starts checkout,
 so the portal never trusts browser referrer state, loose `feature` /
 `return_url` query parameters, or a Pulse-local handoff URL for self-hosted
 purchase completion. Stripe success now lands on Pulse's public
+`frontend-modern/src/utils/pricingHandoff.ts` and
+`frontend-modern/src/pages/PricingHandoff.tsx` may only hand operators into
+Pulse-owned `GET /auth/license-purchase-start`; they must not construct
+Pulse Account portal URLs, `return_url` parameters, or other portal-entry
+contract state in the browser once the server owns that handoff boundary.
+Stripe success now lands on Pulse's public
 `GET /auth/license-purchase-activate` bridge, which auto-submits into the
 owned POST activation path; the portal must not render a second manual
 `Activate in Pulse Pro` step after checkout. Stripe cancel must return

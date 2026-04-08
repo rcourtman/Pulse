@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   getSelfHostedPurchaseStartUrl,
-  getSelfHostedPurchaseReturnUrl,
   getSelfHostedBillingHref,
   getSelfHostedBillingPlanIntent,
   getSelfHostedBillingPurchaseArrival,
   getSelfHostedBillingUsageDetail,
-  getPulseAccountPortalUpgradeUrl,
   getPricingRouteDestination,
   getPublicPricingUrl,
   getUpgradeFallbackDestination,
@@ -25,7 +23,6 @@ import {
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
   SELF_HOSTED_PURCHASE_START_PATH,
-  SELF_HOSTED_PURCHASE_RETURN_PATH,
 } from '@/utils/pricingHandoff';
 
 describe('pricingHandoff', () => {
@@ -41,12 +38,6 @@ describe('pricingHandoff', () => {
 
   it('routes self-hosted upgrades to Pulse Account first', () => {
     expect(getUpgradeFallbackDestination('relay')).toBe(getSelfHostedPurchaseStartUrl('relay'));
-  });
-
-  it('derives the canonical self-hosted purchase return URL from the app origin', () => {
-    expect(
-      getSelfHostedPurchaseReturnUrl('https://pulse.example.com/settings/system/billing/plan'),
-    ).toBe(`https://pulse.example.com${SELF_HOSTED_PURCHASE_RETURN_PATH}`);
   });
 
   it('returns the canonical public pricing URL when no feature is provided', () => {
@@ -148,7 +139,7 @@ describe('pricingHandoff', () => {
   });
 
   it('detects external pricing destinations', () => {
-    expect(isExternalPricingDestination(getPulseAccountPortalUpgradeUrl('relay'))).toBe(true);
+    expect(isExternalPricingDestination(getPublicPricingUrl('relay'))).toBe(true);
     expect(isExternalPricingDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(false);
     expect(isExternalPricingDestination('/cloud')).toBe(false);
   });
@@ -156,22 +147,6 @@ describe('pricingHandoff', () => {
   it('detects the internal self-hosted purchase start destination', () => {
     expect(isSelfHostedPurchaseStartDestination(getSelfHostedPurchaseStartUrl('relay'))).toBe(true);
     expect(isSelfHostedPurchaseStartDestination(SELF_HOSTED_PURCHASE_START_PATH)).toBe(true);
-    expect(isSelfHostedPurchaseStartDestination(getPulseAccountPortalUpgradeUrl('relay'))).toBe(
-      false,
-    );
-  });
-
-  it('adds the product return URL to Pulse Account upgrade links when the app origin is known', () => {
-    const withOrigin = getPulseAccountPortalUpgradeUrl(
-      'relay',
-      undefined,
-      'https://pulse.example.com/settings/system/billing/plan',
-    );
-    expect(withOrigin).toContain('feature=relay');
-    expect(withOrigin).toContain('service=upgrade');
-    expect(withOrigin).toContain(
-      'return_url=' +
-        encodeURIComponent(`https://pulse.example.com${SELF_HOSTED_PURCHASE_RETURN_PATH}`),
-    );
+    expect(isSelfHostedPurchaseStartDestination(getPublicPricingUrl('relay'))).toBe(false);
   });
 });

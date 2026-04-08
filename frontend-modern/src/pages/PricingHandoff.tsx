@@ -6,7 +6,6 @@ import {
   handoffToExternalPricing,
   isExternalPricingDestination,
   isSelfHostedPurchaseStartDestination,
-  isPulseAccountPortalDestination,
 } from '@/utils/pricingHandoff';
 
 export default function PricingHandoff() {
@@ -16,9 +15,7 @@ export default function PricingHandoff() {
   const selfHostedPurchaseStartDestination = createMemo(() =>
     isSelfHostedPurchaseStartDestination(destination()),
   );
-  const pulseAccountDestination = createMemo(() =>
-    isPulseAccountPortalDestination(destination()) || selfHostedPurchaseStartDestination(),
-  );
+  const pulseAccountDestination = createMemo(() => selfHostedPurchaseStartDestination());
   const handoffLabel = createMemo(() =>
     pulseAccountDestination() ? 'Pulse Account' : 'pricing',
   );

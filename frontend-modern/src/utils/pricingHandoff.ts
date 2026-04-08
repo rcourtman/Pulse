@@ -6,12 +6,7 @@ import {
 
 const DEFAULT_PUBLIC_PRICING_URL =
   'https://pulserelay.pro/pricing?utm_source=pulse&utm_medium=app&utm_campaign=upgrade';
-const DEFAULT_PULSE_ACCOUNT_PORTAL_URL = 'https://cloud.pulserelay.pro/portal';
-const PULSE_ACCOUNT_PORTAL_UPGRADE_SERVICE = 'upgrade';
 export const SELF_HOSTED_PURCHASE_START_PATH = '/auth/license-purchase-start';
-export const SELF_HOSTED_PURCHASE_RETURN_PATH = '/auth/license-purchase-activate';
-export const PULSE_ACCOUNT_PORTAL_RETURN_URL_QUERY_PARAM = 'return_url';
-export const PULSE_ACCOUNT_PORTAL_RETURN_TOKEN_QUERY_PARAM = 'purchase_return_token';
 
 export const SELF_HOSTED_PRO_BILLING_ROUTE = '/settings/system/billing';
 export const SELF_HOSTED_PRO_BILLING_PLAN_ROUTE = `${SELF_HOSTED_PRO_BILLING_ROUTE}/plan`;
@@ -85,33 +80,6 @@ function normalizeFeatureKey(feature: string | null | undefined): string | undef
   return normalized ? normalized : undefined;
 }
 
-function resolvePulseProductOrigin(locationHref?: string): string | undefined {
-  const candidateHref =
-    typeof locationHref === 'string' && locationHref.trim()
-      ? locationHref
-      : typeof window !== 'undefined'
-        ? window.location.href
-        : undefined;
-  if (!candidateHref) return undefined;
-
-  try {
-    return new URL(candidateHref).origin;
-  } catch {
-    return undefined;
-  }
-}
-
-export function getSelfHostedPurchaseReturnUrl(locationHref?: string): string | undefined {
-  const origin = resolvePulseProductOrigin(locationHref);
-  if (!origin) return undefined;
-
-  try {
-    return new URL(SELF_HOSTED_PURCHASE_RETURN_PATH, origin).toString();
-  } catch {
-    return undefined;
-  }
-}
-
 export function getSelfHostedPurchaseStartUrl(
   feature?: string | null,
   searchParams?: URLSearchParams,
@@ -159,63 +127,6 @@ export function getPublicPricingUrl(feature?: string | null): string {
     url.searchParams.set('feature', normalizedFeature);
   }
   return url.toString();
-}
-
-export function getPulseAccountPortalUrl(
-  options: {
-    email?: string | null;
-    feature?: string | null;
-    locationHref?: string;
-    returnUrl?: string | null;
-    service?: string | null;
-    searchParams?: URLSearchParams;
-  } = {},
-): string {
-  const url = new URL(DEFAULT_PULSE_ACCOUNT_PORTAL_URL);
-  if (options.searchParams) {
-    for (const [key, value] of options.searchParams.entries()) {
-      const normalizedValue = value.trim();
-      if (normalizedValue) {
-        url.searchParams.set(key, normalizedValue);
-      }
-    }
-  }
-
-  const normalizedEmail = options.email?.trim();
-  if (normalizedEmail) {
-    url.searchParams.set('email', normalizedEmail);
-  }
-
-  const normalizedFeature = normalizeFeatureKey(options.feature);
-  if (normalizedFeature) {
-    url.searchParams.set('feature', normalizedFeature);
-  }
-
-  const normalizedService = options.service?.trim();
-  if (normalizedService) {
-    url.searchParams.set('service', normalizedService);
-  }
-
-  const normalizedReturnUrl =
-    options.returnUrl?.trim() || getSelfHostedPurchaseReturnUrl(options.locationHref);
-  if (normalizedReturnUrl) {
-    url.searchParams.set(PULSE_ACCOUNT_PORTAL_RETURN_URL_QUERY_PARAM, normalizedReturnUrl);
-  }
-
-  return url.toString();
-}
-
-export function getPulseAccountPortalUpgradeUrl(
-  feature?: string | null,
-  searchParams?: URLSearchParams,
-  locationHref?: string,
-): string {
-  return getPulseAccountPortalUrl({
-    feature,
-    locationHref,
-    searchParams,
-    service: PULSE_ACCOUNT_PORTAL_UPGRADE_SERVICE,
-  });
 }
 
 export function getUpgradeFallbackDestination(feature?: string | null): string {
@@ -390,22 +301,6 @@ export function isSelfHostedPurchaseStartDestination(destination: string): boole
 
   try {
     return new URL(destination, INTERNAL_HREF_BASE).pathname === SELF_HOSTED_PURCHASE_START_PATH;
-  } catch {
-    return false;
-  }
-}
-
-export function isPulseAccountPortalDestination(destination: string): boolean {
-  if (!isExternalUpgradeHref(destination)) {
-    return false;
-  }
-
-  try {
-    const url = new URL(destination);
-    return (
-      url.origin === new URL(DEFAULT_PULSE_ACCOUNT_PORTAL_URL).origin &&
-      url.pathname === new URL(DEFAULT_PULSE_ACCOUNT_PORTAL_URL).pathname
-    );
   } catch {
     return false;
   }
