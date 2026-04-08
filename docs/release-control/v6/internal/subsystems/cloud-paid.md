@@ -775,6 +775,14 @@ when a recurring v5 customer migrates into v6, billing persistence,
 entitlement evaluation, renewal handling, and Pro-license presentation must
 preserve the customer's existing recurring price identity instead of silently
 rewriting them onto current v6 retail pricing.
+That same continuity boundary now also owns monitored-system capacity
+preservation for migrated self-hosted estates. Activation persistence and
+grant refresh must carry local-only legacy-migration continuity metadata, and
+when canonical deduped monitored-system usage first resolves on a migrated
+installation Pulse must persist a one-time grandfather floor so status,
+runtime entitlement evaluation, and later restore/refresh flows keep the
+existing estate admissible without silently grandfathering post-migration
+growth.
 That continuity rule cannot depend on webhook metadata being perfect. The
 canonical Stripe price-to-plan lookup in `pkg/licensing/features.go` and
 `pkg/licensing/stripe_subscription.go` must recognize the still-renewing

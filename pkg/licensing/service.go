@@ -243,7 +243,7 @@ func (s *Service) ActivateWithKey(activationKey string) (*License, error) {
 		return nil, fmt.Errorf("activation failed: %w", err)
 	}
 
-	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence)
+	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence, ActivationContinuity{})
 }
 
 // ActivateLegacyLicense exchanges a legacy v5 JWT-style license for a v6 activation.
@@ -277,7 +277,9 @@ func (s *Service) ActivateLegacyLicense(legacyLicenseKey string) (*License, erro
 		return nil, fmt.Errorf("activation failed: %w", err)
 	}
 
-	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence)
+	return s.applyActivationResponse(resp, fingerprint, client.BaseURL(), persistence, ActivationContinuity{
+		LegacyMigration: true,
+	})
 }
 
 func (s *Service) applyActivationResponse(
@@ -285,6 +287,7 @@ func (s *Service) applyActivationResponse(
 	fingerprint string,
 	serverURL string,
 	persistence *Persistence,
+	continuity ActivationContinuity,
 ) (*License, error) {
 	// Parse the grant JWT to extract claims.
 	gc, err := verifyAndParseGrantJWT(resp.Grant.JWT)
@@ -293,7 +296,8 @@ func (s *Service) applyActivationResponse(
 	}
 
 	// Build the license from grant claims.
-	lic := grantClaimsToLicense(gc, resp.Grant.JWT)
+	continuity = normalizeActivationContinuity(continuity)
+	lic := grantClaimsToLicenseWithContinuity(gc, resp.Grant.JWT, continuity)
 
 	// Build activation state for persistence and refresh.
 	now := time.Now().Unix()
@@ -308,6 +312,7 @@ func (s *Service) applyActivationResponse(
 		LicenseServerURL:    serverURL,
 		ActivatedAt:         now,
 		LastRefreshedAt:     now,
+		Continuity:          continuity,
 	}
 
 	s.mu.Lock()
@@ -383,18 +388,81 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 		return fmt.Errorf("parse persisted grant: %w", err)
 	}
 
-	lic := grantClaimsToLicense(gc, state.GrantJWT)
+	stateCopy := *state
+	stateCopy.Continuity = normalizeActivationContinuity(stateCopy.Continuity)
+
+	lic := grantClaimsToLicenseWithContinuity(gc, stateCopy.GrantJWT, stateCopy.Continuity)
 
 	s.mu.Lock()
 	s.license = cloneLicense(lic)
 	source := NewTokenSource(&s.license.Claims)
 	s.evaluator = NewEvaluator(source)
-	s.activationState = state
+	s.activationState = &stateCopy
 	cb := s.onLicenseChange
 	snapshot := cloneLicense(s.license)
 	s.mu.Unlock()
 
 	if cb != nil {
+		cb(snapshot)
+	}
+
+	return nil
+}
+
+// CaptureLegacyMonitoredSystemGrandfatherFloor resolves the one-time
+// monitored-system floor for a migrated legacy activation using the canonical
+// deduped monitored-system count observed at runtime.
+func (s *Service) CaptureLegacyMonitoredSystemGrandfatherFloor(count int) error {
+	if count < 0 {
+		count = 0
+	}
+
+	s.mu.Lock()
+	if s.activationState == nil {
+		s.mu.Unlock()
+		return nil
+	}
+
+	continuity := normalizeActivationContinuity(s.activationState.Continuity)
+	if !continuity.needsLegacyMonitoredSystemCapture() {
+		s.mu.Unlock()
+		return nil
+	}
+
+	currentLimit := 0
+	if s.license != nil {
+		currentLimit = monitoredSystemLimitFromClaims(s.license.Claims)
+	}
+	continuity.GrandfatheredMonitoredSystemsCapturedAt = time.Now().Unix()
+	if count > currentLimit {
+		continuity.GrandfatheredMaxMonitoredSystems = count
+	}
+	s.activationState.Continuity = continuity
+
+	shouldNotify := false
+	if s.license != nil {
+		claims := cloneClaims(s.license.Claims)
+		applyActivationContinuityToClaims(&claims, continuity)
+		updatedLimit := monitoredSystemLimitFromClaims(claims)
+		shouldNotify = updatedLimit != currentLimit
+		s.license.Claims = claims
+		source := NewTokenSource(&s.license.Claims)
+		s.evaluator = NewEvaluator(source)
+	}
+
+	stateCopy := *s.activationState
+	persistence := s.persistence
+	cb := s.onLicenseChange
+	snapshot := cloneLicense(s.license)
+	s.mu.Unlock()
+
+	if persistence != nil {
+		if err := persistence.SaveActivationState(&stateCopy); err != nil {
+			return fmt.Errorf("persist activation continuity: %w", err)
+		}
+	}
+
+	if shouldNotify && cb != nil {
 		cb(snapshot)
 	}
 
@@ -794,6 +862,13 @@ func safeIntFromInt64(v int64) int {
 		return 0
 	}
 	return int(v)
+}
+
+func monitoredSystemLimitFromClaims(claims Claims) int {
+	if limit, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+		return safeIntFromInt64(limit)
+	}
+	return 0
 }
 
 func remainingDaysCeil(expiresAtUnix, nowUnix int64) int {

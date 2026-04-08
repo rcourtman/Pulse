@@ -1186,6 +1186,13 @@ resolved, those API contracts must fail closed for net-new admissions rather
 than serializing a fake zero. `/api/license/entitlements` therefore carries
 limit-level `current_available` truth so clients can distinguish unavailable
 monitored-system usage from a real `current: 0`.
+That same contract now also owns migrated legacy continuity. When a supported
+v5 license auto-exchanges or is activated manually in v6, `/api/license/status`
+and `/api/license/entitlements` must surface `max_monitored_systems` from the
+greater of the exchanged plan limit and the one-time deduped monitored-system
+floor captured from canonical runtime usage, and restored grant activations
+must backfill that floor once canonical usage becomes available instead of
+falling back to the raw exchanged grant limit after restart.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring

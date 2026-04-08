@@ -4803,6 +4803,160 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_contract_floor",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		Features:            []string{"relay"},
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "contract-floor@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+			License: pkglicensing.ActivateResponseLicense{
+				LicenseID:           "lic_contract_floor",
+				State:               "active",
+				Tier:                "pro",
+				Features:            []string{"relay"},
+				MaxMonitoredSystems: 10,
+			},
+			Installation: pkglicensing.ActivateResponseInstallation{
+				InstallationID:    "inst_contract_floor",
+				InstallationToken: "pit_live_contract_floor",
+				Status:            "active",
+			},
+			Grant: pkglicensing.GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_contract_floor",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	cp, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("contract-floor@example.com", pkglicensing.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate test license: %v", err)
+	}
+	if err := persistence.Save(legacyJWT); err != nil {
+		t.Fatalf("save legacy jwt: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, false)
+	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
+	t.Cleanup(handlers.StopAllBackgroundLoops)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+
+	statusReq := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
+	statusRec := httptest.NewRecorder()
+	handlers.HandleLicenseStatus(statusRec, statusReq)
+	if statusRec.Code != http.StatusOK {
+		t.Fatalf("status=%d, want %d: %s", statusRec.Code, http.StatusOK, statusRec.Body.String())
+	}
+
+	entReq := httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	entRec := httptest.NewRecorder()
+	handlers.HandleEntitlements(entRec, entReq)
+	if entRec.Code != http.StatusOK {
+		t.Fatalf("entitlements status=%d, want %d: %s", entRec.Code, http.StatusOK, entRec.Body.String())
+	}
+
+	var status pkglicensing.LicenseStatus
+	if err := json.Unmarshal(statusRec.Body.Bytes(), &status); err != nil {
+		t.Fatalf("decode status: %v", err)
+	}
+	var payload EntitlementPayload
+	if err := json.Unmarshal(entRec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode entitlements: %v", err)
+	}
+
+	got, err := json.Marshal(struct {
+		Status struct {
+			Tier                pkglicensing.Tier `json:"tier"`
+			PlanVersion         string            `json:"plan_version"`
+			MaxMonitoredSystems int               `json:"max_monitored_systems"`
+			Valid               bool              `json:"valid"`
+		} `json:"status"`
+		Entitlements struct {
+			Tier              string                     `json:"tier"`
+			PlanVersion       string                     `json:"plan_version"`
+			SubscriptionState string                     `json:"subscription_state"`
+			Limits            []pkglicensing.LimitStatus `json:"limits"`
+		} `json:"entitlements"`
+	}{
+		Status: struct {
+			Tier                pkglicensing.Tier `json:"tier"`
+			PlanVersion         string            `json:"plan_version"`
+			MaxMonitoredSystems int               `json:"max_monitored_systems"`
+			Valid               bool              `json:"valid"`
+		}{
+			Tier:                status.Tier,
+			PlanVersion:         status.PlanVersion,
+			MaxMonitoredSystems: status.MaxMonitoredSystems,
+			Valid:               status.Valid,
+		},
+		Entitlements: struct {
+			Tier              string                     `json:"tier"`
+			PlanVersion       string                     `json:"plan_version"`
+			SubscriptionState string                     `json:"subscription_state"`
+			Limits            []pkglicensing.LimitStatus `json:"limits"`
+		}{
+			Tier:              payload.Tier,
+			PlanVersion:       payload.PlanVersion,
+			SubscriptionState: payload.SubscriptionState,
+			Limits:            payload.Limits,
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal snapshot payload: %v", err)
+	}
+
+	const want = `{
+		"status":{
+			"tier":"pro",
+			"plan_version":"v5_pro_monthly_grandfathered",
+			"max_monitored_systems":23,
+			"valid":true
+		},
+		"entitlements":{
+			"tier":"pro",
+			"plan_version":"v5_pro_monthly_grandfathered",
+			"subscription_state":"active",
+			"limits":[{"key":"max_monitored_systems","limit":23,"current":23,"current_available":true,"state":"enforced"}]
+		}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 	baseDir := t.TempDir()
 	store := config.NewFileBillingStore(baseDir)

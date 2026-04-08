@@ -169,7 +169,13 @@ querying, and the operator-facing storage health presentation layer.
     `checkout_intent_id`, purchase-return tokens, activation-bridge
     callbacks, owned billing purchase-arrival states, or demo-hidden
     commercial route policy as recovery identity, restore proof, preview
-    framing, or backup/recovery-local transport.
+    framing, or backup/recovery-local transport. That same adjacent commercial
+    boundary now also owns migrated-v5 monitored-system grandfathering:
+    storage and recovery may read the resulting entitlement limits as context,
+    but they must not infer a second capacity floor from protected inventory,
+    backup counts, or recovery-point presence when commercial continuity is
+    already defined by the canonical monitored-system resolver and activation
+    persistence.
 
 ## Forbidden Paths
 

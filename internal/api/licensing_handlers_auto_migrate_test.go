@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -10,6 +11,8 @@ import (
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
+	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
@@ -290,6 +293,300 @@ func TestGetTenantComponents_PersistsCommercialMigrationState_WhenAutoExchangeFa
 	}
 
 	handlers.StopAllBackgroundLoops()
+}
+
+func TestGetTenantComponents_AutoExchangeGrandfathersObservedMonitoredSystems(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_floor_auto",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		Features:            []string{"relay"},
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "floor-auto@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+			License: pkglicensing.ActivateResponseLicense{
+				LicenseID:           "lic_floor_auto",
+				State:               "active",
+				Tier:                "pro",
+				Features:            []string{"relay"},
+				MaxMonitoredSystems: 10,
+			},
+			Installation: pkglicensing.ActivateResponseInstallation{
+				InstallationID:    "inst_floor_auto",
+				InstallationToken: "pit_live_floor_auto",
+				Status:            "active",
+			},
+			Grant: pkglicensing.GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_floor_auto",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	cp, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+
+	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("floor-auto@example.com", pkglicensing.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate test license: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	if err := persistence.Save(legacyJWT); err != nil {
+		t.Fatalf("save legacy jwt: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, false)
+	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if !svc.IsActivated() {
+		t.Fatal("expected persisted legacy JWT to auto-exchange into activation state")
+	}
+	if got := svc.Status().MaxMonitoredSystems; got != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", got)
+	}
+	if activationState, err := persistence.LoadActivationState(); err != nil {
+		t.Fatalf("load activation state: %v", err)
+	} else if activationState == nil {
+		t.Fatal("expected activation state after legacy exchange")
+	} else {
+		if !activationState.Continuity.LegacyMigration {
+			t.Fatal("expected legacy migration continuity flag")
+		}
+		if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
+			t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
+		}
+		if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
+			t.Fatal("expected grandfather capture timestamp")
+		}
+	}
+
+	handlers.StopAllBackgroundLoops()
+}
+
+func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArrivesLate(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_floor_restore",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		Features:            []string{"relay"},
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "floor-restore@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	cp, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	if err := persistence.SaveActivationState(&pkglicensing.ActivationState{
+		InstallationID:      "inst_floor_restore",
+		InstallationToken:   "pit_live_floor_restore",
+		LicenseID:           "lic_floor_restore",
+		GrantJWT:            grantJWT,
+		GrantJTI:            "grant_floor_restore",
+		GrantExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		InstanceFingerprint: "fp-floor-restore",
+		LicenseServerURL:    "https://license.pulserelay.pro",
+		ActivatedAt:         time.Now().Add(-time.Hour).Unix(),
+		LastRefreshedAt:     time.Now().Add(-time.Hour).Unix(),
+		Continuity: pkglicensing.ActivationContinuity{
+			LegacyMigration: true,
+		},
+	}); err != nil {
+		t.Fatalf("save activation state: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, false)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if got := svc.Status().MaxMonitoredSystems; got != 10 {
+		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 10 before floor capture", got)
+	}
+
+	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
+	svc = handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected cached service")
+	}
+	if got := svc.Status().MaxMonitoredSystems; got != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after late monitor capture", got)
+	}
+
+	loaded, err := persistence.LoadActivationState()
+	if err != nil {
+		t.Fatalf("load activation state: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected activation state")
+	}
+	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
+		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
+	}
+	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
+		t.Fatal("expected captured timestamp after late monitor restore")
+	}
+
+	handlers.StopAllBackgroundLoops()
+}
+
+func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigration(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_floor_manual",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_annual_grandfathered",
+		State:               "active",
+		Features:            []string{"relay"},
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "floor-manual@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+			License: pkglicensing.ActivateResponseLicense{
+				LicenseID:           "lic_floor_manual",
+				State:               "active",
+				Tier:                "pro",
+				Features:            []string{"relay"},
+				MaxMonitoredSystems: 10,
+			},
+			Installation: pkglicensing.ActivateResponseInstallation{
+				InstallationID:    "inst_floor_manual",
+				InstallationToken: "pit_live_floor_manual",
+				Status:            "active",
+			},
+			Grant: pkglicensing.GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_floor_manual",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	handlers := createTestHandler(t)
+	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
+	t.Cleanup(handlers.StopAllBackgroundLoops)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("floor-manual@example.com", pkglicensing.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate test license: %v", err)
+	}
+
+	resp, err := handlers.activateLicenseKey(ctx, legacyJWT)
+	if err != nil {
+		t.Fatalf("activateLicenseKey: %v", err)
+	}
+	if !resp.Success {
+		t.Fatalf("expected success, got %+v", resp)
+	}
+
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if got := svc.Status().MaxMonitoredSystems; got != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", got)
+	}
+}
+
+func buildGrandfatherFloorMonitor(count int) *monitoring.Monitor {
+	now := time.Now().UTC()
+	registry := unifiedresources.NewRegistry(nil)
+	records := make([]unifiedresources.IngestRecord, 0, count)
+	for i := 0; i < count; i++ {
+		id := fmt.Sprintf("host-%02d", i+1)
+		hostname := fmt.Sprintf("legacy-%02d.lab.local", i+1)
+		machineID := fmt.Sprintf("machine-%02d", i+1)
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID: id,
+			Resource: unifiedresources.Resource{
+				ID:        id,
+				Type:      unifiedresources.ResourceTypeAgent,
+				Name:      hostname,
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-" + id,
+					Hostname:  hostname,
+					MachineID: machineID,
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: machineID,
+					Hostnames: []string{hostname},
+				},
+			},
+		})
+	}
+	registry.IngestRecords(unifiedresources.SourceAgent, records)
+
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	return monitor
 }
 
 // base64RawURLEncode is a helper for tests.

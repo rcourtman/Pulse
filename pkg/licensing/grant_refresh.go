@@ -209,7 +209,11 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 	}
 
 	// Update the license from the new grant.
-	lic := grantClaimsToLicense(gc, resp.Grant.JWT)
+	continuity := ActivationContinuity{}
+	if state != nil {
+		continuity = normalizeActivationContinuity(state.Continuity)
+	}
+	lic := grantClaimsToLicenseWithContinuity(gc, resp.Grant.JWT, continuity)
 
 	s.mu.Lock()
 
@@ -231,6 +235,7 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 		s.activationState.GrantJTI = resp.Grant.JTI
 		s.activationState.GrantExpiresAt = resp.Grant.ParseExpiresAt()
 		s.activationState.LastRefreshedAt = time.Now().Unix()
+		s.activationState.Continuity = continuity
 	}
 
 	cb := s.onLicenseChange

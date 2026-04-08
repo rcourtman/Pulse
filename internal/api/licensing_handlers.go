@@ -516,6 +516,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 		if err := h.ensureEvaluatorForOrg(orgID, svc); err != nil {
 			log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to refresh license evaluator for org")
 		}
+		h.ensureLegacyMigrationGrandfatherFloor(ctx, svc)
 		h.ensureHostedEntitlementRefreshForOrg(orgID, svc)
 		// We need persistence too, reconstruct it or cache it?
 		// Reconstructing persistence is cheap (just a struct with path).
@@ -553,6 +554,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 			if err := service.RestoreActivation(activationState); err != nil {
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to restore activation")
 			} else {
+				h.ensureLegacyMigrationGrandfatherFloor(ctx, service)
 				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after activation restore")
 				}
@@ -582,6 +584,7 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 				}
 				log.Warn().Str("org_id", orgID).Err(err).Msg("Failed to auto-exchange persisted legacy license")
 			} else if service.IsActivated() {
+				h.ensureLegacyMigrationGrandfatherFloor(ctx, service)
 				if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 					log.Warn().Str("org_id", orgID).Err(clearErr).Msg("Failed to clear commercial migration state after successful auto-exchange")
 				}
@@ -614,6 +617,40 @@ func (h *LicenseHandlers) getTenantComponents(ctx context.Context) (*licenseServ
 	h.ensureHostedEntitlementRefreshForOrg(orgID, service)
 
 	return service, persistence, nil
+}
+
+func (h *LicenseHandlers) canonicalMonitoredSystemGrandfatherFloor(ctx context.Context) (int, bool) {
+	usage := h.entitlementUsageSnapshot(ctx)
+	if !usage.MonitoredSystemsAvailable {
+		return 0, false
+	}
+	if usage.MonitoredSystems < 0 {
+		return 0, false
+	}
+	return int(usage.MonitoredSystems), true
+}
+
+func (h *LicenseHandlers) ensureLegacyMigrationGrandfatherFloor(ctx context.Context, service *licenseService) {
+	if h == nil || service == nil {
+		return
+	}
+
+	count, ok := h.canonicalMonitoredSystemGrandfatherFloor(ctx)
+	if !ok {
+		return
+	}
+
+	if err := service.CaptureLegacyMonitoredSystemGrandfatherFloor(count); err != nil {
+		orgID := GetOrgID(ctx)
+		if orgID == "" {
+			orgID = "default"
+		}
+		log.Warn().
+			Str("org_id", orgID).
+			Int("monitored_systems", count).
+			Err(err).
+			Msg("Failed to persist migrated monitored-system grandfather floor")
+	}
 }
 
 func (h *LicenseHandlers) ensureEvaluatorForOrg(orgID string, service *licenseService) error {
@@ -1313,6 +1350,9 @@ func (h *LicenseHandlers) activateLicenseKey(ctx context.Context, licenseKey str
 	}
 
 	if service.IsActivated() {
+		if migratedLegacyKey {
+			h.ensureLegacyMigrationGrandfatherFloor(ctx, service)
+		}
 		h.stopHostedEntitlementRefreshLoop(orgID)
 		if clearErr := h.setCommercialMigrationState(orgID, nil); clearErr != nil {
 			log.Warn().Err(clearErr).Str("org_id", orgID).Msg("Failed to clear commercial migration state after activation")

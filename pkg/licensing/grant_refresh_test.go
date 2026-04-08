@@ -444,6 +444,93 @@ func TestRefreshGrantOnce_PersistsState(t *testing.T) {
 	}
 }
 
+func TestRefreshGrantOnce_PreservesLegacyGrandfatherFloor(t *testing.T) {
+	setupTestPublicKey(t)
+
+	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_refreshed_floor",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(RefreshGrantResponse{
+			Grant: GrantEnvelope{
+				JWT:       newGrantJWT,
+				JTI:       "grant_refreshed_floor",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	tmpDir, err := os.MkdirTemp("", "pulse-refresh-floor-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_initial_floor",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	svc := NewService()
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+	svc.SetPersistence(p)
+
+	state := &ActivationState{
+		InstallationID:      "inst_refresh_floor",
+		InstallationToken:   "pit_live_refresh_floor",
+		LicenseID:           "lic_initial_floor",
+		GrantJWT:            initialGrantJWT,
+		GrantJTI:            "grant_old_floor",
+		InstanceFingerprint: "fp-refresh-floor",
+		Continuity: ActivationContinuity{
+			LegacyMigration:                         true,
+			GrandfatheredMaxMonitoredSystems:        23,
+			GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
+		},
+	}
+	if err := svc.RestoreActivation(state); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	if err := svc.refreshGrantOnce(context.Background()); err != nil {
+		t.Fatalf("refreshGrantOnce: %v", err)
+	}
+
+	status := svc.Status()
+	if status.MaxMonitoredSystems != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", status.MaxMonitoredSystems)
+	}
+
+	loaded, err := p.LoadActivationState()
+	if err != nil {
+		t.Fatalf("LoadActivationState: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected persisted activation state")
+	}
+	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
+		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
+	}
+}
+
 func TestRefreshGrantOnce_MissingCloudPlanFailsClosed(t *testing.T) {
 	setupTestPublicKey(t)
 

@@ -200,7 +200,12 @@ management, and fleet control surfaces.
     commercial-owned `checkout_intent_id`, purchase-return tokens,
     activation-bridge form state, owned billing purchase-arrival states, or
     demo-hidden commercial route policy as installer credentials,
-    registration state, or fleet enrollment authority.
+    registration state, or fleet enrollment authority. The same adjacent
+    commercial boundary now also owns migrated-v5 monitored-system
+    grandfathering: lifecycle surfaces may react to the resulting license or
+    entitlements payloads, but they must not cache their own pre-activation
+    host counts, synthesize a second grandfather floor, or treat install-time
+    fleet inventory as the authority for commercial continuity.
 
 ## Forbidden Paths
 

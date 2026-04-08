@@ -17,16 +17,81 @@ const DefaultLicenseServerURL = "https://license.pulserelay.pro"
 // ActivationState holds the local state for an activation-key-based license.
 // Persisted encrypted on disk via Persistence.SaveActivationState.
 type ActivationState struct {
-	InstallationID      string `json:"installation_id"`      // inst_...
-	InstallationToken   string `json:"installation_token"`   // pit_live_... (secret)
-	LicenseID           string `json:"license_id"`           // lic_...
-	GrantJWT            string `json:"grant_jwt"`            // current relay grant JWT
-	GrantJTI            string `json:"grant_jti"`            // grant ID for dedup
-	GrantExpiresAt      int64  `json:"grant_expires_at"`     // Unix timestamp
-	InstanceFingerprint string `json:"instance_fingerprint"` // stable UUID for this installation
-	LicenseServerURL    string `json:"license_server_url"`   // base URL used for this activation
-	ActivatedAt         int64  `json:"activated_at"`         // Unix timestamp of initial activation
-	LastRefreshedAt     int64  `json:"last_refreshed_at"`    // Unix timestamp of last grant refresh
+	InstallationID      string               `json:"installation_id"`      // inst_...
+	InstallationToken   string               `json:"installation_token"`   // pit_live_... (secret)
+	LicenseID           string               `json:"license_id"`           // lic_...
+	GrantJWT            string               `json:"grant_jwt"`            // current relay grant JWT
+	GrantJTI            string               `json:"grant_jti"`            // grant ID for dedup
+	GrantExpiresAt      int64                `json:"grant_expires_at"`     // Unix timestamp
+	InstanceFingerprint string               `json:"instance_fingerprint"` // stable UUID for this installation
+	LicenseServerURL    string               `json:"license_server_url"`   // base URL used for this activation
+	ActivatedAt         int64                `json:"activated_at"`         // Unix timestamp of initial activation
+	LastRefreshedAt     int64                `json:"last_refreshed_at"`    // Unix timestamp of last grant refresh
+	Continuity          ActivationContinuity `json:"continuity,omitempty"`
+}
+
+// ActivationContinuity captures local-only continuity state that must survive
+// activation restore and grant refresh without becoming part of the server
+// grant wire contract.
+type ActivationContinuity struct {
+	// LegacyMigration marks installations activated from a supported v5 license
+	// exchange rather than a native v6 activation key.
+	LegacyMigration bool `json:"legacy_migration,omitempty"`
+
+	// GrandfatheredMaxMonitoredSystems stores the deduped monitored-system floor
+	// captured for a migrated v5 installation when its existing estate exceeds
+	// the exchanged plan limit.
+	GrandfatheredMaxMonitoredSystems int `json:"grandfathered_max_monitored_systems,omitempty"`
+
+	// GrandfatheredMonitoredSystemsCapturedAt marks that the migration floor was
+	// resolved exactly once from canonical runtime usage, even when no override
+	// was needed because the observed estate was already within the exchanged
+	// plan limit.
+	GrandfatheredMonitoredSystemsCapturedAt int64 `json:"grandfathered_monitored_systems_captured_at,omitempty"`
+}
+
+func normalizeActivationContinuity(continuity ActivationContinuity) ActivationContinuity {
+	if continuity.GrandfatheredMaxMonitoredSystems < 0 {
+		continuity.GrandfatheredMaxMonitoredSystems = 0
+	}
+	if continuity.GrandfatheredMonitoredSystemsCapturedAt < 0 {
+		continuity.GrandfatheredMonitoredSystemsCapturedAt = 0
+	}
+	return continuity
+}
+
+func (c ActivationContinuity) needsLegacyMonitoredSystemCapture() bool {
+	c = normalizeActivationContinuity(c)
+	return c.LegacyMigration && c.GrandfatheredMonitoredSystemsCapturedAt == 0
+}
+
+func applyActivationContinuityToClaims(claims *Claims, continuity ActivationContinuity) {
+	if claims == nil {
+		return
+	}
+
+	continuity = normalizeActivationContinuity(continuity)
+	if continuity.GrandfatheredMaxMonitoredSystems <= 0 {
+		return
+	}
+
+	currentLimit := int64(0)
+	if existing, ok := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; ok {
+		currentLimit = existing
+	}
+	if currentLimit >= int64(continuity.GrandfatheredMaxMonitoredSystems) {
+		return
+	}
+
+	if claims.Limits == nil {
+		claims.Limits = map[string]int64{}
+	} else {
+		claims.Limits = NormalizeMonitoredSystemLimits(claims.Limits)
+	}
+	claims.Limits[MaxMonitoredSystemsLicenseGateKey] = int64(continuity.GrandfatheredMaxMonitoredSystems)
+	if claims.MaxMonitoredSystems < continuity.GrandfatheredMaxMonitoredSystems {
+		claims.MaxMonitoredSystems = continuity.GrandfatheredMaxMonitoredSystems
+	}
 }
 
 // GrantClaims are the claims parsed from a relay grant JWT payload.
@@ -65,6 +130,10 @@ func (g *GrantClaims) UnmarshalJSON(data []byte) error {
 // grantClaimsToClaims maps grant claims to the existing Claims struct
 // so that all feature gating and monitored-system limits work unchanged.
 func grantClaimsToClaims(gc *GrantClaims) Claims {
+	return grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{})
+}
+
+func grantClaimsToClaimsWithContinuity(gc *GrantClaims, continuity ActivationContinuity) Claims {
 	c := Claims{
 		LicenseID:           gc.LicenseID,
 		Email:               gc.Email,
@@ -90,12 +159,22 @@ func grantClaimsToClaims(gc *GrantClaims) Claims {
 		c.SubState = SubStateSuspended
 	}
 
+	applyActivationContinuityToClaims(&c, continuity)
+
 	return c
 }
 
 // grantClaimsToLicense creates a License from parsed grant claims.
 func grantClaimsToLicense(gc *GrantClaims, rawJWT string) *License {
-	claims := grantClaimsToClaims(gc)
+	return grantClaimsToLicenseWithContinuity(gc, rawJWT, ActivationContinuity{})
+}
+
+func grantClaimsToLicenseWithContinuity(
+	gc *GrantClaims,
+	rawJWT string,
+	continuity ActivationContinuity,
+) *License {
+	claims := grantClaimsToClaimsWithContinuity(gc, continuity)
 
 	lic := &License{
 		Raw:         rawJWT,

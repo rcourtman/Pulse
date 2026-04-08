@@ -179,6 +179,54 @@ func TestGrantClaimsToLicense(t *testing.T) {
 	})
 }
 
+func TestGrantClaimsToClaimsWithContinuityAppliesGrandfatherFloor(t *testing.T) {
+	gc := &GrantClaims{
+		LicenseID:           "lic_floor",
+		State:               "active",
+		Tier:                "pro",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	}
+
+	claims := grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{
+		LegacyMigration:                         true,
+		GrandfatheredMaxMonitoredSystems:        23,
+		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
+	})
+
+	if claims.MaxMonitoredSystems != 23 {
+		t.Fatalf("MaxMonitoredSystems = %d, want 23", claims.MaxMonitoredSystems)
+	}
+	if got := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 23 {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want 23", got)
+	}
+}
+
+func TestGrantClaimsToClaimsWithContinuityDoesNotLowerGrantLimit(t *testing.T) {
+	gc := &GrantClaims{
+		LicenseID:           "lic_noop",
+		State:               "active",
+		Tier:                "pro",
+		MaxMonitoredSystems: 15,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	}
+
+	claims := grantClaimsToClaimsWithContinuity(gc, ActivationContinuity{
+		LegacyMigration:                         true,
+		GrandfatheredMaxMonitoredSystems:        10,
+		GrandfatheredMonitoredSystemsCapturedAt: time.Now().Unix(),
+	})
+
+	if claims.MaxMonitoredSystems != 15 {
+		t.Fatalf("MaxMonitoredSystems = %d, want 15", claims.MaxMonitoredSystems)
+	}
+	if got := claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 15 {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems] = %d, want 15", got)
+	}
+}
+
 func TestGrantClaimsToClaimsCanonicalizesCloudPlanAtEntitlementBoundary(t *testing.T) {
 	gc := &GrantClaims{
 		LicenseID:           "lic_cloud",

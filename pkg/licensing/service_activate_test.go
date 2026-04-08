@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -112,6 +113,156 @@ func TestServiceActivate_AllowsLegacyJWTInDevMode(t *testing.T) {
 	}
 	if svc.IsActivated() {
 		t.Fatal("expected dev JWT activation to remain non-activation-key mode")
+	}
+}
+
+func TestServiceActivate_ExchangedLegacyJWTMarksLegacyMigrationContinuity(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	setupTestPublicKey(t)
+
+	tmpDir, err := os.MkdirTemp("", "pulse-service-legacy-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	svc := NewService()
+	svc.SetPersistence(p)
+
+	licenseKey, err := GenerateLicenseForTesting("legacy-continuity@example.com", TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateLicenseForTesting: %v", err)
+	}
+
+	grantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_continuity",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("Path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
+			License: ActivateResponseLicense{
+				LicenseID:           "lic_continuity",
+				State:               "active",
+				Tier:                "pro",
+				MaxMonitoredSystems: 10,
+			},
+			Installation: ActivateResponseInstallation{
+				InstallationID:    "inst_continuity",
+				InstallationToken: "pit_live_continuity",
+				Status:            "active",
+			},
+			Grant: GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_continuity",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+
+	if _, err := svc.Activate(licenseKey); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	state := svc.GetActivationState()
+	if state == nil {
+		t.Fatal("expected activation state")
+	}
+	if !state.Continuity.LegacyMigration {
+		t.Fatal("expected legacy exchange to mark legacy migration continuity")
+	}
+	if state.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 before capture", state.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
+	}
+}
+
+func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesStatus(t *testing.T) {
+	setupTestPublicKey(t)
+
+	tmpDir, err := os.MkdirTemp("", "pulse-service-floor-*")
+	if err != nil {
+		t.Fatalf("create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	p, err := NewPersistence(tmpDir)
+	if err != nil {
+		t.Fatalf("create persistence: %v", err)
+	}
+
+	initialGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_floor",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	svc := NewService()
+	svc.SetPersistence(p)
+	state := &ActivationState{
+		InstallationID:      "inst_floor",
+		InstallationToken:   "pit_live_floor",
+		LicenseID:           "lic_floor",
+		GrantJWT:            initialGrantJWT,
+		GrantJTI:            "grant_floor",
+		InstanceFingerprint: "fp-floor",
+		Continuity: ActivationContinuity{
+			LegacyMigration: true,
+		},
+	}
+	if err := svc.RestoreActivation(state); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	if err := svc.CaptureLegacyMonitoredSystemGrandfatherFloor(23); err != nil {
+		t.Fatalf("CaptureLegacyMonitoredSystemGrandfatherFloor: %v", err)
+	}
+
+	status := svc.Status()
+	if status.MaxMonitoredSystems != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23", status.MaxMonitoredSystems)
+	}
+
+	current := svc.Current()
+	if current == nil {
+		t.Fatal("expected current license")
+	}
+	if got := current.Claims.EffectiveLimits()[MaxMonitoredSystemsLicenseGateKey]; got != 23 {
+		t.Fatalf("EffectiveLimits()[max_monitored_systems]=%d, want 23", got)
+	}
+
+	loaded, err := p.LoadActivationState()
+	if err != nil {
+		t.Fatalf("LoadActivationState: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected persisted activation state")
+	}
+	if loaded.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
+		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", loaded.Continuity.GrandfatheredMaxMonitoredSystems)
+	}
+	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
+		t.Fatal("expected persisted capture timestamp")
 	}
 }
 
