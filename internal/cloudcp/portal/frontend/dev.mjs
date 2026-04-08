@@ -545,8 +545,8 @@ function routeCommercialAPI(request, response, url, scenario) {
     }
     sendJSON(response, 200, {
       portal_handoff_id: portalHandoffID,
-      checkout_intent_id: 'cki_preview_upgrade',
       feature: 'max_monitored_systems',
+      expires_at: Math.floor(Date.now() / 1000) + 3600,
     });
     return;
   }
@@ -626,7 +626,7 @@ function routeCommercialAPI(request, response, url, scenario) {
 
   if (route === '/v1/checkout/session') {
     readJSONBody(request).then(function(body) {
-      if (String(body.checkout_intent_id || '').trim() !== 'cki_preview_upgrade') {
+      if (String(body.portal_handoff_id || '').trim() !== 'cph_preview_upgrade') {
         sendJSON(response, 400, { error: 'Pulse Account could not verify the secure Pulse Pro upgrade handoff.' });
         return;
       }

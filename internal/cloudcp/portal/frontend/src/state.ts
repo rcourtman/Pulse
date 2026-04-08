@@ -120,8 +120,6 @@ export function createPortalBillingState(): PortalBillingState {
     upgradeFeatureKey: '',
     upgradePortalHandoffID: '',
     upgradePortalHandoff: createQueryState(null),
-    upgradeCheckoutIntentID: '',
-    upgradeCheckoutIntent: createQueryState(null),
     upgradePricing: createQueryState(null),
     upgradeCheckout: createMutationState(),
     flows: {

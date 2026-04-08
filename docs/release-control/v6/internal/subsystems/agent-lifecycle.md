@@ -197,7 +197,7 @@ management, and fleet control surfaces.
     `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
     `/auth/license-purchase-activate`, lifecycle-adjacent setup and fleet
     surfaces may rely on that public-route wiring but must not reinterpret the
-    commercial-owned `checkout_intent_id`, purchase-return tokens,
+    commercial-owned `portal_handoff_id`, server-resolved checkout intent, purchase-return tokens,
     activation-bridge form state, owned billing purchase-arrival states, or
     demo-hidden commercial route policy as installer credentials,
     registration state, or fleet enrollment authority. The same adjacent
@@ -370,7 +370,7 @@ commercial-posture fields inside `SetupCompletionPanel.tsx`.
 That same shared boundary now also owns the one-time checkout-return lookup:
 lifecycle-adjacent surfaces may initiate billing or account handoff through
 shared public routes, but they must never persist, derive, or replay the
-server-owned `checkout_intent_id` or owned billing purchase-arrival state as
+server-owned portal checkout state or owned billing purchase-arrival state as
 lifecycle state.
 Lifecycle-adjacent storage and fleet surfaces now also depend on one governed
 physical-disk history transport. When agent-backed disk telemetry is rendered

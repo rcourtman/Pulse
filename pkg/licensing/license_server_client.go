@@ -28,7 +28,6 @@ type CheckoutSessionResult struct {
 	Message             string `json:"message,omitempty"`
 	CheckoutStatus      string `json:"checkout_status,omitempty"`
 	PaymentStatus       string `json:"payment_status,omitempty"`
-	CheckoutIntentID    string `json:"checkout_intent_id,omitempty"`
 	PurchaseReturnJTI   string `json:"purchase_return_jti,omitempty"`
 	LicenseID           string `json:"license_id,omitempty"`
 	ActivationKey       string `json:"activation_key,omitempty"`
@@ -65,12 +64,12 @@ type CheckoutPortalHandoffRequest struct {
 }
 
 // CheckoutPortalHandoffResponse is the canonical opaque portal handoff used to
-// bootstrap the hosted Pulse Account billing flow.
+// bootstrap the hosted Pulse Account billing flow without exposing the bound
+// checkout intent to the browser.
 type CheckoutPortalHandoffResponse struct {
-	PortalHandoffID  string `json:"portal_handoff_id"`
-	CheckoutIntentID string `json:"checkout_intent_id,omitempty"`
-	Feature          string `json:"feature,omitempty"`
-	ExpiresAt        int64  `json:"expires_at,omitempty"`
+	PortalHandoffID string `json:"portal_handoff_id"`
+	Feature         string `json:"feature,omitempty"`
+	ExpiresAt       int64  `json:"expires_at,omitempty"`
 }
 
 // NewLicenseServerClient creates a client for the license server.

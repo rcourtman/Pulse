@@ -166,7 +166,7 @@ querying, and the operator-facing storage health presentation layer.
     `/auth/license-purchase-start`, `/auth/license-purchase-handoff`, or
     `/auth/license-purchase-activate`, storage and recovery may coexist with
     those shared public-route helpers but must not reuse the commercial-owned
-    `checkout_intent_id`, purchase-return tokens, activation-bridge
+    `portal_handoff_id`, server-resolved checkout intent, purchase-return tokens, activation-bridge
     callbacks, owned billing purchase-arrival states, or demo-hidden
     commercial route policy as recovery identity, restore proof, preview
     framing, or backup/recovery-local transport. That same adjacent commercial
@@ -364,7 +364,7 @@ applied.
 That same adjacent commercial boundary also owns one-time checkout-return
 lookup. Storage and recovery may coexist with the shared purchase return routes
 in the app shell, but they must not cache, derive, or replay the
-server-resolved `checkout_intent_id` or owned billing purchase-arrival state
+server-resolved portal checkout state or owned billing purchase-arrival state
 as recovery route state, restore evidence, or storage-local navigation
 context.
 Storage- or recovery-adjacent commercial helpers must therefore wait for the

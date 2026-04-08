@@ -84,6 +84,21 @@ test.describe("Pulse Account upgrade bootstrap", () => {
       ),
     ).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Buy Annual" }).first()).toBeEnabled();
+
+    const checkoutRequestPromise = page.waitForRequest((request) => {
+      return (
+        request.method() === "POST" &&
+        request.url().includes("/__portal_preview/commercial/v1/checkout/session")
+      );
+    });
+    const buyAnnual = page.getByRole("button", { name: "Buy Annual" }).first();
+    await buyAnnual.click();
+
+    const checkoutRequest = await checkoutRequestPromise;
+    const checkoutPayload = checkoutRequest.postDataJSON() as Record<string, string>;
+    expect(checkoutPayload.portal_handoff_id).toBe("cph_preview_upgrade");
+    expect("checkout_intent_id" in checkoutPayload).toBe(false);
+    await expect(page).toHaveURL(/preview_toast=/);
   });
 
   test("blocks the retired checkout-intent bootstrap path", async ({ page }, testInfo) => {

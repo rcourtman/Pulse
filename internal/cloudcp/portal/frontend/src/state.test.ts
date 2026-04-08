@@ -37,8 +37,6 @@ describe('portal state', function() {
     expect(billingState.upgradeFeatureKey).toBe('');
     expect(billingState.upgradePortalHandoffID).toBe('');
     expect(billingState.upgradePortalHandoff.status).toBe('idle');
-    expect(billingState.upgradeCheckoutIntentID).toBe('');
-    expect(billingState.upgradeCheckoutIntent.status).toBe('idle');
     expect(billingState.upgradePricing.status).toBe('idle');
 
     billingState.flows.manage.emailValue = 'override@example.com';

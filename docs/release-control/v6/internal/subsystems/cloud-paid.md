@@ -477,13 +477,17 @@ loose `feature` / `return_url` query parameters, or a raw browser-supplied
 `checkout_intent_id` for self-hosted purchase completion. The portal proxy
 must expose `GET /v1/checkout/portal-handoff` as the canonical browser
 bootstrap and must not keep the retired `GET /v1/checkout/intent` bootstrap
-path alive once `portal_handoff_id` is the owned contract. Stripe success now lands on Pulse's public
+path alive once `portal_handoff_id` is the owned contract. The browser-facing
+portal handoff response must reveal only `portal_handoff_id`, feature, and
+expiry metadata; it must not disclose the bound `checkout_intent_id`, and
+browser checkout creation must post only `portal_handoff_id` so Pulse Account
+resolves the private checkout intent server-side before contacting Stripe.
+Stripe success now lands on Pulse's public
 `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/pages/PricingHandoff.tsx` may only hand operators into
 Pulse-owned `GET /auth/license-purchase-start`; they must not construct
 Pulse Account portal URLs, `return_url` parameters, or other portal-entry
 contract state in the browser once the server owns that handoff boundary.
-Stripe success now lands on Pulse's public
 `GET /auth/license-purchase-activate` bridge, which auto-submits into the
 owned POST activation path; the portal must not render a second manual
 `Activate in Pulse Pro` step after checkout. Stripe cancel must return

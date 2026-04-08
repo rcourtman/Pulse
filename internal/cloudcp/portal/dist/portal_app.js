@@ -833,8 +833,6 @@
       upgradeFeatureKey: "",
       upgradePortalHandoffID: "",
       upgradePortalHandoff: createQueryState(null),
-      upgradeCheckoutIntentID: "",
-      upgradeCheckoutIntent: createQueryState(null),
       upgradePricing: createQueryState(null),
       upgradeCheckout: createMutationState(),
       flows: {
@@ -1413,7 +1411,7 @@
       return "";
     }
     var portalHandoffID = String(billingState.upgradePortalHandoffID || "").trim();
-    var checkoutDisabled = billingState.upgradeCheckout.pending || !portalHandoffID || billingState.upgradeCheckoutIntent.status === "loading" || !String(billingState.upgradeCheckoutIntentID || "").trim() || billingState.upgradeCheckoutIntent.status !== "ready";
+    var checkoutDisabled = billingState.upgradeCheckout.pending || !portalHandoffID || billingState.upgradePortalHandoff.status === "loading" || billingState.upgradePortalHandoff.status !== "ready";
     return '<div class="billing-upgrade-plan-grid">' + plans.map(function(plan) {
       var buttons = Array.isArray(plan.buttons) ? plan.buttons : [];
       var checkoutButtons = buttons.filter(function(button) {
@@ -1432,8 +1430,7 @@
     var featureKey = String(billingState.upgradeFeatureKey || "").trim();
     var portalHandoffID = String(billingState.upgradePortalHandoffID || "").trim();
     var pricingState = billingState.upgradePricing;
-    var checkoutIntentState = billingState.upgradeCheckoutIntent;
-    var checkoutIntentID = String(billingState.upgradeCheckoutIntentID || "").trim();
+    var handoffState = billingState.upgradePortalHandoff;
     var explainer = pricingState.data && pricingState.data.explainer ? pricingState.data.explainer : "";
     var summaryItems = [];
     if (billingState.upgradeCheckout.pending) {
@@ -1446,11 +1443,11 @@
       summaryItems.push(
         '<div class="billing-status visible error">Open this upgrade from Pulse Pro billing so Pulse Account can verify the secure upgrade handoff before checkout.</div>'
       );
-    } else if (checkoutIntentState.status === "loading") {
+    } else if (handoffState.status === "loading") {
       summaryItems.push('<div class="billing-status visible">Verifying the secure Pulse Pro upgrade handoff...</div>');
-    } else if (checkoutIntentState.status === "error") {
-      summaryItems.push('<div class="billing-status visible error">' + escapeText(checkoutIntentState.error || "Failed to verify the secure Pulse Pro upgrade handoff.") + "</div>");
-    } else if (checkoutIntentState.status === "ready" && checkoutIntentID) {
+    } else if (handoffState.status === "error") {
+      summaryItems.push('<div class="billing-status visible error">' + escapeText(handoffState.error || "Failed to verify the secure Pulse Pro upgrade handoff.") + "</div>");
+    } else if (handoffState.status === "ready") {
       summaryItems.push('<div class="billing-status visible success">Pulse Account will return completed checkout directly to Pulse Pro billing.</div>');
     }
     if (pricingState.status === "loading" && !pricingState.data) {
@@ -1685,8 +1682,6 @@
         billingState.upgradeFeatureKey = nextState.upgradeFeatureKey;
         billingState.upgradePortalHandoffID = nextState.upgradePortalHandoffID;
         billingState.upgradePortalHandoff = nextState.upgradePortalHandoff;
-        billingState.upgradeCheckoutIntentID = nextState.upgradeCheckoutIntentID;
-        billingState.upgradeCheckoutIntent = nextState.upgradeCheckoutIntent;
         billingState.upgradePricing = nextState.upgradePricing;
         billingState.upgradeCheckout = nextState.upgradeCheckout;
         billingState.flows = nextState.flows;
@@ -1776,49 +1771,28 @@
         });
       }
     }
-    async function resolveUpgradeCheckoutIntent(force) {
+    async function resolveUpgradePortalHandoff(force) {
       var billingState = getBillingState();
       var portalHandoffID = String(billingState.upgradePortalHandoffID || "").trim();
       if (!portalHandoffID) return;
-      if (!force && (billingState.upgradeCheckoutIntent.status === "loading" || billingState.upgradeCheckoutIntent.status === "ready")) {
+      if (!force && (billingState.upgradePortalHandoff.status === "loading" || billingState.upgradePortalHandoff.status === "ready")) {
         return;
       }
       updateBillingState(function(nextBillingState) {
         beginQueryState(nextBillingState.upgradePortalHandoff, null);
-        beginQueryState(nextBillingState.upgradeCheckoutIntent, null);
       });
       try {
-        var resolvedCheckoutIntentID = "";
-        var resolvedFeature = "";
         var handoff = await api.getCommercialJSON(
           "/v1/checkout/portal-handoff?portal_handoff_id=" + encodeURIComponent(portalHandoffID)
         );
-        resolvedCheckoutIntentID = String(handoff.checkout_intent_id || "").trim();
-        resolvedFeature = String(handoff.feature || "").trim();
         updateBillingState(function(nextBillingState) {
           resolveQueryState(nextBillingState.upgradePortalHandoff, handoff);
+          nextBillingState.upgradeFeatureKey = String(handoff.feature || "").trim();
         }, false);
-        if (!resolvedCheckoutIntentID) {
-          throw new Error("Pulse Account could not verify the secure Pulse Pro upgrade handoff.");
-        }
-        updateBillingState(function(nextBillingState) {
-          resolveQueryState(nextBillingState.upgradeCheckoutIntent, {
-            checkout_intent_id: resolvedCheckoutIntentID,
-            feature: resolvedFeature
-          });
-          nextBillingState.upgradeCheckoutIntentID = resolvedCheckoutIntentID;
-          nextBillingState.upgradeFeatureKey = resolvedFeature;
-        });
       } catch (err) {
         updateBillingState(function(nextBillingState) {
-          nextBillingState.upgradeCheckoutIntentID = "";
           failQueryState(
             nextBillingState.upgradePortalHandoff,
-            null,
-            err instanceof Error ? err.message : "Failed to verify the secure Pulse Pro upgrade handoff."
-          );
-          failQueryState(
-            nextBillingState.upgradeCheckoutIntent,
             null,
             err instanceof Error ? err.message : "Failed to verify the secure Pulse Pro upgrade handoff."
           );
@@ -1828,8 +1802,7 @@
     async function startUpgradeCheckout(planKey, tier, billingCycle) {
       if (!planKey || !tier || !billingCycle) return;
       var portalHandoffID = String(getBillingState().upgradePortalHandoffID || "").trim();
-      var checkoutIntentID = String(getBillingState().upgradeCheckoutIntentID || "").trim();
-      if (!portalHandoffID || !checkoutIntentID) {
+      if (!portalHandoffID || getBillingState().upgradePortalHandoff.status !== "ready") {
         updateBillingState(function(nextBillingState) {
           failMutationState(
             nextBillingState.upgradeCheckout,
@@ -1846,7 +1819,7 @@
           plan_key: planKey,
           tier,
           billing_cycle: billingCycle,
-          checkout_intent_id: checkoutIntentID
+          portal_handoff_id: portalHandoffID
         });
         if (!data || !data.url) {
           throw new Error("Checkout URL was not returned.");
@@ -2146,7 +2119,7 @@
       var billingState = getBillingState();
       if (billingState.openBillingPanelID === "upgrade-billing-panel" || !!billingState.upgradeFeatureKey || !!billingState.upgradePortalHandoffID) {
         void loadUpgradePricing(false);
-        void resolveUpgradeCheckoutIntent(false);
+        void resolveUpgradePortalHandoff(false);
       }
       renderOpenBillingPanels(getBillingState().openBillingPanelID);
       renderAllFlows();

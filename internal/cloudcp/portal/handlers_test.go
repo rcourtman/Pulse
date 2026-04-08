@@ -1304,7 +1304,7 @@ func TestCommercialProxy_AllowsPortalHandoffGETRequests(t *testing.T) {
 			t.Fatalf("portal_handoff_id = %q, want cph_upgrade", got)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"portal_handoff_id":"cph_upgrade","checkout_intent_id":"cki_upgrade","feature":"max_monitored_systems"}`))
+		_, _ = w.Write([]byte(`{"portal_handoff_id":"cph_upgrade","feature":"max_monitored_systems"}`))
 	}))
 	defer upstream.Close()
 
@@ -1317,7 +1317,7 @@ func TestCommercialProxy_AllowsPortalHandoffGETRequests(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusOK, rec.Body.String())
 	}
-	if got := strings.TrimSpace(rec.Body.String()); got != `{"portal_handoff_id":"cph_upgrade","checkout_intent_id":"cki_upgrade","feature":"max_monitored_systems"}` {
+	if got := strings.TrimSpace(rec.Body.String()); got != `{"portal_handoff_id":"cph_upgrade","feature":"max_monitored_systems"}` {
 		t.Fatalf("body = %q", got)
 	}
 }

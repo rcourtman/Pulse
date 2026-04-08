@@ -229,10 +229,9 @@ describe('services view', function() {
     var billingState = createPortalBillingState();
     billingState.upgradeFeatureKey = 'max_monitored_systems';
     billingState.upgradePortalHandoffID = 'cph_signed';
-    billingState.upgradeCheckoutIntentID = 'cki_signed';
-    billingState.upgradeCheckoutIntent.status = 'ready';
-    billingState.upgradeCheckoutIntent.data = {
-      checkout_intent_id: 'cki_signed',
+    billingState.upgradePortalHandoff.status = 'ready';
+    billingState.upgradePortalHandoff.data = {
+      portal_handoff_id: 'cph_signed',
       feature: 'max_monitored_systems',
     };
     billingState.upgradePricing.status = 'ready';
@@ -280,8 +279,8 @@ describe('services view', function() {
 
     var billingState = createPortalBillingState();
     billingState.upgradePortalHandoffID = 'cph_signed';
-    billingState.upgradeCheckoutIntent.status = 'error';
-    billingState.upgradeCheckoutIntent.error = 'Pulse Account could not verify the secure upgrade handoff.';
+    billingState.upgradePortalHandoff.status = 'error';
+    billingState.upgradePortalHandoff.error = 'Pulse Account could not verify the secure upgrade handoff.';
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
       title: 'Pricing',
@@ -322,12 +321,6 @@ describe('services view', function() {
     document.body.innerHTML = '<div id="upgrade-billing-root"></div>';
 
     var billingState = createPortalBillingState();
-    billingState.upgradeCheckoutIntentID = 'cki_legacy';
-    billingState.upgradeCheckoutIntent.status = 'ready';
-    billingState.upgradeCheckoutIntent.data = {
-      checkout_intent_id: 'cki_legacy',
-      feature: 'max_monitored_systems',
-    };
     billingState.upgradePricing.status = 'ready';
     billingState.upgradePricing.data = {
       title: 'Pricing',

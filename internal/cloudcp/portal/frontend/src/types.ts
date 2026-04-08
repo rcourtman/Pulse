@@ -79,15 +79,10 @@ export interface PortalUpgradePricingModel {
   plans: PortalUpgradePricingPlan[];
 }
 
-export interface PortalUpgradeCheckoutIntentModel {
-  checkout_intent_id: string;
-  feature?: string;
-}
-
 export interface PortalUpgradePortalHandoffModel {
   portal_handoff_id: string;
-  checkout_intent_id: string;
   feature?: string;
+  expires_at?: number;
 }
 
 export interface PortalCheckoutSessionCreateResponse {
@@ -171,8 +166,6 @@ export interface PortalBillingState {
   upgradeFeatureKey: string;
   upgradePortalHandoffID: string;
   upgradePortalHandoff: PortalQueryState<PortalUpgradePortalHandoffModel | null>;
-  upgradeCheckoutIntentID: string;
-  upgradeCheckoutIntent: PortalQueryState<PortalUpgradeCheckoutIntentModel | null>;
   upgradePricing: PortalQueryState<PortalUpgradePricingModel | null>;
   upgradeCheckout: PortalMutationState;
   flows: Record<PortalBillingFlowID, VerificationFlowState>;

@@ -291,7 +291,6 @@ func TestClientGetCheckoutSessionResult(t *testing.T) {
 				Status:              "fulfilled",
 				CheckoutStatus:      "complete",
 				PaymentStatus:       "paid",
-				CheckoutIntentID:    "cki_test_123",
 				PurchaseReturnJTI:   "purchase_return_jti_123",
 				ActivationKeyPrefix: "ppk_live_",
 				Tier:                "pro",
