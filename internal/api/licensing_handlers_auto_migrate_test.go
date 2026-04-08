@@ -16,6 +16,33 @@ import (
 	pkglicensing "github.com/rcourtman/pulse-go-rewrite/pkg/licensing"
 )
 
+type grandfatherFloorSupplementalProvider struct {
+	settled bool
+	readyAt time.Time
+	records []unifiedresources.IngestRecord
+}
+
+func (p *grandfatherFloorSupplementalProvider) SupplementalRecords(*monitoring.Monitor, string) []unifiedresources.IngestRecord {
+	out := make([]unifiedresources.IngestRecord, len(p.records))
+	copy(out, p.records)
+	return out
+}
+
+func (p *grandfatherFloorSupplementalProvider) SnapshotOwnedSources() []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
+}
+
+func (p *grandfatherFloorSupplementalProvider) SupplementalInventoryReadyAt(*monitoring.Monitor, string) (time.Time, bool) {
+	return p.readyAt, p.settled
+}
+
+func (p *grandfatherFloorSupplementalProvider) settle(count int) {
+	now := time.Now().UTC()
+	p.readyAt = now
+	p.settled = true
+	p.records = buildSupplementalGrandfatherFloorRecords(count, now)
+}
+
 func TestGetTenantComponents_AutoExchangesPersistedLegacyJWT(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
 
@@ -553,6 +580,128 @@ func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigrati
 	}
 }
 
+func TestGetTenantComponents_DelaysGrandfatherFloorUntilSupplementalInventorySettles(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_floor_supplemental",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		Features:            []string{"relay"},
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "floor-supplemental@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(pkglicensing.ActivateInstallationResponse{
+			License: pkglicensing.ActivateResponseLicense{
+				LicenseID:           "lic_floor_supplemental",
+				State:               "active",
+				Tier:                "pro",
+				Features:            []string{"relay"},
+				MaxMonitoredSystems: 10,
+			},
+			Installation: pkglicensing.ActivateResponseInstallation{
+				InstallationID:    "inst_floor_supplemental",
+				InstallationToken: "pit_live_floor_supplemental",
+				Status:            "active",
+			},
+			Grant: pkglicensing.GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_floor_supplemental",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	cp, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+
+	legacyJWT, err := pkglicensing.GenerateLicenseForTesting("floor-supplemental@example.com", pkglicensing.TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("generate test license: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	if err := persistence.Save(legacyJWT); err != nil {
+		t.Fatalf("save legacy jwt: %v", err)
+	}
+
+	provider := &grandfatherFloorSupplementalProvider{}
+	monitor := buildSupplementalGrandfatherFloorMonitor(provider)
+
+	handlers := NewLicenseHandlers(mtp, false)
+	handlers.SetMonitors(monitor, nil)
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+	if got := svc.Status().MaxMonitoredSystems; got != 10 {
+		t.Fatalf("initial status.MaxMonitoredSystems=%d, want 10 while supplemental inventory is unsettled", got)
+	}
+
+	activationState, err := persistence.LoadActivationState()
+	if err != nil {
+		t.Fatalf("load activation state: %v", err)
+	}
+	if activationState == nil {
+		t.Fatal("expected activation state after legacy exchange")
+	}
+	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+		t.Fatalf("GrandfatheredMonitoredSystemsCapturedAt=%d, want 0 before supplemental baseline settles", activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt)
+	}
+
+	provider.settle(23)
+	svc = handlers.Service(ctx)
+	if got := svc.Status().MaxMonitoredSystems; got != 10 {
+		t.Fatalf("stale supplemental store should not capture grandfather floor yet, got %d", got)
+	}
+
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	svc = handlers.Service(ctx)
+	if got := svc.Status().MaxMonitoredSystems; got != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after supplemental store rebuild", got)
+	}
+
+	activationState, err = persistence.LoadActivationState()
+	if err != nil {
+		t.Fatalf("reload activation state: %v", err)
+	}
+	if activationState == nil {
+		t.Fatal("expected activation state after grandfather capture")
+	}
+	if activationState.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
+		t.Fatalf("GrandfatheredMaxMonitoredSystems=%d, want 23", activationState.Continuity.GrandfatheredMaxMonitoredSystems)
+	}
+	if activationState.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
+		t.Fatal("expected grandfather capture timestamp after supplemental store rebuild")
+	}
+
+	handlers.StopAllBackgroundLoops()
+}
+
 func buildGrandfatherFloorMonitor(count int) *monitoring.Monitor {
 	now := time.Now().UTC()
 	registry := unifiedresources.NewRegistry(nil)
@@ -587,6 +736,42 @@ func buildGrandfatherFloorMonitor(count int) *monitoring.Monitor {
 	monitor := &monitoring.Monitor{}
 	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
 	return monitor
+}
+
+func buildSupplementalGrandfatherFloorMonitor(provider *grandfatherFloorSupplementalProvider) *monitoring.Monitor {
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	return monitor
+}
+
+func buildSupplementalGrandfatherFloorRecords(
+	count int,
+	now time.Time,
+) []unifiedresources.IngestRecord {
+	records := make([]unifiedresources.IngestRecord, 0, count)
+	for i := 0; i < count; i++ {
+		id := fmt.Sprintf("truenas-%02d", i+1)
+		hostname := fmt.Sprintf("truenas-%02d.lab.local", i+1)
+		records = append(records, unifiedresources.IngestRecord{
+			SourceID: "system:" + id,
+			Resource: unifiedresources.Resource{
+				ID:        id,
+				Type:      unifiedresources.ResourceTypeAgent,
+				Name:      hostname,
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Identity: unifiedresources.ResourceIdentity{
+					Hostnames: []string{hostname},
+				},
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: hostname,
+				},
+			},
+		})
+	}
+	return records
 }
 
 // base64RawURLEncode is a helper for tests.

@@ -206,14 +206,6 @@ management, and fleet control surfaces.
     entitlements payloads, but they must not cache their own pre-activation
     host counts, synthesize a second grandfather floor, or treat install-time
     fleet inventory as the authority for commercial continuity.
-14. Keep dormant assistant availability on the shared auth/bootstrap contract.
-    When `internal/api/ai_handlers.go`,
-    `internal/api/router_routes_auth_security.go`, or
-    `internal/api/security_status_capabilities.go` change, first-session,
-    setup, and install routes that do not own assistant or Patrol UI must
-    consume `/api/security/status.sessionCapabilities.assistantEnabled`
-    instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary route
-    bootstrap.
 
 ## Forbidden Paths
 
@@ -1030,6 +1022,13 @@ lifecycle-local counter, drift on source priority, or treat missing monitored-
 system usage as zero; when an active cap is present and usage cannot be
 resolved, the route must fail closed with retryable unavailable guidance
 instead of silently admitting a net-new monitored system.
+That same commercial readiness boundary now also assumes settled canonical
+usage, not the first non-nil monitor view. Lifecycle-owned setup or first-host
+surfaces may not seal migrated-v5 continuity, display counted-system totals as
+final, or retry admission against a provider-owned supplemental platform such
+as TrueNAS or VMware until the monitor has both seen an initial baseline for
+every active connection and rebuilt the canonical store at or after that
+provider watermark.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent

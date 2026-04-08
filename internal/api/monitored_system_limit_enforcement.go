@@ -130,19 +130,11 @@ type monitoredSystemUsageSnapshot struct {
 }
 
 func monitoredSystemUsage(monitor *monitoring.Monitor) monitoredSystemUsageSnapshot {
-	if monitor == nil {
-		return monitoredSystemUsageSnapshot{}
-	}
-
-	readState := monitor.GetUnifiedReadStateOrSnapshot()
-	if readState == nil {
-		return monitoredSystemUsageSnapshot{}
-	}
-
+	usage := monitor.MonitoredSystemUsage()
 	return monitoredSystemUsageSnapshot{
-		count:     unifiedresources.MonitoredSystemCount(readState),
-		readState: readState,
-		available: true,
+		count:     usage.Count,
+		readState: usage.ReadState,
+		available: usage.Available,
 	}
 }
 

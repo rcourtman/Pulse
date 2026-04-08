@@ -168,21 +168,21 @@ func (h *LicenseHandlers) entitlementUsageSnapshot(ctx context.Context) entitlem
 	var monitorResolved bool
 	if h.mtMonitor != nil {
 		if monitor, err := h.mtMonitor.GetMonitor(orgID); err == nil && monitor != nil {
-			state := monitoredSystemUsage(monitor)
-			if state.available {
-				usage.MonitoredSystems = int64(state.count)
+			state := monitor.MonitoredSystemUsage()
+			if state.Available {
+				usage.MonitoredSystems = int64(state.Count)
 				usage.MonitoredSystemsAvailable = true
-				usage.LegacyConnections = legacyConnectionCounts(monitor)
+				usage.LegacyConnections = legacyConnectionCountsFromReadState(state.ReadState)
 				monitorResolved = true
 			}
 		}
 	}
 	if !monitorResolved && orgID == "default" && h.monitor != nil {
-		state := monitoredSystemUsage(h.monitor)
-		if state.available {
-			usage.MonitoredSystems = int64(state.count)
+		state := h.monitor.MonitoredSystemUsage()
+		if state.Available {
+			usage.MonitoredSystems = int64(state.Count)
 			usage.MonitoredSystemsAvailable = true
-			usage.LegacyConnections = legacyConnectionCounts(h.monitor)
+			usage.LegacyConnections = legacyConnectionCountsFromReadState(state.ReadState)
 		}
 	}
 

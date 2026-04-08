@@ -35,6 +35,30 @@ func (s *freshnessResourceStore) UnifiedResourceFreshness() time.Time {
 	return s.freshness
 }
 
+type testSupplementalInventoryReadinessProvider struct {
+	source  unifiedresources.DataSource
+	records []unifiedresources.IngestRecord
+	settled bool
+	readyAt time.Time
+}
+
+func (p *testSupplementalInventoryReadinessProvider) SupplementalRecords(_ *Monitor, _ string) []unifiedresources.IngestRecord {
+	out := make([]unifiedresources.IngestRecord, len(p.records))
+	copy(out, p.records)
+	return out
+}
+
+func (p *testSupplementalInventoryReadinessProvider) SnapshotOwnedSources() []unifiedresources.DataSource {
+	if p.source == "" {
+		return nil
+	}
+	return []unifiedresources.DataSource{p.source}
+}
+
+func (p *testSupplementalInventoryReadinessProvider) SupplementalInventoryReadyAt(*Monitor, string) (time.Time, bool) {
+	return p.readyAt, p.settled
+}
+
 type unifiedResourceGetter interface {
 	GetAll() []unifiedresources.Resource
 }
@@ -230,5 +254,53 @@ func TestMonitorGetUnifiedReadStateOrSnapshotUsesCanonicalMockUnifiedResources(t
 	}
 	if !hasUnifiedResourceName(resources, legacyName) {
 		t.Fatalf("expected mock-mode read-state to include legacy mock resource %q, got %#v", legacyName, resources)
+	}
+}
+
+func TestMonitorMonitoredSystemUsageWaitsForSupplementalReadinessAndStoreFreshness(t *testing.T) {
+	monitor := &Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+
+	provider := &testSupplementalInventoryReadinessProvider{
+		source: unifiedresources.SourceTrueNAS,
+	}
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+
+	if usage := monitor.MonitoredSystemUsage(); usage.Available {
+		t.Fatalf("expected unsettled supplemental inventory to be unavailable, got %+v", usage)
+	}
+
+	readyAt := time.Now().UTC()
+	provider.records = []unifiedresources.IngestRecord{{
+		SourceID: "system:tn-main",
+		Resource: unifiedresources.Resource{
+			ID:       "tn-main",
+			Type:     unifiedresources.ResourceTypeAgent,
+			Name:     "tn-main",
+			Status:   unifiedresources.StatusOnline,
+			LastSeen: readyAt,
+			Identity: unifiedresources.ResourceIdentity{
+				Hostnames: []string{"tn-main"},
+			},
+			TrueNAS: &unifiedresources.TrueNASData{
+				Hostname: "tn-main",
+			},
+		},
+	}}
+	provider.readyAt = readyAt
+	provider.settled = true
+
+	if usage := monitor.MonitoredSystemUsage(); usage.Available {
+		t.Fatalf("expected stale store freshness to keep usage unavailable, got %+v", usage)
+	}
+
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+
+	usage := monitor.MonitoredSystemUsage()
+	if !usage.Available {
+		t.Fatalf("expected usage to become available after rebuild, got %+v", usage)
+	}
+	if usage.Count != 1 {
+		t.Fatalf("MonitoredSystemUsage().Count = %d, want 1", usage.Count)
 	}
 }

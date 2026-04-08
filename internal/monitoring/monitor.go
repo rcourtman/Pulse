@@ -148,6 +148,17 @@ type MonitorSupplementalChangesProvider interface {
 	SupplementalChanges(m *Monitor, orgID string) []unifiedresources.ResourceChange
 }
 
+// MonitorSupplementalInventoryReadinessProvider optionally reports when a
+// supplemental provider's current org-scoped inventory is settled enough to be
+// consumed by billing and monitored-system admission boundaries.
+//
+// Providers that suppress snapshot-owned sources must implement this contract
+// so the monitor can fail closed until the canonical store has been rebuilt
+// from a settled provider baseline.
+type MonitorSupplementalInventoryReadinessProvider interface {
+	SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)
+}
+
 // MonitorPhysicalDiskTemperatureHistoryProvider optionally exposes source-native
 // physical-disk temperature history through the canonical monitoring chart
 // boundary when Pulse's own stored history is shallow.

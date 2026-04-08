@@ -411,6 +411,11 @@ before persistence, and `/api/license/entitlements` must expose
 `current_available` when an active monitored-system cap cannot resolve current
 usage so callers can fail closed without misreading unavailable usage as a
 real zero.
+That same `current_available` truth now includes supplemental-provider startup
+readiness. API contracts must not serialize a live monitored-system count from
+the first store-backed read-state when provider-owned inventories such as
+TrueNAS or VMware have not yet completed an initial baseline and been rebuilt
+into the canonical monitor store.
 The shared metrics-history contract now also owns physical-disk live I/O
 windows. `/api/metrics-store/history` must accept `resourceType=disk`, keep
 `30m` as a valid compact live range, and resolve `disk`, `diskread`,
@@ -477,12 +482,6 @@ as the canonical runtime contract for `demoMode`, `readOnly`,
 must therefore defer their first read until that policy has resolved, so
 public demos fail closed without probing hidden commercial routes during
 bootstrap.
-That same `/api/security/status` contract now also owns closed-shell
-assistant availability. The response must expose
-`sessionCapabilities.assistantEnabled` as the only general-route bootstrap
-fact for dormant assistant chrome, so non-AI routes do not probe
-`/api/settings/ai` or `/api/ai/*` merely to decide whether the assistant
-affordance may be opened.
 That same contract split also makes the licensing boundary explicit:
 `/api/license/runtime-capabilities` is the public runtime feature contract,
 `/api/license/commercial-posture` is the non-billing upgrade/trial posture
@@ -1199,6 +1198,11 @@ greater of the exchanged plan limit and the one-time deduped monitored-system
 floor captured from canonical runtime usage, and restored grant activations
 must backfill that floor once canonical usage becomes available instead of
 falling back to the raw exchanged grant limit after restart.
+That migration capture must wait for settled canonical usage, not merely the
+first non-nil read-state. If provider-owned supplemental inventories are still
+between initial wiring and the first canonical store rebuild, the API must
+keep the grandfather floor uncaptured and expose usage as unavailable rather
+than sealing continuity against a partial startup graph.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring

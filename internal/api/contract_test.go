@@ -48,6 +48,53 @@ type contractCapturingStreamingProvider struct {
 	lastRequest providers.ChatRequest
 }
 
+type contractSupplementalUsageProvider struct {
+	settled bool
+	readyAt time.Time
+	records []unifiedresources.IngestRecord
+}
+
+func (p *contractSupplementalUsageProvider) SupplementalRecords(*monitoring.Monitor, string) []unifiedresources.IngestRecord {
+	out := make([]unifiedresources.IngestRecord, len(p.records))
+	copy(out, p.records)
+	return out
+}
+
+func (p *contractSupplementalUsageProvider) SnapshotOwnedSources() []unifiedresources.DataSource {
+	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
+}
+
+func (p *contractSupplementalUsageProvider) SupplementalInventoryReadyAt(*monitoring.Monitor, string) (time.Time, bool) {
+	return p.readyAt, p.settled
+}
+
+func (p *contractSupplementalUsageProvider) settle(count int) {
+	now := time.Now().UTC()
+	p.readyAt = now
+	p.settled = true
+	p.records = make([]unifiedresources.IngestRecord, 0, count)
+	for i := 0; i < count; i++ {
+		host := fmt.Sprintf("contract-truenas-%02d.lab.local", i+1)
+		p.records = append(p.records, unifiedresources.IngestRecord{
+			SourceID: fmt.Sprintf("system:contract-truenas-%02d", i+1),
+			Resource: unifiedresources.Resource{
+				ID:        fmt.Sprintf("contract-truenas-%02d", i+1),
+				Type:      unifiedresources.ResourceTypeAgent,
+				Name:      host,
+				Status:    unifiedresources.StatusOnline,
+				LastSeen:  now,
+				UpdatedAt: now,
+				Identity: unifiedresources.ResourceIdentity{
+					Hostnames: []string{host},
+				},
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: host,
+				},
+			},
+		})
+	}
+}
+
 func (p *contractCapturingStreamingProvider) Chat(ctx context.Context, req providers.ChatRequest) (*providers.ChatResponse, error) {
 	p.lastRequest = req
 	return &providers.ChatResponse{Content: "ok", Model: req.Model}, nil
@@ -4801,6 +4848,35 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageUnavailableJSONSnapshot(
 	}`
 
 	assertJSONSnapshot(t, got, want)
+}
+
+func TestContract_EntitlementUsageSnapshotWaitsForSettledSupplementalInventory(t *testing.T) {
+	provider := &contractSupplementalUsageProvider{}
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+
+	handlers := &LicenseHandlers{monitor: monitor}
+
+	usage := handlers.entitlementUsageSnapshot(context.Background())
+	if usage.MonitoredSystemsAvailable {
+		t.Fatalf("expected unsettled supplemental inventory to keep usage unavailable, got %+v", usage)
+	}
+
+	provider.settle(1)
+	usage = handlers.entitlementUsageSnapshot(context.Background())
+	if usage.MonitoredSystemsAvailable {
+		t.Fatalf("expected stale store freshness to keep usage unavailable, got %+v", usage)
+	}
+
+	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	usage = handlers.entitlementUsageSnapshot(context.Background())
+	if !usage.MonitoredSystemsAvailable {
+		t.Fatalf("expected usage to become available after canonical store rebuild, got %+v", usage)
+	}
+	if usage.MonitoredSystems != 1 {
+		t.Fatalf("MonitoredSystems=%d, want 1", usage.MonitoredSystems)
+	}
 }
 
 func TestContract_LegacyMigrationGrandfatherFloorJSONSnapshot(t *testing.T) {

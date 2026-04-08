@@ -581,6 +581,39 @@ func (p *VMwarePoller) SnapshotOwnedSourcesForOrg(string) []unifiedresources.Dat
 	return []unifiedresources.DataSource{unifiedresources.SourceVMware}
 }
 
+// SupplementalInventoryReadyAt reports when the current org-scoped VMware
+// inventory has reached a settled initial baseline that has to be reflected in
+// the canonical monitor store before billing can consume monitored-system
+// counts.
+func (p *VMwarePoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {
+	if p == nil {
+		return time.Time{}, true
+	}
+
+	orgID = normalizeVMwareOrgID(orgID)
+	configs := p.activeConnectionConfigsForOrg(orgID)
+	if len(configs) == 0 {
+		return time.Time{}, true
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	var watermark time.Time
+	statusByConn := p.statusByOrg[orgID]
+	for connID := range configs {
+		status := statusByConn[connID]
+		if status == nil || status.lastAttemptAt.IsZero() {
+			return time.Time{}, false
+		}
+		if status.lastAttemptAt.After(watermark) {
+			watermark = status.lastAttemptAt
+		}
+	}
+
+	return watermark, true
+}
+
 // GetCurrentRecordsForOrg returns the latest known VMware records for the specified org.
 func (p *VMwarePoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
 	if p == nil {
@@ -619,6 +652,57 @@ func (p *VMwarePoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources.
 		records = append(records, cloneIngestRecords(recordsByConnection[connectionID])...)
 	}
 	return records
+}
+
+func (p *VMwarePoller) activeConnectionConfigsForOrg(orgID string) map[string]config.VMwareVCenterInstance {
+	orgID = normalizeVMwareOrgID(orgID)
+	if p == nil {
+		return nil
+	}
+
+	p.mu.Lock()
+	cached := cloneVMwareConnectionConfigMap(p.configsByOrg[orgID])
+	p.mu.Unlock()
+	if len(cached) > 0 || p.multiTenant == nil {
+		return cached
+	}
+
+	persistence, err := p.multiTenant.GetPersistence(orgID)
+	if err != nil || persistence == nil {
+		return cached
+	}
+	instances, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		return cached
+	}
+
+	active := make(map[string]config.VMwareVCenterInstance)
+	for i := range instances {
+		instance := instances[i]
+		instance.ApplyDefaults()
+		if !instance.Enabled {
+			continue
+		}
+		connID := strings.TrimSpace(instance.ID)
+		if connID == "" {
+			continue
+		}
+		active[connID] = instance
+	}
+	return active
+}
+
+func cloneVMwareConnectionConfigMap(
+	in map[string]config.VMwareVCenterInstance,
+) map[string]config.VMwareVCenterInstance {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]config.VMwareVCenterInstance, len(in))
+	for connID, instance := range in {
+		out[connID] = instance
+	}
+	return out
 }
 
 // GetCurrentChangesForOrg returns the latest known VMware timeline changes for the specified org.

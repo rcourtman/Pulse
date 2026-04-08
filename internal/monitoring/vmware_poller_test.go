@@ -134,6 +134,36 @@ func TestVMwarePollerPollsConfiguredConnections(t *testing.T) {
 	}
 }
 
+func TestVMwarePollerSupplementalInventoryReadyAtUsesPersistedActiveConnections(t *testing.T) {
+	mtp, persistence := newTestTenantPersistence(t)
+
+	connection := config.NewVMwareVCenterInstance()
+	connection.ID = "vc-ready"
+	connection.Host = "vc-ready.lab.local"
+	connection.Username = "administrator@vsphere.local"
+	connection.Password = "secret"
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{connection}); err != nil {
+		t.Fatalf("SaveVMwareConfig() error = %v", err)
+	}
+
+	poller := NewVMwarePoller(mtp, time.Second)
+
+	if readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default"); settled || !readyAt.IsZero() {
+		t.Fatalf("SupplementalInventoryReadyAt() before any attempt = (%v, %t), want (zero, false)", readyAt, settled)
+	}
+
+	attemptedAt := time.Now().UTC()
+	poller.RecordConnectionTestSuccess("default", connection.ID, &vmware.InventorySummary{}, attemptedAt)
+
+	readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default")
+	if !settled {
+		t.Fatal("expected readiness to settle after the first recorded attempt")
+	}
+	if !readyAt.Equal(attemptedAt) {
+		t.Fatalf("SupplementalInventoryReadyAt() = %v, want %v", readyAt, attemptedAt)
+	}
+}
+
 func TestVMwarePollerFeatureFlagGate(t *testing.T) {
 	previous := vmware.IsFeatureEnabled()
 	vmware.SetFeatureEnabled(false)

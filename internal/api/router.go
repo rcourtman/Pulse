@@ -9610,4 +9610,8 @@ func (a mockSupplementalRecordsAdapter) SnapshotOwnedSourcesForOrg(string) []uni
 	return a.SnapshotOwnedSources()
 }
 
+func (a mockSupplementalRecordsAdapter) SupplementalInventoryReadyAt(*monitoring.Monitor, string) (time.Time, bool) {
+	return time.Time{}, true
+}
+
 // trigger rebuild Fri Jan 16 10:52:41 UTC 2026

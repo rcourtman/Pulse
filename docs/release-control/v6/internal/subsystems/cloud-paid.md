@@ -135,14 +135,6 @@ agreement, and cloud-specific enforcement rules.
     `/settings/system/billing/usage?details=counting-rules` for explanation and
     `/settings/system/billing/plan?intent=max_monitored_systems` for upgrade
     intent.
-24. Keep dormant assistant availability on the shared browser bootstrap
-    contract. When `frontend-modern/src/App.tsx`,
-    `frontend-modern/src/useAppRuntimeState.ts`,
-    `internal/api/router_routes_auth_security.go`, or
-    `internal/api/security_status_capabilities.go` change, cloud-paid routes
-    that do not own assistant or Patrol interaction must consume
-    `/api/security/status.sessionCapabilities.assistantEnabled` instead of
-    probing `/api/settings/ai` or `/api/ai/*` during ordinary route bootstrap.
 
 ## Forbidden Paths
 
@@ -791,6 +783,12 @@ installation Pulse must persist a one-time grandfather floor so status,
 runtime entitlement evaluation, and later restore/refresh flows keep the
 existing estate admissible without silently grandfathering post-migration
 growth.
+That first resolved usage snapshot must be a settled canonical monitor view,
+not the first store-backed read-state seen during startup. When provider-owned
+supplemental inventories such as TrueNAS or VMware are still between initial
+provider wiring and the first canonical store rebuild after their baseline
+poll, cloud-paid continuity must keep usage unavailable and delay floor
+capture rather than sealing a lower count forever.
 That continuity rule cannot depend on webhook metadata being perfect. The
 canonical Stripe price-to-plan lookup in `pkg/licensing/features.go` and
 `pkg/licensing/stripe_subscription.go` must recognize the still-renewing

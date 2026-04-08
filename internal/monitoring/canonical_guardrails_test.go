@@ -91,6 +91,45 @@ func TestGetStateRefreshesLiveAlertSnapshots(t *testing.T) {
 	}
 }
 
+func TestMonitoredSystemUsageReadinessGuardrailsRemainCanonical(t *testing.T) {
+	requiredSnippets := map[string][]string{
+		"monitor.go": {
+			"type MonitorSupplementalInventoryReadinessProvider interface {",
+			"SupplementalInventoryReadyAt(m *Monitor, orgID string) (time.Time, bool)",
+		},
+		"monitored_system_usage.go": {
+			"func (m *Monitor) MonitoredSystemUsage() MonitoredSystemUsageSnapshot {",
+			"readyAt, settled := m.supplementalInventoryReadyAt(orgID)",
+			"if !settled {",
+			"if freshness.IsZero() || freshness.Before(readyAt) {",
+			"return MonitoredSystemUsageSnapshot{ReadState: readState}",
+		},
+		"truenas_poller.go": {
+			"func (p *TrueNASPoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {",
+			"configs := p.activeConnectionConfigsForOrg(orgID)",
+			"if status == nil || status.lastAttemptAt.IsZero() {",
+		},
+		"vmware_poller.go": {
+			"func (p *VMwarePoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {",
+			"configs := p.activeConnectionConfigsForOrg(orgID)",
+			"if status == nil || status.lastAttemptAt.IsZero() {",
+		},
+	}
+
+	for file, snippets := range requiredSnippets {
+		data, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("failed to read %s: %v", file, err)
+		}
+		source := string(data)
+		for _, snippet := range snippets {
+			if !strings.Contains(source, snippet) {
+				t.Fatalf("%s must contain %q", file, snippet)
+			}
+		}
+	}
+}
+
 func TestGuestMemoryFallbackUsesCanonicalLowTrustSelector(t *testing.T) {
 	data, err := os.ReadFile("guest_memory_sources.go")
 	if err != nil {

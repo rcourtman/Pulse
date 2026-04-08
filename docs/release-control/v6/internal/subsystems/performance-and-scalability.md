@@ -227,6 +227,12 @@ the unified-resource projection helpers must reuse one current monitored-
 system snapshot plus prospective candidate/preview projection for add and
 update checks instead of rescanning platform inventories per handler or
 falling back to zero when monitor state is unavailable.
+That protected path now also includes supplemental-inventory settlement.
+Performance work may not shortcut monitored-system usage readiness to "store
+exists" once provider-owned platforms such as TrueNAS or VMware suppress
+snapshot-owned sources; the hot path must fail closed until the monitor has
+both observed an initial baseline for every active connection and rebuilt the
+canonical store at or after the latest provider watermark.
 
 The dashboard workload selector path and the dashboard runtime that consumes it
 are now part of the protected performance surface rather than proof-only

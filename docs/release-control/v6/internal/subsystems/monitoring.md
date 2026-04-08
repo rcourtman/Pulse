@@ -94,6 +94,13 @@ This subsystem now sits under the dedicated core monitoring runtime lane so
 discovery, metrics-history correctness, and platform-specific runtime coverage
 can be governed as first-class product work instead of staying diluted inside
 architecture coherence.
+That same monitoring owner now also governs monitored-system usage readiness
+for commercial boundaries. A non-nil unified read-state is not sufficient when
+provider-owned supplemental inventories such as TrueNAS or VMware are still
+settling: monitoring must fail closed until every active connection in that
+provider has reached an initial baseline and the canonical monitor store has
+rebuilt at or after that provider watermark, otherwise billing and upgrade
+continuity can freeze against a transient startup undercount.
 VMware vSphere now also has a locked phase-1 ingestion boundary under this
 lane. The admitted direction is vCenter-only in phase 1, and monitoring must
 stay API-first through the

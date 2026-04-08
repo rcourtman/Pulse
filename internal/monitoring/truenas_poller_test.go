@@ -1279,6 +1279,35 @@ func TestTrueNASPollerSnapshotOwnedSources(t *testing.T) {
 	}
 }
 
+func TestTrueNASPollerSupplementalInventoryReadyAtUsesPersistedActiveConnections(t *testing.T) {
+	mtp, persistence := newTestTenantPersistence(t)
+
+	connection := config.NewTrueNASInstance()
+	connection.ID = "conn-ready"
+	connection.Host = "nas-ready.lab.local"
+	connection.APIKey = "api-key"
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{connection}); err != nil {
+		t.Fatalf("SaveTrueNASConfig() error = %v", err)
+	}
+
+	poller := NewTrueNASPoller(mtp, time.Second, nil)
+
+	if readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default"); settled || !readyAt.IsZero() {
+		t.Fatalf("SupplementalInventoryReadyAt() before any attempt = (%v, %t), want (zero, false)", readyAt, settled)
+	}
+
+	attemptedAt := time.Now().UTC()
+	poller.RecordConnectionTestSuccess("default", connection.ID, connection, attemptedAt)
+
+	readyAt, settled := poller.SupplementalInventoryReadyAt(nil, "default")
+	if !settled {
+		t.Fatal("expected readiness to settle after the first recorded attempt")
+	}
+	if !readyAt.Equal(attemptedAt) {
+		t.Fatalf("SupplementalInventoryReadyAt() = %v, want %v", readyAt, attemptedAt)
+	}
+}
+
 func TestTrueNASPollerSyncConnectionsLogsStructuredContextWhenPersistenceNil(t *testing.T) {
 	logOutput := captureTrueNASPollerLogs(t)
 

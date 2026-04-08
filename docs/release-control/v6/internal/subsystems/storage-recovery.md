@@ -176,14 +176,6 @@ querying, and the operator-facing storage health presentation layer.
     backup counts, or recovery-point presence when commercial continuity is
     already defined by the canonical monitored-system resolver and activation
     persistence.
-37. Keep dormant assistant availability on the shared auth/bootstrap contract.
-    When `frontend-modern/src/App.tsx`, `internal/api/ai_handlers.go`,
-    `internal/api/router_routes_auth_security.go`, or
-    `internal/api/security_status_capabilities.go` change, storage and
-    recovery routes that do not own assistant or Patrol interaction must
-    consume `/api/security/status.sessionCapabilities.assistantEnabled`
-    instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary route
-    bootstrap.
 
 ## Forbidden Paths
 
@@ -1446,6 +1438,13 @@ an already-counted host, the API helper must strip only that source from the
 prospective grouped system and preserve any remaining top-level evidence such
 as agent or sibling API ownership, rather than briefly freeing a slot or
 double-counting the same monitored system.
+That same shared boundary now also assumes settled monitored-system usage
+readiness. Storage- or recovery-adjacent transport flows may not interpret the
+first store-backed monitor view as commercial truth when provider-owned
+supplemental platforms such as TrueNAS or VMware are still between initial
+connection wiring and the first rebuilt canonical store; until that baseline
+settles, adjacent surfaces must preserve `current_available=false` and avoid
+sealing any migration or admission decision against a transient undercount.
 That same shared `internal/api/` dependency also assumes session-carried OIDC
 refresh tokens stay fail-closed at rest: `session_store.go` may only persist
 or recover those tokens through encrypted-at-rest session payloads, and any

@@ -1019,6 +1019,39 @@ func (p *TrueNASPoller) SnapshotOwnedSourcesForOrg(string) []unifiedresources.Da
 	return []unifiedresources.DataSource{unifiedresources.SourceTrueNAS}
 }
 
+// SupplementalInventoryReadyAt reports when the current org-scoped TrueNAS
+// inventory has reached a settled initial baseline that has to be reflected in
+// the canonical monitor store before billing can consume monitored-system
+// counts.
+func (p *TrueNASPoller) SupplementalInventoryReadyAt(_ *Monitor, orgID string) (time.Time, bool) {
+	if p == nil {
+		return time.Time{}, true
+	}
+
+	orgID = normalizeTrueNASOrgID(orgID)
+	configs := p.activeConnectionConfigsForOrg(orgID)
+	if len(configs) == 0 {
+		return time.Time{}, true
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	var watermark time.Time
+	statusByConn := p.statusByOrg[orgID]
+	for connID := range configs {
+		status := statusByConn[connID]
+		if status == nil || status.lastAttemptAt.IsZero() {
+			return time.Time{}, false
+		}
+		if status.lastAttemptAt.After(watermark) {
+			watermark = status.lastAttemptAt
+		}
+	}
+
+	return watermark, true
+}
+
 // GetCurrentRecordsForOrg returns the latest known TrueNAS records for the specified org.
 func (p *TrueNASPoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources.IngestRecord {
 	if p == nil {
@@ -1057,6 +1090,57 @@ func (p *TrueNASPoller) GetCurrentRecordsForOrg(orgID string) []unifiedresources
 		records = append(records, cloneIngestRecords(recordsByConn[id])...)
 	}
 	return records
+}
+
+func (p *TrueNASPoller) activeConnectionConfigsForOrg(orgID string) map[string]config.TrueNASInstance {
+	orgID = normalizeTrueNASOrgID(orgID)
+	if p == nil {
+		return nil
+	}
+
+	p.mu.Lock()
+	cached := cloneTrueNASConnectionConfigMap(p.configsByOrg[orgID])
+	p.mu.Unlock()
+	if len(cached) > 0 || p.multiTenant == nil {
+		return cached
+	}
+
+	persistence, err := p.multiTenant.GetPersistence(orgID)
+	if err != nil || persistence == nil {
+		return cached
+	}
+	instances, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		return cached
+	}
+
+	active := make(map[string]config.TrueNASInstance)
+	for i := range instances {
+		instance := instances[i]
+		instance.ApplyDefaults()
+		if !instance.Enabled {
+			continue
+		}
+		connID := strings.TrimSpace(instance.ID)
+		if connID == "" {
+			continue
+		}
+		active[connID] = instance
+	}
+	return active
+}
+
+func cloneTrueNASConnectionConfigMap(
+	in map[string]config.TrueNASInstance,
+) map[string]config.TrueNASInstance {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]config.TrueNASInstance, len(in))
+	for connID, instance := range in {
+		out[connID] = instance
+	}
+	return out
 }
 
 // ControlApp executes a canonical TrueNAS app action for one tenant-scoped
