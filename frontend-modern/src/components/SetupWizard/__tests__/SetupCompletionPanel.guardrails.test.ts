@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import setupCompletionPanelSource from '../SetupCompletionPanel.tsx?raw';
+import setupCompletionModelSource from '../setupCompletionModel.ts?raw';
 
 describe('SetupCompletionPanel guardrails', () => {
   it('keeps setup completion aligned with the canonical infrastructure install workspace', () => {
@@ -40,12 +41,12 @@ describe('SetupCompletionPanel guardrails', () => {
     );
     expect(setupCompletionPanelSource).toContain("title: 'Run it on the first host you want to monitor'");
     expect(setupCompletionPanelSource).toContain('What to expect');
-    expect(setupCompletionPanelSource).toContain('First host first');
+    expect(setupCompletionPanelSource).toContain('First system first');
     expect(setupCompletionPanelSource).toContain('Start with one host, then add more systems later from the same install workspace.');
     expect(setupCompletionPanelSource).toContain(
-      'API-backed platforms like Proxmox and TrueNAS use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+      'API-backed platforms like Proxmox, TrueNAS, and VMware use Platform connections instead of a dedicated install profile in Infrastructure Install.',
     );
-    expect(setupCompletionPanelSource).toContain(
+    expect(setupCompletionModelSource).toContain(
       'If the first system is API-backed, use Platform connections instead of starting with host install.',
     );
     expect(setupCompletionPanelSource).not.toContain('Smart Auto-Detection');
@@ -53,11 +54,15 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).not.toContain('ProxmoxIcon');
   });
 
-  it('keeps connected infrastructure labels on the canonical local identity helper', () => {
-    expect(setupCompletionPanelSource).toContain('isAgentFacetInfrastructureResource');
-    expect(setupCompletionPanelSource).toContain('getPreferredInfrastructureDisplayName');
-    expect(setupCompletionPanelSource).not.toContain("resource.type === 'truenas'");
-    expect(setupCompletionPanelSource).not.toContain('getPreferredResourceDisplayName(resource)');
+  it('keeps connected infrastructure classification on the canonical setup model', () => {
+    expect(setupCompletionPanelSource).toContain('buildSetupCompletionConnectedSystems');
+    expect(setupCompletionPanelSource).toContain('buildSetupCompletionViewModel');
+    expect(setupCompletionModelSource).toContain('isAgentFacetInfrastructureResource');
+    expect(setupCompletionModelSource).toContain('getPreferredInfrastructureDisplayName');
+    expect(setupCompletionModelSource).toContain('getPreferredResourceHostname');
+    expect(setupCompletionModelSource).toContain('PLATFORM_CONNECTION_PLATFORM_TYPES');
+    expect(setupCompletionModelSource).not.toContain("resource.type === 'truenas'");
+    expect(setupCompletionModelSource).not.toContain('getPreferredResourceDisplayName(resource)');
   });
 
   it('does not reintroduce a separate setup-wizard install command surface', () => {
@@ -79,17 +84,18 @@ describe('SetupCompletionPanel guardrails', () => {
     expect(setupCompletionPanelSource).toContain('Save the admin login and API token before leaving this screen');
     expect(setupCompletionPanelSource).toContain('Recommended next step');
     expect(setupCompletionPanelSource).toContain('Go to Dashboard');
-    expect(setupCompletionPanelSource).toContain('First monitored host connected');
+    expect(setupCompletionModelSource).toContain("heroTitle: 'First monitored system connected'");
+    expect(setupCompletionModelSource).toContain("heroTitle: 'Connect your first monitored system'");
     expect(setupCompletionPanelSource).toContain(
-      'hasConnectedAgents() ? handleGoToDashboard() : handleOpenInstallWorkspace()',
+      "completionViewModel().primaryAction === 'dashboard'",
     );
     expect(setupCompletionPanelSource).toContain(
-      "{hasConnectedAgents() ? 'Go to Dashboard' : 'Open Infrastructure Install'}",
+      'completionViewModel().showPlatformConnectionsAction',
     );
+    expect(setupCompletionPanelSource).toContain('completionViewModel().showInstallAction');
     expect(setupCompletionPanelSource).toContain('handleOpenPlatformConnections');
-    expect(setupCompletionPanelSource).not.toContain(
-      "connectedAgents().length > 0 ? 'Go to Dashboard' : 'Open Infrastructure Install'",
-    );
+    expect(setupCompletionPanelSource).not.toContain('hasConnectedAgents');
+    expect(setupCompletionPanelSource).not.toContain('connectedAgents().length');
     expect(setupCompletionPanelSource).not.toContain(
       'You can return here later from Infrastructure Operations if you skip install for now.',
     );

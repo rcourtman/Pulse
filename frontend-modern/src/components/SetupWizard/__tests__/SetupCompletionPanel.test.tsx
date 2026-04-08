@@ -12,6 +12,9 @@ const showErrorMock = vi.fn();
 const navigateMock = vi.fn();
 const createObjectURLMock = vi.fn(() => 'blob:mock-url');
 const revokeObjectURLMock = vi.fn();
+const trackAgentFirstConnectedMock = vi.fn();
+const trackPaywallViewedMock = vi.fn();
+const trackUpgradeClickedMock = vi.fn();
 
 class MockBlob {
   readonly parts: string[];
@@ -76,9 +79,9 @@ vi.mock('@/utils/logger', () => ({
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
-  trackAgentFirstConnected: vi.fn(),
-  trackPaywallViewed: vi.fn(),
-  trackUpgradeClicked: vi.fn(),
+  trackAgentFirstConnected: (...args: unknown[]) => trackAgentFirstConnectedMock(...args),
+  trackPaywallViewed: (...args: unknown[]) => trackPaywallViewedMock(...args),
+  trackUpgradeClicked: (...args: unknown[]) => trackUpgradeClickedMock(...args),
 }));
 
 const baseState: WizardState = {
@@ -109,6 +112,7 @@ describe('SetupCompletionPanel', () => {
   it('frames setup completion around the canonical infrastructure install workspace', async () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
+    expect(screen.getByText('Connect your first monitored system')).toBeInTheDocument();
     expect(screen.getByText('What happens next')).toBeInTheDocument();
     expect(screen.getAllByText('Open Infrastructure Install').length).toBeGreaterThan(0);
     expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
@@ -117,7 +121,7 @@ describe('SetupCompletionPanel', () => {
     expect(screen.getByText('admin')).toBeInTheDocument();
     expect(screen.getByText('password')).toBeInTheDocument();
     expect(screen.getByText('What to expect')).toBeInTheDocument();
-    expect(screen.getByText('First host first')).toBeInTheDocument();
+    expect(screen.getByText('First system first')).toBeInTheDocument();
     expect(
       screen.getByText(
         'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
@@ -130,7 +134,7 @@ describe('SetupCompletionPanel', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText(
-        'API-backed platforms like Proxmox and TrueNAS use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+        'API-backed platforms like Proxmox, TrueNAS, and VMware use Platform connections instead of a dedicated install profile in Infrastructure Install.',
       ),
     ).toBeInTheDocument();
 
@@ -191,7 +195,7 @@ describe('SetupCompletionPanel', () => {
       'continue with the first-host install token Pulse prepares from setup',
     );
     expect(content).toContain(
-      'the first system is API-backed, such as Proxmox or TrueNAS',
+      'the first system is API-backed, such as Proxmox, TrueNAS, or VMware',
     );
     expect(content).not.toContain('Example Install Command');
     expect(content).not.toContain('Example Windows Install Command');
@@ -229,24 +233,33 @@ describe('SetupCompletionPanel', () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Connected (1 agent)')).toBeInTheDocument();
+      expect(screen.getByText('Connected (1 system)')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Tower')).toBeInTheDocument();
-    expect(screen.getByText('First monitored host connected')).toBeInTheDocument();
+    expect(screen.getAllByText('Tower').length).toBeGreaterThan(0);
+    expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
     expect(
       screen.getByText(
-        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify your first overview, or return to Infrastructure Install when you want to add more systems.',
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Infrastructure Install when you want to add more host-installed systems.',
       ),
     ).toBeInTheDocument();
     expect(
       screen.getByText('Open the dashboard to review your first connected system.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Infrastructure Install stays available any time you want to add more host-installed systems.',
+      ),
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Go to Dashboard' }).length).toBeGreaterThan(0);
     expect(
       screen.getAllByRole('button', { name: 'Open Infrastructure Install' }).length,
     ).toBeGreaterThan(0);
     expect(screen.queryByRole('button', { name: 'Open Platform connections' })).not.toBeInTheDocument();
+    expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
+      'setup_wizard_complete',
+      'first_agent',
+    );
 
     const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
     const nextStepCard = nextStepHeading.closest('div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6');
@@ -254,6 +267,119 @@ describe('SetupCompletionPanel', () => {
 
     fireEvent.click(within(nextStepCard as HTMLElement).getByRole('button', { name: 'Go to Dashboard' }));
     expect(onComplete).toHaveBeenCalledWith('/');
+  });
+
+  it('keeps platform connections available for API-backed starts after the first system connects', async () => {
+    const onComplete = vi.fn();
+    apiFetchJSONMock.mockResolvedValue({
+      resources: [
+        {
+          id: 'truenas-1',
+          type: 'agent',
+          name: 'truenas-main',
+          displayName: 'TrueNAS Main',
+          platformId: 'truenas-main',
+          platformType: 'truenas',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: 123,
+          platformData: {
+            truenas: { hostname: 'tn-main.local' },
+          },
+        },
+      ],
+    });
+
+    render(() => <SetupCompletionPanel state={baseState} onComplete={onComplete} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected (1 system)')).toBeInTheDocument();
+    });
+
+    expect(screen.getByText('TrueNAS Main')).toBeInTheDocument();
+    expect(screen.getByText('TrueNAS')).toBeInTheDocument();
+    expect(screen.getByText('First monitored system connected')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Platform connections when you want to add more API-backed systems.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Platform connections stays available any time you want to add more API-backed systems, and Infrastructure Install is ready when the next system should run the unified agent.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Go to Dashboard' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Infrastructure Install' })).toBeInTheDocument();
+    expect(trackAgentFirstConnectedMock).not.toHaveBeenCalled();
+
+    const nextStepHeading = screen.getByRole('heading', { name: 'Open your first dashboard view' });
+    const nextStepCard = nextStepHeading.closest('div.bg-surface.rounded-md.border.border-border.p-6.text-left.mb-6');
+    expect(nextStepCard).not.toBeNull();
+
+    fireEvent.click(
+      within(nextStepCard as HTMLElement).getByRole('button', {
+        name: 'Open Platform connections',
+      }),
+    );
+    expect(onComplete).toHaveBeenCalledWith('/settings/infrastructure/platforms');
+  });
+
+  it('keeps both continuation paths visible when install-managed and API-backed systems are already present', async () => {
+    apiFetchJSONMock.mockResolvedValue({
+      resources: [
+        {
+          id: 'agent-1',
+          type: 'agent',
+          name: 'Tower',
+          displayName: 'Tower',
+          platformId: 'tower',
+          platformType: 'agent',
+          sourceType: 'agent',
+          status: 'online',
+          lastSeen: 123,
+          agent: { agentId: 'agent-1' },
+        },
+        {
+          id: 'truenas-1',
+          type: 'agent',
+          name: 'truenas-main',
+          displayName: 'TrueNAS Main',
+          platformId: 'truenas-main',
+          platformType: 'truenas',
+          sourceType: 'api',
+          status: 'online',
+          lastSeen: 456,
+          platformData: {
+            truenas: { hostname: 'tn-main.local' },
+          },
+        },
+      ],
+    });
+
+    render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected (2 systems)')).toBeInTheDocument();
+    });
+
+    expect(
+      screen.getByText(
+        'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify the first overview, then return to Platform connections or Infrastructure Install when you want to add more systems.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Platform connections and Infrastructure Install both stay available any time you want to expand from this first system.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Platform connections' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Infrastructure Install' })).toBeInTheDocument();
+    expect(trackAgentFirstConnectedMock).toHaveBeenCalledWith(
+      'setup_wizard_complete',
+      'first_agent',
+    );
   });
 
   it('keeps connected governed infrastructure on local operator identity', async () => {
@@ -282,10 +408,11 @@ describe('SetupCompletionPanel', () => {
     render(() => <SetupCompletionPanel state={baseState} onComplete={vi.fn()} />);
 
     await waitFor(() => {
-      expect(screen.getByText('Connected (1 agent)')).toBeInTheDocument();
+      expect(screen.getByText('Connected (1 system)')).toBeInTheDocument();
     });
 
     expect(screen.getByText('PBS Main')).toBeInTheDocument();
+    expect(screen.getByText('Proxmox Backup Server')).toBeInTheDocument();
     expect(
       screen.queryByText('backup server resource; status online; sources pbs'),
     ).not.toBeInTheDocument();

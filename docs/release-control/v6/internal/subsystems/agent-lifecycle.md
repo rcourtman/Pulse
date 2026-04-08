@@ -223,6 +223,14 @@ management, and fleet control surfaces.
    future provider integrations rather than leaving post-setup next actions
    implicit. That API-backed alternative must be a real first-run handoff
    control, not prose-only guidance.
+   Once the completion surface observes connected systems, that same handoff
+   model must derive its follow-up actions from the canonical connected-system
+   path classification rather than a raw connected-agent count. API-backed
+   first-session states must keep `Platform connections` visible without
+   hiding `Infrastructure Install` when the next system should run the unified
+   agent, and install-managed first-session states must not suppress the
+   explicit API-backed alternative when the runtime has already connected
+   platform-owned systems.
 6. Keep `frontend-modern/src/components/Settings/InfrastructureInstallerSection.tsx`
    oriented around the first monitored host. Install-token generation,
    governed command copy, and install instructions belong to the canonical

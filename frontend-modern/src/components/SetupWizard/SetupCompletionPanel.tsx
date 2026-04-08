@@ -9,28 +9,17 @@ import {
   For,
 } from 'solid-js';
 import { useNavigate } from '@solidjs/router';
-import { unwrap } from 'solid-js/store';
 import { copyToClipboard } from '@/utils/clipboard';
 import { logger } from '@/utils/logger';
 import { apiFetchJSON } from '@/utils/apiClient';
 import { getPulseBaseUrl } from '@/utils/url';
 import type { State } from '@/types/api';
-import type { Resource } from '@/types/resource';
 import { showSuccess, showError } from '@/utils/toast';
-import {
-  getActionableAgentIdFromResource,
-  isAgentFacetInfrastructureResource,
-  hasAgentFacet as resourceHasAgentFacet,
-} from '@/utils/agentResources';
 import {
   trackAgentFirstConnected,
   trackPaywallViewed,
   trackUpgradeClicked,
 } from '@/utils/upgradeMetrics';
-import {
-  getPreferredInfrastructureDisplayName,
-  getPreferredResourceHostname,
-} from '@/utils/resourceIdentity';
 import {
   isCommercialTrialActive,
   loadCommercialPosture,
@@ -43,6 +32,10 @@ import {
 } from '@/utils/relayPresentation';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 import type { WizardState } from '../SetupWizard';
+import {
+  buildSetupCompletionConnectedSystems,
+  buildSetupCompletionViewModel,
+} from './setupCompletionModel';
 
 interface CompleteStepProps {
   state: WizardState;
@@ -52,7 +45,7 @@ interface CompleteStepProps {
 const UNIFIED_RESOURCE_GUIDANCE = {
   title: 'What happens next',
   description:
-    'Pulse is now secured. Next, choose the first infrastructure path: use Infrastructure Install for a host that should run the unified agent, or use Platform connections for API-backed platforms like Proxmox and TrueNAS.',
+    'Pulse is now secured. Next, choose the first infrastructure path: use Infrastructure Install for a host that should run the unified agent, or use Platform connections for API-backed platforms like Proxmox, TrueNAS, and VMware.',
   steps: [
     {
       title: 'Open Infrastructure Install',
@@ -73,70 +66,33 @@ const UNIFIED_RESOURCE_GUIDANCE = {
   inventoryFacts: [
     'Start with one host, then add more systems later from the same install workspace.',
     'Infrastructure Install owns the token, connection URL, TLS/CA settings, and platform-specific commands.',
-    'API-backed platforms like Proxmox and TrueNAS use Platform connections instead of a dedicated install profile in Infrastructure Install.',
+    'API-backed platforms like Proxmox, TrueNAS, and VMware use Platform connections instead of a dedicated install profile in Infrastructure Install.',
   ],
 } as const;
-
-interface ConnectedAgent {
-  id: string;
-  name: string;
-  type: string;
-  host: string;
-  addedAt: Date;
-}
 
 const RELAY_SETTINGS_PATH = '/settings/system-relay';
 const INFRASTRUCTURE_INSTALL_PATH = '/settings/infrastructure/install';
 const INFRASTRUCTURE_PLATFORMS_PATH = '/settings/infrastructure/platforms';
 const SETUP_WIZARD_TELEMETRY_SURFACE = 'setup_wizard_complete';
 
-const pd = (resource: Resource) =>
-  resource.platformData ? (unwrap(resource.platformData) as Record<string, unknown>) : undefined;
-const asRecord = (value: unknown): Record<string, unknown> | undefined =>
-  value && typeof value === 'object' ? (value as Record<string, unknown>) : undefined;
-const asString = (value: unknown): string | undefined =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
-const hasAgentFacet = (resource: Resource): boolean => resourceHasAgentFacet(resource);
-
-const toNodeSummaryShape = (resource: Resource) => {
-  const platformData = pd(resource);
-  const proxmox = asRecord(platformData?.proxmox);
-  const name = getPreferredInfrastructureDisplayName(resource);
-  return {
-    id: resource.id,
-    name,
-    displayName: name,
-    host: asString(proxmox?.instance) || '',
-  };
-};
-
-const toAgentSummaryShape = (resource: Resource) => {
-  const hostname = getPreferredResourceHostname(resource) || resource.id;
-  const name = getPreferredInfrastructureDisplayName(resource);
-  const id = getActionableAgentIdFromResource(resource) || resource.id;
-  return {
-    id,
-    hostname,
-    displayName: name,
-  };
-};
-
 export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
   const navigate = useNavigate();
   const [copied, setCopied] = createSignal<'password' | 'admin-token' | null>(null);
   const [showCredentials, setShowCredentials] = createSignal(true);
-  const [connectedAgents, setConnectedAgents] = createSignal<ConnectedAgent[]>([]);
+  const [connectedSystems, setConnectedSystems] = createSignal<
+    ReturnType<typeof buildSetupCompletionConnectedSystems>
+  >([]);
   const [trialStarting, setTrialStarting] = createSignal(false);
   const [trialStarted, setTrialStarted] = createSignal(false);
   const [relayPaywallTracked, setRelayPaywallTracked] = createSignal(false);
-  let firstConnectionTracked = false;
+  let firstAgentConnectionTracked = false;
 
   onMount(() => {
     void loadCommercialPosture();
   });
 
   createEffect(() => {
-    if (connectedAgents().length > 0 && !relayPaywallTracked()) {
+    if (connectedSystems().length > 0 && !relayPaywallTracked()) {
       trackPaywallViewed('relay', 'setup_wizard');
       setRelayPaywallTracked(true);
     }
@@ -146,97 +102,52 @@ export const SetupCompletionPanel: Component<CompleteStepProps> = (props) => {
     let pollInterval: number | undefined;
     let previousCount = 0;
 
-    const checkForAgents = async () => {
+    const checkForConnectedSystems = async () => {
       try {
         const state = await apiFetchJSON<State>('/api/state', {
           headers: {
             'X-API-Token': props.state.apiToken,
           },
         });
-        const resources = state.resources || [];
-        const nodeResources = resources.filter((resource) => resource.type === 'agent');
-        const agentFacetResources = resources.filter((resource) =>
-          isAgentFacetInfrastructureResource(resource),
-        );
-
-        const nodes = nodeResources.map(toNodeSummaryShape);
-        const agents = agentFacetResources.map(toAgentSummaryShape);
-        const agentMap = new Map<string, ConnectedAgent>();
-
-        for (const node of nodes) {
-          const name = node.displayName || node.name || 'Unknown';
-          const existing = agentMap.get(name);
-          if (existing) {
-            if (!existing.type.includes('Proxmox')) {
-              existing.type = `${existing.type} + Proxmox VE`;
-            }
-            if (node.host && !existing.host) {
-              existing.host = node.host;
-            }
-          } else {
-            agentMap.set(name, {
-              id: node.id || `node-${name}`,
-              name,
-              type: 'Proxmox VE',
-              host: node.host || '',
-              addedAt: new Date(),
-            });
-          }
-        }
-
-        for (const agent of agents) {
-          const name = agent.displayName || agent.hostname || 'Unknown';
-          const existing = agentMap.get(name);
-          if (existing) {
-            if (!existing.type.includes('Agent')) {
-              existing.type = `${existing.type} + Agent`;
-            }
-          } else {
-            agentMap.set(name, {
-              id: agent.id || `agent-${name}`,
-              name,
-              type: 'Agent',
-              host: '',
-              addedAt: new Date(),
-            });
-          }
-        }
-
-        const nextConnectedAgents = Array.from(agentMap.values());
-        const totalAgents = nextConnectedAgents.length;
-        const previousAgents = connectedAgents();
+        const nextConnectedSystems = buildSetupCompletionConnectedSystems(state.resources || []);
+        const totalConnectedSystems = nextConnectedSystems.length;
+        const previousSystems = connectedSystems();
         const hasConnectionChanges =
-          totalAgents !== previousAgents.length ||
-          nextConnectedAgents.some((agent, index) => {
-            const previousAgent = previousAgents[index];
+          totalConnectedSystems !== previousSystems.length ||
+          nextConnectedSystems.some((system, index) => {
+            const previousSystem = previousSystems[index];
             return (
-              !previousAgent ||
-              previousAgent.id !== agent.id ||
-              previousAgent.name !== agent.name ||
-              previousAgent.type !== agent.type ||
-              previousAgent.host !== agent.host
+              !previousSystem ||
+              previousSystem.id !== system.id ||
+              previousSystem.name !== system.name ||
+              previousSystem.typeLabel !== system.typeLabel ||
+              previousSystem.host !== system.host ||
+              previousSystem.connectionPath !== system.connectionPath
             );
           });
 
-        if (!firstConnectionTracked && totalAgents > 0) {
+        if (
+          !firstAgentConnectionTracked &&
+          nextConnectedSystems.some((system) => system.connectionPath === 'install')
+        ) {
           trackAgentFirstConnected(SETUP_WIZARD_TELEMETRY_SURFACE, 'first_agent');
-          firstConnectionTracked = true;
+          firstAgentConnectionTracked = true;
         }
 
         if (hasConnectionChanges) {
-          setConnectedAgents(nextConnectedAgents);
+          setConnectedSystems(nextConnectedSystems);
         }
 
-        if (hasConnectionChanges || totalAgents !== previousCount) {
-          previousCount = totalAgents;
+        if (hasConnectionChanges || totalConnectedSystems !== previousCount) {
+          previousCount = totalConnectedSystems;
         }
       } catch (error) {
-        logger.error('Failed to check for agents:', error);
+        logger.error('Failed to check for connected systems:', error);
       }
     };
 
-    pollInterval = window.setInterval(checkForAgents, 3000);
-    void checkForAgents();
+    pollInterval = window.setInterval(checkForConnectedSystems, 3000);
+    void checkForConnectedSystems();
 
     onCleanup(() => {
       if (pollInterval) {
@@ -286,7 +197,7 @@ Use the Infrastructure Install workspace to:
 - copy Linux, macOS, Windows, and related install commands
 
 Use the Platform connections workspace when:
-- the first system is API-backed, such as Proxmox or TrueNAS
+- the first system is API-backed, such as Proxmox, TrueNAS, or VMware
 - Pulse should poll that platform directly instead of starting with a host install
 
 Keep these credentials secure!
@@ -341,7 +252,9 @@ Keep these credentials secure!
     navigate(RELAY_SETTINGS_PATH);
   };
 
-  const hasConnectedAgents = createMemo(() => connectedAgents().length > 0);
+  const completionViewModel = createMemo(() =>
+    buildSetupCompletionViewModel(connectedSystems()),
+  );
 
   return (
     <div class="max-w-2xl mx-auto bg-surface border border-border overflow-hidden animate-fade-in relative rounded-md p-6 sm:p-8 text-center text-base-content">
@@ -359,16 +272,14 @@ Keep these credentials secure!
             </svg>
           </div>
           <h1 class="text-2xl sm:text-3xl font-bold tracking-tight text-base-content mb-2">
-            {hasConnectedAgents() ? 'First monitored host connected' : 'Install your first monitored host'}
+            {completionViewModel().heroTitle}
           </h1>
           <p class="text-slate-500 dark:text-emerald-300 font-light text-sm sm:text-base">
-            {hasConnectedAgents()
-              ? 'Your admin account is ready and Pulse is already receiving telemetry. Open the dashboard to verify your first overview, or return to Infrastructure Install when you want to add more systems.'
-              : 'Your admin account is ready. Next, open Infrastructure Install and run the generated command on the first system you want Pulse to monitor.'}
+            {completionViewModel().heroDescription}
           </p>
         </div>
 
-        <Show when={connectedAgents().length > 0}>
+        <Show when={completionViewModel().hasConnectedSystems}>
           <div class="bg-emerald-50 dark:bg-emerald-900 rounded-md border border-emerald-200 dark:border-emerald-800 p-5 text-left mb-6">
             <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-400 mb-3 flex items-center gap-2">
               <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -379,23 +290,22 @@ Keep these credentials secure!
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              Connected ({connectedAgents().length} agent{connectedAgents().length !== 1 ? 's' : ''}
-              )
+              {completionViewModel().connectedSummaryLabel}
             </h3>
             <div class="space-y-2">
-              <For each={connectedAgents()}>
-                {(agent) => (
+              <For each={connectedSystems()}>
+                {(system) => (
                   <div class="flex items-center justify-between bg-surface rounded-md px-3 py-2.5 border border-border-subtle">
                     <div class="flex items-center gap-2.5">
                       <span class="w-2.5 h-2.5 bg-emerald-500 rounded-full"></span>
-                      <span class="text-base-content text-sm font-medium">{agent.name}</span>
+                      <span class="text-base-content text-sm font-medium">{system.name}</span>
                     </div>
                     <div class="flex items-center gap-2">
                       <span class="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full font-medium">
-                        {agent.type}
+                        {system.typeLabel}
                       </span>
-                      <Show when={agent.host}>
-                        <span class="text-[10px] text-muted font-mono">{agent.host}</span>
+                      <Show when={system.host}>
+                        <span class="text-[10px] text-muted font-mono">{system.host}</span>
                       </Show>
                     </div>
                   </div>
@@ -435,7 +345,7 @@ Keep these credentials secure!
                 </span>
                 <p class="mt-1 text-xs text-muted max-w-xl">
                   Save the admin login and API token before leaving this screen, then continue into{' '}
-                  {hasConnectedAgents() ? 'the dashboard or Infrastructure Install.' : 'Infrastructure Install for the first host.'}
+                  {completionViewModel().credentialsContinuationText}
                 </p>
               </div>
             </div>
@@ -622,7 +532,7 @@ Keep these credentials secure!
                 What to expect
               </div>
               <div class="rounded-sm bg-emerald-100 px-2 py-1 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300">
-                First host first
+                First system first
               </div>
             </div>
             <div class="space-y-2">
@@ -655,11 +565,11 @@ Keep these credentials secure!
                     d="M8 9l3 3-3 3m5 0h3M5 20h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
                   />
                 </svg>
-                {hasConnectedAgents() ? 'Open your first dashboard view' : 'Install your first host'}
+                {completionViewModel().nextStepTitle}
               </h3>
               <p class="mt-2 text-xs text-muted max-w-xl">
-                {hasConnectedAgents()
-                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Infrastructure Install any time you want to add more hosts or regenerate commands.'
+                {completionViewModel().hasConnectedSystems
+                  ? 'Pulse already has a live monitored system. Open the dashboard to confirm the first overview, then return to Infrastructure Operations when you want to continue with the next system path.'
                   : 'The canonical install flow now lives in Infrastructure Operations. Open that workspace to continue with the first-host install token Pulse prepares from setup, adjust the agent connection URL only if needed, configure TLS or custom CA options, and copy the correct command for the first system you want Pulse to monitor.'}
               </p>
             </div>
@@ -672,26 +582,26 @@ Keep these credentials secure!
               Next step
             </div>
             <div class="mt-2 text-sm text-base-content">
-              {hasConnectedAgents()
-                ? 'Open the dashboard to review your first connected system.'
-                : 'Open Infrastructure Install to bring your first monitored system into Pulse.'}
+              {completionViewModel().nextStepSummary}
             </div>
             <div class="mt-2 text-xs text-muted">
-              {hasConnectedAgents()
-                ? 'Infrastructure Install stays available any time you want to add more systems later.'
-                : 'If the first system is API-backed, use Platform connections instead of starting with host install.'}
+              {completionViewModel().nextStepDetail}
             </div>
           </div>
           <div class="mt-4 flex flex-col gap-3 sm:flex-row">
             <button
               onClick={() =>
-                hasConnectedAgents() ? handleGoToDashboard() : handleOpenInstallWorkspace()
+                completionViewModel().primaryAction === 'dashboard'
+                  ? handleGoToDashboard()
+                  : handleOpenInstallWorkspace()
               }
               class="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
             >
-              {hasConnectedAgents() ? 'Go to Dashboard' : 'Open Infrastructure Install'}
+              {completionViewModel().primaryAction === 'dashboard'
+                ? 'Go to Dashboard'
+                : 'Open Infrastructure Install'}
             </button>
-            <Show when={!hasConnectedAgents()}>
+            <Show when={completionViewModel().showPlatformConnectionsAction}>
               <button
                 onClick={handleOpenPlatformConnections}
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
@@ -699,7 +609,7 @@ Keep these credentials secure!
                 Open Platform connections
               </button>
             </Show>
-            <Show when={hasConnectedAgents()}>
+            <Show when={completionViewModel().showInstallAction}>
               <button
                 onClick={handleOpenInstallWorkspace}
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-border px-4 py-3 text-sm font-medium text-base-content transition-colors hover:bg-surface-hover"
@@ -710,7 +620,7 @@ Keep these credentials secure!
           </div>
         </div>
 
-        <Show when={hasConnectedAgents()}>
+        <Show when={completionViewModel().hasConnectedSystems}>
           <div class="bg-indigo-50 dark:bg-indigo-900 rounded-md border border-indigo-100 dark:border-indigo-800 p-5 text-left mt-8 overflow-hidden relative">
             <div class="flex items-start gap-4 relative z-10">
               <div class="flex h-12 w-12 items-center justify-center rounded-md bg-indigo-600 text-white shrink-0 border border-indigo-500">
