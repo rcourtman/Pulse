@@ -176,6 +176,14 @@ querying, and the operator-facing storage health presentation layer.
     backup counts, or recovery-point presence when commercial continuity is
     already defined by the canonical monitored-system resolver and activation
     persistence.
+37. Keep dormant assistant availability on the shared auth/bootstrap contract.
+    When `frontend-modern/src/App.tsx`, `internal/api/ai_handlers.go`,
+    `internal/api/router_routes_auth_security.go`, or
+    `internal/api/security_status_capabilities.go` change, storage and
+    recovery routes that do not own assistant or Patrol interaction must
+    consume `/api/security/status.sessionCapabilities.assistantEnabled`
+    instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary route
+    bootstrap.
 
 ## Forbidden Paths
 

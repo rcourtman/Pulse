@@ -286,6 +286,19 @@ describe('AIChat', () => {
       renderChat();
       expect(screen.queryByText('Pulse Assistant')).not.toBeInTheDocument();
     });
+
+    it('does not initialize sessions or models while closed', async () => {
+      mockAiChatStore.isOpenSignal.mockReturnValue(false);
+      renderChat();
+
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(mockAIChatAPI.getStatus).not.toHaveBeenCalled();
+      expect(mockAIChatAPI.listSessions).not.toHaveBeenCalled();
+      expect(mockAIAPI.getSettings).not.toHaveBeenCalled();
+      expect(mockAIAPI.getModels).not.toHaveBeenCalled();
+    });
   });
 
   // ── Input & submit ───────────────────────────────────────────────────

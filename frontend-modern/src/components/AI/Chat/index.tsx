@@ -246,9 +246,31 @@ export const AIChat: Component<AIChatProps> = (props) => {
     }
   });
 
+  const initializeWhenOpen = async () => {
+    try {
+      const status = await AIChatAPI.getStatus();
+      if (!status.running) {
+        // AI not running - silently clear dynamic state instead of logging on
+        // unrelated routes or after the assistant is disabled.
+        setSessions([]);
+        setModels([]);
+        setModelsError('');
+        return;
+      }
+      await refreshSessions();
+      await loadSettings();
+      await loadModels();
+    } catch (error) {
+      logger.error('[AIChat] Failed to initialize:', error);
+    }
+  };
+
   // Refresh models when AI settings change (e.g., new API key added)
   createEffect(() => {
     const version = aiChatStore.settingsVersionSignal();
+    if (!isOpen()) {
+      return;
+    }
     // Skip the initial run (version 0)
     if (version > 0) {
       loadModels();
@@ -290,21 +312,11 @@ export const AIChat: Component<AIChatProps> = (props) => {
     return { type: 'thinking', text: 'Thinking...' };
   });
 
-  // Load sessions on mount
-  onMount(async () => {
-    try {
-      const status = await AIChatAPI.getStatus();
-      if (!status.running) {
-        // AI not running - silently return, don't show warning on every page load
-        // Users who intentionally disabled AI don't need a notification about it
-        return;
-      }
-      await refreshSessions();
-      await loadSettings();
-      await loadModels();
-    } catch (error) {
-      logger.error('[AIChat] Failed to initialize:', error);
+  createEffect(() => {
+    if (!isOpen()) {
+      return;
     }
+    void initializeWhenOpen();
   });
 
   // Click outside handler to close all dropdowns

@@ -19,6 +19,7 @@ describe('useAppRuntimeState', () => {
   let getOrgIDMock: ReturnType<typeof vi.fn>;
   let setOrgIDMock: ReturnType<typeof vi.fn>;
   let showToastMock: ReturnType<typeof vi.fn>;
+  let aiChatSetEnabledMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.resetModules();
@@ -67,6 +68,7 @@ describe('useAppRuntimeState', () => {
     getOrgIDMock = vi.fn().mockReturnValue('default');
     setOrgIDMock = vi.fn();
     showToastMock = vi.fn();
+    aiChatSetEnabledMock = vi.fn();
 
     vi.doMock('@/stores/websocket-global', () => ({
       getGlobalWebSocketStore: () => ({
@@ -203,6 +205,12 @@ describe('useAppRuntimeState', () => {
       loadRuntimeCapabilities: loadLicenseStatusMock,
     }));
 
+    vi.doMock('@/stores/aiChat', () => ({
+      aiChatStore: {
+        setEnabled: aiChatSetEnabledMock,
+      },
+    }));
+
     vi.doMock('@/utils/layout', () => ({
       layoutStore: {
         loadFromServer: vi.fn(),
@@ -277,7 +285,7 @@ describe('useAppRuntimeState', () => {
         return new Response(
           JSON.stringify({
             hasAuthentication: true,
-            sessionCapabilities: { demoMode: true },
+            sessionCapabilities: { demoMode: true, assistantEnabled: true },
           }),
           { status: 200 },
         );
@@ -296,6 +304,7 @@ describe('useAppRuntimeState', () => {
 
     expect(demoModeModule.demoModeResolved()).toBe(true);
     expect(demoModeModule.demoModeEnabled()).toBe(true);
+    expect(aiChatSetEnabledMock).toHaveBeenCalledWith(true);
 
     dispose();
   });

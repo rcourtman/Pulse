@@ -410,10 +410,49 @@ func TestSecurityStatusIncludesDemoModeSessionCapabilities(t *testing.T) {
 	if !payload.SessionCapabilities.DemoMode {
 		t.Fatalf("expected sessionCapabilities.demoMode to be true, got %#v", payload.SessionCapabilities)
 	}
+	if payload.SessionCapabilities.AssistantEnabled {
+		t.Fatalf("expected sessionCapabilities.assistantEnabled to default false, got %#v", payload.SessionCapabilities)
+	}
 	if !payload.PresentationPolicy.DemoMode ||
 		!payload.PresentationPolicy.ReadOnly ||
 		!payload.PresentationPolicy.HideCommercial ||
 		!payload.PresentationPolicy.HideUpgrade {
 		t.Fatalf("expected demo presentation policy, got %#v", payload.PresentationPolicy)
+	}
+}
+
+func TestSecurityStatusIncludesAssistantAvailability(t *testing.T) {
+	t.Setenv("PULSE_DATA_DIR", t.TempDir())
+	cfg := &config.Config{}
+	router := NewRouter(cfg, nil, nil, nil, nil, "1.0.0")
+
+	persistence := router.aiSettingsHandler.getPersistence(context.Background())
+	if persistence == nil {
+		t.Fatal("expected AI persistence for security status test")
+	}
+	if err := persistence.SaveAIConfig(config.AIConfig{
+		Enabled:      true,
+		OpenAIAPIKey: "sk-test",
+	}); err != nil {
+		t.Fatalf("SaveAIConfig(): %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/security/status", nil)
+	rec := httptest.NewRecorder()
+	router.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for security status, got %d", rec.Code)
+	}
+
+	var payload struct {
+		SessionCapabilities securityStatusSessionCapabilities `json:"sessionCapabilities"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+
+	if !payload.SessionCapabilities.AssistantEnabled {
+		t.Fatalf("expected sessionCapabilities.assistantEnabled to be true, got %#v", payload.SessionCapabilities)
 	}
 }

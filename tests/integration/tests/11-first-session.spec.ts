@@ -115,45 +115,58 @@ test.describe.serial('First-session experience', () => {
     ] as const;
 
     const consoleErrors: string[] = [];
+    const aiRequests = trackBrowserRequests(page, /\/api\/ai(\/|$)/);
     page.on('console', (msg) => {
       if (msg.type() === 'error') {
         consoleErrors.push(msg.text());
       }
     });
 
-    for (const route of keyRoutes) {
-      consoleErrors.length = 0;
+    try {
+      for (const route of keyRoutes) {
+        consoleErrors.length = 0;
+        aiRequests.clear();
 
-      await page.goto(route, { waitUntil: 'domcontentloaded' });
-      await page.waitForURL(/\/settings/, { timeout: 10_000 });
-      await expect(page.locator('#root')).toBeVisible();
+        await page.goto(route, { waitUntil: 'domcontentloaded' });
+        await page.waitForURL(/\/settings/, { timeout: 10_000 });
+        await expect(page.locator('#root')).toBeVisible();
 
-      // Wait for the panel content to render. Scope to the settings content
-      // area (everything after the sidebar) to avoid matching sidebar labels.
-      // Fall back to a page-wide heading if the content area locator doesn't
-      // match — some layouts render headings differently.
-      const panelHeading = page.locator('h1, h2, h3, [role="heading"]')
-        .filter({ hasNotText: 'Settings' })
-        .first();
-      await expect(
-        panelHeading,
-        `Route ${route} did not render any panel content`,
-      ).toBeVisible({ timeout: 10_000 });
+        // Wait for the panel content to render. Scope to the settings content
+        // area (everything after the sidebar) to avoid matching sidebar labels.
+        // Fall back to a page-wide heading if the content area locator doesn't
+        // match — some layouts render headings differently.
+        const panelHeading = page.locator('h1, h2, h3, [role="heading"]')
+          .filter({ hasNotText: 'Settings' })
+          .first();
+        await expect(
+          panelHeading,
+          `Route ${route} did not render any panel content`,
+        ).toBeVisible({ timeout: 10_000 });
 
-      // Filter out benign console noise.
-      const realErrors = consoleErrors.filter(
-        (e) =>
-          !e.includes('Download the React DevTools') &&
-          !e.includes('Warning:') &&
-          !e.includes('favicon') &&
-          !e.includes('ERR_CONNECTION_REFUSED') &&
-          !e.includes('net::'),
-      );
+        await page.waitForTimeout(500);
 
-      expect(
-        realErrors.length,
-        `Unexpected console errors on ${route}: ${realErrors.join('; ')}`,
-      ).toBe(0);
+        expect(
+          aiRequests.count(),
+          `Non-AI settings route ${route} should not bootstrap AI endpoints: ${aiRequests.urls().join(', ')}`,
+        ).toBe(0);
+
+        // Filter out benign console noise.
+        const realErrors = consoleErrors.filter(
+          (e) =>
+            !e.includes('Download the React DevTools') &&
+            !e.includes('Warning:') &&
+            !e.includes('favicon') &&
+            !e.includes('ERR_CONNECTION_REFUSED') &&
+            !e.includes('net::'),
+        );
+
+        expect(
+          realErrors.length,
+          `Unexpected console errors on ${route}: ${realErrors.join('; ')}`,
+        ).toBe(0);
+      }
+    } finally {
+      aiRequests.stop();
     }
   });
 

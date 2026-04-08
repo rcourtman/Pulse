@@ -178,6 +178,14 @@ quickstart-ready installs may enable Patrol directly without opening provider
 setup, while activation-required or offline quickstart states must surface one
 canonical blocked reason and fall back to activation-or-BYOK guidance instead
 of inferring readiness from provider model catalogs or local credit counters.
+That same AI/runtime boundary now also owns the server-side assistant
+availability fact used by the app shell. `internal/api/ai_handlers.go`,
+`internal/api/security_status_capabilities.go`, and
+`internal/api/router_routes_auth_security.go` must expose one canonical
+`/api/security/status.sessionCapabilities.assistantEnabled` signal for the
+closed assistant affordance, so unrelated shells do not probe
+`/api/settings/ai` or `/api/ai/sessions` during ordinary route bootstrap just
+to decide whether the assistant drawer may be opened.
 That same settings/runtime boundary now also governs BYOK first-run setup:
 `frontend-modern/src/components/Settings/useAISettingsState.ts` may send only
 provider credentials or base URLs when the operator connects a provider, and

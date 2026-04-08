@@ -2314,6 +2314,38 @@ func (h *AISettingsHandler) populateQuickstartFields(ctx context.Context, resp *
 	}
 }
 
+// AssistantEnabled reports whether the Pulse Assistant affordance should be
+// shown in the authenticated shell without forcing the browser to probe the
+// full AI settings API on every route bootstrap.
+func (h *AISettingsHandler) AssistantEnabled(ctx context.Context) bool {
+	if h == nil {
+		return false
+	}
+
+	settings, err := h.loadAIConfig(ctx)
+	if err != nil {
+		return false
+	}
+	if settings == nil {
+		settings = config.NewDefaultAIConfig()
+	}
+
+	enabled := settings.Enabled || mockmode.IsEnabled()
+	if !enabled {
+		return false
+	}
+
+	if settings.IsConfigured() || mockmode.IsEnabled() {
+		return true
+	}
+
+	response := AISettingsResponse{
+		ConfiguredProviders: settings.GetConfiguredProviders(),
+	}.NormalizeCollections()
+	h.populateQuickstartFields(ctx, &response)
+	return response.QuickstartCreditsAvailable
+}
+
 func aiSettingsRequireModelResolution(settings *config.AIConfig) bool {
 	if settings == nil || !settings.IsConfigured() {
 		return false

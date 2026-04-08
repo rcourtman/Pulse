@@ -135,6 +135,14 @@ agreement, and cloud-specific enforcement rules.
     `/settings/system/billing/usage?details=counting-rules` for explanation and
     `/settings/system/billing/plan?intent=max_monitored_systems` for upgrade
     intent.
+24. Keep dormant assistant availability on the shared browser bootstrap
+    contract. When `frontend-modern/src/App.tsx`,
+    `frontend-modern/src/useAppRuntimeState.ts`,
+    `internal/api/router_routes_auth_security.go`, or
+    `internal/api/security_status_capabilities.go` change, cloud-paid routes
+    that do not own assistant or Patrol interaction must consume
+    `/api/security/status.sessionCapabilities.assistantEnabled` instead of
+    probing `/api/settings/ai` or `/api/ai/*` during ordinary route bootstrap.
 
 ## Forbidden Paths
 

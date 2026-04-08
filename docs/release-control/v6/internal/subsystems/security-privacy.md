@@ -390,7 +390,13 @@ That same auth/security boundary also owns browser session-capability posture:
 `internal/api/security_status_capabilities.go` must expose
 `/api/security/status.sessionCapabilities.demoMode` as the backend-owned
 public-demo posture signal, and security/privacy consumers must not infer demo
-state from response headers, `/api/health`, or hostname heuristics.
+state from response headers, `/api/health`, or hostname heuristics. That same
+session-capability contract now also carries the closed-shell assistant
+availability fact through
+`/api/security/status.sessionCapabilities.assistantEnabled`, so general
+settings or security surfaces do not probe `/api/settings/ai` or other
+assistant endpoints merely to decide whether dormant assistant chrome may be
+opened.
 That same token-management boundary now also depends on one neutral
 app-runtime context owner. `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 may consume websocket-backed revocation fan-out through

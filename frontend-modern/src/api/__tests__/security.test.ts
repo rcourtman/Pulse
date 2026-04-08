@@ -23,6 +23,10 @@ describe('SecurityAPI', () => {
         exportProtected: true,
         hasAuditLogging: true,
         configuredButPendingRestart: false,
+        sessionCapabilities: {
+          demoMode: false,
+          assistantEnabled: true,
+        },
       };
       vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockStatus);
 
@@ -30,6 +34,27 @@ describe('SecurityAPI', () => {
 
       expect(apiFetchJSON).toHaveBeenCalledWith('/api/security/status');
       expect(result).toEqual(mockStatus);
+    });
+
+    it('preserves assistant availability in session capabilities', async () => {
+      const mockStatus: SecurityStatus = {
+        hasAuthentication: true,
+        apiTokenConfigured: false,
+        requiresAuth: true,
+        credentialsEncrypted: true,
+        exportProtected: true,
+        hasAuditLogging: false,
+        configuredButPendingRestart: false,
+        sessionCapabilities: {
+          demoMode: false,
+          assistantEnabled: true,
+        },
+      };
+      vi.mocked(apiFetchJSON).mockResolvedValueOnce(mockStatus);
+
+      const result = await SecurityAPI.getStatus();
+
+      expect(result.sessionCapabilities?.assistantEnabled).toBe(true);
     });
   });
 

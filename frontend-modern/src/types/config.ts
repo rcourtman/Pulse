@@ -119,6 +119,7 @@ export interface SecurityStatusSettingsCapabilities {
 
 export interface SecurityStatusSessionCapabilities {
   demoMode: boolean;
+  assistantEnabled?: boolean;
 }
 
 export interface SecurityStatusPresentationPolicy {

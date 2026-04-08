@@ -37,6 +37,7 @@ describe('useDashboardActions', () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-01T00:00:00Z'));
+    window.history.replaceState({}, '', '/dashboard');
   });
 
   afterEach(() => {
@@ -161,6 +162,28 @@ describe('useDashboardActions', () => {
       'runtime-warning',
       'infra-warning',
     ]);
+
+    dispose();
+  });
+
+  it('stays idle when the dashboard action surface is not enabled', async () => {
+    let dispose!: () => void;
+    let actions!: ReturnType<typeof useDashboardActions>;
+
+    createRoot((d) => {
+      dispose = d;
+      const [alertsList] = createSignal<Alert[]>([]);
+      const [enabled] = createSignal(false);
+      actions = useDashboardActions(alertsList, { enabled });
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(vi.mocked(AIAPI.getUnifiedFindings)).not.toHaveBeenCalled();
+    expect(vi.mocked(AIAPI.getPendingApprovals)).not.toHaveBeenCalled();
+    expect(actions.pendingApprovals()).toEqual([]);
+    expect(actions.findingsNeedingAttention()).toEqual([]);
 
     dispose();
   });

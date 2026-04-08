@@ -208,6 +208,16 @@ work extends shared components instead of creating new local variants.
     labels must resolve to distinct owned destinations or section anchors
     instead of presenting two different labels that land on the same
     unscoped billing screen.
+15. Keep assistant availability bootstrap on the shared app-shell boundary.
+    `frontend-modern/src/useAppRuntimeState.ts`,
+    `frontend-modern/src/App.tsx`,
+    `frontend-modern/src/components/AI/Chat/index.tsx`, and
+    `frontend-modern/src/hooks/useDashboardActions.ts` must consume the
+    backend-owned `/api/security/status.sessionCapabilities.assistantEnabled`
+    fact instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary
+    route bootstrap. Closed assistant chrome and non-AI settings panels may
+    not initialize assistant runtime state until an owned assistant or Patrol
+    surface is actually open.
 
 ## Forbidden Paths
 
@@ -1912,3 +1922,15 @@ response-header inference, hostname heuristics, or per-banner demo branching;
 the runtime bootstrap, shared session-capability store, and shared banner
 hooks stay on one canonical owner so suppression stays coherent across
 customer-facing surfaces.
+That same shared app-shell boundary now also owns assistant bootstrap silence
+on non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
+`frontend-modern/src/App.tsx`,
+`frontend-modern/src/components/AI/Chat/index.tsx`, and
+`frontend-modern/src/hooks/useDashboardActions.ts` must treat
+`/api/security/status.sessionCapabilities.assistantEnabled` as the only
+general-route assistant availability fact, while closed assistant chrome and
+non-AI settings panels stay off `/api/settings/ai` and `/api/ai/*` until an
+owned assistant or Patrol surface is actually open. The governed browser
+proof in `tests/integration/tests/11-first-session.spec.ts` must continue to
+assert that plain settings routes render without assistant bootstrap traffic
+or console noise.

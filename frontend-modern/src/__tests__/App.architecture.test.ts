@@ -40,6 +40,8 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const [organizations, setOrganizations] = createSignal(');
     expect(appSource).not.toContain('const [themePreference, setThemePreference] =');
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
+    expect(appSource).not.toContain("import('./api/ai')");
+    expect(appSource).not.toContain('AIAPI.getSettings()');
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
@@ -82,6 +84,7 @@ describe('App architecture', () => {
     expect(appRuntimeStateSource).toContain('onMount(() => {');
     expect(appRuntimeStateSource).toContain('onMount(async () => {');
     expect(appRuntimeStateSource).toContain('void loadCommercialPosture();');
+    expect(appRuntimeStateSource).toContain('aiChatStore.setEnabled(');
     expect(appRuntimeStateSource).toContain("eventBus.on('theme_changed', handleRemoteThemeChange);");
     expect(appRuntimeStateSource).toContain(
       "eventBus.on('websocket_reconnected', handleWebSocketReconnected);",

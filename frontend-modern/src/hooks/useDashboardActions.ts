@@ -4,6 +4,7 @@ import type { UnifiedFinding } from '@/stores/aiIntelligence';
 import { aiIntelligenceStore } from '@/stores/aiIntelligence';
 import type { ApprovalRequest } from '@/api/ai';
 import { hasFeature } from '@/stores/license';
+import { DASHBOARD_PATH } from '@/routing/resourceLinks';
 
 export interface DashboardActions {
   pendingApprovals: Accessor<ApprovalRequest[]>;
@@ -13,16 +14,26 @@ export interface DashboardActions {
   totalActionCount: Accessor<number>;
 }
 
+interface UseDashboardActionsOptions {
+  enabled?: Accessor<boolean>;
+}
+
 const APPROVAL_REFRESH_INTERVAL_MS = 30_000;
 
-export function useDashboardActions(alertsList: Accessor<Alert[]>): DashboardActions {
-  const hasPatrol = () => hasFeature('ai_patrol');
+export function useDashboardActions(
+  alertsList: Accessor<Alert[]>,
+  options: UseDashboardActionsOptions = {},
+): DashboardActions {
+  const enabled = () =>
+    options.enabled?.() ??
+    (typeof window === 'undefined' || window.location.pathname === DASHBOARD_PATH);
+  const hasPatrol = () => enabled() && hasFeature('ai_patrol');
 
   // Load patrol data on mount when feature is enabled
   createEffect(() => {
     if (hasPatrol()) {
-      aiIntelligenceStore.loadFindings();
-      aiIntelligenceStore.loadPendingApprovals();
+      void aiIntelligenceStore.loadFindings();
+      void aiIntelligenceStore.loadPendingApprovals();
     }
   });
 
@@ -35,7 +46,7 @@ export function useDashboardActions(alertsList: Accessor<Alert[]>): DashboardAct
     }
     if (hasPatrol()) {
       refreshInterval = window.setInterval(() => {
-        aiIntelligenceStore.loadPendingApprovals();
+        void aiIntelligenceStore.loadPendingApprovals();
       }, APPROVAL_REFRESH_INTERVAL_MS);
     }
   });

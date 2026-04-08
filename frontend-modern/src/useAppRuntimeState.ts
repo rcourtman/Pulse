@@ -52,6 +52,7 @@ import {
   runtimeCapabilitiesLoaded,
   loadRuntimeCapabilities,
 } from '@/stores/license';
+import { aiChatStore } from '@/stores/aiChat';
 import { loadCommercialPosture } from '@/stores/licenseCommercial';
 import { syncSessionPresentationPolicy } from '@/stores/sessionPresentationPolicy';
 import { layoutStore } from '@/utils/layout';
@@ -274,6 +275,14 @@ export const useAppRuntimeState = () => {
       logger.error('Failed to load system settings from server', error);
       markSystemSettingsLoadedWithDefaults();
     }
+  };
+
+  const applySecurityStatus = (securityData: SecurityStatus | null) => {
+    if (securityData) {
+      syncSessionPresentationPolicy(securityData);
+    }
+    setSecurityStatus(securityData);
+    aiChatStore.setEnabled(securityData?.sessionCapabilities?.assistantEnabled === true);
   };
 
   const beginAuthenticatedRuntime = async () => {
@@ -572,6 +581,7 @@ export const useAppRuntimeState = () => {
         } catch (clearError) {
           logger.warn('[App] Failed to clear stored auth after 401', clearError);
         }
+        aiChatStore.setEnabled(false);
         setHasAuth(false);
         setNeedsAuth(true);
         setIsLoading(false);
@@ -583,8 +593,7 @@ export const useAppRuntimeState = () => {
         logger.debug('[App] User logged out, showing login page');
         if (securityResponse.ok) {
           const securityData = (await securityResponse.json()) as SecurityStatus;
-          syncSessionPresentationPolicy(securityData);
-          setSecurityStatus(securityData);
+          applySecurityStatus(securityData);
         }
         setHasAuth(true);
         setNeedsAuth(true);
@@ -606,8 +615,7 @@ export const useAppRuntimeState = () => {
         ssoLogoutURL?: string;
       };
       logger.debug('[App] Security status fetched', securityData);
-      syncSessionPresentationPolicy(securityData);
-      setSecurityStatus(securityData);
+      applySecurityStatus(securityData);
 
       const authConfigured = securityData.hasAuthentication || false;
       setHasAuth(authConfigured);
@@ -664,6 +672,7 @@ export const useAppRuntimeState = () => {
       } catch (clearError) {
         logger.warn('[App] Failed to clear stored auth after auth check error', clearError);
       }
+      aiChatStore.setEnabled(false);
       setHasAuth(false);
       setNeedsAuth(true);
     } finally {
@@ -705,6 +714,7 @@ export const useAppRuntimeState = () => {
     keysToRemove.forEach((key) => localStorage.removeItem(key));
     sessionStorage.clear();
     localStorage.setItem('just_logged_out', 'true');
+    aiChatStore.setEnabled(false);
 
     if (wsStore()) {
       setWsStore(null);

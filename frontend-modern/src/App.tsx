@@ -296,26 +296,8 @@ function App() {
       onCloseCommandPalette: () => setCommandPaletteOpen(false),
     });
 
-    // Check AI settings on mount and setup escape handling
+    // Setup escape handling for the assistant drawer.
     onMount(() => {
-      // Only check AI settings if already authenticated (not on login screen)
-      // Otherwise, the 401 response triggers a redirect loop
-      if (!runtime.needsAuth()) {
-        import('./api/ai').then(({ AIAPI }) => {
-          AIAPI.getSettings()
-            .then((settings) => {
-              aiChatStore.setEnabled(settings.enabled && settings.configured);
-              // Initialize chat session sync with server
-              if (settings.enabled && settings.configured) {
-                aiChatStore.initSync();
-              }
-            })
-            .catch(() => {
-              aiChatStore.setEnabled(false);
-            });
-        });
-      }
-
       const handleKeyDown = (e: KeyboardEvent) => {
         // Escape to close
         if (e.key === 'Escape' && aiChatStore.isOpen) {

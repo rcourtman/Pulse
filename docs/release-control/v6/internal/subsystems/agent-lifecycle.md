@@ -206,6 +206,14 @@ management, and fleet control surfaces.
     entitlements payloads, but they must not cache their own pre-activation
     host counts, synthesize a second grandfather floor, or treat install-time
     fleet inventory as the authority for commercial continuity.
+14. Keep dormant assistant availability on the shared auth/bootstrap contract.
+    When `internal/api/ai_handlers.go`,
+    `internal/api/router_routes_auth_security.go`, or
+    `internal/api/security_status_capabilities.go` change, first-session,
+    setup, and install routes that do not own assistant or Patrol UI must
+    consume `/api/security/status.sessionCapabilities.assistantEnabled`
+    instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary route
+    bootstrap.
 
 ## Forbidden Paths
 

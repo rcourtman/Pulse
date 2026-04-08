@@ -477,6 +477,12 @@ as the canonical runtime contract for `demoMode`, `readOnly`,
 must therefore defer their first read until that policy has resolved, so
 public demos fail closed without probing hidden commercial routes during
 bootstrap.
+That same `/api/security/status` contract now also owns closed-shell
+assistant availability. The response must expose
+`sessionCapabilities.assistantEnabled` as the only general-route bootstrap
+fact for dormant assistant chrome, so non-AI routes do not probe
+`/api/settings/ai` or `/api/ai/*` merely to decide whether the assistant
+affordance may be opened.
 That same contract split also makes the licensing boundary explicit:
 `/api/license/runtime-capabilities` is the public runtime feature contract,
 `/api/license/commercial-posture` is the non-billing upgrade/trial posture

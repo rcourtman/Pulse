@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -26,7 +27,8 @@ type securityStatusSettingsCapabilities struct {
 }
 
 type securityStatusSessionCapabilities struct {
-	DemoMode bool `json:"demoMode"`
+	DemoMode         bool `json:"demoMode"`
+	AssistantEnabled bool `json:"assistantEnabled"`
 }
 
 type securityStatusPresentationPolicy struct {
@@ -238,10 +240,15 @@ func (r *Router) securityStatusSettingsCapabilities(req *http.Request) securityS
 	return r.securityStatusSettingsCapabilitiesFromSnapshot(r.buildSecurityStatusAuthSnapshot(req))
 }
 
-func (r *Router) securityStatusSessionCapabilities() securityStatusSessionCapabilities {
+func (r *Router) securityStatusSessionCapabilities(ctx context.Context) securityStatusSessionCapabilities {
 	demoMode := r != nil && r.config != nil && r.config.DemoMode
+	assistantEnabled := false
+	if r != nil && r.aiSettingsHandler != nil {
+		assistantEnabled = r.aiSettingsHandler.AssistantEnabled(ctx)
+	}
 	return securityStatusSessionCapabilities{
-		DemoMode: demoMode,
+		DemoMode:         demoMode,
+		AssistantEnabled: assistantEnabled,
 	}
 }
 
