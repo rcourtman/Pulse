@@ -14,9 +14,16 @@ const PURCHASE_RETURN_URL = `${DEV_SERVER_URL}/auth/license-purchase-activate`;
 const PORTAL_HANDOFF_ID = "cph_checkout_return";
 const ACTIVATED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=activated`;
 const CANCELLED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=cancelled`;
+const EXPIRED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=expired`;
+const FAILED_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems&purchase=failed`;
 const FINAL_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/plan?intent=max_monitored_systems`;
 const USAGE_BILLING_URL = `${DEV_SERVER_URL}/settings/system/billing/usage`;
+const RECOVERY_BILLING_HREF =
+  "/settings/system/billing/plan?intent=max_monitored_systems&details=recovery";
+const RECOVERY_BILLING_URL = `${DEV_SERVER_URL}${RECOVERY_BILLING_HREF}`;
 const PURCHASE_RETURN_TOKEN = "prt_signed_checkout_return";
+const CHECKOUT_SESSION_ID = "cs_upgrade_return";
+const MONITORED_SYSTEM_FEATURE = "max_monitored_systems";
 
 const MONITORED_SYSTEM_ENTITLEMENTS = {
   capabilities: [],
@@ -108,6 +115,184 @@ function escapeAttribute(value: string): string {
     .replaceAll(">", "&gt;");
 }
 
+function buildPortalHandoffUrl(portalHandoffID = PORTAL_HANDOFF_ID): string {
+  return `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${portalHandoffID}`;
+}
+
+function buildPurchaseReturnUrl(options: {
+  sessionID?: string;
+  portalHandoffID?: string;
+  feature?: string;
+  purchaseReturnToken?: string;
+} = {}): string {
+  const {
+    sessionID = CHECKOUT_SESSION_ID,
+    portalHandoffID = PORTAL_HANDOFF_ID,
+    feature = MONITORED_SYSTEM_FEATURE,
+    purchaseReturnToken = PURCHASE_RETURN_TOKEN,
+  } = options;
+  const url = new URL(PURCHASE_RETURN_URL);
+  url.searchParams.set("session_id", sessionID);
+  url.searchParams.set("portal_handoff_id", portalHandoffID);
+  url.searchParams.set("feature", feature);
+  url.searchParams.set("purchase_return_token", purchaseReturnToken);
+  return url.toString();
+}
+
+function renderTimedRedirectPage(title: string, body: string, redirectUrl: string): string {
+  return (
+    "<!doctype html><html><body>" +
+    `<h1>${title}</h1>` +
+    `<p>${body}</p>` +
+    `<script>setTimeout(function(){window.location.replace(${JSON.stringify(redirectUrl)});},150);</script>` +
+    "</body></html>"
+  );
+}
+
+function renderActivationBridgePage(options: {
+  sessionID?: string;
+  portalHandoffID?: string;
+  feature?: string;
+  purchaseReturnToken?: string;
+  title?: string;
+} = {}): string {
+  const {
+    sessionID = CHECKOUT_SESSION_ID,
+    portalHandoffID = PORTAL_HANDOFF_ID,
+    feature = MONITORED_SYSTEM_FEATURE,
+    purchaseReturnToken = PURCHASE_RETURN_TOKEN,
+    title = "Finalizing Pulse Pro upgrade",
+  } = options;
+  return (
+    "<!doctype html><html><body>" +
+    `<h1>${title}</h1>` +
+    `<form id="purchase-activation-continue-form" method="POST" action="${escapeAttribute(PURCHASE_RETURN_URL)}">` +
+    `<input type="hidden" name="session_id" value="${escapeAttribute(sessionID)}">` +
+    `<input type="hidden" name="portal_handoff_id" value="${escapeAttribute(portalHandoffID)}">` +
+    `<input type="hidden" name="feature" value="${escapeAttribute(feature)}">` +
+    `<input type="hidden" name="purchase_return_token" value="${escapeAttribute(purchaseReturnToken)}">` +
+    "</form>" +
+    '<script>setTimeout(function(){document.getElementById("purchase-activation-continue-form")?.submit();},50);</script>' +
+    "</body></html>"
+  );
+}
+
+function renderActivationCompletionPage(title: string, redirectUrl: string): string {
+  return (
+    "<!doctype html><html><body>" +
+    `<h1>${title}</h1>` +
+    `<script>(function(){var redirectPath=${JSON.stringify(redirectUrl)};if(window.opener&&!window.opener.closed){window.opener.location.assign(redirectPath);window.close();return;}window.location.replace(redirectPath);}());</script>` +
+    "</body></html>"
+  );
+}
+
+async function configurePurchaseStartRoute(
+  context: BrowserContext,
+  onRequest?: (requestUrl: URL) => void,
+) {
+  await context.route(`${PURCHASE_START_URL}**`, async (route) => {
+    const requestUrl = new URL(route.request().url());
+    onRequest?.(requestUrl);
+    expect(requestUrl.searchParams.get("feature")).toBe(MONITORED_SYSTEM_FEATURE);
+    await route.fulfill({
+      status: 303,
+      headers: {
+        location: buildPortalHandoffUrl(),
+      },
+      body: "",
+    });
+  });
+}
+
+async function configurePortalRedirectRoute(
+  context: BrowserContext,
+  options: {
+    title?: string;
+    body: string;
+    redirectUrl: string;
+  },
+) {
+  await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
+    const requestUrl = new URL(route.request().url());
+    expect(requestUrl.searchParams.get("service")).toBeNull();
+    expect(requestUrl.searchParams.get("feature")).toBeNull();
+    expect(requestUrl.searchParams.get("return_url")).toBeNull();
+    expect(requestUrl.searchParams.get("purchase_handoff_url")).toBeNull();
+    expect(requestUrl.searchParams.get("portal_handoff_id")).toBe(PORTAL_HANDOFF_ID);
+    expect(requestUrl.searchParams.get("checkout_intent_id")).toBeNull();
+
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: renderTimedRedirectPage(
+        options.title ?? "Pulse Account",
+        options.body,
+        options.redirectUrl,
+      ),
+    });
+  });
+}
+
+async function configurePurchaseReturnRoute(
+  context: BrowserContext,
+  options: {
+    sessionID?: string;
+    portalHandoffID?: string;
+    feature?: string;
+    purchaseReturnToken?: string;
+    bridgeTitle?: string;
+    completionTitle: string;
+    finalRedirectUrl: string;
+  },
+) {
+  const {
+    sessionID = CHECKOUT_SESSION_ID,
+    portalHandoffID = PORTAL_HANDOFF_ID,
+    feature = MONITORED_SYSTEM_FEATURE,
+    purchaseReturnToken = PURCHASE_RETURN_TOKEN,
+    bridgeTitle,
+    completionTitle,
+    finalRedirectUrl,
+  } = options;
+
+  await context.route(`${PURCHASE_RETURN_URL}**`, async (route) => {
+    const request = route.request();
+    if (request.method() === "GET") {
+      const requestUrl = new URL(request.url());
+      expect(requestUrl.searchParams.get("session_id")).toBe(sessionID);
+      expect(requestUrl.searchParams.get("portal_handoff_id")).toBe(portalHandoffID);
+      expect(requestUrl.searchParams.get("feature")).toBe(feature);
+      expect(requestUrl.searchParams.get("purchase_return_token")).toBe(
+        purchaseReturnToken,
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: renderActivationBridgePage({
+          sessionID,
+          portalHandoffID,
+          feature,
+          purchaseReturnToken,
+          title: bridgeTitle,
+        }),
+      });
+      return;
+    }
+
+    expect(request.method()).toBe("POST");
+    const formData = new URLSearchParams(request.postData() || "");
+    expect(formData.get("session_id")).toBe(sessionID);
+    expect(formData.get("portal_handoff_id")).toBe(portalHandoffID);
+    expect(formData.get("feature")).toBe(feature);
+    expect(formData.get("purchase_return_token")).toBe(purchaseReturnToken);
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: renderActivationCompletionPage(completionTitle, finalRedirectUrl),
+    });
+  });
+}
+
 async function configureBillingFixtures(context: BrowserContext, page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("pulse_whats_new_v2_shown", "true");
@@ -187,85 +372,16 @@ test.describe("Self-hosted upgrade return flow", () => {
     await configureBillingFixtures(context, page);
     let purchaseStartURL = "";
 
-    await context.route(`${PURCHASE_START_URL}**`, async (route) => {
-      const requestUrl = new URL(route.request().url());
+    await configurePurchaseStartRoute(context, (requestUrl) => {
       purchaseStartURL = requestUrl.toString();
-      expect(requestUrl.searchParams.get("feature")).toBe(
-        "max_monitored_systems",
-      );
-      await route.fulfill({
-        status: 303,
-        headers: {
-          location: `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
-        },
-        body: "",
-      });
     });
-
-    await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
-      const requestUrl = new URL(route.request().url());
-      expect(requestUrl.searchParams.get("service")).toBeNull();
-      expect(requestUrl.searchParams.get("feature")).toBeNull();
-      expect(requestUrl.searchParams.get("return_url")).toBeNull();
-      expect(requestUrl.searchParams.get("purchase_handoff_url")).toBeNull();
-      expect(requestUrl.searchParams.get("portal_handoff_id")).toBe(
-        PORTAL_HANDOFF_ID,
-      );
-      expect(requestUrl.searchParams.get("checkout_intent_id")).toBeNull();
-
-      await route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body:
-          "<!doctype html><html><body>" +
-          "<h1>Pulse Account</h1>" +
-          "<p>Checkout complete. Returning to Pulse Pro.</p>" +
-          `<script>setTimeout(function(){window.location.replace(${JSON.stringify(
-            `${PURCHASE_RETURN_URL}?session_id=cs_upgrade_return&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
-          )});},150);</script>` +
-          "</body></html>",
-      });
+    await configurePortalRedirectRoute(context, {
+      body: "Checkout complete. Returning to Pulse Pro.",
+      redirectUrl: buildPurchaseReturnUrl(),
     });
-
-    await context.route(`${PURCHASE_RETURN_URL}**`, async (route) => {
-      const request = route.request();
-      if (request.method() === "GET") {
-        const requestUrl = new URL(request.url());
-        expect(requestUrl.searchParams.get("session_id")).toBe(
-          "cs_upgrade_return",
-        );
-        expect(requestUrl.searchParams.get("purchase_return_token")).toBe(
-          PURCHASE_RETURN_TOKEN,
-        );
-        await route.fulfill({
-          status: 200,
-          contentType: "text/html",
-          body:
-            "<!doctype html><html><body>" +
-            "<h1>Finalizing Pulse Pro upgrade</h1>" +
-            `<form id="purchase-activation-continue-form" method="POST" action="${escapeAttribute(PURCHASE_RETURN_URL)}">` +
-            '<input type="hidden" name="session_id" value="cs_upgrade_return">' +
-            `<input type="hidden" name="purchase_return_token" value="${escapeAttribute(PURCHASE_RETURN_TOKEN)}">` +
-            "</form>" +
-            '<script>setTimeout(function(){document.getElementById("purchase-activation-continue-form")?.submit();},50);</script>' +
-            "</body></html>",
-        });
-        return;
-      }
-
-      expect(request.method()).toBe("POST");
-      const formData = new URLSearchParams(request.postData() || "");
-      expect(formData.get("session_id")).toBe("cs_upgrade_return");
-      expect(formData.get("purchase_return_token")).toBe(PURCHASE_RETURN_TOKEN);
-      await route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body:
-          "<!doctype html><html><body>" +
-          "<h1>Pulse Pro activated</h1>" +
-          `<script>(function(){var redirectPath=${JSON.stringify(ACTIVATED_BILLING_URL)};if(window.opener&&!window.opener.closed){window.opener.location.assign(redirectPath);window.close();return;}window.location.replace(redirectPath);}());</script>` +
-          "</body></html>",
-      });
+    await configurePurchaseReturnRoute(context, {
+      completionTitle: "Pulse Pro activated",
+      finalRedirectUrl: ACTIVATED_BILLING_URL,
     });
 
     await openMonitoredSystemUpgradeArrival(page);
@@ -282,12 +398,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       .poll(() => purchaseStartURL)
       .toBe(`${PURCHASE_START_URL}?feature=max_monitored_systems`);
 
-    await page.goto(
-      `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
-      {
-        waitUntil: "domcontentloaded",
-      },
-    );
+    await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
     await expect(
       page.getByRole("heading", { name: "Pulse Account" }),
     ).toBeVisible();
@@ -322,29 +433,10 @@ test.describe("Self-hosted upgrade return flow", () => {
     const context = page.context();
     await configureBillingFixtures(context, page);
 
-    await context.route(`${PURCHASE_START_URL}**`, async (route) => {
-      await route.fulfill({
-        status: 303,
-        headers: {
-          location: `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
-        },
-        body: "",
-      });
-    });
-
-    await context.route(`${PULSE_ACCOUNT_PORTAL_URL}**`, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "text/html",
-        body:
-          "<!doctype html><html><body>" +
-          "<h1>Pulse Account</h1>" +
-          "<p>Checkout cancelled. Returning to Pulse Pro.</p>" +
-          `<script>setTimeout(function(){window.location.replace(${JSON.stringify(
-            CANCELLED_BILLING_URL,
-          )});},150);</script>` +
-          "</body></html>",
-      });
+    await configurePurchaseStartRoute(context);
+    await configurePortalRedirectRoute(context, {
+      body: "Checkout cancelled. Returning to Pulse Pro.",
+      redirectUrl: CANCELLED_BILLING_URL,
     });
 
     await openMonitoredSystemUpgradeArrival(page);
@@ -352,12 +444,7 @@ test.describe("Self-hosted upgrade return flow", () => {
     const comparePlansLink = page.getByRole("link", { name: "Compare plans" });
     await comparePlansLink.click();
 
-    await page.goto(
-      `${PULSE_ACCOUNT_PORTAL_URL}?portal_handoff_id=${PORTAL_HANDOFF_ID}`,
-      {
-        waitUntil: "domcontentloaded",
-      },
-    );
+    await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
 
     await expect(page).toHaveURL(CANCELLED_BILLING_URL);
     await expect(page.getByText("Checkout cancelled", { exact: true })).toBeVisible();
@@ -365,5 +452,117 @@ test.describe("Self-hosted upgrade return flow", () => {
       "href",
       `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
     );
+  });
+
+  test("returns an already-consumed checkout back to the activated billing state", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    const context = page.context();
+    await configureBillingFixtures(context, page);
+
+    await configurePurchaseStartRoute(context);
+    await configurePortalRedirectRoute(context, {
+      body: "Checkout complete. Returning to Pulse Pro.",
+      redirectUrl: buildPurchaseReturnUrl(),
+    });
+    await configurePurchaseReturnRoute(context, {
+      bridgeTitle: "Confirming Pulse Pro activation state",
+      completionTitle: "Purchase activation already completed",
+      finalRedirectUrl: ACTIVATED_BILLING_URL,
+    });
+
+    await openMonitoredSystemUpgradeArrival(page);
+    await page.getByRole("link", { name: "Compare plans" }).click();
+    await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(FINAL_BILLING_URL);
+    await expect(
+      page.getByText("Pulse Pro activated", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "Review usage" })).toHaveAttribute(
+      "href",
+      "/settings/system/billing/usage",
+    );
+  });
+
+  test("returns an expired or mismatched checkout state to restart the owned upgrade flow", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    const context = page.context();
+    await configureBillingFixtures(context, page);
+
+    await configurePurchaseStartRoute(context);
+    await configurePortalRedirectRoute(context, {
+      body: "Secure upgrade state expired. Returning to Pulse Pro.",
+      redirectUrl: buildPurchaseReturnUrl(),
+    });
+    await configurePurchaseReturnRoute(context, {
+      bridgeTitle: "Verifying Pulse Pro checkout return",
+      completionTitle: "Upgrade return expired",
+      finalRedirectUrl: EXPIRED_BILLING_URL,
+    });
+
+    await openMonitoredSystemUpgradeArrival(page);
+    await page.getByRole("link", { name: "Compare plans" }).click();
+    await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(EXPIRED_BILLING_URL);
+    await expect(
+      page.getByText("Upgrade return expired", { exact: true }),
+    ).toBeVisible();
+    const restartUpgradeLink = page.getByRole("link", { name: "Restart upgrade" });
+    await expect(restartUpgradeLink).toHaveAttribute(
+      "href",
+      `${PURCHASE_START_PATH}?feature=max_monitored_systems`,
+    );
+    await expect(restartUpgradeLink).toHaveAttribute("target", "_blank");
+  });
+
+  test("returns local activation failures to the billing recovery entry point", async ({
+    page,
+  }, testInfo) => {
+    test.skip(
+      testInfo.project.name.startsWith("mobile-"),
+      "Desktop-only billing continuity",
+    );
+
+    const context = page.context();
+    await configureBillingFixtures(context, page);
+
+    await configurePurchaseStartRoute(context);
+    await configurePortalRedirectRoute(context, {
+      body: "Checkout complete, but Pulse Pro needs local recovery.",
+      redirectUrl: buildPurchaseReturnUrl(),
+    });
+    await configurePurchaseReturnRoute(context, {
+      bridgeTitle: "Finishing local Pulse Pro activation",
+      completionTitle: "Activation needs attention",
+      finalRedirectUrl: FAILED_BILLING_URL,
+    });
+
+    await openMonitoredSystemUpgradeArrival(page);
+    await page.getByRole("link", { name: "Compare plans" }).click();
+    await page.goto(buildPortalHandoffUrl(), { waitUntil: "domcontentloaded" });
+
+    await expect(page).toHaveURL(FAILED_BILLING_URL);
+    await expect(
+      page.getByText("Activation needs attention", { exact: true }),
+    ).toBeVisible();
+    const recoveryLink = page.getByRole("link", { name: "Open recovery" });
+    await expect(recoveryLink).toHaveAttribute("href", RECOVERY_BILLING_HREF);
+    await expect(recoveryLink).not.toHaveAttribute("target", "_blank");
+    await recoveryLink.click();
+    await expect(page).toHaveURL(RECOVERY_BILLING_URL);
+    await expect(page.locator("#pulse-pro-recovery")).toBeVisible();
   });
 });

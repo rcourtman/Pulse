@@ -14,10 +14,15 @@ export const SELF_HOSTED_PRO_BILLING_USAGE_ROUTE = `${SELF_HOSTED_PRO_BILLING_RO
 export const SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID = 'pulse-pro-plan';
 export const SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID = 'pulse-pro-usage';
 export const SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID = 'pulse-pro-recovery';
-export const SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM = 'details';
+export const SELF_HOSTED_PRO_BILLING_DETAILS_QUERY_PARAM = 'details';
+export const SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM =
+  SELF_HOSTED_PRO_BILLING_DETAILS_QUERY_PARAM;
+export const SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM =
+  SELF_HOSTED_PRO_BILLING_DETAILS_QUERY_PARAM;
 export const SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM = 'intent';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM = 'purchase';
 export const SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL = 'counting-rules';
+export const SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL = 'recovery';
 export const SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT = 'max_monitored_systems';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED = 'activated';
 export const SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED = 'cancelled';
@@ -26,6 +31,8 @@ export const SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED = 'failed';
 
 export type SelfHostedBillingSection = 'plan' | 'usage';
 export type SelfHostedBillingUsageDetail = typeof SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL;
+export type SelfHostedBillingPlanDetail = typeof SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL;
+export type SelfHostedBillingDetail = SelfHostedBillingUsageDetail | SelfHostedBillingPlanDetail;
 export type SelfHostedBillingPlanIntent = typeof SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT;
 export type SelfHostedBillingPurchaseArrival =
   | typeof SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED
@@ -35,7 +42,7 @@ export type SelfHostedBillingPurchaseArrival =
 
 export const SELF_HOSTED_PRO_BILLING_PLAN_HREF = SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
 export const SELF_HOSTED_PRO_BILLING_USAGE_HREF = SELF_HOSTED_PRO_BILLING_USAGE_ROUTE;
-export const SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}#${SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID}`;
+export const SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL}`;
 export const SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF = `${SELF_HOSTED_PRO_BILLING_USAGE_ROUTE}?${SELF_HOSTED_PRO_BILLING_USAGE_DETAILS_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL}`;
 export const SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF = `${SELF_HOSTED_PRO_BILLING_PLAN_ROUTE}?${SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM}=${SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT}`;
 
@@ -144,6 +151,13 @@ export function getSelfHostedBillingUsageDetail(
   return detail === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL ? detail : null;
 }
 
+export function getSelfHostedBillingPlanDetail(search: string): SelfHostedBillingPlanDetail | null {
+  const detail = billingSearch(search)
+    .get(SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM)
+    ?.trim();
+  return detail === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL ? detail : null;
+}
+
 export function getSelfHostedBillingPlanIntent(search: string): SelfHostedBillingPlanIntent | null {
   const intent = billingSearch(search).get(SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM)?.trim();
   return intent === SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT ? intent : null;
@@ -167,7 +181,7 @@ export function getSelfHostedBillingPurchaseArrival(
 export function getSelfHostedBillingHref(
   section: SelfHostedBillingSection,
   options: {
-    detail?: SelfHostedBillingUsageDetail | null;
+    detail?: SelfHostedBillingDetail | null;
     intent?: SelfHostedBillingPlanIntent | null;
     purchase?: SelfHostedBillingPurchaseArrival | null;
   } = {},
@@ -187,6 +201,13 @@ export function getSelfHostedBillingHref(
     params.set(
       SELF_HOSTED_PRO_BILLING_PLAN_INTENT_QUERY_PARAM,
       SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+    );
+  }
+
+  if (section === 'plan' && options.detail === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL) {
+    params.set(
+      SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM,
+      SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
     );
   }
 
@@ -222,8 +243,14 @@ export function resolveSelfHostedBillingSection(
   if (normalizedHash === SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID) {
     return 'plan';
   }
+  if (normalizedHash === SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID) {
+    return 'plan';
+  }
   if (getSelfHostedBillingUsageDetail(search) === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL) {
     return 'usage';
+  }
+  if (getSelfHostedBillingPlanDetail(search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL) {
+    return 'plan';
   }
   return 'plan';
 }
@@ -239,18 +266,33 @@ export function resolveCanonicalSelfHostedBillingHref(
   }
 
   const section = resolveSelfHostedBillingSection(normalizedPath, search, hash);
-  const canonicalPath =
-    section === 'usage' ? SELF_HOSTED_PRO_BILLING_USAGE_ROUTE : SELF_HOSTED_PRO_BILLING_PLAN_ROUTE;
-  const normalizedSearch = normalizeSearch(search);
+  const normalizedHash = normalizeHash(hash);
+  const usageDetail =
+    section === 'usage' &&
+    getSelfHostedBillingUsageDetail(search) === SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL
+      ? SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL
+      : null;
+  const planIntent = section === 'plan' ? getSelfHostedBillingPlanIntent(search) : null;
+  const planDetail =
+    section === 'plan' &&
+    (getSelfHostedBillingPlanDetail(search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL ||
+      normalizedHash === SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID)
+      ? SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL
+      : null;
+  const purchase = section === 'plan' ? getSelfHostedBillingPurchaseArrival(search) : null;
 
-  return `${canonicalPath}${normalizedSearch ? `?${normalizedSearch}` : ''}`;
+  return getSelfHostedBillingHref(section, {
+    detail: section === 'usage' ? usageDetail : planDetail,
+    intent: planIntent,
+    purchase,
+  });
 }
 
 export function scopeSelfHostedBillingDestination(
   destination: UpgradeDestination,
   section: SelfHostedBillingSection,
   options: {
-    detail?: SelfHostedBillingUsageDetail | null;
+    detail?: SelfHostedBillingDetail | null;
     intent?: SelfHostedBillingPlanIntent | null;
     purchase?: SelfHostedBillingPurchaseArrival | null;
   } = {},

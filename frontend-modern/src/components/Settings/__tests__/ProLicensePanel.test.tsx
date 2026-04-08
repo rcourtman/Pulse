@@ -9,6 +9,7 @@ import proLicensePanelStateSource from '../useProLicensePanelState.ts?raw';
 import proLicensePlanSectionSource from '../ProLicensePlanSection.tsx?raw';
 import selfHostedCommercialRecoverySectionSource from '../SelfHostedCommercialRecoverySection.tsx?raw';
 import {
+  getSelfHostedBillingHref,
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
@@ -18,6 +19,7 @@ import {
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
+  SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
@@ -482,9 +484,14 @@ describe('ProLicensePanel', () => {
       purchase: SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
       title: 'Activation needs attention',
       actionLabel: 'Open recovery',
-      actionHref: SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF,
+      actionHref: getSelfHostedBillingHref('plan', {
+        detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+      }),
+      redirectedHref: getSelfHostedBillingHref('plan', {
+        detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+      }),
     },
-  ])('shows the purchase arrival notice for $purchase', async ({ purchase, title, actionLabel, actionHref }) => {
+  ])('shows the purchase arrival notice for $purchase', async ({ purchase, title, actionLabel, actionHref, redirectedHref = SELF_HOSTED_PRO_BILLING_PLAN_HREF }) => {
     useLocationMock.mockReturnValue({
       search: `?purchase=${purchase}`,
       pathname: '/settings/system/billing/plan',
@@ -499,7 +506,7 @@ describe('ProLicensePanel', () => {
     } else {
       expect(screen.queryByRole('link', { name: 'Review usage' })).not.toBeInTheDocument();
     }
-    expect(navigateMock).toHaveBeenCalledWith(SELF_HOSTED_PRO_BILLING_PLAN_HREF, {
+    expect(navigateMock).toHaveBeenCalledWith(redirectedHref, {
       replace: true,
       scroll: false,
     });
@@ -520,6 +527,21 @@ describe('ProLicensePanel', () => {
       SELF_HOSTED_PRO_BILLING_USAGE_HREF,
     );
     expect(screen.queryByText('Need a higher monitored-system cap?')).not.toBeInTheDocument();
+  });
+
+  it('opens recovery by default when the billing route requests the recovery detail', async () => {
+    useLocationMock.mockReturnValue({
+      search: '?details=recovery',
+      pathname: '/settings/system/billing/plan',
+      hash: '',
+    });
+
+    renderPanel();
+
+    const recoveryDisclosure = screen
+      .getByText('Redeem existing key')
+      .closest('details');
+    expect(recoveryDisclosure).toHaveAttribute('open');
   });
 
   it('focuses the usage billing section when the usage route requests counting rules', async () => {

@@ -144,6 +144,43 @@ func TestClientActivate(t *testing.T) {
 		}
 	})
 
+	t.Run("server returns legacy error field", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]any{
+				"error":     "invalid_activation",
+				"message":   "Activation key could not be redeemed",
+				"retryable": false,
+			})
+		}))
+		defer server.Close()
+
+		client := NewLicenseServerClient(server.URL)
+		_, err := client.Activate(context.Background(), ActivateInstallationRequest{
+			ActivationKey: "ppk_live_bad",
+		})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+
+		apiErr, ok := err.(*LicenseServerError)
+		if !ok {
+			t.Fatalf("expected *LicenseServerError, got %T", err)
+		}
+		if apiErr.StatusCode != 400 {
+			t.Errorf("StatusCode = %d, want 400", apiErr.StatusCode)
+		}
+		if apiErr.Code != "invalid_activation" {
+			t.Errorf("Code = %q, want invalid_activation", apiErr.Code)
+		}
+		if apiErr.Message != "Activation key could not be redeemed" {
+			t.Errorf("Message = %q, want Activation key could not be redeemed", apiErr.Message)
+		}
+		if apiErr.Retryable {
+			t.Error("expected Retryable=false for 400")
+		}
+	})
+
 	t.Run("server error is retryable", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)

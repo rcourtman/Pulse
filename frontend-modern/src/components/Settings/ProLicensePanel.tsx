@@ -59,27 +59,43 @@ export const ProLicensePanel: Component = () => {
               title={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionTitle}
               description={SELF_HOSTED_PRO_BILLING_PRESENTATION.planSectionDescription}
             >
-              <ProLicensePlanSection
-                commercialMigrationNotice={state.commercialMigrationNotice()}
-                commercialPlanModel={state.commercialPlanModel()}
-                entitlements={state.entitlements()}
-                formattedFeatures={state.formattedFeatures()}
-                grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
-                hasLicenseDetails={state.hasLicenseDetails()}
-                hasPaidFeatures={state.hasPaidFeatures()}
-                loading={state.loading()}
-                monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
-                onReload={() => void state.loadPanelData()}
-                purchaseActivationAction={state.purchaseActivationAction()}
-                purchaseActivationNotice={state.purchaseActivationNotice()}
-                showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
-                showTrialStart={state.showTrialStart()}
-                startingTrial={state.startingTrial()}
-                statusPresentation={state.statusPresentation()}
-                onStartTrial={() => void state.handleStartTrial()}
-                trialActivationNotice={state.trialActivationNotice()}
-                trialEnded={state.trialEnded()}
-              />
+              <div class="space-y-6">
+                <ProLicensePlanSection
+                  commercialMigrationNotice={state.commercialMigrationNotice()}
+                  commercialPlanModel={state.commercialPlanModel()}
+                  entitlements={state.entitlements()}
+                  formattedFeatures={state.formattedFeatures()}
+                  grandfatheredPriceNotice={state.grandfatheredPriceNotice()}
+                  hasLicenseDetails={state.hasLicenseDetails()}
+                  hasPaidFeatures={state.hasPaidFeatures()}
+                  loading={state.loading()}
+                  monitoredSystemContinuityNotice={state.monitoredSystemContinuityNotice()}
+                  onReload={() => void state.loadPanelData()}
+                  purchaseActivationAction={state.purchaseActivationAction()}
+                  purchaseActivationNotice={state.purchaseActivationNotice()}
+                  showMonitoredSystemUpgradeArrival={state.showMonitoredSystemUpgradeArrival()}
+                  showTrialStart={state.showTrialStart()}
+                  startingTrial={state.startingTrial()}
+                  statusPresentation={state.statusPresentation()}
+                  onStartTrial={() => void state.handleStartTrial()}
+                  trialActivationNotice={state.trialActivationNotice()}
+                  trialEnded={state.trialEnded()}
+                />
+
+                <SelfHostedCommercialRecoverySection
+                  sectionId={SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID}
+                  open={state.showRecoveryByDefault()}
+                  licenseKey={state.licenseKey()}
+                  activating={state.activating()}
+                  clearing={state.clearing()}
+                  loading={state.loading()}
+                  hasLicenseDetails={state.hasLicenseDetails()}
+                  looksLikeLegacyLicenseKey={state.looksLikeLegacyLicenseKey()}
+                  onLicenseKeyInput={state.setLicenseKey}
+                  onActivate={state.handleActivate}
+                  onClear={state.handleClear}
+                />
+              </div>
             </CommercialSection>
           </Show>
 
@@ -95,19 +111,6 @@ export const ProLicensePanel: Component = () => {
               />
             </CommercialSection>
           </Show>
-
-          <SelfHostedCommercialRecoverySection
-            sectionId={SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID}
-            licenseKey={state.licenseKey()}
-            activating={state.activating()}
-            clearing={state.clearing()}
-            loading={state.loading()}
-            hasLicenseDetails={state.hasLicenseDetails()}
-            looksLikeLegacyLicenseKey={state.looksLikeLegacyLicenseKey()}
-            onLicenseKeyInput={state.setLicenseKey}
-            onActivate={state.handleActivate}
-            onClear={state.handleClear}
-          />
         </div>
       </CommercialBillingShell>
     </div>

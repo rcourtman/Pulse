@@ -56,6 +56,9 @@ def git_diff_name_only(*args: str) -> list[str]:
 def is_worktree_sensitive_governance_path(path: str) -> bool:
     if path in STAGED_EXECUTION_EXACT_FILES:
         return False
+    filename = path.rsplit("/", 1)[-1]
+    if filename.endswith("_test.py") or filename.endswith("_test.go"):
+        return False
     if path in WORKTREE_SENSITIVE_EXACT_FILES:
         return True
     return any(path.startswith(prefix) for prefix in WORKTREE_SENSITIVE_PREFIXES)

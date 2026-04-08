@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getSelfHostedPurchaseStartUrl,
   getSelfHostedBillingHref,
+  getSelfHostedBillingPlanDetail,
   getSelfHostedBillingPlanIntent,
   getSelfHostedBillingPurchaseArrival,
   getSelfHostedBillingUsageDetail,
@@ -17,7 +18,9 @@ import {
   SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
   SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
+  SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
+  SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   SELF_HOSTED_PRO_BILLING_ROUTE,
   SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
@@ -75,12 +78,21 @@ describe('pricingHandoff', () => {
     ).toBe(
       `${SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF}&purchase=${SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED}`,
     );
+    expect(
+      getSelfHostedBillingHref('plan', {
+        intent: SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
+        detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+      }),
+    ).toBe(`${SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF}&details=recovery`);
   });
 
   it('canonicalizes legacy self-hosted billing aliases to route-owned states', () => {
     expect(
       resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE, '', '#pulse-pro-usage'),
     ).toBe(SELF_HOSTED_PRO_BILLING_USAGE_HREF);
+    expect(
+      resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE, '', '#pulse-pro-recovery'),
+    ).toBe(SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF);
     expect(resolveCanonicalSelfHostedBillingHref(SELF_HOSTED_PRO_BILLING_ROUTE)).toBe(
       SELF_HOSTED_PRO_BILLING_PLAN_HREF,
     );
@@ -95,6 +107,9 @@ describe('pricingHandoff', () => {
     expect(
       getSelfHostedBillingPlanIntent('?intent=' + SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT),
     ).toBe(SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT);
+    expect(getSelfHostedBillingPlanDetail('?details=' + SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL)).toBe(
+      SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+    );
     expect(
       getSelfHostedBillingPurchaseArrival(
         '?purchase=' + SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,

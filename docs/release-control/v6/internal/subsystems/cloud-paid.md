@@ -110,7 +110,7 @@ agreement, and cloud-specific enforcement rules.
 14. Add or change shared commercial plan/usage presentation through `frontend-modern/src/components/Settings/CommercialBillingSections.tsx` and `frontend-modern/src/utils/commercialBillingModel.ts`
 15. Add or change organization billing and usage presentation through `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`, `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`, and `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
 16. Add or change self-hosted Pro plan, trial, recovery, and entitlement actions through `frontend-modern/src/components/Settings/ProLicensePanel.tsx`, `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`, `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`, and `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-17. Add or change monitored-system ledger presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+17. Add or change monitored-system ledger, disclosure, or admission-preview presentation through `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`, `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`, `frontend-modern/src/components/Commercial/MonitoredSystemDefinitionDisclosure.tsx`, and `frontend-modern/src/utils/monitoredSystemPresentation.ts`
 18. Add or change paid relay settings and onboarding presentation through `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`, `frontend-modern/src/components/Settings/RelayPairingSection.tsx`, `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`, `frontend-modern/src/components/Dashboard/RelayOnboardingCard.tsx`, and `frontend-modern/src/components/Dashboard/useRelayOnboardingCardState.ts`
 19. Add or change cloud plan presentation through `frontend-modern/src/pages/CloudPricing.tsx`
 20. Add contract tests where runtime and pricing need to stay aligned
@@ -628,6 +628,10 @@ limit-warning banner, so the settings panel, Pro usage section, counting-rules
 disclosure, and shared warning-banner model must consume that helper instead
 of redefining customer-facing monitored-system copy inline or keeping a
 parallel copy in generic self-hosted plan utilities.
+That same helper also owns preview-impact copy and current/projected
+source-label wording for pre-save monitored-system admission UI, so the
+TrueNAS and VMware settings panels do not drift into provider-local billing
+phrasing when they surface canonical preview results before save.
 That same disclosure surface must not accept arbitrary caller-supplied
 monitored-system summary strings as its primary API. When the disclosure needs
 to show brief summary copy, it should render the canonical helper-owned brief
@@ -699,6 +703,15 @@ for self-hosted plan comparison and checkout before returning through the
 runtime-owned activation callback. Pulse product routes keep ownership of
 license status, usage, and activation state; `Pulse Account` owns the commerce
 flow itself.
+That same router-owned billing contract now also includes recovery as a plan
+detail state instead of a fragment alias. The canonical recovery arrival is
+`/settings/system/billing/plan?details=recovery`, while
+`#pulse-pro-recovery` remains a compatibility deep link that must normalize
+into that owned query state. `purchase=failed` arrival handling on the
+self-hosted billing surface must consume the one-shot purchase result, preserve
+the owned plan intent when present, and replace the URL with the canonical
+recovery detail route so `Open recovery` lands on a first-class billing state
+instead of a hash that settings-shell normalization strips away.
 That same ownership split is explicit in the governed registry as well:
 `CommercialBillingSections.tsx` is part of the shared commercial shell/model
 surface, while `SelfHostedCommercialRecoverySection.tsx` stays on the

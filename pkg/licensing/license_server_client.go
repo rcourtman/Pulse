@@ -354,14 +354,23 @@ func (c *LicenseServerClient) parseError(resp *http.Response) error {
 	// Try to parse structured error response from the license server.
 	if len(body) > 0 {
 		var parsed struct {
-			Code      string `json:"code"`
-			Message   string `json:"message"`
-			Retryable bool   `json:"retryable"`
+			Code       string `json:"code"`
+			LegacyCode string `json:"error"`
+			Message    string `json:"message"`
+			Retryable  bool   `json:"retryable"`
 		}
-		if json.Unmarshal(body, &parsed) == nil && parsed.Code != "" {
-			apiErr.Code = parsed.Code
-			apiErr.Message = parsed.Message
-			apiErr.Retryable = parsed.Retryable
+		if json.Unmarshal(body, &parsed) == nil {
+			code := strings.TrimSpace(parsed.Code)
+			if code == "" {
+				code = strings.TrimSpace(parsed.LegacyCode)
+			}
+			if code != "" {
+				apiErr.Code = code
+				if strings.TrimSpace(parsed.Message) != "" {
+					apiErr.Message = parsed.Message
+				}
+				apiErr.Retryable = parsed.Retryable
+			}
 		}
 	}
 

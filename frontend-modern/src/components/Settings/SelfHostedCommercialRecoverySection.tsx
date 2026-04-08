@@ -7,6 +7,7 @@ import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresent
 
 interface SelfHostedCommercialRecoverySectionProps {
   sectionId?: string;
+  open?: boolean;
   licenseKey: string;
   activating: boolean;
   clearing: boolean;
@@ -26,7 +27,7 @@ export const SelfHostedCommercialRecoverySection: Component<
     title={SELF_HOSTED_PRO_BILLING_PRESENTATION.recoverySectionTitle}
     description={SELF_HOSTED_PRO_BILLING_PRESENTATION.recoverySectionDescription}
   >
-    <details class="group rounded-md border border-border bg-surface-alt p-4">
+    <details class="group rounded-md border border-border bg-surface-alt p-4" open={props.open}>
       <summary class="cursor-pointer list-none">
         <div class="flex items-start justify-between gap-3">
           <div>

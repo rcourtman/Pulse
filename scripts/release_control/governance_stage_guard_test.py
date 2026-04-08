@@ -28,12 +28,21 @@ class GovernanceStageGuardTest(unittest.TestCase):
     def test_is_worktree_sensitive_governance_path_matches_expected_scope(self) -> None:
         self.assertTrue(is_worktree_sensitive_governance_path(".husky/pre-commit"))
         self.assertTrue(is_worktree_sensitive_governance_path("docs/release-control/control_plane.json"))
-        self.assertTrue(is_worktree_sensitive_governance_path("internal/repoctl/canonical_development_protocol_test.go"))
         self.assertTrue(is_worktree_sensitive_governance_path("scripts/release_control/status_audit.py"))
+        self.assertFalse(
+            is_worktree_sensitive_governance_path(
+                "internal/repoctl/canonical_development_protocol_test.go"
+            )
+        )
         self.assertFalse(is_worktree_sensitive_governance_path(".github/workflows/canonical-governance.yml"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/internal/CONTROL_PLANE.md"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/v6/internal/status.json"))
         self.assertFalse(is_worktree_sensitive_governance_path("docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md"))
+        self.assertFalse(
+            is_worktree_sensitive_governance_path(
+                "scripts/release_control/subsystem_lookup_test.py"
+            )
+        )
         self.assertFalse(
             is_worktree_sensitive_governance_path(
                 "scripts/release_control/release_promotion_policy_test.py"
@@ -48,7 +57,9 @@ class GovernanceStageGuardTest(unittest.TestCase):
             "docs/release-control/control_plane.json",
             "docs/release-control/v6/internal/status.json",
             "docs/release-control/v6/internal/PRE_RELEASE_CHECKLIST.md",
+            "internal/repoctl/canonical_development_protocol_test.go",
             "scripts/release_control/release_promotion_policy_test.py",
+            "scripts/release_control/subsystem_lookup_test.py",
             "internal/api/slo.go",
             "scripts/release_control/status_audit.py",
         ]

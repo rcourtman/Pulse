@@ -23,6 +23,8 @@ import {
   isDisplayableLicenseFeature,
 } from '@/utils/licensePresentation';
 import {
+  getSelfHostedBillingHref,
+  getSelfHostedBillingPlanDetail,
   getSelfHostedBillingPlanIntent,
   getSelfHostedBillingPurchaseArrival,
   getSelfHostedBillingUsageDetail,
@@ -30,11 +32,12 @@ import {
   resolveSelfHostedPurchaseStartDestination,
   SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
   SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT,
-  SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF,
+  SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED,
+  SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_PLAN_ROUTE,
   SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM,
   SELF_HOSTED_PRO_BILLING_USAGE_HREF,
@@ -93,6 +96,15 @@ export function useProLicensePanelState() {
     if (purchaseResult) {
       setPurchaseActivationResult(purchaseResult);
       params.delete(SELF_HOSTED_PRO_BILLING_PURCHASE_QUERY_PARAM);
+      if (
+        purchaseResult === SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED &&
+        getSelfHostedBillingPlanDetail(location.search) !== SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL
+      ) {
+        params.set(
+          SELF_HOSTED_PRO_BILLING_PLAN_DETAILS_QUERY_PARAM,
+          SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+        );
+      }
     }
     if (trialResult || purchaseResult) {
       const nextSearch = params.toString();
@@ -129,6 +141,11 @@ export function useProLicensePanelState() {
       activeSection() === 'usage' &&
       getSelfHostedBillingUsageDetail(location.search) ===
         SELF_HOSTED_PRO_BILLING_COUNTING_RULES_DETAIL,
+  );
+  const showRecoveryByDefault = createMemo(
+    () =>
+      activeSection() === 'plan' &&
+      getSelfHostedBillingPlanDetail(location.search) === SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
   );
 
   const showTrialStart = createMemo(() => {
@@ -295,7 +312,12 @@ export function useProLicensePanelState() {
       case SELF_HOSTED_PRO_BILLING_PURCHASE_FAILED:
         return {
           label: SELF_HOSTED_PRO_BILLING_PRESENTATION.purchaseFailedActionLabel,
-          destination: resolveUpgradeDestination(SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF),
+          destination: resolveUpgradeDestination(
+            getSelfHostedBillingHref('plan', {
+              intent,
+              detail: SELF_HOSTED_PRO_BILLING_RECOVERY_DETAIL,
+            }),
+          ),
         };
       default:
         return null;
@@ -416,6 +438,7 @@ export function useProLicensePanelState() {
     setLicenseKey,
     showCountingRulesByDefault,
     showMonitoredSystemUpgradeArrival,
+    showRecoveryByDefault,
     showTrialStart,
     startingTrial,
     statusPresentation,
