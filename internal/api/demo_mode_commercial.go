@@ -64,6 +64,36 @@ var publicDemoCommercialPolicies = []publicDemoCommercialRoutePolicy{
 		matches:  exactDemoCommercialMethodPath(http.MethodGet, "/api/license/monitored-system-ledger"),
 	},
 	{
+		route:    "POST /api/license/monitored-system-ledger/explain",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/license/monitored-system-ledger/explain"),
+	},
+	{
+		route:    "POST /api/license/monitored-system-ledger/preview",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/license/monitored-system-ledger/preview"),
+	},
+	{
+		route:    "POST /api/truenas/connections/preview",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/truenas/connections/preview"),
+	},
+	{
+		route:    "POST /api/truenas/connections/{id}/preview",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialConnectionActionPath(http.MethodPost, "/api/truenas/connections/", "preview"),
+	},
+	{
+		route:    "POST /api/vmware/connections/preview",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/vmware/connections/preview"),
+	},
+	{
+		route:    "POST /api/vmware/connections/{id}/preview",
+		exposure: publicDemoCommercialExposureHidden,
+		matches:  exactDemoCommercialConnectionActionPath(http.MethodPost, "/api/vmware/connections/", "preview"),
+	},
+	{
 		route:    "POST /api/upgrade-metrics/events",
 		exposure: publicDemoCommercialExposureHidden,
 		matches:  exactDemoCommercialMethodPath(http.MethodPost, "/api/upgrade-metrics/events"),
@@ -191,6 +221,28 @@ func exactDemoCommercialOrgBillingStatePath(method string) func(*http.Request) b
 			parts[2] == "orgs" &&
 			strings.TrimSpace(parts[3]) != "" &&
 			parts[4] == "billing-state"
+	}
+}
+
+func exactDemoCommercialConnectionActionPath(
+	method string,
+	prefix string,
+	action string,
+) func(*http.Request) bool {
+	return func(r *http.Request) bool {
+		if r == nil || r.Method != method || r.URL == nil {
+			return false
+		}
+		path := normalizeDemoCommercialPath(r.URL.Path)
+		if !strings.HasPrefix(path, prefix) {
+			return false
+		}
+		trimmed := strings.Trim(strings.TrimPrefix(path, prefix), "/")
+		if !strings.HasSuffix(trimmed, "/"+action) {
+			return false
+		}
+		id := strings.TrimSuffix(trimmed, "/"+action)
+		return strings.TrimSpace(id) != "" && !strings.Contains(id, "/")
 	}
 }
 

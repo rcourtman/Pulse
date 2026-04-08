@@ -3346,6 +3346,301 @@ func TestContract_MonitoredSystemLedgerJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, got, want)
 }
 
+func TestContract_MonitoredSystemLedgerPreviewJSONSnapshot(t *testing.T) {
+	payload := MonitoredSystemLedgerPreviewResponse{
+		CurrentCount:     1,
+		ProjectedCount:   1,
+		AdditionalCount:  0,
+		Limit:            5,
+		WouldExceedLimit: false,
+		Effect:           "attaches_existing",
+		CurrentSystems: []MonitoredSystemLedgerEntry{
+			{
+				Name:   "Tower",
+				Type:   "host",
+				Status: "online",
+				StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+					Summary: "All included top-level collection paths currently report online status.",
+					Reasons: []MonitoredSystemLedgerStatusReason{},
+				},
+				LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+					Name:   "Tower",
+					Type:   "host",
+					Source: "agent",
+					At:     "2026-03-18T17:30:00Z",
+				},
+				Source: "agent",
+				Explanation: MonitoredSystemLedgerExplanation{
+					Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
+					Reasons: []MonitoredSystemLedgerExplanationReason{
+						{
+							Kind:    "standalone",
+							Signal:  "single-top-level-view",
+							Summary: "No overlapping top-level source matched this system.",
+						},
+					},
+					Surfaces: []MonitoredSystemLedgerExplanationSurface{
+						{Name: "Tower", Type: "host", Source: "agent"},
+					},
+				},
+			},
+		},
+		ProjectedSystems: []MonitoredSystemLedgerEntry{
+			{
+				Name:   "tower",
+				Type:   "proxmox-node",
+				Status: "online",
+				StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+					Summary: "All included top-level collection paths currently report online status.",
+					Reasons: []MonitoredSystemLedgerStatusReason{},
+				},
+				LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+					Name:   "tower",
+					Type:   "proxmox-node",
+					Source: "proxmox",
+					At:     "2026-03-18T17:35:00Z",
+				},
+				Source: "multiple",
+				Explanation: MonitoredSystemLedgerExplanation{
+					Summary: "Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+					Reasons: []MonitoredSystemLedgerExplanationReason{
+						{
+							Kind:    "grouped",
+							Signal:  "identity-match",
+							Summary: "Pulse matched these top-level views by shared canonical machine identity.",
+						},
+					},
+					Surfaces: []MonitoredSystemLedgerExplanationSurface{
+						{Name: "Tower", Type: "host", Source: "agent"},
+						{Name: "tower", Type: "proxmox-node", Source: "proxmox"},
+					},
+				},
+			},
+		},
+		CurrentSystem: &MonitoredSystemLedgerEntry{
+			Name:   "Tower",
+			Type:   "host",
+			Status: "online",
+			StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+				Summary: "All included top-level collection paths currently report online status.",
+				Reasons: []MonitoredSystemLedgerStatusReason{},
+			},
+			LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+				Name:   "Tower",
+				Type:   "host",
+				Source: "agent",
+				At:     "2026-03-18T17:30:00Z",
+			},
+			Source: "agent",
+			Explanation: MonitoredSystemLedgerExplanation{
+				Summary: "Counts as one monitored system because Pulse sees one top-level host view from agent.",
+				Reasons: []MonitoredSystemLedgerExplanationReason{
+					{
+						Kind:    "standalone",
+						Signal:  "single-top-level-view",
+						Summary: "No overlapping top-level source matched this system.",
+					},
+				},
+				Surfaces: []MonitoredSystemLedgerExplanationSurface{
+					{Name: "Tower", Type: "host", Source: "agent"},
+				},
+			},
+		},
+		ProjectedSystem: &MonitoredSystemLedgerEntry{
+			Name:   "tower",
+			Type:   "proxmox-node",
+			Status: "online",
+			StatusExplanation: MonitoredSystemLedgerStatusExplanation{
+				Summary: "All included top-level collection paths currently report online status.",
+				Reasons: []MonitoredSystemLedgerStatusReason{},
+			},
+			LatestIncludedSignal: MonitoredSystemLedgerLatestSignal{
+				Name:   "tower",
+				Type:   "proxmox-node",
+				Source: "proxmox",
+				At:     "2026-03-18T17:35:00Z",
+			},
+			Source: "multiple",
+			Explanation: MonitoredSystemLedgerExplanation{
+				Summary: "Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+				Reasons: []MonitoredSystemLedgerExplanationReason{
+					{
+						Kind:    "grouped",
+						Signal:  "identity-match",
+						Summary: "Pulse matched these top-level views by shared canonical machine identity.",
+					},
+				},
+				Surfaces: []MonitoredSystemLedgerExplanationSurface{
+					{Name: "Tower", Type: "host", Source: "agent"},
+					{Name: "tower", Type: "proxmox-node", Source: "proxmox"},
+				},
+			},
+		},
+	}
+
+	got, err := json.Marshal(payload.NormalizeCollections())
+	if err != nil {
+		t.Fatalf("marshal monitored system ledger preview response: %v", err)
+	}
+
+	const want = `{
+		"current_count":1,
+		"projected_count":1,
+		"additional_count":0,
+		"limit":5,
+		"would_exceed_limit":false,
+		"effect":"attaches_existing",
+		"current_systems":[
+			{
+				"name":"Tower",
+				"type":"host",
+				"status":"online",
+				"status_explanation":{
+					"summary":"All included top-level collection paths currently report online status.",
+					"reasons":[]
+				},
+				"latest_included_signal":{
+					"name":"Tower",
+					"type":"host",
+					"source":"agent",
+					"at":"2026-03-18T17:30:00Z"
+				},
+				"source":"agent",
+				"explanation":{
+					"summary":"Counts as one monitored system because Pulse sees one top-level host view from agent.",
+					"reasons":[
+						{
+							"kind":"standalone",
+							"signal":"single-top-level-view",
+							"summary":"No overlapping top-level source matched this system."
+						}
+					],
+					"surfaces":[
+						{
+							"name":"Tower",
+							"type":"host",
+							"source":"agent"
+						}
+					]
+				}
+			}
+		],
+		"projected_systems":[
+			{
+				"name":"tower",
+				"type":"proxmox-node",
+				"status":"online",
+				"status_explanation":{
+					"summary":"All included top-level collection paths currently report online status.",
+					"reasons":[]
+				},
+				"latest_included_signal":{
+					"name":"tower",
+					"type":"proxmox-node",
+					"source":"proxmox",
+					"at":"2026-03-18T17:35:00Z"
+				},
+				"source":"multiple",
+				"explanation":{
+					"summary":"Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+					"reasons":[
+						{
+							"kind":"grouped",
+							"signal":"identity-match",
+							"summary":"Pulse matched these top-level views by shared canonical machine identity."
+						}
+					],
+					"surfaces":[
+						{
+							"name":"Tower",
+							"type":"host",
+							"source":"agent"
+						},
+						{
+							"name":"tower",
+							"type":"proxmox-node",
+							"source":"proxmox"
+						}
+					]
+				}
+			}
+		],
+		"current_system":{
+			"name":"Tower",
+			"type":"host",
+			"status":"online",
+			"status_explanation":{
+				"summary":"All included top-level collection paths currently report online status.",
+				"reasons":[]
+			},
+			"latest_included_signal":{
+				"name":"Tower",
+				"type":"host",
+				"source":"agent",
+				"at":"2026-03-18T17:30:00Z"
+			},
+			"source":"agent",
+			"explanation":{
+				"summary":"Counts as one monitored system because Pulse sees one top-level host view from agent.",
+				"reasons":[
+					{
+						"kind":"standalone",
+						"signal":"single-top-level-view",
+						"summary":"No overlapping top-level source matched this system."
+					}
+				],
+				"surfaces":[
+					{
+						"name":"Tower",
+						"type":"host",
+						"source":"agent"
+					}
+				]
+			}
+		},
+		"projected_system":{
+			"name":"tower",
+			"type":"proxmox-node",
+			"status":"online",
+			"status_explanation":{
+				"summary":"All included top-level collection paths currently report online status.",
+				"reasons":[]
+			},
+			"latest_included_signal":{
+				"name":"tower",
+				"type":"proxmox-node",
+				"source":"proxmox",
+				"at":"2026-03-18T17:35:00Z"
+			},
+			"source":"multiple",
+			"explanation":{
+				"summary":"Counts as one monitored system because Pulse merged 2 top-level views into one canonical system using shared machine identity.",
+				"reasons":[
+					{
+						"kind":"grouped",
+						"signal":"identity-match",
+						"summary":"Pulse matched these top-level views by shared canonical machine identity."
+					}
+				],
+				"surfaces":[
+					{
+						"name":"Tower",
+						"type":"host",
+						"source":"agent"
+					},
+					{
+						"name":"tower",
+						"type":"proxmox-node",
+						"source":"proxmox"
+					}
+				]
+			}
+		}
+	}`
+
+	assertJSONSnapshot(t, got, want)
+}
+
 func TestContract_MonitoredSystemLedgerDoesNotEmitCompatibilityAliases(t *testing.T) {
 	entry := monitoredSystemLedgerEntry(unifiedresources.MonitoredSystemRecord{
 		Name:   "Tower",
@@ -5124,6 +5419,12 @@ func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 			{method: http.MethodPost, path: "/api/license/clear"},
 			{method: http.MethodPost, path: "/api/license/trial/start"},
 			{method: http.MethodGet, path: "/api/license/monitored-system-ledger"},
+			{method: http.MethodPost, path: "/api/license/monitored-system-ledger/explain"},
+			{method: http.MethodPost, path: "/api/license/monitored-system-ledger/preview"},
+			{method: http.MethodPost, path: "/api/truenas/connections/preview"},
+			{method: http.MethodPost, path: "/api/truenas/connections/conn-1/preview"},
+			{method: http.MethodPost, path: "/api/vmware/connections/preview"},
+			{method: http.MethodPost, path: "/api/vmware/connections/conn-1/preview"},
 			{method: http.MethodGet, path: "/api/admin/orgs/t-tenant/billing-state"},
 			{method: http.MethodPut, path: "/api/admin/orgs/t-tenant/billing-state"},
 			{method: http.MethodGet, path: "/api/upgrade-metrics/stats"},

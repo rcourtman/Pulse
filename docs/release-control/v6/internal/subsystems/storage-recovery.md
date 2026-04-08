@@ -344,9 +344,10 @@ an empty estate.
 That same adjacent `internal/api/` boundary now also governs public-demo
 commercial redaction for storage and recovery viewers. Shared storage/recovery
 surfaces may run beside a demo runtime that has real internal entitlements,
-but `DEMO_MODE` must still 404 license-status, billing-state, and monitored-
-system-ledger reads so adjacent recovery or storage pages do not leak
-commercial identity or upgrade posture into a public demo. Storage/recovery
+but `DEMO_MODE` must still 404 license-status, billing-state, monitored-
+system-ledger reads, and monitored-system explanation/provider preview routes
+so adjacent recovery or storage pages do not leak commercial identity or
+upgrade posture into a public demo. Storage/recovery
 must consume that redacted boundary as presentation truth rather than
 reintroducing mock-only license bypasses or page-local commercial fallbacks.
 Browser-facing storage/recovery surfaces must also treat

@@ -341,7 +341,9 @@ That same adjacent `internal/api/` boundary now also keeps public demos from
 leaking commercial state through lifecycle-adjacent surfaces. Agent install,
 reporting, and setup flows may share backend helpers with billing or license
 transport, but `DEMO_MODE` must continue to 404 commercial read surfaces
-instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
+instead of teaching lifecycle or mock-mode paths to bypass licensing. That
+same boundary also hides monitored-system explanation and provider preview
+routes used by lifecycle-adjacent platform connections. Public
 demo readiness therefore comes from hiding commercial presentation on the
 shared API boundary, not from introducing a second fake-entitlement path into
 lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces

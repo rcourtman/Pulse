@@ -75,7 +75,7 @@ Own canonical runtime payload shapes between backend and frontend.
 50. `internal/cloudcp/portal/frontend_sync_test.go`
 51. `internal/api/recovery_handlers.go`
 52. `internal/api/config_setup_handlers.go`
-53. `internal/api/demo_mode_commercial.go`
+53. `internal/api/demo_mode_commercial.go`: the canonical public-demo commercial route policy, including monitored-system ledger, explanation, and provider preview surfaces.
 54. `internal/api/security_status_capabilities.go`
 55. `internal/api/demo_middleware.go`
 56. `frontend-modern/src/stores/aiRuntimeState.ts`
