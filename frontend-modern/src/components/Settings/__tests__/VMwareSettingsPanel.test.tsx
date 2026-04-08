@@ -35,6 +35,8 @@ const mockState = vi.hoisted(() => ({
   pendingDeleteConnection: vi.fn((): VMwareConnection | null => null),
   monitoredSystemPreview: vi.fn(() => null),
   monitoredSystemPreviewError: vi.fn(() => null),
+  monitoredSystemPreviewErrorTitle: vi.fn(() => null),
+  monitoredSystemAdmissionSaveBlocked: vi.fn(() => false),
   previewCurrentForm: vi.fn(),
   previewing: vi.fn(() => false),
   saveCurrentForm: vi.fn(),
@@ -75,6 +77,8 @@ describe('VMwareSettingsPanel', () => {
     mockState.pendingDeleteConnection.mockReturnValue(null);
     mockState.monitoredSystemPreview.mockReturnValue(null);
     mockState.monitoredSystemPreviewError.mockReturnValue(null);
+    mockState.monitoredSystemPreviewErrorTitle.mockReturnValue(null);
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(false);
     mockState.previewing.mockReturnValue(false);
     mockState.saving.mockReturnValue(false);
     mockState.testing.mockReturnValue(false);
@@ -271,6 +275,7 @@ describe('VMwareSettingsPanel', () => {
       current_system: null,
       projected_system: null,
     });
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(true);
 
     renderPanel();
 
@@ -280,5 +285,28 @@ describe('VMwareSettingsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview impact' }));
     expect(mockState.previewCurrentForm).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders canonical unavailable guidance and blocks save while preview usage is rebuilding', () => {
+    mockState.dialogOpen.mockReturnValue(true);
+    mockState.monitoredSystemPreviewErrorTitle.mockReturnValue(
+      'Monitored-system capacity is temporarily unavailable',
+    );
+    mockState.monitoredSystemPreviewError.mockReturnValue(
+      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+    );
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(true);
+
+    renderPanel();
+
+    expect(
+      screen.getByText('Monitored-system capacity is temporarily unavailable'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled();
   });
 });

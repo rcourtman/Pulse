@@ -15,6 +15,10 @@ import {
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import {
+  formatMonitoredSystemAdmissionPreviewUnavailableMessage,
+  getMonitoredSystemAdmissionPreviewUnavailableTitle,
+} from '@/utils/monitoredSystemPresentation';
+import {
   buildVMwareConnectionFailurePresentation,
   type VMwareConnectionFailurePresentation,
 } from './vmwareConnectionFailurePresentation';
@@ -85,6 +89,19 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
 const getVMwareErrorMessage = (error: unknown, fallback: string): string =>
   apiErrorDetailField(error, 'error') ?? getErrorMessage(error, fallback);
 
+const monitoredSystemAdmissionPreviewUnavailableStateFromError = (error: unknown) => {
+  if (apiErrorCode(error) !== 'monitored_system_usage_unavailable') {
+    return null;
+  }
+
+  const reason = apiErrorDetailField(error, 'reason');
+  return {
+    reason,
+    title: getMonitoredSystemAdmissionPreviewUnavailableTitle(),
+    message: formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason ?? undefined),
+  };
+};
+
 const buildConnectionInput = (form: VMwareConnectionFormState): VMwareConnectionInput => {
   const port = parseOptionalPort(form.port);
   const name = form.name.trim();
@@ -122,8 +139,18 @@ export function useVMwareSettingsPanelState() {
     createSignal<VMwareConnectionFailurePresentation | null>(null);
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
     createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
+  const [monitoredSystemPreviewUnavailableReason, setMonitoredSystemPreviewUnavailableReason] =
+    createSignal<string | null>(null);
+  const [monitoredSystemPreviewErrorTitle, setMonitoredSystemPreviewErrorTitle] = createSignal<
+    string | null
+  >(null);
   const [monitoredSystemPreviewError, setMonitoredSystemPreviewError] = createSignal<string | null>(
     null,
+  );
+  const monitoredSystemAdmissionSaveBlocked = createMemo(
+    () =>
+      Boolean(monitoredSystemPreviewUnavailableReason()) ||
+      Boolean(monitoredSystemPreview()?.would_exceed_limit),
   );
 
   const editingConnection = createMemo(
@@ -164,6 +191,8 @@ export function useVMwareSettingsPanelState() {
     setForm(createEmptyFormState());
     setConnectionFailure(null);
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     setDialogOpen(true);
   };
@@ -173,6 +202,8 @@ export function useVMwareSettingsPanelState() {
     setForm(buildFormStateFromConnection(connection));
     setConnectionFailure(null);
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     setDialogOpen(true);
   };
@@ -183,6 +214,8 @@ export function useVMwareSettingsPanelState() {
     setForm(createEmptyFormState());
     setConnectionFailure(null);
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
   };
 
@@ -209,6 +242,8 @@ export function useVMwareSettingsPanelState() {
   const updateForm = (patch: Partial<VMwareConnectionFormState>) => {
     setConnectionFailure(null);
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     setForm((current) => ({ ...current, ...patch }));
   };
@@ -269,6 +304,8 @@ export function useVMwareSettingsPanelState() {
   const previewCurrentForm = async () => {
     setPreviewing(true);
     setConnectionFailure(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     try {
       const payload = buildConnectionInput(form());
@@ -276,8 +313,19 @@ export function useVMwareSettingsPanelState() {
         ? await VMwareAPI.previewSavedConnection(editingConnectionId()!, payload)
         : await VMwareAPI.previewConnection(payload);
       setMonitoredSystemPreview(preview);
+      setMonitoredSystemPreviewUnavailableReason(null);
+      setMonitoredSystemPreviewErrorTitle(null);
       return preview;
     } catch (error) {
+      const unavailableState = monitoredSystemAdmissionPreviewUnavailableStateFromError(error);
+      if (unavailableState) {
+        setMonitoredSystemPreview(null);
+        setMonitoredSystemPreviewUnavailableReason(unavailableState.reason);
+        setMonitoredSystemPreviewErrorTitle(unavailableState.title);
+        setMonitoredSystemPreviewError(unavailableState.message);
+        logger.error('[VMware Settings] Preview failed', error);
+        return null;
+      }
       const failure = buildVMwareConnectionFailurePresentation({
         code: apiErrorCode(error),
         category: apiErrorDetailField(error, 'category'),
@@ -285,6 +333,8 @@ export function useVMwareSettingsPanelState() {
         fallback: 'Could not preview monitored-system impact',
       });
       setMonitoredSystemPreview(null);
+      setMonitoredSystemPreviewUnavailableReason(null);
+      setMonitoredSystemPreviewErrorTitle(null);
       setMonitoredSystemPreviewError(failure.message);
       if (
         apiErrorCode(error) === 'vmware_connection_failed' ||
@@ -300,6 +350,12 @@ export function useVMwareSettingsPanelState() {
   };
 
   const saveCurrentForm = async () => {
+    if (monitoredSystemPreviewUnavailableReason()) {
+      notificationStore.error(
+        monitoredSystemPreviewError() ?? 'Pulse cannot verify monitored-system capacity right now.',
+      );
+      return;
+    }
     if (monitoredSystemPreview()?.would_exceed_limit) {
       notificationStore.error('This change would exceed your monitored-system limit');
       return;
@@ -317,12 +373,25 @@ export function useVMwareSettingsPanelState() {
       resetDialogState();
       await loadConnections();
     } catch (error) {
+      const unavailableState = monitoredSystemAdmissionPreviewUnavailableStateFromError(error);
       const preview = apiErrorMonitoredSystemPreview(error);
       if (preview) {
         setMonitoredSystemPreview(preview);
+        setMonitoredSystemPreviewUnavailableReason(null);
+        setMonitoredSystemPreviewErrorTitle(null);
         setMonitoredSystemPreviewError(null);
+      } else if (unavailableState) {
+        setMonitoredSystemPreview(null);
+        setMonitoredSystemPreviewUnavailableReason(unavailableState.reason);
+        setMonitoredSystemPreviewErrorTitle(unavailableState.title);
+        setMonitoredSystemPreviewError(unavailableState.message);
+      } else {
+        setMonitoredSystemPreviewUnavailableReason(null);
+        setMonitoredSystemPreviewErrorTitle(null);
       }
-      const message = getErrorMessage(error, 'Failed to save VMware connection');
+      const message = unavailableState
+        ? unavailableState.message
+        : getErrorMessage(error, 'Failed to save VMware connection');
       notificationStore.error(message);
       logger.error('[VMware Settings] Save failed', error);
     } finally {
@@ -369,8 +438,10 @@ export function useVMwareSettingsPanelState() {
     openEditDialog,
     pendingDeleteConnection,
     previewCurrentForm,
+    monitoredSystemAdmissionSaveBlocked,
     monitoredSystemPreview,
     monitoredSystemPreviewError,
+    monitoredSystemPreviewErrorTitle,
     previewing,
     saveCurrentForm,
     saving,

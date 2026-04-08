@@ -727,6 +727,102 @@ test.describe("TrueNAS platform connections settings", () => {
     ).toBeDisabled();
   });
 
+  test("blocks TrueNAS save while monitored-system usage is still settling", async ({
+    page,
+  }) => {
+    let previewPayload: Record<string, unknown> | null = null;
+    let createCalls = 0;
+
+    await page.route("**/api/truenas/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/truenas/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (
+        pathname === "/api/truenas/connections/preview" &&
+        method === "POST"
+      ) {
+        previewPayload = JSON.parse(request.postData() || "{}");
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Unable to verify monitored-system capacity right now",
+            code: "monitored_system_usage_unavailable",
+            status_code: 503,
+            details: {
+              reason: "supplemental_inventory_unsettled",
+            },
+          }),
+        });
+        return;
+      }
+
+      if (pathname === "/api/truenas/connections" && method === "POST") {
+        createCalls += 1;
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({}),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/truenas", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/truenas/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: "Add TrueNAS connection" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add TrueNAS connection" });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByPlaceholder("tower").fill("Tower NAS");
+    await dialog.getByPlaceholder("truenas.local").fill("tower.local");
+    await dialog
+      .locator('input[type="password"]')
+      .first()
+      .fill("secret-api-key");
+
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+
+    await expect
+      .poll(() => previewPayload)
+      .toMatchObject({
+        name: "Tower NAS",
+        host: "tower.local",
+        apiKey: "secret-api-key",
+        useHttps: true,
+        enabled: true,
+      });
+    await expect(
+      dialog.getByText("Monitored-system capacity is temporarily unavailable"),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
+    expect(createCalls).toBe(0);
+  });
+
   test("saved connection tests refresh runtime health in the settings card", async ({
     page,
   }) => {

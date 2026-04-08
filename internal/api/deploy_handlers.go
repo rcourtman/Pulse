@@ -1094,7 +1094,7 @@ func (h *DeployHandlers) HandleCreateJob(w http.ResponseWriter, r *http.Request)
 	if maxLimit > 0 {
 		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
 		if !decision.usageAvailable {
-			writeMonitoredSystemUsageUnavailable(w)
+			writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 			return
 		}
 		available := decision.limit - decision.current
@@ -1594,7 +1594,7 @@ func (h *DeployHandlers) HandleRetryJob(w http.ResponseWriter, r *http.Request) 
 	if maxLimit > 0 {
 		decision := monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)
 		if !decision.usageAvailable {
-			writeMonitoredSystemUsageUnavailable(w)
+			writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 			return
 		}
 		available := decision.limit - decision.current

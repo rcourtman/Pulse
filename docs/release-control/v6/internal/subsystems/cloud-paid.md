@@ -634,6 +634,12 @@ That same helper also owns preview-impact copy and current/projected
 source-label wording for pre-save monitored-system admission UI, so the
 TrueNAS and VMware settings panels do not drift into provider-local billing
 phrasing when they surface canonical preview results before save.
+That same helper-owned admission-preview copy now also owns unavailable-
+capacity guidance. When provider-backed preview endpoints return
+`monitored_system_usage_unavailable`, the shared preview shell and provider
+panels must render helper-owned unavailable title/message mapped from the
+canonical backend `details.reason` and disable the save action until preview
+can resolve again.
 That same helper also owns grouped preview attribution and multi-source labels.
 When a current or projected monitored system represents several included
 surfaces, the admission preview must render canonical helper-owned labels such

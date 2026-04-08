@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/models"
+	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -421,12 +421,32 @@ func TestHandleMonitoredSystemLedgerPreviewUnavailableUsage(t *testing.T) {
 	router := &Router{}
 	router.handleMonitoredSystemLedgerPreview(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
-		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
-	}
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableMonitorState)
+}
+
+func TestHandleMonitoredSystemLedgerPreviewUnavailableUsageWhenSupplementalInventoryRebuildPending(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	monitor, _, _ := newTestMonitor(t)
+	provider := newTestSupplementalUsageProvider(unifiedresources.SourceTrueNAS)
+	bindTestSupplementalUsageProvider(monitor, unifiedresources.SourceTrueNAS, provider)
+	provider.settleAtWithRecords(time.Now().UTC().Add(time.Minute), nil)
+
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"truenas",
+			"name":"archive",
+			"hostname":"archive.local",
+			"host_url":"https://archive.local"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/preview", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{monitor: monitor}
+	router.handleMonitoredSystemLedgerPreview(rec, req)
+
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending)
 }
 
 func TestHandleMonitoredSystemLedgerUnavailableUsage(t *testing.T) {
@@ -436,12 +456,7 @@ func TestHandleMonitoredSystemLedgerUnavailableUsage(t *testing.T) {
 	router := &Router{}
 	router.handleMonitoredSystemLedger(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
-		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
-	}
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableMonitorState)
 }
 
 func TestHandleMonitoredSystemLedgerExplainCurrentAndPreview(t *testing.T) {

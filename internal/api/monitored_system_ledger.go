@@ -172,7 +172,7 @@ func (e MonitoredSystemLedgerEntry) NormalizeCollections() MonitoredSystemLedger
 func (r *Router) handleMonitoredSystemLedger(w http.ResponseWriter, req *http.Request) {
 	usage := monitoredSystemUsage(r.getTenantMonitor(req.Context()))
 	if !usage.available {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 		return
 	}
 
@@ -199,7 +199,7 @@ func (r *Router) handleMonitoredSystemLedgerPreview(w http.ResponseWriter, req *
 	monitor := r.getTenantMonitor(req.Context())
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 		return
 	}
 
@@ -240,7 +240,7 @@ func (r *Router) handleMonitoredSystemLedgerExplain(w http.ResponseWriter, req *
 
 	usage := monitoredSystemUsage(r.getTenantMonitor(req.Context()))
 	if !usage.available {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 		return
 	}
 

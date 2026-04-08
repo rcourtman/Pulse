@@ -39,6 +39,8 @@ const mockState = vi.hoisted(() => ({
   pendingDeleteConnection: vi.fn(() => null),
   monitoredSystemPreview: vi.fn(() => null),
   monitoredSystemPreviewError: vi.fn(() => null),
+  monitoredSystemPreviewErrorTitle: vi.fn(() => null),
+  monitoredSystemAdmissionSaveBlocked: vi.fn(() => false),
   previewCurrentForm: vi.fn(),
   previewing: vi.fn(() => false),
   saveCurrentForm: vi.fn(),
@@ -84,6 +86,8 @@ describe('TrueNASSettingsPanel', () => {
     mockState.pendingDeleteConnection.mockReturnValue(null);
     mockState.monitoredSystemPreview.mockReturnValue(null);
     mockState.monitoredSystemPreviewError.mockReturnValue(null);
+    mockState.monitoredSystemPreviewErrorTitle.mockReturnValue(null);
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(false);
     mockState.previewing.mockReturnValue(false);
     mockState.saving.mockReturnValue(false);
     mockState.testing.mockReturnValue(false);
@@ -93,7 +97,10 @@ describe('TrueNASSettingsPanel', () => {
     cleanup();
   });
 
-  const renderPanel = () => render(() => <TrueNASSettingsPanel state={mockState as unknown as TrueNASSettingsPanelState} />);
+  const renderPanel = () =>
+    render(() => (
+      <TrueNASSettingsPanel state={mockState as unknown as TrueNASSettingsPanelState} />
+    ));
 
   it('renders the settings shell and existing connections', () => {
     mockState.connections.mockReturnValue([
@@ -165,7 +172,9 @@ describe('TrueNASSettingsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add TrueNAS connection' }));
     expect(mockState.openCreateDialog).toHaveBeenCalledTimes(1);
 
-    fireEvent.click(within(screen.getByTestId('truenas-connection-conn-1')).getByRole('button', { name: 'Test' }));
+    fireEvent.click(
+      within(screen.getByTestId('truenas-connection-conn-1')).getByRole('button', { name: 'Test' }),
+    );
     expect(mockState.testSavedConnection).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'conn-1' }),
     );
@@ -211,6 +220,7 @@ describe('TrueNASSettingsPanel', () => {
       current_system: null,
       projected_system: null,
     });
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(true);
 
     renderPanel();
 
@@ -220,5 +230,28 @@ describe('TrueNASSettingsPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Preview impact' }));
     expect(mockState.previewCurrentForm).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders canonical unavailable guidance and blocks save while preview usage is unsettled', () => {
+    mockState.dialogOpen.mockReturnValue(true);
+    mockState.monitoredSystemPreviewErrorTitle.mockReturnValue(
+      'Monitored-system capacity is temporarily unavailable',
+    );
+    mockState.monitoredSystemPreviewError.mockReturnValue(
+      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+    );
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(true);
+
+    renderPanel();
+
+    expect(
+      screen.getByText('Monitored-system capacity is temporarily unavailable'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled();
   });
 });

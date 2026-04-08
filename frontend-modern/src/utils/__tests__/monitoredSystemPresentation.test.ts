@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  formatMonitoredSystemAdmissionPreviewUnavailableMessage,
   formatMonitoredSystemLegacyConnectionBreakdown,
   getMonitoredSystemBriefSummary,
   formatMonitoredSystemLimitSummary,
@@ -8,6 +9,7 @@ import {
   formatMonitoredSystemMigrationMessage,
   formatMonitoredSystemOverflowSummary,
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemAdmissionPreviewUnavailableTitle,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemDisclosureDefinition,
   getMonitoredSystemDisclosureToggleLabel,
@@ -54,7 +56,8 @@ describe('monitoredSystemPresentation', () => {
       includedCollectionPathsHeading: 'Included collection paths',
       emptyState: 'No monitored systems counted.',
       noIncludedSignalLabel: 'No included signal yet.',
-      fallbackExplanationSummary: 'Pulse counts this top-level collection path as one monitored system.',
+      fallbackExplanationSummary:
+        'Pulse counts this top-level collection path as one monitored system.',
       statusSummaryByStatus: {
         online: 'All included top-level collection paths currently report online status.',
         warning:
@@ -70,6 +73,15 @@ describe('monitoredSystemPresentation', () => {
         overflowSummaryPrefix: 'Includes 1 temporary onboarding slot',
         legacyConnectionSuffix:
           'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+      },
+      admissionPreview: {
+        unavailableTitle: 'Monitored-system capacity is temporarily unavailable',
+        unavailableFallbackMessage:
+          'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
+        unavailableUnsettledMessage:
+          'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+        unavailableRebuildPendingMessage:
+          'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
       },
     });
     expect(getMonitoredSystemBriefSummary()).toBe(
@@ -135,6 +147,29 @@ describe('monitoredSystemPresentation', () => {
       'Includes 1 temporary onboarding slot (14d remaining)',
     );
     expect(formatMonitoredSystemOverflowSummary(undefined)).toBe('');
+  });
+
+  it('returns canonical monitored-system admission unavailable copy', () => {
+    expect(getMonitoredSystemAdmissionPreviewUnavailableTitle()).toBe(
+      'Monitored-system capacity is temporarily unavailable',
+    );
+    expect(
+      formatMonitoredSystemAdmissionPreviewUnavailableMessage('supplemental_inventory_unsettled'),
+    ).toBe(
+      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+    );
+    expect(
+      formatMonitoredSystemAdmissionPreviewUnavailableMessage(
+        'supplemental_inventory_rebuild_pending',
+      ),
+    ).toBe(
+      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+    );
+    expect(
+      formatMonitoredSystemAdmissionPreviewUnavailableMessage('monitor_state_unavailable'),
+    ).toBe(
+      'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
+    );
   });
 
   it('returns customer-facing source and type labels', () => {

@@ -1,6 +1,10 @@
 package api
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
 	"time"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/monitoring"
@@ -61,4 +65,31 @@ func bindTestSupplementalUsageProvider(
 	}
 	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(nil))
 	monitor.SetSupplementalRecordsProvider(source, provider)
+}
+
+func assertMonitoredSystemUsageUnavailableReason(
+	t *testing.T,
+	rec *httptest.ResponseRecorder,
+	want string,
+) APIError {
+	t.Helper()
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var apiErr APIError
+	if err := json.NewDecoder(rec.Body).Decode(&apiErr); err != nil {
+		t.Fatalf("decode API error: %v", err)
+	}
+	apiErr = apiErr.NormalizeCollections()
+
+	if apiErr.Code != "monitored_system_usage_unavailable" {
+		t.Fatalf("API error code = %q, want monitored_system_usage_unavailable", apiErr.Code)
+	}
+	if got := apiErr.Details["reason"]; got != want {
+		t.Fatalf("API error details.reason = %q, want %q", got, want)
+	}
+
+	return apiErr
 }

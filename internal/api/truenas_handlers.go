@@ -286,7 +286,7 @@ func (h *TrueNASHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http
 	monitor := h.monitorForRequest(r.Context())
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 		return
 	}
 
@@ -349,7 +349,7 @@ func (h *TrueNASHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r 
 		monitor := h.monitorForRequest(r.Context())
 		usage := monitoredSystemUsage(monitor)
 		if !usage.available {
-			writeMonitoredSystemUsageUnavailable(w)
+			writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 			return
 		}
 
@@ -599,7 +599,7 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimit(
 
 	decision := monitoredSystemLimitDecisionForCandidate(r.Context(), monitor, trueNASMonitoredSystemCandidate(instance))
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {
@@ -630,7 +630,7 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimitReplacement(
 		},
 	}, trueNASMonitoredSystemCandidate(next))
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {

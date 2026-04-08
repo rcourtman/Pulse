@@ -247,6 +247,47 @@ describe('useTrueNASSettingsPanelState', () => {
     expect(result.monitoredSystemPreview()?.effect).toBe('attaches_existing');
   });
 
+  it('blocks save when monitored-system usage is temporarily unavailable during preview', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.previewConnection).mockRejectedValueOnce(
+      Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
+        status: 503,
+        code: 'monitored_system_usage_unavailable',
+        details: {
+          reason: 'supplemental_inventory_unsettled',
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'tower.local',
+      apiKey: 'secret',
+    });
+
+    const preview = await result.previewCurrentForm();
+
+    expect(preview).toBeNull();
+    expect(result.monitoredSystemPreview()).toBeNull();
+    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
+    expect(result.monitoredSystemPreviewErrorTitle()).toBe(
+      'Monitored-system capacity is temporarily unavailable',
+    );
+    expect(result.monitoredSystemPreviewError()).toBe(
+      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+    );
+
+    await result.saveCurrentForm();
+
+    expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();
+    expect(notificationStore.error).toHaveBeenLastCalledWith(
+      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+    );
+  });
+
   it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
     vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
@@ -292,5 +333,37 @@ describe('useTrueNASSettingsPanelState', () => {
       effect: 'creates_new',
     });
     expect(result.dialogOpen()).toBe(true);
+  });
+
+  it('surfaces monitored-system usage unavailability when save is rejected before preview settles', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
+      Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
+        status: 503,
+        code: 'monitored_system_usage_unavailable',
+        details: {
+          reason: 'supplemental_inventory_rebuild_pending',
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'tower.local',
+      apiKey: 'secret',
+    });
+    await result.saveCurrentForm();
+
+    expect(result.monitoredSystemPreview()).toBeNull();
+    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
+    expect(result.monitoredSystemPreviewError()).toBe(
+      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+    );
+    expect(notificationStore.error).toHaveBeenCalledWith(
+      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+    );
   });
 });

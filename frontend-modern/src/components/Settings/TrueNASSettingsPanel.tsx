@@ -152,8 +152,8 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
               of treating the NAS like a generic host.
             </p>
             <p class="mt-2">
-              Use the unified agent on TrueNAS only as optional augmentation later if there is
-              extra host telemetry the API cannot provide.
+              Use the unified agent on TrueNAS only as optional augmentation later if there is extra
+              host telemetry the API cannot provide.
             </p>
           </>
         }
@@ -171,9 +171,8 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                   'TrueNAS integration has been explicitly disabled on this Pulse server.'}
               </p>
               <p class="mt-2">
-                Remove <code>PULSE_ENABLE_TRUENAS=false</code> or set it back to{' '}
-                <code>true</code> on the Pulse server, then restart the service before managing
-                TrueNAS connections.
+                Remove <code>PULSE_ENABLE_TRUENAS=false</code> or set it back to <code>true</code>{' '}
+                on the Pulse server, then restart the service before managing TrueNAS connections.
               </p>
             </>
           }
@@ -202,11 +201,7 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                 >
                   Refresh
                 </button>
-                <button
-                  type="button"
-                  class={primaryButtonClass}
-                  onClick={state.openCreateDialog}
-                >
+                <button type="button" class={primaryButtonClass} onClick={state.openCreateDialog}>
                   Add TrueNAS connection
                 </button>
               </div>
@@ -237,7 +232,9 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
               />
             </Show>
 
-            <Show when={!state.loading() && !state.loadingError() && state.connections().length === 0}>
+            <Show
+              when={!state.loading() && !state.loadingError() && state.connections().length === 0}
+            >
               <div class="rounded-lg border border-dashed border-border bg-surface-alt px-6 py-12 text-center">
                 <p class="text-base font-medium text-base-content">No TrueNAS connections yet</p>
                 <p class="mt-1 text-sm text-muted">
@@ -246,7 +243,9 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
               </div>
             </Show>
 
-            <Show when={!state.loading() && !state.loadingError() && state.connections().length > 0}>
+            <Show
+              when={!state.loading() && !state.loadingError() && state.connections().length > 0}
+            >
               <div class="space-y-3">
                 <For each={state.connections()}>
                   {(connection) => {
@@ -330,7 +329,8 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                                   <For each={observedMetrics()}>
                                     {(item) => (
                                       <span class={connectionMetaBadgeClass}>
-                                        {formatNumber(item.value)} {pluralize(item.value, item.label)}
+                                        {formatNumber(item.value)}{' '}
+                                        {pluralize(item.value, item.label)}
                                       </span>
                                     )}
                                   </For>
@@ -501,9 +501,7 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                 }
               />
               <Show when={state.form().hasStoredApiKey}>
-                <span class={formHelpText}>
-                  Leave this blank to keep the saved API key.
-                </span>
+                <span class={formHelpText}>Leave this blank to keep the saved API key.</span>
               </Show>
             </label>
           </Show>
@@ -531,9 +529,7 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                   }
                 />
                 <Show when={state.form().hasStoredPassword}>
-                  <span class={formHelpText}>
-                    Leave this blank to keep the saved password.
-                  </span>
+                  <span class={formHelpText}>Leave this blank to keep the saved password.</span>
                 </Show>
               </label>
             </div>
@@ -548,9 +544,7 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                 onInput={(event) => state.updateForm({ fingerprint: event.currentTarget.value })}
                 placeholder="Optional SHA256 fingerprint"
               />
-              <span class={formHelpText}>
-                Optional certificate pin for HTTPS connections.
-              </span>
+              <span class={formHelpText}>Optional certificate pin for HTTPS connections.</span>
             </label>
             <div class="space-y-3 rounded-md border border-border bg-surface-alt px-4 py-3">
               <label class="flex items-center gap-3">
@@ -589,6 +583,7 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
             preview={state.monitoredSystemPreview()}
             loading={state.previewing()}
             error={state.monitoredSystemPreviewError()}
+            errorTitle={state.monitoredSystemPreviewErrorTitle()}
           />
 
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -624,7 +619,7 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
                 state.saving() ||
                 state.testing() ||
                 state.previewing() ||
-                state.monitoredSystemPreview()?.would_exceed_limit
+                state.monitoredSystemAdmissionSaveBlocked()
               }
             >
               {state.saving()

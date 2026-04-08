@@ -5400,6 +5400,37 @@ func TestContract_HostedBillingStateFallbackJSONSnapshot(t *testing.T) {
 	assertJSONSnapshot(t, rec.Body.Bytes(), want)
 }
 
+func TestContract_MonitoredSystemUsageUnavailableIncludesReason(t *testing.T) {
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"proxmox",
+			"name":"tower",
+			"hostname":"tower.local",
+			"host_url":"https://tower.local:8006"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/preview", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleMonitoredSystemLedgerPreview(rec, req)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status=%d, want %d: %s", rec.Code, http.StatusServiceUnavailable, rec.Body.String())
+	}
+
+	var payload APIError
+	if err := json.NewDecoder(rec.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode unavailable payload: %v", err)
+	}
+	payload = payload.NormalizeCollections()
+	if payload.Code != "monitored_system_usage_unavailable" {
+		t.Fatalf("code=%q, want monitored_system_usage_unavailable", payload.Code)
+	}
+	if got := payload.Details["reason"]; got != monitoring.MonitoredSystemUsageUnavailableMonitorState {
+		t.Fatalf("details.reason=%q, want %q", got, monitoring.MonitoredSystemUsageUnavailableMonitorState)
+	}
+}
+
 func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 	t.Run("hidden routes return not found", func(t *testing.T) {
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

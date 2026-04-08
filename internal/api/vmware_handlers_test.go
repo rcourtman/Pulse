@@ -918,12 +918,29 @@ func TestVMwareHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplement
 	rec := httptest.NewRecorder()
 	handler.HandlePreviewConnection(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
-		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
-	}
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled)
+}
+
+func TestVMwareHandlers_HandlePreviewConnection_ReturnsUnavailableWhenSupplementalInventoryRebuildPending(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	handler, _ := newVMwareHandlersForTest(t)
+	monitor, _, _ := newTestMonitor(t)
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	provider := newTestSupplementalUsageProvider(unifiedresources.SourceVMware)
+	bindTestSupplementalUsageProvider(monitor, unifiedresources.SourceVMware, provider)
+	provider.settleAtWithRecords(time.Now().UTC().Add(time.Minute), nil)
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"host":     "vcsa.lab.local",
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewConnection(rec, req)
+
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending)
 }
 
 func TestVMwareHandlers_HandlePreviewSavedConnection_PreservesStoredSecrets(t *testing.T) {
@@ -1018,12 +1035,36 @@ func TestVMwareHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSuppl
 	rec := httptest.NewRecorder()
 	handler.HandlePreviewSavedConnection(rec, req)
 
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled)
+}
+
+func TestVMwareHandlers_HandlePreviewSavedConnection_ReturnsUnavailableWhenSupplementalInventoryRebuildPending(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	monitor, _, _ := newTestMonitor(t)
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	provider := newTestSupplementalUsageProvider(unifiedresources.SourceVMware)
+	bindTestSupplementalUsageProvider(monitor, unifiedresources.SourceVMware, provider)
+	provider.settleAtWithRecords(time.Now().UTC().Add(time.Minute), nil)
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
+		{
+			ID:       "conn-1",
+			Name:     "lab-vcenter",
+			Host:     "vcsa.lab.local",
+			Username: "administrator@vsphere.local",
+			Password: "super-secret",
+			Enabled:  true,
+		},
+	}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
 	}
-	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
-		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
-	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/conn-1/preview", nil)
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewSavedConnection(rec, req)
+
+	assertMonitoredSystemUsageUnavailableReason(t, rec, monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending)
 }
 
 func TestVMwareHandlers_HandleTestSavedConnection_UsesStoredSecretsAndUpdatesRuntimeSummary(t *testing.T) {

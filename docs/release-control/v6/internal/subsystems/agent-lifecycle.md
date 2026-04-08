@@ -1056,6 +1056,15 @@ final, or retry admission against a provider-owned supplemental platform such
 as TrueNAS or VMware until the monitor has both seen an initial baseline for
 every active connection and rebuilt the canonical store at or after that
 provider watermark.
+That same lifecycle-owned admission surface now also requires canonical
+unavailable-reason guidance. When `/api/license/monitored-system-ledger/preview`,
+`/api/truenas/connections/preview`, `/api/truenas/connections/{id}/preview`,
+`/api/vmware/connections/preview`, or
+`/api/vmware/connections/{id}/preview` fail with
+`monitored_system_usage_unavailable`, the backend must preserve
+`details.reason` from the monitor usage contract and the shared admission
+preview shell plus provider panels must render helper-owned retry copy and
+disable save until preview can resolve again.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent

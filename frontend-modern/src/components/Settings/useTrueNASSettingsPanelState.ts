@@ -2,13 +2,22 @@ import { createMemo, createSignal, onMount } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
-import { apiErrorMonitoredSystemPreview, apiErrorStatus } from '@/api/responseUtils';
+import {
+  apiErrorCode,
+  apiErrorDetailField,
+  apiErrorMonitoredSystemPreview,
+  apiErrorStatus,
+} from '@/api/responseUtils';
 import {
   TrueNASAPI,
   isRedactedTrueNASSecret,
   type TrueNASConnection,
   type TrueNASConnectionInput,
 } from '@/api/truenas';
+import {
+  formatMonitoredSystemAdmissionPreviewUnavailableMessage,
+  getMonitoredSystemAdmissionPreviewUnavailableTitle,
+} from '@/utils/monitoredSystemPresentation';
 
 type TrueNASAuthMode = 'apiKey' | 'userpass';
 
@@ -112,6 +121,19 @@ const getErrorMessage = (error: unknown, fallback: string): string => {
   return fallback;
 };
 
+const monitoredSystemAdmissionPreviewUnavailableStateFromError = (error: unknown) => {
+  if (apiErrorCode(error) !== 'monitored_system_usage_unavailable') {
+    return null;
+  }
+
+  const reason = apiErrorDetailField(error, 'reason');
+  return {
+    reason,
+    title: getMonitoredSystemAdmissionPreviewUnavailableTitle(),
+    message: formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason ?? undefined),
+  };
+};
+
 const buildConnectionInput = (form: TrueNASConnectionFormState): TrueNASConnectionInput => {
   const port = parseOptionalPort(form.port);
   const pollIntervalSeconds = parsePollIntervalSeconds(form.pollIntervalSeconds);
@@ -161,8 +183,18 @@ export function useTrueNASSettingsPanelState() {
   const [previewing, setPreviewing] = createSignal(false);
   const [monitoredSystemPreview, setMonitoredSystemPreview] =
     createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
+  const [monitoredSystemPreviewUnavailableReason, setMonitoredSystemPreviewUnavailableReason] =
+    createSignal<string | null>(null);
+  const [monitoredSystemPreviewErrorTitle, setMonitoredSystemPreviewErrorTitle] = createSignal<
+    string | null
+  >(null);
   const [monitoredSystemPreviewError, setMonitoredSystemPreviewError] = createSignal<string | null>(
     null,
+  );
+  const monitoredSystemAdmissionSaveBlocked = createMemo(
+    () =>
+      Boolean(monitoredSystemPreviewUnavailableReason()) ||
+      Boolean(monitoredSystemPreview()?.would_exceed_limit),
   );
 
   const editingConnection = createMemo(
@@ -202,6 +234,8 @@ export function useTrueNASSettingsPanelState() {
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     setDialogOpen(true);
   };
@@ -210,6 +244,8 @@ export function useTrueNASSettingsPanelState() {
     setEditingConnectionId(connection.id);
     setForm(buildFormStateFromConnection(connection));
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     setDialogOpen(true);
   };
@@ -219,6 +255,8 @@ export function useTrueNASSettingsPanelState() {
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
   };
 
@@ -244,6 +282,8 @@ export function useTrueNASSettingsPanelState() {
 
   const updateForm = (patch: Partial<TrueNASConnectionFormState>) => {
     setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     setForm((current) => ({ ...current, ...patch }));
   };
@@ -288,6 +328,8 @@ export function useTrueNASSettingsPanelState() {
 
   const previewCurrentForm = async () => {
     setPreviewing(true);
+    setMonitoredSystemPreviewUnavailableReason(null);
+    setMonitoredSystemPreviewErrorTitle(null);
     setMonitoredSystemPreviewError(null);
     try {
       const payload = buildConnectionInput(form());
@@ -295,11 +337,23 @@ export function useTrueNASSettingsPanelState() {
         ? await TrueNASAPI.previewSavedConnection(editingConnectionId()!, payload)
         : await TrueNASAPI.previewConnection(payload);
       setMonitoredSystemPreview(preview);
+      setMonitoredSystemPreviewUnavailableReason(null);
+      setMonitoredSystemPreviewErrorTitle(null);
       return preview;
     } catch (error) {
-      const message = getErrorMessage(error, 'Could not preview monitored-system impact');
+      const unavailableState = monitoredSystemAdmissionPreviewUnavailableStateFromError(error);
       setMonitoredSystemPreview(null);
-      setMonitoredSystemPreviewError(message);
+      if (unavailableState) {
+        setMonitoredSystemPreviewUnavailableReason(unavailableState.reason);
+        setMonitoredSystemPreviewErrorTitle(unavailableState.title);
+        setMonitoredSystemPreviewError(unavailableState.message);
+      } else {
+        setMonitoredSystemPreviewUnavailableReason(null);
+        setMonitoredSystemPreviewErrorTitle(null);
+        setMonitoredSystemPreviewError(
+          getErrorMessage(error, 'Could not preview monitored-system impact'),
+        );
+      }
       logger.error('[TrueNAS Settings] Preview failed', error);
       return null;
     } finally {
@@ -308,6 +362,12 @@ export function useTrueNASSettingsPanelState() {
   };
 
   const saveCurrentForm = async () => {
+    if (monitoredSystemPreviewUnavailableReason()) {
+      notificationStore.error(
+        monitoredSystemPreviewError() ?? 'Pulse cannot verify monitored-system capacity right now.',
+      );
+      return;
+    }
     if (monitoredSystemPreview()?.would_exceed_limit) {
       notificationStore.error('This change would exceed your monitored-system limit');
       return;
@@ -325,12 +385,25 @@ export function useTrueNASSettingsPanelState() {
       resetDialogState();
       await loadConnections();
     } catch (error) {
+      const unavailableState = monitoredSystemAdmissionPreviewUnavailableStateFromError(error);
       const preview = apiErrorMonitoredSystemPreview(error);
       if (preview) {
         setMonitoredSystemPreview(preview);
+        setMonitoredSystemPreviewUnavailableReason(null);
+        setMonitoredSystemPreviewErrorTitle(null);
         setMonitoredSystemPreviewError(null);
+      } else if (unavailableState) {
+        setMonitoredSystemPreview(null);
+        setMonitoredSystemPreviewUnavailableReason(unavailableState.reason);
+        setMonitoredSystemPreviewErrorTitle(unavailableState.title);
+        setMonitoredSystemPreviewError(unavailableState.message);
+      } else {
+        setMonitoredSystemPreviewUnavailableReason(null);
+        setMonitoredSystemPreviewErrorTitle(null);
       }
-      const message = getErrorMessage(error, 'Failed to save TrueNAS connection');
+      const message = unavailableState
+        ? unavailableState.message
+        : getErrorMessage(error, 'Failed to save TrueNAS connection');
       notificationStore.error(message);
       logger.error('[TrueNAS Settings] Save failed', error);
     } finally {
@@ -376,8 +449,10 @@ export function useTrueNASSettingsPanelState() {
     openEditDialog,
     pendingDeleteConnection,
     previewCurrentForm,
+    monitoredSystemAdmissionSaveBlocked,
     monitoredSystemPreview,
     monitoredSystemPreviewError,
+    monitoredSystemPreviewErrorTitle,
     previewing,
     saveCurrentForm,
     saving,

@@ -1037,4 +1037,97 @@ test.describe("VMware platform connections settings", () => {
       dialog.getByRole("button", { name: "Add connection" }),
     ).toBeDisabled();
   });
+
+  test("blocks VMware save while monitored-system usage is rebuilding", async ({
+    page,
+  }) => {
+    let previewPayload: Record<string, unknown> | null = null;
+    let createCalls = 0;
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections/preview" && method === "POST") {
+        previewPayload = JSON.parse(request.postData() || "{}");
+        await route.fulfill({
+          status: 503,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "Unable to verify monitored-system capacity right now",
+            code: "monitored_system_usage_unavailable",
+            status_code: 503,
+            details: {
+              reason: "supplemental_inventory_rebuild_pending",
+            },
+          }),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections" && method === "POST") {
+        createCalls += 1;
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({}),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: "Add VMware connection" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add VMware connection" });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByPlaceholder("lab-vcenter").fill("Lab VC");
+    await dialog.getByPlaceholder("vcsa.lab.local").fill("vcsa.lab.local");
+    await dialog
+      .getByPlaceholder("administrator@vsphere.local")
+      .fill("administrator@vsphere.local");
+    await dialog.locator('input[type="password"]').first().fill("super-secret");
+
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+
+    await expect
+      .poll(() => previewPayload)
+      .toMatchObject({
+        name: "Lab VC",
+        host: "vcsa.lab.local",
+        username: "administrator@vsphere.local",
+        password: "super-secret",
+        enabled: true,
+      });
+    await expect(
+      dialog.getByText("Monitored-system capacity is temporarily unavailable"),
+    ).toBeVisible();
+    await expect(
+      dialog.getByText(
+        "Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.",
+      ),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
+    expect(createCalls).toBe(0);
+  });
 });

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -124,27 +125,30 @@ func monitoredSystemCount(monitor *monitoring.Monitor) int {
 }
 
 type monitoredSystemUsageSnapshot struct {
-	count     int
-	readState unifiedresources.ReadState
-	available bool
+	count             int
+	readState         unifiedresources.ReadState
+	available         bool
+	unavailableReason string
 }
 
 func monitoredSystemUsage(monitor *monitoring.Monitor) monitoredSystemUsageSnapshot {
 	usage := monitor.MonitoredSystemUsage()
 	return monitoredSystemUsageSnapshot{
-		count:     usage.Count,
-		readState: usage.ReadState,
-		available: usage.Available,
+		count:             usage.Count,
+		readState:         usage.ReadState,
+		available:         usage.Available,
+		unavailableReason: usage.UnavailableReason,
 	}
 }
 
 type monitoredSystemLimitDecision struct {
-	current        int
-	limit          int
-	additional     int
-	usageAvailable bool
-	exceeded       bool
-	preview        *MonitoredSystemLedgerPreviewResponse
+	current                int
+	limit                  int
+	additional             int
+	usageAvailable         bool
+	usageUnavailableReason string
+	exceeded               bool
+	preview                *MonitoredSystemLedgerPreviewResponse
 }
 
 func legacyConnectionCounts(monitor *monitoring.Monitor) legacyConnectionCountsModel {
@@ -172,13 +176,17 @@ func writeMaxMonitoredSystemsLimitExceeded(w http.ResponseWriter, decision monit
 	writePaymentRequired(w, monitoredSystemLimitExceededPayload(decision))
 }
 
-func writeMonitoredSystemUsageUnavailable(w http.ResponseWriter) {
+func writeMonitoredSystemUsageUnavailable(w http.ResponseWriter, reason string) {
+	details := map[string]string{}
+	if trimmed := strings.TrimSpace(reason); trimmed != "" {
+		details["reason"] = trimmed
+	}
 	writeErrorResponse(
 		w,
 		http.StatusServiceUnavailable,
 		"monitored_system_usage_unavailable",
 		"Unable to verify monitored-system capacity right now",
-		nil,
+		details,
 	)
 }
 
@@ -239,7 +247,8 @@ func monitoredSystemLimitDecisionForCandidate(
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
-			limit: limit,
+			limit:                  limit,
+			usageUnavailableReason: usage.unavailableReason,
 		}
 	}
 
@@ -264,7 +273,8 @@ func monitoredSystemLimitDecisionForCandidateReplacement(
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
-			limit: limit,
+			limit:                  limit,
+			usageUnavailableReason: usage.unavailableReason,
 		}
 	}
 
@@ -292,7 +302,8 @@ func monitoredSystemLimitDecisionForRecords(
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
-			limit: limit,
+			limit:                  limit,
+			usageUnavailableReason: usage.unavailableReason,
 		}
 	}
 
@@ -317,7 +328,8 @@ func monitoredSystemLimitDecisionForRecordsReplacement(
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
-			limit: limit,
+			limit:                  limit,
+			usageUnavailableReason: usage.unavailableReason,
 		}
 	}
 
@@ -346,7 +358,8 @@ func monitoredSystemLimitDecisionForAdditionalSlots(
 	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
-			limit: limit,
+			limit:                  limit,
+			usageUnavailableReason: usage.unavailableReason,
 		}
 	}
 
@@ -362,7 +375,7 @@ func enforceMonitoredSystemLimitForConfigRegistration(
 ) bool {
 	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {
@@ -383,7 +396,7 @@ func enforceMonitoredSystemLimitForConfigReplacement(
 ) bool {
 	decision := monitoredSystemLimitDecisionForCandidateReplacement(ctx, monitor, replacement, candidate)
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {
@@ -420,7 +433,7 @@ func enforceMonitoredSystemLimitForHostReport(
 	}
 	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {
@@ -500,7 +513,7 @@ func enforceMonitoredSystemLimitForDockerReport(
 	}
 	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {
@@ -540,7 +553,7 @@ func enforceMonitoredSystemLimitForKubernetesReport(
 	}
 	decision := monitoredSystemLimitDecisionForCandidate(ctx, monitor, candidate)
 	if !decision.usageAvailable {
-		writeMonitoredSystemUsageUnavailable(w)
+		writeMonitoredSystemUsageUnavailable(w, decision.usageUnavailableReason)
 		return true
 	}
 	if !decision.exceeded {

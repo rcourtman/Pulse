@@ -36,7 +36,8 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   includedCollectionPathsHeading: 'Included collection paths',
   emptyState: 'No monitored systems counted.',
   noIncludedSignalLabel: 'No included signal yet.',
-  fallbackExplanationSummary: 'Pulse counts this top-level collection path as one monitored system.',
+  fallbackExplanationSummary:
+    'Pulse counts this top-level collection path as one monitored system.',
   statusSummaryByStatus: {
     online: 'All included top-level collection paths currently report online status.',
     warning:
@@ -52,6 +53,15 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     overflowSummaryPrefix: 'Includes 1 temporary onboarding slot',
     legacyConnectionSuffix:
       'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
+  },
+  admissionPreview: {
+    unavailableTitle: 'Monitored-system capacity is temporarily unavailable',
+    unavailableFallbackMessage:
+      'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
+    unavailableUnsettledMessage:
+      'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+    unavailableRebuildPendingMessage:
+      'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
   },
 } as const;
 
@@ -119,6 +129,21 @@ export function getMonitoredSystemLimitUpgradeLabel(): string {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.upgradeLabel;
 }
 
+export function getMonitoredSystemAdmissionPreviewUnavailableTitle(): string {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.unavailableTitle;
+}
+
+export function formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason?: string): string {
+  switch (normalizeMonitoredSystemValue(reason)) {
+    case 'supplemental_inventory_unsettled':
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.unavailableUnsettledMessage;
+    case 'supplemental_inventory_rebuild_pending':
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.unavailableRebuildPendingMessage;
+    default:
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.unavailableFallbackMessage;
+  }
+}
+
 export function formatMonitoredSystemLimitSummary(limit: {
   current: number;
   limit: number;
@@ -132,9 +157,7 @@ export function formatMonitoredSystemLegacyConnectionBreakdown(
   const parts: string[] = [];
 
   if (counts.proxmox_nodes > 0) {
-    parts.push(
-      `${counts.proxmox_nodes} Proxmox ${counts.proxmox_nodes === 1 ? 'node' : 'nodes'}`,
-    );
+    parts.push(`${counts.proxmox_nodes} Proxmox ${counts.proxmox_nodes === 1 ? 'node' : 'nodes'}`);
   }
   if (counts.docker_hosts > 0) {
     parts.push(`${counts.docker_hosts} Docker ${counts.docker_hosts === 1 ? 'host' : 'hosts'}`);
@@ -163,9 +186,7 @@ export function formatMonitoredSystemMigrationMessage(
   } ${MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.legacyConnectionSuffix}`;
 }
 
-export function formatMonitoredSystemOverflowSummary(
-  daysRemaining: number | undefined,
-): string {
+export function formatMonitoredSystemOverflowSummary(daysRemaining: number | undefined): string {
   if (!daysRemaining) return '';
   return `${MONITORED_SYSTEM_LEDGER_PRESENTATION.limitBanner.overflowSummaryPrefix} (${daysRemaining}d remaining)`;
 }

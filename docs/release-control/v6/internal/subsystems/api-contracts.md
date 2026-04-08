@@ -1074,6 +1074,14 @@ Provider-backed preview routes such as `/api/truenas/connections/preview`,
 and `/api/vmware/connections/{id}/preview` must serialize that same canonical
 preview shape directly; they may not down-scope the response to local counts or
 hide current/projected grouped systems from the governed contract.
+That same fail-closed contract now also carries a structured unavailable
+reason. When monitored-system usage is unavailable, the 503 payload must keep
+`code=monitored_system_usage_unavailable` and include `details.reason` with the
+canonical monitor usage reason such as `monitor_state_unavailable`,
+`supplemental_inventory_unsettled`, or
+`supplemental_inventory_rebuild_pending`, and provider-backed preview routes
+plus deploy slot checks must emit that same reason-bearing payload instead of a
+generic unavailable error.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

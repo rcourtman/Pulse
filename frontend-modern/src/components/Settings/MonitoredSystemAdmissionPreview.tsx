@@ -7,6 +7,7 @@ interface MonitoredSystemAdmissionPreviewProps {
   preview: MonitoredSystemLedgerPreviewResponse | null;
   loading?: boolean;
   error?: string | null;
+  errorTitle?: string | null;
 }
 
 const formatUsage = (count: number, limit: number): string =>
@@ -42,9 +43,9 @@ const previewSummary = (preview: MonitoredSystemLedgerPreviewResponse): string =
   return `Current usage ${before}. Saving this change keeps usage at ${after}.`;
 };
 
-export const MonitoredSystemAdmissionPreview: Component<
-  MonitoredSystemAdmissionPreviewProps
-> = (props) => {
+export const MonitoredSystemAdmissionPreview: Component<MonitoredSystemAdmissionPreviewProps> = (
+  props,
+) => {
   return (
     <>
       <Show when={props.loading}>
@@ -57,7 +58,7 @@ export const MonitoredSystemAdmissionPreview: Component<
         {(error) => (
           <CalloutCard
             tone="warning"
-            title="Could not preview monitored-system impact"
+            title={props.errorTitle || 'Could not preview monitored-system impact'}
             description={<p>{error()}</p>}
           />
         )}
@@ -78,9 +79,7 @@ export const MonitoredSystemAdmissionPreview: Component<
                     </p>
                     <ul class="space-y-1 text-sm text-base-content">
                       <For each={preview().current_systems}>
-                        {(system) => (
-                          <li>{formatMonitoredSystemSurfaceAttribution(system)}</li>
-                        )}
+                        {(system) => <li>{formatMonitoredSystemSurfaceAttribution(system)}</li>}
                       </For>
                     </ul>
                   </div>
@@ -92,9 +91,7 @@ export const MonitoredSystemAdmissionPreview: Component<
                     </p>
                     <ul class="space-y-1 text-sm text-base-content">
                       <For each={preview().projected_systems}>
-                        {(system) => (
-                          <li>{formatMonitoredSystemSurfaceAttribution(system)}</li>
-                        )}
+                        {(system) => <li>{formatMonitoredSystemSurfaceAttribution(system)}</li>}
                       </For>
                     </ul>
                   </div>

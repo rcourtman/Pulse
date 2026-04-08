@@ -529,6 +529,7 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
             preview={state.monitoredSystemPreview()}
             loading={state.previewing()}
             error={state.monitoredSystemPreviewError()}
+            errorTitle={state.monitoredSystemPreviewErrorTitle()}
           />
 
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -564,7 +565,7 @@ export const VMwareSettingsPanel: Component<VMwareSettingsPanelProps> = (props) 
                 state.saving() ||
                 state.testing() ||
                 state.previewing() ||
-                state.monitoredSystemPreview()?.would_exceed_limit
+                state.monitoredSystemAdmissionSaveBlocked()
               }
             >
               {state.saving()
