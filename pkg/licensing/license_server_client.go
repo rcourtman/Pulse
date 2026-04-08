@@ -28,6 +28,7 @@ type CheckoutSessionResult struct {
 	Message             string `json:"message,omitempty"`
 	CheckoutStatus      string `json:"checkout_status,omitempty"`
 	PaymentStatus       string `json:"payment_status,omitempty"`
+	PortalHandoffID     string `json:"portal_handoff_id,omitempty"`
 	PurchaseReturnJTI   string `json:"purchase_return_jti,omitempty"`
 	LicenseID           string `json:"license_id,omitempty"`
 	ActivationKey       string `json:"activation_key,omitempty"`

@@ -48,6 +48,19 @@ func issuePurchaseReturnToken(t *testing.T, handler *LicenseHandlers, orgID, fea
 	return token
 }
 
+func purchaseReturnJTIFromToken(t *testing.T, handler *LicenseHandlers, token string) string {
+	t.Helper()
+	signingKey, err := handler.purchaseReturnSigningKey()
+	if err != nil {
+		t.Fatalf("purchaseReturnSigningKey: %v", err)
+	}
+	claims, err := verifyPurchaseReturnTokenFromLicensing(token, signingKey, "pulse.example.com", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("verifyPurchaseReturnTokenFromLicensing: %v", err)
+	}
+	return strings.TrimSpace(claims.ID)
+}
+
 type licenseFeaturesResponseDTO struct {
 	LicenseStatus string          `json:"license_status"`
 	Features      map[string]bool `json:"features"`
@@ -812,7 +825,7 @@ func TestHandleCheckoutActivation_GETRendersAutoSubmitBridge(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodGet,
 		"https://pulse.example.com"+licensePurchaseActivationPath+
-			"?session_id=cs_success&purchase_return_token="+url.QueryEscape(returnToken),
+			"?session_id=cs_success&portal_handoff_id=cph_success&purchase_return_token="+url.QueryEscape(returnToken),
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -835,6 +848,9 @@ func TestHandleCheckoutActivation_GETRendersAutoSubmitBridge(t *testing.T) {
 	if !strings.Contains(body, `name="purchase_return_token" value="`+returnToken+`"`) {
 		t.Fatalf("body = %q, want purchase_return_token hidden field", body)
 	}
+	if !strings.Contains(body, `name="portal_handoff_id" value="cph_success"`) {
+		t.Fatalf("body = %q, want portal_handoff_id hidden field", body)
+	}
 	if !strings.Contains(body, `name="feature" value="max_monitored_systems"`) {
 		t.Fatalf("body = %q, want feature hidden field derived from claims", body)
 	}
@@ -845,6 +861,10 @@ func TestHandleCheckoutActivation_GETRendersAutoSubmitBridge(t *testing.T) {
 
 func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge(t *testing.T) {
 	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
+	purchaseReturnJTI := purchaseReturnJTIFromToken(t, handler, returnToken)
 
 	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
 		LicenseID:           "lic_checkout_success",
@@ -872,7 +892,7 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 				t.Fatalf("session_id = %q, want cs_success", got)
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"status":"fulfilled","activation_key":"ppk_live_checkout_activation"}`))
+			_, _ = w.Write([]byte(`{"status":"fulfilled","portal_handoff_id":"cph_success","purchase_return_jti":"` + purchaseReturnJTI + `","activation_key":"ppk_live_checkout_activation"}`))
 		case "/v1/activate":
 			if r.Method != http.MethodPost {
 				t.Fatalf("activate method = %s, want POST", r.Method)
@@ -904,12 +924,10 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	defer server.Close()
 	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
 
-	handler := createTestHandler(t)
-	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"https://pulse.example.com"+licensePurchaseActivationPath,
-		strings.NewReader("session_id=cs_success&purchase_return_token="+url.QueryEscape(returnToken)),
+		strings.NewReader("session_id=cs_success&portal_handoff_id=cph_success&purchase_return_token="+url.QueryEscape(returnToken)),
 	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -977,7 +995,7 @@ func TestHandleCheckoutActivation_RendersFailurePageWhenCheckoutIsNotFulfilled(t
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"https://pulse.example.com"+licensePurchaseActivationPath,
-		strings.NewReader("session_id=cs_pending&purchase_return_token="+url.QueryEscape(returnToken)),
+		strings.NewReader("session_id=cs_pending&portal_handoff_id=cph_pending&purchase_return_token="+url.QueryEscape(returnToken)),
 	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -1011,7 +1029,7 @@ func TestHandleCheckoutActivation_RejectsPurchaseReturnBindingMismatch(t *testin
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"https://pulse.example.com"+licensePurchaseActivationPath,
-		strings.NewReader("session_id=cs_success&purchase_return_token="+url.QueryEscape(returnToken)),
+		strings.NewReader("session_id=cs_success&portal_handoff_id=cph_success&purchase_return_token="+url.QueryEscape(returnToken)),
 	)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
@@ -1026,6 +1044,41 @@ func TestHandleCheckoutActivation_RejectsPurchaseReturnBindingMismatch(t *testin
 	}
 	if handler.Service(context.Background()).IsActivated() {
 		t.Fatal("expected mismatched checkout return to leave the local license inactive")
+	}
+}
+
+func TestHandleCheckoutActivation_RejectsPortalHandoffBindingMismatch(t *testing.T) {
+	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
+	purchaseReturnJTI := purchaseReturnJTIFromToken(t, handler, returnToken)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/checkout/session" {
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"fulfilled","portal_handoff_id":"cph_wrong","purchase_return_jti":"` + purchaseReturnJTI + `","activation_key":"ppk_live_should_not_activate"}`))
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"https://pulse.example.com"+licensePurchaseActivationPath,
+		strings.NewReader("session_id=cs_success&portal_handoff_id=cph_expected&purchase_return_token="+url.QueryEscape(returnToken)),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+
+	handler.HandleCheckoutActivation(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want %d (body=%q)", rec.Code, http.StatusConflict, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "did not match the completed upgrade flow") {
+		t.Fatalf("body = %q, want binding mismatch message", rec.Body.String())
+	}
+	if handler.Service(context.Background()).IsActivated() {
+		t.Fatal("expected mismatched portal handoff to leave the local license inactive")
 	}
 }
 

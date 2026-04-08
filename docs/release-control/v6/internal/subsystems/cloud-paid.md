@@ -489,6 +489,14 @@ lifecycle must stay derived from the owned portal handoff plus the bound
 checkout intent (`created`, `resolved`, `checkout_started`, `completed`) so
 Pulse Account can distinguish a fresh upgrade bootstrap from a resumed or
 already-completed checkout without reviving browser-owned commercial state.
+That same owned handoff row is now also the canonical self-hosted purchase
+binding record: it must persist the signed `purchase_return_jti`, the bound
+Stripe `session_id`, and the lifecycle timestamps that prove when checkout was
+resolved, started, and completed. Stripe success must carry that same
+`portal_handoff_id` back into Pulse's activation callback, and Pulse must
+cross-check both `portal_handoff_id` and `purchase_return_jti` against the
+commercial session result before local activation so the browser no longer
+trusts Stripe metadata or local form state alone for return integrity.
 Stripe success now lands on Pulse's public
 `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/pages/PricingHandoff.tsx` may only hand operators into

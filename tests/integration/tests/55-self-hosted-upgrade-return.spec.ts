@@ -220,7 +220,7 @@ test.describe("Self-hosted upgrade return flow", () => {
           "<h1>Pulse Account</h1>" +
           "<p>Checkout complete. Returning to Pulse Pro.</p>" +
           `<script>setTimeout(function(){window.location.replace(${JSON.stringify(
-            `${PURCHASE_RETURN_URL}?session_id=cs_upgrade_return&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
+            `${PURCHASE_RETURN_URL}?session_id=cs_upgrade_return&portal_handoff_id=${PORTAL_HANDOFF_ID}&purchase_return_token=${encodeURIComponent(PURCHASE_RETURN_TOKEN)}`,
           )});},150);</script>` +
           "</body></html>",
       });
@@ -233,6 +233,9 @@ test.describe("Self-hosted upgrade return flow", () => {
         expect(requestUrl.searchParams.get("session_id")).toBe(
           "cs_upgrade_return",
         );
+        expect(requestUrl.searchParams.get("portal_handoff_id")).toBe(
+          PORTAL_HANDOFF_ID,
+        );
         expect(requestUrl.searchParams.get("purchase_return_token")).toBe(
           PURCHASE_RETURN_TOKEN,
         );
@@ -244,6 +247,7 @@ test.describe("Self-hosted upgrade return flow", () => {
             "<h1>Finalizing Pulse Pro upgrade</h1>" +
             `<form id="purchase-activation-continue-form" method="POST" action="${escapeAttribute(PURCHASE_RETURN_URL)}">` +
             '<input type="hidden" name="session_id" value="cs_upgrade_return">' +
+            `<input type="hidden" name="portal_handoff_id" value="${escapeAttribute(PORTAL_HANDOFF_ID)}">` +
             `<input type="hidden" name="purchase_return_token" value="${escapeAttribute(PURCHASE_RETURN_TOKEN)}">` +
             "</form>" +
             '<script>setTimeout(function(){document.getElementById("purchase-activation-continue-form")?.submit();},50);</script>' +
@@ -255,6 +259,7 @@ test.describe("Self-hosted upgrade return flow", () => {
       expect(request.method()).toBe("POST");
       const formData = new URLSearchParams(request.postData() || "");
       expect(formData.get("session_id")).toBe("cs_upgrade_return");
+      expect(formData.get("portal_handoff_id")).toBe(PORTAL_HANDOFF_ID);
       expect(formData.get("purchase_return_token")).toBe(PURCHASE_RETURN_TOKEN);
       await route.fulfill({
         status: 200,

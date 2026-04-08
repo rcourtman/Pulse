@@ -584,7 +584,16 @@ resolution must stamp `resolved_at`, the portal-facing lifecycle must stay
 derived from the owned handoff plus the private checkout intent
 (`created`, `resolved`, `checkout_started`, `completed`), and completed
 handoffs must refuse browser checkout replay instead of silently reopening
-commercial state. That same owned contract also retires the old compatibility
+commercial state. The owned handoff row is also the canonical binding record
+for product-originated self-hosted checkout: it must persist the signed
+`purchase_return_jti`, the bound Stripe `session_id`, and the timestamps that
+prove resolve, checkout-start, and completion. Stripe success must return
+that same `portal_handoff_id` into Pulse's activation callback, and Pulse
+must compare both `portal_handoff_id` and `purchase_return_jti` against the
+commercial checkout-session result before redeeming the activation key, so
+browser form/query state and Stripe metadata alone never become the source of
+truth for a completed self-hosted upgrade. That same owned contract also
+retires the old compatibility
 bootstrap surfaces: Pulse must not expose a separate public
 `GET /auth/license-purchase-handoff` resolver, and the commercial server must
 not expose a direct browser bootstrap through `GET /v1/checkout/intent` once

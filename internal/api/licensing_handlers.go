@@ -408,27 +408,34 @@ func writeLicensePurchaseActivationSuccessPage(w http.ResponseWriter, feature st
 func writeLicensePurchaseActivationContinuePage(
 	w http.ResponseWriter,
 	sessionID string,
+	portalHandoffID string,
 	feature string,
 	returnToken string,
 ) {
 	escapedFeature := html.EscapeString(feature)
 	escapedReturnToken := html.EscapeString(returnToken)
 	escapedSessionID := html.EscapeString(sessionID)
+	escapedPortalHandoffID := html.EscapeString(strings.TrimSpace(portalHandoffID))
 	featureInput := ""
 	if strings.TrimSpace(feature) != "" {
 		featureInput = fmt.Sprintf("<input type=\"hidden\" name=\"feature\" value=\"%s\">", escapedFeature)
+	}
+	portalHandoffInput := ""
+	if strings.TrimSpace(portalHandoffID) != "" {
+		portalHandoffInput = fmt.Sprintf("<input type=\"hidden\" name=\"%s\" value=\"%s\">", pulseAccountPortalHandoffIDField, escapedPortalHandoffID)
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = fmt.Fprintf(
 		w,
-		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Finalizing Pulse Pro upgrade</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Finalizing Pulse Pro upgrade</h1><p id=\"purchase-activation-continue-status\" style=\"margin-bottom:1rem\">Pulse is securely finalizing the completed checkout.</p><form id=\"purchase-activation-continue-form\" method=\"POST\" action=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\">%s<button type=\"submit\">Continue to Pulse Pro</button></form></main><script>(function(){var form=document.getElementById('purchase-activation-continue-form');var statusEl=document.getElementById('purchase-activation-continue-status');if(statusEl){statusEl.textContent='Pulse is finishing the upgrade and returning you to billing.';}if(form&&typeof form.submit==='function'){setTimeout(function(){form.submit();},50);}}());</script></body></html>",
+		"<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Finalizing Pulse Pro upgrade</title></head><body><main style=\"max-width:32rem;margin:3rem auto;padding:0 1rem;font:16px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif\"><h1 style=\"margin-bottom:0.5rem\">Finalizing Pulse Pro upgrade</h1><p id=\"purchase-activation-continue-status\" style=\"margin-bottom:1rem\">Pulse is securely finalizing the completed checkout.</p><form id=\"purchase-activation-continue-form\" method=\"POST\" action=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\"><input type=\"hidden\" name=\"%s\" value=\"%s\">%s%s<button type=\"submit\">Continue to Pulse Pro</button></form></main><script>(function(){var form=document.getElementById('purchase-activation-continue-form');var statusEl=document.getElementById('purchase-activation-continue-status');if(statusEl){statusEl.textContent='Pulse is finishing the upgrade and returning you to billing.';}if(form&&typeof form.submit==='function'){setTimeout(function(){form.submit();},50);}}());</script></body></html>",
 		licensePurchaseActivationPath,
 		licensePurchaseSessionIDField,
 		escapedSessionID,
 		licensePurchaseReturnTokenField,
 		escapedReturnToken,
 		featureInput,
+		portalHandoffInput,
 	)
 }
 
@@ -1491,6 +1498,7 @@ func (h *LicenseHandlers) HandleCheckoutStart(w http.ResponseWriter, r *http.Req
 func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
 		sessionID := strings.TrimSpace(r.URL.Query().Get(licensePurchaseSessionIDField))
+		portalHandoffID := strings.TrimSpace(r.URL.Query().Get(pulseAccountPortalHandoffIDField))
 		feature := strings.TrimSpace(r.URL.Query().Get("feature"))
 		returnToken := strings.TrimSpace(r.URL.Query().Get(licensePurchaseReturnTokenField))
 		if returnToken == "" || sessionID == "" {
@@ -1506,7 +1514,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		if claims != nil && strings.TrimSpace(claims.Feature) != "" {
 			feature = strings.TrimSpace(claims.Feature)
 		}
-		writeLicensePurchaseActivationContinuePage(w, sessionID, feature, returnToken)
+		writeLicensePurchaseActivationContinuePage(w, sessionID, portalHandoffID, feature, returnToken)
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -1519,6 +1527,7 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	}
 
 	sessionID := strings.TrimSpace(r.FormValue(licensePurchaseSessionIDField))
+	portalHandoffID := strings.TrimSpace(r.FormValue(pulseAccountPortalHandoffIDField))
 	feature := strings.TrimSpace(r.FormValue("feature"))
 	returnToken := strings.TrimSpace(r.FormValue(licensePurchaseReturnTokenField))
 	if returnToken == "" {
@@ -1625,6 +1634,27 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	resolvedPurchaseReturnJTI := ""
 	if checkoutResult != nil {
 		resolvedPurchaseReturnJTI = strings.TrimSpace(checkoutResult.PurchaseReturnJTI)
+	}
+	resolvedPortalHandoffID := ""
+	if checkoutResult != nil {
+		resolvedPortalHandoffID = strings.TrimSpace(checkoutResult.PortalHandoffID)
+	}
+	if portalHandoffID != "" {
+		if resolvedPortalHandoffID == "" || resolvedPortalHandoffID != portalHandoffID {
+			clearReplay("portal_handoff_id_mismatch", nil)
+			log.Warn().
+				Str("checkout_session_id", sessionID).
+				Str("expected_portal_handoff_id", portalHandoffID).
+				Str("resolved_portal_handoff_id", resolvedPortalHandoffID).
+				Msg("Rejected checkout activation due to portal handoff binding mismatch")
+			writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+			return
+		}
+	} else if resolvedPortalHandoffID != "" {
+		log.Warn().
+			Str("checkout_session_id", sessionID).
+			Str("resolved_portal_handoff_id", resolvedPortalHandoffID).
+			Msg("Purchase activation continued without browser portal_handoff_id state")
 	}
 	if expectedPurchaseReturnJTI == "" || resolvedPurchaseReturnJTI == "" || expectedPurchaseReturnJTI != resolvedPurchaseReturnJTI {
 		clearReplay("purchase_return_jti_mismatch", nil)
