@@ -189,6 +189,25 @@ func TestVMwareHandlers_HandleAdd_BlocksProjectedNetNewSystemsAtLimit(t *testing
 	if rec.Code != http.StatusPaymentRequired {
 		t.Fatalf("expected 402 once projected VMware inventory exceeds the cap, got %d: %s", rec.Code, rec.Body.String())
 	}
+	payload := decodeMonitoredSystemLimitBlockedPayload(t, rec.Body.Bytes())
+	if payload.Error != "license_required" {
+		t.Fatalf("error=%q, want license_required", payload.Error)
+	}
+	if payload.Feature != maxMonitoredSystemsLicenseGateKey {
+		t.Fatalf("feature=%q, want %q", payload.Feature, maxMonitoredSystemsLicenseGateKey)
+	}
+	if !payload.MonitoredSystemPreview.WouldExceedLimit {
+		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
+	}
+	if payload.MonitoredSystemPreview.Effect != "creates_new" {
+		t.Fatalf("effect=%q, want creates_new", payload.MonitoredSystemPreview.Effect)
+	}
+	if payload.MonitoredSystemPreview.AdditionalCount != 1 {
+		t.Fatalf("additional_count=%d, want 1", payload.MonitoredSystemPreview.AdditionalCount)
+	}
+	if len(payload.MonitoredSystemPreview.ProjectedSystems) != 1 {
+		t.Fatalf("len(projected_systems)=%d, want 1", len(payload.MonitoredSystemPreview.ProjectedSystems))
+	}
 
 	stored, err := persistence.LoadVMwareConfig()
 	if err != nil {
@@ -648,6 +667,22 @@ func TestVMwareHandlers_HandleUpdate_BlocksProjectedNetNewSystemsAtLimit(t *test
 	if rec.Code != http.StatusPaymentRequired {
 		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
 	}
+	payload := decodeMonitoredSystemLimitBlockedPayload(t, rec.Body.Bytes())
+	if !payload.MonitoredSystemPreview.WouldExceedLimit {
+		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
+	}
+	if payload.MonitoredSystemPreview.Effect != "splits_existing" {
+		t.Fatalf("effect=%q, want splits_existing", payload.MonitoredSystemPreview.Effect)
+	}
+	if payload.MonitoredSystemPreview.AdditionalCount != 1 {
+		t.Fatalf("additional_count=%d, want 1", payload.MonitoredSystemPreview.AdditionalCount)
+	}
+	if len(payload.MonitoredSystemPreview.CurrentSystems) != 1 {
+		t.Fatalf("len(current_systems)=%d, want 1", len(payload.MonitoredSystemPreview.CurrentSystems))
+	}
+	if len(payload.MonitoredSystemPreview.ProjectedSystems) != 1 {
+		t.Fatalf("len(projected_systems)=%d, want 1", len(payload.MonitoredSystemPreview.ProjectedSystems))
+	}
 
 	stored, err := persistence.LoadVMwareConfig()
 	if err != nil {
@@ -765,6 +800,170 @@ func TestVMwareHandlers_HandleTestConnection_PreservesUnsupportedVersionCategory
 	}
 	if payload.Details["category"] != "unsupported_version" {
 		t.Fatalf("expected unsupported_version category, got %+v", payload.Details)
+	}
+}
+
+func TestVMwareHandlers_HandlePreviewConnection_ReturnsCanonicalMultiSystemImpact(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	handler, _ := newVMwareHandlersForTest(t)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "agent-host-1",
+			Resource: unifiedresources.Resource{
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "esxi-01.lab.local",
+				Status: unifiedresources.StatusOnline,
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+	monitor := &monitoring.Monitor{}
+	monitor.SetResourceStore(unifiedresources.NewMonitorAdapter(registry))
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		return []unifiedresources.IngestRecord{
+			{
+				SourceID: "vc-1:host:host-101",
+				Resource: unifiedresources.Resource{
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "esxi-01.lab.local",
+					Status: unifiedresources.StatusOnline,
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-101",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-1",
+					},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					DMIUUID:   "uuid-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+			{
+				SourceID: "vc-1:host:host-102",
+				Resource: unifiedresources.Resource{
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "esxi-02.lab.local",
+					Status: unifiedresources.StatusOnline,
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-102",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-2",
+					},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					DMIUUID:   "uuid-host-2",
+					Hostnames: []string{"esxi-02.lab.local"},
+				},
+			},
+		}, nil
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"host":     "vcsa.lab.local",
+		"username": "administrator@vsphere.local",
+		"password": "super-secret",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 2 || preview.AdditionalCount != 1 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if !preview.WouldExceedLimit {
+		t.Fatalf("expected preview to report limit overrun, got %+v", preview)
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 2 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 2", len(preview.ProjectedSystems))
+	}
+}
+
+func TestVMwareHandlers_HandlePreviewSavedConnection_PreservesStoredSecrets(t *testing.T) {
+	setVMwareFeatureForTest(t, true)
+
+	handler, persistence := newVMwareHandlersForTest(t)
+	monitor, _, _ := newTestMonitor(t)
+	handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+	if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{
+		{
+			ID:       "conn-1",
+			Name:     "lab-vcenter",
+			Host:     "vcsa.lab.local",
+			Username: "administrator@vsphere.local",
+			Password: "super-secret",
+			Enabled:  true,
+		},
+	}); err != nil {
+		t.Fatalf("seed vmware config: %v", err)
+	}
+
+	var previewed config.VMwareVCenterInstance
+	handler.previewRecords = func(_ context.Context, instance config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+		previewed = instance
+		return []unifiedresources.IngestRecord{
+			{
+				SourceID: "vc-1:host:host-101",
+				Resource: unifiedresources.Resource{
+					Type:   unifiedresources.ResourceTypeAgent,
+					Name:   "esxi-01.lab.local",
+					Status: unifiedresources.StatusOnline,
+					VMware: &unifiedresources.VMwareData{
+						ConnectionID:    "conn-1",
+						ConnectionName:  "lab-vcenter",
+						ManagedObjectID: "host-101",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-1",
+					},
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					DMIUUID:   "uuid-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		}, nil
+	}
+
+	body := marshalVMwareRequest(t, map[string]any{
+		"host":               "edited.lab.local",
+		"username":           "operator@vsphere.local",
+		"password":           "********",
+		"insecureSkipVerify": true,
+		"enabled":            true,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections/conn-1/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if previewed.Password != "super-secret" {
+		t.Fatalf("expected stored password to be reused, got %+v", previewed)
+	}
+	if previewed.Host != "edited.lab.local" {
+		t.Fatalf("expected edited host to be previewed, got %+v", previewed)
 	}
 }
 

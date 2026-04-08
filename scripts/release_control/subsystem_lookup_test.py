@@ -29,12 +29,16 @@ PLATFORM_CONNECTIONS_WORKSPACE_EXACT_FILES = [
     "frontend-modern/src/components/Settings/__tests__/InfrastructureWorkspace.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/PlatformConnectionsWorkspace.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/VMwareSettingsPanel.test.tsx",
     "frontend-modern/src/components/Settings/__tests__/monitoredSystemModelGuardrails.test.ts",
     "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
     "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
+    "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
     "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
     "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
     "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
+    "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
+    "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts",
 ]
 
 

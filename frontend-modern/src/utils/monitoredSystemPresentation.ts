@@ -185,12 +185,16 @@ export function getMonitoredSystemSourceLabel(source: string | undefined): strin
       return 'Docker';
     case 'kubernetes':
       return 'Kubernetes';
+    case 'multiple':
+      return 'Multiple Sources';
     case 'pbs':
       return 'PBS';
     case 'pmg':
       return 'PMG';
     case 'proxmox':
       return 'Proxmox';
+    case 'vmware':
+      return 'VMware';
     case 'truenas':
       return 'TrueNAS';
     case '':
@@ -203,6 +207,8 @@ export function getMonitoredSystemSourceLabel(source: string | undefined): strin
 
 export function getMonitoredSystemSurfaceTypeLabel(type: string | undefined): string {
   switch (normalizeMonitoredSystemValue(type)) {
+    case 'agent':
+      return 'Host';
     case 'docker-host':
       return 'Docker Host';
     case 'host':

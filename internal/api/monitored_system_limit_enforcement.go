@@ -144,6 +144,7 @@ type monitoredSystemLimitDecision struct {
 	additional     int
 	usageAvailable bool
 	exceeded       bool
+	preview        *MonitoredSystemLedgerPreviewResponse
 }
 
 func legacyConnectionCounts(monitor *monitoring.Monitor) legacyConnectionCountsModel {
@@ -154,12 +155,21 @@ func legacyConnectionCountsFromReadState(rs unifiedresources.ReadState) legacyCo
 	return legacyConnectionCountsModel{}
 }
 
-func writeMaxMonitoredSystemsLimitExceeded(w http.ResponseWriter, current, limit int) {
-	WriteLicenseRequired(
-		w,
-		maxMonitoredSystemsLicenseGateKey,
-		monitoredSystemLimitExceededMessageFromLicensing(current, limit),
-	)
+func monitoredSystemLimitExceededPayload(decision monitoredSystemLimitDecision) map[string]interface{} {
+	payload := map[string]interface{}{
+		"error":       "license_required",
+		"message":     monitoredSystemLimitExceededMessageFromLicensing(decision.current, decision.limit),
+		"feature":     maxMonitoredSystemsLicenseGateKey,
+		"upgrade_url": upgradeURLForFeatureFromLicensing(maxMonitoredSystemsLicenseGateKey),
+	}
+	if decision.preview != nil {
+		payload["monitored_system_preview"] = decision.preview.NormalizeCollections()
+	}
+	return payload
+}
+
+func writeMaxMonitoredSystemsLimitExceeded(w http.ResponseWriter, decision monitoredSystemLimitDecision) {
+	writePaymentRequired(w, monitoredSystemLimitExceededPayload(decision))
 }
 
 func writeMonitoredSystemUsageUnavailable(w http.ResponseWriter) {
@@ -196,6 +206,23 @@ func monitoredSystemLimitDecisionFromAdditional(
 	}
 }
 
+func monitoredSystemLimitDecisionFromPreview(
+	ctx context.Context,
+	limit int,
+	hasReplacement bool,
+	preview unifiedresources.MonitoredSystemProjectionPreview,
+) monitoredSystemLimitDecision {
+	decision := monitoredSystemLimitDecisionFromAdditional(
+		ctx,
+		limit,
+		preview.CurrentCount,
+		preview.AdditionalCount,
+	)
+	resp := monitoredSystemLedgerPreviewResponse(ctx, hasReplacement, preview).NormalizeCollections()
+	decision.preview = &resp
+	return decision
+}
+
 func monitoredSystemLimitDecisionForCandidate(
 	ctx context.Context,
 	monitor *monitoring.Monitor,
@@ -216,8 +243,8 @@ func monitoredSystemLimitDecisionForCandidate(
 		}
 	}
 
-	projection := unifiedresources.ProjectMonitoredSystemCandidate(usage.readState, candidate)
-	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+	projection := unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, candidate)
+	return monitoredSystemLimitDecisionFromPreview(ctx, limit, false, projection)
 }
 
 func monitoredSystemLimitDecisionForCandidateReplacement(
@@ -241,8 +268,12 @@ func monitoredSystemLimitDecisionForCandidateReplacement(
 		}
 	}
 
-	projection := unifiedresources.ProjectMonitoredSystemCandidateReplacement(usage.readState, replacement, candidate)
-	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+	projection := unifiedresources.PreviewMonitoredSystemCandidateReplacement(
+		usage.readState,
+		replacement,
+		candidate,
+	)
+	return monitoredSystemLimitDecisionFromPreview(ctx, limit, true, projection)
 }
 
 func monitoredSystemLimitDecisionForRecords(
@@ -265,8 +296,8 @@ func monitoredSystemLimitDecisionForRecords(
 		}
 	}
 
-	projection := unifiedresources.ProjectMonitoredSystemRecords(usage.readState, recordsBySource)
-	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+	projection := unifiedresources.PreviewMonitoredSystemRecords(usage.readState, recordsBySource)
+	return monitoredSystemLimitDecisionFromPreview(ctx, limit, false, projection)
 }
 
 func monitoredSystemLimitDecisionForRecordsReplacement(
@@ -290,8 +321,12 @@ func monitoredSystemLimitDecisionForRecordsReplacement(
 		}
 	}
 
-	projection := unifiedresources.ProjectMonitoredSystemRecordsReplacement(usage.readState, replacement, recordsBySource)
-	return monitoredSystemLimitDecisionFromAdditional(ctx, limit, projection.CurrentCount, projection.AdditionalCount)
+	projection := unifiedresources.PreviewMonitoredSystemRecordsReplacement(
+		usage.readState,
+		replacement,
+		recordsBySource,
+	)
+	return monitoredSystemLimitDecisionFromPreview(ctx, limit, true, projection)
 }
 
 func monitoredSystemLimitDecisionForAdditionalSlots(
@@ -335,7 +370,7 @@ func enforceMonitoredSystemLimitForConfigRegistration(
 	}
 
 	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -356,7 +391,7 @@ func enforceMonitoredSystemLimitForConfigReplacement(
 	}
 
 	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -393,7 +428,7 @@ func enforceMonitoredSystemLimitForHostReport(
 	}
 
 	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -473,7 +508,7 @@ func enforceMonitoredSystemLimitForDockerReport(
 	}
 
 	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -513,7 +548,7 @@ func enforceMonitoredSystemLimitForKubernetesReport(
 	}
 
 	emitLimitBlockedEvent(ctx, decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 

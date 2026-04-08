@@ -898,6 +898,13 @@ must update the canonical TrueNAS poll summary owner so subsequent
 `/api/truenas/connections` reads reflect refreshed last-success or last-error
 state instead of leaving settings health disconnected from manual operator
 tests.
+That same route family now also owns pre-save monitored-system admission
+preview. `POST /api/truenas/connections/preview` and
+`POST /api/truenas/connections/{id}/preview` must return the shared
+monitored-system ledger preview contract sourced from canonical
+unified-resource projection, including current/projected grouped systems and
+enforced limit verdicts, rather than page-local settings estimates or
+provider-local counters.
 That same `/api/truenas/connections` list boundary now also owns the
 operator-facing runtime summary for those configured connections. The list
 response must carry the canonical redacted config together with poll health
@@ -960,6 +967,13 @@ remains the saved connection retest surface. The explicit disabled path also
 stays on this boundary: `404 vmware_disabled` means the operator or runtime has
 opted out of the default-on VMware candidate, not that the platform requires a
 different onboarding contract.
+That same route family now also owns source-native monitored-system admission
+preview. `POST /api/vmware/connections/preview` and
+`POST /api/vmware/connections/{id}/preview` must project the discovered
+provider-backed record set through the shared monitored-system ledger preview
+contract before persistence, including current/projected grouped systems and
+enforced limit verdicts, rather than collapsing a vCenter add or edit to one
+handler-local candidate estimate.
 That same TrueNAS and VMware platform-connections contract now also owns
 runtime mock continuity. When `/api/system/mock-mode` flips on a running
 server, `/api/truenas/connections` and `/api/vmware/connections` must
@@ -1048,6 +1062,18 @@ directly rather than keeping flat alias fallback for
 `latest_included_signal_at`, `latest_included_signal_source`, or `last_seen`.
 The canonical nested status-reason timestamp is `reported_at`, and the
 normalized client contract must expose only that field.
+That same monitored-system ledger contract now also owns prospective
+explanation. `POST /api/license/monitored-system-ledger/preview` must accept
+one canonical candidate plus an optional structured replacement selector, fail
+closed when monitored-system usage is unavailable, and return the canonical
+current/projected count delta, enforced limit verdict, effect label, and
+current/projected ledger entries produced by the shared monitored-system
+projection layer instead of by handler-local heuristics.
+Provider-backed preview routes such as `/api/truenas/connections/preview`,
+`/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,
+and `/api/vmware/connections/{id}/preview` must serialize that same canonical
+preview shape directly; they may not down-scope the response to local counts or
+hide current/projected grouped systems from the governed contract.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not
@@ -1238,6 +1264,11 @@ registration or update routes must project candidates or preview records
 through the canonical monitored-system resolver before persistence, including
 replacement of one existing source-owned surface, instead of rebuilding
 handler-local priority tables or platform-specific counters.
+That same admission contract now also owns replacement identity. Shared API
+handlers may keep source-local request decoding, but the replacement they pass
+into monitored-system projection must travel as one canonical structured
+selector contract rather than as per-handler opaque match logic, so support
+preview, limit enforcement, and final runtime grouping stay aligned.
 When an active monitored-system cap is present and current usage cannot be
 resolved, those API contracts must fail closed for net-new admissions rather
 than serializing a fake zero. `/api/license/entitlements` therefore carries

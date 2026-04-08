@@ -261,6 +261,121 @@ func (h *TrueNASHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, instance.Redacted())
 }
 
+// HandlePreviewConnection projects the monitored-system impact of a proposed
+// TrueNAS connection without persisting it.
+func (h *TrueNASHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.Request) {
+	if !h.featureEnabled(w) {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
+
+	var instance config.TrueNASInstance
+	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	normalizeTrueNASInstance(&instance)
+	if err := instance.Validate(); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+
+	monitor := h.monitorForRequest(r.Context())
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		writeMonitoredSystemUsageUnavailable(w)
+		return
+	}
+
+	preview := unifiedresources.PreviewMonitoredSystemCandidate(usage.readState, trueNASMonitoredSystemCandidate(instance))
+	if len(preview.ProjectedSystems) == 0 {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "TrueNAS connection did not resolve to a canonical monitored system preview", nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), false, preview).NormalizeCollections())
+}
+
+// HandlePreviewSavedConnection projects the monitored-system impact of an edit
+// to one saved TrueNAS connection using the same secret-preservation path as
+// update and saved test flows.
+func (h *TrueNASHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *http.Request) {
+	if !h.featureEnabled(w) {
+		return
+	}
+
+	connectionID, ok := trueNASConnectionIDFromPreviewPath(r.URL.Path)
+	if !ok {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_connection_id", "Connection ID is required", nil)
+		return
+	}
+
+	persistence := h.persistenceForRequest(w, r.Context())
+	if persistence == nil {
+		return
+	}
+
+	instances, err := persistence.LoadTrueNASConfig()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "truenas_load_failed", "Failed to load TrueNAS configuration", map[string]string{"error": err.Error()})
+		return
+	}
+
+	for i := range instances {
+		current := instances[i]
+		if strings.TrimSpace(current.ID) != connectionID {
+			continue
+		}
+
+		payload, hasPayload, ok := decodeOptionalTrueNASInstanceRequest(w, r)
+		if !ok {
+			return
+		}
+		next := current
+		if hasPayload {
+			payload.ID = connectionID
+			normalizeTrueNASInstance(&payload)
+			payload.PreserveMaskedSecrets(current)
+			if err := payload.Validate(); err != nil {
+				writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+				return
+			}
+			next = payload
+		}
+
+		monitor := h.monitorForRequest(r.Context())
+		usage := monitoredSystemUsage(monitor)
+		if !usage.available {
+			writeMonitoredSystemUsageUnavailable(w)
+			return
+		}
+
+		replacementHost := pulseTokenHostCandidate(current.Host)
+		preview := unifiedresources.PreviewMonitoredSystemCandidateReplacement(
+			usage.readState,
+			unifiedresources.MonitoredSystemReplacement{
+				Source: unifiedresources.SourceTrueNAS,
+				Selector: unifiedresources.MonitoredSystemReplacementSelector{
+					Hostname: replacementHost,
+				},
+			},
+			trueNASMonitoredSystemCandidate(next),
+		)
+		if len(preview.ProjectedSystems) == 0 {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "TrueNAS connection did not resolve to a canonical monitored system preview", nil)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), true, preview).NormalizeCollections())
+		return
+	}
+
+	writeErrorResponse(w, http.StatusNotFound, "truenas_not_found", "Connection not found", nil)
+}
+
 // HandleTestConnection validates connectivity for a proposed TrueNAS connection.
 func (h *TrueNASHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if !h.featureEnabled(w) {
@@ -452,6 +567,13 @@ func (h *TrueNASHandlers) featureEnabled(w http.ResponseWriter) bool {
 	return false
 }
 
+func (h *TrueNASHandlers) monitorForRequest(ctx context.Context) *monitoring.Monitor {
+	if h == nil || h.getMonitor == nil {
+		return nil
+	}
+	return h.getMonitor(ctx)
+}
+
 func (h *TrueNASHandlers) persistenceForRequest(w http.ResponseWriter, ctx context.Context) *config.ConfigPersistence {
 	if h == nil || h.getPersistence == nil {
 		writeErrorResponse(w, http.StatusInternalServerError, "truenas_unavailable", "TrueNAS service unavailable", nil)
@@ -485,7 +607,7 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimit(
 	}
 
 	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -503,8 +625,8 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimitReplacement(
 	replacementHost := pulseTokenHostCandidate(current.Host)
 	decision := monitoredSystemLimitDecisionForCandidateReplacement(r.Context(), monitor, unifiedresources.MonitoredSystemReplacement{
 		Source: unifiedresources.SourceTrueNAS,
-		Matches: func(resource unifiedresources.Resource) bool {
-			return resource.TrueNAS != nil && strings.EqualFold(strings.TrimSpace(resource.TrueNAS.Hostname), replacementHost)
+		Selector: unifiedresources.MonitoredSystemReplacementSelector{
+			Hostname: replacementHost,
 		},
 	}, trueNASMonitoredSystemCandidate(next))
 	if !decision.usageAvailable {
@@ -516,7 +638,7 @@ func (h *TrueNASHandlers) enforceMonitoredSystemLimitReplacement(
 	}
 
 	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -553,14 +675,22 @@ func trueNASConnectionIDFromPath(path string) (string, bool) {
 }
 
 func trueNASConnectionIDFromTestPath(path string) (string, bool) {
+	return trueNASConnectionIDFromActionPath(path, "/test")
+}
+
+func trueNASConnectionIDFromPreviewPath(path string) (string, bool) {
+	return trueNASConnectionIDFromActionPath(path, "/preview")
+}
+
+func trueNASConnectionIDFromActionPath(path string, suffix string) (string, bool) {
 	if !strings.HasPrefix(path, trueNASConnectionsPathPrefix) {
 		return "", false
 	}
 	trimmed := strings.Trim(strings.TrimPrefix(path, trueNASConnectionsPathPrefix), "/")
-	if !strings.HasSuffix(trimmed, "/test") {
+	if !strings.HasSuffix(trimmed, suffix) {
 		return "", false
 	}
-	raw := strings.TrimSuffix(trimmed, "/test")
+	raw := strings.TrimSuffix(trimmed, suffix)
 	if raw == "" || strings.Contains(raw, "/") {
 		return "", false
 	}

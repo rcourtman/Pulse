@@ -1,5 +1,10 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
+  normalizeMonitoredSystemLedgerPreviewResponse,
+  type MonitoredSystemLedgerPreviewResponse,
+  type MonitoredSystemLedgerRawPreviewResponse,
+} from './monitoredSystemLedger';
+import {
   arrayOrUndefined,
   finiteNumberOrUndefined,
   optionalTrimmedString,
@@ -215,5 +220,34 @@ export class VMwareAPI {
     return {
       success: strictBoolean(response.success),
     };
+  }
+
+  static async previewConnection(
+    input: VMwareConnectionInput,
+  ): Promise<MonitoredSystemLedgerPreviewResponse> {
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
+      `${VMWARE_CONNECTIONS_PATH}/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(serializeVMwareConnectionInput(input)),
+      },
+    );
+    return normalizeMonitoredSystemLedgerPreviewResponse(response);
+  }
+
+  static async previewSavedConnection(
+    id: string,
+    input?: VMwareConnectionInput,
+  ): Promise<MonitoredSystemLedgerPreviewResponse> {
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
+      `${VMWARE_CONNECTIONS_PATH}/${encodeURIComponent(id)}/preview`,
+      {
+        method: 'POST',
+        ...(input !== undefined
+          ? { body: JSON.stringify(serializeVMwareConnectionInput(input)) }
+          : {}),
+      },
+    );
+    return normalizeMonitoredSystemLedgerPreviewResponse(response);
   }
 }

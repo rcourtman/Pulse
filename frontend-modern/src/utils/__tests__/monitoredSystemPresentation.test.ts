@@ -139,8 +139,11 @@ describe('monitoredSystemPresentation', () => {
 
   it('returns customer-facing source and type labels', () => {
     expect(getMonitoredSystemSourceLabel('agent')).toBe('Agent');
+    expect(getMonitoredSystemSourceLabel('multiple')).toBe('Multiple Sources');
     expect(getMonitoredSystemSourceLabel('pbs')).toBe('PBS');
+    expect(getMonitoredSystemSourceLabel('vmware')).toBe('VMware');
     expect(getMonitoredSystemSourceLabel('')).toBe('');
+    expect(getMonitoredSystemSurfaceTypeLabel('agent')).toBe('Host');
     expect(getMonitoredSystemSurfaceTypeLabel('docker-host')).toBe('Docker Host');
     expect(getMonitoredSystemSurfaceTypeLabel('proxmox-node')).toBe('Proxmox Node');
     expect(getMonitoredSystemSurfaceTypeLabel(undefined)).toBe('System');
@@ -162,6 +165,20 @@ describe('monitoredSystemPresentation', () => {
         source: 'host',
       }),
     ).toBe('tower (Host)');
+    expect(
+      formatMonitoredSystemSurfaceAttribution({
+        name: 'esxi-01',
+        type: 'host',
+        source: 'vmware',
+      }),
+    ).toBe('esxi-01 (Host via VMware)');
+    expect(
+      formatMonitoredSystemSurfaceAttribution({
+        name: 'tower',
+        type: 'truenas-system',
+        source: 'multiple',
+      }),
+    ).toBe('tower (TrueNAS System via Multiple Sources)');
     expect(
       formatMonitoredSystemLatestIncludedSignalSentence({
         attribution: 'tower (PBS Server via PBS)',

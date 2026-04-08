@@ -33,6 +33,10 @@ const mockState = vi.hoisted(() => ({
   openDeleteDialog: vi.fn(),
   openEditDialog: vi.fn(),
   pendingDeleteConnection: vi.fn((): VMwareConnection | null => null),
+  monitoredSystemPreview: vi.fn(() => null),
+  monitoredSystemPreviewError: vi.fn(() => null),
+  previewCurrentForm: vi.fn(),
+  previewing: vi.fn(() => false),
   saveCurrentForm: vi.fn(),
   saving: vi.fn(() => false),
   testCurrentForm: vi.fn(),
@@ -69,6 +73,9 @@ describe('VMwareSettingsPanel', () => {
     mockState.loading.mockReturnValue(false);
     mockState.loadingError.mockReturnValue(null);
     mockState.pendingDeleteConnection.mockReturnValue(null);
+    mockState.monitoredSystemPreview.mockReturnValue(null);
+    mockState.monitoredSystemPreviewError.mockReturnValue(null);
+    mockState.previewing.mockReturnValue(false);
     mockState.saving.mockReturnValue(false);
     mockState.testing.mockReturnValue(false);
   });
@@ -238,5 +245,40 @@ describe('VMwareSettingsPanel', () => {
         'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('renders monitored-system preview inside the dialog and blocks save over the limit', () => {
+    mockState.dialogOpen.mockReturnValue(true);
+    mockState.monitoredSystemPreview.mockReturnValue({
+      current_count: 5,
+      projected_count: 7,
+      additional_count: 2,
+      limit: 6,
+      would_exceed_limit: true,
+      effect: 'creates_multiple',
+      current_systems: [],
+      projected_systems: [
+        {
+          name: 'esxi-01',
+          type: 'host',
+          status: 'online',
+          source: 'vmware',
+          status_explanation: { summary: '', reasons: [] },
+          latest_included_signal: { name: '', type: '', at: '' },
+          explanation: { summary: '', reasons: [], surfaces: [] },
+        },
+      ],
+      current_system: null,
+      projected_system: null,
+    });
+
+    renderPanel();
+
+    expect(screen.getByText('This change exceeds your monitored-system limit')).toBeInTheDocument();
+    expect(screen.getByText(/Current usage 5 \/ 6/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview impact' }));
+    expect(mockState.previewCurrentForm).toHaveBeenCalledTimes(1);
   });
 });

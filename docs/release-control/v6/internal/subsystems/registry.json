@@ -226,6 +226,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
+      "rationale": "the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary",
+      "subsystems": [
+        "agent-lifecycle",
+        "cloud-paid"
+      ]
+    },
+    {
       "path": "frontend-modern/src/components/Settings/NodeModal.tsx",
       "rationale": "the node setup modal render shell is both an agent lifecycle control surface and a shared API-backed install/setup contract boundary",
       "subsystems": [
@@ -598,6 +606,7 @@
         "frontend-modern/src/components/Settings/InfrastructureStopMonitoringDialog.tsx",
         "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
         "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
+        "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
         "frontend-modern/src/components/Settings/NodeModal.tsx",
         "frontend-modern/src/components/Settings/NodeModalAuthenticationSection.tsx",
         "frontend-modern/src/components/Settings/NodeModalBasicInfoSection.tsx",
@@ -627,6 +636,8 @@
         "frontend-modern/src/components/Settings/useNodeModalState.ts",
         "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts",
         "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
+        "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
+        "frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx",
         "frontend-modern/src/components/SetupWizard/SetupCompletionPanel.tsx",
         "frontend-modern/src/utils/agentCapabilityPresentation.ts",
         "frontend-modern/src/utils/agentInstallCommand.ts",
@@ -874,6 +885,7 @@
               "frontend-modern/src/components/Settings/infrastructureSettingsModel.ts",
               "frontend-modern/src/components/Settings/InfrastructureWorkspace.tsx",
               "frontend-modern/src/components/Settings/infrastructureWorkspaceModel.ts",
+              "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
               "frontend-modern/src/components/Settings/platformConnectionsModel.ts",
               "frontend-modern/src/components/Settings/PlatformConnectionsWorkspace.tsx",
               "frontend-modern/src/components/Settings/ProxmoxConfiguredNodesTable.tsx",
@@ -891,6 +903,8 @@
               "frontend-modern/src/components/Settings/useInfrastructureSettingsState.ts",
               "frontend-modern/src/components/Settings/useProxmoxDirectWorkspaceState.ts",
               "frontend-modern/src/components/Settings/useTrueNASSettingsPanelState.ts",
+              "frontend-modern/src/components/Settings/useVMwareSettingsPanelState.ts",
+              "frontend-modern/src/components/Settings/VMwareSettingsPanel.tsx",
               "frontend-modern/src/utils/clusterEndpointPresentation.ts",
               "frontend-modern/src/utils/proxmoxSettingsPresentation.ts"
             ],
@@ -904,9 +918,13 @@
               "frontend-modern/src/components/Settings/__tests__/settingsArchitecture.test.ts",
               "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
               "frontend-modern/src/components/Settings/__tests__/useTrueNASSettingsPanelState.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/useVMwareSettingsPanelState.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/VMwareSettingsPanel.test.tsx",
               "frontend-modern/src/utils/__tests__/clusterEndpointPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/frontendResourceTypeBoundaries.test.ts",
-              "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts"
+              "frontend-modern/src/utils/__tests__/proxmoxSettingsPresentation.test.ts",
+              "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
+              "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts"
             ]
           },
           {
@@ -1651,6 +1669,7 @@
         "frontend-modern/src/components/Settings/BillingAdminOrganizationsTable.tsx",
         "frontend-modern/src/components/Settings/BillingAdminPanel.tsx",
         "frontend-modern/src/components/Settings/CommercialBillingSections.tsx",
+        "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
         "frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx",
         "frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx",
@@ -2158,15 +2177,20 @@
           },
           {
             "id": "monitored-system-presentation-helper",
-            "label": "monitored system presentation helper proof",
+            "label": "monitored system presentation and admission preview proof",
             "match_prefixes": [],
             "match_files": [
+              "frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx",
               "frontend-modern/src/utils/monitoredSystemPresentation.ts"
             ],
             "allow_same_subsystem_tests": false,
             "test_prefixes": [],
             "exact_files": [
-              "frontend-modern/src/utils/__tests__/monitoredSystemPresentation.test.ts"
+              "frontend-modern/src/components/Settings/__tests__/TrueNASSettingsPanel.test.tsx",
+              "frontend-modern/src/components/Settings/__tests__/VMwareSettingsPanel.test.tsx",
+              "frontend-modern/src/utils/__tests__/monitoredSystemPresentation.test.ts",
+              "tests/integration/tests/21-truenas-settings-platform-connections.spec.ts",
+              "tests/integration/tests/22-vmware-settings-platform-connections.spec.ts"
             ]
           },
           {

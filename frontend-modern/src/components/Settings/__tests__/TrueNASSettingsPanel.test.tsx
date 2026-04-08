@@ -37,6 +37,10 @@ const mockState = vi.hoisted(() => ({
   openDeleteDialog: vi.fn(),
   openEditDialog: vi.fn(),
   pendingDeleteConnection: vi.fn(() => null),
+  monitoredSystemPreview: vi.fn(() => null),
+  monitoredSystemPreviewError: vi.fn(() => null),
+  previewCurrentForm: vi.fn(),
+  previewing: vi.fn(() => false),
   saveCurrentForm: vi.fn(),
   saving: vi.fn(() => false),
   testCurrentForm: vi.fn(),
@@ -78,6 +82,9 @@ describe('TrueNASSettingsPanel', () => {
     mockState.loading.mockReturnValue(false);
     mockState.loadingError.mockReturnValue(null);
     mockState.pendingDeleteConnection.mockReturnValue(null);
+    mockState.monitoredSystemPreview.mockReturnValue(null);
+    mockState.monitoredSystemPreviewError.mockReturnValue(null);
+    mockState.previewing.mockReturnValue(false);
     mockState.saving.mockReturnValue(false);
     mockState.testing.mockReturnValue(false);
   });
@@ -178,5 +185,40 @@ describe('TrueNASSettingsPanel', () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/PULSE_ENABLE_TRUENAS=false/)).toBeInTheDocument();
     expect(screen.queryByText('TrueNAS connections')).not.toBeInTheDocument();
+  });
+
+  it('renders monitored-system preview inside the dialog and blocks save over the limit', () => {
+    mockState.dialogOpen.mockReturnValue(true);
+    mockState.monitoredSystemPreview.mockReturnValue({
+      current_count: 9,
+      projected_count: 11,
+      additional_count: 2,
+      limit: 10,
+      would_exceed_limit: true,
+      effect: 'splits_existing',
+      current_systems: [],
+      projected_systems: [
+        {
+          name: 'tower',
+          type: 'truenas-system',
+          status: 'online',
+          source: 'truenas',
+          status_explanation: { summary: '', reasons: [] },
+          latest_included_signal: { name: '', type: '', at: '' },
+          explanation: { summary: '', reasons: [], surfaces: [] },
+        },
+      ],
+      current_system: null,
+      projected_system: null,
+    });
+
+    renderPanel();
+
+    expect(screen.getByText('This change exceeds your monitored-system limit')).toBeInTheDocument();
+    expect(screen.getByText(/Current usage 9 \/ 10/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Preview impact' }));
+    expect(mockState.previewCurrentForm).toHaveBeenCalledTimes(1);
   });
 });

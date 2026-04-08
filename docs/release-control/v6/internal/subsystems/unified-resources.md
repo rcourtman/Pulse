@@ -132,7 +132,17 @@ phrases for `sensitive` and `restricted` resources, so the backend policy
 contract controls those strings instead of duplicating them inside the summary
 assembly branch.
 4. Add metrics-target normalization or synthetic metrics support through `internal/unifiedresources/metrics_targets.go` and `internal/unifiedresources/metrics.go`
-5. Add platform registry, resolution, or host-dedup behavior through `internal/unifiedresources/registry.go`, `internal/unifiedresources/resolve.go`, `internal/unifiedresources/resolved_host_set.go`, `internal/unifiedresources/snapshot_source_filter.go`, `internal/unifiedresources/store.go`, `internal/unifiedresources/kubernetes_capabilities.go`, and `internal/unifiedresources/pbs_rollups.go`
+5. Add platform registry, resolution, host-dedup, or monitored-system
+   projection behavior through `internal/unifiedresources/registry.go`,
+   `internal/unifiedresources/resolve.go`,
+   `internal/unifiedresources/resolved_host_set.go`,
+   `internal/unifiedresources/snapshot_source_filter.go`,
+   `internal/unifiedresources/store.go`,
+   `internal/unifiedresources/kubernetes_capabilities.go`,
+   `internal/unifiedresources/pbs_rollups.go`,
+   `internal/unifiedresources/monitored_systems.go`,
+   `internal/unifiedresources/monitored_system_projection.go`, and
+   `internal/unifiedresources/top_level_systems.go`
 6. Add canonical governed name-resolution or policy-aware resource lookup behavior through `internal/unifiedresources/resolve.go` and `internal/unifiedresources/resolve_context.go`
 7. Add or change resource drawer timeline/facet presentation through `frontend-modern/src/components/Infrastructure/ResourceDetailDrawer.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerOverviewTab.tsx`, `frontend-modern/src/components/Infrastructure/ResourceDetailDrawerDebugTab.tsx`, `frontend-modern/src/components/Infrastructure/useResourceDetailDrawerState.ts`, `frontend-modern/src/components/Infrastructure/ResourceFacetSummary.tsx`, `frontend-modern/src/components/Infrastructure/resourceDetailMappers.ts`, and the governed `internal/api/resources.go` facet/timeline contract together
 8. Add or change discovery-support runtime under the resource drawer through `frontend-modern/src/components/Discovery/DiscoveryTab.tsx` for shell/presentation ownership and `frontend-modern/src/components/Discovery/useDiscoveryTabState.ts` for fetch, websocket-progress, and notes-mutation ownership
@@ -1384,6 +1394,16 @@ source replacement. Add/update handlers must project candidates or preview
 records through shared monitored-system projection helpers, including the
 delta from replacing one existing source-owned surface, instead of guessing
 from handler-local priority rules or transport-specific counters.
+That same projection contract now also owns structured replacement selectors
+and detailed previews. Shared callers may serialize source-native selector
+fields such as hostname, host URL, machine or agent identity, and source-owned
+resource identifiers, but they must not invent preview-only matcher logic or
+hide source replacement behind handler-local closures once the request crosses
+into unified-resource ownership.
+Source-native record-set preview is required for provider-backed onboarding
+that can discover multiple top-level systems from one saved connection, so
+TrueNAS, VMware, and future multi-record providers stay on the same canonical
+projection boundary for both explanation and enforcement.
 VMware host previews are part of that same contract: canonical host identity
 must honor VMware host UUID plus normalized hostnames so a vCenter add or
 update cannot bypass the monitored-system cap by discovering host-backed
@@ -1532,6 +1552,11 @@ must remove only the replaced source from that grouped root and preserve any
 remaining canonical source ownership that still keeps the monitored system
 counted, so replacement-aware admission stays aligned with final runtime
 counting.
+When support or onboarding needs to explain that same change, unified
+resources must be able to return both the current grouped monitored system and
+the projected grouped monitored system for the candidate being evaluated, not
+just the numeric count delta, so explainability and enforcement stay on one
+canonical projection boundary.
 
 Canonical unified resources now also own first-class policy metadata for the
 v6 bridge release. Cloned and API-exported resources must carry

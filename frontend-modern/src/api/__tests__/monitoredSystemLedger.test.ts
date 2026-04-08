@@ -29,6 +29,124 @@ describe('MonitoredSystemLedgerAPI', () => {
     });
   });
 
+  it('fetches the canonical monitored-system ledger preview endpoint', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      current_count: 1,
+      projected_count: 1,
+      additional_count: 0,
+      limit: 5,
+      would_exceed_limit: false,
+      effect: 'attaches_existing',
+      current_systems: [
+        {
+          name: 'Tower',
+          type: 'host',
+          status: 'online',
+          source: 'agent',
+        },
+      ],
+      projected_systems: [
+        {
+          name: 'tower',
+          type: 'vmware-host',
+          status: 'online',
+          source: 'vmware',
+        },
+      ],
+      current_system: {
+        name: 'Tower',
+        type: 'host',
+        status: 'online',
+        source: 'agent',
+      },
+      projected_system: {
+        name: 'tower',
+        type: 'vmware-host',
+        status: 'online',
+        source: 'vmware',
+      },
+    });
+
+    const request = {
+      candidate: {
+        source: 'vmware',
+        hostname: 'tower.local',
+        resource_id: 'vc-1',
+      },
+    };
+    const result = await MonitoredSystemLedgerAPI.preview(request);
+
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/monitored-system-ledger/preview', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    expect(result.current_system?.source).toBe('agent');
+    expect(result.projected_system?.source).toBe('vmware');
+    expect(result.current_systems).toHaveLength(1);
+    expect(result.projected_systems).toHaveLength(1);
+    expect(result.effect).toBe('attaches_existing');
+  });
+
+  it('fetches the canonical monitored-system explanation endpoint', async () => {
+    vi.mocked(apiFetchJSON).mockResolvedValueOnce({
+      ledger: {
+        systems: [
+          {
+            name: 'Tower',
+            type: 'host',
+            status: 'online',
+            source: 'agent',
+          },
+        ],
+        total: 1,
+        limit: 5,
+      },
+      preview: {
+        current_count: 1,
+        projected_count: 1,
+        additional_count: 0,
+        limit: 5,
+        would_exceed_limit: false,
+        effect: 'attaches_existing',
+        current_systems: [
+          {
+            name: 'Tower',
+            type: 'host',
+            status: 'online',
+            source: 'agent',
+          },
+        ],
+        projected_systems: [
+          {
+            name: 'tower',
+            type: 'vmware-host',
+            status: 'online',
+            source: 'vmware',
+          },
+        ],
+        current_system: null,
+        projected_system: null,
+      },
+    });
+
+    const request = {
+      candidate: {
+        source: 'vmware',
+        hostname: 'tower.local',
+        resource_id: 'vc-1',
+      },
+    };
+    const result = await MonitoredSystemLedgerAPI.explain(request);
+
+    expect(apiFetchJSON).toHaveBeenCalledWith('/api/license/monitored-system-ledger/explain', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+    expect(result.ledger.total).toBe(1);
+    expect(result.preview?.effect).toBe('attaches_existing');
+    expect(result.preview?.projected_systems).toHaveLength(1);
+  });
+
   it('preserves grouping explanation payloads from the API contract', async () => {
     vi.mocked(apiFetchJSON).mockResolvedValueOnce({
       systems: [
@@ -95,7 +213,9 @@ describe('MonitoredSystemLedgerAPI', () => {
 
     const result = await MonitoredSystemLedgerAPI.getLedger();
 
-    expect(result.systems[0]?.explanation.summary).toContain('counts this top-level collection path');
+    expect(result.systems[0]?.explanation.summary).toContain(
+      'counts this top-level collection path',
+    );
     expect(result.systems[0]?.status_explanation?.summary).toContain('currently report online');
     expect(result.systems[0]?.status_explanation?.reasons).toEqual([]);
     expect(result.systems[0]?.explanation.reasons).toEqual([]);
@@ -201,7 +321,8 @@ describe('MonitoredSystemLedgerAPI', () => {
           type: 'host',
           status: 'warning',
           status_explanation: {
-            summary: 'At least one included source is stale, so Pulse marks this monitored system as warning.',
+            summary:
+              'At least one included source is stale, so Pulse marks this monitored system as warning.',
             reasons: [
               {
                 kind: 'source-stale',

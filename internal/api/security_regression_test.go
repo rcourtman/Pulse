@@ -1736,9 +1736,11 @@ func TestTrueNASConnectionMutationsRequireSettingsWriteScope(t *testing.T) {
 		body   string
 	}{
 		{method: http.MethodPost, path: "/api/truenas/connections", body: `{}`},
+		{method: http.MethodPost, path: "/api/truenas/connections/preview", body: `{}`},
 		{method: http.MethodPost, path: "/api/truenas/connections/test", body: `{}`},
 		{method: http.MethodPut, path: "/api/truenas/connections/conn-1", body: `{}`},
 		{method: http.MethodDelete, path: "/api/truenas/connections/conn-1", body: ""},
+		{method: http.MethodPost, path: "/api/truenas/connections/conn-1/preview", body: ``},
 		{method: http.MethodPost, path: "/api/truenas/connections/conn-1/test", body: ""},
 	}
 
@@ -1768,9 +1770,11 @@ func TestVMwareConnectionMutationsRequireSettingsWriteScope(t *testing.T) {
 		body   string
 	}{
 		{method: http.MethodPost, path: "/api/vmware/connections", body: `{}`},
+		{method: http.MethodPost, path: "/api/vmware/connections/preview", body: `{}`},
 		{method: http.MethodPost, path: "/api/vmware/connections/test", body: `{}`},
 		{method: http.MethodPut, path: "/api/vmware/connections/conn-1", body: `{}`},
 		{method: http.MethodDelete, path: "/api/vmware/connections/conn-1", body: ""},
+		{method: http.MethodPost, path: "/api/vmware/connections/conn-1/preview", body: ``},
 		{method: http.MethodPost, path: "/api/vmware/connections/conn-1/test", body: ""},
 	}
 

@@ -339,7 +339,8 @@ test.describe("VMware platform connections settings", () => {
       }
 
       if (pathname === "/api/vmware/connections/test" && method === "POST") {
-        const scenario = scenarios[Math.min(draftFailureIndex, scenarios.length - 1)];
+        const scenario =
+          scenarios[Math.min(draftFailureIndex, scenarios.length - 1)];
         draftFailureIndex += 1;
         await route.fulfill({
           status: 400,
@@ -385,7 +386,9 @@ test.describe("VMware platform connections settings", () => {
     }
   });
 
-  test("surfaces saved runtime guidance when a VMware retest fails", async ({ page }) => {
+  test("surfaces saved runtime guidance when a VMware retest fails", async ({
+    page,
+  }) => {
     const authError =
       "VMware authentication failed while creating the VI JSON API session";
     const healthyAt = new Date(Date.now() - 5 * 60_000).toISOString();
@@ -427,7 +430,10 @@ test.describe("VMware platform connections settings", () => {
         return;
       }
 
-      if (pathname === "/api/vmware/connections/conn-1/test" && method === "POST") {
+      if (
+        pathname === "/api/vmware/connections/conn-1/test" &&
+        method === "POST"
+      ) {
         connections = [
           {
             ...connections[0],
@@ -754,5 +760,281 @@ test.describe("VMware platform connections settings", () => {
 
     fs.mkdirSync(path.dirname(WORKFLOW_SCREENSHOT_PATH), { recursive: true });
     await page.screenshot({ path: WORKFLOW_SCREENSHOT_PATH, fullPage: true });
+  });
+
+  test("previews canonical multi-system impact before creating a VMware connection", async ({
+    page,
+  }) => {
+    let previewPayload: Record<string, unknown> | null = null;
+    let createCalls = 0;
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections/preview" && method === "POST") {
+        previewPayload = JSON.parse(request.postData() || "{}");
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            current_count: 5,
+            projected_count: 7,
+            additional_count: 2,
+            limit: 6,
+            would_exceed_limit: true,
+            effect: "mixed_existing_and_new",
+            current_systems: [
+              {
+                name: "esxi-01",
+                type: "agent",
+                status: "online",
+                status_explanation: { summary: "", reasons: [] },
+                latest_included_signal: {
+                  name: "esxi-01",
+                  type: "agent",
+                  source: "agent",
+                  at: new Date(Date.now() - 60_000).toISOString(),
+                },
+                source: "agent",
+                explanation: { summary: "", reasons: [], surfaces: [] },
+              },
+            ],
+            projected_systems: [
+              {
+                name: "esxi-01",
+                type: "agent",
+                status: "online",
+                status_explanation: { summary: "", reasons: [] },
+                latest_included_signal: {
+                  name: "esxi-01",
+                  type: "agent",
+                  source: "vmware",
+                  at: new Date().toISOString(),
+                },
+                source: "vmware",
+                explanation: { summary: "", reasons: [], surfaces: [] },
+              },
+              {
+                name: "esxi-02",
+                type: "agent",
+                status: "online",
+                status_explanation: { summary: "", reasons: [] },
+                latest_included_signal: {
+                  name: "esxi-02",
+                  type: "agent",
+                  source: "vmware",
+                  at: new Date().toISOString(),
+                },
+                source: "vmware",
+                explanation: { summary: "", reasons: [], surfaces: [] },
+              },
+            ],
+            current_system: null,
+            projected_system: null,
+          }),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections" && method === "POST") {
+        createCalls += 1;
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({}),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: "Add VMware connection" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add VMware connection" });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByPlaceholder("lab-vcenter").fill("Lab VC");
+    await dialog.getByPlaceholder("vcsa.lab.local").fill("vcsa.lab.local");
+    await dialog
+      .getByPlaceholder("administrator@vsphere.local")
+      .fill("administrator@vsphere.local");
+    await dialog.locator('input[type="password"]').first().fill("super-secret");
+
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+
+    await expect
+      .poll(() => previewPayload)
+      .toMatchObject({
+        name: "Lab VC",
+        host: "vcsa.lab.local",
+        username: "administrator@vsphere.local",
+        password: "super-secret",
+        enabled: true,
+      });
+    await expect(
+      dialog.getByText("This change exceeds your monitored-system limit"),
+    ).toBeVisible();
+    await expect(dialog.getByText(/Current usage 5 \/ 6/)).toBeVisible();
+    await expect(dialog.getByText("Current matched systems")).toBeVisible();
+    await expect(dialog.getByText("esxi-01 (Host via Agent)")).toBeVisible();
+    await expect(dialog.getByText("Projected systems")).toBeVisible();
+    await expect(dialog.getByText("esxi-01 (Host via VMware)")).toBeVisible();
+    await expect(dialog.getByText("esxi-02 (Host via VMware)")).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
+    expect(createCalls).toBe(0);
+  });
+
+  test("reuses the canonical monitored-system explanation when a VMware save is denied", async ({
+    page,
+  }) => {
+    let createPayload: Record<string, unknown> | null = null;
+
+    await page.route("**/api/vmware/connections**", async (route) => {
+      const request = route.request();
+      const method = request.method();
+      const pathname = new URL(request.url()).pathname;
+
+      if (pathname === "/api/vmware/connections" && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([]),
+        });
+        return;
+      }
+
+      if (pathname === "/api/vmware/connections" && method === "POST") {
+        createPayload = JSON.parse(request.postData() || "{}");
+        await route.fulfill({
+          status: 402,
+          contentType: "application/json",
+          body: JSON.stringify({
+            error: "license_required",
+            message: "Monitored-system limit reached (7/6)",
+            feature: "max_monitored_systems",
+            monitored_system_preview: {
+              current_count: 5,
+              projected_count: 7,
+              additional_count: 2,
+              limit: 6,
+              would_exceed_limit: true,
+              effect: "mixed_existing_and_new",
+              current_systems: [
+                {
+                  name: "esxi-01",
+                  type: "agent",
+                  status: "online",
+                  status_explanation: { summary: "", reasons: [] },
+                  latest_included_signal: {
+                    name: "esxi-01",
+                    type: "agent",
+                    source: "agent",
+                    at: new Date(Date.now() - 60_000).toISOString(),
+                  },
+                  source: "agent",
+                  explanation: { summary: "", reasons: [], surfaces: [] },
+                },
+              ],
+              projected_systems: [
+                {
+                  name: "esxi-01",
+                  type: "agent",
+                  status: "online",
+                  status_explanation: { summary: "", reasons: [] },
+                  latest_included_signal: {
+                    name: "esxi-01",
+                    type: "agent",
+                    source: "vmware",
+                    at: new Date().toISOString(),
+                  },
+                  source: "vmware",
+                  explanation: { summary: "", reasons: [], surfaces: [] },
+                },
+                {
+                  name: "esxi-02",
+                  type: "agent",
+                  status: "online",
+                  status_explanation: { summary: "", reasons: [] },
+                  latest_included_signal: {
+                    name: "esxi-02",
+                    type: "agent",
+                    source: "vmware",
+                    at: new Date().toISOString(),
+                  },
+                  source: "vmware",
+                  explanation: { summary: "", reasons: [], surfaces: [] },
+                },
+              ],
+              current_system: null,
+              projected_system: null,
+            },
+          }),
+        });
+        return;
+      }
+
+      await route.continue();
+    });
+
+    await page.goto("/settings/infrastructure/platforms/vmware", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.waitForURL(/\/settings\/infrastructure\/platforms\/vmware/, {
+      timeout: 15_000,
+    });
+
+    await page.getByRole("button", { name: "Add VMware connection" }).click();
+    const dialog = page.getByRole("dialog", { name: "Add VMware connection" });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByPlaceholder("lab-vcenter").fill("Lab VC");
+    await dialog.getByPlaceholder("vcsa.lab.local").fill("vcsa.lab.local");
+    await dialog
+      .getByPlaceholder("administrator@vsphere.local")
+      .fill("administrator@vsphere.local");
+    await dialog.locator('input[type="password"]').first().fill("super-secret");
+    await dialog.getByRole("button", { name: "Add connection" }).click();
+
+    await expect
+      .poll(() => createPayload)
+      .toMatchObject({
+        name: "Lab VC",
+        host: "vcsa.lab.local",
+        username: "administrator@vsphere.local",
+        password: "super-secret",
+        enabled: true,
+      });
+    await expect(
+      dialog.getByText("This change exceeds your monitored-system limit"),
+    ).toBeVisible();
+    await expect(dialog.getByText(/Current usage 5 \/ 6/)).toBeVisible();
+    await expect(dialog.getByText("Current matched systems")).toBeVisible();
+    await expect(dialog.getByText("esxi-01 (Host via Agent)")).toBeVisible();
+    await expect(dialog.getByText("Projected systems")).toBeVisible();
+    await expect(dialog.getByText("esxi-01 (Host via VMware)")).toBeVisible();
+    await expect(dialog.getByText("esxi-02 (Host via VMware)")).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
   });
 });

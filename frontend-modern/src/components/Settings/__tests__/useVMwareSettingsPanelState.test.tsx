@@ -10,6 +10,8 @@ vi.mock('@/api/vmware', () => ({
     createConnection: vi.fn(),
     updateConnection: vi.fn(),
     deleteConnection: vi.fn(),
+    previewConnection: vi.fn(),
+    previewSavedConnection: vi.fn(),
     testConnection: vi.fn(),
     testSavedConnection: vi.fn(),
   },
@@ -354,5 +356,113 @@ describe('useVMwareSettingsPanelState', () => {
     expect(VMwareAPI.listConnections).toHaveBeenCalledTimes(2);
     expect(result.connections()[0].poll?.lastError?.category).toBe('auth');
     expect(result.connections()[0].poll?.lastError?.message).toBe(authError);
+  });
+
+  it('previews monitored-system impact through the canonical VMware preview path', async () => {
+    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.previewConnection).mockResolvedValueOnce({
+      current_count: 1,
+      projected_count: 3,
+      additional_count: 2,
+      limit: 5,
+      would_exceed_limit: false,
+      effect: 'creates_multiple',
+      current_systems: [],
+      projected_systems: [
+        {
+          name: 'esxi-01',
+          type: 'host',
+          status: 'online',
+          source: 'vmware',
+          status_explanation: { summary: '', reasons: [] },
+          latest_included_signal: { name: '', type: '', at: '' },
+          explanation: { summary: '', reasons: [], surfaces: [] },
+        },
+      ],
+      current_system: null,
+      projected_system: null,
+    } as never);
+
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'vcsa.lab.local',
+      username: 'administrator@vsphere.local',
+      password: 'secret',
+    });
+    const preview = await result.previewCurrentForm();
+
+    expect(VMwareAPI.previewConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: 'vcsa.lab.local',
+        username: 'administrator@vsphere.local',
+        password: 'secret',
+      }),
+    );
+    expect(preview?.additional_count).toBe(2);
+    expect(result.monitoredSystemPreview()?.projected_count).toBe(3);
+  });
+
+  it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
+    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.createConnection).mockRejectedValueOnce(
+      Object.assign(new Error('Monitored-system limit reached (7/6)'), {
+        status: 402,
+        feature: 'max_monitored_systems',
+        monitored_system_preview: {
+          current_count: 5,
+          projected_count: 7,
+          additional_count: 2,
+          limit: 6,
+          would_exceed_limit: true,
+          effect: 'mixed_existing_and_new',
+          current_systems: [
+            {
+              name: 'esxi-01',
+              type: 'agent',
+              status: 'online',
+              source: 'agent',
+            },
+          ],
+          projected_systems: [
+            {
+              name: 'esxi-01',
+              type: 'agent',
+              status: 'online',
+              source: 'vmware',
+            },
+            {
+              name: 'esxi-02',
+              type: 'agent',
+              status: 'online',
+              source: 'vmware',
+            },
+          ],
+          current_system: null,
+          projected_system: null,
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'vcsa.lab.local',
+      username: 'administrator@vsphere.local',
+      password: 'secret',
+    });
+    await result.saveCurrentForm();
+
+    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system limit reached (7/6)');
+    expect(result.monitoredSystemPreview()).toMatchObject({
+      would_exceed_limit: true,
+      projected_count: 7,
+      effect: 'mixed_existing_and_new',
+    });
+    expect(result.dialogOpen()).toBe(true);
   });
 });

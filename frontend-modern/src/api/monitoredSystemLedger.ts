@@ -29,11 +29,7 @@ export interface MonitoredSystemLedgerStatusExplanation {
   reasons: MonitoredSystemLedgerStatusReason[];
 }
 
-export type MonitoredSystemLedgerStatusReasonStatus =
-  | 'online'
-  | 'stale'
-  | 'offline'
-  | 'unknown';
+export type MonitoredSystemLedgerStatusReasonStatus = 'online' | 'stale' | 'offline' | 'unknown';
 
 export interface MonitoredSystemLedgerStatusReason {
   kind: string;
@@ -68,6 +64,61 @@ export interface MonitoredSystemLedgerResponse {
   limit: number; // 0 = unlimited
 }
 
+export interface MonitoredSystemLedgerExplainRequest {
+  candidate?: MonitoredSystemLedgerPreviewCandidate | null;
+  replacement?: MonitoredSystemLedgerPreviewReplacement | null;
+}
+
+export interface MonitoredSystemLedgerPreviewCandidate {
+  source: string;
+  type?: string;
+  name?: string;
+  hostname?: string;
+  host_url?: string;
+  agent_id?: string;
+  machine_id?: string;
+  resource_id?: string;
+}
+
+export interface MonitoredSystemLedgerPreviewReplacement {
+  source?: string;
+  name?: string;
+  hostname?: string;
+  host_url?: string;
+  agent_id?: string;
+  machine_id?: string;
+  resource_id?: string;
+}
+
+export interface MonitoredSystemLedgerPreviewRequest {
+  candidate: MonitoredSystemLedgerPreviewCandidate;
+  replacement?: MonitoredSystemLedgerPreviewReplacement | null;
+}
+
+export type MonitoredSystemLedgerPreviewEffect =
+  | 'creates_new'
+  | 'attaches_existing'
+  | 'replaces_existing'
+  | 'splits_existing';
+
+export interface MonitoredSystemLedgerPreviewResponse {
+  current_count: number;
+  projected_count: number;
+  additional_count: number;
+  limit: number;
+  would_exceed_limit: boolean;
+  effect: MonitoredSystemLedgerPreviewEffect | string;
+  current_systems: MonitoredSystemLedgerEntry[];
+  projected_systems: MonitoredSystemLedgerEntry[];
+  current_system: MonitoredSystemLedgerEntry | null;
+  projected_system: MonitoredSystemLedgerEntry | null;
+}
+
+export interface MonitoredSystemLedgerExplainResponse {
+  ledger: MonitoredSystemLedgerResponse;
+  preview: MonitoredSystemLedgerPreviewResponse | null;
+}
+
 type MonitoredSystemLedgerRawEntry = Omit<
   MonitoredSystemLedgerEntry,
   'status_explanation' | 'latest_included_signal' | 'explanation'
@@ -81,13 +132,32 @@ type MonitoredSystemLedgerRawResponse = Omit<MonitoredSystemLedgerResponse, 'sys
   systems?: MonitoredSystemLedgerRawEntry[];
 };
 
-interface MonitoredSystemLedgerRawStatusExplanation
-  extends Omit<MonitoredSystemLedgerStatusExplanation, 'reasons'> {
+type MonitoredSystemLedgerRawExplainResponse = {
+  ledger?: MonitoredSystemLedgerRawResponse;
+  preview?: MonitoredSystemLedgerRawPreviewResponse | null;
+};
+
+export type MonitoredSystemLedgerRawPreviewResponse = Omit<
+  MonitoredSystemLedgerPreviewResponse,
+  'current_systems' | 'projected_systems' | 'current_system' | 'projected_system'
+> & {
+  current_systems?: MonitoredSystemLedgerRawEntry[];
+  projected_systems?: MonitoredSystemLedgerRawEntry[];
+  current_system?: MonitoredSystemLedgerRawEntry | null;
+  projected_system?: MonitoredSystemLedgerRawEntry | null;
+};
+
+interface MonitoredSystemLedgerRawStatusExplanation extends Omit<
+  MonitoredSystemLedgerStatusExplanation,
+  'reasons'
+> {
   reasons?: MonitoredSystemLedgerRawStatusReason[];
 }
 
-interface MonitoredSystemLedgerRawStatusReason
-  extends Omit<MonitoredSystemLedgerStatusReason, 'reported_at'> {
+interface MonitoredSystemLedgerRawStatusReason extends Omit<
+  MonitoredSystemLedgerStatusReason,
+  'reported_at'
+> {
   reported_at?: string;
 }
 
@@ -96,11 +166,86 @@ export class MonitoredSystemLedgerAPI {
 
   static async getLedger(): Promise<MonitoredSystemLedgerResponse> {
     const response = await apiFetchJSON<MonitoredSystemLedgerRawResponse>(this.baseUrl);
-    return {
-      ...response,
-      systems: (response.systems ?? []).map(normalizeMonitoredSystemLedgerEntry),
-    };
+    return normalizeMonitoredSystemLedgerResponse(response);
   }
+
+  static async preview(
+    request: MonitoredSystemLedgerPreviewRequest,
+  ): Promise<MonitoredSystemLedgerPreviewResponse> {
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
+      `${this.baseUrl}/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+    return normalizeMonitoredSystemLedgerPreviewResponse(response);
+  }
+
+  static async explain(
+    request: MonitoredSystemLedgerExplainRequest = {},
+  ): Promise<MonitoredSystemLedgerExplainResponse> {
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawExplainResponse>(
+      `${this.baseUrl}/explain`,
+      {
+        method: 'POST',
+        body: JSON.stringify(request),
+      },
+    );
+    return normalizeMonitoredSystemLedgerExplainResponse(response);
+  }
+}
+
+export function normalizeMonitoredSystemLedgerResponse(
+  response: MonitoredSystemLedgerRawResponse,
+): MonitoredSystemLedgerResponse {
+  return {
+    ...response,
+    systems: (response.systems ?? []).map(normalizeMonitoredSystemLedgerEntry),
+  };
+}
+
+export function normalizeMonitoredSystemLedgerPreviewResponse(
+  response: MonitoredSystemLedgerRawPreviewResponse,
+): MonitoredSystemLedgerPreviewResponse {
+  const currentSystems = (response.current_systems ?? []).map(normalizeMonitoredSystemLedgerEntry);
+  const projectedSystems = (response.projected_systems ?? []).map(
+    normalizeMonitoredSystemLedgerEntry,
+  );
+  return {
+    ...response,
+    current_systems: currentSystems,
+    projected_systems: projectedSystems,
+    current_system:
+      response.current_system != null
+        ? normalizeMonitoredSystemLedgerEntry(response.current_system)
+        : currentSystems.length === 1
+          ? currentSystems[0]
+          : null,
+    projected_system:
+      response.projected_system != null
+        ? normalizeMonitoredSystemLedgerEntry(response.projected_system)
+        : projectedSystems.length === 1
+          ? projectedSystems[0]
+          : null,
+  };
+}
+
+export function normalizeMonitoredSystemLedgerExplainResponse(
+  response: MonitoredSystemLedgerRawExplainResponse,
+): MonitoredSystemLedgerExplainResponse {
+  const rawLedger: MonitoredSystemLedgerRawResponse = response.ledger ?? {
+    systems: [],
+    total: 0,
+    limit: 0,
+  };
+  return {
+    ledger: normalizeMonitoredSystemLedgerResponse(rawLedger),
+    preview:
+      response.preview != null
+        ? normalizeMonitoredSystemLedgerPreviewResponse(response.preview)
+        : null,
+  };
 }
 
 function normalizeMonitoredSystemLedgerEntry(
@@ -120,7 +265,9 @@ function normalizeMonitoredSystemLedgerEntry(
     latest_included_signal: latestIncludedSignal,
     status_explanation: {
       summary: entry.status_explanation?.summary ?? getMonitoredSystemStatusFallbackSummary(status),
-      reasons: (entry.status_explanation?.reasons ?? []).map(normalizeMonitoredSystemLedgerStatusReason),
+      reasons: (entry.status_explanation?.reasons ?? []).map(
+        normalizeMonitoredSystemLedgerStatusReason,
+      ),
     },
     explanation: {
       summary: explanation?.summary ?? getMonitoredSystemExplanationFallbackSummary(),
@@ -183,6 +330,7 @@ function normalizeMonitoredSystemLedgerSource(
     case 'pmg':
     case 'proxmox':
     case 'truenas':
+    case 'vmware':
       return source?.trim().toLowerCase();
     default:
       return undefined;

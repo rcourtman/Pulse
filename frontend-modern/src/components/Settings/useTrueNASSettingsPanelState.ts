@@ -1,7 +1,8 @@
 import { createMemo, createSignal, onMount } from 'solid-js';
 import { notificationStore } from '@/stores/notifications';
 import { logger } from '@/utils/logger';
-import { apiErrorStatus } from '@/api/responseUtils';
+import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
+import { apiErrorMonitoredSystemPreview, apiErrorStatus } from '@/api/responseUtils';
 import {
   TrueNASAPI,
   isRedactedTrueNASSecret,
@@ -47,7 +48,9 @@ const createEmptyFormState = (): TrueNASConnectionFormState => ({
   hasStoredPassword: false,
 });
 
-const buildFormStateFromConnection = (connection: TrueNASConnection): TrueNASConnectionFormState => {
+const buildFormStateFromConnection = (
+  connection: TrueNASConnection,
+): TrueNASConnectionFormState => {
   const hasStoredAPIKey = isRedactedTrueNASSecret(connection.apiKey);
   const hasStoredPassword = isRedactedTrueNASSecret(connection.password);
   const authMode: TrueNASAuthMode =
@@ -149,16 +152,21 @@ export function useTrueNASSettingsPanelState() {
   const [dialogOpen, setDialogOpen] = createSignal(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = createSignal(false);
   const [editingConnectionId, setEditingConnectionId] = createSignal<string | null>(null);
-  const [pendingDeleteConnection, setPendingDeleteConnection] = createSignal<TrueNASConnection | null>(
-    null,
-  );
+  const [pendingDeleteConnection, setPendingDeleteConnection] =
+    createSignal<TrueNASConnection | null>(null);
   const [form, setForm] = createSignal<TrueNASConnectionFormState>(createEmptyFormState());
   const [saving, setSaving] = createSignal(false);
   const [testing, setTesting] = createSignal(false);
   const [deleting, setDeleting] = createSignal(false);
+  const [previewing, setPreviewing] = createSignal(false);
+  const [monitoredSystemPreview, setMonitoredSystemPreview] =
+    createSignal<MonitoredSystemLedgerPreviewResponse | null>(null);
+  const [monitoredSystemPreviewError, setMonitoredSystemPreviewError] = createSignal<string | null>(
+    null,
+  );
 
-  const editingConnection = createMemo(() =>
-    connections().find((connection) => connection.id === editingConnectionId()) ?? null,
+  const editingConnection = createMemo(
+    () => connections().find((connection) => connection.id === editingConnectionId()) ?? null,
   );
 
   const loadConnections = async () => {
@@ -193,12 +201,16 @@ export function useTrueNASSettingsPanelState() {
   const openCreateDialog = () => {
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewError(null);
     setDialogOpen(true);
   };
 
   const openEditDialog = (connection: TrueNASConnection) => {
     setEditingConnectionId(connection.id);
     setForm(buildFormStateFromConnection(connection));
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewError(null);
     setDialogOpen(true);
   };
 
@@ -206,6 +218,8 @@ export function useTrueNASSettingsPanelState() {
     setDialogOpen(false);
     setEditingConnectionId(null);
     setForm(createEmptyFormState());
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewError(null);
   };
 
   const closeDialog = () => {
@@ -228,8 +242,11 @@ export function useTrueNASSettingsPanelState() {
     resetDeleteDialogState();
   };
 
-  const updateForm = (patch: Partial<TrueNASConnectionFormState>) =>
+  const updateForm = (patch: Partial<TrueNASConnectionFormState>) => {
+    setMonitoredSystemPreview(null);
+    setMonitoredSystemPreviewError(null);
     setForm((current) => ({ ...current, ...patch }));
+  };
 
   const testCurrentForm = async () => {
     setTesting(true);
@@ -256,7 +273,9 @@ export function useTrueNASSettingsPanelState() {
     setTesting(true);
     try {
       await TrueNASAPI.testSavedConnection(connection.id);
-      notificationStore.success(`TrueNAS connection successful for ${connection.name || connection.host}`);
+      notificationStore.success(
+        `TrueNAS connection successful for ${connection.name || connection.host}`,
+      );
     } catch (error) {
       const message = getErrorMessage(error, 'TrueNAS connection failed');
       notificationStore.error(message);
@@ -267,7 +286,32 @@ export function useTrueNASSettingsPanelState() {
     }
   };
 
+  const previewCurrentForm = async () => {
+    setPreviewing(true);
+    setMonitoredSystemPreviewError(null);
+    try {
+      const payload = buildConnectionInput(form());
+      const preview = editingConnectionId()
+        ? await TrueNASAPI.previewSavedConnection(editingConnectionId()!, payload)
+        : await TrueNASAPI.previewConnection(payload);
+      setMonitoredSystemPreview(preview);
+      return preview;
+    } catch (error) {
+      const message = getErrorMessage(error, 'Could not preview monitored-system impact');
+      setMonitoredSystemPreview(null);
+      setMonitoredSystemPreviewError(message);
+      logger.error('[TrueNAS Settings] Preview failed', error);
+      return null;
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   const saveCurrentForm = async () => {
+    if (monitoredSystemPreview()?.would_exceed_limit) {
+      notificationStore.error('This change would exceed your monitored-system limit');
+      return;
+    }
     setSaving(true);
     try {
       const payload = buildConnectionInput(form());
@@ -281,6 +325,11 @@ export function useTrueNASSettingsPanelState() {
       resetDialogState();
       await loadConnections();
     } catch (error) {
+      const preview = apiErrorMonitoredSystemPreview(error);
+      if (preview) {
+        setMonitoredSystemPreview(preview);
+        setMonitoredSystemPreviewError(null);
+      }
       const message = getErrorMessage(error, 'Failed to save TrueNAS connection');
       notificationStore.error(message);
       logger.error('[TrueNAS Settings] Save failed', error);
@@ -326,6 +375,10 @@ export function useTrueNASSettingsPanelState() {
     openDeleteDialog,
     openEditDialog,
     pendingDeleteConnection,
+    previewCurrentForm,
+    monitoredSystemPreview,
+    monitoredSystemPreviewError,
+    previewing,
     saveCurrentForm,
     saving,
     testCurrentForm,

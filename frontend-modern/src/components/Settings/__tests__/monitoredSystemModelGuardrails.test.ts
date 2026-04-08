@@ -29,6 +29,7 @@ import systemSettingsStateSource from '../useSystemSettingsState.ts?raw';
 import infrastructureSettingsStateSource from '../useInfrastructureSettingsState.ts?raw';
 import infrastructureWorkspaceSource from '../InfrastructureWorkspace.tsx?raw';
 import infrastructureWorkspaceModelSource from '../infrastructureWorkspaceModel.ts?raw';
+import monitoredSystemAdmissionPreviewSource from '../MonitoredSystemAdmissionPreview.tsx?raw';
 import settingsPanelRegistrySource from '../useSettingsPanelRegistry.tsx?raw';
 import settingsSystemPanelsSource from '../useSettingsSystemPanels.tsx?raw';
 import infrastructureSummarySource from '@/components/Infrastructure/InfrastructureSummary.tsx?raw';
@@ -185,6 +186,12 @@ import proxmoxNodeModalStackSource from '../ProxmoxNodeModalStack.tsx?raw';
 import proxmoxSettingsPanelSource from '../ProxmoxSettingsPanel.tsx?raw';
 import proxmoxSettingsModelSource from '../proxmoxSettingsModel.ts?raw';
 import proxmoxDirectWorkspaceStateSource from '../useProxmoxDirectWorkspaceState.ts?raw';
+import trueNASApiSource from '@/api/truenas.ts?raw';
+import trueNASSettingsPanelSource from '../TrueNASSettingsPanel.tsx?raw';
+import trueNASSettingsPanelStateSource from '../useTrueNASSettingsPanelState.ts?raw';
+import vmwareApiSource from '@/api/vmware.ts?raw';
+import vmwareSettingsPanelSource from '../VMwareSettingsPanel.tsx?raw';
+import vmwareSettingsPanelStateSource from '../useVMwareSettingsPanelState.ts?raw';
 import relayOnboardingCardSource from '@/components/Dashboard/RelayOnboardingCard.tsx?raw';
 import relayOnboardingCardStateSource from '@/components/Dashboard/useRelayOnboardingCardState.ts?raw';
 import generalSettingsPanelSource from '../GeneralSettingsPanel.tsx?raw';
@@ -276,6 +283,44 @@ describe('monitored-system model guardrails', () => {
     expect(agentLedgerPanelSource).not.toContain('getMonitoredSystemStatusFallbackSummary');
     expect(agentLedgerPanelSource).not.toContain('function systemExplanation(');
     expect(agentLedgerPanelSource).not.toContain('function systemStatusExplanation(');
+  });
+
+  it('keeps platform-connection admission preview on the shared monitored-system model', () => {
+    expect(monitoredSystemAdmissionPreviewSource).toContain(
+      "import { formatMonitoredSystemSurfaceAttribution }",
+    );
+    expect(monitoredSystemAdmissionPreviewSource).toContain('Current matched systems');
+    expect(monitoredSystemAdmissionPreviewSource).toContain('Projected systems');
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain('TrueNASAPI.');
+    expect(monitoredSystemAdmissionPreviewSource).not.toContain('VMwareAPI.');
+
+    expect(trueNASSettingsPanelSource).toContain(
+      "import { MonitoredSystemAdmissionPreview } from './MonitoredSystemAdmissionPreview';",
+    );
+    expect(trueNASSettingsPanelSource).toContain('<MonitoredSystemAdmissionPreview');
+    expect(trueNASSettingsPanelSource).toContain('Preview impact');
+    expect(trueNASSettingsPanelStateSource).toContain('const [previewing, setPreviewing]');
+    expect(trueNASSettingsPanelStateSource).toContain('const previewCurrentForm = async () =>');
+    expect(trueNASSettingsPanelStateSource).toContain('TrueNASAPI.previewConnection(payload)');
+    expect(trueNASSettingsPanelStateSource).toContain(
+      'TrueNASAPI.previewSavedConnection(editingConnectionId()!, payload)',
+    );
+    expect(trueNASApiSource).toContain('static async previewConnection(');
+    expect(trueNASApiSource).toContain('static async previewSavedConnection(');
+
+    expect(vmwareSettingsPanelSource).toContain(
+      "import { MonitoredSystemAdmissionPreview } from './MonitoredSystemAdmissionPreview';",
+    );
+    expect(vmwareSettingsPanelSource).toContain('<MonitoredSystemAdmissionPreview');
+    expect(vmwareSettingsPanelSource).toContain('Preview impact');
+    expect(vmwareSettingsPanelStateSource).toContain('const [previewing, setPreviewing]');
+    expect(vmwareSettingsPanelStateSource).toContain('const previewCurrentForm = async () =>');
+    expect(vmwareSettingsPanelStateSource).toContain('VMwareAPI.previewConnection(payload)');
+    expect(vmwareSettingsPanelStateSource).toContain(
+      'VMwareAPI.previewSavedConnection(editingConnectionId()!, payload)',
+    );
+    expect(vmwareApiSource).toContain('static async previewConnection(');
+    expect(vmwareApiSource).toContain('static async previewSavedConnection(');
   });
 
   it('keeps APITokenManager runtime usage mapped from unified resources', () => {

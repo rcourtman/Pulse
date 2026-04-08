@@ -321,8 +321,8 @@ func TestProjectMonitoredSystemCandidateReplacementPreservesOverlappingSources(t
 
 	projection := ProjectMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
 		Source: SourceTrueNAS,
-		Matches: func(resource Resource) bool {
-			return resource.TrueNAS != nil && resource.TrueNAS.Hostname == "archive.local"
+		Selector: MonitoredSystemReplacementSelector{
+			Hostname: "archive.local",
 		},
 	}, MonitoredSystemCandidate{
 		Source:   SourceTrueNAS,
@@ -364,8 +364,8 @@ func TestProjectMonitoredSystemCandidateReplacementRemovesStandaloneSource(t *te
 
 	projection := ProjectMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
 		Source: SourcePBS,
-		Matches: func(resource Resource) bool {
-			return resource.PBS != nil && resource.PBS.InstanceID == "pbs-a"
+		Selector: MonitoredSystemReplacementSelector{
+			ResourceID: "pbs-a",
 		},
 	}, MonitoredSystemCandidate{
 		Source:   SourcePBS,
@@ -383,5 +383,234 @@ func TestProjectMonitoredSystemCandidateReplacementRemovesStandaloneSource(t *te
 	}
 	if projection.AdditionalCount != 0 {
 		t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
+	}
+}
+
+func TestPreviewMonitoredSystemCandidateReturnsCurrentAndProjectedSystems(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemCandidate(registry, MonitoredSystemCandidate{
+		Source:   SourceProxmox,
+		Type:     ResourceTypeAgent,
+		Name:     "tower",
+		Hostname: "tower.local",
+		HostURL:  "https://tower.local:8006",
+	})
+
+	if preview.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 1 {
+		t.Fatalf("ProjectedCount = %d, want 1", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", preview.AdditionalCount)
+	}
+	if preview.CurrentSystem == nil {
+		t.Fatal("expected current system preview")
+	}
+	if preview.ProjectedSystem == nil {
+		t.Fatal("expected projected system preview")
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 1 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 1", len(preview.ProjectedSystems))
+	}
+	if preview.CurrentSystem.Source != "agent" {
+		t.Fatalf("CurrentSystem.Source = %q, want agent", preview.CurrentSystem.Source)
+	}
+	if preview.ProjectedSystem.Source != "multiple" {
+		t.Fatalf("ProjectedSystem.Source = %q, want multiple", preview.ProjectedSystem.Source)
+	}
+	if len(preview.ProjectedSystem.Explanation.Surfaces) != 2 {
+		t.Fatalf("expected projected system to include 2 grouped surfaces, got %+v", preview.ProjectedSystem.Explanation.Surfaces)
+	}
+}
+
+func TestPreviewMonitoredSystemCandidateReplacementReturnsAffectedSystems(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "archive.local",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"archive.local"},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(SourceTrueNAS, []IngestRecord{
+		{
+			SourceID: "system:archive.local",
+			Resource: Resource{
+				ID:     "truenas-1",
+				Type:   ResourceTypeAgent,
+				Name:   "archive",
+				Status: StatusOnline,
+				TrueNAS: &TrueNASData{
+					Hostname: "archive.local",
+				},
+			},
+			Identity: ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemCandidateReplacement(registry, MonitoredSystemReplacement{
+		Source: SourceTrueNAS,
+		Selector: MonitoredSystemReplacementSelector{
+			Hostname: "archive.local",
+		},
+	}, MonitoredSystemCandidate{
+		Source:   SourceTrueNAS,
+		Type:     ResourceTypeAgent,
+		Name:     "backup",
+		Hostname: "backup.local",
+		HostURL:  "https://backup.local",
+	})
+
+	if preview.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 2 {
+		t.Fatalf("ProjectedCount = %d, want 2", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 1 {
+		t.Fatalf("AdditionalCount = %d, want 1", preview.AdditionalCount)
+	}
+	if preview.CurrentSystem == nil {
+		t.Fatal("expected current system preview")
+	}
+	if preview.ProjectedSystem == nil {
+		t.Fatal("expected projected system preview")
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 1 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 1", len(preview.ProjectedSystems))
+	}
+	if preview.CurrentSystem.Source != "multiple" {
+		t.Fatalf("CurrentSystem.Source = %q, want multiple", preview.CurrentSystem.Source)
+	}
+	if preview.ProjectedSystem.Source != "truenas" {
+		t.Fatalf("ProjectedSystem.Source = %q, want truenas", preview.ProjectedSystem.Source)
+	}
+	if preview.ProjectedSystem.Name != "backup" {
+		t.Fatalf("ProjectedSystem.Name = %q, want backup", preview.ProjectedSystem.Name)
+	}
+}
+
+func TestPreviewMonitoredSystemRecordsReturnsAffectedSystems(t *testing.T) {
+	registry := NewRegistry(nil)
+	registry.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-host-1",
+			Resource: Resource{
+				Type:   ResourceTypeAgent,
+				Name:   "esxi-01.lab.local",
+				Status: StatusOnline,
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemRecords(registry, map[DataSource][]IngestRecord{
+		SourceVMware: {
+			{
+				SourceID: "vc-1:host:host-101",
+				Resource: Resource{
+					Type:   ResourceTypeAgent,
+					Name:   "esxi-01.lab.local",
+					Status: StatusOnline,
+					VMware: &VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-101",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-1",
+					},
+				},
+				Identity: ResourceIdentity{
+					DMIUUID:   "uuid-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+			{
+				SourceID: "vc-1:host:host-102",
+				Resource: Resource{
+					Type:   ResourceTypeAgent,
+					Name:   "esxi-02.lab.local",
+					Status: StatusOnline,
+					VMware: &VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-102",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-2",
+					},
+				},
+				Identity: ResourceIdentity{
+					DMIUUID:   "uuid-host-2",
+					Hostnames: []string{"esxi-02.lab.local"},
+				},
+			},
+		},
+	})
+
+	if preview.CurrentCount != 1 {
+		t.Fatalf("CurrentCount = %d, want 1", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 2 {
+		t.Fatalf("ProjectedCount = %d, want 2", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 1 {
+		t.Fatalf("AdditionalCount = %d, want 1", preview.AdditionalCount)
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 2 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 2", len(preview.ProjectedSystems))
+	}
+	if preview.CurrentSystems[0].Source != "agent" {
+		t.Fatalf("CurrentSystems[0].Source = %q, want agent", preview.CurrentSystems[0].Source)
 	}
 }

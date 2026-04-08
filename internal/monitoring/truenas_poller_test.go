@@ -1331,13 +1331,24 @@ func TestTrueNASPollerPollAllLogsStructuredContextOnRefreshFailure(t *testing.T)
 
 	poller := NewTrueNASPoller(nil, time.Second, nil)
 	poller.mu.Lock()
+	if poller.configsByOrg == nil {
+		poller.configsByOrg = make(map[string]map[string]config.TrueNASInstance)
+	}
+	if poller.configsByOrg["default"] == nil {
+		poller.configsByOrg["default"] = make(map[string]config.TrueNASInstance)
+	}
+	connection := config.NewTrueNASInstance()
+	connection.ID = "conn-refresh-fail"
+	connection.Host = "nas-refresh-fail.lab.local"
+	connection.APIKey = "api-key"
+	poller.configsByOrg["default"][connection.ID] = connection
 	if poller.providersByOrg == nil {
 		poller.providersByOrg = make(map[string]map[string]*truenas.Provider)
 	}
 	if poller.providersByOrg["default"] == nil {
 		poller.providersByOrg["default"] = make(map[string]*truenas.Provider)
 	}
-	poller.providersByOrg["default"]["conn-refresh-fail"] = truenas.NewLiveProvider(failingTrueNASFetcher{err: fmt.Errorf("refresh exploded")})
+	poller.providersByOrg["default"][connection.ID] = truenas.NewLiveProvider(failingTrueNASFetcher{err: fmt.Errorf("refresh exploded")})
 	poller.mu.Unlock()
 
 	poller.pollAll(context.Background())

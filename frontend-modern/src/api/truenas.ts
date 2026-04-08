@@ -1,5 +1,10 @@
 import { apiFetchJSON } from '@/utils/apiClient';
 import {
+  normalizeMonitoredSystemLedgerPreviewResponse,
+  type MonitoredSystemLedgerPreviewResponse,
+  type MonitoredSystemLedgerRawPreviewResponse,
+} from './monitoredSystemLedger';
+import {
   arrayOrUndefined,
   finiteNumberOrUndefined,
   optionalTrimmedString,
@@ -219,5 +224,34 @@ export class TrueNASAPI {
     return {
       success: strictBoolean(response.success),
     };
+  }
+
+  static async previewConnection(
+    input: TrueNASConnectionInput,
+  ): Promise<MonitoredSystemLedgerPreviewResponse> {
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
+      `${TRUE_NAS_CONNECTIONS_PATH}/preview`,
+      {
+        method: 'POST',
+        body: JSON.stringify(serializeTrueNASConnectionInput(input)),
+      },
+    );
+    return normalizeMonitoredSystemLedgerPreviewResponse(response);
+  }
+
+  static async previewSavedConnection(
+    id: string,
+    input?: TrueNASConnectionInput,
+  ): Promise<MonitoredSystemLedgerPreviewResponse> {
+    const response = await apiFetchJSON<MonitoredSystemLedgerRawPreviewResponse>(
+      `${TRUE_NAS_CONNECTIONS_PATH}/${encodeURIComponent(id)}/preview`,
+      {
+        method: 'POST',
+        ...(input !== undefined
+          ? { body: JSON.stringify(serializeTrueNASConnectionInput(input)) }
+          : {}),
+      },
+    );
+    return normalizeMonitoredSystemLedgerPreviewResponse(response);
   }
 }

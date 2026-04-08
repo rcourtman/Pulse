@@ -162,6 +162,25 @@ func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	if rec.Code != http.StatusPaymentRequired {
 		t.Fatalf("expected 402 once monitored-system cap is full, got %d: %s", rec.Code, rec.Body.String())
 	}
+	payload := decodeMonitoredSystemLimitBlockedPayload(t, rec.Body.Bytes())
+	if payload.Error != "license_required" {
+		t.Fatalf("error=%q, want license_required", payload.Error)
+	}
+	if payload.Feature != maxMonitoredSystemsLicenseGateKey {
+		t.Fatalf("feature=%q, want %q", payload.Feature, maxMonitoredSystemsLicenseGateKey)
+	}
+	if !payload.MonitoredSystemPreview.WouldExceedLimit {
+		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
+	}
+	if payload.MonitoredSystemPreview.Effect != "creates_new" {
+		t.Fatalf("effect=%q, want creates_new", payload.MonitoredSystemPreview.Effect)
+	}
+	if payload.MonitoredSystemPreview.AdditionalCount != 1 {
+		t.Fatalf("additional_count=%d, want 1", payload.MonitoredSystemPreview.AdditionalCount)
+	}
+	if len(payload.MonitoredSystemPreview.ProjectedSystems) != 1 {
+		t.Fatalf("len(projected_systems)=%d, want 1", len(payload.MonitoredSystemPreview.ProjectedSystems))
+	}
 
 	stored, err := persistence.LoadTrueNASConfig()
 	if err != nil {
@@ -565,6 +584,22 @@ func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *test
 	if rec.Code != http.StatusPaymentRequired {
 		t.Fatalf("expected 402 when update would add a new monitored system, got %d: %s", rec.Code, rec.Body.String())
 	}
+	payload := decodeMonitoredSystemLimitBlockedPayload(t, rec.Body.Bytes())
+	if !payload.MonitoredSystemPreview.WouldExceedLimit {
+		t.Fatalf("expected monitored_system_preview.would_exceed_limit=true, got %+v", payload.MonitoredSystemPreview)
+	}
+	if payload.MonitoredSystemPreview.Effect != "splits_existing" {
+		t.Fatalf("effect=%q, want splits_existing", payload.MonitoredSystemPreview.Effect)
+	}
+	if payload.MonitoredSystemPreview.AdditionalCount != 1 {
+		t.Fatalf("additional_count=%d, want 1", payload.MonitoredSystemPreview.AdditionalCount)
+	}
+	if len(payload.MonitoredSystemPreview.CurrentSystems) != 1 {
+		t.Fatalf("len(current_systems)=%d, want 1", len(payload.MonitoredSystemPreview.CurrentSystems))
+	}
+	if len(payload.MonitoredSystemPreview.ProjectedSystems) != 1 {
+		t.Fatalf("len(projected_systems)=%d, want 1", len(payload.MonitoredSystemPreview.ProjectedSystems))
+	}
 
 	stored, err := persistence.LoadTrueNASConfig()
 	if err != nil {
@@ -704,6 +739,143 @@ func TestTrueNASHandlers_HandleTestSavedConnection_UsesStoredSecrets(t *testing.
 
 	if missingRec.Code != http.StatusNotFound {
 		t.Fatalf("expected 404 for missing saved connection, got %d: %s", missingRec.Code, missingRec.Body.String())
+	}
+}
+
+func TestTrueNASHandlers_HandlePreviewConnection_ReturnsCanonicalImpact(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, _, monitor := newTrueNASHandlersForTest(t, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "tower.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "tower.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"tower.local"},
+				},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":   "tower",
+		"host":   "tower.local",
+		"apiKey": "super-secret",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.CurrentCount != 1 || preview.ProjectedCount != 1 || preview.AdditionalCount != 0 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if preview.Effect != "attaches_existing" {
+		t.Fatalf("Effect = %q, want attaches_existing", preview.Effect)
+	}
+	if len(preview.CurrentSystems) != 1 || len(preview.ProjectedSystems) != 1 {
+		t.Fatalf("unexpected affected systems: %+v", preview)
+	}
+}
+
+func TestTrueNASHandlers_HandlePreviewSavedConnection_UsesReplacementProjection(t *testing.T) {
+	setTrueNASFeatureForTest(t, true)
+
+	handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+	registry := unifiedresources.NewRegistry(nil)
+	registry.IngestRecords(unifiedresources.SourceAgent, []unifiedresources.IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: unifiedresources.Resource{
+				ID:     "host-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive.local",
+				Status: unifiedresources.StatusOnline,
+				Agent: &unifiedresources.AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "archive.local",
+					MachineID: "machine-1",
+				},
+				Identity: unifiedresources.ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"archive.local"},
+				},
+			},
+		},
+	})
+	registry.IngestRecords(unifiedresources.SourceTrueNAS, []unifiedresources.IngestRecord{
+		{
+			SourceID: "system:archive.local",
+			Resource: unifiedresources.Resource{
+				ID:     "truenas-1",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "archive",
+				Status: unifiedresources.StatusOnline,
+				TrueNAS: &unifiedresources.TrueNASData{
+					Hostname: "archive.local",
+				},
+			},
+			Identity: unifiedresources.ResourceIdentity{
+				MachineID: "machine-1",
+				Hostnames: []string{"archive.local"},
+			},
+		},
+	})
+	setUnexportedField(t, monitor, "resourceStore", monitoring.ResourceStoreInterface(unifiedresources.NewMonitorAdapter(registry)))
+	if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+		{
+			ID:       "conn-1",
+			Name:     "archive",
+			Host:     "archive.local",
+			APIKey:   "super-secret",
+			Enabled:  true,
+			UseHTTPS: true,
+		},
+	}); err != nil {
+		t.Fatalf("seed truenas config: %v", err)
+	}
+
+	body := marshalTrueNASRequest(t, map[string]any{
+		"name":   "backup",
+		"host":   "backup.local",
+		"apiKey": "********",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections/conn-1/preview", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler.HandlePreviewSavedConnection(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var preview MonitoredSystemLedgerPreviewResponse
+	if err := json.NewDecoder(rec.Body).Decode(&preview); err != nil {
+		t.Fatalf("decode preview response: %v", err)
+	}
+	if preview.ProjectedCount != 2 || preview.AdditionalCount != 1 {
+		t.Fatalf("unexpected preview counts: %+v", preview)
+	}
+	if preview.Effect != "splits_existing" {
+		t.Fatalf("Effect = %q, want splits_existing", preview.Effect)
 	}
 }
 

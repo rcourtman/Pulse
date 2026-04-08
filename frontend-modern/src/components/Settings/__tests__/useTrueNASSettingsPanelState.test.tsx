@@ -10,10 +10,13 @@ vi.mock('@/api/truenas', () => ({
     createConnection: vi.fn(),
     updateConnection: vi.fn(),
     deleteConnection: vi.fn(),
+    previewConnection: vi.fn(),
+    previewSavedConnection: vi.fn(),
     testConnection: vi.fn(),
     testSavedConnection: vi.fn(),
   },
-  isRedactedTrueNASSecret: (value: string | null | undefined) => (value || '').trim() === '********',
+  isRedactedTrueNASSecret: (value: string | null | undefined) =>
+    (value || '').trim() === '********',
 }));
 
 vi.mock('@/stores/notifications', () => ({
@@ -187,5 +190,107 @@ describe('useTrueNASSettingsPanelState', () => {
     );
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
+  });
+
+  it('previews monitored-system impact through the canonical TrueNAS preview path', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.previewConnection).mockResolvedValueOnce({
+      current_count: 4,
+      projected_count: 4,
+      additional_count: 0,
+      limit: 10,
+      would_exceed_limit: false,
+      effect: 'attaches_existing',
+      current_systems: [
+        {
+          name: 'tower',
+          type: 'truenas-system',
+          status: 'online',
+          source: 'agent',
+          status_explanation: { summary: '', reasons: [] },
+          latest_included_signal: { name: '', type: '', at: '' },
+          explanation: { summary: '', reasons: [], surfaces: [] },
+        },
+      ],
+      projected_systems: [
+        {
+          name: 'tower',
+          type: 'truenas-system',
+          status: 'online',
+          source: 'multiple',
+          status_explanation: { summary: '', reasons: [] },
+          latest_included_signal: { name: '', type: '', at: '' },
+          explanation: { summary: '', reasons: [], surfaces: [] },
+        },
+      ],
+      current_system: null,
+      projected_system: null,
+    } as never);
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'tower.local',
+      apiKey: 'secret',
+    });
+    const preview = await result.previewCurrentForm();
+
+    expect(TrueNASAPI.previewConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: 'tower.local',
+        apiKey: 'secret',
+      }),
+    );
+    expect(preview?.additional_count).toBe(0);
+    expect(result.monitoredSystemPreview()?.effect).toBe('attaches_existing');
+  });
+
+  it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
+      Object.assign(new Error('Monitored-system limit reached (10/9)'), {
+        status: 402,
+        feature: 'max_monitored_systems',
+        monitored_system_preview: {
+          current_count: 9,
+          projected_count: 10,
+          additional_count: 1,
+          limit: 9,
+          would_exceed_limit: true,
+          effect: 'creates_new',
+          current_systems: [],
+          projected_systems: [
+            {
+              name: 'tower',
+              type: 'truenas-system',
+              status: 'online',
+              source: 'truenas',
+            },
+          ],
+          current_system: null,
+          projected_system: null,
+        },
+      }),
+    );
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'tower.local',
+      apiKey: 'secret',
+    });
+    await result.saveCurrentForm();
+
+    expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system limit reached (10/9)');
+    expect(result.monitoredSystemPreview()).toMatchObject({
+      would_exceed_limit: true,
+      projected_count: 10,
+      effect: 'creates_new',
+    });
+    expect(result.dialogOpen()).toBe(true);
   });
 });

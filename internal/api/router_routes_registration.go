@@ -206,6 +206,19 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
+	r.mux.HandleFunc("/api/truenas/connections/preview", func(w http.ResponseWriter, req *http.Request) {
+		if r.trueNASHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandlePreviewConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	r.mux.HandleFunc("/api/truenas/connections/", func(w http.ResponseWriter, req *http.Request) {
 		if r.trueNASHandlers == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "truenas_unavailable", "TrueNAS service unavailable", nil)
@@ -214,6 +227,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
 			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleTestSavedConnection))(w, req)
+		} else if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/preview") {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandlePreviewSavedConnection))(w, req)
 		} else if req.Method == http.MethodDelete {
 			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.trueNASHandlers.HandleDelete))(w, req)
 		} else if req.Method == http.MethodPut {
@@ -253,6 +268,19 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 		}
 	})
 
+	r.mux.HandleFunc("/api/vmware/connections/preview", func(w http.ResponseWriter, req *http.Request) {
+		if r.vmwareHandlers == nil {
+			writeErrorResponse(w, http.StatusServiceUnavailable, "vmware_unavailable", "VMware service unavailable", nil)
+			return
+		}
+
+		if req.Method == http.MethodPost {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandlePreviewConnection))(w, req)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	r.mux.HandleFunc("/api/vmware/connections/", func(w http.ResponseWriter, req *http.Request) {
 		if r.vmwareHandlers == nil {
 			writeErrorResponse(w, http.StatusServiceUnavailable, "vmware_unavailable", "VMware service unavailable", nil)
@@ -261,6 +289,8 @@ func (r *Router) registerConfigSystemRoutes(updateHandlers *UpdateHandlers) {
 
 		if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/test") {
 			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleTestSavedConnection))(w, req)
+		} else if req.Method == http.MethodPost && strings.HasSuffix(strings.Trim(req.URL.Path, "/"), "/preview") {
+			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandlePreviewSavedConnection))(w, req)
 		} else if req.Method == http.MethodDelete {
 			RequireAdmin(r.config, RequireScope(config.ScopeSettingsWrite, r.vmwareHandlers.HandleDelete))(w, req)
 		} else if req.Method == http.MethodPut {

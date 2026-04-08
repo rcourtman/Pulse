@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -10,6 +11,26 @@ import (
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 	agentshost "github.com/rcourtman/pulse-go-rewrite/pkg/agents/host"
 )
+
+type monitoredSystemLimitBlockedPayload struct {
+	Error                  string                               `json:"error"`
+	Feature                string                               `json:"feature"`
+	Message                string                               `json:"message"`
+	MonitoredSystemPreview MonitoredSystemLedgerPreviewResponse `json:"monitored_system_preview"`
+}
+
+func decodeMonitoredSystemLimitBlockedPayload(
+	t *testing.T,
+	body []byte,
+) monitoredSystemLimitBlockedPayload {
+	t.Helper()
+
+	var payload monitoredSystemLimitBlockedPayload
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("decode monitored-system limit blocked payload: %v", err)
+	}
+	return payload
+}
 
 func TestMonitoredSystemCountNilMonitor(t *testing.T) {
 	got := monitoredSystemCount(nil)

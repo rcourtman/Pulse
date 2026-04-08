@@ -61,34 +61,36 @@ agreement, and cloud-specific enforcement rules.
 39. `frontend-modern/src/components/Settings/OrganizationBillingPanel.tsx`
 40. `frontend-modern/src/components/Settings/OrganizationBillingLoadingState.tsx`
 41. `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx`
-42. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
-43. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
-44. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
-45. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
-46. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
-47. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
-48. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
-49. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
-50. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
-51. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
-52. `frontend-modern/src/pages/CloudPricing.tsx`
-53. `frontend-modern/src/pages/HostedSignup.tsx`
-54. `frontend-modern/src/pages/PricingHandoff.tsx`
-55. `frontend-modern/src/utils/apiClient.ts`
-56. `frontend-modern/src/utils/cloudPlans.ts`
-57. `frontend-modern/src/utils/commercialBillingModel.ts`
-58. `frontend-modern/src/utils/licensePresentation.ts`
-59. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
-60. `frontend-modern/src/utils/pricingHandoff.ts`
-61. `frontend-modern/src/utils/selfHostedPlans.ts`
-62. `frontend-modern/src/utils/upgradePresentation.ts`
+42. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx`
+43. `frontend-modern/src/components/Settings/ProLicensePanel.tsx`
+44. `frontend-modern/src/components/Settings/ProLicensePlanSection.tsx`
+45. `frontend-modern/src/components/Settings/CommercialBillingSections.tsx`
+46. `frontend-modern/src/components/Settings/SelfHostedCommercialRecoverySection.tsx`
+47. `frontend-modern/src/components/Settings/RelaySettingsPanel.tsx`
+48. `frontend-modern/src/components/Settings/RelayPairingSection.tsx`
+49. `frontend-modern/src/components/Settings/useBillingAdminPanelState.ts`
+50. `frontend-modern/src/components/Settings/useOrganizationBillingPanelState.ts`
+51. `frontend-modern/src/components/Settings/useProLicensePanelState.ts`
+52. `frontend-modern/src/components/Settings/useRelaySettingsPanelState.ts`
+53. `frontend-modern/src/pages/CloudPricing.tsx`
+54. `frontend-modern/src/pages/HostedSignup.tsx`
+55. `frontend-modern/src/pages/PricingHandoff.tsx`
+56. `frontend-modern/src/utils/apiClient.ts`
+57. `frontend-modern/src/utils/cloudPlans.ts`
+58. `frontend-modern/src/utils/commercialBillingModel.ts`
+59. `frontend-modern/src/utils/licensePresentation.ts`
+60. `frontend-modern/src/utils/monitoredSystemPresentation.ts`
+61. `frontend-modern/src/utils/pricingHandoff.ts`
+62. `frontend-modern/src/utils/selfHostedPlans.ts`
+63. `frontend-modern/src/utils/upgradePresentation.ts`
 
 ## Shared Boundaries
 
-1. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-2. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
-3. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
-4. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
+1. `frontend-modern/src/components/Settings/MonitoredSystemAdmissionPreview.tsx` shared with `agent-lifecycle`: the monitored-system admission preview is both a platform-connections lifecycle surface and a canonical cloud-paid monitored-system presentation boundary.
+2. `internal/api/licensing_bridge.go` shared with `api-contracts`: commercial licensing bridge handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+3. `internal/api/licensing_handlers.go` shared with `api-contracts`: commercial licensing handlers carry both API payload contract and cloud-paid entitlement boundary ownership.
+4. `internal/api/payments_webhook_handlers.go` shared with `api-contracts`: commercial payment webhook handlers carry both API payload contract and cloud-paid billing boundary ownership.
+5. `internal/api/public_signup_handlers.go` shared with `api-contracts`: hosted signup handlers carry both API payload contract and cloud-paid hosted provisioning boundary ownership.
 
 ## Extension Points
 
@@ -632,6 +634,11 @@ That same helper also owns preview-impact copy and current/projected
 source-label wording for pre-save monitored-system admission UI, so the
 TrueNAS and VMware settings panels do not drift into provider-local billing
 phrasing when they surface canonical preview results before save.
+That same helper also owns grouped preview attribution and multi-source labels.
+When a current or projected monitored system represents several included
+surfaces, the admission preview must render canonical helper-owned labels such
+as `Multiple Sources` and helper-owned effect copy instead of provider-local
+source names, raw type/source slugs, or ad hoc billing phrasing.
 That same disclosure surface must not accept arbitrary caller-supplied
 monitored-system summary strings as its primary API. When the disclosure needs
 to show brief summary copy, it should render the canonical helper-owned brief

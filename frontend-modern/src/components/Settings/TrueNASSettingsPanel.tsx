@@ -22,6 +22,7 @@ import {
   formSelect,
 } from '@/components/shared/Form';
 import { getSettingsConfigurationLoadingState } from '@/utils/settingsShellPresentation';
+import { MonitoredSystemAdmissionPreview } from './MonitoredSystemAdmissionPreview';
 import type { TrueNASSettingsPanelState } from './useTrueNASSettingsPanelState';
 
 const buttonClass =
@@ -584,6 +585,12 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
             </div>
           </div>
 
+          <MonitoredSystemAdmissionPreview
+            preview={state.monitoredSystemPreview()}
+            loading={state.previewing()}
+            error={state.monitoredSystemPreviewError()}
+          />
+
           <div class="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"
@@ -603,9 +610,22 @@ export const TrueNASSettingsPanel: Component<TrueNASSettingsPanelProps> = (props
             </button>
             <button
               type="button"
+              class={buttonClass}
+              onClick={() => void state.previewCurrentForm()}
+              disabled={state.saving() || state.testing() || state.previewing()}
+            >
+              {state.previewing() ? 'Previewing…' : 'Preview impact'}
+            </button>
+            <button
+              type="button"
               class={primaryButtonClass}
               onClick={() => void state.saveCurrentForm()}
-              disabled={state.saving() || state.testing()}
+              disabled={
+                state.saving() ||
+                state.testing() ||
+                state.previewing() ||
+                state.monitoredSystemPreview()?.would_exceed_limit
+              }
             >
               {state.saving()
                 ? state.editingConnection()

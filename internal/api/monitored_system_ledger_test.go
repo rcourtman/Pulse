@@ -1,12 +1,15 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/rcourtman/pulse-go-rewrite/internal/models"
 	"github.com/rcourtman/pulse-go-rewrite/internal/unifiedresources"
 )
 
@@ -324,5 +327,217 @@ func TestHandleMonitoredSystemLedgerHTTP(t *testing.T) {
 	}
 	if decoded.Systems[0].Explanation.Summary == "" {
 		t.Errorf("expected explanation summary, got %+v", decoded.Systems[0].Explanation)
+	}
+}
+
+func TestHandleMonitoredSystemLedgerPreviewHTTP(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{
+		{
+			ID:           "host-1",
+			Hostname:     "tower.local",
+			DisplayName:  "Tower",
+			Status:       "online",
+			LastSeen:     time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC),
+			MachineID:    "machine-1",
+			AgentVersion: "1.0.0",
+		},
+	}
+	syncTestResourceStore(t, monitor, state)
+
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"proxmox",
+			"name":"tower",
+			"hostname":"tower.local",
+			"host_url":"https://tower.local:8006"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/preview", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{monitor: monitor}
+	router.handleMonitoredSystemLedgerPreview(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded MonitoredSystemLedgerPreviewResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.CurrentCount != 1 || decoded.ProjectedCount != 1 || decoded.AdditionalCount != 0 {
+		t.Fatalf("unexpected counts: %+v", decoded)
+	}
+	if decoded.Limit != 1 {
+		t.Fatalf("Limit = %d, want 1", decoded.Limit)
+	}
+	if decoded.WouldExceedLimit {
+		t.Fatalf("expected attach preview to stay within limit, got %+v", decoded)
+	}
+	if decoded.Effect != "attaches_existing" {
+		t.Fatalf("Effect = %q, want attaches_existing", decoded.Effect)
+	}
+	if decoded.CurrentSystem == nil {
+		t.Fatal("expected current system payload")
+	}
+	if decoded.ProjectedSystem == nil {
+		t.Fatal("expected projected system payload")
+	}
+	if len(decoded.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(decoded.CurrentSystems))
+	}
+	if len(decoded.ProjectedSystems) != 1 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 1", len(decoded.ProjectedSystems))
+	}
+	if decoded.CurrentSystem.Source != "agent" {
+		t.Fatalf("CurrentSystem.Source = %q, want agent", decoded.CurrentSystem.Source)
+	}
+	if decoded.ProjectedSystem.Source != "multiple" {
+		t.Fatalf("ProjectedSystem.Source = %q, want multiple", decoded.ProjectedSystem.Source)
+	}
+	if len(decoded.ProjectedSystem.Explanation.Surfaces) != 2 {
+		t.Fatalf("expected projected system surfaces to normalize, got %+v", decoded.ProjectedSystem.Explanation.Surfaces)
+	}
+}
+
+func TestHandleMonitoredSystemLedgerPreviewUnavailableUsage(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"proxmox",
+			"name":"tower",
+			"hostname":"tower.local",
+			"host_url":"https://tower.local:8006"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/preview", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleMonitoredSystemLedgerPreview(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
+		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
+	}
+}
+
+func TestHandleMonitoredSystemLedgerUnavailableUsage(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/api/license/monitored-system-ledger", nil)
+	rec := httptest.NewRecorder()
+
+	router := &Router{}
+	router.handleMonitoredSystemLedger(rec, req)
+
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "monitored_system_usage_unavailable") {
+		t.Fatalf("expected unavailable usage error body, got %s", rec.Body.String())
+	}
+}
+
+func TestHandleMonitoredSystemLedgerExplainCurrentAndPreview(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{
+		{
+			ID:           "host-1",
+			Hostname:     "tower.local",
+			DisplayName:  "Tower",
+			Status:       "online",
+			LastSeen:     time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC),
+			MachineID:    "machine-1",
+			AgentVersion: "1.0.0",
+		},
+	}
+	syncTestResourceStore(t, monitor, state)
+
+	body := bytes.NewBufferString(`{
+		"candidate":{
+			"source":"proxmox",
+			"name":"tower",
+			"hostname":"tower.local",
+			"host_url":"https://tower.local:8006"
+		}
+	}`)
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/explain", body)
+	rec := httptest.NewRecorder()
+
+	router := &Router{monitor: monitor}
+	router.handleMonitoredSystemLedgerExplain(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded MonitoredSystemLedgerExplainResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.Ledger.Total != 1 {
+		t.Fatalf("Ledger.Total = %d, want 1", decoded.Ledger.Total)
+	}
+	if decoded.Ledger.Limit != 1 {
+		t.Fatalf("Ledger.Limit = %d, want 1", decoded.Ledger.Limit)
+	}
+	if len(decoded.Ledger.Systems) != 1 {
+		t.Fatalf("len(Ledger.Systems) = %d, want 1", len(decoded.Ledger.Systems))
+	}
+	if decoded.Preview == nil {
+		t.Fatal("expected preview payload")
+	}
+	if decoded.Preview.CurrentCount != 1 || decoded.Preview.ProjectedCount != 1 {
+		t.Fatalf("unexpected preview counts: %+v", decoded.Preview)
+	}
+	if decoded.Preview.Effect != "attaches_existing" {
+		t.Fatalf("Preview.Effect = %q, want attaches_existing", decoded.Preview.Effect)
+	}
+}
+
+func TestHandleMonitoredSystemLedgerExplainCurrentOnly(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 2)
+
+	monitor, state, _ := newTestMonitor(t)
+	state.Hosts = []models.Host{
+		{
+			ID:           "host-1",
+			Hostname:     "tower.local",
+			DisplayName:  "Tower",
+			Status:       "online",
+			LastSeen:     time.Date(2026, 4, 8, 10, 0, 0, 0, time.UTC),
+			MachineID:    "machine-1",
+			AgentVersion: "1.0.0",
+		},
+	}
+	syncTestResourceStore(t, monitor, state)
+
+	req := httptest.NewRequest(http.MethodPost, "/api/license/monitored-system-ledger/explain", http.NoBody)
+	rec := httptest.NewRecorder()
+
+	router := &Router{monitor: monitor}
+	router.handleMonitoredSystemLedgerExplain(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var decoded MonitoredSystemLedgerExplainResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.Preview != nil {
+		t.Fatalf("expected nil preview, got %+v", decoded.Preview)
+	}
+	if decoded.Ledger.Total != 1 || decoded.Ledger.Limit != 2 {
+		t.Fatalf("unexpected ledger payload: %+v", decoded.Ledger)
 	}
 }

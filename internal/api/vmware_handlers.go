@@ -275,6 +275,136 @@ func (h *VMwareHandlers) HandleUpdate(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, instance.Redacted())
 }
 
+// HandlePreviewConnection projects the monitored-system impact of a proposed
+// VMware vCenter connection without persisting it.
+func (h *VMwareHandlers) HandlePreviewConnection(w http.ResponseWriter, r *http.Request) {
+	if !h.featureEnabled(w) {
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, 32*1024)
+	defer r.Body.Close()
+
+	var instance config.VMwareVCenterInstance
+	if err := json.NewDecoder(r.Body).Decode(&instance); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "invalid_request", "Invalid request body", map[string]string{"error": err.Error()})
+		return
+	}
+
+	normalizeVMwareInstance(&instance)
+	if err := instance.Validate(); err != nil {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+		return
+	}
+
+	monitor := h.monitorForRequest(r.Context())
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		writeMonitoredSystemUsageUnavailable(w)
+		return
+	}
+
+	records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)
+	if err != nil {
+		h.writeConnectionFailure(w, invalidConfig, err)
+		return
+	}
+
+	preview := unifiedresources.PreviewMonitoredSystemRecords(usage.readState, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+		unifiedresources.SourceVMware: records,
+	})
+	if len(preview.ProjectedSystems) == 0 {
+		writeErrorResponse(w, http.StatusBadRequest, "validation_error", "VMware connection did not resolve to a canonical monitored system preview", nil)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), false, preview).NormalizeCollections())
+}
+
+// HandlePreviewSavedConnection projects the monitored-system impact of editing
+// one saved VMware connection using the same secret-preservation path as
+// update and saved test flows.
+func (h *VMwareHandlers) HandlePreviewSavedConnection(w http.ResponseWriter, r *http.Request) {
+	if !h.featureEnabled(w) {
+		return
+	}
+
+	connectionID, ok := vmwareConnectionIDFromPreviewPath(r.URL.Path)
+	if !ok {
+		writeErrorResponse(w, http.StatusBadRequest, "missing_connection_id", "Connection ID is required", nil)
+		return
+	}
+
+	persistence := h.persistenceForRequest(w, r.Context())
+	if persistence == nil {
+		return
+	}
+
+	instances, err := persistence.LoadVMwareConfig()
+	if err != nil {
+		writeErrorResponse(w, http.StatusInternalServerError, "vmware_load_failed", "Failed to load VMware configuration", map[string]string{"error": err.Error()})
+		return
+	}
+
+	for i := range instances {
+		current := instances[i]
+		if strings.TrimSpace(current.ID) != connectionID {
+			continue
+		}
+
+		payload, hasPayload, ok := decodeOptionalVMwareInstanceRequest(w, r)
+		if !ok {
+			return
+		}
+		next := current
+		if hasPayload {
+			payload.ID = connectionID
+			normalizeVMwareInstance(&payload)
+			payload.PreserveMaskedSecrets(current)
+			if err := payload.Validate(); err != nil {
+				writeErrorResponse(w, http.StatusBadRequest, "validation_error", err.Error(), nil)
+				return
+			}
+			next = payload
+		}
+
+		monitor := h.monitorForRequest(r.Context())
+		usage := monitoredSystemUsage(monitor)
+		if !usage.available {
+			writeMonitoredSystemUsageUnavailable(w)
+			return
+		}
+
+		records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)
+		if err != nil {
+			h.writeConnectionFailure(w, invalidConfig, err)
+			return
+		}
+
+		preview := unifiedresources.PreviewMonitoredSystemRecordsReplacement(
+			usage.readState,
+			unifiedresources.MonitoredSystemReplacement{
+				Source: unifiedresources.SourceVMware,
+				Selector: unifiedresources.MonitoredSystemReplacementSelector{
+					ResourceID: connectionID,
+				},
+			},
+			map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+				unifiedresources.SourceVMware: records,
+			},
+		)
+		if len(preview.ProjectedSystems) == 0 {
+			writeErrorResponse(w, http.StatusBadRequest, "validation_error", "VMware connection did not resolve to a canonical monitored system preview", nil)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, monitoredSystemLedgerPreviewResponse(r.Context(), true, preview).NormalizeCollections())
+		return
+	}
+
+	writeErrorResponse(w, http.StatusNotFound, "vmware_not_found", "Connection not found", nil)
+}
+
 // HandleTestConnection validates connectivity for a proposed VMware vCenter connection.
 func (h *VMwareHandlers) HandleTestConnection(w http.ResponseWriter, r *http.Request) {
 	if !h.featureEnabled(w) {
@@ -551,7 +681,7 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimit(
 	}
 
 	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -581,8 +711,8 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
 	replacementID := strings.TrimSpace(current.ID)
 	decision := monitoredSystemLimitDecisionForRecordsReplacement(r.Context(), monitor, unifiedresources.MonitoredSystemReplacement{
 		Source: unifiedresources.SourceVMware,
-		Matches: func(resource unifiedresources.Resource) bool {
-			return resource.VMware != nil && strings.TrimSpace(resource.VMware.ConnectionID) == replacementID
+		Selector: unifiedresources.MonitoredSystemReplacementSelector{
+			ResourceID: replacementID,
 		},
 	}, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 		unifiedresources.SourceVMware: records,
@@ -596,7 +726,7 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
 	}
 
 	emitLimitBlockedEvent(r.Context(), decision.current, decision.limit)
-	writeMaxMonitoredSystemsLimitExceeded(w, decision.current, decision.limit)
+	writeMaxMonitoredSystemsLimitExceeded(w, decision)
 	return true
 }
 
@@ -778,15 +908,23 @@ func vmwareConnectionIDFromPath(path string) (string, bool) {
 }
 
 func vmwareConnectionIDFromTestPath(path string) (string, bool) {
+	return vmwareConnectionIDFromActionPath(path, "/test")
+}
+
+func vmwareConnectionIDFromPreviewPath(path string) (string, bool) {
+	return vmwareConnectionIDFromActionPath(path, "/preview")
+}
+
+func vmwareConnectionIDFromActionPath(path string, suffix string) (string, bool) {
 	if !strings.HasPrefix(path, vmwareConnectionsPathPrefix) {
 		return "", false
 	}
 
 	raw := strings.Trim(strings.TrimPrefix(path, vmwareConnectionsPathPrefix), "/")
-	if !strings.HasSuffix(raw, "/test") {
+	if !strings.HasSuffix(raw, suffix) {
 		return "", false
 	}
-	raw = strings.TrimSuffix(raw, "/test")
+	raw = strings.TrimSuffix(raw, suffix)
 	if raw == "" || strings.Contains(raw, "/") {
 		return "", false
 	}
