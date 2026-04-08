@@ -143,6 +143,9 @@ export interface Node {
   name: string;
   displayName?: string;
   instance: string;
+  platform?: string; // "proxmox", "vmware", "libvirt", "aws", "azure", "gcp", "nutanix"
+  providerId?: string; // ID of the hypervisor instance
+  providerName?: string; // Friendly name of the provider
   host: string;
   guestURL?: string; // Optional guest-accessible URL (for navigation)
   status: string;
@@ -180,6 +183,10 @@ export interface VM {
   name: string;
   node: string;
   instance: string;
+  platform?: string; // "proxmox", "vmware", "libvirt", "aws", "azure", "gcp", "nutanix"
+  providerId?: string;
+  providerName?: string;
+  consoleTypes?: string[]; // Available console protocols: "vnc", "spice", "ssh", "rdp"
   status: string;
   type: string;
   cpu: number;
@@ -212,6 +219,9 @@ export interface Container {
   name: string;
   node: string;
   instance: string;
+  platform?: string; // "proxmox", "vmware", "libvirt", "aws", "azure", "gcp", "nutanix"
+  providerId?: string;
+  providerName?: string;
   status: string;
   type: string;
   cpu: number;

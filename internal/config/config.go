@@ -96,6 +96,9 @@ type Config struct {
 	// Proxmox Mail Gateway connections
 	PMGInstances []PMGInstance
 
+	// Generic hypervisor/cloud provider connections (VMware, KVM, Nutanix, AWS, Azure, GCP, etc.)
+	HypervisorInstances []HypervisorInstance `json:"hypervisorInstances,omitempty"`
+
 	// Monitoring settings
 	PVEPollingInterval              time.Duration `envconfig:"PVE_POLLING_INTERVAL"`             // PVE polling interval (10s default)
 	PBSPollingInterval              time.Duration `envconfig:"PBS_POLLING_INTERVAL"`             // PBS polling interval (60s default)
@@ -571,6 +574,50 @@ type PMGInstance struct {
 	MonitorDomainStats           bool
 	TemperatureMonitoringEnabled *bool // Monitor temperature via SSH (nil = use global setting, true/false = override)
 	SSHPort                      int   // SSH port for temperature monitoring (0 = use global default)
+}
+
+// HypervisorInstance represents a generic hypervisor or cloud provider connection.
+// Supports VMware vSphere, KVM/libvirt, Nutanix, AWS, Azure, GCP, Hyper-V, etc.
+type HypervisorInstance struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Type     string `json:"type"` // "vmware", "libvirt", "nutanix", "aws", "azure", "gcp", "hyperv"
+	Host     string `json:"host,omitempty"`
+	Enabled  bool   `json:"enabled"`
+
+	// Standard auth
+	Username string `json:"username,omitempty"`
+	Password string `json:"password,omitempty"`
+	Token    string `json:"token,omitempty"`
+
+	// TLS
+	VerifySSL   bool   `json:"verifySSL"`
+	Fingerprint string `json:"fingerprint,omitempty"`
+
+	// Cloud-specific
+	Region         string `json:"region,omitempty"`         // AWS, Azure, GCP
+	AccessKey      string `json:"accessKey,omitempty"`      // AWS
+	SecretKey      string `json:"secretKey,omitempty"`      // AWS
+	Profile        string `json:"profile,omitempty"`        // AWS CLI profile
+	RoleARN        string `json:"roleArn,omitempty"`        // AWS cross-account
+	SubscriptionID string `json:"subscriptionId,omitempty"` // Azure
+	TenantID       string `json:"tenantId,omitempty"`       // Azure
+	ClientID       string `json:"clientId,omitempty"`       // Azure
+	ClientSecret   string `json:"clientSecret,omitempty"`   // Azure
+	ProjectID      string `json:"projectId,omitempty"`      // GCP
+	CredentialsJSON string `json:"credentialsJson,omitempty"` // GCP service account key
+
+	// Libvirt-specific
+	KeyFile string `json:"keyFile,omitempty"` // SSH key for qemu+ssh connections
+
+	// VMware-specific
+	Datacenter string `json:"datacenter,omitempty"` // vSphere datacenter filter
+
+	// Provider-specific extra config
+	Extra map[string]string `json:"extra,omitempty"`
+
+	// Polling
+	PollingInterval int `json:"pollingInterval,omitempty"` // Seconds (0 = default)
 }
 
 // Global persistence instance for saving

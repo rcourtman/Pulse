@@ -72,12 +72,15 @@ type ResolvedAlert struct {
 	ResolvedTime time.Time `json:"resolvedTime"`
 }
 
-// Node represents a Proxmox VE node
+// Node represents a Proxmox VE node or a compute node from any hypervisor/cloud provider.
 type Node struct {
 	ID                           string       `json:"id"`
 	Name                         string       `json:"name"`
 	DisplayName                  string       `json:"displayName,omitempty"`
 	Instance                     string       `json:"instance"`
+	Platform                     string       `json:"platform,omitempty"`      // "proxmox", "vmware", "libvirt", "aws", "azure", "gcp", "nutanix"
+	ProviderID                   string       `json:"providerId,omitempty"`    // ID of the hypervisor instance
+	ProviderName                 string       `json:"providerName,omitempty"`  // Friendly name of the provider
 	Host                         string       `json:"host"`     // Full host URL from config
 	GuestURL                     string       `json:"guestURL"` // Optional guest-accessible URL (for navigation)
 	Status                       string       `json:"status"`
@@ -105,13 +108,17 @@ type Node struct {
 	LinkedHostAgentID string `json:"linkedHostAgentId,omitempty"` // ID of the host agent running on this node
 }
 
-// VM represents a virtual machine
+// VM represents a virtual machine on any hypervisor (Proxmox, VMware, KVM, cloud, etc.)
 type VM struct {
 	ID                string                  `json:"id"`
 	VMID              int                     `json:"vmid"`
 	Name              string                  `json:"name"`
 	Node              string                  `json:"node"`
 	Instance          string                  `json:"instance"`
+	Platform          string                  `json:"platform,omitempty"`      // "proxmox", "vmware", "libvirt", "aws", "azure", "gcp", "nutanix"
+	ProviderID        string                  `json:"providerId,omitempty"`    // ID of the hypervisor instance
+	ProviderName      string                  `json:"providerName,omitempty"`  // Friendly name of the provider
+	ConsoleTypes      []string                `json:"consoleTypes,omitempty"`  // Available console protocols: "vnc", "spice", "ssh", "rdp"
 	Status            string                  `json:"status"`
 	Type              string                  `json:"type"`
 	CPU               float64                 `json:"cpu"`
@@ -138,13 +145,16 @@ type VM struct {
 	LastSeen          time.Time               `json:"lastSeen"`
 }
 
-// Container represents an LXC container
+// Container represents an LXC container or any container from a hypervisor/cloud provider.
 type Container struct {
 	ID                string                  `json:"id"`
 	VMID              int                     `json:"vmid"`
 	Name              string                  `json:"name"`
 	Node              string                  `json:"node"`
 	Instance          string                  `json:"instance"`
+	Platform          string                  `json:"platform,omitempty"`      // "proxmox", "vmware", "libvirt", "aws", "azure", "gcp", "nutanix"
+	ProviderID        string                  `json:"providerId,omitempty"`    // ID of the hypervisor instance
+	ProviderName      string                  `json:"providerName,omitempty"`  // Friendly name of the provider
 	Status            string                  `json:"status"`
 	Type              string                  `json:"type"`
 	CPU               float64                 `json:"cpu"`
