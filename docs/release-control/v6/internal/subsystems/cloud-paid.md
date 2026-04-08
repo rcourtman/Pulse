@@ -497,6 +497,13 @@ resolved, started, and completed. Stripe success must carry that same
 cross-check both `portal_handoff_id` and `purchase_return_jti` against the
 commercial session result before local activation so the browser no longer
 trusts Stripe metadata or local form state alone for return integrity.
+Once that commercial binding verifies, Pulse must not fall back to a generic
+JTI replay tombstone. The local activation callback must persist a dedicated
+purchase-return redemption record keyed by `portal_handoff_id` plus
+`purchase_return_jti`, stamp explicit local redemption state
+(`started`, `activated`, `failed`), and use that owned record to make
+completed returns idempotent while still allowing retry after transient local
+activation failures.
 Stripe success now lands on Pulse's public
 `frontend-modern/src/utils/pricingHandoff.ts` and
 `frontend-modern/src/pages/PricingHandoff.tsx` may only hand operators into

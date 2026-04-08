@@ -61,6 +61,27 @@ func purchaseReturnJTIFromToken(t *testing.T, handler *LicenseHandlers, token st
 	return strings.TrimSpace(claims.ID)
 }
 
+func issueCheckoutActivationGrant(t *testing.T) string {
+	t.Helper()
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_checkout_success",
+		Tier:                "pro_plus",
+		State:               "active",
+		Features:            []string{"relay", "ai_alerts"},
+		MaxMonitoredSystems: 50,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "buyer@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	license.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { license.SetPublicKey(nil) })
+	return grantJWT
+}
+
 type licenseFeaturesResponseDTO struct {
 	LicenseStatus string          `json:"license_status"`
 	Features      map[string]bool `json:"features"`
@@ -866,21 +887,7 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
 	purchaseReturnJTI := purchaseReturnJTIFromToken(t, handler, returnToken)
 
-	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
-		LicenseID:           "lic_checkout_success",
-		Tier:                "pro_plus",
-		State:               "active",
-		Features:            []string{"relay", "ai_alerts"},
-		MaxMonitoredSystems: 50,
-		IssuedAt:            time.Now().Unix(),
-		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
-		Email:               "buyer@example.com",
-	})
-	if err != nil {
-		t.Fatalf("generate grant jwt: %v", err)
-	}
-	license.SetPublicKey(grantPublicKey)
-	t.Cleanup(func() { license.SetPublicKey(nil) })
+	grantJWT := issueCheckoutActivationGrant(t)
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
@@ -954,6 +961,162 @@ func TestHandleCheckoutActivation_RedeemsCompletedCheckoutAndWritesSuccessBridge
 	}
 	if !handler.Service(context.Background()).IsActivated() {
 		t.Fatal("expected completed checkout to activate the local license")
+	}
+}
+
+func TestHandleCheckoutActivation_BlocksDuplicateRedemptionAfterSuccess(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
+	purchaseReturnJTI := purchaseReturnJTIFromToken(t, handler, returnToken)
+	grantJWT := issueCheckoutActivationGrant(t)
+
+	activateCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checkout/session":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"fulfilled","portal_handoff_id":"cph_success","purchase_return_jti":"` + purchaseReturnJTI + `","license_id":"lic_checkout_success","activation_key_prefix":"ppk_live","activation_key":"ppk_live_checkout_activation"}`))
+		case "/v1/activate":
+			activateCalls++
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"license": map[string]any{
+					"license_id":            "lic_checkout_success",
+					"state":                 "active",
+					"tier":                  "pro_plus",
+					"features":              []string{"relay", "ai_alerts"},
+					"max_monitored_systems": 50,
+				},
+				"installation": map[string]any{
+					"installation_id":    "inst_checkout_success",
+					"installation_token": "pit_live_checkout_success",
+					"status":             "active",
+				},
+				"grant": map[string]any{
+					"jwt":        grantJWT,
+					"jti":        "grant_checkout_success",
+					"expires_at": time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+			})
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	makeRequest := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"https://pulse.example.com"+licensePurchaseActivationPath,
+			strings.NewReader("session_id=cs_success&portal_handoff_id=cph_success&purchase_return_token="+url.QueryEscape(returnToken)),
+		)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		handler.HandleCheckoutActivation(rec, req)
+		return rec
+	}
+
+	first := makeRequest()
+	if first.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want %d (body=%q)", first.Code, http.StatusOK, first.Body.String())
+	}
+
+	second := makeRequest()
+	if second.Code != http.StatusConflict {
+		t.Fatalf("second status = %d, want %d (body=%q)", second.Code, http.StatusConflict, second.Body.String())
+	}
+	if !strings.Contains(second.Body.String(), "already returned to Pulse Pro") {
+		t.Fatalf("second body = %q, want duplicate redemption message", second.Body.String())
+	}
+	if activateCalls != 1 {
+		t.Fatalf("activateCalls = %d, want 1", activateCalls)
+	}
+}
+
+func TestHandleCheckoutActivation_AllowsRetryAfterActivationFailure(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	handler := createTestHandler(t)
+	returnToken := issuePurchaseReturnToken(t, handler, "default", "max_monitored_systems")
+	purchaseReturnJTI := purchaseReturnJTIFromToken(t, handler, returnToken)
+	grantJWT := issueCheckoutActivationGrant(t)
+
+	activateCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/checkout/session":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"status":"fulfilled","portal_handoff_id":"cph_success","purchase_return_jti":"` + purchaseReturnJTI + `","license_id":"lic_checkout_success","activation_key_prefix":"ppk_live","activation_key":"ppk_live_checkout_activation"}`))
+		case "/v1/activate":
+			activateCalls++
+			if activateCalls == 1 {
+				w.WriteHeader(http.StatusBadRequest)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"error":     "invalid_activation",
+					"message":   "Activation key could not be redeemed",
+					"retryable": false,
+				})
+				return
+			}
+			w.WriteHeader(http.StatusCreated)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"license": map[string]any{
+					"license_id":            "lic_checkout_success",
+					"state":                 "active",
+					"tier":                  "pro_plus",
+					"features":              []string{"relay", "ai_alerts"},
+					"max_monitored_systems": 50,
+				},
+				"installation": map[string]any{
+					"installation_id":    "inst_checkout_success",
+					"installation_token": "pit_live_checkout_success",
+					"status":             "active",
+				},
+				"grant": map[string]any{
+					"jwt":        grantJWT,
+					"jti":        "grant_checkout_success",
+					"expires_at": time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+				},
+			})
+		default:
+			t.Fatalf("unexpected path %q", r.URL.Path)
+		}
+	}))
+	defer server.Close()
+	t.Setenv("PULSE_LICENSE_SERVER_URL", server.URL)
+
+	makeRequest := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(
+			http.MethodPost,
+			"https://pulse.example.com"+licensePurchaseActivationPath,
+			strings.NewReader("session_id=cs_success&portal_handoff_id=cph_success&purchase_return_token="+url.QueryEscape(returnToken)),
+		)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rec := httptest.NewRecorder()
+		handler.HandleCheckoutActivation(rec, req)
+		return rec
+	}
+
+	first := makeRequest()
+	if first.Code != http.StatusBadRequest {
+		t.Fatalf("first status = %d, want %d (body=%q)", first.Code, http.StatusBadRequest, first.Body.String())
+	}
+	if !strings.Contains(first.Body.String(), "Activation key could not be redeemed") {
+		t.Fatalf("first body = %q, want activation failure message", first.Body.String())
+	}
+
+	second := makeRequest()
+	if second.Code != http.StatusOK {
+		t.Fatalf("second status = %d, want %d (body=%q)", second.Code, http.StatusOK, second.Body.String())
+	}
+	if !strings.Contains(second.Body.String(), "Pulse Pro activated") {
+		t.Fatalf("second body = %q, want activation success bridge", second.Body.String())
+	}
+	if activateCalls != 2 {
+		t.Fatalf("activateCalls = %d, want 2", activateCalls)
 	}
 }
 

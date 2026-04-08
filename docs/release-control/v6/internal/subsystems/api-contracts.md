@@ -592,7 +592,13 @@ that same `portal_handoff_id` into Pulse's activation callback, and Pulse
 must compare both `portal_handoff_id` and `purchase_return_jti` against the
 commercial checkout-session result before redeeming the activation key, so
 browser form/query state and Stripe metadata alone never become the source of
-truth for a completed self-hosted upgrade. That same owned contract also
+truth for a completed self-hosted upgrade. Once that commercial binding
+verifies, Pulse's owned callback must persist a dedicated local
+purchase-return redemption record keyed by `portal_handoff_id` plus
+`purchase_return_jti`, use explicit local redemption state
+(`started`, `activated`, `failed`) instead of a generic replay tombstone, and
+allow retry only from owned failed state rather than by deleting the local
+binding outright. That same owned contract also
 retires the old compatibility
 bootstrap surfaces: Pulse must not expose a separate public
 `GET /auth/license-purchase-handoff` resolver, and the commercial server must

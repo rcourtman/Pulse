@@ -57,6 +57,7 @@ type LicenseHandlers struct {
 	services                   sync.Map // map[string]*licenseService
 	trialLimiter               *RateLimiter
 	trialReplay                *jtiReplayStore
+	purchaseReturnRedemptions  *purchaseReturnRedemptionStore
 	trialInitiations           *trialSignupInitiationStore
 	trialRedeemer              func(token string) (*hostedTrialRedemptionResponse, error)
 	monitor                    *monitoring.Monitor
@@ -76,19 +77,22 @@ func NewLicenseHandlers(mtp *config.MultiTenantPersistence, hostedMode bool, cfg
 	}
 
 	var trialReplay *jtiReplayStore
+	var purchaseReturnRedemptions *purchaseReturnRedemptionStore
 	var trialInitiations *trialSignupInitiationStore
 	if mtp != nil {
 		trialReplay = &jtiReplayStore{configDir: mtp.BaseDataDir()}
+		purchaseReturnRedemptions = &purchaseReturnRedemptionStore{configDir: mtp.BaseDataDir()}
 		trialInitiations = &trialSignupInitiationStore{configDir: mtp.BaseDataDir()}
 	}
 
 	return &LicenseHandlers{
-		mtPersistence:    mtp,
-		hostedMode:       hostedMode,
-		cfg:              cfg,
-		trialLimiter:     NewRateLimiter(trialStartRateLimitBurst, trialStartRateLimitWindow),
-		trialReplay:      trialReplay,
-		trialInitiations: trialInitiations,
+		mtPersistence:             mtp,
+		hostedMode:                hostedMode,
+		cfg:                       cfg,
+		trialLimiter:              NewRateLimiter(trialStartRateLimitBurst, trialStartRateLimitWindow),
+		trialReplay:               trialReplay,
+		purchaseReturnRedemptions: purchaseReturnRedemptions,
+		trialInitiations:          trialInitiations,
 	}
 }
 
@@ -275,6 +279,20 @@ func (h *LicenseHandlers) purchaseReturnSigningKey() ([]byte, error) {
 		return nil, fmt.Errorf("derive purchase return signing key: %w", err)
 	}
 	return signingKey, nil
+}
+
+func (h *LicenseHandlers) purchaseReturnRedemptionStore() *purchaseReturnRedemptionStore {
+	if h == nil {
+		return nil
+	}
+	if h.purchaseReturnRedemptions != nil {
+		return h.purchaseReturnRedemptions
+	}
+	dataDir := h.purchaseReturnDataDir()
+	if strings.TrimSpace(dataDir) == "" {
+		return nil
+	}
+	return &purchaseReturnRedemptionStore{configDir: dataDir}
 }
 
 func pulseAccountUpgradeURLForRequest(portalHandoffID string, query url.Values) (string, error) {
@@ -1553,54 +1571,8 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		return
 	}
 
-	replayStore := h.trialReplay
-	if replayStore == nil {
-		dataDir := h.purchaseReturnDataDir()
-		if strings.TrimSpace(dataDir) != "" {
-			replayStore = &jtiReplayStore{configDir: dataDir}
-		}
-	}
-	replaySubject := ""
-	if claims != nil {
-		replaySubject = strings.TrimSpace(claims.Subject)
-		if replaySubject == "" {
-			replaySubject = strings.TrimSpace(claims.ID)
-		}
-	}
-	if replayStore == nil || replaySubject == "" {
-		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not verify the purchase activation state for this checkout.")
-		return
-	}
-
-	replayID := "purchase_activate:" + replaySubject
-	expiresAt := time.Now().UTC().Add(2 * time.Hour)
-	if claims != nil && claims.ExpiresAt != nil {
-		expiresAt = claims.ExpiresAt.Time
-	}
-	stored, err := replayStore.checkAndStore(replayID, expiresAt)
-	if err != nil {
-		log.Error().Err(err).Msg("Purchase activation replay-store failure")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not verify the purchase activation state for this checkout.")
-		return
-	}
-	if !stored {
-		log.Warn().Str("replay_id_prefix", replayID[:24]).Msg("Purchase activation replay blocked")
-		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseActivated, "This completed purchase was already returned to Pulse Pro. Reopen billing if you need to confirm the current entitlement.")
-		return
-	}
-	clearReplay := func(reason string, replayErr error) {
-		if deleteErr := replayStore.delete(replayID); deleteErr != nil {
-			log.Warn().Err(deleteErr).Str("replay_id_prefix", replayID[:24]).Str("reason", reason).Msg("Purchase activation replay-store cleanup failed")
-			return
-		}
-		if replayErr != nil {
-			log.Warn().Err(replayErr).Str("replay_id_prefix", replayID[:24]).Str("reason", reason).Msg("Cleared purchase activation replay marker after activation failure")
-		}
-	}
-
 	lsClient := newLicenseServerClientFromLicensing("")
 	if lsClient == nil {
-		clearReplay("license_server_unavailable", nil)
 		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not contact the commercial activation service.")
 		return
 	}
@@ -1612,7 +1584,6 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 
 	checkoutResult, err := lsClient.GetCheckoutSessionResult(ctx, sessionID)
 	if err != nil {
-		clearReplay("checkout_lookup_failed", err)
 		log.Warn().Err(err).Str("checkout_session_id", sessionID).Msg("Failed to resolve checkout session during purchase activation")
 		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, selfHostedBillingPurchaseFailed, "Pulse could not confirm the completed checkout yet. Please try again in a moment.")
 		return
@@ -1623,7 +1594,6 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 		if checkoutResult != nil && strings.TrimSpace(checkoutResult.Message) != "" {
 			message = strings.TrimSpace(checkoutResult.Message)
 		}
-		clearReplay("checkout_not_fulfilled", nil)
 		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseFailed, message)
 		return
 	}
@@ -1641,7 +1611,6 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 	}
 	if portalHandoffID != "" {
 		if resolvedPortalHandoffID == "" || resolvedPortalHandoffID != portalHandoffID {
-			clearReplay("portal_handoff_id_mismatch", nil)
 			log.Warn().
 				Str("checkout_session_id", sessionID).
 				Str("expected_portal_handoff_id", portalHandoffID).
@@ -1650,14 +1619,17 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 			writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
 			return
 		}
-	} else if resolvedPortalHandoffID != "" {
+	} else {
+		portalHandoffID = resolvedPortalHandoffID
+	}
+	if portalHandoffID == "" {
 		log.Warn().
 			Str("checkout_session_id", sessionID).
-			Str("resolved_portal_handoff_id", resolvedPortalHandoffID).
-			Msg("Purchase activation continued without browser portal_handoff_id state")
+			Msg("Rejected checkout activation without canonical portal handoff binding")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+		return
 	}
 	if expectedPurchaseReturnJTI == "" || resolvedPurchaseReturnJTI == "" || expectedPurchaseReturnJTI != resolvedPurchaseReturnJTI {
-		clearReplay("purchase_return_jti_mismatch", nil)
 		log.Warn().
 			Str("checkout_session_id", sessionID).
 			Str("expected_purchase_return_jti", expectedPurchaseReturnJTI).
@@ -1669,15 +1641,80 @@ func (h *LicenseHandlers) HandleCheckoutActivation(w http.ResponseWriter, r *htt
 
 	activationKey := strings.TrimSpace(checkoutResult.ActivationKey)
 	if activationKey == "" {
-		clearReplay("activation_key_missing", nil)
 		writeLicensePurchaseActivationFailurePage(w, http.StatusBadGateway, feature, selfHostedBillingPurchaseFailed, "The completed checkout did not return an activation key.")
 		return
 	}
 
+	redemptionStore := h.purchaseReturnRedemptionStore()
+	if redemptionStore == nil {
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not verify the purchase activation state for this checkout.")
+		return
+	}
+	expiresAt := time.Now().UTC().Add(2 * time.Hour)
+	if claims != nil && claims.ExpiresAt != nil {
+		expiresAt = claims.ExpiresAt.Time
+	}
+	redemptionDecision, _, err := redemptionStore.begin(purchaseReturnRedemptionAttempt{
+		PortalHandoffID:     portalHandoffID,
+		PurchaseReturnJTI:   expectedPurchaseReturnJTI,
+		CheckoutSessionID:   sessionID,
+		LicenseID:           strings.TrimSpace(checkoutResult.LicenseID),
+		ActivationKeyPrefix: strings.TrimSpace(checkoutResult.ActivationKeyPrefix),
+		ExpiresAt:           expiresAt,
+	})
+	if err != nil {
+		log.Error().Err(err).Str("portal_handoff_id", portalHandoffID).Msg("Purchase activation redemption-store failure")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse could not verify the purchase activation state for this checkout.")
+		return
+	}
+	switch redemptionDecision {
+	case purchaseReturnRedemptionDecisionAlreadyActivated:
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseActivated, "This completed purchase was already returned to Pulse Pro. Reopen billing if you need to confirm the current entitlement.")
+		return
+	case purchaseReturnRedemptionDecisionInProgress:
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseFailed, "Pulse is already finalizing this completed purchase. Reopen billing in a moment if this tab does not close automatically.")
+		return
+	case purchaseReturnRedemptionDecisionConflict:
+		log.Warn().
+			Str("checkout_session_id", sessionID).
+			Str("portal_handoff_id", portalHandoffID).
+			Msg("Rejected checkout activation due to local redemption binding conflict")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusConflict, feature, selfHostedBillingPurchaseExpired, "Purchase activation state did not match the completed upgrade flow. Reopen the upgrade flow from Pulse Pro billing.")
+		return
+	}
+	recordFailure := func(reason string, activationErr error) {
+		message := ""
+		if activationErr != nil {
+			message = activationErr.Error()
+		}
+		if markErr := redemptionStore.markFailed(portalHandoffID, expectedPurchaseReturnJTI, reason, message); markErr != nil {
+			log.Warn().
+				Err(markErr).
+				Str("portal_handoff_id", portalHandoffID).
+				Str("purchase_return_jti", expectedPurchaseReturnJTI).
+				Str("reason", reason).
+				Msg("Failed to update purchase activation redemption record")
+			return
+		}
+		if activationErr != nil {
+			log.Warn().
+				Err(activationErr).
+				Str("portal_handoff_id", portalHandoffID).
+				Str("purchase_return_jti", expectedPurchaseReturnJTI).
+				Str("reason", reason).
+				Msg("Marked purchase activation redemption as failed")
+		}
+	}
+
 	if _, err := h.activateLicenseKey(ctx, activationKey); err != nil {
-		clearReplay("license_activation_failed", err)
+		recordFailure("license_activation_failed", err)
 		log.Warn().Err(err).Str("checkout_session_id", sessionID).Msg("Failed to activate completed checkout locally")
 		writeLicensePurchaseActivationFailurePage(w, http.StatusBadRequest, feature, selfHostedBillingPurchaseFailed, userFriendlyActivationError(err))
+		return
+	}
+	if err := redemptionStore.markActivated(portalHandoffID, expectedPurchaseReturnJTI, strings.TrimSpace(checkoutResult.LicenseID), strings.TrimSpace(checkoutResult.ActivationKeyPrefix)); err != nil {
+		log.Error().Err(err).Str("portal_handoff_id", portalHandoffID).Str("checkout_session_id", sessionID).Msg("Failed to finalize purchase activation redemption record")
+		writeLicensePurchaseActivationFailurePage(w, http.StatusServiceUnavailable, feature, selfHostedBillingPurchaseFailed, "Pulse activated the license but could not finalize the local purchase record. Reopen billing to confirm the current entitlement.")
 		return
 	}
 
