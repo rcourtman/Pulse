@@ -746,6 +746,12 @@ workloads, storage, and recovery handoffs must read the canonical connection
 fixtures from `internal/mock/fixture_graph.go` instead of handler-local demo
 lists, so operator-facing demos stay coherent across those adjacent product
 surfaces without a restart.
+That same lifecycle-owned platform-connections boundary also owns configured
+Proxmox, PBS, and PMG replacement continuity. Node update handlers must pass
+the current platform surface into monitored-system admission through the shared
+structured replacement selector so host or name edits preserve the intended
+slot without reintroducing lifecycle-local matcher closures or empty-estate
+fallbacks.
 That same lifecycle-owned VMware workspace must also keep the backend-runtime
 shape hidden behind one operator-facing connection model. The settings surface
 may show one VMware connection's poll health, last error classification, and

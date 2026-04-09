@@ -346,6 +346,11 @@ recovery-adjacent setup, deploy, and API-backed update helpers may reuse the
 canonical monitored-system cap boundary, but they must preserve remaining
 grouped sources on a counted host and must not reinterpret unavailable usage as
 an empty estate.
+Configured Proxmox, PBS, and PMG node replacements on that adjacent API
+boundary must identify the replaced source-owned surface through the shared
+monitored-system replacement selector, not storage- or recovery-local matching
+rules, so a platform host edit preserves non-replaced grouped evidence before
+storage or recovery consumes the resulting runtime context.
 That same adjacent `internal/api/` boundary now also governs public-demo
 commercial redaction for storage and recovery viewers. Shared storage/recovery
 surfaces may run beside a demo runtime that has real internal entitlements,

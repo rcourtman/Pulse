@@ -1069,6 +1069,12 @@ closed when monitored-system usage is unavailable, and return the canonical
 current/projected count delta, enforced limit verdict, effect label, and
 current/projected ledger entries produced by the shared monitored-system
 projection layer instead of by handler-local heuristics.
+Configured Proxmox, PBS, and PMG update handlers in
+internal/api/config_node_handlers.go must use that same structured
+replacement-selector contract when they enforce monitored-system admission:
+source-owned names, host URLs, hostnames, and resource identifiers may cross
+the API boundary, but handler-local matcher closures must not become the
+source of truth for replacement identity.
 Provider-backed preview routes such as `/api/truenas/connections/preview`,
 `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,
 and `/api/vmware/connections/{id}/preview` must serialize that same canonical

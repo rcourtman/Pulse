@@ -749,20 +749,10 @@ func proxmoxMonitoredSystemReplacement(instance config.PVEInstance) unifiedresou
 	hostname := pulseTokenHostCandidate(instance.Host)
 	return unifiedresources.MonitoredSystemReplacement{
 		Source: unifiedresources.SourceProxmox,
-		Matches: func(resource unifiedresources.Resource) bool {
-			if resource.Proxmox == nil {
-				return false
-			}
-			if name != "" && strings.EqualFold(strings.TrimSpace(resource.Proxmox.Instance), name) {
-				return true
-			}
-			if name != "" && strings.EqualFold(strings.TrimSpace(resource.Proxmox.NodeName), name) {
-				return true
-			}
-			if host != "" && strings.EqualFold(strings.TrimSpace(resource.Proxmox.HostURL), host) {
-				return true
-			}
-			return hostname != "" && strings.EqualFold(pulseTokenHostCandidate(resource.Proxmox.HostURL), hostname)
+		Selector: unifiedresources.MonitoredSystemReplacementSelector{
+			Name:     name,
+			Hostname: hostname,
+			HostURL:  host,
 		},
 	}
 }
@@ -773,17 +763,10 @@ func pbsMonitoredSystemReplacement(instance config.PBSInstance) unifiedresources
 	hostname := pulseTokenHostCandidate(instance.Host)
 	return unifiedresources.MonitoredSystemReplacement{
 		Source: unifiedresources.SourcePBS,
-		Matches: func(resource unifiedresources.Resource) bool {
-			if resource.PBS == nil {
-				return false
-			}
-			if name != "" && strings.EqualFold(strings.TrimSpace(resource.PBS.InstanceID), name) {
-				return true
-			}
-			if host != "" && strings.EqualFold(strings.TrimSpace(resource.PBS.HostURL), host) {
-				return true
-			}
-			return hostname != "" && strings.EqualFold(strings.TrimSpace(resource.PBS.Hostname), hostname)
+		Selector: unifiedresources.MonitoredSystemReplacementSelector{
+			ResourceID: name,
+			Hostname:   hostname,
+			HostURL:    host,
 		},
 	}
 }
@@ -793,14 +776,9 @@ func pmgMonitoredSystemReplacement(instance config.PMGInstance) unifiedresources
 	hostname := pulseTokenHostCandidate(instance.Host)
 	return unifiedresources.MonitoredSystemReplacement{
 		Source: unifiedresources.SourcePMG,
-		Matches: func(resource unifiedresources.Resource) bool {
-			if resource.PMG == nil {
-				return false
-			}
-			if name != "" && strings.EqualFold(strings.TrimSpace(resource.PMG.InstanceID), name) {
-				return true
-			}
-			return hostname != "" && strings.EqualFold(strings.TrimSpace(resource.PMG.Hostname), hostname)
+		Selector: unifiedresources.MonitoredSystemReplacementSelector{
+			ResourceID: name,
+			Hostname:   hostname,
 		},
 	}
 }

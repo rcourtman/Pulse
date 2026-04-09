@@ -5431,6 +5431,143 @@ func TestContract_MonitoredSystemUsageUnavailableIncludesReason(t *testing.T) {
 	}
 }
 
+func TestContract_ConfiguredNodeReplacementsUseCanonicalSelectors(t *testing.T) {
+	testCases := []struct {
+		name        string
+		current     any
+		updated     any
+		source      unifiedresources.DataSource
+		currentRoot unifiedresources.Resource
+		replacement func(any) unifiedresources.MonitoredSystemReplacement
+		candidate   func(any) unifiedresources.MonitoredSystemCandidate
+	}{
+		{
+			name: "proxmox",
+			current: config.PVEInstance{
+				Name: " pve-a ",
+				Host: " https://pve-a.lab.local:8006 ",
+			},
+			updated: config.PVEInstance{
+				Name: "pve-b",
+				Host: "https://pve-b.lab.local:8006",
+			},
+			source: unifiedresources.SourceProxmox,
+			currentRoot: unifiedresources.Resource{
+				ID:     "pve-a",
+				Type:   unifiedresources.ResourceTypeAgent,
+				Name:   "pve-a",
+				Status: unifiedresources.StatusOnline,
+				Proxmox: &unifiedresources.ProxmoxData{
+					Instance: "pve-a",
+					NodeName: "pve-a-node",
+					HostURL:  "https://pve-a.lab.local:8006",
+				},
+			},
+			replacement: func(value any) unifiedresources.MonitoredSystemReplacement {
+				return proxmoxMonitoredSystemReplacement(value.(config.PVEInstance))
+			},
+			candidate: func(value any) unifiedresources.MonitoredSystemCandidate {
+				return proxmoxMonitoredSystemCandidate(value.(config.PVEInstance))
+			},
+		},
+		{
+			name: "pbs",
+			current: config.PBSInstance{
+				Name: " backup-a ",
+				Host: " https://backup-a.lab.local:8007 ",
+			},
+			updated: config.PBSInstance{
+				Name: "backup-b",
+				Host: "https://backup-b.lab.local:8007",
+			},
+			source: unifiedresources.SourcePBS,
+			currentRoot: unifiedresources.Resource{
+				ID:     "pbs-a",
+				Type:   unifiedresources.ResourceTypePBS,
+				Name:   "backup-a",
+				Status: unifiedresources.StatusOnline,
+				PBS: &unifiedresources.PBSData{
+					InstanceID: "backup-a",
+					Hostname:   "backup-a.lab.local",
+					HostURL:    "https://backup-a.lab.local:8007",
+				},
+			},
+			replacement: func(value any) unifiedresources.MonitoredSystemReplacement {
+				return pbsMonitoredSystemReplacement(value.(config.PBSInstance))
+			},
+			candidate: func(value any) unifiedresources.MonitoredSystemCandidate {
+				return pbsMonitoredSystemCandidate(value.(config.PBSInstance))
+			},
+		},
+		{
+			name: "pmg",
+			current: config.PMGInstance{
+				Name: " mail-a ",
+				Host: " https://mail-a.lab.local:8006 ",
+			},
+			updated: config.PMGInstance{
+				Name: "mail-b",
+				Host: "https://mail-b.lab.local:8006",
+			},
+			source: unifiedresources.SourcePMG,
+			currentRoot: unifiedresources.Resource{
+				ID:     "pmg-a",
+				Type:   unifiedresources.ResourceTypePMG,
+				Name:   "mail-a",
+				Status: unifiedresources.StatusOnline,
+				PMG: &unifiedresources.PMGData{
+					InstanceID: "mail-a",
+					Hostname:   "mail-a.lab.local",
+				},
+			},
+			replacement: func(value any) unifiedresources.MonitoredSystemReplacement {
+				return pmgMonitoredSystemReplacement(value.(config.PMGInstance))
+			},
+			candidate: func(value any) unifiedresources.MonitoredSystemCandidate {
+				return pmgMonitoredSystemCandidate(value.(config.PMGInstance))
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			replacement := tc.replacement(tc.current)
+			if replacement.Source != tc.source {
+				t.Fatalf("replacement source = %q, want %q", replacement.Source, tc.source)
+			}
+			if replacement.Matches != nil {
+				t.Fatal("configured node replacement must use the canonical selector contract, not a handler-local matcher")
+			}
+			if !replacement.MatchesResource(tc.currentRoot) {
+				t.Fatalf("replacement selector did not match current %s root", tc.name)
+			}
+
+			registry := unifiedresources.NewRegistry(nil)
+			registry.IngestRecords(tc.source, []unifiedresources.IngestRecord{
+				{
+					SourceID: tc.currentRoot.ID,
+					Resource: tc.currentRoot,
+				},
+			})
+
+			projection := unifiedresources.ProjectMonitoredSystemCandidateReplacement(
+				registry,
+				replacement,
+				tc.candidate(tc.updated),
+			)
+			if projection.CurrentCount != 1 {
+				t.Fatalf("CurrentCount = %d, want 1", projection.CurrentCount)
+			}
+			if projection.ProjectedCount != 1 {
+				t.Fatalf("ProjectedCount = %d, want 1", projection.ProjectedCount)
+			}
+			if projection.AdditionalCount != 0 {
+				t.Fatalf("AdditionalCount = %d, want 0", projection.AdditionalCount)
+			}
+		})
+	}
+}
+
 func TestContract_DemoModeCommercialSurfacePolicy(t *testing.T) {
 	t.Run("hidden routes return not found", func(t *testing.T) {
 		next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
