@@ -422,9 +422,7 @@ base.describe('Managed demo runtime commercial boundary', () => {
 
   base(
     'hides commercial surfaces and APIs without browser route stubs',
-    async ({ page }, testInfo) => {
-      base.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
-
+    async ({ page }) => {
       await page.addInitScript(() => {
         localStorage.setItem('pulse_whats_new_v2_shown', 'true');
       });
