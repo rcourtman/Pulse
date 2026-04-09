@@ -4438,7 +4438,7 @@
     },
     {
       "id": "accidental-prerelease-tags-do-not-count-as-shipped-rcs",
-      "summary": "Accidental prerelease git tags do not count as shipped prerelease lineage. `v6.0.0-rc.1` was pushed accidentally, never published, and must not be treated as a valid stable-promotion `promoted_from_tag`.",
+      "summary": "Accidental prerelease git tags do not count as shipped prerelease lineage. Local-only false-start prerelease tags must be cleared or superseded before the first real governed prerelease is published, and only actually published prerelease tags may be treated as valid stable-promotion `promoted_from_tag` lineage.",
       "kind": "release-policy",
       "decided_at": "2026-03-14",
       "subsystem_ids": [],

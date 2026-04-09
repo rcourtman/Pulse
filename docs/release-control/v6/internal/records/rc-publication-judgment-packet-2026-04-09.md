@@ -179,12 +179,12 @@ record for that approval; it does not change the later GA/stable policy.
 
 ## Required Release Actions
 
-1. Bump `VERSION` on `pulse/v6-release` to `6.0.0-rc.2` and commit that change.
-   `v6.0.0-rc.1` remains reserved in governance as the accidental unpublished
-   prerelease tag and must not be reused for the first real governed RC.
+1. Restore `VERSION` on `pulse/v6-release` to `6.0.0-rc.1` and commit that change.
+   Remove the stale local-only accidental `v6.0.0-rc.1` tag before publish so
+   the first real governed prerelease numbering matches user-facing history.
 2. Push the governed `pulse/v6-release` branch so `origin` carries the approved
    RC candidate and the current release-control records.
-3. Run `Pulse Release Pipeline` on `pulse/v6-release` for `6.0.0-rc.2` with the
+3. Run `Pulse Release Pipeline` on `pulse/v6-release` for `6.0.0-rc.1` with the
    prepared v6 prerelease notes and rollback input `5.1.27`; create the draft
    prerelease first, validate the draft outputs, then publish the prerelease.
 4. Keep `rc-to-ga-promotion-readiness` blocked until a real prerelease has
