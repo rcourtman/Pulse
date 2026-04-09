@@ -171,7 +171,7 @@ export function buildStackedDiskBarPresentation(
     : (props.aggregateDisk?.used ?? 0);
   const overallPercent = totalCapacity > 0 ? (totalUsed / totalCapacity) * 100 : 0;
   const barPercent = Math.min(overallPercent, 100);
-  const anomalyRatio = formatAnomalyRatio(props.anomaly);
+  const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
   const maxInfo = getMaxDiskInfo(disks);
   const maxLabelShort = maxInfo ? `max ${formatPercent(maxInfo.percent)}` : '';
   const maxLabelFull = maxInfo

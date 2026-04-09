@@ -51,6 +51,7 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
   const isPBSItem = !isPVEItem;
   const node = () => (isPVEItem ? (props.item as Node) : null);
   const pbs = () => (isPBSItem ? (props.item as PBSInstance) : null);
+  const pendingUpdates = createMemo(() => node()?.pendingUpdates);
   const online = createMemo(() => isInfrastructureSummaryItemOnline(props.item));
   const nodeId = () => (isPVEItem ? node()!.id : pbs()!.name);
   const resourceId = () => (isPVEItem ? node()!.id || node()!.name : pbs()!.id || pbs()!.name);
@@ -207,19 +208,19 @@ export const InfrastructureSummaryTableRow: Component<InfrastructureSummaryTable
                 when={
                   isPVEItem &&
                   online() &&
-                  node()!.pendingUpdates !== undefined &&
-                  node()!.pendingUpdates > 0
+                  pendingUpdates() !== undefined &&
+                  (pendingUpdates() ?? 0) > 0
                 }
               >
                 <span
                   class={`text-[9px] px-1 py-0 rounded font-medium whitespace-nowrap ${
-                    (node()!.pendingUpdates ?? 0) >= 10
+                    (pendingUpdates() ?? 0) >= 10
                       ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400'
                       : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-400'
                   }`}
-                  title={`${node()!.pendingUpdates} pending apt update${node()!.pendingUpdates !== 1 ? 's' : ''}`}
+                  title={`${pendingUpdates()} pending apt update${pendingUpdates() !== 1 ? 's' : ''}`}
                 >
-                  {node()!.pendingUpdates} updates
+                  {pendingUpdates()} updates
                 </span>
               </Show>
               <Show when={isPBSItem}>

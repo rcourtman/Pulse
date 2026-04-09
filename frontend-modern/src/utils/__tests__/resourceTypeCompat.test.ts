@@ -10,6 +10,7 @@ describe('resourceTypeCompat', () => {
     expect(canonicalizeFrontendResourceType('kubernetes')).toBe('pod');
     expect(canonicalizeFrontendResourceType('kubernetes_cluster')).toBe('k8s-cluster');
     expect(canonicalizeFrontendResourceType('kubernetes-node')).toBe('k8s-node');
+    expect(canonicalizeFrontendResourceType('ceph')).toBe('ceph');
     expect(canonicalizeFrontendResourceType('truenas')).toBe('agent');
   });
 

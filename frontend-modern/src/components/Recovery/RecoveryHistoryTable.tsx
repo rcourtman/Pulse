@@ -30,7 +30,6 @@ import {
   getRecoveryPointModeLabel,
   getRecoveryPointRepositoryLabel,
   getRecoveryPointTimestampMs,
-  normalizeRecoveryModeQueryValue,
 } from '@/utils/recoveryRecordPresentation';
 import { getRecoveryPointPlatform } from '@/utils/recoveryPlatformModel';
 import {
@@ -172,9 +171,6 @@ export const RecoveryHistoryTable: Component<RecoveryHistoryTableProps> = (props
                     const itemTypePresentation =
                       getRecoveryItemTypePresentation(getRecoveryPointItemTypeKey(point));
                     const platform = normalizeSourcePlatformQueryValue(getRecoveryPointPlatform(point));
-                    const mode =
-                      normalizeRecoveryModeQueryValue(String(point.mode || '').toLowerCase()) ||
-                      'local';
                     const outcome =
                       (String(point.outcome || 'unknown').toLowerCase() as RecoveryOutcome) ||
                       'unknown';

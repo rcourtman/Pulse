@@ -1,5 +1,6 @@
 export type CanonicalFrontendResourceType =
   | 'agent'
+  | 'ceph'
   | 'vm'
   | 'system-container'
   | 'app-container'
@@ -48,6 +49,7 @@ export const canonicalizeFrontendResourceType = (
     case 'kubernetes_node':
       return 'k8s-node';
     case 'agent':
+    case 'ceph':
     case 'vm':
     case 'system-container':
     case 'app-container':

@@ -85,7 +85,8 @@ describe('reporting catalog model', () => {
     expect(catalog.guidance.title).toBe('Advanced Insights');
     expect(catalog.performanceReport.defaultFormat).toBe('pdf');
     expect(catalog.performanceReport.ranges[0].windowHours).toBe(24);
-    expect(catalog.vmInventoryExport.exportEndpoint).toBe(
+    expect(catalog.vmInventoryExport).not.toBeNull();
+    expect(catalog.vmInventoryExport?.exportEndpoint).toBe(
       '/api/admin/reports/inventory/vms/export',
     );
   });

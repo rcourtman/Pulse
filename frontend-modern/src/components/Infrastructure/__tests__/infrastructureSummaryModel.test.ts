@@ -326,7 +326,7 @@ describe('infrastructureSummaryModel', () => {
       shouldShowInfrastructureNetworkCard(false, [
         makeResource({
           type: 'vm',
-          platformType: 'proxmox-vm',
+          platformType: 'proxmox-pve',
           network: { rxBytes: 10, txBytes: 0 },
         }),
       ]),
@@ -336,7 +336,7 @@ describe('infrastructureSummaryModel', () => {
       shouldShowInfrastructureNetworkCard(false, [
         makeResource({
           type: 'vm',
-          platformType: 'proxmox-vm',
+          platformType: 'proxmox-pve',
           network: { rxBytes: 0, txBytes: 0 },
           platformData: { sources: ['proxmox'] },
         }),

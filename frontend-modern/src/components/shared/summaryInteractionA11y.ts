@@ -22,12 +22,16 @@ interface SummaryInteractiveRowPreviewOptions {
   onPreviewClear?: () => void;
 }
 
+interface SummaryInteractiveRowPreviewHandlers {
+  onFocusIn: JSX.EventHandler<HTMLElement, FocusEvent>;
+  onFocusOut: JSX.EventHandler<HTMLElement, FocusEvent>;
+  onPointerEnter: JSX.EventHandler<HTMLElement, PointerEvent>;
+  onPointerLeave: JSX.EventHandler<HTMLElement, PointerEvent>;
+}
+
 export const createSummaryInteractiveRowPreviewHandlers = (
   options: SummaryInteractiveRowPreviewOptions,
-): Pick<
-  JSX.HTMLAttributes<HTMLElement>,
-  'onFocusIn' | 'onFocusOut' | 'onPointerEnter' | 'onPointerLeave'
-> => ({
+): SummaryInteractiveRowPreviewHandlers => ({
   onPointerEnter: (event) => {
     if (isFinePointerEvent(event)) {
       options.onPreview?.();
@@ -57,7 +61,7 @@ interface SummaryInteractiveActionKeydownOptions {
 
 export const createSummaryInteractiveActionKeydownHandler = (
   options: SummaryInteractiveActionKeydownOptions,
-): JSX.EventHandlerUnion<HTMLButtonElement, KeyboardEvent> => (event) => {
+): JSX.EventHandler<HTMLButtonElement, KeyboardEvent> => (event) => {
   if (
     event.key === 'Enter' ||
     event.key === ' ' ||

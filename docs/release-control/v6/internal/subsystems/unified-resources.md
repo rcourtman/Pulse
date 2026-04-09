@@ -271,6 +271,12 @@ canonical resource identity, discovery normalization, and platform-runtime
 coverage stay governed as a first-class Pulse product surface, including the
 shared VMware signal-metadata and `resource-incident` timeline vocabulary that
 canonical resources expose to alerts, AI, and frontend consumers.
+That same frontend-owned compatibility boundary must remain intentionally
+narrow. Shared resource adapters may admit explicit aliases such as `host`,
+`truenas`, and `ceph`, and VMware detail mappers may project typed metadata
+through the canonical resource model, but unified-resource consumers must not
+reintroduce removed workload aliases or feature-local resource-type shims just
+to satisfy one table, drawer, or badge surface.
 That same runtime now also owns prospective monitored-system projection. Add
 and update consumers must ask the unified-resource layer whether candidate or
 preview records change the deduped top-level monitored-system count, including
@@ -1669,3 +1675,9 @@ source filter option set even when the currently loaded unified-resource
 snapshot does not contain that source yet, so cross-surface handoffs from
 settings, alerts, or findings do not collapse back to `All` during hydration
 or empty-filter states.
+That same frontend-owned compatibility boundary must remain intentionally
+narrow. Shared resource adapters may admit explicit aliases such as `host`,
+`truenas`, and `ceph`, and VMware detail mappers may project typed metadata
+through the canonical resource model, but unified-resource consumers must not
+reintroduce removed workload aliases or feature-local resource-type shims just
+to satisfy one table, drawer, or badge surface.

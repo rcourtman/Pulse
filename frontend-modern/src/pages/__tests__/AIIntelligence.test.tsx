@@ -45,7 +45,7 @@ const { findingsPanelState, runHistoryState, intelligenceState } = vi.hoisted(()
       };
       predictions_count: number;
       recent_changes_count: number;
-      recent_changes: Array<{
+      recent_changes?: Array<{
         id: string;
         observedAt: string;
         resourceId: string;

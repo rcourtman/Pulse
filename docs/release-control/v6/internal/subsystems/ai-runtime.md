@@ -859,3 +859,8 @@ AI chat stream matching and mention dedupe now route through the shared
 frontend chat identifier helper, so tool-name prefix stripping and mention-key
 normalization stay aligned across the chat runtime instead of being redefined
 inline in the stream processor or container component.
+That same browser-owned chat read model must keep target normalization helper-
+driven. Assistant shells may still derive legacy VM identifiers or display
+labels for read-only targeting, but they must do so through shared helpers and
+store context precedence instead of passing component-local resource objects or
+duplicating naming fallbacks inline.

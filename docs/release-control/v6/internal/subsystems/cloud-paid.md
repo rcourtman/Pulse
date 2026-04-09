@@ -165,6 +165,12 @@ still grows monitored-system usage.
 
 Cloud paid readiness is materially behind architecture work. The main concern is
 contract coherence between pricing, entitlements, and runtime enforcement.
+That public-demo commercial boundary also owns monitored-system preview
+unavailability wording. Browser presentation may keep the unavailable reason
+nullable until the formatting edge, but it must normalize the message through
+the shared monitored-system presentation helper instead of branching on
+demo/billing state inside settings panels or inventing a second mock-only
+license explanation path.
 That same cloud-paid/browser boundary now also governs public demo posture.
 `DEMO_MODE` may run against a real internal entitlement, but public demo
 surfaces must not reveal self-hosted license metadata, hosted billing state,
@@ -1365,3 +1371,9 @@ real licensing model. That includes settings billing tabs, public-demo banner
 and monitored-system/trial nudges, dashboard relay paywalls, Patrol upgrade
 CTAs, and history-lock upsells. Demo readiness therefore means presentation
 isolation, not a license exemption.
+That public-demo commercial boundary also owns monitored-system preview
+unavailability wording. Browser presentation may keep the unavailable reason
+nullable until the formatting edge, but it must normalize the message through
+the shared monitored-system presentation helper instead of branching on
+demo/billing state inside settings panels or inventing a second mock-only
+license explanation path.

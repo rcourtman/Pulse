@@ -9,7 +9,6 @@ import { getCanonicalWorkloadId } from '@/utils/workloads';
 import {
   getDiskUsagePercent,
   getWorkloadGroupLabel,
-  getWorkloadGroupKey,
   groupWorkloads,
   computeWorkloadStats,
   computeWorkloadIOEmphasis,

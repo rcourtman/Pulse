@@ -48,6 +48,7 @@ describe('StoragePoolDetail', () => {
               refs: { resourceId: 'storage-legacy-id', platformEntityId: 'truenas-1' },
             })}
             physicalDisks={[]}
+            summarySeriesId="pool:tank"
           />
         </tbody>
       </table>
@@ -74,6 +75,7 @@ describe('StoragePoolDetail', () => {
               refs: { resourceId: 'pve1:local-zfs', platformEntityId: 'cluster-a' },
             })}
             physicalDisks={[] as Resource[]}
+            summarySeriesId="pve1:local-zfs"
           />
         </tbody>
       </table>

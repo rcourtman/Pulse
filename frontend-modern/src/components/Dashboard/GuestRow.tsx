@@ -128,7 +128,7 @@ export function GuestRow(props: GuestRowProps) {
               <SummaryRowActionButton
                 kind="disclosure"
                 subjectLabel={props.guest.name}
-                expanded={props.isExpanded}
+                expanded={props.isExpanded === true}
                 controlsId={detailControlsId()}
                 onAction={() => props.onClick?.()}
                 onPreviewClear={() => props.onHoverChange?.(null)}

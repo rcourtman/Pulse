@@ -13,7 +13,7 @@ describe('reportableResourceTypes', () => {
   it('exports the shared reportable resource set', () => {
     expect(REPORTABLE_RESOURCE_TYPES.has('agent')).toBe(true);
     expect(REPORTABLE_RESOURCE_TYPES.has('pbs')).toBe(true);
-    expect(REPORTABLE_RESOURCE_TYPES.has('truenas')).toBe(false);
+    expect(REPORTABLE_RESOURCE_TYPES.has('truenas' as any)).toBe(false);
   });
 
   it('normalizes resource types for picker ordering', () => {

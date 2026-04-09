@@ -7,7 +7,6 @@ import {
 import { eventBus } from '@/stores/events';
 import { logger } from '@/utils/logger';
 import {
-  getInProductPricingDestination,
   getUpgradeFallbackDestination,
   isSelfHostedPurchaseStartDestination,
 } from '@/utils/pricingHandoff';

@@ -90,6 +90,8 @@ describe('FilterHeader', () => {
     screen.getByRole('button', { name: 'Load options' }).click();
 
     await waitFor(() => expect(select.value).toBe('truenas'));
-    expect(screen.getByRole('option', { name: 'TrueNAS' }).selected).toBe(true);
+    expect((screen.getByRole('option', { name: 'TrueNAS' }) as HTMLOptionElement).selected).toBe(
+      true,
+    );
   });
 });

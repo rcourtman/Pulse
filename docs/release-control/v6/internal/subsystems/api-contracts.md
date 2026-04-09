@@ -429,6 +429,12 @@ when the disabled candidate no longer counts toward monitored-system capacity.
 
 The API layer already uses contract tests in many places, but every major live
 contract should continue moving toward canonical-only runtime shapes.
+That same browser-transport contract now tolerates sparse admission-preview
+payloads without changing the runtime truth. Patrol transport may omit
+`finding_ids`, and infrastructure removal previews may stage optimistic rows
+only after canonical IDs have been resolved or a safe row-name fallback has
+been chosen. API-adjacent browser callers must not reinterpret missing IDs or
+preview arrays as authoritative empty success.
 Monitored-system commercial admission is now also part of that owned live
 contract. Add and update routes must project prospective candidates or
 previewed source records through the canonical monitored-system resolver
@@ -2665,3 +2671,9 @@ the canonical monitored-system usage view is unsettled or rebuilding. VMware
 write admission must check that canonical usage state before collecting
 external vCenter inventory, so direct API callers cannot receive provider
 connection errors or persist connections while capacity accounting is unsafe.
+That same browser-transport contract now tolerates sparse admission-preview
+payloads without changing the runtime truth. Patrol transport may omit
+`finding_ids`, and infrastructure removal previews may stage optimistic rows
+only after canonical IDs have been resolved or a safe row-name fallback has
+been chosen. API-adjacent browser callers must not reinterpret missing IDs or
+preview arrays as authoritative empty success.

@@ -29,9 +29,9 @@ export function useAlertIncidentTimelineState() {
     setIncidentTimelines({});
     setIncidentLoading({});
     setIncidentErrors({});
-    setExpandedIncidents(new Set());
+    setExpandedIncidents(new Set<string>());
     setIncidentNoteDrafts({});
-    setIncidentNoteSaving(new Set());
+    setIncidentNoteSaving(new Set<string>());
     setEventFilters(createIncidentEventFilterSet());
   };
 
@@ -77,7 +77,7 @@ export function useAlertIncidentTimelineState() {
     }
 
     setIncidentNoteSaving((prev) => {
-      const next = new Set(prev);
+      const next = new Set<string>(prev);
       next.add(key);
       return next;
     });
@@ -93,7 +93,7 @@ export function useAlertIncidentTimelineState() {
       notificationStore.error(getAlertResourceIncidentNoteSaveFailure());
     } finally {
       setIncidentNoteSaving((prev) => {
-        const next = new Set(prev);
+        const next = new Set<string>(prev);
         next.delete(key);
         return next;
       });

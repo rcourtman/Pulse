@@ -19,7 +19,6 @@ export interface PhysicalDiskNodeIdentity {
 }
 
 const normalize = (value: string | null | undefined): string => value?.trim().toLowerCase() || '';
-const trim = (value: string | null | undefined): string => value?.trim() || '';
 
 export const getPhysicalDiskNodeIdentity = (resource: Resource): PhysicalDiskNodeIdentity => {
   const platformData = ((resource.platformData as DiskPlatformData | undefined) ||

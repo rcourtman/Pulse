@@ -67,7 +67,7 @@ describe('storageModelCore', () => {
         name: 'tank',
         source: {
           platform: 'truenas',
-          family: 'storage',
+          family: 'onprem',
           origin: 'resource',
           adapterId: 'resource-storage',
         },

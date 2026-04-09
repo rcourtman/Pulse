@@ -8,7 +8,7 @@ import type {
   ResourceSensitivity,
 } from '@/types/resource';
 
-function normalizeNonNegativeCount(value: number | undefined): number | null {
+function normalizeNonNegativeCount(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
     return null;
   }
@@ -32,7 +32,10 @@ function normalizeCountMap<T extends string>(
 }
 
 function sumCountMap<T extends string>(counts: Partial<Record<T, number>>): number {
-  return Object.values(counts).reduce((total, count) => total + (count ?? 0), 0);
+  return (Object.values(counts) as Array<number | undefined>).reduce<number>(
+    (total, count) => total + (count ?? 0),
+    0,
+  );
 }
 
 function normalizePolicyPosture(
@@ -45,9 +48,11 @@ function normalizePolicyPosture(
   const sensitivityCounts = normalizeCountMap<ResourceSensitivity>(posture.sensitivity_counts);
   const routingCounts = normalizeCountMap<ResourceRoutingScope>(posture.routing_counts);
   const redactionCounts = normalizeCountMap<ResourceRedactionHint>(posture.redaction_counts);
-  const totalResources =
-    normalizeNonNegativeCount(posture.total_resources) ??
-    Math.max(sumCountMap(sensitivityCounts), sumCountMap(routingCounts));
+  const totalResources = Math.max(
+    normalizeNonNegativeCount(posture.total_resources) ?? 0,
+    sumCountMap(sensitivityCounts),
+    sumCountMap(routingCounts),
+  );
 
   return {
     total_resources: totalResources,

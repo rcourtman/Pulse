@@ -81,12 +81,19 @@ export const getRecoveryRollupPlatforms = (
   return values.map((value) => toTrimmedString(value)).filter(Boolean);
 };
 
-const normalizeRecoveryMeta = (meta: RecoveryResponseMeta | null | undefined): RecoveryResponseMeta => ({
-  page: Number.isFinite(meta?.page) ? meta.page : 1,
-  limit: Number.isFinite(meta?.limit) ? meta.limit : 0,
-  total: Number.isFinite(meta?.total) ? meta.total : 0,
-  totalPages: Number.isFinite(meta?.totalPages) ? meta.totalPages : 1,
-});
+const normalizeRecoveryMeta = (meta: RecoveryResponseMeta | null | undefined): RecoveryResponseMeta => {
+  const page = typeof meta?.page === 'number' && Number.isFinite(meta.page) ? meta.page : 1;
+  const limit = typeof meta?.limit === 'number' && Number.isFinite(meta.limit) ? meta.limit : 0;
+  const total = typeof meta?.total === 'number' && Number.isFinite(meta.total) ? meta.total : 0;
+  const totalPages =
+    typeof meta?.totalPages === 'number' && Number.isFinite(meta.totalPages) ? meta.totalPages : 1;
+  return {
+    page,
+    limit,
+    total,
+    totalPages,
+  };
+};
 
 export const normalizeRecoveryPoint = (
   point: RecoveryPointTransport | RecoveryPoint,

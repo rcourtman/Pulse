@@ -8,6 +8,7 @@ import {
   resolveToggleSize,
   type ToggleSize,
 } from '@/components/shared/toggleModel';
+export type { ToggleChangeEvent } from '@/components/shared/toggleModel';
 import {
   type ToggleRuntimeProps,
   useToggleState,

@@ -1,13 +1,15 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 import type { VMwareConnection } from '@/api/vmware';
 import { VMwareSettingsPanel } from '../VMwareSettingsPanel';
 import type { VMwareSettingsPanelState } from '../useVMwareSettingsPanelState';
+import type { VMwareConnectionFailurePresentation } from '../vmwareConnectionFailurePresentation';
 
 const mockState = vi.hoisted(() => ({
   closeDeleteDialog: vi.fn(),
   closeDialog: vi.fn(),
-  connectionFailure: vi.fn(() => null),
+  connectionFailure: vi.fn<() => VMwareConnectionFailurePresentation | null>(() => null),
   connections: vi.fn((): VMwareConnection[] => []),
   deleteDialogOpen: vi.fn(() => false),
   deletePendingConnection: vi.fn(),
@@ -33,9 +35,9 @@ const mockState = vi.hoisted(() => ({
   openDeleteDialog: vi.fn(),
   openEditDialog: vi.fn(),
   pendingDeleteConnection: vi.fn((): VMwareConnection | null => null),
-  monitoredSystemPreview: vi.fn(() => null),
-  monitoredSystemPreviewError: vi.fn(() => null),
-  monitoredSystemPreviewErrorTitle: vi.fn(() => null),
+  monitoredSystemPreview: vi.fn<() => MonitoredSystemLedgerPreviewResponse | null>(() => null),
+  monitoredSystemPreviewError: vi.fn<() => string | null>(() => null),
+  monitoredSystemPreviewErrorTitle: vi.fn<() => string | null>(() => null),
   monitoredSystemAdmissionSaveBlocked: vi.fn(() => true),
   previewCurrentForm: vi.fn(),
   previewing: vi.fn(() => false),

@@ -40,6 +40,10 @@ describe('alertDestinationsModel', () => {
         to: ['alerts@example.com'],
         tls: true,
         startTLS: true,
+        replyTo: '',
+        maxRetries: 3,
+        retryDelay: 60,
+        rateLimit: 0,
       }),
     ).toEqual(
       expect.objectContaining({

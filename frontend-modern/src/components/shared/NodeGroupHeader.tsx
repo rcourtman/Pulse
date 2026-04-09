@@ -10,7 +10,8 @@ interface NodeGroupHeaderProps {
   leadingAction?: JSX.Element;
   renderAs?: 'tr' | 'div';
   trClass?: string;
-  trProps?: JSX.HTMLAttributes<HTMLTableRowElement>;
+  trProps?: JSX.HTMLAttributes<HTMLTableRowElement> &
+    Partial<Record<`data-${string}`, string | undefined>>;
 }
 
 export const NodeGroupHeader: Component<NodeGroupHeaderProps> = (props) => {

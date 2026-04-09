@@ -93,14 +93,6 @@ describe('license stores', () => {
     upgrade_reasons: [],
   };
 
-  const mockFreeCommercialEntitlements: LicenseCommercialEntitlements = {
-    ...mockFreeCommercialPosture,
-    capabilities: [],
-    limits: [],
-    hosted_mode: false,
-    max_history_days: 7,
-  };
-
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(presentationPolicyHidesCommercialSurfaces).mockReturnValue(false);
@@ -297,10 +289,10 @@ describe('license stores', () => {
     });
 
     it('deduplicates in-flight commercial posture loads', async () => {
-      let resolveLoad: ((value: typeof mockCommercialPosture) => void) | null = null;
+      let resolveLoad!: (value: typeof mockCommercialPosture) => void;
       vi.mocked(LicenseAPI.getCommercialPosture).mockImplementation(
         () =>
-          new Promise((resolve) => {
+          new Promise<typeof mockCommercialPosture>((resolve) => {
             resolveLoad = resolve;
           }),
       );
@@ -309,7 +301,7 @@ describe('license stores', () => {
       const secondLoad = loadCommercialPosture();
 
       expect(LicenseAPI.getCommercialPosture).toHaveBeenCalledTimes(1);
-      resolveLoad?.(mockCommercialPosture);
+      resolveLoad(mockCommercialPosture);
       await Promise.all([firstLoad, secondLoad]);
 
       expect(commercialPosture()).toEqual(mockCommercialPosture);

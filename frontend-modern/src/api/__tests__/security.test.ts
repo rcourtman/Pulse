@@ -40,6 +40,7 @@ describe('SecurityAPI', () => {
       const mockStatus: SecurityStatus = {
         hasAuthentication: true,
         apiTokenConfigured: false,
+        apiTokenHint: '',
         requiresAuth: true,
         credentialsEncrypted: true,
         exportProtected: true,

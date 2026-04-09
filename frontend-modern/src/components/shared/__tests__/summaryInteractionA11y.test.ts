@@ -5,14 +5,45 @@ import {
   createSummaryInteractiveRowPreviewHandlers,
 } from '@/components/shared/summaryInteractionA11y';
 
+const createPointerEvent = (pointerType: string) =>
+  ({
+    pointerType,
+    currentTarget: document.body,
+    target: document.body,
+  }) as unknown as PointerEvent & { currentTarget: HTMLElement; target: Element };
+
+const createFocusEvent = (
+  currentTarget: HTMLElement,
+  relatedTarget: EventTarget | null = null,
+) =>
+  ({
+    currentTarget,
+    target: currentTarget,
+    relatedTarget,
+  }) as unknown as FocusEvent & { currentTarget: HTMLElement; target: Element };
+
+const createKeyboardEvent = (
+  currentTarget: HTMLButtonElement,
+  key: string,
+  code: string,
+  preventDefault: () => void,
+) =>
+  ({
+    key,
+    code,
+    currentTarget,
+    target: currentTarget,
+    preventDefault,
+  }) as unknown as KeyboardEvent & { currentTarget: HTMLButtonElement; target: Element };
+
 describe('summaryInteractionA11y', () => {
   it('previews on fine pointers and ignores touch pointers', () => {
     const onPreview = vi.fn();
     const handlers = createSummaryInteractiveRowPreviewHandlers({ onPreview });
 
-    handlers.onPointerEnter?.({ pointerType: 'mouse' } as PointerEvent);
-    handlers.onPointerEnter?.({ pointerType: 'pen' } as PointerEvent);
-    handlers.onPointerEnter?.({ pointerType: 'touch' } as PointerEvent);
+    handlers.onPointerEnter(createPointerEvent('mouse'));
+    handlers.onPointerEnter(createPointerEvent('pen'));
+    handlers.onPointerEnter(createPointerEvent('touch'));
 
     expect(onPreview).toHaveBeenCalledTimes(2);
   });
@@ -25,15 +56,9 @@ describe('summaryInteractionA11y', () => {
     const child = document.createElement('button');
     row.appendChild(child);
 
-    handlers.onFocusIn?.({ currentTarget: row } as FocusEvent & { currentTarget: HTMLElement });
-    handlers.onFocusOut?.({
-      currentTarget: row,
-      relatedTarget: child,
-    } as FocusEvent & { currentTarget: HTMLElement; relatedTarget: EventTarget | null });
-    handlers.onFocusOut?.({
-      currentTarget: row,
-      relatedTarget: document.body,
-    } as FocusEvent & { currentTarget: HTMLElement; relatedTarget: EventTarget | null });
+    handlers.onFocusIn(createFocusEvent(row));
+    handlers.onFocusOut(createFocusEvent(row, child));
+    handlers.onFocusOut(createFocusEvent(row, document.body));
 
     expect(onPreview).toHaveBeenCalledTimes(1);
     expect(onPreviewClear).toHaveBeenCalledTimes(1);
@@ -45,26 +70,10 @@ describe('summaryInteractionA11y', () => {
     const button = document.createElement('button');
 
     const enterPreventDefault = vi.fn();
-    onKeyDown({
-      key: 'Enter',
-      code: 'Enter',
-      currentTarget: button,
-      preventDefault: enterPreventDefault,
-    } as KeyboardEvent & {
-      currentTarget: HTMLButtonElement;
-      preventDefault: () => void;
-    });
+    onKeyDown(createKeyboardEvent(button, 'Enter', 'Enter', enterPreventDefault));
 
     const spacePreventDefault = vi.fn();
-    onKeyDown({
-      key: 'Space',
-      code: 'Space',
-      currentTarget: button,
-      preventDefault: spacePreventDefault,
-    } as KeyboardEvent & {
-      currentTarget: HTMLButtonElement;
-      preventDefault: () => void;
-    });
+    onKeyDown(createKeyboardEvent(button, 'Space', 'Space', spacePreventDefault));
 
     expect(onAction).toHaveBeenCalledTimes(2);
     expect(enterPreventDefault).toHaveBeenCalledTimes(1);
@@ -78,14 +87,7 @@ describe('summaryInteractionA11y', () => {
     button.blur = vi.fn();
 
     const preventDefault = vi.fn();
-    onKeyDown({
-      key: 'Escape',
-      currentTarget: button,
-      preventDefault,
-    } as KeyboardEvent & {
-      currentTarget: HTMLButtonElement;
-      preventDefault: () => void;
-    });
+    onKeyDown(createKeyboardEvent(button, 'Escape', 'Escape', preventDefault));
 
     expect(onPreviewClear).toHaveBeenCalledTimes(1);
     expect(preventDefault).toHaveBeenCalledTimes(1);

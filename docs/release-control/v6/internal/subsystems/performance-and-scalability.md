@@ -730,3 +730,9 @@ contract for feature truth, but commercial demo routes stay hidden and the
 browser must not keep retrying `/api/license/commercial-posture`,
 `/api/license/entitlements`, `/auth/license-purchase-start`, or other hidden
 commercial endpoints from performance-sensitive settings or dashboard shells.
+Dashboard and infrastructure summary consumers now also keep null-tolerant read
+models on the shared hot path. Guest rows, stacked bars, anomaly summaries, and
+resource detail mappers may accept partial platform metadata or undefined
+ratios, but they must normalize those values once in the shared model layer
+instead of scattering non-null assertions or per-component count coercion
+through the dashboard runtime.

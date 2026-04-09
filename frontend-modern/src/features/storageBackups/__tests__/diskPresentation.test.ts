@@ -5,14 +5,13 @@ import {
   comparePhysicalDiskPresentation,
   extractPhysicalDiskPresentationData,
   filterAndSortPhysicalDisks,
-  getPhysicalDiskExpandIconClass,
   PHYSICAL_DISK_EMPTY_CARD_CLASS,
-  PHYSICAL_DISK_EXPAND_BUTTON_CLASS,
   PHYSICAL_DISK_HEADER_DISK_CLASS,
   PHYSICAL_DISK_HEADER_SOURCE_CLASS,
   PHYSICAL_DISK_NAME_TEXT_CLASS,
   PHYSICAL_DISK_SOURCE_BADGE_CLASS,
   PHYSICAL_DISK_TABLE_CLASS,
+  PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS,
   getPhysicalDiskEmptyStatePresentation,
   getPhysicalDiskHealthStatus,
   getPhysicalDiskHealthSummary,
@@ -52,7 +51,7 @@ describe('diskPresentation', () => {
   it('returns critical presentation for failed disks', () => {
     expect(PHYSICAL_DISK_EMPTY_CARD_CLASS).toBe('text-center');
     expect(PHYSICAL_DISK_TABLE_CLASS).toBe('w-full text-xs');
-    expect(PHYSICAL_DISK_EXPAND_BUTTON_CLASS).toContain('hover:bg-surface-hover');
+    expect(PHYSICAL_DISK_TABLE_ROW_HOVER_CLASS).toContain('hover:bg-surface-hover');
     expect(PHYSICAL_DISK_HEADER_DISK_CLASS).toContain('uppercase');
     expect(PHYSICAL_DISK_HEADER_SOURCE_CLASS).toContain('w-[72px]');
     expect(PHYSICAL_DISK_NAME_TEXT_CLASS).toContain('font-semibold');
@@ -117,8 +116,6 @@ describe('diskPresentation', () => {
       className:
         'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-400 inline-flex min-w-[3.25rem] justify-center px-1.5 py-px text-[9px] font-medium',
     });
-    expect(getPhysicalDiskExpandIconClass(true)).toContain('rotate-90');
-    expect(getPhysicalDiskExpandIconClass(false)).not.toContain('rotate-90');
   });
 
   it('returns host, health summary, and empty-state presentation canonically', () => {

@@ -71,7 +71,7 @@ describe('unifiedResourceTableStateModel', () => {
 
   it('computes visible items and spacer heights from the active window', () => {
     const items = buildHostTableItems(
-      [{ cluster: null, resources: [makeResource('a'), makeResource('b'), makeResource('c')] }],
+      [{ cluster: '', resources: [makeResource('a'), makeResource('b'), makeResource('c')] }],
       'flat',
     );
 

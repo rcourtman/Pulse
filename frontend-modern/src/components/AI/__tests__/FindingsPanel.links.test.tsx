@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FindingsPanel } from '../FindingsPanel';
@@ -53,7 +54,7 @@ const mockState = vi.hoisted(() => {
 });
 
 vi.mock('@solidjs/router', () => ({
-  A: (props: { href: string; children: unknown; [key: string]: unknown }) => (
+  A: (props: { href: string; children?: JSX.Element; [key: string]: unknown }) => (
     <a href={props.href} aria-label={props['aria-label'] as string} onClick={props.onClick as any}>
       {props.children}
     </a>
@@ -62,7 +63,7 @@ vi.mock('@solidjs/router', () => ({
 }));
 
 vi.mock('@/components/shared/Card', () => ({
-  Card: (props: { children: unknown }) => <div>{props.children}</div>,
+  Card: (props: { children?: JSX.Element }) => <div>{props.children}</div>,
 }));
 
 vi.mock('@/components/patrol', () => ({

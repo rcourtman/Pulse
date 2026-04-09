@@ -24,6 +24,7 @@ export interface AISettings {
   oauth_connected: boolean; // true if OAuth tokens are configured
   // Patrol settings for token efficiency
   patrol_interval_minutes?: number; // Patrol interval in minutes (0 = disabled, minimum 10)
+  patrol_enabled?: boolean; // Legacy/server-authored patrol runtime toggle still surfaced by the API
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_event_triggers_enabled?: boolean; // legacy aggregate toggle, true if any scoped Patrol trigger source is enabled
   patrol_alert_triggers_enabled?: boolean; // true if alert-driven scoped Patrol triggers are enabled
@@ -74,6 +75,7 @@ export interface AISettingsUpdateRequest {
   auto_fix_model?: string; // Model for auto-fix remediation
   // Patrol settings for token efficiency
   patrol_interval_minutes?: number; // Custom interval in minutes (0 = disabled, minimum 10)
+  patrol_enabled?: boolean; // Legacy/server-authored patrol runtime toggle still accepted by the API
   alert_triggered_analysis?: boolean; // true if AI should analyze when alerts fire
   patrol_event_triggers_enabled?: boolean; // legacy aggregate toggle, applies to both scoped Patrol trigger sources
   patrol_alert_triggers_enabled?: boolean; // true if alert-driven scoped Patrol triggers are enabled

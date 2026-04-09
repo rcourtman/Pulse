@@ -54,6 +54,23 @@ const buildSignalValue = (count: number | undefined, label: string, summary?: st
 
 const hasRows = (rows: ResourceDetailDrawerVMwareRow[]): boolean => rows.length > 0;
 
+const filterNonEmptyRows = (
+  rows: ResourceDetailDrawerVMwareRow[],
+): ResourceDetailDrawerVMwareRow[] => rows.filter((row) => row.value);
+
+const getStatusTone = (status?: string | null): ResourceDetailDrawerVMwareRowTone => {
+  const normalized = asTrimmedString(status).toLowerCase();
+  if (normalized === 'red') return 'warning';
+  if (normalized) return 'accent';
+  return 'default';
+};
+
+const getWarningTone = (hasWarning: boolean): ResourceDetailDrawerVMwareRowTone =>
+  hasWarning ? 'warning' : 'default';
+
+const getAccentTone = (hasAccent: boolean): ResourceDetailDrawerVMwareRowTone =>
+  hasAccent ? 'accent' : 'default';
+
 export const buildVMwareDetailsSummary = (
   resourceType: ResourceType,
   vmware?: ResourceVMwareMeta,
@@ -88,7 +105,7 @@ export const buildVMwareDetailSections = (
     return [];
   }
 
-  const stateRows: ResourceDetailDrawerVMwareRow[] = [
+  const stateRows = filterNonEmptyRows([
     {
       label: 'Connection',
       value: asTrimmedString(vmware.connectionName),
@@ -104,12 +121,7 @@ export const buildVMwareDetailSections = (
     {
       label: 'Overall status',
       value: asTrimmedString(vmware.overallStatus),
-      tone:
-        asTrimmedString(vmware.overallStatus).toLowerCase() === 'red'
-          ? 'warning'
-          : asTrimmedString(vmware.overallStatus)
-              ? 'accent'
-              : 'default',
+      tone: getStatusTone(vmware.overallStatus),
     },
     {
       label: 'Power',
@@ -126,7 +138,7 @@ export const buildVMwareDetailSections = (
     {
       label: 'Accessible',
       value: formatBoolLabel(vmware.datastoreAccessible),
-      tone: vmware.datastoreAccessible === false ? 'warning' : 'default',
+      tone: getWarningTone(vmware.datastoreAccessible === false),
     },
     {
       label: 'Shared access',
@@ -135,11 +147,11 @@ export const buildVMwareDetailSections = (
     {
       label: 'Maintenance',
       value: asTrimmedString(vmware.maintenanceMode),
-      tone: asTrimmedString(vmware.maintenanceMode) ? 'warning' : 'default',
+      tone: getWarningTone(Boolean(asTrimmedString(vmware.maintenanceMode))),
     },
-  ].filter((row) => row.value);
+  ]);
 
-  const placementRows: ResourceDetailDrawerVMwareRow[] = [
+  const placementRows = filterNonEmptyRows([
     {
       label: 'Datacenter',
       value: asTrimmedString(vmware.datacenterName),
@@ -168,9 +180,9 @@ export const buildVMwareDetailSections = (
       label: 'Datastores',
       value: (vmware.datastoreNames ?? []).filter(Boolean).join(', '),
     },
-  ].filter((row) => row.value);
+  ]);
 
-  const guestRows: ResourceDetailDrawerVMwareRow[] = [
+  const guestRows = filterNonEmptyRows([
     {
       label: 'Host UUID',
       value: asTrimmedString(vmware.hostUuid),
@@ -199,18 +211,18 @@ export const buildVMwareDetailSections = (
       label: 'Datastore URL',
       value: asTrimmedString(vmware.datastoreUrl),
     },
-  ].filter((row) => row.value);
+  ]);
 
-  const signalRows: ResourceDetailDrawerVMwareRow[] = [
+  const signalRows = filterNonEmptyRows([
     {
       label: 'Alarms',
       value: buildSignalValue(vmware.activeAlarmCount, 'alarm', vmware.activeAlarmSummary),
-      tone: (vmware.activeAlarmCount ?? 0) > 0 ? 'warning' : 'default',
+      tone: getWarningTone((vmware.activeAlarmCount ?? 0) > 0),
     },
     {
       label: 'Tasks',
       value: buildSignalValue(vmware.recentTaskCount, 'task', vmware.recentTaskSummary),
-      tone: (vmware.recentTaskCount ?? 0) > 0 ? 'accent' : 'default',
+      tone: getAccentTone((vmware.recentTaskCount ?? 0) > 0),
     },
     {
       label: 'Snapshots',
@@ -219,7 +231,7 @@ export const buildVMwareDetailSections = (
           ? formatCount(Math.max(0, vmware.snapshotCount ?? 0), 'snapshot')
           : '',
     },
-  ].filter((row) => row.value);
+  ]);
 
   const sections: ResourceDetailDrawerVMwareSection[] = [
     { id: 'state', label: 'State', rows: stateRows },

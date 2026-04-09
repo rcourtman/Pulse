@@ -36,7 +36,11 @@ describe('DashboardStateCards', () => {
         nodeCount={0}
         reconnect={() => undefined}
         workloads={{
+          workloads: [] as any,
           loading: () => false,
+          refetch: async () => [],
+          mutate: (value) => (Array.isArray(value) ? value : value([])),
+          error: () => null,
         }}
       />
     ));

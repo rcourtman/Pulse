@@ -434,6 +434,12 @@ bounds, including provider-backed alert-history wording. `frontend-modern/src/fe
 backed host and VM incidents with the shared `resource-incident` vocabulary
 and existing alert-history shells instead of introducing VMware-only labels,
 badges, or panel copy just because the underlying signal came from vSphere.
+Shared table, disclosure, and form primitives must also stay explicitly typed
+at the browser edge. Summary rows may memoize repeated pending-update reads,
+shared buttons must preserve discriminated disclosure props, toggle and a11y
+helpers must expose exact event signatures, shared rows must accept typed
+`data-*` props, and reporting-panel helpers must remain ES2020-safe instead of
+depending on feature-local casts or newer string helpers.
 That same shared settings-shell and banner boundary now also owns demo-mode
 commercial suppression. `frontend-modern/src/components/Settings/settingsNavCatalog.ts`,
 `frontend-modern/src/components/Settings/settingsNavVisibility.ts`,
@@ -1960,3 +1966,9 @@ persistence belong there, while backend settings/model reads stay on
 `tests/integration/tests/11-first-session.spec.ts` must continue to assert
 that plain settings routes render without assistant bootstrap traffic or
 console noise.
+Shared table, disclosure, and form primitives must also stay explicitly typed
+at the browser edge. Summary rows may memoize repeated pending-update reads,
+shared buttons must preserve discriminated disclosure props, toggle and a11y
+helpers must expose exact event signatures, shared rows must accept typed
+`data-*` props, and reporting-panel helpers must remain ES2020-safe instead of
+depending on feature-local casts or newer string helpers.

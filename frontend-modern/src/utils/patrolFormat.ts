@@ -4,8 +4,8 @@ import { formatIdentifierLabel } from '@/utils/textPresentation';
 interface ModelInfo {
   id: string;
   name: string;
-  description: string;
-  notable: boolean;
+  description?: string;
+  notable?: boolean;
 }
 
 interface PartialRunRecord {

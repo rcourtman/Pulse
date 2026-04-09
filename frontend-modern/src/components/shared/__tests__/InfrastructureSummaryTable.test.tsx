@@ -115,6 +115,11 @@ describe('InfrastructureSummaryTable', () => {
     expect(infrastructureSummaryTableRowSource).toContain('getAlertStyles');
   });
 
+  it('keeps pending update badges inside the shared row primitive', () => {
+    expect(infrastructureSummaryTableRowSource).toContain('pendingUpdates');
+    expect(infrastructureSummaryTableRowSource).toContain('pending apt update');
+  });
+
   it('uses the shared normalized identity lookup helper', () => {
     expect(resourceIdentitySource).toContain('getNormalizedIdentityLookupVariants');
     expect(resourceIdentitySource).not.toContain(

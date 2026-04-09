@@ -1,10 +1,11 @@
 import { render, screen } from '@solidjs/testing-library';
+import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AlertResourceIncidentsPanel } from '../AlertResourceIncidentsPanel';
 
 vi.mock('@solidjs/router', () => ({
-  A: (props: { href: string; children: unknown; [key: string]: unknown }) => (
+  A: (props: { href: string; children?: JSX.Element; [key: string]: unknown }) => (
     <a href={props.href} aria-label={props['aria-label'] as string}>
       {props.children}
     </a>

@@ -617,3 +617,8 @@ Patrol approval and trial shells should consume selector helpers such as
 `canStartCommercialTrial()` from
 `frontend-modern/src/stores/licenseCommercial.ts` instead of branching on raw
 commercial-posture fields in leaf components.
+Patrol findings presentation now also keeps runtime identity and action routing
+on shared helpers. Findings shells may link or format from feature-owned
+presentation helpers, but Patrol runtime severity, title cleanup, and primary
+settings actions must stay keyed to the canonical Patrol service identity
+instead of reimplementing those branches in links-only or leaf badge surfaces.

@@ -121,12 +121,12 @@ describe('InfrastructureSelector', () => {
         displayName: 'PBS Main',
         status: 'online',
         platformId: 'pbs-main',
+        platformType: 'proxmox-pbs',
+        sourceType: 'api',
         lastSeen: Date.now(),
         policy: {
-          display: {
-            mode: 'governed',
-            summary: 'backup server resource; status online; sources pbs',
-          },
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
         },
         platformData: {
           agent: {
@@ -144,7 +144,7 @@ describe('InfrastructureSelector', () => {
           raid: [],
         },
       },
-    ] as Resource[];
+    ] as unknown as Resource[];
 
     expect(buildInfrastructureSelectorAgents(resources)).toEqual([
       expect.objectContaining({

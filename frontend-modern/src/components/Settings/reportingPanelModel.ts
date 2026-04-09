@@ -72,12 +72,12 @@ function sanitizeReportingFilenameSubject(
   switch (subject) {
     case 'resource_id': {
       let sanitized = value;
-      sanitized = sanitized.replaceAll('"', '');
-      sanitized = sanitized.replaceAll('\\', '');
-      sanitized = sanitized.replaceAll('/', '-');
-      sanitized = sanitized.replaceAll(':', '-');
-      sanitized = sanitized.replaceAll('\r', '');
-      sanitized = sanitized.replaceAll('\n', '');
+      sanitized = sanitized.replace(/"/g, '');
+      sanitized = sanitized.replace(/\\/g, '');
+      sanitized = sanitized.replace(/\//g, '-');
+      sanitized = sanitized.replace(/:/g, '-');
+      sanitized = sanitized.replace(/\r/g, '');
+      sanitized = sanitized.replace(/\n/g, '');
       if (sanitized.length > 64) {
         sanitized = sanitized.slice(0, 64);
       }

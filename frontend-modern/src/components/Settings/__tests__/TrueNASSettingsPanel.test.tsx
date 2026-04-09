@@ -1,17 +1,19 @@
 import { cleanup, fireEvent, render, screen, within } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
+import type { TrueNASConnection } from '@/api/truenas';
 import { TrueNASSettingsPanel } from '../TrueNASSettingsPanel';
 import type { TrueNASSettingsPanelState } from '../useTrueNASSettingsPanelState';
 
 const mockState = vi.hoisted(() => ({
   closeDeleteDialog: vi.fn(),
   closeDialog: vi.fn(),
-  connections: vi.fn(() => []),
+  connections: vi.fn<() => TrueNASConnection[]>(() => []),
   deleteDialogOpen: vi.fn(() => false),
   deletePendingConnection: vi.fn(),
   deleting: vi.fn(() => false),
   dialogOpen: vi.fn(() => false),
-  editingConnection: vi.fn(() => null),
+  editingConnection: vi.fn<() => TrueNASConnection | null>(() => null),
   featureDisabled: vi.fn(() => false),
   featureDisabledMessage: vi.fn(() => ''),
   form: vi.fn(() => ({
@@ -36,10 +38,10 @@ const mockState = vi.hoisted(() => ({
   openCreateDialog: vi.fn(),
   openDeleteDialog: vi.fn(),
   openEditDialog: vi.fn(),
-  pendingDeleteConnection: vi.fn(() => null),
-  monitoredSystemPreview: vi.fn(() => null),
-  monitoredSystemPreviewError: vi.fn(() => null),
-  monitoredSystemPreviewErrorTitle: vi.fn(() => null),
+  pendingDeleteConnection: vi.fn<() => TrueNASConnection | null>(() => null),
+  monitoredSystemPreview: vi.fn<() => MonitoredSystemLedgerPreviewResponse | null>(() => null),
+  monitoredSystemPreviewError: vi.fn<() => string | null>(() => null),
+  monitoredSystemPreviewErrorTitle: vi.fn<() => string | null>(() => null),
   monitoredSystemAdmissionSaveBlocked: vi.fn(() => true),
   previewCurrentForm: vi.fn(),
   previewing: vi.fn(() => false),

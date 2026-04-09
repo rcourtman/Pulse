@@ -13,11 +13,6 @@ type ThresholdSliderInputEvent = InputEvent & {
   target: HTMLInputElement;
 };
 
-type ThresholdSliderWheelEvent<T extends HTMLElement> = WheelEvent & {
-  currentTarget: T;
-  target: Element;
-};
-
 export function useThresholdSliderState(props: ThresholdSliderProps) {
   const [isDragging, setIsDragging] = createSignal(false);
   let releaseDragLock: (() => void) | undefined;
@@ -39,19 +34,13 @@ export function useThresholdSliderState(props: ThresholdSliderProps) {
     props.onChange(parseInt(event.currentTarget.value, 10));
   };
 
-  const handleInputWheel: JSX.EventHandlerUnion<
-    HTMLInputElement,
-    ThresholdSliderWheelEvent<HTMLInputElement>
-  > = (event) => {
+  const handleInputWheel: JSX.EventHandler<HTMLInputElement, WheelEvent> = (event) => {
     if (!props.disabled) {
       event.preventDefault();
     }
   };
 
-  const handleContainerWheel: JSX.EventHandlerUnion<
-    HTMLDivElement,
-    ThresholdSliderWheelEvent<HTMLDivElement>
-  > = (event) => {
+  const handleContainerWheel: JSX.EventHandler<HTMLDivElement, WheelEvent> = (event) => {
     if (!props.disabled && isDragging()) {
       event.preventDefault();
     }

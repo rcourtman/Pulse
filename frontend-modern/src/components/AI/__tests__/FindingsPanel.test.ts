@@ -330,6 +330,19 @@ describe('aiFindingPresentation', () => {
         }),
       ).toBeUndefined();
     });
+
+    it('keeps Patrol runtime actions keyed to the shared runtime identity even without product-prefixed titles', () => {
+      expect(
+        getFindingPrimaryActionPresentation({
+          resourceId: 'ai-service',
+          resourceName: 'Pulse Patrol Service',
+          title: 'Insufficient API credits',
+        }),
+      ).toEqual({
+        label: 'Open AI Settings',
+        href: '/settings/system-ai',
+      });
+    });
   });
 
   describe('findingTitlePresentation', () => {
@@ -656,7 +669,7 @@ describe('aiFindingPresentation', () => {
               status: 'pending',
               toolId: 'investigation_fix',
               targetId: 'finding-1',
-              expiresAt: '2026-04-01T00:06:00Z',
+	              expiresAt: '2026-04-30T00:06:00Z',
             },
           ] as never),
       ).toBe(true);
@@ -684,7 +697,7 @@ describe('aiFindingPresentation', () => {
               status: 'pending',
               toolId: 'investigation_fix',
               targetId: 'finding-1',
-              expiresAt: '2026-04-01T00:06:00Z',
+	              expiresAt: '2026-04-30T00:06:00Z',
             },
           ] as never,
         ),

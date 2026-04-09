@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { StorageRecord } from '@/features/storageBackups/models';
 import {
   buildStoragePoolRowModel,
-  getStoragePoolExpandIconClass,
   getStoragePoolImpactTextClass,
   STORAGE_POOL_ROW_CLASS,
-  STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS,
-  STORAGE_POOL_ROW_EXPAND_ICON_BASE_CLASS,
+  STORAGE_POOL_ROW_EXPANDED_CLASS,
   STORAGE_POOL_ROW_NAME_TEXT_CLASS,
   STORAGE_POOL_ROW_PLACEHOLDER_CLASS,
   STORAGE_POOL_ROW_SOURCE_BADGE_CLASS,
@@ -45,10 +43,9 @@ describe('storage pool row presentation', () => {
     expect(STORAGE_POOL_ROW_CLASS).toContain('cursor-pointer');
     expect(STORAGE_POOL_ROW_NAME_TEXT_CLASS).toContain('font-semibold');
     expect(STORAGE_POOL_ROW_SOURCE_BADGE_CLASS).toContain('text-[9px]');
-    expect(STORAGE_POOL_ROW_EXPAND_BUTTON_CLASS).toContain('hover:bg-surface-hover');
+    expect(STORAGE_POOL_ROW_EXPANDED_CLASS).toBe('bg-surface-alt');
     expect(STORAGE_POOL_ROW_PLACEHOLDER_CLASS).toBe('text-muted');
     expect(STORAGE_POOL_ROW_USAGE_FALLBACK_CLASS).toBe('text-[11px] text-muted');
-    expect(STORAGE_POOL_ROW_EXPAND_ICON_BASE_CLASS).toContain('transition-transform');
 
     const model = buildStoragePoolRowModel(baseRecord());
 
@@ -60,7 +57,6 @@ describe('storage pool row presentation', () => {
     expect(model.compactIssue).toBe('Capacity Pressure');
     expect(model.compactImpact).toBe('—');
     expect(model.freeBytes).toBe(200);
-    expect(getStoragePoolExpandIconClass(true)).toContain('rotate-90');
     expect(getStoragePoolImpactTextClass('—')).toContain('text-muted');
   });
 });

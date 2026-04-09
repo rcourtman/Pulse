@@ -29,7 +29,9 @@ export interface ScheduleTabProps {
 }
 
 export function ScheduleTab(props: ScheduleTabProps) {
-  const quietHourSuppressOptions = getAlertConfigQuietHourSuppressOptions();
+  const quietHourSuppressOptions = getAlertConfigQuietHourSuppressOptions().map((option) => ({
+    ...option,
+  }));
   const scheduleState = useAlertScheduleState(props);
 
   return (
@@ -74,7 +76,9 @@ export function ScheduleTab(props: ScheduleTabProps) {
           setQuietHoursStart={scheduleState.setQuietHoursStart}
           setQuietHoursEnd={scheduleState.setQuietHoursEnd}
           setQuietHoursTimezone={scheduleState.setQuietHoursTimezone}
-          toggleQuietDay={scheduleState.toggleQuietDay}
+          toggleQuietDay={(day: keyof QuietHoursConfig['days']) =>
+            scheduleState.toggleQuietDay(day as Parameters<typeof scheduleState.toggleQuietDay>[0])
+          }
           setQuietSuppressCategory={scheduleState.setQuietSuppressCategory}
         />
 

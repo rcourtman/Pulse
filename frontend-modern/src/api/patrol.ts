@@ -428,7 +428,7 @@ export interface PatrolRunRecord {
   resolved_findings: number;
   auto_fix_count: number;
   findings_summary: string;
-  finding_ids: string[];
+  finding_ids?: string[];
   error_count: number;
   status: PatrolRunStatus;
   triage_flags: number;
@@ -450,8 +450,10 @@ function normalizePatrolRunRecord(run: PatrolRunRecord | null | undefined): Patr
   const normalized = promoteLegacyAlertIdentifier(
     run as PatrolRunRecord & { alert_identifier?: string; truenas_checked?: number },
   );
+  const findingIDs = Array.isArray(normalized.finding_ids) ? normalized.finding_ids : undefined;
   return {
     ...normalized,
+    ...(findingIDs !== undefined ? { finding_ids: findingIDs } : {}),
     truenas_checked:
       typeof normalized.truenas_checked === 'number' && Number.isFinite(normalized.truenas_checked)
         ? normalized.truenas_checked

@@ -28,8 +28,8 @@ describe('infrastructurePageModel', () => {
       makeResource({
         id: 'resource-2',
         type: 'vm',
-        platformType: 'proxmox-vm',
-        status: 'warning',
+        platformType: 'proxmox-pve',
+        status: 'degraded',
         platformData: { sources: ['proxmox'] },
       }),
     ];
@@ -62,8 +62,8 @@ describe('infrastructurePageModel', () => {
         id: 'resource-2',
         displayName: 'VM Beta',
         type: 'vm',
-        platformType: 'proxmox-vm',
-        status: 'warning',
+        platformType: 'proxmox-pve',
+        status: 'degraded',
         platformData: { sources: ['proxmox'] },
       }),
     ];

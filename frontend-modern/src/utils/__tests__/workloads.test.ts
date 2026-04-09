@@ -232,12 +232,22 @@ describe('isDockerManagedAppContainer', () => {
 
 describe('getDiscoveryResourceTypeForWorkload', () => {
   it('returns the canonical discovery resource type for VM workloads with canonical coordinates', () => {
-    const guest = { workloadType: 'vm' as const, type: 'vm', node: 'pve1', vmid: 101 };
+    const guest = {
+      id: 'vm:pve1:101',
+      instance: 'cluster-a',
+      workloadType: 'vm' as const,
+      type: 'vm',
+      node: 'pve1',
+      vmid: 101,
+    };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBe('vm');
   });
 
   it('returns the canonical discovery resource type for Docker-managed app-container workloads', () => {
     const guest = {
+      instance: 'docker-host-1',
+      vmid: 0,
+      node: 'docker-host-1',
       workloadType: 'app-container' as const,
       type: 'app-container',
       platformType: 'docker',
@@ -249,6 +259,9 @@ describe('getDiscoveryResourceTypeForWorkload', () => {
 
   it('returns the canonical discovery resource type for pod workloads with agent ownership', () => {
     const guest = {
+      instance: 'cluster-a',
+      vmid: 0,
+      node: 'cluster-a',
       workloadType: 'pod' as const,
       type: 'k8s',
       kubernetesAgentId: 'k8s-agent-1',
@@ -265,6 +278,7 @@ describe('getDiscoveryResourceTypeForWorkload', () => {
       id: 'app-container:truenas-main:nextcloud',
       node: 'truenas-main',
       instance: 'truenas-main',
+      vmid: 0,
     };
     expect(getDiscoveryResourceTypeForWorkload(guest)).toBeNull();
   });

@@ -256,26 +256,30 @@ export const useInfrastructureReportingState = () => {
     row: UnifiedAgentRow,
   ) => {
     const removedAt = Date.now();
-    if (capabilities.includes('agent') && ids.agentId) {
+    const displayName = row.displayName || row.name;
+    const hostname = row.hostname || row.name;
+    const agentId = ids.agentId;
+    if (capabilities.includes('agent') && agentId) {
       setOptimisticRemovedHostAgents((prev) => [
         {
-          id: ids.agentId,
-          hostname: row.hostname,
-          displayName: row.displayName || row.name,
+          id: agentId,
+          hostname,
+          displayName,
           removedAt,
         },
-        ...prev.filter((item) => item.id !== ids.agentId),
+        ...prev.filter((item) => item.id !== agentId),
       ]);
     }
-    if (capabilities.includes('docker') && ids.dockerId) {
+    const dockerId = ids.dockerId;
+    if (capabilities.includes('docker') && dockerId) {
       setOptimisticRemovedDockerHosts((prev) => [
         {
-          id: ids.dockerId,
-          hostname: row.hostname,
-          displayName: row.displayName || row.name,
+          id: dockerId,
+          hostname,
+          displayName,
           removedAt,
         },
-        ...prev.filter((item) => item.id !== ids.dockerId),
+        ...prev.filter((item) => item.id !== dockerId),
       ]);
     }
     mutateResources((prev) =>

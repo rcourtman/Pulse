@@ -424,10 +424,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
       return resource.id;
     };
 
-    const parseLegacyVmid = (
-      resource: Resource,
-      platformData: Record<string, unknown> | undefined,
-    ): number | undefined => {
+    const parseLegacyVmid = (platformData: Record<string, unknown> | undefined): number | undefined => {
       const vmidRaw = platformData?.vmid;
       if (typeof vmidRaw === 'number' && Number.isFinite(vmidRaw) && vmidRaw > 0) return vmidRaw;
       if (typeof vmidRaw === 'string') {
@@ -455,7 +452,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
       const platformData = readPlatformData(resource);
       const node = getVMMentionNode(resource);
-      const vmid = parseLegacyVmid(resource, platformData);
+      const vmid = parseLegacyVmid(platformData);
       if (node && vmid !== undefined) {
         return `vm:${node}:${vmid}`;
       }
@@ -470,7 +467,7 @@ export const AIChat: Component<AIChatProps> = (props) => {
 
       const platformData = readPlatformData(resource);
       const node = asString(platformData?.node) || resource.parentName || '';
-      const vmid = parseLegacyVmid(resource, platformData);
+      const vmid = parseLegacyVmid(platformData);
       if (node && vmid !== undefined) {
         return `system-container:${node}:${vmid}`;
       }

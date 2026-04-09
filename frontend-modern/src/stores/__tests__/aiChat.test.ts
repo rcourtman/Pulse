@@ -79,6 +79,17 @@ describe('aiChatStore', () => {
     expect(aiChatStore.context.targetId).toBe('agent-1');
   });
 
+  it('prefers guestName, then name, then target id for target context labels', () => {
+    aiChatStore.setTargetContext('vm', 'vm-101', { guestName: 'guest-first', name: 'ignored-name' });
+    expect(aiChatStore.contextItems[0].name).toBe('guest-first');
+
+    aiChatStore.openForTarget('agent', 'agent-1', { name: 'node-name' });
+    expect(aiChatStore.contextItems[0].name).toBe('node-name');
+
+    aiChatStore.openForTarget('storage', 'storage-1');
+    expect(aiChatStore.contextItems[0].name).toBe('storage-1');
+  });
+
   it('opens with a pre-filled prompt', () => {
     aiChatStore.openWithPrompt('hello', { targetType: 'vm', targetId: 'vm-101' });
     expect(aiChatStore.isOpen).toBe(true);

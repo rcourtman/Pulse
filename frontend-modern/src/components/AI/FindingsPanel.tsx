@@ -42,7 +42,6 @@ import {
   getFindingSeveritySortOrder,
   getFindingResolutionReason,
   getFindingLoopStateBadgeClasses,
-  getFindingSeverityBadgeClasses,
   getFindingStatusBadgeClasses,
   getFindingStatusLabel,
   getFindingSourceBadgeClasses,

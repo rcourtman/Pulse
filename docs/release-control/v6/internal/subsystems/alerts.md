@@ -548,3 +548,9 @@ upgrade destinations through the shared commercial-posture store, but alert
 runtime availability and chat enablement must stay governed by the
 non-commercial app runtime and assistant state instead of reusing the same
 commercial payload as feature truth.
+Alert schedule and incident-timeline surfaces now also keep their browser state
+typed through one feature-owned contract. Quiet-hour suppress options must be
+cloned into mutable feature props before crossing section boundaries, quiet-day
+callbacks must preserve the canonical weekday key union, and incident timeline
+expansion/note-saving state must remain `Set<string>`-owned instead of drifting
+to untyped browser-local collections.

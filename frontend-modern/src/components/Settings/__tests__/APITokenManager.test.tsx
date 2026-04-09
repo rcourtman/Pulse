@@ -260,11 +260,9 @@ describe('APITokenManager', () => {
         platformType: 'proxmox-pbs',
         sourceType: 'api',
         policy: {
-          display: {
-            mode: 'governed',
-            summary: 'backup server resource; status online; sources pbs',
-          },
-        } as Record<string, unknown>,
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
         platformData: {
           pbs: {
             hostname: 'pbs.local',

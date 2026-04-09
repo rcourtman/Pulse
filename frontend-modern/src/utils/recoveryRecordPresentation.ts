@@ -147,7 +147,7 @@ export function getRecoveryPointKindLabel(value: string | null | undefined): str
     case 'other':
       return 'Other';
     default:
-      return titleCaseDelimitedLabel(value, {
+      return titleCaseDelimitedLabel(value ?? undefined, {
         fallback: 'n/a',
         preserveShortAllCaps: true,
       });
@@ -160,7 +160,7 @@ export function getRecoveryPointModeLabel(value: string | null | undefined): str
     return getRecoveryArtifactModePresentation(normalized).label;
   }
 
-  return titleCaseDelimitedLabel(value, {
+  return titleCaseDelimitedLabel(value ?? undefined, {
     fallback: 'n/a',
     preserveShortAllCaps: true,
   });

@@ -1,4 +1,4 @@
-import { Component, Show } from 'solid-js';
+import { Component } from 'solid-js';
 import StorageCephSection from '@/components/Storage/StorageCephSection';
 import StorageContentCard from '@/components/Storage/StorageContentCard';
 import StoragePageBanners from '@/components/Storage/StoragePageBanners';

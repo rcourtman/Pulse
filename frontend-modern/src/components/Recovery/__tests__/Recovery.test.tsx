@@ -6,6 +6,12 @@ import useRecoveryPointsFacetsSource from '@/hooks/useRecoveryPointsFacets.ts?ra
 import useRecoveryPointsSeriesSource from '@/hooks/useRecoveryPointsSeries.ts?raw';
 import useRecoveryPointsSource from '@/hooks/useRecoveryPoints.ts?raw';
 import useRecoveryRollupsSource from '@/hooks/useRecoveryRollups.ts?raw';
+import type {
+  ProtectionRollup,
+  ProtectionRollupTransport,
+  RecoveryPoint,
+  RecoveryPointTransport,
+} from '@/types/recovery';
 import { parseRecoveryDateKey } from '@/utils/recoveryDatePresentation';
 import { STORAGE_KEYS } from '@/utils/localStorage';
 import { ROUTE_STATE_REPLACE_OPTIONS } from '@/utils/routeStateNavigation';
@@ -26,7 +32,7 @@ vi.mock('@solidjs/router', async () => {
   };
 });
 
-const rollupsPayload = [
+const rollupsPayload: Array<ProtectionRollup | ProtectionRollupTransport> = [
   {
     rollupId: 'res:vm-123',
     itemResourceId: 'vm-123',
@@ -47,7 +53,7 @@ const rollupsPayload = [
   },
 ];
 
-const pointsByRollupId: Record<string, any[]> = {
+const pointsByRollupId: Record<string, Array<RecoveryPoint | RecoveryPointTransport>> = {
   'res:vm-123': [
     {
       id: 'p1',
@@ -874,7 +880,9 @@ describe('Recovery', () => {
     await waitFor(() => expect(screen.getByLabelText('Platform')).toBeInTheDocument());
 
     expect(screen.getByLabelText('Platform')).toHaveValue('truenas');
-    expect(screen.getByRole('option', { name: 'TrueNAS' }).selected).toBe(true);
+    expect((screen.getByRole('option', { name: 'TrueNAS' }) as HTMLOptionElement).selected).toBe(
+      true,
+    );
     expect(screen.getByText('Host / Agent')).toBeInTheDocument();
     expect(screen.getByText('tower')).toBeInTheDocument();
   });

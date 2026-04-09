@@ -42,9 +42,10 @@ export function getRecoveryPointLocationEntries(
   ).trim();
   const namespace = String(point.display?.namespaceLabel || point.namespace || '').trim();
 
-  return [
+  const entries: Array<{ key: RecoveryLocationFacetKind; label: string; value: string }> = [
     { key: 'cluster', label: getRecoveryLocationFacetLabel('cluster'), value: cluster },
     { key: 'node', label: getRecoveryLocationFacetLabel('node'), value: node },
     { key: 'namespace', label: getRecoveryLocationFacetLabel('namespace'), value: namespace },
-  ].filter((entry) => entry.value !== '');
+  ];
+  return entries.filter((entry) => entry.value !== '');
 }

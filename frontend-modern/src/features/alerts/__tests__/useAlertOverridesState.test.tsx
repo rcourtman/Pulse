@@ -125,7 +125,7 @@ describe('useAlertOverridesState', () => {
 
   it('exposes canonical container runtimes for TrueNAS-backed app workloads', async () => {
     const [hasUnsavedChanges] = createSignal(false);
-    const [overviewOverrides, setOverviewOverrides] = createSignal([]);
+    const [, setOverviewOverrides] = createSignal([]);
     const resources = [
       makeResource({
         id: 'truenas-main',

@@ -350,6 +350,12 @@ querying, and the operator-facing storage health presentation layer.
 This subsystem now sits under the dedicated storage and recovery lane so the
 operator-facing storage page, recovery timeline, and recovery-point persistence
 engine stop hiding inside broader monitoring and E2E buckets.
+Storage and recovery browser helpers now also keep one transport-tolerant
+normalization edge. Recovery display models must accept legacy subject-label
+fields and nullable mode/kind metadata before presenting canonical item labels,
+while storage detail drawers and filter controls must route summary series IDs,
+source tones, and disk metrics through the shared storage helpers instead of
+reconstructing them from local table state.
 That same shared `internal/api/` dependency now also expects replacement-aware
 monitored-system admission and fail-closed usage availability. Storage- or
 recovery-adjacent setup, deploy, and API-backed update helpers may reuse the
@@ -2113,3 +2119,9 @@ resulting provider setup state only after `internal/api/truenas_handlers.go`,
 `internal/api/vmware_handlers.go`, and the shared monitored-system admission
 helpers have returned a safe capacity verdict; VMware write admission must not
 collect external vCenter inventory before that canonical usage state is safe.
+Storage and recovery browser helpers now also keep one transport-tolerant
+normalization edge. Recovery display models must accept legacy subject-label
+fields and nullable mode/kind metadata before presenting canonical item labels,
+while storage detail drawers and filter controls must route summary series IDs,
+source tones, and disk metrics through the shared storage helpers instead of
+reconstructing them from local table state.

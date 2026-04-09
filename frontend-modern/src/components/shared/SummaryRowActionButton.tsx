@@ -38,10 +38,12 @@ const SCOPE_BUTTON_CLASS = [
 ].join(' ');
 
 export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (props) => {
+  const disclosureProps = () => (props.kind === 'disclosure' ? props : null);
+  const scopeProps = () => (props.kind === 'scope' ? props : null);
   const disclosureLabel = () =>
-    props.expanded ? `Collapse ${props.subjectLabel}` : `Expand ${props.subjectLabel}`;
+    disclosureProps()?.expanded ? `Collapse ${props.subjectLabel}` : `Expand ${props.subjectLabel}`;
   const scopeLabel = () =>
-    props.pressed
+    scopeProps()?.pressed
       ? `Unpin summary scope for ${props.subjectLabel}`
       : `Pin summary scope for ${props.subjectLabel}`;
 
@@ -51,9 +53,9 @@ export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (p
       data-row-action="true"
       class={`${props.kind === 'disclosure' ? DISCLOSURE_BUTTON_CLASS : SCOPE_BUTTON_CLASS} ${props.class ?? ''}`.trim()}
       aria-label={props.kind === 'disclosure' ? disclosureLabel() : scopeLabel()}
-      aria-expanded={props.kind === 'disclosure' ? props.expanded : undefined}
-      aria-controls={props.kind === 'disclosure' ? props.controlsId : undefined}
-      aria-pressed={props.kind === 'scope' ? props.pressed : undefined}
+      aria-expanded={disclosureProps()?.expanded}
+      aria-controls={disclosureProps()?.controlsId}
+      aria-pressed={scopeProps()?.pressed}
       title={props.kind === 'disclosure' ? disclosureLabel() : scopeLabel()}
       onClick={(event) => {
         event.stopPropagation();
@@ -68,7 +70,7 @@ export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (p
         when={props.kind === 'scope'}
         fallback={
           <svg
-            class={`h-3.5 w-3.5 transition-transform duration-150 ${props.expanded ? 'rotate-90 text-base-content' : ''}`.trim()}
+            class={`h-3.5 w-3.5 transition-transform duration-150 ${disclosureProps()?.expanded ? 'rotate-90 text-base-content' : ''}`.trim()}
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -84,9 +86,11 @@ export const SummaryRowActionButton: Component<SummaryRowActionButtonProps> = (p
         }
       >
         <span
-          class={`whitespace-nowrap ${props.pressed ? 'border-sky-200 bg-sky-50 px-0 py-0 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300' : ''}`.trim()}
+          class={`whitespace-nowrap ${scopeProps()?.pressed ? 'border-sky-200 bg-sky-50 px-0 py-0 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300' : ''}`.trim()}
         >
-          {props.pressed ? (props.activeLabel ?? 'Pinned') : (props.inactiveLabel ?? 'Scope')}
+          {scopeProps()?.pressed
+            ? (scopeProps()?.activeLabel ?? 'Pinned')
+            : (scopeProps()?.inactiveLabel ?? 'Scope')}
         </span>
       </Show>
     </button>

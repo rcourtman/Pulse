@@ -15,7 +15,7 @@ const baseResource = (overrides: Partial<Resource> = {}): Resource => ({
   name: 'vm-101',
   displayName: 'VM 101',
   platformId: 'vm-101',
-  platformType: 'proxmox-vm',
+  platformType: 'proxmox-pve',
   sourceType: 'hybrid',
   status: 'online',
   lastSeen: Date.now(),

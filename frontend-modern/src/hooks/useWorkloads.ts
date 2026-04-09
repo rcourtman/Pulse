@@ -320,7 +320,7 @@ const mapResourceToWorkload = (resource: APIResource): WorkloadGuest | null => {
   const platformType = resolvePlatformTypeFromSources(resource.sources);
   const dockerManagedAppContainer = isDockerManagedAppContainer({
     workloadType,
-    type: resource.type,
+    type: resource.type ?? '',
     platformType,
     containerRuntime: resource.docker?.runtime,
   });

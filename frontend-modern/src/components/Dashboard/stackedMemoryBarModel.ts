@@ -189,7 +189,7 @@ export function buildStackedMemoryBarPresentation(
       ? (ANOMALY_SEVERITY_CLASS[props.anomaly.severity] ?? 'text-yellow-400')
       : 'text-yellow-400',
     anomalyDescription: props.anomaly?.description,
-    anomalyRatio: formatAnomalyRatio(props.anomaly),
+    anomalyRatio: formatAnomalyRatio(props.anomaly) ?? '',
     displayLabel,
     displaySublabel,
     segments: getSegments(props, utilizationPercent),
@@ -203,4 +203,3 @@ export function buildStackedMemoryBarPresentation(
     tooltipTitle: 'Memory Composition',
   };
 }
-

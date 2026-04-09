@@ -26,7 +26,7 @@ export interface EnhancedCPUBarPresentation {
 export function buildEnhancedCPUBarPresentation(
   props: EnhancedCPUBarProps,
 ): EnhancedCPUBarPresentation {
-  const anomalyRatio = formatAnomalyRatio(props.anomaly);
+  const anomalyRatio = formatAnomalyRatio(props.anomaly) ?? '';
 
   return {
     anomalyClass: props.anomaly
@@ -43,4 +43,3 @@ export function buildEnhancedCPUBarPresentation(
     tooltipUsageClass: props.usage > 90 ? 'text-red-400' : 'text-base-content',
   };
 }
-

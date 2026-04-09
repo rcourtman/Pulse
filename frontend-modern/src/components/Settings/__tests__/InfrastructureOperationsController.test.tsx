@@ -865,7 +865,9 @@ describe('InfrastructureOperationsController token generation', () => {
 
     await waitFor(() => expect(createObjectURLMock).toHaveBeenCalled(), { interval: 0 });
 
-    const downloadedBlob = createObjectURLMock.mock.calls.at(-1)?.[0] as MockBlob | undefined;
+    const createObjectURLCalls = createObjectURLMock.mock.calls as unknown[][];
+    const lastCreateObjectURLCall = createObjectURLCalls[createObjectURLCalls.length - 1];
+    const downloadedBlob = lastCreateObjectURLCall?.[0] as MockBlob | undefined;
     expect(downloadedBlob).toBeDefined();
     const content = await downloadedBlob!.text();
     expect(content).toContain('Canonical install workspace:');

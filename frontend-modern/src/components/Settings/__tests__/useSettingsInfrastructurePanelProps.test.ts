@@ -120,19 +120,15 @@ describe('useSettingsInfrastructurePanelProps', () => {
       createServiceResource('pbs', {
         displayName: 'PBS Main',
         policy: {
-          display: {
-            mode: 'governed',
-            summary: 'backup server resource; status online; sources pbs',
-          },
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
         },
       }),
       createServiceResource('pmg', {
         displayName: 'PMG Main',
         policy: {
-          display: {
-            mode: 'governed',
-            summary: 'mail gateway resource; status online; sources pmg',
-          },
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
         },
       }),
     ]);

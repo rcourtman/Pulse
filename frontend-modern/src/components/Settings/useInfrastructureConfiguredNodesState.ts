@@ -50,8 +50,7 @@ export const useInfrastructureConfiguredNodesState = ({
       byType('docker-host').length +
       byType('k8s-cluster').length +
       byType('pbs').length +
-      byType('pmg').length +
-      byType('truenas').length,
+      byType('pmg').length,
   );
   const orgGuestUsage = createMemo(
     () => byType('vm').length + byType('system-container').length + byType('oci-container').length,

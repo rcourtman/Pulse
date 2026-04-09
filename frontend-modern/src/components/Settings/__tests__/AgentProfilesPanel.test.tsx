@@ -602,11 +602,9 @@ describe('AgentProfilesPanel V6 agent ID handling', () => {
         identity: { hostname: 'pbs.local' },
         agent: { agentId: 'pbs-agent-1' },
         policy: {
-          display: {
-            mode: 'governed',
-            summary: 'backup server resource; status online; sources pbs',
-          },
-        } as Record<string, unknown>,
+          sensitivity: 'restricted',
+          routing: { scope: 'local-only', redact: ['hostname'] },
+        },
       }),
     ];
     mockWsStore.state.connectedInfrastructure = [

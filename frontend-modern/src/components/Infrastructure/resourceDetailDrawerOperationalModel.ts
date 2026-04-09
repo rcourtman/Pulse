@@ -119,7 +119,7 @@ export const buildSourceHealthSummary = (
 };
 
 export const buildSourceSummary = (
-  mergedSources: string[],
+  _mergedSources: string[],
   sourceStatus: SourceStatusMap,
 ): ResourceDetailDrawerSummary | null => {
   const health = buildSourceHealthSummary(sourceStatus);

@@ -100,11 +100,9 @@ describe('resourceStateAdapters nodeFromResource', () => {
       displayName: 'Tower',
       platformId: 'tower-id',
       policy: {
-        display: {
-          mode: 'governed',
-          summary: 'host resource; status online; source agent',
-        },
-      } as Resource['policy'],
+        sensitivity: 'restricted',
+        routing: { scope: 'local-only', redact: ['hostname'] },
+      },
       canonicalIdentity: {
         displayName: 'Tower',
         hostname: 'tower.local',
@@ -151,11 +149,9 @@ describe('resourceStateAdapters nodeFromResource', () => {
         {
           displayName: 'PBS Main',
           policy: {
-            display: {
-              mode: 'governed',
-              summary: 'backup server resource; status online; sources pbs',
-            },
-          } as Resource['policy'],
+            sensitivity: 'restricted',
+            routing: { scope: 'local-only', redact: ['hostname'] },
+          },
         },
       ),
     );
@@ -188,11 +184,9 @@ describe('resourceStateAdapters nodeFromResource', () => {
         {
           displayName: 'PMG Main',
           policy: {
-            display: {
-              mode: 'governed',
-              summary: 'mail gateway resource; status online; sources pmg',
-            },
-          } as Resource['policy'],
+            sensitivity: 'restricted',
+            routing: { scope: 'local-only', redact: ['hostname'] },
+          },
         },
       ),
     );

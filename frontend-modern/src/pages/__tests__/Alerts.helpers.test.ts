@@ -994,7 +994,6 @@ describe('Unified selector parity', () => {
       ['docker-host', 'Container Runtime'],
       ['k8s-cluster', 'K8s Cluster'],
       ['k8s-node', 'K8s Node'],
-      ['truenas', 'Agent'],
       ['vm', 'VM'],
       ['system-container', 'Container'],
       ['oci-container', 'Container'],
@@ -1015,6 +1014,10 @@ describe('Unified selector parity', () => {
     for (const [input, expected] of cases) {
       expect(unifiedTypeToAlertDisplayType(input)).toBe(expected);
     }
+  });
+
+  it('maps the legacy truenas alias to Agent', () => {
+    expect(unifiedTypeToAlertDisplayType('truenas' as any)).toBe('Agent');
   });
 
   it('keeps guest override extraction shape aligned with legacy mapping', () => {

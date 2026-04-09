@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { StorageControls } from '@/components/Storage/StorageControls';
+import type { StorageSourceOption } from '@/utils/storageSources';
 
 describe('StorageControls', () => {
   it('renders the shared storage controls and node filter', () => {
@@ -13,7 +14,7 @@ describe('StorageControls', () => {
     const [statusFilter, setStatusFilter] =
       createSignal<'all' | 'warning' | 'critical'>('all');
     const [sourceFilter, setSourceFilter] = createSignal('all');
-    const [sourceOptions] = createSignal([
+    const [sourceOptions] = createSignal<StorageSourceOption[]>([
       { key: 'all', label: 'All Sources', tone: 'slate' as const },
       { key: 'proxmox-pve', label: 'PVE', tone: 'orange' as const },
     ]);
@@ -63,7 +64,7 @@ describe('StorageControls', () => {
     const [statusFilter, setStatusFilter] =
       createSignal<'all' | 'warning' | 'critical'>('all');
     const [sourceFilter, setSourceFilter] = createSignal('truenas');
-    const [sourceOptions, setSourceOptions] = createSignal([
+    const [sourceOptions, setSourceOptions] = createSignal<StorageSourceOption[]>([
       { key: 'all', label: 'All Sources', tone: 'slate' as const },
     ]);
     const [selectedNodeId, setSelectedNodeId] = createSignal('all');

@@ -2,6 +2,7 @@ import { renderHook } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { useStorageFilterToolbarModel } from '@/components/Storage/useStorageFilterToolbarModel';
+import type { StorageSourceOption } from '@/utils/storageSources';
 
 describe('useStorageFilterToolbarModel', () => {
   it('centralizes storage filter toolbar state and reset behavior', () => {
@@ -53,7 +54,7 @@ describe('useStorageFilterToolbarModel', () => {
     const [search, setSearch] = createSignal('');
     const [sortKey, setSortKey] = createSignal('priority');
     const [sortDirection, setSortDirection] = createSignal<'asc' | 'desc'>('desc');
-    const [sourceOptions, setSourceOptions] = createSignal([
+    const [sourceOptions, setSourceOptions] = createSignal<StorageSourceOption[]>([
       { key: 'all', label: 'All Sources', tone: 'slate' as const },
     ]);
 

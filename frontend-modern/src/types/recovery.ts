@@ -20,6 +20,8 @@ export interface RecoveryExternalRef {
 }
 
 export interface RecoveryPointDisplay {
+  subjectLabel?: string;
+  subjectType?: string;
   itemLabel?: string;
   itemType?: string;
   isWorkload?: boolean;
@@ -32,10 +34,7 @@ export interface RecoveryPointDisplay {
   detailsSummary?: string;
 }
 
-export interface RecoveryPointDisplayTransport extends RecoveryPointDisplay {
-  subjectLabel?: string;
-  subjectType?: string;
-}
+export interface RecoveryPointDisplayTransport extends RecoveryPointDisplay {}
 
 export interface RecoveryPoint {
   id: string;
@@ -100,7 +99,8 @@ export interface ProtectionRollup {
 
   lastAttemptAt?: string | null;
   lastSuccessAt?: string | null;
-  lastOutcome: RecoveryOutcome;
+  // Older payloads may omit this even though the canonical backend contract now supplies it.
+  lastOutcome?: RecoveryOutcome;
 
   platforms?: RecoveryPlatform[];
 }

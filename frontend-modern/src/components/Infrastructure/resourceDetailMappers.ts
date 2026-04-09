@@ -7,7 +7,7 @@ import type {
   Memory,
   Node,
 } from '@/types/api';
-import type { Resource, ResourceMetric } from '@/types/resource';
+import type { Resource, ResourceMetric, ResourceVMwareMeta } from '@/types/resource';
 import { formatTemperature } from '@/utils/temperature';
 import { getActionableAgentIdFromResource } from '@/utils/agentResources';
 import {
@@ -113,6 +113,7 @@ export type PlatformData = {
   agent?: AgentPlatformData;
   sourceStatus?: Record<string, { status?: string; lastSeen?: string | number; error?: string }>;
   docker?: Record<string, unknown>;
+  vmware?: ResourceVMwareMeta;
   pbs?: PBSPlatformData;
   pmg?: PMGPlatformData;
   kubernetes?: KubernetesPlatformData;

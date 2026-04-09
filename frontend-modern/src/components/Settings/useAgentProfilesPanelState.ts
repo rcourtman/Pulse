@@ -53,13 +53,11 @@ import {
 const resourcePriority = (resource: Resource): number => {
   switch (resource.type) {
     case 'agent':
-      return 0;
+      return resource.platformType === 'truenas' ? 3 : 0;
     case 'pbs':
       return 1;
     case 'pmg':
       return 2;
-    case 'truenas':
-      return 3;
     case 'k8s-cluster':
       return 4;
     case 'docker-host':

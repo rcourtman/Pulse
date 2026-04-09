@@ -2,6 +2,7 @@ import { createMemo } from 'solid-js';
 
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { useAnomalyForMetric } from '@/hooks/useAnomalies';
+import type { Container } from '@/types/api';
 import { buildMetricKey } from '@/utils/metricsKeys';
 import { getGuestPowerIndicator, isGuestRunning } from '@/utils/status';
 import { getShortImageName, formatBytes } from '@/utils/format';
@@ -95,13 +96,14 @@ export function useGuestRowState(props: GuestRowProps) {
 
   const isOCIContainer = createMemo(() => {
     if (workloadType() !== 'system-container') return false;
-    return props.guest.type === 'oci-container' || props.guest.isOci === true;
+    const containerMeta = props.guest as Partial<Pick<Container, 'isOci'>>;
+    return props.guest.type === 'oci-container' || containerMeta.isOci === true;
   });
 
   const ociImage = createMemo(() => {
     if (!isOCIContainer()) return null;
 
-    const template = props.guest.osTemplate;
+    const template = (props.guest as Partial<Pick<Container, 'osTemplate'>>).osTemplate;
     if (!template) return null;
 
     let image = template;

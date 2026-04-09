@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectedInfrastructureItem } from '@/types/api';
+import type { UnifiedAgentRow } from '../infrastructureOperationsModel';
 import {
   INSTALL_PROFILE_OPTIONS,
   getPlatformConnectionsPathForCapability,
@@ -54,42 +55,42 @@ describe('infrastructure operations model', () => {
   });
 
   it('keeps host-managed stop monitoring scoped to the full host surface set', () => {
-    const row = {
+    const row: UnifiedAgentRow = {
       rowKey: 'agent-agent-1',
       id: 'agent-1',
       name: 'node-a',
       hostname: 'node-a.internal',
       capabilities: ['agent', 'docker', 'pbs'],
-      status: 'active' as const,
-      upgradePlatform: 'linux' as const,
+      status: 'active',
+      upgradePlatform: 'linux',
       scope: {
         label: 'Default',
         detail: 'Auto-detect',
-        category: 'default' as const,
+        category: 'default',
       },
       installFlags: ['--enable-docker', '--disable-host', '--enable-proxmox', '--proxmox-type pbs'],
       searchText: 'node-a node-a.internal agent-1',
       surfaces: [
         {
           key: 'agent',
-          kind: 'agent' as const,
+          kind: 'agent',
           label: 'Host telemetry',
           detail: 'Pulse is receiving host telemetry.',
-          action: 'stop-monitoring' as const,
+          action: 'stop-monitoring',
         },
         {
           key: 'docker',
-          kind: 'docker' as const,
+          kind: 'docker',
           label: 'Docker runtime data',
           detail: 'Pulse is receiving Docker telemetry.',
-          action: 'stop-monitoring' as const,
+          action: 'stop-monitoring',
         },
         {
           key: 'pbs',
-          kind: 'pbs' as const,
+          kind: 'pbs',
           label: 'PBS data',
           detail: 'Pulse is receiving PBS telemetry.',
-          action: 'stop-monitoring' as const,
+          action: 'stop-monitoring',
         },
       ],
     };

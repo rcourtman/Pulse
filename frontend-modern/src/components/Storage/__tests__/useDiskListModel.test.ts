@@ -53,6 +53,7 @@ describe('useDiskListModel', () => {
     const [nodes] = createSignal<Resource[]>([buildNode('node-tower', 'tower')]);
     const [selectedNode] = createSignal<string | null>('node-tower');
     const [searchTerm] = createSignal('cache');
+    const [selectedDiskId, setSelectedDiskId] = createSignal<string | null>(null);
 
     const { result } = renderHook(() =>
       useDiskListModel({
@@ -60,6 +61,8 @@ describe('useDiskListModel', () => {
         nodes,
         selectedNode,
         searchTerm,
+        selectedDiskId,
+        setSelectedDiskId,
       }),
     );
 

@@ -8,8 +8,13 @@ import {
   useInfrastructureSummaryState,
 } from '../useInfrastructureSummaryState';
 
-const mockFetchInfrastructureSummaryAndCache = vi.fn();
-const mockReadInfrastructureSummaryCache = vi.fn(() => null);
+const {
+  mockFetchInfrastructureSummaryAndCache,
+  mockReadInfrastructureSummaryCache,
+} = vi.hoisted(() => ({
+  mockFetchInfrastructureSummaryAndCache: vi.fn(),
+  mockReadInfrastructureSummaryCache: vi.fn(() => null),
+}));
 
 vi.mock('@/hooks/useResources', () => ({
   useResources: () => ({
@@ -19,10 +24,8 @@ vi.mock('@/hooks/useResources', () => ({
 }));
 
 vi.mock('@/utils/infrastructureSummaryCache', () => ({
-  fetchInfrastructureSummaryAndCache: (...args: unknown[]) =>
-    mockFetchInfrastructureSummaryAndCache(...args),
-  readInfrastructureSummaryCache: (...args: unknown[]) =>
-    mockReadInfrastructureSummaryCache(...args),
+  fetchInfrastructureSummaryAndCache: mockFetchInfrastructureSummaryAndCache,
+  readInfrastructureSummaryCache: mockReadInfrastructureSummaryCache,
 }));
 
 vi.mock('@/utils/apiClient', async () => {

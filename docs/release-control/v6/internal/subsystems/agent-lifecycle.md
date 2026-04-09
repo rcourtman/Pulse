@@ -354,6 +354,12 @@ This subsystem now sits under the dedicated agent lifecycle and fleet
 operations lane so install, registration, update continuity, profile
 management, and fleet safety stop hiding inside architecture, migration, or
 monitoring work.
+Lifecycle-owned connected-infrastructure and reporting browsers now also keep
+governed platform rows on canonical local operator identity while tolerating
+optional optimistic hostnames. Shared row models may fall back to the row name
+when staging a removal state, but they must not resurrect legacy
+`policy.display` shims or require platform-managed surfaces to synthesize a
+second hostname contract.
 That same adjacent `internal/api/` boundary now also keeps public demos from
 leaking commercial state through lifecycle-adjacent surfaces. Agent install,
 reporting, and setup flows may share backend helpers with billing or license
@@ -1979,3 +1985,9 @@ lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces
 must also treat `/api/security/status.sessionCapabilities.demoMode` as the
 canonical public-demo bootstrap signal instead of inferring demo posture from
 headers, `/api/health`, or hostname heuristics.
+Lifecycle-owned connected-infrastructure and reporting surfaces must also keep
+governed platform rows on canonical local operator identity while tolerating
+optional optimistic hostnames. Shared row models may fall back to the row name
+when staging a removal state, but they must not resurrect legacy
+`policy.display` shims or require platform-managed surfaces to synthesize a
+second hostname contract.

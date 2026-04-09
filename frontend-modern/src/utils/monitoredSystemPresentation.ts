@@ -304,7 +304,7 @@ export function buildMonitoredSystemAdmissionPreviewUnavailableState(input: {
   return {
     reason,
     title: getMonitoredSystemAdmissionPreviewUnavailableTitle(),
-    message: formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason),
+    message: formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason ?? undefined),
   };
 }
 

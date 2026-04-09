@@ -105,7 +105,7 @@ describe('HistoryChart', () => {
 
   it('renders the default history label', () => {
     render(() => (
-      <HistoryChart resourceType="node" resourceId="node-1" metric="cpu" />
+      <HistoryChart resourceType="agent" resourceId="node-1" metric="cpu" />
     ));
 
     expect(screen.getByText('History')).toBeInTheDocument();
