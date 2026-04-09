@@ -28,8 +28,9 @@ import (
 //   - Query(1000 pts):     ~400µs → SLO 5ms
 //   - QueryAll(4×500 pts): ~1.8ms locally; ~15.6ms p95 on the April 9, 2026 v6 RC dry run
 //     → local SLO 15ms, GH Actions SLO 25ms
-//   - QueryAllBatch(50×4×100): ~57ms p95 observed locally in March 2026; ~123ms p95 on the April 9, 2026 v6 RC dry run
-//     → local SLO 60ms, GH Actions SLO 140ms
+//   - QueryAllBatch(50×4×100): ~57ms p95 observed locally in March 2026; up to
+//     ~150ms p95 on the April 9, 2026 v6 RC dry runs
+//     → local SLO 60ms, GH Actions SLO 160ms
 //   - QueryAllBatch downsampled (50×4×100, 60s): ~31ms locally; ~143ms p95 on the April 9, 2026 v6 RC dry run
 //     → local SLO 55ms, GH Actions SLO 160ms
 //   - QueryAllBatch chunked (500×4×20): ~84ms p95 observed locally in March 2026; ~252ms p95 on the April 9, 2026 v6 RC dry run
@@ -69,8 +70,8 @@ const (
 	// 4 metric types × 100 points each) — the batched dashboard chart path.
 	SLOQueryAllBatchP95 = 60 * time.Millisecond
 	// SLOQueryAllBatchGitHubActionsP95 matches the slower shared-runner envelope
-	// observed on GitHub-hosted release rehearsals.
-	SLOQueryAllBatchGitHubActionsP95 = 140 * time.Millisecond
+	// observed on the April 9, 2026 GitHub-hosted RC dry runs.
+	SLOQueryAllBatchGitHubActionsP95 = 160 * time.Millisecond
 
 	// SLOQueryAllBatchDownsampledP95 is the p95 target for QueryAllBatch with
 	// 60-second downsampling (50 resources × 4 metrics × 100 raw points). This
