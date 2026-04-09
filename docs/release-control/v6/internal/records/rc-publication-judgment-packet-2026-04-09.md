@@ -133,60 +133,49 @@ python3 scripts/release_control/internal/mobile_relay_auth_approvals_proof.py --
 
 Result: all subchecks passed, including `enterprise-approval-handlers`.
 
-## Current Blocker
+## Proof Refresh
 
-With the enterprise module graph repaired, the full active-target guard was
-rerun outside the sandbox so the loopback test server could bind normally. That
-run progressed past `RA17` and then blocked earlier in the Pulse runtime at
-`RA3`/`RA4`:
+After the packet was first recorded, the in-progress Pulse monitored-system
+enforcement/admission slice advanced and the full active-target proof was
+rerun:
 
-```text
-BLOCKED: readiness assertion proof failed for RA3,RA4:entitlement-gating-api-tests (exit 1)
+```bash
+python3 scripts/release_control/readiness_assertion_guard.py --active-target
 ```
 
-The concrete failure is now a Pulse API build break:
+Result: pass.
 
-```text
-internal/api/vmware_handlers.go:672:14: undefined: monitoredSystemLimitDecisionForRecords
-internal/api/vmware_handlers.go:712:14: undefined: monitoredSystemLimitDecisionForRecordsReplacement
-```
+The rerun completed the full governed active-target proof, including the
+earlier `RA3`/`RA4` entitlement-gating slice, the repaired enterprise-backed
+`RA17` mobile approvals proof, relay reconnect/drain proof, commercial
+cancellation/reactivation proof, quickstart/browser proof, and the remaining
+rc-ready assertion set.
 
-The canonical helpers currently present in the repo are:
+`python3 scripts/release_control/status_audit.py --pretty` still reports:
 
-```text
-internal/api/monitored_system_limit_enforcement.go:289: monitoredSystemLimitDecisionForRecordsFromUsage
-internal/api/monitored_system_limit_enforcement.go:313: monitoredSystemLimitDecisionForRecordsReplacementFromUsage
-```
-
-That means the RC blocker is no longer the enterprise repo. The current blocker
-is an in-progress Pulse monitored-system enforcement/admission slice where
-`vmware_handlers.go` still references the pre-rename helper names while the
-shared contract has already moved to the `...FromUsage` helpers.
+1. `repo_ready=True`.
+2. `rc_ready=False`.
+3. `release_ready=False`.
+4. All rc-ready release gates passed.
+5. `rc-publication-judgment` as the only remaining rc-ready blocker.
 
 ## Judgment Outcome
 
 Do not clear `rc-publication-judgment` from this packet.
 
-The release-control metadata is close to the RC floor, but the current
-workspace still cannot complete the active-target proof. Publishing an RC from
-this state would let an incomplete Pulse monitored-system slice masquerade as a
-governed release judgment.
+The release-control proof floor is now satisfied, but prerelease publication is
+still an explicit owner product decision rather than an automatic consequence of
+passing proof. This packet is now ready for that judgment; it does not make the
+judgment itself.
 
 ## Required Unblock Steps
 
-1. Finish the Pulse monitored-system enforcement/admission slice so
-   `internal/api/vmware_handlers.go` uses the canonical helper names that
-   currently exist in `monitored_system_limit_enforcement.go`.
-2. Return all active repos needed for the RC proof to a clean, intentional
-   state.
-3. Rerun:
-
-```bash
-python3 scripts/release_control/readiness_assertion_guard.py --active-target
-python3 scripts/release_control/status_audit.py --pretty
-```
-
-4. If both commands pass, ask the owner to make the explicit product judgment
-   on `rc-publication-judgment`.
-5. Keep `rc-to-ga-promotion-readiness` blocked until a real prerelease has
+1. Review this packet as the explicit RC publication decision input.
+2. If the owner judges the current candidate ready for a real governed RC,
+   resolve `rc-publication-judgment` explicitly instead of treating proof
+   completion as implicit approval.
+3. If the owner does not approve publication yet, keep
+   `rc-publication-judgment` open and record the reason as a product decision,
+   not a missing proof.
+4. Keep `rc-to-ga-promotion-readiness` blocked until a real prerelease has
    shipped and the later GA promotion rehearsal exists.

@@ -19,10 +19,8 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   ready for a real governed RC.
 - The latest RC publication judgment packet is
   `docs/release-control/v6/internal/records/rc-publication-judgment-packet-2026-04-09.md`.
-  It does not clear the open decision: the active-target proof currently blocks
-  in `pulse/internal/api` because `vmware_handlers.go` still references the old
-  monitored-system helper names instead of the canonical `...FromUsage`
-  helpers.
+  The full active-target proof now passes; the remaining blocker is the
+  explicit owner judgment on whether to publish a real governed RC.
 - The active target is back on `v6-rc-cut`, so GA rehearsal remains
   intentionally out of scope until a real RC has actually shipped and
   promotion is resumed explicitly.
