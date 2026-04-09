@@ -1084,6 +1084,17 @@ Provider-backed preview routes such as `/api/truenas/connections/preview`,
 and `/api/vmware/connections/{id}/preview` must serialize that same canonical
 preview shape directly; they may not down-scope the response to local counts or
 hide current/projected grouped systems from the governed contract.
+That same platform-connections preview contract now also owns candidate-state
+defaulting. New connection preview and test payloads must inherit the
+canonical provider default `enabled=true` when the field is omitted, while
+saved-connection preview, test, and update payloads must preserve the stored
+`enabled` state unless the request explicitly changes it. Shared handlers may
+not let zero-value JSON decode silently turn an unchanged connection into an
+inactive monitored-system candidate.
+Inactive TrueNAS and VMware candidates must stay on that same canonical API
+contract as zero-delta or removal-only previews. Those routes may not fail
+validation just because no projected monitored-system rows remain once the
+candidate is treated as non-counting.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not

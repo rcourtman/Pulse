@@ -1083,6 +1083,13 @@ may not create or update a connection while the admission preview is missing,
 loading, unavailable, errored, or over-limit, and save-time backend races must
 reuse the same canonical preview/unavailable presentation state instead of
 falling back to provider-local billing messages.
+That same lifecycle-adjacent request contract now also assumes canonical
+enablement defaults. New platform-connection preview/test/add payloads must
+inherit the provider default `enabled=true` when the field is omitted, while
+saved-connection preview/test/update payloads must preserve stored enablement
+unless the caller explicitly changes it, so setup surfaces do not accidentally
+preview an unchanged active connection as inactive just because JSON omitted a
+bool field.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent

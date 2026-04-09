@@ -1467,6 +1467,11 @@ that result, they must rely on the shared monitored-system ledger preview
 contract for current/projected grouped systems and enforced limit verdicts
 instead of reconstructing preview copy from page-local recovery inventory or
 provider-local connection details.
+That same adjacent preview contract also treats disabled provider connections
+as non-counting candidates. Storage- or recovery-adjacent flows may use the
+shared zero-delta or removal-only preview state for explanation, but they must
+not reinterpret a disabled TrueNAS or VMware connection as active counted
+capacity until the canonical provider configuration is explicitly re-enabled.
 That same shared boundary now also assumes settled monitored-system usage
 readiness. Storage- or recovery-adjacent transport flows may not interpret the
 first store-backed monitor view as commercial truth when provider-owned
