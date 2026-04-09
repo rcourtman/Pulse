@@ -3,6 +3,10 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/config"
@@ -30,6 +34,352 @@ func decodeMonitoredSystemLimitBlockedPayload(
 		t.Fatalf("decode monitored-system limit blocked payload: %v", err)
 	}
 	return payload
+}
+
+func readAPIPackageFile(t *testing.T, name string) string {
+	t.Helper()
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve API package test file")
+	}
+	content, err := os.ReadFile(filepath.Join(filepath.Dir(filename), name))
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(content)
+}
+
+func requireContainsSnippet(t *testing.T, source string, snippet string) {
+	t.Helper()
+
+	if !strings.Contains(source, snippet) {
+		t.Fatalf("missing snippet %q", snippet)
+	}
+}
+
+func requireSnippetCountAtLeast(t *testing.T, source string, snippet string, min int) {
+	t.Helper()
+
+	if got := strings.Count(source, snippet); got < min {
+		t.Fatalf("snippet %q count = %d, want at least %d", snippet, got, min)
+	}
+}
+
+func requireSnippetBefore(t *testing.T, source string, earlier string, later string) {
+	t.Helper()
+
+	earlierIndex := strings.Index(source, earlier)
+	if earlierIndex < 0 {
+		t.Fatalf("missing earlier snippet %q", earlier)
+	}
+	laterIndex := strings.Index(source, later)
+	if laterIndex < 0 {
+		t.Fatalf("missing later snippet %q", later)
+	}
+	if earlierIndex > laterIndex {
+		t.Fatalf("snippet %q must appear before %q", earlier, later)
+	}
+}
+
+func TestMonitoredSystemLimitDecisionOnlyBlocksNetNewSystems(t *testing.T) {
+	ctx := context.Background()
+
+	atLimitExisting := monitoredSystemLimitDecisionFromAdditional(ctx, 5, 5, 0)
+	if atLimitExisting.exceeded {
+		t.Fatalf("existing monitored systems must continue reporting at the limit: %+v", atLimitExisting)
+	}
+
+	atLimitNew := monitoredSystemLimitDecisionFromAdditional(ctx, 5, 5, 1)
+	if !atLimitNew.exceeded {
+		t.Fatalf("net-new monitored systems must be blocked when the cap is full: %+v", atLimitNew)
+	}
+}
+
+func TestMonitoredSystemAdmissionSurfacesStayBehindSharedLimitGate(t *testing.T) {
+	router := readAPIPackageFile(t, "router_routes_registration.go")
+
+	type sourceContract struct {
+		file              string
+		requiredSnippets  []string
+		requiredCounts    map[string]int
+		requiredOrderings [][2]string
+	}
+	type proofContract struct {
+		file     string
+		snippets []string
+	}
+	type admissionSurface struct {
+		name           string
+		routerSnippets []string
+		sources        []sourceContract
+		proofs         []proofContract
+	}
+
+	surfaces := []admissionSurface{
+		{
+			name: "unified agent report",
+			routerSnippets: []string{
+				`"/api/agents/agent/report"`,
+				`"/api/agents/host/report"`,
+				"r.unifiedAgentHandlers.HandleReport",
+			},
+			sources: []sourceContract{{
+				file: "agent_ingest.go",
+				requiredSnippets: []string{
+					"enforceMonitoredSystemLimitForHostReport(",
+					"ApplyHostReport(report, tokenRecord)",
+				},
+				requiredOrderings: [][2]string{
+					{"enforceMonitoredSystemLimitForHostReport(", "ApplyHostReport(report, tokenRecord)"},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "unified_agent_handlers_test.go",
+				snippets: []string{
+					"TestUnifiedAgentHandlers_HandleReport_EnforcesMaxMonitoredSystemsForNewHostsOnly",
+					"Existing host should continue to report at the limit.",
+					"New host should be blocked.",
+					"http.StatusPaymentRequired",
+				},
+			}},
+		},
+		{
+			name: "docker agent report",
+			routerSnippets: []string{
+				`"/api/agents/docker/report"`,
+				"r.dockerAgentHandlers.HandleReport",
+			},
+			sources: []sourceContract{{
+				file: "docker_agents.go",
+				requiredSnippets: []string{
+					"enforceMonitoredSystemLimitForDockerReport(",
+					"ApplyDockerReport(report, tokenRecord)",
+				},
+				requiredOrderings: [][2]string{
+					{"enforceMonitoredSystemLimitForDockerReport(", "ApplyDockerReport(report, tokenRecord)"},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "docker_agents_additional_test.go",
+				snippets: []string{
+					"TestDockerAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit",
+					"http.StatusPaymentRequired",
+				},
+			}},
+		},
+		{
+			name: "kubernetes agent report",
+			routerSnippets: []string{
+				`"/api/agents/kubernetes/report"`,
+				"r.kubernetesAgentHandlers.HandleReport",
+			},
+			sources: []sourceContract{{
+				file: "kubernetes_agents.go",
+				requiredSnippets: []string{
+					"enforceMonitoredSystemLimitForKubernetesReport(",
+					"ApplyKubernetesReport(report, tokenRecord)",
+				},
+				requiredOrderings: [][2]string{
+					{"enforceMonitoredSystemLimitForKubernetesReport(", "ApplyKubernetesReport(report, tokenRecord)"},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "kubernetes_agents_additional_test.go",
+				snippets: []string{
+					"TestKubernetesAgentHandlers_HandleReport_BlocksNewMonitoredSystemAtLimit",
+					"http.StatusPaymentRequired",
+				},
+			}},
+		},
+		{
+			name: "proxmox family config add and update",
+			routerSnippets: []string{
+				`"/api/config/nodes"`,
+				`"/api/config/nodes/"`,
+				"r.configHandlers.HandleAddNode",
+				"r.configHandlers.HandleUpdateNode",
+			},
+			sources: []sourceContract{{
+				file: "config_node_handlers.go",
+				requiredSnippets: []string{
+					"enforceMonitoredSystemLimitForConfigRegistration(",
+					"enforceMonitoredSystemLimitForConfigReplacement(",
+					"SaveNodesConfig(",
+				},
+				requiredCounts: map[string]int{
+					"enforceMonitoredSystemLimitForConfigRegistration(": 3,
+					"enforceMonitoredSystemLimitForConfigReplacement(":  3,
+				},
+				requiredOrderings: [][2]string{
+					{"enforceMonitoredSystemLimitForConfigRegistration(", "PVEInstances = append"},
+					{"enforceMonitoredSystemLimitForConfigReplacement(", "*pve = updated"},
+				},
+			}},
+			proofs: []proofContract{
+				{
+					file: "config_handlers_add_test.go",
+					snippets: []string{
+						"TestHandleAddNode_BlocksNewCountedSystemAtLimit",
+						"http.StatusPaymentRequired",
+					},
+				},
+				{
+					file: "config_handlers_update_test.go",
+					snippets: []string{
+						"TestHandleUpdateNode_BlocksProjectedNetNewSystemAtLimit",
+						"http.StatusPaymentRequired",
+					},
+				},
+			},
+		},
+		{
+			name: "auto registration",
+			routerSnippets: []string{
+				`"/api/auto-register"`,
+				"r.configHandlers.HandleAutoRegister",
+			},
+			sources: []sourceContract{{
+				file: "config_setup_handlers.go",
+				requiredSnippets: []string{
+					"enforceMonitoredSystemLimitForConfigRegistration(",
+					"SaveNodesConfig(",
+				},
+				requiredCounts: map[string]int{
+					"enforceMonitoredSystemLimitForConfigRegistration(": 2,
+				},
+				requiredOrderings: [][2]string{
+					{"enforceMonitoredSystemLimitForConfigRegistration(", "PVEInstances = append"},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "config_handlers_auto_register_test.go",
+				snippets: []string{
+					"TestHandleAutoRegister_BlocksNewCountedSystemAtLimit",
+					"http.StatusPaymentRequired",
+				},
+			}},
+		},
+		{
+			name: "truenas connection add and update",
+			routerSnippets: []string{
+				`"/api/truenas/connections"`,
+				`"/api/truenas/connections/"`,
+				"r.trueNASHandlers.HandleAdd",
+				"r.trueNASHandlers.HandleUpdate",
+			},
+			sources: []sourceContract{{
+				file: "truenas_handlers.go",
+				requiredSnippets: []string{
+					"monitoredSystemLimitDecisionForCandidate(",
+					"monitoredSystemLimitDecisionForCandidateReplacement(",
+					"SaveTrueNASConfig(",
+				},
+				requiredOrderings: [][2]string{
+					{"h.enforceMonitoredSystemLimit(w, r, instance)", "existing = append(existing, instance)"},
+					{"h.enforceMonitoredSystemLimitReplacement(w, r, instances[index], instance)", "instances[index] = instance"},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "truenas_handlers_test.go",
+				snippets: []string{
+					"TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit",
+					"TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit",
+					"http.StatusPaymentRequired",
+					"license_required",
+				},
+			}},
+		},
+		{
+			name: "vmware connection add and update",
+			routerSnippets: []string{
+				`"/api/vmware/connections"`,
+				`"/api/vmware/connections/"`,
+				"r.vmwareHandlers.HandleAdd",
+				"r.vmwareHandlers.HandleUpdate",
+			},
+			sources: []sourceContract{{
+				file: "vmware_handlers.go",
+				requiredSnippets: []string{
+					"monitoredSystemLimitDecisionForRecords(",
+					"monitoredSystemLimitDecisionForRecordsReplacement(",
+					"SaveVMwareConfig(",
+				},
+				requiredOrderings: [][2]string{
+					{"h.enforceMonitoredSystemLimit(w, r, instance)", "instances = append(instances, instance)"},
+					{"h.enforceMonitoredSystemLimitReplacement(w, r, instances[index], instance)", "instances[index] = instance"},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "vmware_handlers_test.go",
+				snippets: []string{
+					"TestVMwareHandlers_HandleAdd_BlocksProjectedNetNewSystemsAtLimit",
+					"TestVMwareHandlers_HandleUpdate_BlocksProjectedNetNewSystemsAtLimit",
+					"http.StatusPaymentRequired",
+					"license_required",
+				},
+			}},
+		},
+		{
+			name: "agent deployment jobs",
+			routerSnippets: []string{
+				`"/api/clusters/"`,
+				`"/api/agent-deploy/jobs/"`,
+				"r.deployHandlers.HandleCreateJob",
+				"r.deployHandlers.HandleRetryJob",
+			},
+			sources: []sourceContract{{
+				file: "deploy_handlers.go",
+				requiredSnippets: []string{
+					"monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)",
+					`Reason: "skipped_license"`,
+					`"license_limit"`,
+				},
+				requiredCounts: map[string]int{
+					"monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)": 2,
+				},
+				requiredOrderings: [][2]string{
+					{"monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)", `Reason: "skipped_license"`},
+					{"monitoredSystemLimitDecisionForAdditionalSlots(ctx, h.monitor, 0)", `"license_limit"`},
+				},
+			}},
+			proofs: []proofContract{{
+				file: "deploy_handlers_test.go",
+				snippets: []string{
+					"TestHandleCreateJob_TruncatesTargetsToAvailableLicenseSlots",
+					"TestHandleRetryJob_BlocksWhenNoLicenseSlotsAvailable",
+					"skipped_license",
+					"license_limit",
+				},
+			}},
+		},
+	}
+
+	for _, surface := range surfaces {
+		t.Run(surface.name, func(t *testing.T) {
+			for _, snippet := range surface.routerSnippets {
+				requireContainsSnippet(t, router, snippet)
+			}
+			for _, contract := range surface.sources {
+				source := readAPIPackageFile(t, contract.file)
+				for _, snippet := range contract.requiredSnippets {
+					requireContainsSnippet(t, source, snippet)
+				}
+				for snippet, min := range contract.requiredCounts {
+					requireSnippetCountAtLeast(t, source, snippet, min)
+				}
+				for _, ordering := range contract.requiredOrderings {
+					requireSnippetBefore(t, source, ordering[0], ordering[1])
+				}
+			}
+			for _, proof := range surface.proofs {
+				source := readAPIPackageFile(t, proof.file)
+				for _, snippet := range proof.snippets {
+					requireContainsSnippet(t, source, snippet)
+				}
+			}
+		})
+	}
 }
 
 func TestMonitoredSystemCountNilMonitor(t *testing.T) {

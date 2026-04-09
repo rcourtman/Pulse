@@ -1155,6 +1155,82 @@ func TestHandleCreateJob_TargetsNotReady(t *testing.T) {
 	}
 }
 
+func TestHandleCreateJob_TruncatesTargetsToAvailableLicenseSlots(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 4)
+
+	nodes := []models.Node{
+		{
+			ID: "node_pve-a", Name: "pve-a", Host: "https://10.0.0.1:8006",
+			IsClusterMember: true, ClusterName: "lab",
+			LinkedAgentID: "host-a",
+		},
+		{
+			ID: "node_pve-b", Name: "pve-b", Host: "https://10.0.0.2:8006",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+		{
+			ID: "node_pve-c", Name: "pve-c", Host: "https://10.0.0.3:8006",
+			IsClusterMember: true, ClusterName: "lab",
+		},
+	}
+	h := newTestDeployHandlers(t, nodes, nil)
+	ctx := context.Background()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("host-a", "host-a"))
+
+	now := time.Now().UTC()
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "pf_license_partial", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "host-a", SourceNodeID: "node_pve-a",
+		OrgID: "default", Status: deploy.JobSucceeded,
+		MaxParallel: 2, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create preflight job: %v", err)
+	}
+	for _, info := range []struct{ id, nodeID, name, ip string }{
+		{"tgt_license_b", "node_pve-b", "pve-b", "10.0.0.2"},
+		{"tgt_license_c", "node_pve-c", "pve-c", "10.0.0.3"},
+	} {
+		if err := h.store.CreateTarget(ctx, &deploy.Target{
+			ID: info.id, JobID: "pf_license_partial", NodeID: info.nodeID,
+			NodeName: info.name, NodeIP: info.ip, Arch: "amd64",
+			Status: deploy.TargetReady, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			t.Fatalf("create preflight target: %v", err)
+		}
+	}
+
+	body := `{"sourceAgentId":"host-a","preflightId":"pf_license_partial","targetNodeIds":["node_pve-b","node_pve-c"],"mode":"install"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/clusters/lab/agent-deploy/jobs", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+
+	h.HandleCreateJob(rec, req)
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var resp createJobResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.AcceptedTargets) != 1 {
+		t.Fatalf("expected 1 accepted target, got %d", len(resp.AcceptedTargets))
+	}
+	if resp.AcceptedTargets[0] != "node_pve-b" {
+		t.Fatalf("expected deterministic accepted node_pve-b, got %q", resp.AcceptedTargets[0])
+	}
+	if resp.ReservedLicenseSlots != 1 {
+		t.Fatalf("expected 1 reserved license slot, got %d", resp.ReservedLicenseSlots)
+	}
+	if len(resp.SkippedTargets) != 1 {
+		t.Fatalf("expected 1 skipped target, got %d", len(resp.SkippedTargets))
+	}
+	if resp.SkippedTargets[0].NodeID != "node_pve-c" || resp.SkippedTargets[0].Reason != "skipped_license" {
+		t.Fatalf("unexpected skipped target: %+v", resp.SkippedTargets[0])
+	}
+}
+
 func TestHandleGetJob_Success(t *testing.T) {
 	h := newTestDeployHandlers(t, nil, nil)
 	ctx := context.Background()
@@ -1321,6 +1397,53 @@ func TestHandleRetryJob_Success(t *testing.T) {
 	job, _ := h.store.GetJob(ctx, "dep_retry")
 	if job.Status != deploy.JobRunning {
 		t.Fatalf("expected status running, got %q", job.Status)
+	}
+}
+
+func TestHandleRetryJob_BlocksWhenNoLicenseSlotsAvailable(t *testing.T) {
+	setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+	h := newTestDeployHandlers(t, nil, []models.Host{{ID: "host-existing", Hostname: "existing"}})
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	t.Cleanup(h.execServer.TestRegisterAgent("agent-1", "agent-1"))
+
+	if err := h.store.CreateJob(ctx, &deploy.Job{
+		ID: "dep_retry_license", ClusterID: "lab", ClusterName: "lab",
+		SourceAgentID: "agent-1", SourceNodeID: "node_a",
+		OrgID: "default", Status: deploy.JobFailed,
+		MaxParallel: 2, RetryMax: 3, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create job: %v", err)
+	}
+
+	if err := h.store.CreateTarget(ctx, &deploy.Target{
+		ID: "tgt_retry_license_1", JobID: "dep_retry_license", NodeID: "node_b",
+		NodeName: "pve-b", NodeIP: "10.0.0.2", Arch: "amd64",
+		Status: deploy.TargetFailedRetryable, Attempts: 1,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("create target: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/agent-deploy/jobs/dep_retry_license/retry", strings.NewReader(`{}`))
+	rec := httptest.NewRecorder()
+	h.HandleRetryJob(rec, req)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "license_limit") {
+		t.Fatalf("expected license_limit response, got %s", rec.Body.String())
+	}
+
+	targets, err := h.store.GetTargetsForJob(ctx, "dep_retry_license")
+	if err != nil {
+		t.Fatalf("get targets: %v", err)
+	}
+	if len(targets) != 1 || targets[0].Status != deploy.TargetFailedRetryable {
+		t.Fatalf("expected retry target to remain failed_retryable, got %+v", targets)
 	}
 }
 
