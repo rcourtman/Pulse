@@ -276,6 +276,10 @@ and update consumers must ask the unified-resource layer whether candidate or
 preview records change the deduped top-level monitored-system count, including
 replacement-aware projection and VMware host-UUID identity, instead of
 rebuilding handler-local counting heuristics.
+Candidate matching must fail closed when the prospective monitored-system
+candidate cannot resolve to a canonical top-level resource; malformed or
+whitespace-only inputs are not allowed to masquerade as an already-counted
+system simply because their no-op projection has zero additional count.
 That shared consumer ownership now includes same-tab summary hydration too.
 `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 may keep an in-memory remount cache for canonical resource charts, but the key

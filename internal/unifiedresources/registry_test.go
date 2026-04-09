@@ -2059,6 +2059,43 @@ func TestRegistryHasMatchingMonitoredSystemUsesCanonicalHostIdentity(t *testing.
 	}
 }
 
+func TestRegistryHasMatchingMonitoredSystemRejectsInvalidCandidate(t *testing.T) {
+	rr := NewRegistry(nil)
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "host-1",
+			Resource: Resource{
+				ID:     "host-1",
+				Type:   ResourceTypeAgent,
+				Name:   "lab-a",
+				Status: StatusOnline,
+				Agent: &AgentData{
+					AgentID:   "agent-1",
+					Hostname:  "lab-a",
+					MachineID: "machine-1",
+				},
+				Identity: ResourceIdentity{
+					MachineID: "machine-1",
+					Hostnames: []string{"lab-a"},
+				},
+			},
+		},
+	})
+
+	if HasMatchingMonitoredSystem(rr, MonitoredSystemCandidate{}) {
+		t.Fatal("expected empty candidate not to match an existing counted system")
+	}
+
+	if HasMatchingMonitoredSystem(rr, MonitoredSystemCandidate{
+		Source:   SourceAgent,
+		Name:     " ",
+		Hostname: " ",
+		HostURL:  " ",
+	}) {
+		t.Fatal("expected whitespace-only candidate not to match an existing counted system")
+	}
+}
+
 func TestProjectMonitoredSystemRecords_DedupesVMwareHostAgainstExistingAgentCount(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 4, 7, 12, 0, 0, 0, time.UTC)

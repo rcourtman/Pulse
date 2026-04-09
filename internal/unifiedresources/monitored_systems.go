@@ -113,6 +113,9 @@ func MonitoredSystems(rs ReadState) []MonitoredSystemRecord {
 // HasMatchingMonitoredSystem reports whether a prospective monitored system
 // would dedupe onto an already-counted top-level monitored system.
 func HasMatchingMonitoredSystem(rs ReadState, candidate MonitoredSystemCandidate) bool {
+	if monitoredSystemCandidateResource(candidate) == nil {
+		return false
+	}
 	return ProjectMonitoredSystemCandidate(rs, candidate).AdditionalCount == 0
 }
 
