@@ -1,6 +1,8 @@
 package api
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -62,6 +64,58 @@ func TestSanitizeRuntimeCapabilitiesPayloadForPublicDemo(t *testing.T) {
 	}
 	if sanitized.MaxHistoryDays != 90 || !sanitized.HostedMode {
 		t.Fatalf("non-commercial runtime capability fields should be preserved, got max_history_days=%d hosted_mode=%v", sanitized.MaxHistoryDays, sanitized.HostedMode)
+	}
+}
+
+func TestPublicDemoCommercialPolicyForRequestHidesUsagePreviewRoutes(t *testing.T) {
+	hiddenRoutes := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "ledger read", method: http.MethodGet, path: "/api/license/monitored-system-ledger"},
+		{name: "ledger explain", method: http.MethodPost, path: "/api/license/monitored-system-ledger/explain"},
+		{name: "ledger preview", method: http.MethodPost, path: "/api/license/monitored-system-ledger/preview"},
+		{name: "truenas draft preview", method: http.MethodPost, path: "/api/truenas/connections/preview"},
+		{name: "truenas saved preview", method: http.MethodPost, path: "/api/truenas/connections/conn-1/preview"},
+		{name: "vmware draft preview", method: http.MethodPost, path: "/api/vmware/connections/preview"},
+		{name: "vmware saved preview", method: http.MethodPost, path: "/api/vmware/connections/conn-1/preview"},
+	}
+
+	for _, tc := range hiddenRoutes {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			exposure, ok := publicDemoCommercialPolicyForRequest(req)
+			if !ok {
+				t.Fatalf("%s %s did not match public demo commercial policy", tc.method, tc.path)
+			}
+			if exposure != publicDemoCommercialExposureHidden {
+				t.Fatalf("%s %s exposure=%q, want %q", tc.method, tc.path, exposure, publicDemoCommercialExposureHidden)
+			}
+		})
+	}
+
+	allowedRoutes := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{name: "truenas list", method: http.MethodGet, path: "/api/truenas/connections"},
+		{name: "truenas add", method: http.MethodPost, path: "/api/truenas/connections"},
+		{name: "truenas saved test", method: http.MethodPost, path: "/api/truenas/connections/conn-1/test"},
+		{name: "vmware list", method: http.MethodGet, path: "/api/vmware/connections"},
+		{name: "vmware add", method: http.MethodPost, path: "/api/vmware/connections"},
+		{name: "vmware saved test", method: http.MethodPost, path: "/api/vmware/connections/conn-1/test"},
+		{name: "runtime capabilities", method: http.MethodGet, path: "/api/license/runtime-capabilities"},
+	}
+
+	for _, tc := range allowedRoutes {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, nil)
+			if exposure, ok := publicDemoCommercialPolicyForRequest(req); ok {
+				t.Fatalf("%s %s unexpectedly matched public demo commercial policy with exposure=%q", tc.method, tc.path, exposure)
+			}
+		})
 	}
 }
 

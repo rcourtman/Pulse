@@ -2644,7 +2644,7 @@ read-side boundary. `internal/api/demo_mode_commercial.go`,
 `internal/api/monitored_system_ledger.go`, and
 `internal/api/subscription_state_handlers.go` must fail closed with a generic
 `404` for public-demo billing, license-status, and monitored-system-ledger
-reads whenever `DEMO_MODE` is enabled. Demo runtimes may still use real
-server-side entitlement evaluation internally, but the governed browser/API
-contract must not expose commercial identity, usage, or upgrade-state payloads
-back to public viewers through those read surfaces.
+reads or preview probes whenever `DEMO_MODE` is enabled. Demo runtimes may
+still use real server-side entitlement evaluation internally, but the
+governed browser/API contract must not expose commercial identity, usage, or
+upgrade-state payloads back to public viewers through those read surfaces.
