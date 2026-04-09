@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
 	"os/exec"
 	"strings"
 	"testing"
@@ -17,13 +18,16 @@ func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.
 	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origGOOS := runtimeGOOS
+	origReadDir := readDir
 	t.Cleanup(func() {
 		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		runtimeGOOS = origGOOS
+		readDir = origReadDir
 	})
 
 	runtimeGOOS = "linux"
+	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name == "lsblk" {
@@ -62,10 +66,13 @@ func TestCollectLocal_LogsStructuredContextOnDeviceCollectionFailure(t *testing.
 
 func TestListBlockDevicesLinux_LogsStructuredContextForExcludedDevice(t *testing.T) {
 	origRun := smartRunCommandOutput
+	origReadDir := readDir
 	t.Cleanup(func() {
 		smartRunCommandOutput = origRun
+		readDir = origReadDir
 	})
 
+	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		data := lsblkJSON{Blockdevices: []lsblkDevice{
 			{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},

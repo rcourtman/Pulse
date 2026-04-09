@@ -466,14 +466,17 @@ func TestCollectSMARTLocalSkipsErrors(t *testing.T) {
 	origRun := smartRunCommandOutput
 	origLook := execLookPath
 	origNow := timeNow
+	origReadDir := readDir
 	t.Cleanup(func() {
 		smartRunCommandOutput = origRun
 		execLookPath = origLook
 		timeNow = origNow
+		readDir = origReadDir
 	})
 
 	fixed := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 	timeNow = func() time.Time { return fixed }
+	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	execLookPath = func(string) (string, error) { return "smartctl", nil }
 
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
@@ -926,8 +929,13 @@ func TestCollectDeviceSMARTWWN(t *testing.T) {
 
 func TestListBlockDevicesLinuxWithExcludes(t *testing.T) {
 	origRun := smartRunCommandOutput
-	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	origReadDir := readDir
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+	})
 
+	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		if name != "lsblk" {
 			return nil, errors.New("unexpected command")
@@ -1045,8 +1053,13 @@ func TestLinuxSMARTSkipReason(t *testing.T) {
 
 func TestListBlockDevicesLinuxFiltersVirtualDevices(t *testing.T) {
 	origRun := smartRunCommandOutput
-	t.Cleanup(func() { smartRunCommandOutput = origRun })
+	origReadDir := readDir
+	t.Cleanup(func() {
+		smartRunCommandOutput = origRun
+		readDir = origReadDir
+	})
 
+	readDir = func(string) ([]os.DirEntry, error) { return nil, errors.New("sysfs unavailable") }
 	smartRunCommandOutput = func(ctx context.Context, name string, args ...string) ([]byte, error) {
 		return mockLsblkJSON(
 			lsblkDevice{Name: "sda", Type: "disk", Tran: "sata", Subsystems: "block:scsi:pci"},
