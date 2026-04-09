@@ -38,7 +38,8 @@ import (
 //     → local SLO 15ms, GH Actions SLO 25ms
 //   - rollupTier fleet-scale (500×4×20): ~138ms p95 observed locally in March 2026; ~214-217ms p95 on March 26, 2026 GitHub release rehearsals;
 //     ~271ms p95 on the April 9, 2026 v6 RC dry run → local SLO 140ms, GH Actions SLO 300ms
-//   - Query under write contention: ~400µs → SLO 5ms
+//   - Query under write contention: ~400µs locally; ~6.2ms p95 on the April 9, 2026 v6 RC dry run
+//     → local SLO 5ms, GH Actions SLO 7ms
 //   - 500-node concurrent dashboard load: ~7.9ms p95 observed locally in March 2026; ~23-24ms p95 on March 26, 2026 GitHub release rehearsals
 //     → local SLO 15ms, GH Actions SLO 30ms
 //   - QueryManyResources:  ~22µs  → SLO 500µs
@@ -106,6 +107,9 @@ const (
 	// while a background writer continuously appends batches on the same SQLite
 	// connection pool. This guards dashboard read latency under live ingestion.
 	SLOConcurrentReadWriteP95 = 5 * time.Millisecond
+	// SLOConcurrentReadWriteGitHubActionsP95 absorbs hosted-runner contention
+	// jitter while preserving the local dashboard read budget.
+	SLOConcurrentReadWriteGitHubActionsP95 = 7 * time.Millisecond
 
 	// SLOConcurrentDashboardLoadP95 is the p95 target for a 500-node scenario
 	// where 10 concurrent dashboard loads each issue QueryAll while background
@@ -763,12 +767,13 @@ func TestSLO_ConcurrentReadWrite(t *testing.T) {
 		}
 	})
 
+	target := effectiveSLOTarget(SLOConcurrentReadWriteP95, SLOConcurrentReadWriteGitHubActionsP95)
 	p95 := pct(latencies, 0.95)
 	t.Logf("ConcurrentReadWrite p50=%v p95=%v p99=%v SLO=%v",
-		pct(latencies, 0.50), p95, pct(latencies, 0.99), SLOConcurrentReadWriteP95)
+		pct(latencies, 0.50), p95, pct(latencies, 0.99), target)
 
-	if p95 > SLOConcurrentReadWriteP95 {
-		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, SLOConcurrentReadWriteP95)
+	if p95 > target {
+		t.Errorf("SLO VIOLATION: p95=%v exceeds target %v", p95, target)
 	}
 }
 
