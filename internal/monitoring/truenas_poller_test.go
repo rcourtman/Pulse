@@ -41,8 +41,8 @@ func TestTrueNASPollerPollsConfiguredConnections(t *testing.T) {
 	t.Cleanup(poller.Stop)
 
 	waitForCondition(t, 2*time.Second, func() bool {
-		return mock.RequestCount() >= 5
-	}, "expected at least one successful TrueNAS poll cycle")
+		return mock.RequestCount() >= 5 && hasTrueNASHostForOrg(poller, "default", "nas-one")
+	}, "expected configured TrueNAS connection to poll and ingest host resources")
 
 	poller.Stop()
 	if !hasTrueNASHostForOrg(poller, "default", "nas-one") {
