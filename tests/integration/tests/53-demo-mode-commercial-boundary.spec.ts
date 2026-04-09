@@ -1,14 +1,46 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, test as base } from '@playwright/test';
-import { createAuthenticatedStorageState } from './helpers';
+import { expect, test as base, type Page } from '@playwright/test';
+import { createAuthenticatedStorageState, ensureAuthenticated, trackBrowserRequests } from './helpers';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 type WorkerFixtures = {
   authStorageStatePath: string;
 };
+
+type BrowserProbeResult = {
+  status: number;
+  body: unknown;
+};
+
+const HIDDEN_DEMO_COMMERCIAL_RESPONSE_KEYS = [
+  'commercialPosture',
+  'entitlements',
+  'status',
+  'features',
+  'activate',
+  'clear',
+  'trialStart',
+  'ledger',
+  'ledgerPreview',
+  'billingState',
+  'upgradeMetrics',
+  'truenasDraftPreview',
+  'truenasSavedPreview',
+  'vmwareDraftPreview',
+  'vmwareSavedPreview',
+  'checkoutStart',
+  'trialActivate',
+] as const;
+
+type HiddenDemoCommercialResponseKey = typeof HIDDEN_DEMO_COMMERCIAL_RESPONSE_KEYS[number];
+
+type DemoCommercialBoundaryResponses = Record<
+  'runtimeCapabilities' | HiddenDemoCommercialResponseKey,
+  BrowserProbeResult
+>;
 
 const SECURITY_STATUS_DEMO_PAYLOAD = {
   hasAuthentication: true,
@@ -33,6 +65,14 @@ const DEMO_PUBLIC_RUNTIME_CAPABILITIES = {
   max_history_days: 90,
 };
 
+const truthy = (value: unknown): boolean =>
+  ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
+
+const integratedManagedDemoRuntime =
+  truthy(process.env.PULSE_E2E_USE_LOCAL_BACKEND) &&
+  truthy(process.env.DEMO_MODE) &&
+  truthy(process.env.PULSE_MOCK_MODE);
+
 const authenticatedTest = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
@@ -55,6 +95,89 @@ const authenticatedTest = base.extend<{}, WorkerFixtures>({
     }
   }, { scope: 'worker' }],
 });
+
+async function probeDemoCommercialBoundaryFromBrowser(
+  page: Page,
+): Promise<DemoCommercialBoundaryResponses> {
+  return page.evaluate(async () => {
+    const probe = async (input: string, init?: RequestInit) => {
+      const res = await fetch(input, {
+        credentials: 'include',
+        ...init,
+      });
+      let body: unknown = null;
+      try {
+        body = await res.json();
+      } catch {
+        body = null;
+      }
+      return { status: res.status, body };
+    };
+    const postEmptyJSON = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    };
+
+    return {
+      runtimeCapabilities: await probe('/api/license/runtime-capabilities'),
+      status: await probe('/api/license/status'),
+      features: await probe('/api/license/features'),
+      commercialPosture: await probe('/api/license/commercial-posture'),
+      entitlements: await probe('/api/license/entitlements'),
+      activate: await probe('/api/license/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ license_key: 'demo' }),
+      }),
+      clear: await probe('/api/license/clear', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      }),
+      trialStart: await probe('/api/license/trial/start', { method: 'POST' }),
+      ledger: await probe('/api/license/monitored-system-ledger'),
+      ledgerPreview: await probe('/api/license/monitored-system-ledger/preview', postEmptyJSON),
+      billingState: await probe('/api/admin/orgs/default/billing-state'),
+      upgradeMetrics: await probe('/api/upgrade-metrics/stats'),
+      truenasDraftPreview: await probe('/api/truenas/connections/preview', postEmptyJSON),
+      truenasSavedPreview: await probe('/api/truenas/connections/conn-1/preview', postEmptyJSON),
+      vmwareDraftPreview: await probe('/api/vmware/connections/preview', postEmptyJSON),
+      vmwareSavedPreview: await probe('/api/vmware/connections/conn-1/preview', postEmptyJSON),
+      checkoutStart: await probe('/auth/license-purchase-start'),
+      trialActivate: await probe('/auth/trial-activate'),
+    };
+  });
+}
+
+function expectPublicDemoRuntimeCapabilities(response: BrowserProbeResult): void {
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({ hosted_mode: false });
+  expect((response.body as { capabilities?: string[] }).capabilities).toEqual(
+    expect.arrayContaining(['ai_patrol', 'relay']),
+  );
+  expect((response.body as { max_history_days?: number }).max_history_days).toEqual(expect.any(Number));
+  expect((response.body as { max_history_days?: number }).max_history_days).toBeGreaterThan(0);
+  expect(response.body).not.toHaveProperty('licensed_email');
+  expect(response.body).not.toHaveProperty('tier');
+  expect(response.body).not.toHaveProperty('subscription_state');
+  expect(response.body).not.toHaveProperty('upgrade_reasons');
+  const limits = (response.body as { limits?: Array<{ key: string; current: number; limit: number; state: string }> }).limits ?? [];
+  expect(limits).toContainEqual({ key: 'max_monitored_systems', limit: 0, current: 0, state: 'ok' });
+  for (const limit of limits) {
+    expect(limit.limit, `expected ${limit.key} demo limit to be redacted`).toBe(0);
+    expect(limit.current, `expected ${limit.key} demo current usage to be redacted`).toBe(0);
+    expect(limit.state, `expected ${limit.key} demo limit state to be harmless`).toBe('ok');
+  }
+}
+
+function expectHiddenDemoCommercialResponses(
+  responses: DemoCommercialBoundaryResponses,
+): void {
+  for (const key of HIDDEN_DEMO_COMMERCIAL_RESPONSE_KEYS) {
+    expect(responses[key].status, `expected ${key} to stay hidden in demo mode`).toBe(404);
+  }
+}
 
 base.describe('Demo mode commercial boundary', () => {
   base.setTimeout(180_000);
@@ -283,87 +406,82 @@ base.describe('Demo mode commercial boundary', () => {
 
       await page.goto('/settings/infrastructure/install', { waitUntil: 'domcontentloaded' });
 
-      const responses = await page.evaluate(async () => {
-        const probe = async (input: string, init?: RequestInit) => {
-          const res = await fetch(input, {
-            credentials: 'include',
-            ...init,
-          });
-          let body: unknown = null;
-          try {
-            body = await res.json();
-          } catch {
-            body = null;
-          }
-          return { status: res.status, body };
-        };
-        const postEmptyJSON = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({}),
-        };
+      const responses = await probeDemoCommercialBoundaryFromBrowser(page);
+      expectPublicDemoRuntimeCapabilities(responses.runtimeCapabilities);
+      expectHiddenDemoCommercialResponses(responses);
+    },
+  );
+});
 
-        return {
-          runtimeCapabilities: await probe('/api/license/runtime-capabilities'),
-          status: await probe('/api/license/status'),
-          features: await probe('/api/license/features'),
-          commercialPosture: await probe('/api/license/commercial-posture'),
-          entitlements: await probe('/api/license/entitlements'),
-          activate: await probe('/api/license/activate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ license_key: 'demo' }),
-          }),
-          clear: await probe('/api/license/clear', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({}),
-          }),
-          trialStart: await probe('/api/license/trial/start', { method: 'POST' }),
-          ledger: await probe('/api/license/monitored-system-ledger'),
-          ledgerPreview: await probe('/api/license/monitored-system-ledger/preview', postEmptyJSON),
-          billingState: await probe('/api/admin/orgs/default/billing-state'),
-          upgradeMetrics: await probe('/api/upgrade-metrics/stats'),
-          truenasDraftPreview: await probe('/api/truenas/connections/preview', postEmptyJSON),
-          truenasSavedPreview: await probe('/api/truenas/connections/conn-1/preview', postEmptyJSON),
-          vmwareDraftPreview: await probe('/api/vmware/connections/preview', postEmptyJSON),
-          vmwareSavedPreview: await probe('/api/vmware/connections/conn-1/preview', postEmptyJSON),
-          checkoutStart: await probe('/auth/license-purchase-start'),
-          trialActivate: await probe('/auth/trial-activate'),
-        };
+base.describe('Managed demo runtime commercial boundary', () => {
+  base.setTimeout(180_000);
+  base.skip(
+    !integratedManagedDemoRuntime,
+    'Run with PULSE_E2E_USE_LOCAL_BACKEND=1 DEMO_MODE=true PULSE_MOCK_MODE=true to exercise the real managed demo runtime.',
+  );
+
+  base(
+    'hides commercial surfaces and APIs without browser route stubs',
+    async ({ page }, testInfo) => {
+      base.skip(testInfo.project.name.startsWith('mobile-'), 'Desktop runtime proof');
+
+      await page.addInitScript(() => {
+        localStorage.setItem('pulse_whats_new_v2_shown', 'true');
+      });
+      await ensureAuthenticated(page);
+
+      const hiddenCommercialRequests = trackBrowserRequests(
+        page,
+        /\/api\/license\/(?!runtime-capabilities)|\/api\/admin\/orgs\/[^/]+\/billing-state|\/api\/upgrade-metrics\/|\/auth\/license-purchase-start|\/auth\/trial-activate/,
+      );
+      try {
+        await page.goto('/settings/system/billing/usage?details=counting-rules', {
+          waitUntil: 'domcontentloaded',
+        });
+        await page.waitForURL('**/settings/infrastructure/install', { timeout: 15_000 });
+
+        await expect(
+          page.getByText('Demo instance with mock data (read-only)', { exact: true }),
+        ).toBeVisible();
+        await expect(page.getByRole('heading', { level: 1, name: 'Infrastructure Operations' })).toBeVisible();
+        const settingsNavigation = page.locator('[aria-label="Settings navigation"]');
+        await expect(settingsNavigation).toBeVisible();
+        await expect(settingsNavigation.getByText('Pulse Pro', { exact: true })).toHaveCount(0);
+        await expect(page.getByText('Pro Trial:', { exact: false })).toHaveCount(0);
+        await expect(page.getByText(/Monitored systems:\s*\d+\/\d+/)).toHaveCount(0);
+        await expect(
+          page
+            .locator('[role="tab"]')
+            .filter({ hasText: 'Settings' })
+            .getByText('Pro', { exact: true }),
+        ).toHaveCount(0);
+
+        expect(
+          hiddenCommercialRequests.urls(),
+          'demo settings navigation should not request hidden commercial APIs',
+        ).toEqual([]);
+      } finally {
+        hiddenCommercialRequests.stop();
+      }
+
+      const securityStatus = await page.evaluate(async () => {
+        const res = await fetch('/api/security/status', { credentials: 'include' });
+        return { status: res.status, body: await res.json() };
+      });
+      expect(securityStatus.status).toBe(200);
+      expect(securityStatus.body).toMatchObject({
+        sessionCapabilities: { demoMode: true },
+        presentationPolicy: {
+          demoMode: true,
+          readOnly: true,
+          hideCommercial: true,
+          hideUpgrade: true,
+        },
       });
 
-      expect(responses.runtimeCapabilities.status).toBe(200);
-      expect(responses.runtimeCapabilities.body).toMatchObject({
-        capabilities: ['ai_patrol', 'relay'],
-        hosted_mode: false,
-        max_history_days: 90,
-      });
-      expect(responses.runtimeCapabilities.body).not.toHaveProperty('licensed_email');
-      expect(responses.runtimeCapabilities.body).not.toHaveProperty('tier');
-      expect(responses.runtimeCapabilities.body).not.toHaveProperty('subscription_state');
-      expect(responses.runtimeCapabilities.body).not.toHaveProperty('upgrade_reasons');
-      expect((responses.runtimeCapabilities.body as { limits?: Array<{ key: string; current: number; limit: number; state: string }> }).limits).toEqual([
-        { key: 'max_monitored_systems', limit: 0, current: 0, state: 'ok' },
-      ]);
-
-      expect(responses.commercialPosture.status).toBe(404);
-      expect(responses.entitlements.status).toBe(404);
-      expect(responses.status.status).toBe(404);
-      expect(responses.features.status).toBe(404);
-      expect(responses.activate.status).toBe(404);
-      expect(responses.clear.status).toBe(404);
-      expect(responses.trialStart.status).toBe(404);
-      expect(responses.ledger.status).toBe(404);
-      expect(responses.ledgerPreview.status).toBe(404);
-      expect(responses.billingState.status).toBe(404);
-      expect(responses.upgradeMetrics.status).toBe(404);
-      expect(responses.truenasDraftPreview.status).toBe(404);
-      expect(responses.truenasSavedPreview.status).toBe(404);
-      expect(responses.vmwareDraftPreview.status).toBe(404);
-      expect(responses.vmwareSavedPreview.status).toBe(404);
-      expect(responses.checkoutStart.status).toBe(404);
-      expect(responses.trialActivate.status).toBe(404);
+      const responses = await probeDemoCommercialBoundaryFromBrowser(page);
+      expectPublicDemoRuntimeCapabilities(responses.runtimeCapabilities);
+      expectHiddenDemoCommercialResponses(responses);
     },
   );
 });

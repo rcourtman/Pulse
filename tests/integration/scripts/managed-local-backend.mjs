@@ -15,6 +15,7 @@ const DEFAULT_LOCAL_BACKEND_VARIANT = 'core';
 const SUPPORTED_LOCAL_BACKEND_VARIANTS = new Set(['core', 'enterprise']);
 
 const trim = (value) => String(value || '').trim();
+const truthy = (value) => ['1', 'true', 'yes', 'on'].includes(trim(value).toLowerCase());
 const buildScopedPathSegment = (value) => String(value).replace(/[^A-Za-z0-9._-]+/g, '-');
 
 function resolveManagedLocalBackendVariant(env = process.env) {
@@ -176,7 +177,7 @@ export function buildManagedLocalBackendEnv(state, env = process.env) {
     nextEnv.PULSE_E2E_ENTITLEMENT_PROFILE = trim(env.PULSE_E2E_ENTITLEMENT_PROFILE);
   }
 
-  if (trim(env.PULSE_HOSTED_MODE).toLowerCase() === 'true') {
+  if (truthy(env.PULSE_HOSTED_MODE) || truthy(env.DEMO_MODE)) {
     nextEnv.PULSE_AUTH_USER = trim(env.PULSE_AUTH_USER) || trim(env.PULSE_E2E_USERNAME) || DEFAULT_E2E_USERNAME;
     nextEnv.PULSE_AUTH_PASS = trim(env.PULSE_AUTH_PASS) || trim(env.PULSE_E2E_PASSWORD) || DEFAULT_E2E_PASSWORD;
   }
@@ -504,11 +505,23 @@ async function ensureManagedLocalBackendSecurity(state, env, logger) {
   }
 
   if (security?.hasAuthentication && !security?.apiTokenConfigured) {
+    if (truthy(env.DEMO_MODE)) {
+      logger.log('[integration] Managed local backend demo mode is read-only; skipping API token creation');
+      return {
+        security,
+        primaryAPIToken: '',
+      };
+    }
+
     const primaryAPIToken = await createManagedLocalBackendAPIToken(state, env, logger);
     return {
       security: await readSecurityStatus(state.baseURL),
       primaryAPIToken,
     };
+  }
+
+  if (truthy(env.DEMO_MODE)) {
+    throw new Error('Managed local backend demo mode requires preconfigured authentication because demo mode blocks first-run setup writes');
   }
 
   const payload = {

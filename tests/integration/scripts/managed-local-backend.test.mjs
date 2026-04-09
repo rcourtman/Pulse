@@ -107,6 +107,19 @@ test('buildManagedLocalBackendEnv preserves explicit hosted auth overrides', () 
   assert.equal(env.PULSE_AUTH_PASS, 'custom-password-123');
 });
 
+test('buildManagedLocalBackendEnv seeds deterministic auth in demo mode', () => {
+  const state = buildManagedLocalBackendState({
+    PULSE_E2E_LOCAL_BACKEND_PORT: '9004',
+    DEMO_MODE: 'true',
+  });
+  const env = buildManagedLocalBackendEnv(state, {
+    DEMO_MODE: 'true',
+  });
+
+  assert.equal(env.PULSE_AUTH_USER, 'admin');
+  assert.equal(env.PULSE_AUTH_PASS, 'adminadminadmin');
+});
+
 test('shouldBuildManagedLocalBackendBinary returns true when binary is missing', async () => {
   const repoRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'pulse-managed-backend-'));
   const state = {
