@@ -243,7 +243,7 @@ describe('monitored-system model guardrails', () => {
     expect(agentProfilesPanelStateSource).toContain('const { resources } = useResources()');
     expect(agentProfilesPanelStateSource).toContain('const loadData = async () =>');
     expect(agentProfilesPanelStateSource).toContain('const handleSave = async () =>');
-    expect(agentProfilesPanelStateSource).toContain("aiChatStore.enabled === true");
+    expect(agentProfilesPanelStateSource).toContain('aiChatStore.enabled === true');
     expect(agentProfilesPanelStateSource).not.toContain('AIAPI.getSettings()');
     expect(agentProfilesPanelStateSource).toContain('AgentProfilesAPI.listProfiles()');
     expect(agentProfilesPanelStateSource).toContain('AgentProfilesAPI.listAssignments()');
@@ -287,7 +287,10 @@ describe('monitored-system model guardrails', () => {
 
   it('keeps platform-connection admission preview on the shared monitored-system model', () => {
     expect(monitoredSystemAdmissionPreviewSource).toContain(
-      "import { formatMonitoredSystemSurfaceAttribution }",
+      'formatMonitoredSystemSurfaceAttribution',
+    );
+    expect(monitoredSystemAdmissionPreviewSource).toContain(
+      'getMonitoredSystemAdmissionPreviewRequiredState',
     );
     expect(monitoredSystemAdmissionPreviewSource).toContain('Current matched systems');
     expect(monitoredSystemAdmissionPreviewSource).toContain('Projected systems');
@@ -301,6 +304,13 @@ describe('monitored-system model guardrails', () => {
     expect(trueNASSettingsPanelSource).toContain('Preview impact');
     expect(trueNASSettingsPanelStateSource).toContain('const [previewing, setPreviewing]');
     expect(trueNASSettingsPanelStateSource).toContain('const previewCurrentForm = async () =>');
+    expect(trueNASSettingsPanelStateSource).toContain(
+      'buildMonitoredSystemAdmissionPreviewUnavailableState',
+    );
+    expect(trueNASSettingsPanelStateSource).toContain(
+      'getMonitoredSystemAdmissionPreviewSaveBlockedMessage',
+    );
+    expect(trueNASSettingsPanelStateSource).not.toContain('monitored_system_usage_unavailable');
     expect(trueNASSettingsPanelStateSource).toContain('TrueNASAPI.previewConnection(payload)');
     expect(trueNASSettingsPanelStateSource).toContain(
       'TrueNASAPI.previewSavedConnection(editingConnectionId()!, payload)',
@@ -315,12 +325,20 @@ describe('monitored-system model guardrails', () => {
     expect(vmwareSettingsPanelSource).toContain('Preview impact');
     expect(vmwareSettingsPanelStateSource).toContain('const [previewing, setPreviewing]');
     expect(vmwareSettingsPanelStateSource).toContain('const previewCurrentForm = async () =>');
+    expect(vmwareSettingsPanelStateSource).toContain(
+      'buildMonitoredSystemAdmissionPreviewUnavailableState',
+    );
+    expect(vmwareSettingsPanelStateSource).toContain(
+      'getMonitoredSystemAdmissionPreviewSaveBlockedMessage',
+    );
+    expect(vmwareSettingsPanelStateSource).not.toContain('monitored_system_usage_unavailable');
     expect(vmwareSettingsPanelStateSource).toContain('VMwareAPI.previewConnection(payload)');
     expect(vmwareSettingsPanelStateSource).toContain(
       'VMwareAPI.previewSavedConnection(editingConnectionId()!, payload)',
     );
     expect(vmwareApiSource).toContain('static async previewConnection(');
     expect(vmwareApiSource).toContain('static async previewSavedConnection(');
+    expect(monitoredSystemPresentationSource).toContain('monitored_system_usage_unavailable');
   });
 
   it('keeps APITokenManager runtime usage mapped from unified resources', () => {
@@ -983,7 +1001,9 @@ describe('monitored-system model guardrails', () => {
       'The canonical install flow now lives in Infrastructure Operations.',
     );
     expect(setupCompletionPanelSource).not.toContain('const hasAgentFacet = (resource: Resource)');
-    expect(setupCompletionPanelSource).not.toContain('const agentFacetResources = resources.filter(');
+    expect(setupCompletionPanelSource).not.toContain(
+      'const agentFacetResources = resources.filter(',
+    );
     expect(setupCompletionPanelSource).not.toContain('state.nodes || []');
     expect(setupCompletionPanelSource).not.toContain('state.hosts || []');
     expect(infrastructureSelectorSource).toContain('useInfrastructureSelectorState');

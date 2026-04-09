@@ -87,6 +87,9 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
       'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
   },
   admissionPreview: {
+    requiredTitle: 'Preview monitored-system impact before saving',
+    requiredMessage:
+      'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
     unavailableTitle: 'Monitored-system capacity is temporarily unavailable',
     unavailableFallbackMessage:
       'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
@@ -94,8 +97,12 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
       'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
     unavailableRebuildPendingMessage:
       'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+    saveBlockedLimitMessage: 'This change would exceed your monitored-system limit',
+    saveBlockedLoadingMessage: 'Wait for the monitored-system impact preview to finish',
   },
 } as const;
+
+const MONITORED_SYSTEM_USAGE_UNAVAILABLE_ERROR_CODE = 'monitored_system_usage_unavailable';
 
 export type MonitoredSystemLegacyConnectionCounts = {
   proxmox_nodes: number;
@@ -109,6 +116,19 @@ export type MonitoredSystemLimitUsageStatus = {
   current_available?: boolean | null;
   current_unavailable_reason?: string | null;
   state?: string | null;
+};
+
+export type MonitoredSystemAdmissionPreviewUnavailableState = {
+  reason: string | null;
+  title: string;
+  message: string;
+};
+
+export type MonitoredSystemAdmissionPreviewSaveState = {
+  preview?: { would_exceed_limit?: boolean | null } | null;
+  unavailableState?: MonitoredSystemAdmissionPreviewUnavailableState | null;
+  error?: string | null;
+  loading?: boolean | null;
 };
 
 export function getMonitoredSystemLedgerPresentation() {
@@ -251,6 +271,16 @@ export function getMonitoredSystemAdmissionPreviewUnavailableTitle(): string {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.unavailableTitle;
 }
 
+export function getMonitoredSystemAdmissionPreviewRequiredState(): {
+  title: string;
+  message: string;
+} {
+  return {
+    title: MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.requiredTitle,
+    message: MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.requiredMessage,
+  };
+}
+
 export function formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason?: string): string {
   switch (normalizeMonitoredSystemValue(reason)) {
     case 'supplemental_inventory_unsettled':
@@ -260,6 +290,59 @@ export function formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason?:
     default:
       return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.unavailableFallbackMessage;
   }
+}
+
+export function buildMonitoredSystemAdmissionPreviewUnavailableState(input: {
+  code?: string | null;
+  reason?: string | null;
+}): MonitoredSystemAdmissionPreviewUnavailableState | null {
+  if (normalizeMonitoredSystemValue(input.code) !== MONITORED_SYSTEM_USAGE_UNAVAILABLE_ERROR_CODE) {
+    return null;
+  }
+
+  const reason = input.reason?.trim() || null;
+  return {
+    reason,
+    title: getMonitoredSystemAdmissionPreviewUnavailableTitle(),
+    message: formatMonitoredSystemAdmissionPreviewUnavailableMessage(reason),
+  };
+}
+
+export function isMonitoredSystemAdmissionPreviewResolvedSafely(
+  state: MonitoredSystemAdmissionPreviewSaveState,
+): boolean {
+  return (
+    !state.loading &&
+    Boolean(state.preview) &&
+    state.preview?.would_exceed_limit !== true &&
+    !state.unavailableState &&
+    !state.error?.trim()
+  );
+}
+
+export function getMonitoredSystemAdmissionPreviewSaveBlockedMessage(
+  state: MonitoredSystemAdmissionPreviewSaveState,
+): string | null {
+  if (isMonitoredSystemAdmissionPreviewResolvedSafely(state)) {
+    return null;
+  }
+
+  if (state.loading) {
+    return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.saveBlockedLoadingMessage;
+  }
+  if (state.unavailableState) {
+    return state.unavailableState.message;
+  }
+  if (state.preview?.would_exceed_limit) {
+    return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.saveBlockedLimitMessage;
+  }
+
+  const error = state.error?.trim();
+  if (error) {
+    return error;
+  }
+
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.admissionPreview.requiredMessage;
 }
 
 export function formatMonitoredSystemLimitSummary(limit: {

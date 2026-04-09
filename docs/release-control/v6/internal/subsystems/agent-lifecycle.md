@@ -1075,6 +1075,12 @@ unavailable-reason guidance. When `/api/license/monitored-system-ledger/preview`
 `details.reason` from the monitor usage contract and the shared admission
 preview shell plus provider panels must render helper-owned retry copy and
 disable save until preview can resolve again.
+That same lifecycle-owned admission surface must keep provider save actions
+gated on a successful monitored-system preview. TrueNAS and VMware settings
+may not create or update a connection while the admission preview is missing,
+loading, unavailable, errored, or over-limit, and save-time backend races must
+reuse the same canonical preview/unavailable presentation state instead of
+falling back to provider-local billing messages.
 That same validation contract must stay coherent across the public
 `/api/auto-register` route and the direct canonical handler path used by the
 same runtime surface, so Unified Agent/setup entry points do not inherit divergent

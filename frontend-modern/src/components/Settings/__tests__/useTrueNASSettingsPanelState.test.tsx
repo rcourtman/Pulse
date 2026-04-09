@@ -32,6 +32,29 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
+const safeTrueNASPreview = () => ({
+  current_count: 1,
+  projected_count: 1,
+  additional_count: 0,
+  limit: 10,
+  would_exceed_limit: false,
+  effect: 'attaches_existing',
+  current_systems: [],
+  projected_systems: [
+    {
+      name: 'tower',
+      type: 'truenas-system',
+      status: 'online',
+      source: 'truenas',
+      status_explanation: { summary: '', reasons: [] },
+      latest_included_signal: { name: '', type: '', at: '' },
+      explanation: { summary: '', reasons: [], surfaces: [] },
+    },
+  ],
+  current_system: null,
+  projected_system: null,
+});
+
 describe('useTrueNASSettingsPanelState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -75,6 +98,9 @@ describe('useTrueNASSettingsPanelState', () => {
       insecureSkipVerify: false,
       enabled: true,
     } as never);
+    vi.mocked(TrueNASAPI.previewSavedConnection).mockResolvedValueOnce(
+      safeTrueNASPreview() as never,
+    );
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([
       {
         id: 'conn-1',
@@ -95,8 +121,17 @@ describe('useTrueNASSettingsPanelState', () => {
     result.openEditDialog(result.connections()[0]);
     expect(result.dialogOpen()).toBe(true);
     expect(result.form().pollIntervalSeconds).toBe('90');
+    await result.previewCurrentForm();
     await result.saveCurrentForm();
 
+    expect(TrueNASAPI.previewSavedConnection).toHaveBeenCalledWith(
+      'conn-1',
+      expect.objectContaining({
+        host: 'truenas.local',
+        apiKey: '********',
+        pollIntervalSeconds: 90,
+      }),
+    );
     expect(TrueNASAPI.updateConnection).toHaveBeenCalledWith(
       'conn-1',
       expect.objectContaining({
@@ -190,6 +225,27 @@ describe('useTrueNASSettingsPanelState', () => {
     );
     expect(TrueNASAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('TrueNAS connection successful');
+  });
+
+  it('requires a successful monitored-system preview before saving', async () => {
+    vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+
+    const { result } = renderHook(() => useTrueNASSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'tower.local',
+      apiKey: 'secret',
+    });
+
+    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
+    await result.saveCurrentForm();
+
+    expect(TrueNASAPI.createConnection).not.toHaveBeenCalled();
+    expect(notificationStore.error).toHaveBeenCalledWith(
+      'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+    );
   });
 
   it('previews monitored-system impact through the canonical TrueNAS preview path', async () => {
@@ -290,6 +346,7 @@ describe('useTrueNASSettingsPanelState', () => {
 
   it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.previewConnection).mockResolvedValueOnce(safeTrueNASPreview() as never);
     vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
       Object.assign(new Error('Monitored-system limit reached (10/9)'), {
         status: 402,
@@ -324,6 +381,7 @@ describe('useTrueNASSettingsPanelState', () => {
       host: 'tower.local',
       apiKey: 'secret',
     });
+    await result.previewCurrentForm();
     await result.saveCurrentForm();
 
     expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system limit reached (10/9)');
@@ -335,8 +393,9 @@ describe('useTrueNASSettingsPanelState', () => {
     expect(result.dialogOpen()).toBe(true);
   });
 
-  it('surfaces monitored-system usage unavailability when save is rejected before preview settles', async () => {
+  it('surfaces monitored-system usage unavailability when save races a stale preview', async () => {
     vi.mocked(TrueNASAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(TrueNASAPI.previewConnection).mockResolvedValueOnce(safeTrueNASPreview() as never);
     vi.mocked(TrueNASAPI.createConnection).mockRejectedValueOnce(
       Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
         status: 503,
@@ -355,6 +414,7 @@ describe('useTrueNASSettingsPanelState', () => {
       host: 'tower.local',
       apiKey: 'secret',
     });
+    await result.previewCurrentForm();
     await result.saveCurrentForm();
 
     expect(result.monitoredSystemPreview()).toBeNull();

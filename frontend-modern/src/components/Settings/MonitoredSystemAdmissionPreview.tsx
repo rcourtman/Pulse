@@ -1,7 +1,10 @@
 import { For, Show, type Component } from 'solid-js';
 import type { MonitoredSystemLedgerPreviewResponse } from '@/api/monitoredSystemLedger';
 import { CalloutCard } from '@/components/shared/CalloutCard';
-import { formatMonitoredSystemSurfaceAttribution } from '@/utils/monitoredSystemPresentation';
+import {
+  formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemAdmissionPreviewRequiredState,
+} from '@/utils/monitoredSystemPresentation';
 
 interface MonitoredSystemAdmissionPreviewProps {
   preview: MonitoredSystemLedgerPreviewResponse | null;
@@ -46,8 +49,18 @@ const previewSummary = (preview: MonitoredSystemLedgerPreviewResponse): string =
 export const MonitoredSystemAdmissionPreview: Component<MonitoredSystemAdmissionPreviewProps> = (
   props,
 ) => {
+  const requiredState = getMonitoredSystemAdmissionPreviewRequiredState();
+
   return (
     <>
+      <Show when={!props.loading && !props.error && !props.preview}>
+        <CalloutCard
+          tone="info"
+          title={requiredState.title}
+          description={<p>{requiredState.message}</p>}
+        />
+      </Show>
+
       <Show when={props.loading}>
         <div class="rounded-md border border-border bg-surface-alt px-4 py-3 text-sm text-muted">
           Calculating monitored-system impact…

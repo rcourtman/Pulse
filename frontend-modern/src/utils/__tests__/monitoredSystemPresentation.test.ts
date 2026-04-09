@@ -6,6 +6,7 @@ import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/mo
 import licensePresentationSource from '@/utils/licensePresentation.ts?raw';
 import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import {
+  buildMonitoredSystemAdmissionPreviewUnavailableState,
   formatMonitoredSystemAdmissionPreviewUnavailableMessage,
   formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLegacyConnectionBreakdown,
@@ -17,6 +18,8 @@ import {
   formatMonitoredSystemMigrationMessage,
   formatMonitoredSystemOverflowSummary,
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemAdmissionPreviewRequiredState,
+  getMonitoredSystemAdmissionPreviewSaveBlockedMessage,
   getMonitoredSystemAdmissionPreviewUnavailableTitle,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemDisclosureDefinition,
@@ -38,6 +41,7 @@ import {
   getMonitoredSystemSourceLabel,
   getMonitoredSystemStatusFallbackSummary,
   getMonitoredSystemSurfaceTypeLabel,
+  isMonitoredSystemAdmissionPreviewResolvedSafely,
   isMonitoredSystemLimitUrgent,
   isMonitoredSystemLimitUsageAvailable,
 } from '@/utils/monitoredSystemPresentation';
@@ -123,6 +127,9 @@ describe('monitoredSystemPresentation', () => {
           'that count once toward your monitored-system cap when the same top-level system is discovered canonically.',
       },
       admissionPreview: {
+        requiredTitle: 'Preview monitored-system impact before saving',
+        requiredMessage:
+          'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
         unavailableTitle: 'Monitored-system capacity is temporarily unavailable',
         unavailableFallbackMessage:
           'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
@@ -130,6 +137,8 @@ describe('monitoredSystemPresentation', () => {
           'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
         unavailableRebuildPendingMessage:
           'Pulse has settled provider-owned inventory and is rebuilding the canonical monitored-system view, so this connection cannot be saved yet. Retry preview in a moment.',
+        saveBlockedLimitMessage: 'This change would exceed your monitored-system limit',
+        saveBlockedLoadingMessage: 'Wait for the monitored-system impact preview to finish',
       },
     });
     expect(getMonitoredSystemBriefSummary()).toBe(
@@ -293,6 +302,11 @@ describe('monitoredSystemPresentation', () => {
   });
 
   it('returns canonical monitored-system admission unavailable copy', () => {
+    expect(getMonitoredSystemAdmissionPreviewRequiredState()).toEqual({
+      title: 'Preview monitored-system impact before saving',
+      message:
+        'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+    });
     expect(getMonitoredSystemAdmissionPreviewUnavailableTitle()).toBe(
       'Monitored-system capacity is temporarily unavailable',
     );
@@ -313,6 +327,46 @@ describe('monitoredSystemPresentation', () => {
     ).toBe(
       'Pulse cannot verify monitored-system capacity right now, so this connection cannot be saved yet. Retry preview in a moment.',
     );
+    expect(
+      buildMonitoredSystemAdmissionPreviewUnavailableState({
+        code: 'monitored_system_usage_unavailable',
+        reason: ' supplemental_inventory_unsettled ',
+      }),
+    ).toEqual({
+      reason: 'supplemental_inventory_unsettled',
+      title: 'Monitored-system capacity is temporarily unavailable',
+      message:
+        'Pulse is still settling provider-owned inventory for this platform connection, so the monitored-system check is not safe yet. Retry preview after the first baseline finishes.',
+    });
+    expect(
+      buildMonitoredSystemAdmissionPreviewUnavailableState({
+        code: 'provider_failed',
+        reason: 'supplemental_inventory_unsettled',
+      }),
+    ).toBeNull();
+    expect(
+      isMonitoredSystemAdmissionPreviewResolvedSafely({
+        preview: { would_exceed_limit: false },
+      }),
+    ).toBe(true);
+    expect(
+      isMonitoredSystemAdmissionPreviewResolvedSafely({
+        preview: { would_exceed_limit: true },
+      }),
+    ).toBe(false);
+    expect(getMonitoredSystemAdmissionPreviewSaveBlockedMessage({ preview: null })).toBe(
+      'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+    );
+    expect(
+      getMonitoredSystemAdmissionPreviewSaveBlockedMessage({
+        preview: { would_exceed_limit: true },
+      }),
+    ).toBe('This change would exceed your monitored-system limit');
+    expect(
+      getMonitoredSystemAdmissionPreviewSaveBlockedMessage({
+        preview: { would_exceed_limit: false },
+      }),
+    ).toBeNull();
   });
 
   it('returns canonical monitored-system ledger unavailable copy', () => {

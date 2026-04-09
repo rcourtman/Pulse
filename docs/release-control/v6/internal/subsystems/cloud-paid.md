@@ -644,6 +644,12 @@ That same helper also owns preview-impact copy and current/projected
 source-label wording for pre-save monitored-system admission UI, so the
 TrueNAS and VMware settings panels do not drift into provider-local billing
 phrasing when they surface canonical preview results before save.
+That same helper-owned admission-preview contract now also owns required-
+preview, unavailable-capacity, and save-blocking messages. Provider settings
+panels must map `monitored_system_usage_unavailable` plus backend
+`details.reason` through `frontend-modern/src/utils/monitoredSystemPresentation.ts`,
+render helper-owned required-preview guidance before the first safe preview,
+and keep save disabled until the shared preview state resolves safely.
 That same helper-owned admission-preview copy now also owns unavailable-
 capacity guidance. When provider-backed preview endpoints return
 `monitored_system_usage_unavailable`, the shared preview shell and provider

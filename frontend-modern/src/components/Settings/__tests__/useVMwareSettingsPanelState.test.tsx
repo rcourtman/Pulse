@@ -31,6 +31,29 @@ vi.mock('@/utils/logger', () => ({
   },
 }));
 
+const safeVMwarePreview = () => ({
+  current_count: 1,
+  projected_count: 1,
+  additional_count: 0,
+  limit: 10,
+  would_exceed_limit: false,
+  effect: 'attaches_existing',
+  current_systems: [],
+  projected_systems: [
+    {
+      name: 'esxi-01',
+      type: 'host',
+      status: 'online',
+      source: 'vmware',
+      status_explanation: { summary: '', reasons: [] },
+      latest_included_signal: { name: '', type: '', at: '' },
+      explanation: { summary: '', reasons: [], surfaces: [] },
+    },
+  ],
+  current_system: null,
+  projected_system: null,
+});
+
 describe('useVMwareSettingsPanelState', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -72,6 +95,7 @@ describe('useVMwareSettingsPanelState', () => {
       insecureSkipVerify: false,
       enabled: true,
     } as never);
+    vi.mocked(VMwareAPI.previewSavedConnection).mockResolvedValueOnce(safeVMwarePreview() as never);
     vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([
       {
         id: 'conn-1',
@@ -91,8 +115,18 @@ describe('useVMwareSettingsPanelState', () => {
 
     result.openEditDialog(result.connections()[0]);
     expect(result.dialogOpen()).toBe(true);
+    await result.previewCurrentForm();
     await result.saveCurrentForm();
 
+    expect(VMwareAPI.previewSavedConnection).toHaveBeenCalledWith(
+      'conn-1',
+      expect.objectContaining({
+        host: 'vcsa.lab.local',
+        port: 443,
+        username: 'administrator@vsphere.local',
+        password: '********',
+      }),
+    );
     expect(VMwareAPI.updateConnection).toHaveBeenCalledWith(
       'conn-1',
       expect.objectContaining({
@@ -188,6 +222,28 @@ describe('useVMwareSettingsPanelState', () => {
     );
     expect(VMwareAPI.testConnection).not.toHaveBeenCalled();
     expect(notificationStore.success).toHaveBeenCalledWith('VMware connection successful');
+  });
+
+  it('requires a successful monitored-system preview before saving', async () => {
+    vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+
+    const { result } = renderHook(() => useVMwareSettingsPanelState());
+    await waitFor(() => expect(result.loading()).toBe(false));
+
+    result.openCreateDialog();
+    result.updateForm({
+      host: 'vcsa.lab.local',
+      username: 'administrator@vsphere.local',
+      password: 'secret',
+    });
+
+    expect(result.monitoredSystemAdmissionSaveBlocked()).toBe(true);
+    await result.saveCurrentForm();
+
+    expect(VMwareAPI.createConnection).not.toHaveBeenCalled();
+    expect(notificationStore.error).toHaveBeenCalledWith(
+      'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+    );
   });
 
   it('surfaces categorized draft test guidance from structured backend failures', async () => {
@@ -450,6 +506,7 @@ describe('useVMwareSettingsPanelState', () => {
 
   it('reuses the canonical monitored-system preview when a save is denied by the backend', async () => {
     vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.previewConnection).mockResolvedValueOnce(safeVMwarePreview() as never);
     vi.mocked(VMwareAPI.createConnection).mockRejectedValueOnce(
       Object.assign(new Error('Monitored-system limit reached (7/6)'), {
         status: 402,
@@ -498,6 +555,7 @@ describe('useVMwareSettingsPanelState', () => {
       username: 'administrator@vsphere.local',
       password: 'secret',
     });
+    await result.previewCurrentForm();
     await result.saveCurrentForm();
 
     expect(notificationStore.error).toHaveBeenCalledWith('Monitored-system limit reached (7/6)');
@@ -509,8 +567,9 @@ describe('useVMwareSettingsPanelState', () => {
     expect(result.dialogOpen()).toBe(true);
   });
 
-  it('surfaces monitored-system usage unavailability when save is rejected before preview settles', async () => {
+  it('surfaces monitored-system usage unavailability when save races a stale preview', async () => {
     vi.mocked(VMwareAPI.listConnections).mockResolvedValueOnce([] as never);
+    vi.mocked(VMwareAPI.previewConnection).mockResolvedValueOnce(safeVMwarePreview() as never);
     vi.mocked(VMwareAPI.createConnection).mockRejectedValueOnce(
       Object.assign(new Error('Unable to verify monitored-system capacity right now'), {
         status: 503,
@@ -530,6 +589,7 @@ describe('useVMwareSettingsPanelState', () => {
       username: 'administrator@vsphere.local',
       password: 'secret',
     });
+    await result.previewCurrentForm();
     await result.saveCurrentForm();
 
     expect(result.connectionFailure()).toBeNull();

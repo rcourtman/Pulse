@@ -36,7 +36,7 @@ const mockState = vi.hoisted(() => ({
   monitoredSystemPreview: vi.fn(() => null),
   monitoredSystemPreviewError: vi.fn(() => null),
   monitoredSystemPreviewErrorTitle: vi.fn(() => null),
-  monitoredSystemAdmissionSaveBlocked: vi.fn(() => false),
+  monitoredSystemAdmissionSaveBlocked: vi.fn(() => true),
   previewCurrentForm: vi.fn(),
   previewing: vi.fn(() => false),
   saveCurrentForm: vi.fn(),
@@ -78,7 +78,7 @@ describe('VMwareSettingsPanel', () => {
     mockState.monitoredSystemPreview.mockReturnValue(null);
     mockState.monitoredSystemPreviewError.mockReturnValue(null);
     mockState.monitoredSystemPreviewErrorTitle.mockReturnValue(null);
-    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(false);
+    mockState.monitoredSystemAdmissionSaveBlocked.mockReturnValue(true);
     mockState.previewing.mockReturnValue(false);
     mockState.saving.mockReturnValue(false);
     mockState.testing.mockReturnValue(false);
@@ -249,6 +249,20 @@ describe('VMwareSettingsPanel', () => {
         'Use a supported vCenter release within the current VI JSON phase-1 floor, then retry this connection test.',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('renders preview-required guidance and blocks save before safe capacity is known', () => {
+    mockState.dialogOpen.mockReturnValue(true);
+
+    renderPanel();
+
+    expect(screen.getByText('Preview monitored-system impact before saving')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Pulse must verify monitored-system capacity for this platform connection before it can be saved.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add connection' })).toBeDisabled();
   });
 
   it('renders monitored-system preview inside the dialog and blocks save over the limit', () => {

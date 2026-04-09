@@ -25,6 +25,34 @@ const WORKFLOW_SCREENSHOT_PATH = path.resolve(
   "vmware-settings-platform-workflow.png",
 );
 
+const buildSafeVMwareAdmissionPreview = () => ({
+  current_count: 1,
+  projected_count: 1,
+  additional_count: 0,
+  limit: 10,
+  would_exceed_limit: false,
+  effect: "attaches_existing",
+  current_systems: [],
+  projected_systems: [
+    {
+      name: "esxi-01",
+      type: "host",
+      status: "online",
+      status_explanation: { summary: "", reasons: [] },
+      latest_included_signal: {
+        name: "esxi-01",
+        type: "host",
+        source: "vmware",
+        at: new Date().toISOString(),
+      },
+      source: "vmware",
+      explanation: { summary: "", reasons: [], surfaces: [] },
+    },
+  ],
+  current_system: null,
+  projected_system: null,
+});
+
 const test = base.extend<{}, WorkerFixtures>({
   storageState: async ({ authStorageStatePath }, use) => {
     await use(authStorageStatePath);
@@ -534,6 +562,15 @@ test.describe("VMware platform connections settings", () => {
         return;
       }
 
+      if (pathname === "/api/vmware/connections/preview" && method === "POST") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(buildSafeVMwareAdmissionPreview()),
+        });
+        return;
+      }
+
       if (pathname === "/api/vmware/connections" && method === "POST") {
         createPayload = JSON.parse(request.postData() || "{}");
         connections = [
@@ -580,6 +617,18 @@ test.describe("VMware platform connections settings", () => {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify({ success: true }),
+        });
+        return;
+      }
+
+      if (
+        pathname === "/api/vmware/connections/conn-1/preview" &&
+        method === "POST"
+      ) {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(buildSafeVMwareAdmissionPreview()),
         });
         return;
       }
@@ -667,6 +716,17 @@ test.describe("VMware platform connections settings", () => {
         insecureSkipVerify: false,
       });
 
+    await expect(
+      dialog.getByText("Preview monitored-system impact before saving"),
+    ).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+    await expect(dialog.getByText(/Current usage 1 \/ 10/)).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeEnabled();
     await dialog.getByRole("button", { name: "Add connection" }).click();
 
     const connectionCard = page.getByTestId("vmware-connection-conn-1");
@@ -721,6 +781,14 @@ test.describe("VMware platform connections settings", () => {
       });
     await expect.poll(() => draftTestCalls).toBe(1);
 
+    await expect(
+      editDialog.getByRole("button", { name: "Save connection" }),
+    ).toBeDisabled();
+    await editDialog.getByRole("button", { name: "Preview impact" }).click();
+    await expect(editDialog.getByText(/Current usage 1 \/ 10/)).toBeVisible();
+    await expect(
+      editDialog.getByRole("button", { name: "Save connection" }),
+    ).toBeEnabled();
     await editDialog.getByRole("button", { name: "Save connection" }).click();
     await expect
       .poll(() => updatePayload)
@@ -923,6 +991,15 @@ test.describe("VMware platform connections settings", () => {
         return;
       }
 
+      if (pathname === "/api/vmware/connections/preview" && method === "POST") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(buildSafeVMwareAdmissionPreview()),
+        });
+        return;
+      }
+
       if (pathname === "/api/vmware/connections" && method === "POST") {
         createPayload = JSON.parse(request.postData() || "{}");
         await route.fulfill({
@@ -1013,6 +1090,14 @@ test.describe("VMware platform connections settings", () => {
       .getByPlaceholder("administrator@vsphere.local")
       .fill("administrator@vsphere.local");
     await dialog.locator('input[type="password"]').first().fill("super-secret");
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeDisabled();
+    await dialog.getByRole("button", { name: "Preview impact" }).click();
+    await expect(dialog.getByText(/Current usage 1 \/ 10/)).toBeVisible();
+    await expect(
+      dialog.getByRole("button", { name: "Add connection" }),
+    ).toBeEnabled();
     await dialog.getByRole("button", { name: "Add connection" }).click();
 
     await expect
