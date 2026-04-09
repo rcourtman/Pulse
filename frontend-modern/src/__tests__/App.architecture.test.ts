@@ -8,6 +8,7 @@ describe('App architecture', () => {
   it('keeps App as the entry shell that delegates runtime and chrome ownership', () => {
     expect(appSource).toContain('DASHBOARD_PATH,');
     expect(appSource).toContain("import { AppLayout } from '@/AppLayout';");
+    expect(appSource).toContain("import { aiChatStore } from './stores/aiChat';");
     expect(appSource).toContain(
       "import { DarkModeContext, WebSocketContext, useWebSocket } from '@/contexts/appRuntime';",
     );
@@ -42,10 +43,13 @@ describe('App architecture', () => {
     expect(appSource).not.toContain('const [activeOrgID, setActiveOrgID] = createSignal(');
     expect(appSource).not.toContain("import('./api/ai')");
     expect(appSource).not.toContain('AIAPI.getSettings()');
+    expect(appSource).toContain("if (e.key === 'Escape' && aiChatStore.isOpen) {");
+    expect(appSource).toContain('<AIChat onClose={() => aiChatStore.close()} />');
   });
 
   it('keeps authenticated chrome in AppLayout and hosted bootstrap in useAppRuntimeState', () => {
     expect(appLayoutSource).toContain('export function AppLayout(props: AppLayoutProps)');
+    expect(appLayoutSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
     expect(appLayoutSource).toContain('<OrgSwitcher');
     expect(appLayoutSource).toContain('const status = () => props.connectionStatus();');
     expect(appLayoutSource).toContain("status().kind === 'sync-reconnecting' || status().kind === 'reconnecting'");
@@ -60,12 +64,17 @@ describe('App architecture', () => {
     expect(appLayoutSource).not.toContain('loadCommercialPosture');
     expect(appLayoutSource).not.toContain('sessionPresentationPolicyResolved');
     expect(appLayoutSource).not.toContain('presentationPolicyHidesCommercialSurfaces');
+    expect(appLayoutSource).toContain(
+      'aiChatStore.enabled === true && !aiChatStore.isOpenSignal() && !kioskMode()',
+    );
+    expect(appLayoutSource).toContain('onClick={() => aiChatStore.toggle()}');
     expect(appSource).not.toContain("eventBus.on('theme_changed'");
     expect(appSource).not.toContain("eventBus.on('websocket_reconnected'");
     expect(appSource).not.toContain("apiFetch('/api/security/status')");
     expect(appLayoutSource).not.toContain("eventBus.on('theme_changed'");
     expect(appLayoutSource).not.toContain("apiFetch('/api/security/status')");
     expect(appRuntimeStateSource).toContain('export const useAppRuntimeState = () =>');
+    expect(appRuntimeStateSource).toContain("import { aiChatStore } from '@/stores/aiChat';");
     expect(appRuntimeStateSource).toContain('const connectionStatus = createMemo<AppConnectionStatus>(() => {');
     expect(appRuntimeStateSource).toContain('const beginAuthenticatedRuntime = async () =>');
     expect(appRuntimeStateSource).toContain("const [backendHealthy, setBackendHealthy] = createSignal(false);");

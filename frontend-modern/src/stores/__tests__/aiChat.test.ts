@@ -1,5 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { aiChatStore } from '@/stores/aiChat';
+import { eventBus } from '@/stores/events';
 
 describe('aiChatStore', () => {
   beforeEach(() => {
@@ -96,5 +97,30 @@ describe('aiChatStore', () => {
     expect(document.activeElement).toBe(textarea);
 
     textarea.remove();
+  });
+
+  it('resets assistant drawer session state on org switch', () => {
+    const previousSessionId = aiChatStore.sessionId;
+
+    aiChatStore.open();
+    aiChatStore.addContextItem('vm', 'vm-101', 'vm-101', { name: 'vm-101' });
+    aiChatStore.setMessages([
+      {
+        id: 'msg-1',
+        role: 'user',
+        content: 'hello',
+        timestamp: new Date('2026-04-08T10:00:00.000Z'),
+      },
+    ]);
+    aiChatStore.setTitle('Session title');
+
+    eventBus.emit('org_switched', 'org-2');
+
+    expect(aiChatStore.messages).toHaveLength(0);
+    expect(aiChatStore.contextItems).toHaveLength(0);
+    expect(aiChatStore.context.targetId).toBeUndefined();
+    expect(aiChatStore.title).toBe('');
+    expect(aiChatStore.sessionId).not.toBe(previousSessionId);
+    expect(localStorage.getItem('pulse:ai_chat_session_id')).toBe(aiChatStore.sessionId);
   });
 });

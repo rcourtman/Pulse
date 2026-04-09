@@ -4732,7 +4732,7 @@ class SubsystemLookupTest(unittest.TestCase):
             ),
             _contract_reference(
                 "docs/release-control/v6/internal/subsystems/ai-runtime.md",
-                "3. `internal/api/ai_handler.go` shared with `api-contracts`",
+                "4. `internal/api/ai_handler.go` shared with `api-contracts`",
                 "internal/api/ai_handler.go",
             ),
             _contract_reference(

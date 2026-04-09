@@ -362,6 +362,14 @@
       ]
     },
     {
+      "path": "frontend-modern/src/stores/aiChat.ts",
+      "rationale": "the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary",
+      "subsystems": [
+        "ai-runtime",
+        "frontend-primitives"
+      ]
+    },
+    {
       "path": "frontend-modern/src/utils/agentInstallCommand.ts",
       "rationale": "the shared frontend install-command helper is both an agent lifecycle control surface and a canonical API/install transport contract boundary",
       "subsystems": [
@@ -979,6 +987,7 @@
         "frontend-modern/src/api/ai.ts",
         "frontend-modern/src/api/patrol.ts",
         "frontend-modern/src/components/AI/AICostDashboard.tsx",
+        "frontend-modern/src/stores/aiChat.ts",
         "frontend-modern/src/stores/aiRuntimeState.ts",
         "frontend-modern/src/utils/aiChatPresentation.ts",
         "frontend-modern/src/utils/aiControlLevelPresentation.ts",
@@ -1042,6 +1051,7 @@
               "frontend-modern/src/components/AI/Chat/"
             ],
             "match_files": [
+              "frontend-modern/src/stores/aiChat.ts",
               "frontend-modern/src/stores/aiRuntimeState.ts"
             ],
             "allow_same_subsystem_tests": false,
@@ -1050,6 +1060,7 @@
             ],
             "exact_files": [
               "frontend-modern/src/components/AI/__tests__/AICostDashboard.test.tsx",
+              "frontend-modern/src/stores/__tests__/aiChat.test.ts",
               "tests/integration/tests/42-vmware-ai-chat-read-recovery.spec.ts"
             ]
           },
@@ -2599,6 +2610,7 @@
         "frontend-modern/src/features/operations/OperationsPageSurface.tsx",
         "frontend-modern/src/hooks/createNonSuspendingQuery.ts",
         "frontend-modern/src/pages/Operations.tsx",
+        "frontend-modern/src/stores/aiChat.ts",
         "frontend-modern/src/utils/aiSettingsPresentation.ts",
         "frontend-modern/src/utils/dashboardEmptyStatePresentation.ts",
         "frontend-modern/src/utils/dashboardGuestPresentation.ts",
@@ -2806,6 +2818,21 @@
               "frontend-modern/src/utils/__tests__/dashboardKpiPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardMetricPresentation.test.ts",
               "frontend-modern/src/utils/__tests__/dashboardTrendPresentation.test.ts"
+            ]
+          },
+          {
+            "id": "assistant-app-shell-bootstrap",
+            "label": "assistant app-shell bootstrap proof",
+            "match_prefixes": [],
+            "match_files": [
+              "frontend-modern/src/stores/aiChat.ts"
+            ],
+            "allow_same_subsystem_tests": false,
+            "test_prefixes": [],
+            "exact_files": [
+              "frontend-modern/src/__tests__/App.architecture.test.ts",
+              "frontend-modern/src/stores/__tests__/aiChat.test.ts",
+              "tests/integration/tests/11-first-session.spec.ts"
             ]
           },
           {

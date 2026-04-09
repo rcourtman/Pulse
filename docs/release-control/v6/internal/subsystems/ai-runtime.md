@@ -9,7 +9,7 @@
   "contract_file": "docs/release-control/v6/internal/subsystems/ai-runtime.md",
   "status_file": "docs/release-control/v6/internal/status.json",
   "registry_file": "docs/release-control/v6/internal/subsystems/registry.json",
-  "dependency_subsystem_ids": ["api-contracts", "frontend-primitives"]
+  "dependency_subsystem_ids": ["api-contracts", "cloud-paid", "frontend-primitives"]
 }
 ```
 
@@ -39,14 +39,16 @@ runtime cost control, and shared AI transport surfaces.
 17. `frontend-modern/src/utils/aiSessionDiffPresentation.ts`
 18. `frontend-modern/src/utils/textPresentation.ts`
 19. `frontend-modern/src/stores/aiRuntimeState.ts`
+20. `frontend-modern/src/stores/aiChat.ts`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/api/ai.ts` shared with `api-contracts`: the AI frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
 2. `frontend-modern/src/api/patrol.ts` shared with `api-contracts`: the Patrol frontend client is both an AI runtime control surface and a canonical API payload contract boundary.
-3. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-4. `internal/api/ai_handlers.go` shared with `api-contracts`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
-5. `internal/api/ai_intelligence_handlers.go` shared with `api-contracts`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+3. `frontend-modern/src/stores/aiChat.ts` shared with `frontend-primitives`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
+4. `internal/api/ai_handler.go` shared with `api-contracts`: Pulse Assistant handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+5. `internal/api/ai_handlers.go` shared with `api-contracts`: AI settings and remediation handlers are both an AI runtime control surface and a canonical API payload contract boundary.
+6. `internal/api/ai_intelligence_handlers.go` shared with `api-contracts`: AI intelligence handlers are both an AI runtime control surface and a canonical API payload contract boundary.
 
 ## Extension Points
 
@@ -57,6 +59,7 @@ runtime cost control, and shared AI transport surfaces.
 5. Add or change AI usage/cost dashboard presentation through `frontend-modern/src/components/AI/AICostDashboard.tsx` and `frontend-modern/src/utils/aiCostPresentation.ts`
 6. Add or change AI provider, control-level, chat/session, or explore-state presentation through `frontend-modern/src/components/AI/Chat/`, `frontend-modern/src/utils/aiProviderPresentation.ts`, `frontend-modern/src/utils/aiProviderHealthPresentation.ts`, `frontend-modern/src/utils/aiControlLevelPresentation.ts`, `frontend-modern/src/utils/aiChatPresentation.ts`, `frontend-modern/src/utils/aiSessionDiffPresentation.ts`, and `frontend-modern/src/utils/aiExplorePresentation.ts`
 7. Keep AI chat presentation helpers aligned through `frontend-modern/src/components/AI/Chat/` and the shared `frontend-modern/src/utils/textPresentation.ts`
+8. Keep assistant drawer context, session, and org-switch reset state aligned through the shared `frontend-modern/src/stores/aiChat.ts` boundary instead of letting `frontend-modern/src/App.tsx`, `frontend-modern/src/AppLayout.tsx`, or feature callers fork their own assistant shell state
 
 ## Forbidden Paths
 
@@ -194,10 +197,19 @@ reads used by chat, Patrol, and AI usage surfaces, while
 `frontend-modern/src/components/Settings/useAISettingsState.ts` remains the
 write-side settings owner. AI-owned surfaces must not fork their own mount-time
 settings/model fetch loops once this store exists.
+The assistant drawer/session shell is a separate shared boundary:
+`frontend-modern/src/stores/aiChat.ts` owns open state, focused-input handoff,
+context accumulation, and org-switch clearing for the assistant drawer, while
+`frontend-modern/src/stores/aiRuntimeState.ts` owns the shared backend-backed
+settings and model catalog reads. AI runtime consumers must not move drawer
+shell state into page-local signals or teach `aiChat.ts` to bootstrap its own
+`/api/settings/ai` or `/api/ai/models` reads.
 `docs/release-control/v6/internal/subsystems/registry.json` must therefore keep
 `frontend-modern/src/stores/aiRuntimeState.ts` and
 `frontend-modern/src/components/AI/Chat/` on the explicit AI runtime proof
-route instead of leaving the shared read model or chat shell unowned.
+route, and keep `frontend-modern/src/stores/aiChat.ts` on the shared
+AI-runtime/frontend-primitives proof boundary instead of leaving the chat shell
+or assistant drawer state unowned.
 That same settings/runtime boundary now also governs BYOK first-run setup:
 `frontend-modern/src/components/Settings/useAISettingsState.ts` may send only
 provider credentials or base URLs when the operator connects a provider, and

@@ -143,12 +143,14 @@ work extends shared components instead of creating new local variants.
 121. `frontend-modern/src/stores/sessionPresentationPolicy.ts`
 122. `frontend-modern/src/stores/licenseCommercial.ts`
 123. `frontend-modern/src/useAppRuntimeState.ts`
+124. `frontend-modern/src/stores/aiChat.ts`
 
 ## Shared Boundaries
 
 1. `frontend-modern/src/components/Settings/GeneralSettingsPanel.tsx` shared with `security-privacy`: the general settings privacy panel is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 2. `frontend-modern/src/components/Settings/SecurityAuthPanel.tsx` shared with `security-privacy`: the authentication settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
 3. `frontend-modern/src/components/Settings/SecurityOverviewPanel.tsx` shared with `security-privacy`: the security overview settings surface is both a security/privacy control surface and a canonical settings-shell presentation boundary.
+4. `frontend-modern/src/stores/aiChat.ts` shared with `ai-runtime`: the assistant drawer and session store is both an AI runtime control surface and a canonical app-shell presentation boundary.
 
 ## Extension Points
 
@@ -211,13 +213,17 @@ work extends shared components instead of creating new local variants.
 15. Keep assistant availability bootstrap on the shared app-shell boundary.
     `frontend-modern/src/useAppRuntimeState.ts`,
     `frontend-modern/src/App.tsx`,
+    `frontend-modern/src/stores/aiChat.ts`,
     `frontend-modern/src/components/AI/Chat/index.tsx`, and
     `frontend-modern/src/hooks/useDashboardActions.ts` must consume the
     backend-owned `/api/security/status.sessionCapabilities.assistantEnabled`
     fact instead of probing `/api/settings/ai` or `/api/ai/*` during ordinary
     route bootstrap. Closed assistant chrome and non-AI settings panels may
     not initialize assistant runtime state until an owned assistant or Patrol
-    surface is actually open.
+    surface is actually open. `frontend-modern/src/stores/aiChat.ts` is the
+    shared drawer shell owner for assistant open/close state, focus handoff,
+    and tenant-local context/session persistence; the app shell must not fork
+    that state across `App.tsx`, `AppLayout.tsx`, or page-level helpers.
     AI-owned frontend surfaces that need shared settings or model-catalog
     truth must route those reads through
     `frontend-modern/src/stores/aiRuntimeState.ts` rather than each feature
@@ -1934,12 +1940,17 @@ customer-facing surfaces.
 That same shared app-shell boundary now also owns assistant bootstrap silence
 on non-AI routes. `frontend-modern/src/useAppRuntimeState.ts`,
 `frontend-modern/src/App.tsx`,
+`frontend-modern/src/stores/aiChat.ts`,
 `frontend-modern/src/components/AI/Chat/index.tsx`, and
 `frontend-modern/src/hooks/useDashboardActions.ts` must treat
 `/api/security/status.sessionCapabilities.assistantEnabled` as the only
 general-route assistant availability fact, while closed assistant chrome and
 non-AI settings panels stay off `/api/settings/ai` and `/api/ai/*` until an
-owned assistant or Patrol surface is actually open. The governed browser
-proof in `tests/integration/tests/11-first-session.spec.ts` must continue to
-assert that plain settings routes render without assistant bootstrap traffic
-or console noise.
+owned assistant or Patrol surface is actually open. `frontend-modern/src/stores/aiChat.ts`
+must therefore stay presentation-only with respect to assistant bootstrap:
+org-switch cleanup, keyboard focus, drawer state, and local context/session
+persistence belong there, while backend settings/model reads stay on
+`frontend-modern/src/stores/aiRuntimeState.ts`. The governed browser proof in
+`tests/integration/tests/11-first-session.spec.ts` must continue to assert
+that plain settings routes render without assistant bootstrap traffic or
+console noise.
