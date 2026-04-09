@@ -1282,7 +1282,11 @@ func TestSanitizeFilenameComponent(t *testing.T) {
 // ========================================
 
 func TestKnowledgeEndpoints_RequireAuth(t *testing.T) {
-	t.Parallel()
+	t.Setenv("ALLOW_ADMIN_BYPASS", "")
+	t.Setenv("PULSE_DEV", "")
+	t.Setenv("NODE_ENV", "")
+	resetAdminBypassState()
+	t.Cleanup(resetAdminBypassState)
 
 	// Config with auth enabled — requests without credentials should be rejected
 	cfg := &config.Config{
@@ -1326,7 +1330,11 @@ func TestKnowledgeEndpoints_RequireAuth(t *testing.T) {
 }
 
 func TestKnowledgeEndpoints_RequireAIChatScope(t *testing.T) {
-	t.Parallel()
+	t.Setenv("ALLOW_ADMIN_BYPASS", "")
+	t.Setenv("PULSE_DEV", "")
+	t.Setenv("NODE_ENV", "")
+	resetAdminBypassState()
+	t.Cleanup(resetAdminBypassState)
 
 	// Create a token with monitoring:read scope (NOT ai:chat)
 	rawToken := "knowledge-scope-test-123.12345678"

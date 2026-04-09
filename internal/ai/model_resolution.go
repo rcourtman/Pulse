@@ -62,19 +62,31 @@ func ResolveConfiguredProviderModel(ctx context.Context, cfg *config.AIConfig, p
 	if !cfg.HasProvider(provider) {
 		return "", fmt.Errorf("%s provider is not configured", provider)
 	}
+	if preferred := strings.TrimSpace(cfg.GetPreferredModelForProvider(provider)); preferred != "" && isModelUsableWithConfig(cfg, preferred) {
+		return preferred, nil
+	}
 
 	client, err := providers.NewForProvider(cfg, provider, "")
 	if err != nil {
+		if fallback := strings.TrimSpace(config.DefaultModelForProvider(provider)); fallback != "" {
+			return fallback, nil
+		}
 		return "", fmt.Errorf("create %s provider for model resolution: %w", provider, err)
 	}
 
 	models, err := client.ListModels(ctx)
 	if err != nil {
+		if fallback := strings.TrimSpace(config.DefaultModelForProvider(provider)); fallback != "" {
+			return fallback, nil
+		}
 		return "", fmt.Errorf("list %s models: %w", provider, err)
 	}
 
 	selected, ok := SelectRecommendedProviderModel(models)
 	if !ok {
+		if fallback := strings.TrimSpace(config.DefaultModelForProvider(provider)); fallback != "" {
+			return fallback, nil
+		}
 		return "", fmt.Errorf("provider %s returned no usable models", provider)
 	}
 

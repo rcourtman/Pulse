@@ -184,6 +184,30 @@ func TestAIConfig_HasProvider(t *testing.T) {
 	}
 }
 
+func TestDefaultModelForProvider_UsesCanonicalProviderFallbacks(t *testing.T) {
+	tests := []struct {
+		provider string
+		expected string
+	}{
+		{provider: AIProviderAnthropic, expected: "anthropic:claude-3-5-sonnet-latest"},
+		{provider: AIProviderOpenAI, expected: "openai:gpt-4o"},
+		{provider: AIProviderOpenRouter, expected: "openrouter:openai/gpt-4o-mini"},
+		{provider: AIProviderDeepSeek, expected: "deepseek:deepseek-chat"},
+		{provider: AIProviderGemini, expected: "gemini:gemini-1.5-pro"},
+		{provider: AIProviderOllama, expected: "ollama:llama3.2"},
+		{provider: AIProviderQuickstart, expected: "quickstart:" + DefaultAIModelQuickstart},
+		{provider: "unknown", expected: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.provider, func(t *testing.T) {
+			if got := DefaultModelForProvider(tt.provider); got != tt.expected {
+				t.Fatalf("DefaultModelForProvider(%q) = %q, want %q", tt.provider, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestAIConfig_GetConfiguredProviders(t *testing.T) {
 	tests := []struct {
 		name   string

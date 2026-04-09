@@ -346,6 +346,18 @@ func NormalizeQuickstartModelString(model string) string {
 // Returns empty string if the provider is unknown.
 func DefaultModelForProvider(provider string) string {
 	switch provider {
+	case AIProviderAnthropic:
+		return FormatModelString(AIProviderAnthropic, "claude-3-5-sonnet-latest")
+	case AIProviderOpenAI:
+		return FormatModelString(AIProviderOpenAI, "gpt-4o")
+	case AIProviderOpenRouter:
+		return FormatModelString(AIProviderOpenRouter, "openai/gpt-4o-mini")
+	case AIProviderDeepSeek:
+		return FormatModelString(AIProviderDeepSeek, "deepseek-chat")
+	case AIProviderGemini:
+		return FormatModelString(AIProviderGemini, "gemini-1.5-pro")
+	case AIProviderOllama:
+		return FormatModelString(AIProviderOllama, "llama3.2")
 	case AIProviderQuickstart:
 		return FormatModelString(AIProviderQuickstart, DefaultAIModelQuickstart)
 	default:

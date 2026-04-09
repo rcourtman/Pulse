@@ -135,18 +135,22 @@ func TestStoreMetadataHelpers(t *testing.T) {
 		t.Fatalf("expected no max timestamp, got %d (ok=%t)", ts, ok)
 	}
 
+	base := time.Now().UTC().Truncate(time.Second)
+	firstTs := base.Add(-2 * time.Second).Unix()
+	secondTs := base.Add(-1 * time.Second).Unix()
+
 	_, err = store.db.Exec(
 		`INSERT INTO metrics (resource_type, resource_id, metric_type, value, timestamp, tier) VALUES
 		('vm','vm-1','cpu',1.0,?, 'raw'),
 		('vm','vm-1','cpu',2.0,?, 'raw')`,
-		100, 200,
+		firstTs, secondTs,
 	)
 	if err != nil {
 		t.Fatalf("insert metrics returned error: %v", err)
 	}
 
-	if ts, ok := store.getMaxTimestampForTier(TierRaw); !ok || ts != 200 {
-		t.Fatalf("expected max timestamp 200, got %d (ok=%t)", ts, ok)
+	if ts, ok := store.getMaxTimestampForTier(TierRaw); !ok || ts != secondTs {
+		t.Fatalf("expected max timestamp %d, got %d (ok=%t)", secondTs, ts, ok)
 	}
 }
 

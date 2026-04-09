@@ -151,27 +151,34 @@ func (h *ConfigHandlers) handleImportConfig(w http.ResponseWriter, r *http.Reque
 
 		// Reload webhook configuration.
 		if webhooks, err := h.getPersistence(r.Context()).LoadWebhooks(); err == nil {
-			// Clear existing webhooks and add new ones.
 			notificationMgr := h.getMonitor(r.Context()).GetNotificationManager()
-			// Get current webhooks to clear them.
-			for _, webhook := range notificationMgr.GetWebhooks() {
-				if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
-					log.Warn().Err(err).Str("webhook", webhook.ID).Msg("Failed to delete existing webhook during reload")
+			if notificationMgr == nil {
+				log.Warn().Msg("Skipped webhook reload after import because notification manager is unavailable")
+			} else {
+				// Clear existing webhooks and add new ones.
+				for _, webhook := range notificationMgr.GetWebhooks() {
+					if err := notificationMgr.DeleteWebhook(webhook.ID); err != nil {
+						log.Warn().Err(err).Str("webhook", webhook.ID).Msg("Failed to delete existing webhook during reload")
+					}
 				}
+				// Add imported webhooks.
+				for _, webhook := range webhooks {
+					notificationMgr.AddWebhook(webhook)
+				}
+				log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
 			}
-			// Add imported webhooks.
-			for _, webhook := range webhooks {
-				notificationMgr.AddWebhook(webhook)
-			}
-			log.Info().Int("count", len(webhooks)).Msg("Reloaded webhook configuration after import")
 		} else {
 			log.Warn().Err(err).Msg("Failed to reload webhook configuration after import")
 		}
 
 		// Reload email configuration.
 		if emailConfig, err := h.getPersistence(r.Context()).LoadEmailConfig(); err == nil {
-			h.getMonitor(r.Context()).GetNotificationManager().SetEmailConfig(*emailConfig)
-			log.Info().Msg("Reloaded email configuration after import")
+			if notificationMgr := h.getMonitor(r.Context()).GetNotificationManager(); notificationMgr == nil {
+				log.Warn().Msg("Skipped email reload after import because notification manager is unavailable")
+			} else {
+				notificationMgr.SetEmailConfig(*emailConfig)
+				log.Info().Msg("Reloaded email configuration after import")
+			}
 		} else {
 			log.Warn().Err(err).Msg("Failed to reload email configuration after import")
 		}

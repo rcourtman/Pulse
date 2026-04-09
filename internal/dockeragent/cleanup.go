@@ -43,7 +43,10 @@ func (a *Agent) cleanupOrphanedBackups(ctx context.Context) {
 		}
 
 		timestampStr := parts[len(parts)-1]
-		backupTime, err := time.Parse("20060102_150405", timestampStr)
+		// Backup names are currently stamped with the agent host's local wall
+		// clock, so cleanup must parse in the local location to avoid treating
+		// valid stale backups as fresh on non-UTC systems.
+		backupTime, err := time.ParseInLocation("20060102_150405", timestampStr, time.Local)
 		if err != nil {
 			// If we can't parse the timestamp, fall back to creation date as a safety
 			created := time.Unix(c.Created, 0)

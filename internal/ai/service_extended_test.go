@@ -909,17 +909,16 @@ func TestService_TestConnection_Extended(t *testing.T) {
 		t.Errorf("Expected 'no provider configured' error, got: %v", err)
 	}
 
-	// 2. Mock provider fallback
+	// 2. Quickstart provider fallback
 	mockProv := &mockProvider{
 		testConnectionFunc: func(ctx context.Context) error {
 			return nil
 		},
 	}
 	svc.provider = mockProv
+	svc.usingQuickstart = true
 	svc.cfg = &config.AIConfig{
-		Enabled:         true,
-		AnthropicAPIKey: "test-key",
-		Model:           "openai:test-model",
+		Enabled: true,
 	}
 
 	err = svc.TestConnection(context.Background())

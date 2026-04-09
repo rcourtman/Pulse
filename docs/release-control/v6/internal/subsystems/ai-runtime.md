@@ -123,6 +123,13 @@ but when a BYOK provider is configured without a concrete model selection,
 provider's live catalog at runtime using the shared provider metadata policy
 instead of reviving static vendor constants in config defaults, service
 fallbacks, or frontend setup flows.
+That same provider-model ownership also governs live-catalog failure fallback:
+when runtime client construction fails, test credentials intentionally block a
+provider catalog, or a provider returns no usable models, the effective BYOK
+selection may fall back only to the provider-owned default declared in
+`internal/config/ai.go`. Runtime startup, connection-test, and load-config
+paths may not return an empty effective model or borrow another provider's
+selection just because live model discovery was unavailable.
 That quickstart ownership includes the public proxy dependency under
 `internal/ai/providers/quickstart.go`: the runtime must default to the owned
 commercial API edge at `https://license.pulserelay.pro/v1/quickstart/patrol`

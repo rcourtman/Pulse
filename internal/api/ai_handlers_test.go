@@ -927,8 +927,8 @@ func TestAISettingsHandler_TestProvider_Ollama(t *testing.T) {
 	if !resp.Success || resp.Provider != "ollama" {
 		t.Fatalf("unexpected response: %+v", resp)
 	}
-	if versionHits != 1 || tagsHits != 2 {
-		t.Fatalf("expected one version check and two tags lookups (service load + connection), got version=%d tags=%d", versionHits, tagsHits)
+	if versionHits != 1 || tagsHits != 1 {
+		t.Fatalf("expected one version check and one tags lookup for the resolved Ollama provider test, got version=%d tags=%d", versionHits, tagsHits)
 	}
 }
 

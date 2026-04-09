@@ -1,9 +1,13 @@
 package ai
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/rcourtman/pulse-go-rewrite/internal/ai/providers"
+	"github.com/rcourtman/pulse-go-rewrite/internal/config"
 )
 
 func TestSelectRecommendedProviderModel_PrefersNotable(t *testing.T) {
@@ -48,5 +52,28 @@ func TestSelectRecommendedProviderModel_UsesLexicalTiebreak(t *testing.T) {
 	}
 	if selected.ID != "provider:alpha" {
 		t.Fatalf("selected model = %q, want %q", selected.ID, "provider:alpha")
+	}
+}
+
+func TestResolveConfiguredProviderModel_FallsBackToProviderDefaultWhenCatalogUnavailable(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":{"message":"invalid key"}}`, http.StatusUnauthorized)
+	}))
+	t.Cleanup(server.Close)
+
+	cfg := &config.AIConfig{
+		Enabled:       true,
+		OpenAIAPIKey:  "sk-test",
+		OpenAIBaseURL: server.URL + "/v1",
+	}
+
+	got, err := ResolveConfiguredProviderModel(context.Background(), cfg, config.AIProviderOpenAI)
+	if err != nil {
+		t.Fatalf("ResolveConfiguredProviderModel() error = %v", err)
+	}
+	if want := config.DefaultModelForProvider(config.AIProviderOpenAI); got != want {
+		t.Fatalf("ResolveConfiguredProviderModel() = %q, want %q", got, want)
 	}
 }

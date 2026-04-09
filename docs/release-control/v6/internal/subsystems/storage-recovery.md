@@ -344,6 +344,12 @@ querying, and the operator-facing storage health presentation layer.
     `createRouteStateNavigateScheduler` helper so back-to-back storage filter
     changes coalesce against the current location instead of reintroducing a
     storage-local timeout queue.
+20. Keep storage/recovery-adjacent config-import reload safety on the shared
+    `internal/api/` boundary. When storage or recovery setup flows depend on
+    `internal/api/config_export_import_handlers.go`, post-import reloads must
+    tolerate absent notification managers and other optional runtime managers
+    so adjacent browser surfaces inherit a fail-closed API response instead of
+    a panic after the archive import succeeds.
 
 ## Current State
 
@@ -1530,6 +1536,12 @@ That same shared boundary also assumes manual auth env writes and auth-status
 reads resolve `.env` through the shared auth-path helper, so storage-adjacent
 recovery and setup flows do not keep neighboring `/etc/pulse/.env` fallback
 logic alive after the runtime data-dir authority has been centralized.
+That same shared `internal/api/` dependency also assumes config import reloads
+degrade safely when optional runtime managers are missing. Storage- and
+recovery-adjacent restore or support flows may drive the shared
+`/api/config/import` boundary before every notification or monitoring manager
+exists, but `internal/api/config_export_import_handlers.go` must still apply
+the imported configuration without panicking on absent optional managers.
 The same boundary also owns first-session reset cleanup during managed-backend
 proof: the dev-only `/api/security/dev/reset-first-run` route must clear auth
 env and persisted API-token state through the shared helpers, and adjacent test

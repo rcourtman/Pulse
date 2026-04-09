@@ -1208,6 +1208,13 @@ That same shared `internal/api/` boundary also assumes manual auth env writes
 and first-session status reads resolve the `.env` path through the shared
 auth-path helper, so lifecycle-adjacent setup and password flows do not each
 reconstruct their own `/etc/pulse/.env` fallback logic.
+That same shared `internal/api/` dependency also assumes config import reloads
+fail closed without panicking when optional runtime managers are absent.
+Lifecycle-adjacent setup, install, and restore flows may invoke the shared
+config-import path before every notification or monitoring manager is wired,
+but `internal/api/config_export_import_handlers.go` must still rebind the
+imported configuration without turning missing optional managers into a fatal
+reload path.
 The same proof boundary also owns deterministic first-run re-entry for the
 managed local backend: integration helpers may use the seeded runtime-state
 primary API token to call the dev-only `/api/security/dev/reset-first-run`

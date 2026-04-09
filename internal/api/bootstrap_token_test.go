@@ -79,30 +79,13 @@ func TestLoadOrCreateBootstrapToken_MkdirAllFailure(t *testing.T) {
 }
 
 func TestLoadOrCreateBootstrapToken_WriteFileFailure(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("permission tests not reliable on Windows")
-	}
-	if os.Getuid() == 0 {
-		t.Skip("cannot test permission errors as root")
-	}
-
-	// Create a temp directory with no write permissions
 	tmpDir := t.TempDir()
-	readOnlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readOnlyDir, 0o700); err != nil {
-		t.Fatalf("failed to create readonly dir: %v", err)
+	tmpFileBlocker := filepath.Join(tmpDir, bootstrapTokenFilename+".tmp")
+	if err := os.MkdirAll(tmpFileBlocker, 0o700); err != nil {
+		t.Fatalf("failed to create tmp file blocker: %v", err)
 	}
 
-	// Remove write permissions
-	if err := os.Chmod(readOnlyDir, 0o500); err != nil {
-		t.Fatalf("failed to chmod dir: %v", err)
-	}
-	// Restore permissions for cleanup
-	t.Cleanup(func() {
-		_ = os.Chmod(readOnlyDir, 0o700)
-	})
-
-	token, created, fullPath, err := loadOrCreateBootstrapToken(readOnlyDir)
+	token, created, fullPath, err := loadOrCreateBootstrapToken(tmpDir)
 	if err == nil {
 		t.Error("expected error when WriteFile fails, got nil")
 	}
@@ -113,7 +96,7 @@ func TestLoadOrCreateBootstrapToken_WriteFileFailure(t *testing.T) {
 		t.Error("expected created=false")
 	}
 	// fullPath should be set even on write failure (path was computed before write)
-	expectedPath := filepath.Join(readOnlyDir, bootstrapTokenFilename)
+	expectedPath := filepath.Join(tmpDir, bootstrapTokenFilename)
 	if fullPath != expectedPath {
 		t.Errorf("expected fullPath=%q, got %q", expectedPath, fullPath)
 	}

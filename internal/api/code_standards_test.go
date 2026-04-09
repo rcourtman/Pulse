@@ -142,6 +142,12 @@ var paidDomainFiles = map[string]string{
 
 const paidDomainFileCeiling = 13
 
+var knownSharedInfrastructureFiles = map[string]bool{
+	// Shared SSO outbound helpers centralize restricted fetch/file access and are
+	// consumed by public handlers; they are not paid-domain business logic.
+	"sso_outbound.go": true,
+}
+
 // TestPaidDomainBoundaryAudit enforces two rules:
 //
 //  1. No NEW paid-domain implementation files may be added to internal/api/.
@@ -225,6 +231,9 @@ func TestPaidDomainBoundaryAudit(t *testing.T) {
 			continue
 		}
 		if knownPublicReportingFiles[name] {
+			continue
+		}
+		if knownSharedInfrastructureFiles[name] {
 			continue
 		}
 

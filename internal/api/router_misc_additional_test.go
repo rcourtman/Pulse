@@ -885,7 +885,7 @@ func TestHandleWorkloadCharts_WorkloadOnlyPayloadAndNodeFilter(t *testing.T) {
 
 func TestHandleWorkloadCharts_UsesCanonicalWorkloadIDsForVMwareVMs(t *testing.T) {
 	monitor, state, history := newTestMonitor(t)
-	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	metricID := "vc-1:vm:vm-201"
 	resourceID := "vm-vmware-1"
 
@@ -961,7 +961,7 @@ func TestHandleWorkloadCharts_UsesCanonicalWorkloadIDsForVMwareVMs(t *testing.T)
 
 func TestHandleWorkloadsSummaryCharts_UsesCanonicalWorkloadIDsForVMwareVMs(t *testing.T) {
 	monitor, state, history := newTestMonitor(t)
-	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	metricID := "vc-1:vm:vm-201"
 	resourceID := "vm-vmware-1"
 

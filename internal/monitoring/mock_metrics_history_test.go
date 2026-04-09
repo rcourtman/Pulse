@@ -963,7 +963,7 @@ func TestGenerateSeededMetricSeriesForTimestamps_UsesSameTimelineAsMockRuntime(t
 }
 
 func TestSeedMockMetricsHistory_StaysContinuousWithSubsequentLiveMockTicks(t *testing.T) {
-	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	next := now.Add(time.Minute)
 	const storageTotal = int64(2 * 1024 * 1024 * 1024 * 1024)
 	const k8sMetricID = "k8s:k8s-tail:pod:workloads/api-tail"
@@ -1262,7 +1262,7 @@ func TestSeedMockMetricsHistory_NormalizesTerminalTimestampToCanonicalGrid(t *te
 }
 
 func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForStateBackedResources(t *testing.T) {
-	ts := time.Date(2026, time.April, 1, 14, 0, 0, 0, time.UTC)
+	ts := time.Now().UTC().Add(-5 * time.Minute).Truncate(time.Minute)
 	const storageTotal = int64(4 * 1024 * 1024 * 1024 * 1024)
 
 	graph := fixtureGraphWithState(models.StateSnapshot{
@@ -1415,7 +1415,7 @@ func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForStateBackedR
 }
 
 func TestRecordMockStateToMetricsHistory_UsesCanonicalMetricModelForPlatformFixtures(t *testing.T) {
-	ts := time.Date(2026, time.April, 1, 14, 37, 0, 0, time.UTC)
+	ts := time.Now().UTC().Add(-5 * time.Minute).Truncate(time.Minute)
 
 	graph := mock.FixtureGraph{
 		PlatformFixtures: mock.PlatformFixtures{

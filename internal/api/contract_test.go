@@ -836,7 +836,7 @@ func TestContract_InfrastructureChartsNormalizeLongRangeMixedCadence(t *testing.
 	}}
 	syncTestResourceStore(t, monitor, state)
 
-	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	windowStart := now.Add(-7 * 24 * time.Hour)
 	seed := make([]metrics.WriteMetric, 0, 1200)
 	appendMetric := func(ts time.Time, value float64) {
@@ -941,7 +941,7 @@ func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
 		t.Fatal("expected vm source ID")
 	}
 
-	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	windowStart := now.Add(-7 * 24 * time.Hour)
 	seed := make([]metrics.WriteMetric, 0, 2000)
 	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
@@ -1024,7 +1024,7 @@ func TestContract_WorkloadChartsCapLongRangeMixedCadenceByTime(t *testing.T) {
 
 func TestContract_WorkloadChartsUseCanonicalWorkloadIDsForProviderBackedVMs(t *testing.T) {
 	monitor, state, history := newTestMonitor(t)
-	now := time.Date(2026, time.April, 1, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	metricID := "vc-1:vm:vm-201"
 
 	history.AddGuestMetric(metricID, "cpu", 51, now.Add(-10*time.Minute))
@@ -1154,7 +1154,7 @@ func TestContract_WorkloadsSummaryChartsNormalizeLongRangeMixedCadence(t *testin
 		t.Fatal("expected vm source ID")
 	}
 
-	now := time.Date(2026, time.March, 31, 12, 0, 0, 0, time.UTC)
+	now := time.Now().UTC().Add(-10 * time.Minute).Truncate(time.Minute)
 	windowStart := now.Add(-7 * 24 * time.Hour)
 	seed := make([]metrics.WriteMetric, 0, 1500)
 	appendMetric := func(ts time.Time, percentValue, rateValue float64) {
@@ -2351,7 +2351,7 @@ func TestContract_AISettingsOllamaAuthJSONSnapshot(t *testing.T) {
 
 	const want = `{
 		"enabled":true,
-		"model":"openai:gpt-4o",
+		"model":"ollama:llama3",
 		"patrol_model":"ollama:llama3",
 		"configured":true,
 		"custom_context":"",
@@ -7457,6 +7457,7 @@ func TestContract_CanonicalAutoRegisterDirectValidationContract(t *testing.T) {
 	reqBody := AutoRegisterRequest{
 		Type:       "pve",
 		Host:       "https://pve.local:8006",
+		Source:     "script",
 		TokenID:    "pulse-monitor@pve!pulse-homelab",
 		TokenValue: "secret-token",
 	}

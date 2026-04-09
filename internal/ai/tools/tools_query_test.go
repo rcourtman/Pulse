@@ -942,7 +942,7 @@ func TestExecuteQuery_UsesCanonicalTrueNASUnifiedResources(t *testing.T) {
 	if err := json.Unmarshal([]byte(listPools.Content[0].Text), &poolsResp); err != nil {
 		t.Fatalf("decode storage pools response: %v", err)
 	}
-	if len(poolsResp.StoragePools) != 3 {
+	if len(poolsResp.StoragePools) != len(truenas.DefaultFixtures().Pools) {
 		t.Fatalf("expected only top-level pools, got %+v", poolsResp.StoragePools)
 	}
 	for _, pool := range poolsResp.StoragePools {

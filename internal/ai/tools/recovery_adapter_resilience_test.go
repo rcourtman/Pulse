@@ -79,8 +79,8 @@ func TestRecoveryPointsMCPAdapter_ListPointsToleratesMalformedPersistedMetadata(
 	if points[0].Details != nil {
 		t.Fatalf("expected malformed details to be omitted, got %#v", points[0].Details)
 	}
-	if points[0].Display.SubjectLabel != "321" {
-		t.Fatalf("display.subjectLabel = %q, want %q", points[0].Display.SubjectLabel, "321")
+	if points[0].Display.SubjectLabel != "nightly archive" {
+		t.Fatalf("display.subjectLabel = %q, want %q", points[0].Display.SubjectLabel, "nightly archive")
 	}
 	if points[0].Display.ItemType != "vm" {
 		t.Fatalf("display.itemType = %q, want %q", points[0].Display.ItemType, "vm")

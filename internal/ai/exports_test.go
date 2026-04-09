@@ -13,8 +13,8 @@ func TestNewDefaultConfig(t *testing.T) {
 	}
 
 	// Verify some default values
-	if cfg.Model == "" {
-		t.Error("Expected a default model")
+	if cfg.Model != "" {
+		t.Errorf("Expected default model to remain empty until provider resolution, got %q", cfg.Model)
 	}
 }
 

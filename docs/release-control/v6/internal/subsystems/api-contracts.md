@@ -424,6 +424,13 @@ when the disabled candidate no longer counts toward monitored-system capacity.
     inputs before any outbound request is attempted, and OIDC discovery must
     append `/.well-known/openid-configuration` beneath the configured issuer
     base path instead of resetting to the origin root.
+25. Keep config-archive import reloads fail-closed on the shared API/runtime
+    boundary. `internal/api/config_export_import_handlers.go`,
+    `internal/api/contract_test.go`, and adjacent config/runtime helpers must
+    tolerate absent notification managers and other optional runtime managers
+    after a successful import-triggered reload request, returning a controlled
+    API outcome instead of panicking or leaving browser-visible state half
+    rewired.
 
 ## Current State
 
@@ -2625,6 +2632,14 @@ selection path before returning the updated payload. `/api/settings/ai` reads
 must then echo that resolved model back as the canonical default selection, so
 UI setup flows and provider test routes do not drift into frontend-baked model
 defaults or handler-local vendor fallbacks.
+That same shared config/runtime contract also owns import-triggered reload
+safety. When `internal/api/config_export_import_handlers.go` imports a config
+archive and rebinds shared runtime state, the reload path must tolerate absent
+notification or monitoring managers and degrade gracefully instead of
+panicking on optional side effects. `/api/config/import` may be exercised from
+proof or setup contexts that do not yet have every long-lived runtime manager
+wired, but the contract must still leave the imported configuration readable
+through the canonical API surface.
 That same shared infrastructure-settings API contract now also owns the
 connected-infrastructure distinction between machine-managed and
 platform-connections-managed reporting. `frontend-modern/src/types/api.ts`,

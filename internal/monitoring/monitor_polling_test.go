@@ -529,8 +529,8 @@ func TestBuildBroadcastFrontendStateIncludesUnifiedIncidentAlerts(t *testing.T) 
 	if len(frontend.ActiveAlerts) != 1 {
 		t.Fatalf("expected 1 active alert in frontend state, got %d", len(frontend.ActiveAlerts))
 	}
-	if frontend.ActiveAlerts[0].Type != "storage-incident" {
-		t.Fatalf("alert type = %q, want storage-incident", frontend.ActiveAlerts[0].Type)
+	if frontend.ActiveAlerts[0].Type != "resource-incident" {
+		t.Fatalf("alert type = %q, want resource-incident", frontend.ActiveAlerts[0].Type)
 	}
 }
 
@@ -1038,8 +1038,8 @@ func TestBuildBroadcastFrontendStatePrefersLiveAlertManagerOverSnapshotAlerts(t 
 	if got := frontend.ActiveAlerts[0].ID; got == "snapshot-stale-1" || got == "" {
 		t.Fatalf("expected live alert manager id, got %q", got)
 	}
-	if got := frontend.ActiveAlerts[0].Type; got != "storage-incident" {
-		t.Fatalf("alert type = %q, want storage-incident", got)
+	if got := frontend.ActiveAlerts[0].Type; got != "resource-incident" {
+		t.Fatalf("alert type = %q, want resource-incident", got)
 	}
 	if got := frontend.ActiveAlerts[0].Message; got == "stale snapshot alert" {
 		t.Fatalf("expected live alert manager payload, got stale snapshot message %q", got)
@@ -1086,8 +1086,8 @@ func TestActiveAlertsSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *testing
 	if got := active[0].ID; got == "snapshot-active-1" || got == "" {
 		t.Fatalf("expected live alert manager alert id, got %q", got)
 	}
-	if got := active[0].Type; got != "storage-incident" {
-		t.Fatalf("alert type = %q, want storage-incident", got)
+	if got := active[0].Type; got != "resource-incident" {
+		t.Fatalf("alert type = %q, want resource-incident", got)
 	}
 }
 
@@ -1136,8 +1136,8 @@ func TestRecentlyResolvedSnapshotPrefersLiveAlertManagerOverStateSnapshot(t *tes
 	if got := resolved[0].ID; got == "snapshot-resolved-1" || got == "" {
 		t.Fatalf("expected live resolved alert id, got %q", got)
 	}
-	if got := resolved[0].Type; got != "storage-incident" {
-		t.Fatalf("resolved alert type = %q, want storage-incident", got)
+	if got := resolved[0].Type; got != "resource-incident" {
+		t.Fatalf("resolved alert type = %q, want resource-incident", got)
 	}
 }
 
@@ -2099,6 +2099,8 @@ func TestUpdateResourceStore_IngestsRegisteredSupplementalProvider(t *testing.T)
 		resourceStore: store,
 	}
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	store.snapshotCalls = 0
+	store.recordsBySource = nil
 	monitor.updateResourceStore(models.StateSnapshot{})
 
 	if store.snapshotCalls != 1 {
@@ -2139,6 +2141,10 @@ func TestUpdateResourceStore_UsesAtomicStoreReplacementWhenAvailable(t *testing.
 		resourceStore: store,
 	}
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	store.snapshotCalls = 0
+	store.atomicCalls = 0
+	store.lastSnapshot = models.StateSnapshot{}
+	store.lastRecordsBySrc = nil
 	snapshot := models.StateSnapshot{
 		Hosts: []models.Host{{ID: "host-1", Hostname: "minipc", Status: "online"}},
 	}
@@ -2187,6 +2193,9 @@ func TestUpdateResourceStore_SuppressesSnapshotForRegisteredSupplementalOwnershi
 		resourceStore: store,
 	}
 	monitor.SetSupplementalRecordsProvider(unifiedresources.SourceTrueNAS, provider)
+	store.snapshotCalls = 0
+	store.recordsBySource = nil
+	store.lastSnapshot = models.StateSnapshot{}
 	monitor.updateResourceStore(models.StateSnapshot{
 		Nodes:      []models.Node{{}},
 		VMs:        []models.VM{{}},

@@ -231,8 +231,8 @@ func TestTrueNASPollerRecordsMetrics(t *testing.T) {
 	t.Cleanup(poller.Stop)
 
 	waitForCondition(t, 5*time.Second, func() bool {
-		return successCount.Load() > 0
-	}, "expected successful requests after initial failures")
+		return successCount.Load() > 0 && hasTrueNASHostForOrg(poller, "default", "metrics-host")
+	}, "expected TrueNAS resources to appear after initial failures")
 
 	poller.Stop()
 	if !hasTrueNASHostForOrg(poller, "default", "metrics-host") {
