@@ -13,8 +13,6 @@ import {
   getPublicPricingUrl,
   getSelfHostedPurchaseStartUrl,
   SELF_HOSTED_PRO_BILLING_PLAN_HREF,
-  SELF_HOSTED_PRO_BILLING_PLAN_MONITORED_SYSTEM_UPGRADE_HREF,
-  SELF_HOSTED_PRO_BILLING_PLAN_RECOVERY_HREF,
   SELF_HOSTED_PRO_BILLING_PURCHASE_ACTIVATED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_CANCELLED,
   SELF_HOSTED_PRO_BILLING_PURCHASE_EXPIRED,
@@ -36,6 +34,8 @@ const activateLicenseMock = vi.fn();
 const clearLicenseMock = vi.fn();
 const notificationSuccessMock = vi.fn();
 const notificationErrorMock = vi.fn();
+const presentationPolicyHidesCommercialSurfacesMock = vi.fn(() => false);
+const sessionPresentationPolicyResolvedMock = vi.fn(() => true);
 const useLocationMock = vi.fn(() => ({
   search: '',
   pathname: '/settings/system/billing/plan',
@@ -70,6 +70,11 @@ vi.mock('@/stores/licenseEntitlements', () => ({
   licenseEntitlements: () => mockEntitlements,
   licenseEntitlementsLoadError: () => licenseEntitlementsLoadErrorMock(),
   loadLicenseEntitlements: (...args: unknown[]) => loadLicenseEntitlementsMock(...args),
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
+  sessionPresentationPolicyResolved: () => sessionPresentationPolicyResolvedMock(),
 }));
 
 vi.mock('@/api/license', () => ({
@@ -113,6 +118,8 @@ describe('ProLicensePanel', () => {
     clearLicenseMock.mockReset();
     notificationSuccessMock.mockReset();
     notificationErrorMock.mockReset();
+    presentationPolicyHidesCommercialSurfacesMock.mockReset();
+    sessionPresentationPolicyResolvedMock.mockReset();
     useLocationMock.mockReset();
     navigateMock.mockReset();
     getUpgradeActionDestinationMock.mockReset();
@@ -124,6 +131,8 @@ describe('ProLicensePanel', () => {
     startProTrialMock.mockResolvedValue(undefined);
     activateLicenseMock.mockResolvedValue({ success: true });
     clearLicenseMock.mockResolvedValue({ success: true });
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+    sessionPresentationPolicyResolvedMock.mockReturnValue(true);
     getUpgradeActionDestinationMock.mockImplementation((feature?: string) => ({
       href: getPublicPricingUrl(feature),
       external: true,
@@ -140,6 +149,38 @@ describe('ProLicensePanel', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('fails closed until the session presentation policy is resolved', () => {
+    sessionPresentationPolicyResolvedMock.mockReturnValue(false);
+
+    renderPanel();
+
+    expect(loadLicenseEntitlementsMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Loading settings access')).toBeInTheDocument();
+    expect(
+      screen.getByText(/before showing license, billing, or usage details/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides commercial details in demo mode without loading license state', () => {
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+
+    renderPanel();
+
+    expect(loadLicenseEntitlementsMock).not.toHaveBeenCalled();
+    expect(loadRuntimeLicenseStatusMock).not.toHaveBeenCalled();
+    expect(loadCommercialPostureMock).not.toHaveBeenCalled();
+    expect(screen.getByText('License and billing details are hidden')).toBeInTheDocument();
+    expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
+    expect(screen.queryByText('Pulse Pro')).not.toBeInTheDocument();
+    expect(screen.queryByText('Monitored Systems')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /start 14-day pro trial/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('shows start trial action only when trial_eligible is true', async () => {
@@ -733,6 +774,9 @@ describe('ProLicensePanel', () => {
 
   it('keeps Pro license split into shell, runtime, and plan owners', () => {
     expect(proLicensePanelSource).toContain('./useProLicensePanelState');
+    expect(proLicensePanelSource).toContain('sessionPresentationPolicyResolved');
+    expect(proLicensePanelSource).toContain('presentationPolicyHidesCommercialSurfaces');
+    expect(proLicensePanelSource).toContain('ProLicensePanelContent');
     expect(proLicensePanelSource).toContain('./ProLicensePlanSection');
     expect(proLicensePanelSource).toContain('SelfHostedCommercialRecoverySection');
     expect(proLicensePanelSource).toContain('SELF_HOSTED_PRO_BILLING_PRESENTATION');

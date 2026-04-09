@@ -50,6 +50,16 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     rebuildPendingMessage:
       'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
   },
+  policyLoadingState: {
+    title: 'Checking monitored-system visibility',
+    message:
+      'Pulse waits for the session presentation policy before loading usage or plan-limit data.',
+  },
+  hiddenState: {
+    title: 'Monitored-system usage is hidden in demo mode',
+    message:
+      'The public demo uses sample infrastructure data, so Pulse hides counted-system totals, plan limits, and upgrade actions instead of creating a demo license.',
+  },
   countingDetailsCollapsedLabel: 'View counting details',
   countingDetailsExpandedLabel: 'Hide counting details',
   currentStatusHeading: 'Current status',
@@ -124,6 +134,14 @@ export function getMonitoredSystemLedgerErrorState() {
 
 export function getMonitoredSystemLedgerUnavailableState() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState;
+}
+
+export function getMonitoredSystemLedgerPolicyLoadingState() {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.policyLoadingState;
+}
+
+export function getMonitoredSystemLedgerHiddenState() {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.hiddenState;
 }
 
 export function formatMonitoredSystemLedgerUnavailableMessage(reason?: string): string {

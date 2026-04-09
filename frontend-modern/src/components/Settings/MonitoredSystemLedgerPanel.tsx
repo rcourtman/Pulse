@@ -26,12 +26,18 @@ import {
   formatMonitoredSystemSurfaceAttribution,
   getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerDescription,
+  getMonitoredSystemLedgerHiddenState,
   getMonitoredSystemLedgerLoadingState,
+  getMonitoredSystemLedgerPolicyLoadingState,
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemLedgerPresentation,
 } from '@/utils/monitoredSystemPresentation';
 import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
+import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
 
 interface MonitoredSystemLedgerPanelProps {
   embedded?: boolean;
@@ -93,7 +99,13 @@ function formatCapturedAt(value: number | undefined): string | null {
 }
 
 export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProps = {}) {
-  const [explanation, { refetch }] = createResource(() => MonitoredSystemLedgerAPI.explain());
+  const ledgerRequestKey = () =>
+    sessionPresentationPolicyResolved() && !presentationPolicyHidesCommercialSurfaces()
+      ? 'visible'
+      : false;
+  const [explanation, { refetch }] = createResource(ledgerRequestKey, () =>
+    MonitoredSystemLedgerAPI.explain(),
+  );
   const [expandedSystemKey, setExpandedSystemKey] = createSignal<string | null>(null);
   const presentation = getMonitoredSystemLedgerPresentation();
 
@@ -139,7 +151,24 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
     setExpandedSystemKey((current) => (current === key ? null : key));
   };
 
-  const content = (
+  const policyLoadingState = getMonitoredSystemLedgerPolicyLoadingState();
+  const hiddenState = getMonitoredSystemLedgerHiddenState();
+
+  const policyLoadingContent = (
+    <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
+      <p class="font-semibold text-base-content">{policyLoadingState.title}</p>
+      <p class="mt-1 text-muted">{policyLoadingState.message}</p>
+    </div>
+  );
+
+  const hiddenContent = (
+    <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
+      <p class="font-semibold text-base-content">{hiddenState.title}</p>
+      <p class="mt-1 text-muted">{hiddenState.message}</p>
+    </div>
+  );
+
+  const ledgerContent = (
     <>
       {/* Summary */}
       <div class="space-y-1">
@@ -426,6 +455,14 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
         </Show>
       </Show>
     </>
+  );
+
+  const content = (
+    <Show when={sessionPresentationPolicyResolved()} fallback={policyLoadingContent}>
+      <Show when={!presentationPolicyHidesCommercialSurfaces()} fallback={hiddenContent}>
+        {ledgerContent}
+      </Show>
+    </Show>
   );
 
   if (props.embedded) {

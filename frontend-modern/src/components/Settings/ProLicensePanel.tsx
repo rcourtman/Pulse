@@ -10,12 +10,48 @@ import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresent
 import { Subtabs } from '@/components/shared/Subtabs';
 import { getMonitoredSystemBriefSummary } from '@/utils/monitoredSystemPresentation';
 import {
+  presentationPolicyHidesCommercialSurfaces,
+  sessionPresentationPolicyResolved,
+} from '@/stores/sessionPresentationPolicy';
+import {
   SELF_HOSTED_PRO_BILLING_PLAN_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_RECOVERY_SECTION_ID,
   SELF_HOSTED_PRO_BILLING_USAGE_SECTION_ID,
 } from '@/utils/pricingHandoff';
 
-export const ProLicensePanel: Component = () => {
+const ProLicensePolicyLoadingPanel: Component = () => (
+  <CommercialBillingShell
+    title={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellTitle}
+    description={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellDescription}
+    icon={<ShieldCheck class="w-5 h-5" />}
+    loading={false}
+  >
+    <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
+      <p class="font-semibold text-base-content">
+        {SELF_HOSTED_PRO_BILLING_PRESENTATION.policyLoadingTitle}
+      </p>
+      <p class="mt-1 text-muted">{SELF_HOSTED_PRO_BILLING_PRESENTATION.policyLoadingBody}</p>
+    </div>
+  </CommercialBillingShell>
+);
+
+const ProLicenseHiddenPanel: Component = () => (
+  <CommercialBillingShell
+    title={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellTitle}
+    description={SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenShellDescription}
+    icon={<ShieldCheck class="w-5 h-5" />}
+    loading={false}
+  >
+    <div class="rounded-lg border border-border bg-surface px-4 py-4 text-sm">
+      <p class="font-semibold text-base-content">
+        {SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenStateTitle}
+      </p>
+      <p class="mt-1 text-muted">{SELF_HOSTED_PRO_BILLING_PRESENTATION.hiddenStateBody}</p>
+    </div>
+  </CommercialBillingShell>
+);
+
+const ProLicensePanelContent: Component = () => {
   const state = useProLicensePanelState();
 
   return (
@@ -122,5 +158,18 @@ export const ProLicensePanel: Component = () => {
     </div>
   );
 };
+
+export const ProLicensePanel: Component = () => (
+  <div class="space-y-6">
+    <Show when={sessionPresentationPolicyResolved()} fallback={<ProLicensePolicyLoadingPanel />}>
+      <Show
+        when={!presentationPolicyHidesCommercialSurfaces()}
+        fallback={<ProLicenseHiddenPanel />}
+      >
+        <ProLicensePanelContent />
+      </Show>
+    </Show>
+  </div>
+);
 
 export default ProLicensePanel;

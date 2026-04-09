@@ -18,8 +18,10 @@ import {
   getMonitoredSystemExplanationFallbackSummary,
   getMonitoredSystemLedgerDescription,
   getMonitoredSystemLedgerErrorState,
+  getMonitoredSystemLedgerHiddenState,
   getMonitoredSystemLedgerLoadingState,
   getMonitoredSystemLedgerPresentation,
+  getMonitoredSystemLedgerPolicyLoadingState,
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemLimitInstallCollectorsLabel,
   getMonitoredSystemLimitLearnMoreLabel,
@@ -72,6 +74,16 @@ describe('monitoredSystemPresentation', () => {
           'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
         rebuildPendingMessage:
           'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
+      },
+      policyLoadingState: {
+        title: 'Checking monitored-system visibility',
+        message:
+          'Pulse waits for the session presentation policy before loading usage or plan-limit data.',
+      },
+      hiddenState: {
+        title: 'Monitored-system usage is hidden in demo mode',
+        message:
+          'The public demo uses sample infrastructure data, so Pulse hides counted-system totals, plan limits, and upgrade actions instead of creating a demo license.',
       },
       countingDetailsCollapsedLabel: 'View counting details',
       countingDetailsExpandedLabel: 'Hide counting details',
@@ -133,6 +145,16 @@ describe('monitoredSystemPresentation', () => {
         'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
       rebuildPendingMessage:
         'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
+    });
+    expect(getMonitoredSystemLedgerPolicyLoadingState()).toEqual({
+      title: 'Checking monitored-system visibility',
+      message:
+        'Pulse waits for the session presentation policy before loading usage or plan-limit data.',
+    });
+    expect(getMonitoredSystemLedgerHiddenState()).toEqual({
+      title: 'Monitored-system usage is hidden in demo mode',
+      message:
+        'The public demo uses sample infrastructure data, so Pulse hides counted-system totals, plan limits, and upgrade actions instead of creating a demo license.',
     });
     expect(getMonitoredSystemCountingDetailsToggleLabel(false)).toBe('View counting details');
     expect(getMonitoredSystemCountingDetailsToggleLabel(true)).toBe('Hide counting details');

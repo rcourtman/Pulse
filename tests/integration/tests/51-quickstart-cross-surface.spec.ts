@@ -656,7 +656,8 @@ test.describe("Quickstart cross-surface browser contract", () => {
 
     await page.getByRole("button", { name: "Enable AI services" }).click();
 
-    expect(surface.updateRequests).toHaveLength(1);
+    await expect.poll(() => surface.updateRequests.length).toBe(1);
+    expect(surface.updateRequests[0]).toMatchObject({ enabled: true });
     await expect(page.getByText("Choose a provider to get started")).toHaveCount(0);
   });
 });

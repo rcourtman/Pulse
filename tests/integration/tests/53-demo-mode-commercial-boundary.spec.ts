@@ -157,7 +157,7 @@ base.describe('Demo mode commercial boundary', () => {
       });
     });
 
-    await page.route('**/api/license/monitored-system-ledger', async (route) => {
+    await page.route('**/api/license/monitored-system-ledger**', async (route) => {
       monitoredSystemLedgerRequests += 1;
       await route.fulfill({
         status: 404,
@@ -184,7 +184,9 @@ base.describe('Demo mode commercial boundary', () => {
       });
     });
 
-    await page.goto('/settings/system/billing', { waitUntil: 'domcontentloaded' });
+    await page.goto('/settings/system/billing/usage?details=counting-rules', {
+      waitUntil: 'domcontentloaded',
+    });
     await page.waitForURL('**/settings/infrastructure/install', { timeout: 15_000 });
 
     await expect
@@ -269,7 +271,7 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/license/activate');
       await hiddenNotFound('**/api/license/clear');
       await hiddenNotFound('**/api/license/trial/start');
-      await hiddenNotFound('**/api/license/monitored-system-ledger');
+      await hiddenNotFound('**/api/license/monitored-system-ledger**');
       await hiddenNotFound('**/api/admin/orgs/**/billing-state');
       await hiddenNotFound('**/api/upgrade-metrics/**');
       await hiddenNotFound('**/auth/license-purchase-start**');

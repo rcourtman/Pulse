@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 
@@ -8,6 +8,8 @@ import type {
 } from '@/api/monitoredSystemLedger';
 
 const explainMock = vi.fn<() => Promise<MonitoredSystemLedgerExplainResponse>>();
+const presentationPolicyHidesCommercialSurfacesMock = vi.fn(() => false);
+const sessionPresentationPolicyResolvedMock = vi.fn(() => true);
 
 const explainResponse = (
   ledger: MonitoredSystemLedgerResponse,
@@ -20,6 +22,11 @@ vi.mock('@/api/monitoredSystemLedger', () => ({
   MonitoredSystemLedgerAPI: {
     explain: () => explainMock(),
   },
+}));
+
+vi.mock('@/stores/sessionPresentationPolicy', () => ({
+  presentationPolicyHidesCommercialSurfaces: () => presentationPolicyHidesCommercialSurfacesMock(),
+  sessionPresentationPolicyResolved: () => sessionPresentationPolicyResolvedMock(),
 }));
 
 vi.mock('@/components/shared/SettingsPanel', () => ({
@@ -52,9 +59,47 @@ vi.mock('@/utils/format', () => ({
 import { MonitoredSystemLedgerPanel } from '../MonitoredSystemLedgerPanel';
 
 describe('MonitoredSystemLedgerPanel', () => {
+  beforeEach(() => {
+    presentationPolicyHidesCommercialSurfacesMock.mockReset();
+    sessionPresentationPolicyResolvedMock.mockReset();
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(false);
+    sessionPresentationPolicyResolvedMock.mockReturnValue(true);
+  });
+
   afterEach(() => {
     cleanup();
     explainMock.mockReset();
+  });
+
+  it('waits for the session presentation policy before requesting ledger data', () => {
+    sessionPresentationPolicyResolvedMock.mockReturnValue(false);
+
+    render(() => <MonitoredSystemLedgerPanel />);
+
+    expect(explainMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Checking monitored-system visibility')).toBeInTheDocument();
+    expect(screen.getByText(/before loading usage or plan-limit data/i)).toBeInTheDocument();
+  });
+
+  it('hides monitored-system usage in demo mode without requesting the ledger', () => {
+    presentationPolicyHidesCommercialSurfacesMock.mockReturnValue(true);
+
+    render(() => (
+      <MonitoredSystemLedgerPanel
+        monitoredSystemLimit={{
+          key: 'max_monitored_systems',
+          limit: 5,
+          current: 16,
+          state: 'enforced',
+        }}
+      />
+    ));
+
+    expect(explainMock).not.toHaveBeenCalled();
+    expect(screen.getByText('Monitored-system usage is hidden in demo mode')).toBeInTheDocument();
+    expect(screen.getByText(/instead of creating a demo license/i)).toBeInTheDocument();
+    expect(screen.queryByText('16 / 5')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
   });
 
   it('shows monitored-system loading copy while the ledger request is pending', () => {

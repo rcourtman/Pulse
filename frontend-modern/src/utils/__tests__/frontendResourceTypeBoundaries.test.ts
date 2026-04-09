@@ -2860,7 +2860,8 @@ describe('frontend resource type boundaries', () => {
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
-    expect(trialBannerStateSource).toContain('commercialPosture');
+    expect(trialBannerStateSource).toContain('isCommercialTrialActive');
+    expect(trialBannerStateSource).toContain('commercialTrialDaysRemaining');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');

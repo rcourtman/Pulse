@@ -83,6 +83,7 @@ agreement, and cloud-specific enforcement rules.
 61. `frontend-modern/src/utils/pricingHandoff.ts`
 62. `frontend-modern/src/utils/selfHostedPlans.ts`
 63. `frontend-modern/src/utils/upgradePresentation.ts`
+64. `frontend-modern/src/components/Settings/selfHostedBillingPresentation.ts`
 
 ## Shared Boundaries
 
@@ -191,6 +192,15 @@ trial urgency, observed usage counts, or checkout handoff state. The
 commercial posture store and billing-entitlements store must also fail closed
 locally until the shared presentation policy resolves, then stay fail-closed
 in demo mode so hidden routes are not probed from the browser shell.
+Deep-linkable commercial panels must consume the same resolved presentation
+policy directly, not rely only on settings navigation to keep public-demo
+browsers away from commercial routes. `ProLicensePanel` may instantiate its
+license/trial/recovery state only after the policy resolves and only when
+commercial surfaces are visible. `MonitoredSystemLedgerPanel` must also defer
+ledger reads until that policy resolves and suppress them while commercial
+surfaces are hidden. Public demo mode therefore renders a redacted
+presentation-policy state instead of creating a fake entitlement, probing
+hidden commercial endpoints, or showing monitored-system usage pressure.
 The governed browser proof for that posture lives in
 `tests/integration/tests/53-demo-mode-commercial-boundary.spec.ts` and is
 expected to stay runnable through
