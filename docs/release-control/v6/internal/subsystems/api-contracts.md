@@ -75,7 +75,7 @@ Own canonical runtime payload shapes between backend and frontend.
 50. `internal/cloudcp/portal/frontend_sync_test.go`
 51. `internal/api/recovery_handlers.go`
 52. `internal/api/config_setup_handlers.go`
-53. `internal/api/demo_mode_commercial.go`: the canonical public-demo commercial route policy, including monitored-system ledger, explanation, and provider preview surfaces.
+53. `internal/api/demo_mode_commercial.go`
 54. `internal/api/security_status_capabilities.go`
 55. `internal/api/demo_middleware.go`
 56. `frontend-modern/src/stores/aiRuntimeState.ts`
@@ -169,7 +169,6 @@ Own canonical runtime payload shapes between backend and frontend.
    and the same shared correlation card's ordering and truncation rule, so callers pass raw correlations instead of encoding their own top-N sort behavior
    and the shared `frontend-modern/src/components/Infrastructure/ResourceChangeSummary.tsx` and `frontend-modern/src/components/Infrastructure/ResourceCorrelationSummary.tsx` cards' infrastructure resource-link default, so the Patrol page, resource drawer, and problem-resource dashboard panels inherit the canonical resource-filter path construction instead of rebuilding infrastructure URLs inline
 8. Route frontend API-client parsed error propagation, API-error-status fallback handling, allowed-status handling, custom status-specific error handling, command-trigger success envelope handling, shared response parsing pipelines, missing-resource lookup handling, metadata CRUD routing, stream event consumption, response status, collection normalization, scalar payload coercion, and structured error normalization through canonical shared helpers under `frontend-modern/src/api/`
-9. Keep direct platform-connection write admission on this shared API contract as well: `internal/api/truenas_handlers.go`, `internal/api/vmware_handlers.go`, `internal/api/monitored_system_limit_enforcement.go`, and `internal/api/contract_test.go` must keep TrueNAS and VMware creates/updates fail-closed with `monitored_system_usage_unavailable` whenever the canonical monitored-system usage view is unsettled or rebuilding, and VMware write admission must check that canonical usage state before collecting external vCenter inventory so direct API callers cannot persist connections behind an unsafe capacity view.
 9. Add or change API token scope, assignment, and revocation presentation through `frontend-modern/src/components/Settings/APITokenManager.tsx`, `frontend-modern/src/components/Settings/apiTokenManagerModel.ts`, and `frontend-modern/src/components/Settings/useAPITokenManagerState.ts`
 10. Add or change infrastructure operations token generation, lookup, assignment, the pure unified-agent inventory/install model, the split infrastructure install/reporting state owners, the split direct-node/discovery infrastructure settings owners, the shared infrastructure-operations state provider/context shell, and reporting/install presentation through `frontend-modern/src/components/Settings/InfrastructureOperationsController.tsx`, `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`, `frontend-modern/src/components/Settings/useInfrastructureConfiguredNodesState.ts`, `frontend-modern/src/components/Settings/useInfrastructureDiscoveryRuntimeState.ts`, `frontend-modern/src/components/Settings/useInfrastructureInstallState.tsx`, `frontend-modern/src/components/Settings/useInfrastructureOperationsState.tsx`, and `frontend-modern/src/components/Settings/useInfrastructureReportingState.tsx`
 11. Keep `internal/api/session_store.go` on a fail-closed auth-persistence boundary: persisted OIDC refresh tokens may only round-trip through encrypted-at-rest session payloads, and any missing-crypto or invalid-ciphertext path must drop the token instead of preserving plaintext-at-rest session state.
@@ -375,10 +374,6 @@ Own canonical runtime payload shapes between backend and frontend.
     store after an owned settings mutation, but they must not reintroduce
     page-local mount loops that fetch `/api/settings/ai` or `/api/ai/models`
     separately for chat, Patrol, and cost/budget views.
-    The shared chat shell under `frontend-modern/src/components/AI/Chat/`
-    stays on that same read-side contract: it may coordinate assistant UI
-    state, but it must not reopen page-local fetch loops against
-    `/api/settings/ai` or `/api/ai/models` outside the shared runtime store.
 23. Keep API-backed first-target onboarding canonical on that same shared
     infrastructure-settings boundary:
     `frontend-modern/src/components/Settings/infrastructureOperationsModel.tsx`,
@@ -1081,14 +1076,6 @@ Provider-backed preview routes such as `/api/truenas/connections/preview`,
 and `/api/vmware/connections/{id}/preview` must serialize that same canonical
 preview shape directly; they may not down-scope the response to local counts or
 hide current/projected grouped systems from the governed contract.
-That same fail-closed contract now also carries a structured unavailable
-reason. When monitored-system usage is unavailable, the 503 payload must keep
-`code=monitored_system_usage_unavailable` and include `details.reason` with the
-canonical monitor usage reason such as `monitor_state_unavailable`,
-`supplemental_inventory_unsettled`, or
-`supplemental_inventory_rebuild_pending`, and provider-backed preview routes
-plus deploy slot checks must emit that same reason-bearing payload instead of a
-generic unavailable error.
 That client contract must also fail closed when older or partial payloads omit
 the nested explanation object: the frontend may normalize missing explanation
 fields to empty reasons/surfaces plus a safe default summary, but it must not
@@ -2649,3 +2636,13 @@ reads or preview probes whenever `DEMO_MODE` is enabled. Demo runtimes may
 still use real server-side entitlement evaluation internally, but the
 governed browser/API contract must not expose commercial identity, usage, or
 upgrade-state payloads back to public viewers through those read surfaces.
+That same monitored-system admission contract now also owns direct write-path
+failure semantics for platform connections. `internal/api/truenas_handlers.go`,
+`internal/api/vmware_handlers.go`,
+`internal/api/monitored_system_limit_enforcement.go`, and
+`internal/api/contract_test.go` must keep TrueNAS and VMware connection
+creates/updates fail-closed with `monitored_system_usage_unavailable` whenever
+the canonical monitored-system usage view is unsettled or rebuilding. VMware
+write admission must check that canonical usage state before collecting
+external vCenter inventory, so direct API callers cannot receive provider
+connection errors or persist connections while capacity accounting is unsafe.

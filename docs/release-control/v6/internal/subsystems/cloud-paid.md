@@ -650,17 +650,6 @@ panels must map `monitored_system_usage_unavailable` plus backend
 `details.reason` through `frontend-modern/src/utils/monitoredSystemPresentation.ts`,
 render helper-owned required-preview guidance before the first safe preview,
 and keep save disabled until the shared preview state resolves safely.
-That same helper-owned admission-preview copy now also owns unavailable-
-capacity guidance. When provider-backed preview endpoints return
-`monitored_system_usage_unavailable`, the shared preview shell and provider
-panels must render helper-owned unavailable title/message mapped from the
-canonical backend `details.reason` and disable the save action until preview
-can resolve again.
-That same helper also owns grouped preview attribution and multi-source labels.
-When a current or projected monitored system represents several included
-surfaces, the admission preview must render canonical helper-owned labels such
-as `Multiple Sources` and helper-owned effect copy instead of provider-local
-source names, raw type/source slugs, or ad hoc billing phrasing.
 That same disclosure surface must not accept arbitrary caller-supplied
 monitored-system summary strings as its primary API. When the disclosure needs
 to show brief summary copy, it should render the canonical helper-owned brief

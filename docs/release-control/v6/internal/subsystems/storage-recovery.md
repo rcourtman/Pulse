@@ -70,7 +70,13 @@ querying, and the operator-facing storage health presentation layer.
    provider-backed recovery: storage and recovery must treat `truenas_disabled`
    as an explicit platform opt-out, not as the baseline onboarding state for a
    supported platform.
-   That same adjacent API boundary also owns direct provider write admission when canonical monitored-system usage is unavailable. `internal/api/truenas_handlers.go`, `internal/api/vmware_handlers.go`, and the shared monitored-system admission helpers must fail those connection saves closed before provider state persists, and VMware must not collect external vCenter inventory before the canonical capacity view is safe.
+   That same adjacent API boundary also owns monitored-system admission preview
+   transport for provider-backed setup context. `/api/truenas/connections/preview`,
+   `/api/truenas/connections/{id}/preview`, `/api/vmware/connections/preview`,
+   and `/api/vmware/connections/{id}/preview` may surface canonical
+   current/projected grouped systems plus enforced limit verdicts for setup and
+   support clarity, but storage and recovery must not reinterpret those routes
+   as recovery-local onboarding or restore APIs.
    That same adjacent API boundary now also owns SSO outbound discovery and metadata fetch trust: storage- and recovery-adjacent surfaces may share `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`, but they must not fork separate metadata/discovery HTTP clients, redirect policies, or credential-file read rules when they depend on shared backend auth helpers.
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.
@@ -148,8 +154,6 @@ querying, and the operator-facing storage health presentation layer.
 26. Keep cross-surface recovery handoffs on the shared route-helper contract. When infrastructure or other unified-resource consumers expose TrueNAS recovery links, they must reuse the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder with owned `platform` and `node` queries instead of inventing drawer-local recovery URLs or treating PBS services as the only infrastructure-to-recovery path.
 27. Keep alert-side recovery drill-ins on that same shared route-helper contract. When alert investigation surfaces such as resource-incident panels expose recovery follow-up links for TrueNAS or future API-backed platforms, they must route through the canonical `frontend-modern/src/routing/resourceLinks.ts` recovery builder instead of freezing alert-local recovery URLs or introducing another provider-shaped recovery handoff vocabulary.
 28. Keep VMware onboarding runtime and recovery semantics separate on that same adjacent platform-connections contract. When `internal/api/router.go`, `internal/api/router_routes_registration.go`, or `internal/api/vmware_handlers.go` evolve VMware connection CRUD, poller-owned `poll` / `observed` summary payloads, saved-test refresh, or observed datastore/VM snapshot visibility, storage and recovery may consume the resulting shared context but must not treat those onboarding/runtime payloads as canonical recovery artifacts, restore capability, or recovery-local control transport.
-    That same adjacent platform-connections boundary also owns pre-save monitored-system admission preview. When `internal/api/monitored_system_ledger.go`, `internal/api/router_routes_registration.go`, `internal/api/truenas_handlers.go`, or `internal/api/vmware_handlers.go` expose current/projected grouped systems and limit-enforcement verdicts before a provider connection is saved, storage and recovery may consume that context only as adjacent onboarding evidence; they must not reinterpret those preview groups as protected inventory, restore readiness, backup coverage, or recovery-local capacity truth.
-    That same adjacent platform-connections boundary also owns the retryable unavailable reason for those preview and slot-enforcement flows. Shared `internal/api/` helpers must preserve canonical `details.reason` values on `monitored_system_usage_unavailable` responses so storage/recovery-adjacent onboarding does not collapse distinct settling-vs-rebuild states into an opaque generic failure.
 29. Keep VMware datastore projection on the shared unified-resource and storage-source contracts. When `frontend-modern/src/hooks/useUnifiedResources.ts` or shared `internal/api/router.go` wiring starts surfacing VMware-backed canonical `storage` resources, storage and recovery may expose those datastores through the owned `vmware-vsphere` source/platform vocabulary for inventory, capacity, and handoff flows only; they must not reinterpret that projection as VMware recovery support, restore semantics, or a provider-local protection surface.
 30. Keep VMware placement and guest-detail enrichment descriptive on that same shared unified-resource contract. When `internal/vmware/provider.go`, `internal/unifiedresources/types.go`, and `frontend-modern/src/hooks/useUnifiedResources.ts` project datacenter, cluster, folder, runtime-host, datastore-attachment, guest-hostname, or guest-IP metadata onto canonical VMware `agent` / `vm` / `storage` resources, storage and recovery may use that detail for labeling and navigation only; they must not promote those topology or guest fields into recovery ownership, restore targeting, protection grouping, or a VMware-local recovery taxonomy without a separately governed slice.
 31. Keep VMware datastore classification neutral on the shared storage adapter contract. When `frontend-modern/src/features/storageBackups/resourceStorageMapping.ts`, `frontend-modern/src/features/storageBackups/resourceStoragePresentation.ts`, and `frontend-modern/src/features/storageBackups/storageAdapters.ts` evolve canonical storage-record mapping, VMware-backed datastores must continue to land on the shared storage route as inventory-only datastores with neutral protection fallback, not as backup repositories, backup targets, or recovery-protected resources.
@@ -355,10 +359,9 @@ storage or recovery consumes the resulting runtime context.
 That same adjacent `internal/api/` boundary now also governs public-demo
 commercial redaction for storage and recovery viewers. Shared storage/recovery
 surfaces may run beside a demo runtime that has real internal entitlements,
-but `DEMO_MODE` must still 404 license-status, billing-state, monitored-
-system-ledger reads, and monitored-system explanation/provider preview routes
-so adjacent recovery or storage pages do not leak commercial identity or
-upgrade posture into a public demo. Storage/recovery
+but `DEMO_MODE` must still 404 license-status, billing-state, and monitored-
+system-ledger reads so adjacent recovery or storage pages do not leak
+commercial identity or upgrade posture into a public demo. Storage/recovery
 must consume that redacted boundary as presentation truth rather than
 reintroducing mock-only license bypasses or page-local commercial fallbacks.
 Browser-facing storage/recovery surfaces must also treat
@@ -1454,6 +1457,11 @@ an already-counted host, the API helper must strip only that source from the
 prospective grouped system and preserve any remaining top-level evidence such
 as agent or sibling API ownership, rather than briefly freeing a slot or
 double-counting the same monitored system.
+When storage- or recovery-adjacent settings or support flows need to explain
+that result, they must rely on the shared monitored-system ledger preview
+contract for current/projected grouped systems and enforced limit verdicts
+instead of reconstructing preview copy from page-local recovery inventory or
+provider-local connection details.
 That same shared boundary now also assumes settled monitored-system usage
 readiness. Storage- or recovery-adjacent transport flows may not interpret the
 first store-backed monitor view as commercial truth when provider-owned
@@ -2018,6 +2026,11 @@ observed datastore/VM snapshot visibility on the shared
 platform-connections surface, but storage and recovery must treat that data as
 setup/runtime context only, not as proof that VMware has joined the canonical
 recovery artifact or restore plane.
+The same rule applies to `/api/truenas/connections*/preview` and
+`/api/vmware/connections*/preview`: monitored-system admission previews may
+surface current/projected grouped systems and enforced limit verdicts for setup
+and support clarity, but they do not imply recovery-local onboarding, recovery
+artifact ownership, or restore support.
 That same bounded phase-1 slice now also includes the shared unified-resource
 adapter floor. `frontend-modern/src/hooks/useUnifiedResources.ts`,
 `frontend-modern/src/routing/resourceLinks.ts`, and adjacent storage filters
@@ -2083,3 +2096,10 @@ Browser-facing storage/recovery surfaces must also treat
 `/api/security/status.sessionCapabilities.demoMode` as the canonical
 public-demo bootstrap signal instead of inferring demo posture from headers,
 `/api/health`, or hostname heuristics.
+That same adjacent platform-connections boundary now also assumes direct
+TrueNAS and VMware connection writes fail closed while canonical
+monitored-system usage is unavailable. Storage and recovery may depend on the
+resulting provider setup state only after `internal/api/truenas_handlers.go`,
+`internal/api/vmware_handlers.go`, and the shared monitored-system admission
+helpers have returned a safe capacity verdict; VMware write admission must not
+collect external vCenter inventory before that canonical usage state is safe.

@@ -222,7 +222,6 @@ management, and fleet control surfaces.
     code must treat the resulting activation-state callback as commercial
     ownership cleanup only, not as install inventory proof or fleet enrollment
     state.
-
     The same lifecycle-adjacent platform-connections boundary also assumes
     direct TrueNAS and VMware connection writes fail closed when canonical
     monitored-system usage is unavailable. Shared `internal/api/` admission
@@ -353,9 +352,7 @@ That same adjacent `internal/api/` boundary now also keeps public demos from
 leaking commercial state through lifecycle-adjacent surfaces. Agent install,
 reporting, and setup flows may share backend helpers with billing or license
 transport, but `DEMO_MODE` must continue to 404 commercial read surfaces
-instead of teaching lifecycle or mock-mode paths to bypass licensing. That
-same boundary also hides monitored-system explanation and provider preview
-routes used by lifecycle-adjacent platform connections. Public
+instead of teaching lifecycle or mock-mode paths to bypass licensing. Public
 demo readiness therefore comes from hiding commercial presentation on the
 shared API boundary, not from introducing a second fake-entitlement path into
 lifecycle-owned install or reporting flows. Browser-facing lifecycle surfaces
@@ -1074,15 +1071,6 @@ final, or retry admission against a provider-owned supplemental platform such
 as TrueNAS or VMware until the monitor has both seen an initial baseline for
 every active connection and rebuilt the canonical store at or after that
 provider watermark.
-That same lifecycle-owned admission surface now also requires canonical
-unavailable-reason guidance. When `/api/license/monitored-system-ledger/preview`,
-`/api/truenas/connections/preview`, `/api/truenas/connections/{id}/preview`,
-`/api/vmware/connections/preview`, or
-`/api/vmware/connections/{id}/preview` fail with
-`monitored_system_usage_unavailable`, the backend must preserve
-`details.reason` from the monitor usage contract and the shared admission
-preview shell plus provider panels must render helper-owned retry copy and
-disable save until preview can resolve again.
 That same lifecycle-owned admission surface must keep provider save actions
 gated on a successful monitored-system preview. TrueNAS and VMware settings
 may not create or update a connection while the admission preview is missing,
