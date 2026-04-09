@@ -26,6 +26,64 @@ func TestRootInstallScriptVersionFlagRequiresValue(t *testing.T) {
 	}
 }
 
+func TestRootInstallScriptArchiveFlagRequiresValue(t *testing.T) {
+	scriptPath := filepath.Join("..", "..", "install.sh")
+
+	cmd := exec.Command("bash", scriptPath, "--archive")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected install.sh --archive without value to fail")
+	}
+
+	got := string(out)
+	if !strings.Contains(got, "--archive requires a local .tar.gz path") {
+		t.Fatalf("expected friendly archive missing-value error, got:\n%s", got)
+	}
+	if strings.Contains(got, "unbound variable") {
+		t.Fatalf("expected guarded parser error, got shell failure:\n%s", got)
+	}
+}
+
+func TestRootInstallScriptArchiveCannotBeUsedWithSource(t *testing.T) {
+	scriptPath := filepath.Join("..", "..", "install.sh")
+
+	cmd := exec.Command("bash", scriptPath, "--source", "--archive", "/tmp/pulse-v6.0.0-linux-amd64.tar.gz")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatal("expected install.sh --source --archive to fail")
+	}
+
+	got := string(out)
+	if !strings.Contains(got, "--archive cannot be used with --source") {
+		t.Fatalf("expected archive/source conflict error, got:\n%s", got)
+	}
+}
+
+func TestRootInstallScriptArchiveSupportContract(t *testing.T) {
+	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
+	if err != nil {
+		t.Fatalf("read root install.sh: %v", err)
+	}
+
+	script := string(content)
+	required := []string{
+		`ARCHIVE_OVERRIDE="${PULSE_ARCHIVE_PATH:-}"`,
+		`--archive PATH`,
+		`resolve_archive_override()`,
+		`infer_release_from_archive_name()`,
+		`validate_pulse_binary_architecture()`,
+		`prefetch_pulse_archive_for_container()`,
+		`download_release_archive()`,
+		`install_pulse_archive()`,
+		`Archive version $inferred_release does not match requested version $FORCE_VERSION`,
+	}
+	for _, needle := range required {
+		if !strings.Contains(script, needle) {
+			t.Fatalf("install.sh missing archive support contract: %s", needle)
+		}
+	}
+}
+
 func TestRootInstallScriptAutoRegisterUsesSecureContractShape(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join("..", "..", "install.sh"))
 	if err != nil {

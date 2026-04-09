@@ -1201,6 +1201,7 @@ exit 1
 		FORCE_VERSION=""
 		FORCE_CHANNEL="rc"
 		UPDATE_CHANNEL=""
+` + extractRootInstallShellFunction(t, "resolve_latest_release_tag_for_channel") + `
 ` + extractRootInstallShellFunction(t, "resolve_install_script_download_url") + `
 		resolve_install_script_download_url
 	`
@@ -1239,6 +1240,62 @@ func TestBuildContainerInstallCommandPreservesForcedVersion(t *testing.T) {
 
 	got := strings.TrimSpace(string(out))
 	want := "bash /tmp/install.sh --in-container --version 'v1.2.3' --enable-auto-updates"
+	if got != want {
+		t.Fatalf("install cmd = %q, want %q", got, want)
+	}
+}
+
+func TestBuildContainerInstallCommandPassesArchiveToContainer(t *testing.T) {
+	script := `
+		FORCE_VERSION=""
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		auto_updates_flag=""
+		BUILD_FROM_SOURCE="false"
+		SOURCE_BRANCH="main"
+		frontend_port="7655"
+		container_archive_dest="/tmp/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"
+		CONFIG_DIR="` + t.TempDir() + `"
+` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractRootInstallShellFunction(t, "build_container_install_command") + `
+		build_container_install_command
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := "bash /tmp/install.sh --in-container --archive /tmp/pulse-v6.0.0-rc.1-linux-amd64.tar.gz"
+	if got != want {
+		t.Fatalf("install cmd = %q, want %q", got, want)
+	}
+}
+
+func TestBuildContainerInstallCommandQuotesArchivePath(t *testing.T) {
+	script := `
+		FORCE_VERSION=""
+		FORCE_CHANNEL=""
+		UPDATE_CHANNEL=""
+		auto_updates_flag=""
+		BUILD_FROM_SOURCE="false"
+		SOURCE_BRANCH="main"
+		frontend_port="7655"
+		container_archive_dest="/tmp/pulse archive-linux-amd64.tar.gz"
+		CONFIG_DIR="` + t.TempDir() + `"
+` + extractRootInstallShellFunction(t, "selected_update_channel") + `
+` + extractRootInstallShellFunction(t, "build_container_install_command") + `
+		build_container_install_command
+	`
+
+	out, err := exec.Command("bash", "-c", script).CombinedOutput()
+	if err != nil {
+		t.Fatalf("bash: %v\n%s", err, out)
+	}
+
+	got := strings.TrimSpace(string(out))
+	want := `bash /tmp/install.sh --in-container --archive /tmp/pulse\ archive-linux-amd64.tar.gz`
 	if got != want {
 		t.Fatalf("install cmd = %q, want %q", got, want)
 	}
