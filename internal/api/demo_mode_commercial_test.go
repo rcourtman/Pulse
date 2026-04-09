@@ -16,7 +16,11 @@ func TestPublicDemoCommercialRouteInventoryCoverage(t *testing.T) {
 	}
 
 	actualSet := sliceToSet(t, actualCommercialRoutes, "public demo commercial boundary routes")
-	expectedSet := sliceToSet(t, publicDemoCommercialRouteInventory(), "public demo commercial route inventory")
+	expectedSet := sliceToSet(
+		t,
+		publicDemoCommercialRouterRouteInventory(),
+		"public demo commercial router route inventory",
+	)
 
 	if missing := setDifference(actualSet, expectedSet); len(missing) > 0 {
 		t.Fatalf(
@@ -26,7 +30,7 @@ func TestPublicDemoCommercialRouteInventoryCoverage(t *testing.T) {
 	}
 	if stale := setDifference(expectedSet, actualSet); len(stale) > 0 {
 		t.Fatalf(
-			"demo commercial route inventory contains routes outside the boundary family: %s",
+			"demo commercial router route inventory contains routes outside the boundary family: %s",
 			strings.Join(sortedKeys(stale), ", "),
 		)
 	}
@@ -77,6 +81,22 @@ func routeBelongsToPublicDemoCommercialBoundary(route string) bool {
 		return true
 	case strings.HasPrefix(route, "POST /api/license/"):
 		return true
+	case route == "/api/truenas/connections/preview":
+		return true
+	case route == "/api/truenas/connections/":
+		return true
+	case route == "POST /api/truenas/connections/preview":
+		return true
+	case route == "POST /api/truenas/connections/{id}/preview":
+		return true
+	case route == "/api/vmware/connections/preview":
+		return true
+	case route == "/api/vmware/connections/":
+		return true
+	case route == "POST /api/vmware/connections/preview":
+		return true
+	case route == "POST /api/vmware/connections/{id}/preview":
+		return true
 	case strings.HasPrefix(route, "GET /api/upgrade-metrics/"):
 		return true
 	case strings.HasPrefix(route, "POST /api/upgrade-metrics/"):
@@ -91,5 +111,34 @@ func routeBelongsToPublicDemoCommercialBoundary(route string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func publicDemoCommercialRouterRouteInventory() []string {
+	routes := make([]string, 0, len(publicDemoCommercialPolicies))
+	seen := map[string]struct{}{}
+	for _, policy := range publicDemoCommercialPolicies {
+		route := publicDemoCommercialRouterRoute(policy.route)
+		if _, ok := seen[route]; ok {
+			continue
+		}
+		seen[route] = struct{}{}
+		routes = append(routes, route)
+	}
+	return routes
+}
+
+func publicDemoCommercialRouterRoute(route string) string {
+	switch route {
+	case "POST /api/truenas/connections/preview":
+		return "/api/truenas/connections/preview"
+	case "POST /api/truenas/connections/{id}/preview":
+		return "/api/truenas/connections/"
+	case "POST /api/vmware/connections/preview":
+		return "/api/vmware/connections/preview"
+	case "POST /api/vmware/connections/{id}/preview":
+		return "/api/vmware/connections/"
+	default:
+		return route
 	}
 }
