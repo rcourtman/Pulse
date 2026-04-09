@@ -2372,6 +2372,106 @@ func TestPreviewMonitoredSystemRecordsReplacementOffsetsReplacedVMwareConnection
 	}
 }
 
+func TestPreviewMonitoredSystemRecordsReplacementScopesVMwareResourceIDToConnection(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-edit:host:host-101",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-01.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-edit",
+					ConnectionName:  "Edited VC",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+					HostUUID:        "uuid-host-1",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+		{
+			SourceID: "vc-other:host:host-201",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-collision.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-other",
+					ConnectionName:  "Other VC",
+					ManagedObjectID: "host-201",
+					EntityType:      "host",
+					HostUUID:        "vc-edit",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "vc-edit",
+				Hostnames: []string{"esxi-collision.lab.local"},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemRecordsReplacement(rr, MonitoredSystemReplacement{
+		Source: SourceVMware,
+		Selector: MonitoredSystemReplacementSelector{
+			ResourceID: "vc-edit",
+		},
+	}, map[DataSource][]IngestRecord{
+		SourceVMware: {
+			{
+				SourceID: "vc-edit:host:host-101",
+				Resource: Resource{
+					Type:     ResourceTypeAgent,
+					Name:     "esxi-01.lab.local",
+					Status:   StatusOnline,
+					LastSeen: now,
+					VMware: &VMwareData{
+						ConnectionID:    "vc-edit",
+						ConnectionName:  "Edited VC",
+						ManagedObjectID: "host-101",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-1",
+					},
+				},
+				Identity: ResourceIdentity{
+					DMIUUID:   "uuid-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+		},
+	})
+
+	if preview.CurrentCount != 2 {
+		t.Fatalf("CurrentCount = %d, want 2", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 2 {
+		t.Fatalf("ProjectedCount = %d, want 2", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", preview.AdditionalCount)
+	}
+	if len(preview.CurrentSystems) != 1 {
+		t.Fatalf("len(CurrentSystems) = %d, want 1", len(preview.CurrentSystems))
+	}
+	if preview.CurrentSystems[0].Name != "esxi-01.lab.local" {
+		t.Fatalf("CurrentSystems[0].Name = %q, want esxi-01.lab.local", preview.CurrentSystems[0].Name)
+	}
+	if len(preview.ProjectedSystems) != 1 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 1", len(preview.ProjectedSystems))
+	}
+	if preview.ProjectedSystems[0].Name != "esxi-01.lab.local" {
+		t.Fatalf("ProjectedSystems[0].Name = %q, want esxi-01.lab.local", preview.ProjectedSystems[0].Name)
+	}
+}
+
 func TestResourceRegistry_WorkloadsIncludeCanonicalAppContainers(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)

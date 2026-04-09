@@ -564,7 +564,8 @@ func monitoredSystemReplacementSelectorMatchesVMware(
 	}
 	return monitoredSystemSelectorMatchesCanonicalResourceID(selector, resource) ||
 		trimmedEqualFold(selector.ResourceID, resource.VMware.ConnectionID) ||
-		trimmedEqualFold(selector.ResourceID, resource.VMware.HostUUID) ||
+		trimmedEqualFold(selector.MachineID, resource.VMware.HostUUID) ||
+		trimmedEqualFold(selector.MachineID, resource.Identity.DMIUUID) ||
 		trimmedEqualFold(selector.Name, resource.Name) ||
 		monitoredSystemSelectorMatchesHost(selector, resource.VMware.RuntimeHostName, resource.VMware.VCenterHost, resource.Name)
 }

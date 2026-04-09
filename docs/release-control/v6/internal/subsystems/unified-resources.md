@@ -280,6 +280,11 @@ Candidate matching must fail closed when the prospective monitored-system
 candidate cannot resolve to a canonical top-level resource; malformed or
 whitespace-only inputs are not allowed to masquerade as an already-counted
 system simply because their no-op projection has zero additional count.
+VMware replacement selectors must also keep source-specific identity signals
+unambiguous: `ResourceID` scopes saved vCenter connection replacement to
+`ConnectionID`, while host UUID / DMI identity matching belongs to the
+machine-identity selector path, so editing one connection cannot strip an
+unrelated VMware host whose UUID happens to equal that connection ID.
 That shared consumer ownership now includes same-tab summary hydration too.
 `frontend-modern/src/components/Infrastructure/useInfrastructureSummaryState.ts`
 may keep an in-memory remount cache for canonical resource charts, but the key
