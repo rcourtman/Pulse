@@ -13,6 +13,8 @@ import { SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF } from '@/utils/prici
 type LimitState = {
   current: number;
   limit: number;
+  current_available?: boolean;
+  current_unavailable_reason?: string;
   state?: string;
 };
 
@@ -25,7 +27,12 @@ export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL =
   getMonitoredSystemLimitInstallCollectorsLabel();
 export const MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL = getMonitoredSystemLimitUpgradeLabel();
 
+export function isMonitoredSystemLimitUsageAvailable(limit: LimitState | undefined): boolean {
+  return limit?.current_available !== false;
+}
+
 export function isMonitoredSystemLimitUrgent(limit: LimitState | undefined): boolean {
+  if (!limit || !isMonitoredSystemLimitUsageAvailable(limit)) return false;
   const state = limit?.state;
   return state === 'warning' || state === 'enforced';
 }
@@ -35,7 +42,7 @@ export function shouldShowMonitoredSystemLimitBanner(limit: LimitState | undefin
 }
 
 export function getMonitoredSystemSummary(limit: LimitState | undefined): string {
-  if (!limit) return '';
+  if (!limit || !isMonitoredSystemLimitUsageAvailable(limit)) return '';
   return formatMonitoredSystemLimitSummary(limit);
 }
 
@@ -57,8 +64,10 @@ export function getMonitoredSystemMigrationMessage(
   return formatMonitoredSystemMigrationMessage(counts);
 }
 
-export function getMonitoredSystemOverflowSummary(daysRemaining: number | undefined): string {
-  return formatMonitoredSystemOverflowSummary(daysRemaining);
+export function getMonitoredSystemOverflowSummary(
+  daysRemaining: number | null | undefined,
+): string {
+  return formatMonitoredSystemOverflowSummary(daysRemaining ?? undefined);
 }
 
 export function getMonitoredSystemBannerToneClass(isUrgent: boolean): string {
@@ -68,7 +77,5 @@ export function getMonitoredSystemBannerToneClass(isUrgent: boolean): string {
 }
 
 export function getMonitoredSystemMigrationTextClass(isUrgent: boolean): string {
-  return isUrgent
-    ? 'text-amber-800 dark:text-amber-200'
-    : 'text-sky-800 dark:text-sky-200';
+  return isUrgent ? 'text-amber-800 dark:text-amber-200' : 'text-sky-800 dark:text-sky-200';
 }

@@ -209,7 +209,12 @@ work extends shared components instead of creating new local variants.
     When a shared banner renders both explanatory and commercial CTAs, those
     labels must resolve to distinct owned destinations or section anchors
     instead of presenting two different labels that land on the same
-    unscoped billing screen.
+    unscoped billing screen. Monitored-system warning banners must also honor
+    canonical runtime usage availability before treating a limit as urgent:
+    when the backend marks `max_monitored_systems.current_available=false`,
+    the shared banner model must suppress usage summaries, upgrade pressure,
+    and upgrade-impression telemetry rather than rendering stale `current/limit`
+    counts or paid-plan CTAs.
 15. Keep assistant availability bootstrap on the shared app-shell boundary.
     `frontend-modern/src/useAppRuntimeState.ts`,
     `frontend-modern/src/App.tsx`,

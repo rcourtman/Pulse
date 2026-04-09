@@ -468,7 +468,8 @@ describe('shared primitive guardrails', () => {
     expect(trialBannerStateSource).toContain('createSignal');
     expect(trialBannerStateSource).toContain('createMemo');
     expect(trialBannerStateSource).not.toContain('loadCommercialPosture');
-    expect(trialBannerStateSource).toContain('commercialPosture');
+    expect(trialBannerStateSource).toContain('commercialTrialDaysRemaining');
+    expect(trialBannerStateSource).toContain('isCommercialTrialActive');
     expect(trialBannerStateSource).toContain('presentationPolicyHidesCommercialSurfaces');
     expect(trialBannerStateSource).toContain('getUpgradeActionDestination');
     expect(trialBannerStateSource).toContain('snoozeUpsell');
@@ -690,6 +691,10 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemLimitInstallCollectorsLabel',
     );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'isMonitoredSystemLimitUsageAvailable',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain('current_available');
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF',
     );

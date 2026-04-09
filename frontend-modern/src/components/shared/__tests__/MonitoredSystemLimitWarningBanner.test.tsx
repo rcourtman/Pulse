@@ -15,6 +15,8 @@ type MockLimitRecord = {
   key: string;
   limit: number;
   current: number;
+  current_available?: boolean;
+  current_unavailable_reason?: string;
   state: string;
 };
 const mockGetLimit = vi.hoisted(() =>
@@ -36,21 +38,20 @@ const mockGetUpgradeActionDestination = vi.hoisted(() => vi.fn());
 const mockGetUpgradeActionUrlOrFallback = vi.hoisted(() => vi.fn());
 
 vi.mock('@/stores/license', () => ({
-  getRuntimeLimit: (...args: unknown[]) => mockGetLimit(...args),
-  loadRuntimeCapabilities: (...args: unknown[]) => mockLoadRuntimeLicenseStatus(...args),
+  getRuntimeLimit: (key: string) => mockGetLimit(key),
+  loadRuntimeCapabilities: (force?: boolean) => mockLoadRuntimeLicenseStatus(force),
 }));
 
 vi.mock('@/stores/licenseCommercial', () => ({
   commercialOverflowDaysRemaining: () => mockEntitlements().overflow_days_remaining ?? null,
-  getUpgradeActionDestination: (...args: unknown[]) => mockGetUpgradeActionDestination(...args),
-  getUpgradeActionUrlOrFallback: (...args: unknown[]) => mockGetUpgradeActionUrlOrFallback(...args),
+  getUpgradeActionDestination: (key: string) => mockGetUpgradeActionDestination(key),
+  getUpgradeActionUrlOrFallback: (key: string) => mockGetUpgradeActionUrlOrFallback(key),
   hasMigrationGap: mockHasMigrationGap,
   legacyConnections: mockLegacyConnections,
 }));
 
 vi.mock('@/stores/sessionPresentationPolicy', () => ({
-  presentationPolicyHidesCommercialSurfaces: () =>
-    mockPresentationPolicyHidesCommercialSurfaces(),
+  presentationPolicyHidesCommercialSurfaces: () => mockPresentationPolicyHidesCommercialSurfaces(),
 }));
 
 vi.mock('@/utils/upgradeMetrics', () => ({
@@ -65,7 +66,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
   beforeEach(() => {
     localStorage.clear();
     mockEntitlements.mockReturnValue({ overflow_days_remaining: undefined });
-    mockGetLimit.mockReturnValue({ key: 'max_monitored_systems', limit: 6, current: 0, state: 'ok' });
+    mockGetLimit.mockReturnValue({
+      key: 'max_monitored_systems',
+      limit: 6,
+      current: 0,
+      state: 'ok',
+    });
     mockHasMigrationGap.mockReturnValue(false);
     mockLegacyConnections.mockReturnValue({
       proxmox_nodes: 0,
@@ -123,14 +129,16 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('trackUpgradeMetricEvent');
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('legacyConnections');
-    expect(monitoredSystemLimitWarningBannerStateSource).toContain('scopeSelfHostedBillingDestination');
+    expect(monitoredSystemLimitWarningBannerStateSource).toContain(
+      'scopeSelfHostedBillingDestination',
+    );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain(
       'SELF_HOSTED_PRO_BILLING_MONITORED_SYSTEM_INTENT',
     );
     expect(monitoredSystemLimitWarningBannerStateSource).toContain('handleUpgradeClick');
 
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
-      "@/utils/monitoredSystemPresentation",
+      '@/utils/monitoredSystemPresentation',
     );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemMigrationMessage',
@@ -144,6 +152,10 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'getMonitoredSystemLimitInstallCollectorsLabel',
     );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain(
+      'isMonitoredSystemLimitUsageAvailable',
+    );
+    expect(monitoredSystemLimitWarningBannerModelSource).toContain('current_available');
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Upgrade to add more');
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 collectors');
   });
@@ -179,7 +191,12 @@ describe('MonitoredSystemLimitWarningBanner', () => {
   });
 
   it('keeps urgent limit warnings visible even without migration gap', async () => {
-    mockGetLimit.mockReturnValue({ key: 'max_monitored_systems', limit: 6, current: 5, state: 'warning' });
+    mockGetLimit.mockReturnValue({
+      key: 'max_monitored_systems',
+      limit: 6,
+      current: 5,
+      state: 'warning',
+    });
 
     const mod = await import('../MonitoredSystemLimitWarningBanner');
     render(() => (
@@ -201,10 +218,37 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(screen.queryByText('Install v6 collectors')).not.toBeInTheDocument();
   });
 
+  it('stays hidden while canonical monitored-system usage is unavailable', async () => {
+    mockGetLimit.mockReturnValue({
+      key: 'max_monitored_systems',
+      limit: 6,
+      current: 6,
+      current_available: false,
+      current_unavailable_reason: 'supplemental_inventory_unsettled',
+      state: 'enforced',
+    });
+
+    const mod = await import('../MonitoredSystemLimitWarningBanner');
+    render(() => (
+      <Router>
+        <Route path="/" component={mod.MonitoredSystemLimitWarningBanner} />
+      </Router>
+    ));
+
+    expect(screen.queryByText(/Monitored systems:/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Upgrade to add more')).not.toBeInTheDocument();
+    expect(mockTrackUpgradeMetricEvent).not.toHaveBeenCalled();
+  });
+
   it('keeps urgent limit warnings visible with migration context', async () => {
     mockHasMigrationGap.mockReturnValue(true);
     mockEntitlements.mockReturnValue({ overflow_days_remaining: 14 });
-    mockGetLimit.mockReturnValue({ key: 'max_monitored_systems', limit: 6, current: 5, state: 'warning' });
+    mockGetLimit.mockReturnValue({
+      key: 'max_monitored_systems',
+      limit: 6,
+      current: 5,
+      state: 'warning',
+    });
     mockLegacyConnections.mockReturnValue({
       proxmox_nodes: 2,
       docker_hosts: 1,
