@@ -274,6 +274,10 @@ base.describe('Demo mode commercial boundary', () => {
       await hiddenNotFound('**/api/license/monitored-system-ledger**');
       await hiddenNotFound('**/api/admin/orgs/**/billing-state');
       await hiddenNotFound('**/api/upgrade-metrics/**');
+      await hiddenNotFound('**/api/truenas/connections/preview');
+      await hiddenNotFound('**/api/truenas/connections/*/preview');
+      await hiddenNotFound('**/api/vmware/connections/preview');
+      await hiddenNotFound('**/api/vmware/connections/*/preview');
       await hiddenNotFound('**/auth/license-purchase-start**');
       await hiddenNotFound('**/auth/trial-activate');
 
@@ -292,6 +296,11 @@ base.describe('Demo mode commercial boundary', () => {
             body = null;
           }
           return { status: res.status, body };
+        };
+        const postEmptyJSON = {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
         };
 
         return {
@@ -312,8 +321,13 @@ base.describe('Demo mode commercial boundary', () => {
           }),
           trialStart: await probe('/api/license/trial/start', { method: 'POST' }),
           ledger: await probe('/api/license/monitored-system-ledger'),
+          ledgerPreview: await probe('/api/license/monitored-system-ledger/preview', postEmptyJSON),
           billingState: await probe('/api/admin/orgs/default/billing-state'),
           upgradeMetrics: await probe('/api/upgrade-metrics/stats'),
+          truenasDraftPreview: await probe('/api/truenas/connections/preview', postEmptyJSON),
+          truenasSavedPreview: await probe('/api/truenas/connections/conn-1/preview', postEmptyJSON),
+          vmwareDraftPreview: await probe('/api/vmware/connections/preview', postEmptyJSON),
+          vmwareSavedPreview: await probe('/api/vmware/connections/conn-1/preview', postEmptyJSON),
           checkoutStart: await probe('/auth/license-purchase-start'),
           trialActivate: await probe('/auth/trial-activate'),
         };
@@ -341,8 +355,13 @@ base.describe('Demo mode commercial boundary', () => {
       expect(responses.clear.status).toBe(404);
       expect(responses.trialStart.status).toBe(404);
       expect(responses.ledger.status).toBe(404);
+      expect(responses.ledgerPreview.status).toBe(404);
       expect(responses.billingState.status).toBe(404);
       expect(responses.upgradeMetrics.status).toBe(404);
+      expect(responses.truenasDraftPreview.status).toBe(404);
+      expect(responses.truenasSavedPreview.status).toBe(404);
+      expect(responses.vmwareDraftPreview.status).toBe(404);
+      expect(responses.vmwareSavedPreview.status).toBe(404);
       expect(responses.checkoutStart.status).toBe(404);
       expect(responses.trialActivate.status).toBe(404);
     },
