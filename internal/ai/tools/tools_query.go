@@ -322,9 +322,11 @@ func classifySingleCommand(command string) IntentResult {
 		}
 	}
 
-	// === PHASE 6: Model-trusted fallback ===
-	// Unknown command passed all blocklist and structural checks → trust the model
-	return IntentResult{Intent: IntentReadOnlyConditional, Reason: "model-trusted: passed all blocklist and structural checks"}
+	// === PHASE 6: Fail closed ===
+	// Unknown commands may wrap interpreters, scripts, or side-effecting tools.
+	// pulse_read must only execute commands that are known read-only by construction
+	// or proven read-only by an explicit content inspector.
+	return IntentResult{Intent: IntentWriteOrUnknown, Reason: "unknown command is not on the read-only allowlist"}
 }
 
 // checkMutationCapabilityGuards checks for shell patterns that enable mutation
@@ -613,10 +615,6 @@ func suggestNonInteractiveREPL(command, cmdLower string) string {
 		return fmt.Sprintf("%s \"SELECT ...\"", command)
 	case "redis-cli":
 		return fmt.Sprintf("%s PING", command)
-	case "python", "python3", "python2":
-		return fmt.Sprintf("%s -c \"...\"", parts[0])
-	case "node", "nodejs":
-		return fmt.Sprintf("%s -e \"...\"", parts[0])
 	case "ssh":
 		// ssh host → ssh host "command"
 		return fmt.Sprintf("%s \"ls -la\"", command)
@@ -787,15 +785,13 @@ func hasTailShorthandBound(cmdLower string) bool {
 //   - ssh host (no command)
 //   - mysql, psql, sqlite3 db (no -c/-e/inline SQL)
 //   - redis-cli (no command args)
-//   - python, node, irb (no script/command)
+//   - python, node, irb
 //   - openssl s_client
 //
 // Allowed (non-interactive):
 //   - ssh host "command"
 //   - mysql -e "SELECT 1"
 //   - sqlite3 db "SELECT 1"
-//   - python -c "print(1)"
-//   - python script.py
 func isInteractiveREPL(cmdLower string) bool {
 	firstWord := cmdLower
 	if spaceIdx := strings.Index(cmdLower, " "); spaceIdx > 0 {
@@ -893,7 +889,9 @@ func isInteractiveREPL(cmdLower string) bool {
 		return !hasCommand
 	}
 
-	// Scripting REPLs: python, node, irb without script/command
+	// Scripting language runtimes are dual-use. Bare invocations are also
+	// interactive; non-interactive forms are blocked by the fail-closed
+	// read-only allowlist boundary.
 	if firstWord == "python" || firstWord == "python3" || firstWord == "python2" {
 		// Non-interactive if has -c or script file
 		if strings.Contains(cmdLower, " -c ") || strings.Contains(cmdLower, " -c\"") {

@@ -132,16 +132,9 @@ func (e *PulseToolExecutor) executeReadExec(ctx context.Context, args map[string
 
 	// STRUCTURAL ENFORCEMENT: Reject non-read-only commands at the tool layer
 	// This is enforced HERE, not in the model's prompt
-	// Uses ExecutionIntent: ReadOnlyCertain and ReadOnlyConditional are allowed;
-	// WriteOrUnknown is rejected.
+	// Uses ExecutionIntent: ReadOnlyCertain and explicitly inspected
+	// ReadOnlyConditional commands are allowed; WriteOrUnknown is rejected.
 	intentResult := ClassifyExecutionIntent(command)
-	if intentResult.Intent == IntentReadOnlyConditional && strings.Contains(intentResult.Reason, "model-trusted") {
-		log.Info().
-			Str("command", truncateCommand(command, 200)).
-			Str("reason", intentResult.Reason).
-			Str("target_host", targetHost).
-			Msg("pulse_read: allowing model-trusted command (no blocklist match)")
-	}
 	if intentResult.Intent == IntentWriteOrUnknown {
 		hint := GetReadOnlyViolationHint(command, intentResult)
 		alternative := "Use pulse_control type=command for write operations"

@@ -296,6 +296,14 @@ The same ownership includes the Pulse query tool schema under
 the AI runtime itself, so new tool arguments such as `max_proxmox_nodes`
 cannot reintroduce parallel legacy aliases once the backend query contract is
 renamed.
+That same AI tool ownership also governs `pulse_read action="exec"` safety.
+`internal/ai/tools/tools_query.go` and `internal/ai/tools/tools_read.go` must
+fail closed on unknown commands: the shared read path may execute only commands
+that are known read-only by construction or proven read-only by an explicit
+content inspector. The runtime must not preserve a model-trusted fallback for
+unknown binaries, custom scripts, downloads, shells, or dual-use interpreters
+such as `python`, `node`, `ruby`, `perl`, `bash`, or `sh`, because those
+surfaces can mutate state even when invoked in non-interactive forms.
 That same AI tool ownership now also includes canonical resource-native
 control. `internal/ai/tools/executor.go`,
 `internal/ai/tools/tools_control.go`, and `internal/api/router.go` must keep

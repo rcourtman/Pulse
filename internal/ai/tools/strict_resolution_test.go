@@ -1381,13 +1381,10 @@ func TestExecutionIntent_ConservativeFallback(t *testing.T) {
 	}
 }
 
-// TestExecutionIntent_ModelTrustedFallback validates that truly unknown commands
-// (unknown binaries, custom scripts) that pass all blocklist and structural checks
-// are allowed with IntentReadOnlyConditional and a "model-trusted" reason.
-//
-// This is the Phase 6 behavior: trust the model's judgment for commands that
-// aren't caught by any specific blocklist or structural guard.
-func TestExecutionIntent_ModelTrustedFallback(t *testing.T) {
+// TestExecutionIntent_FailClosedUnknownCommands validates that truly unknown
+// commands are not allowed in pulse_read just because they passed structural
+// checks. Unknown binaries, custom scripts, and downloads can mutate state.
+func TestExecutionIntent_FailClosedUnknownCommands(t *testing.T) {
 	unknownCommands := []struct {
 		name    string
 		command string
@@ -1401,12 +1398,12 @@ func TestExecutionIntent_ModelTrustedFallback(t *testing.T) {
 	for _, tt := range unknownCommands {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ClassifyExecutionIntent(tt.command)
-			if result.Intent != IntentReadOnlyConditional {
-				t.Errorf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentReadOnlyConditional",
+			if result.Intent != IntentWriteOrUnknown {
+				t.Errorf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentWriteOrUnknown",
 					tt.command, result.Intent, result.Reason)
 			}
-			if !strings.Contains(result.Reason, "model-trusted") {
-				t.Errorf("ClassifyExecutionIntent(%q) reason = %q, want 'model-trusted' in reason",
+			if !strings.Contains(result.Reason, "read-only allowlist") {
+				t.Errorf("ClassifyExecutionIntent(%q) reason = %q, want read-only allowlist reason",
 					tt.command, result.Reason)
 			}
 		})
@@ -1943,10 +1940,10 @@ func TestExecutionIntent_RejectInteractiveREPL(t *testing.T) {
 	}
 }
 
-// TestExecutionIntent_AllowNonInteractiveREPL validates that commands with
-// explicit non-interactive flags or inline commands are allowed.
-func TestExecutionIntent_AllowNonInteractiveREPL(t *testing.T) {
-	// These should be allowed (non-interactive form)
+// TestExecutionIntent_AllowNonInteractiveDataClients validates that data
+// clients with explicit read-only inline operations are allowed.
+func TestExecutionIntent_AllowNonInteractiveDataClients(t *testing.T) {
+	// These should be allowed because content inspection proves the operation is read-only.
 	allowedCommands := []struct {
 		cmd    string
 		reason string
@@ -1960,12 +1957,6 @@ func TestExecutionIntent_AllowNonInteractiveREPL(t *testing.T) {
 		{`psql --command "SELECT 1"`, "psql with --command"},
 		{"redis-cli GET mykey", "redis-cli with command"},
 		{"redis-cli -h localhost PING", "redis-cli with flags and command"},
-		{`python -c "print(1)"`, "python with -c"},
-		{"python script.py", "python with script"},
-		{"python3 /path/to/script.py", "python3 with script path"},
-		{`node -e "console.log(1)"`, "node with -e"},
-		{"node script.js", "node with script"},
-		{`irb -e "puts 1"`, "irb with -e"},
 	}
 
 	for _, tc := range allowedCommands {
@@ -1974,6 +1965,35 @@ func TestExecutionIntent_AllowNonInteractiveREPL(t *testing.T) {
 			if result.Intent == IntentWriteOrUnknown && strings.Contains(result.Reason, "[interactive_repl]") {
 				t.Errorf("ClassifyExecutionIntent(%q) = IntentWriteOrUnknown (reason: %s), want read-only (%s should be allowed)",
 					tc.cmd, result.Reason, tc.reason)
+			}
+		})
+	}
+}
+
+// TestExecutionIntent_BlocksDualUseInterpreterBypass validates that pulse_read
+// fails closed on language runtimes and shells even when the inline code is
+// non-interactive. These interpreters can perform arbitrary file I/O and spawn
+// processes, so they are not read-only by construction.
+func TestExecutionIntent_BlocksDualUseInterpreterBypass(t *testing.T) {
+	commands := []string{
+		`python3 -c "import os; open('/home/user/flag','w').write('done')"`,
+		`python3 -c "import subprocess; subprocess.Popen(['sleep', '100'])"`,
+		`python -c "print(1)"`,
+		`python script.py`,
+		`node -e "require('fs').writeFileSync('/tmp/flag', 'done')"`,
+		`node script.js`,
+		`ruby -e "File.write('/tmp/flag', 'done')"`,
+		`perl -e "open(my $fh, '>', '/tmp/flag')"`,
+		`bash -c "echo done"`,
+		`sh -c "echo done"`,
+	}
+
+	for _, cmd := range commands {
+		t.Run(cmd, func(t *testing.T) {
+			result := ClassifyExecutionIntent(cmd)
+			if result.Intent != IntentWriteOrUnknown {
+				t.Fatalf("ClassifyExecutionIntent(%q) = %v (reason: %s), want IntentWriteOrUnknown",
+					cmd, result.Intent, result.Reason)
 			}
 		})
 	}
