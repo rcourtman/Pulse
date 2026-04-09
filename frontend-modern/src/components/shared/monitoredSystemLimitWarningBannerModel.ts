@@ -6,15 +6,16 @@ import {
   getMonitoredSystemLimitInstallCollectorsLabel,
   getMonitoredSystemLimitLearnMoreLabel,
   getMonitoredSystemLimitUpgradeLabel,
+  isMonitoredSystemLimitUrgent as isCanonicalMonitoredSystemLimitUrgent,
+  isMonitoredSystemLimitUsageAvailable as isCanonicalMonitoredSystemLimitUsageAvailable,
+  type MonitoredSystemLimitUsageStatus,
   type MonitoredSystemLegacyConnectionCounts,
 } from '@/utils/monitoredSystemPresentation';
 import { SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF } from '@/utils/pricingHandoff';
 
-type LimitState = {
+type LimitState = MonitoredSystemLimitUsageStatus & {
   current: number;
   limit: number;
-  current_available?: boolean;
-  current_unavailable_reason?: string;
   state?: string;
 };
 
@@ -28,13 +29,11 @@ export const MONITORED_SYSTEM_LIMIT_INSTALL_COLLECTORS_LABEL =
 export const MONITORED_SYSTEM_LIMIT_UPGRADE_LABEL = getMonitoredSystemLimitUpgradeLabel();
 
 export function isMonitoredSystemLimitUsageAvailable(limit: LimitState | undefined): boolean {
-  return limit?.current_available !== false;
+  return isCanonicalMonitoredSystemLimitUsageAvailable(limit);
 }
 
 export function isMonitoredSystemLimitUrgent(limit: LimitState | undefined): boolean {
-  if (!limit || !isMonitoredSystemLimitUsageAvailable(limit)) return false;
-  const state = limit?.state;
-  return state === 'warning' || state === 'enforced';
+  return isCanonicalMonitoredSystemLimitUrgent(limit);
 }
 
 export function shouldShowMonitoredSystemLimitBanner(limit: LimitState | undefined): boolean {

@@ -1,4 +1,4 @@
-const normalizeMonitoredSystemValue = (value: string | undefined): string =>
+const normalizeMonitoredSystemValue = (value: string | null | undefined): string =>
   value?.trim().toLowerCase() ?? '';
 
 const titleCaseWords = (value: string): string =>
@@ -32,6 +32,7 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   continuityCapturePendingLabel: 'Pending',
   continuityCaptureCapturedLabel: 'Captured',
   usageVerifyingLabel: 'Verifying…',
+  remainingCapacityUnavailableLabel: 'Unavailable',
   unlimitedLimitLabel: 'Unlimited',
   loadingState: {
     text: 'Loading monitored system usage…',
@@ -102,6 +103,14 @@ export type MonitoredSystemLegacyConnectionCounts = {
   kubernetes_clusters: number;
 };
 
+export type MonitoredSystemLimitUsageStatus = {
+  current?: number | null;
+  limit?: number | null;
+  current_available?: boolean | null;
+  current_unavailable_reason?: string | null;
+  state?: string | null;
+};
+
 export function getMonitoredSystemLedgerPresentation() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION;
 }
@@ -144,7 +153,7 @@ export function getMonitoredSystemLedgerHiddenState() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.hiddenState;
 }
 
-export function formatMonitoredSystemLedgerUnavailableMessage(reason?: string): string {
+export function formatMonitoredSystemUsageUnavailableMessage(reason?: string | null): string {
   switch (normalizeMonitoredSystemValue(reason)) {
     case 'supplemental_inventory_unsettled':
       return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState.unsettledMessage;
@@ -153,6 +162,61 @@ export function formatMonitoredSystemLedgerUnavailableMessage(reason?: string): 
     default:
       return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState.fallbackMessage;
   }
+}
+
+export function formatMonitoredSystemLedgerUnavailableMessage(reason?: string | null): string {
+  return formatMonitoredSystemUsageUnavailableMessage(reason);
+}
+
+export function isMonitoredSystemLimitUsageAvailable(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): boolean {
+  return limit?.current_available !== false;
+}
+
+export function getMonitoredSystemLimitUnavailableReason(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): string | undefined {
+  if (isMonitoredSystemLimitUsageAvailable(limit)) return undefined;
+  return limit?.current_unavailable_reason?.trim() || undefined;
+}
+
+export function getMonitoredSystemLimitUsageSummary(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): string | number {
+  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
+    return MONITORED_SYSTEM_LEDGER_PRESENTATION.usageVerifyingLabel;
+  }
+
+  const current = typeof limit?.current === 'number' ? limit.current : 0;
+  const planLimit = typeof limit?.limit === 'number' ? limit.limit : 0;
+  if (planLimit > 0) {
+    return `${current} / ${planLimit}`;
+  }
+  return current;
+}
+
+export function getMonitoredSystemLimitRemainingCapacity(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): string | number {
+  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
+    return MONITORED_SYSTEM_LEDGER_PRESENTATION.remainingCapacityUnavailableLabel;
+  }
+
+  const current = typeof limit?.current === 'number' ? limit.current : 0;
+  const planLimit = typeof limit?.limit === 'number' ? limit.limit : 0;
+  if (planLimit <= 0) {
+    return MONITORED_SYSTEM_LEDGER_PRESENTATION.unlimitedLimitLabel;
+  }
+  return Math.max(planLimit - current, 0);
+}
+
+export function isMonitoredSystemLimitUrgent(
+  limit?: MonitoredSystemLimitUsageStatus | null,
+): boolean {
+  if (!limit || !isMonitoredSystemLimitUsageAvailable(limit)) return false;
+  const state = normalizeMonitoredSystemValue(limit.state ?? undefined);
+  return state === 'warning' || state === 'enforced';
 }
 
 export function getMonitoredSystemCountingDetailsToggleLabel(expanded: boolean): string {

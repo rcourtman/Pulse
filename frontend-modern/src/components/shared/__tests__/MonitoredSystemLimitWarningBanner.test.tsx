@@ -155,7 +155,9 @@ describe('MonitoredSystemLimitWarningBanner', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'isMonitoredSystemLimitUsageAvailable',
     );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain('current_available');
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
+      'current_available !== false',
+    );
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Upgrade to add more');
     expect(monitoredSystemLimitWarningBannerModelSource).not.toContain('Install v6 collectors');
   });

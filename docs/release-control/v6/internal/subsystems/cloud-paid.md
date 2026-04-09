@@ -672,7 +672,14 @@ system counts once without the panel inventing a second counting model.
 When canonical usage is not safe to read yet and the backend returns
 `monitored_system_usage_unavailable` or entitlements mark the monitored-system
 current count unavailable, the usage surface must render helper-owned
-verification copy instead of a synthetic `0 / limit` ledger total.
+verification copy instead of a synthetic `0 / limit` ledger total. The
+canonical `current_available` interpretation, unavailable reason mapping,
+plan-section usage summary, remaining-capacity copy, and upgrade-pressure
+urgency decision all belong to
+`frontend-modern/src/utils/monitoredSystemPresentation.ts`; Pro license panels,
+ledger panels, and shared warning-banner plumbing must consume that helper
+instead of rechecking entitlement availability or hard-coding `Verifying…`,
+`Unavailable`, or `0 / limit` formatting locally.
 The entitlement payload builder must only mark monitored-system usage available
 from an explicit canonical `MonitoredSystemsAvailable` signal supplied by the
 runtime usage boundary. Deprecated compatibility aliases such as `Nodes`, or a

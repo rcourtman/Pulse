@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
+import proLicensePanelStateSource from '@/components/Settings/useProLicensePanelState.ts?raw';
+import monitoredSystemLedgerPanelSource from '@/components/Settings/MonitoredSystemLedgerPanel.tsx?raw';
+import monitoredSystemLimitWarningBannerModelSource from '@/components/shared/monitoredSystemLimitWarningBannerModel.ts?raw';
+import licensePresentationSource from '@/utils/licensePresentation.ts?raw';
+import monitoredSystemPresentationSource from '@/utils/monitoredSystemPresentation.ts?raw';
 import {
   formatMonitoredSystemAdmissionPreviewUnavailableMessage,
   formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLegacyConnectionBreakdown,
+  formatMonitoredSystemUsageUnavailableMessage,
   getMonitoredSystemBriefSummary,
   formatMonitoredSystemLimitSummary,
   formatMonitoredSystemLedgerUnavailableMessage,
@@ -24,11 +30,16 @@ import {
   getMonitoredSystemLedgerPolicyLoadingState,
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemLimitInstallCollectorsLabel,
+  getMonitoredSystemLimitRemainingCapacity,
   getMonitoredSystemLimitLearnMoreLabel,
+  getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLimitUpgradeLabel,
+  getMonitoredSystemLimitUsageSummary,
   getMonitoredSystemSourceLabel,
   getMonitoredSystemStatusFallbackSummary,
   getMonitoredSystemSurfaceTypeLabel,
+  isMonitoredSystemLimitUrgent,
+  isMonitoredSystemLimitUsageAvailable,
 } from '@/utils/monitoredSystemPresentation';
 
 describe('monitoredSystemPresentation', () => {
@@ -57,6 +68,7 @@ describe('monitoredSystemPresentation', () => {
       continuityCapturePendingLabel: 'Pending',
       continuityCaptureCapturedLabel: 'Captured',
       usageVerifyingLabel: 'Verifying…',
+      remainingCapacityUnavailableLabel: 'Unavailable',
       unlimitedLimitLabel: 'Unlimited',
       loadingState: {
         text: 'Loading monitored system usage…',
@@ -175,6 +187,29 @@ describe('monitoredSystemPresentation', () => {
     );
   });
 
+  it('keeps monitored-system usage availability on the shared presentation helper', () => {
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function isMonitoredSystemLimitUsageAvailable',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemLimitUsageSummary',
+    );
+    expect(monitoredSystemPresentationSource).toContain(
+      'export function getMonitoredSystemLimitRemainingCapacity',
+    );
+
+    for (const source of [
+      licensePresentationSource,
+      monitoredSystemLedgerPanelSource,
+      monitoredSystemLimitWarningBannerModelSource,
+      proLicensePanelStateSource,
+    ]) {
+      expect(source).not.toContain('current_available !== false');
+    }
+    expect(proLicensePanelStateSource).not.toContain("'Verifying…'");
+    expect(proLicensePanelStateSource).not.toContain("'Unavailable'");
+  });
+
   it('returns canonical monitored-system limit warning copy', () => {
     expect(getMonitoredSystemLimitLearnMoreLabel()).toBe('Learn more');
     expect(getMonitoredSystemLimitInstallCollectorsLabel()).toBe('Install v6 collectors');
@@ -202,6 +237,59 @@ describe('monitoredSystemPresentation', () => {
       'Includes 1 temporary onboarding slot (14d remaining)',
     );
     expect(formatMonitoredSystemOverflowSummary(undefined)).toBe('');
+  });
+
+  it('centralizes monitored-system limit availability and capacity presentation', () => {
+    const unavailableLimit = {
+      current: 0,
+      limit: 10,
+      current_available: false,
+      current_unavailable_reason: 'supplemental_inventory_unsettled',
+      state: 'enforced',
+    };
+
+    expect(isMonitoredSystemLimitUsageAvailable(unavailableLimit)).toBe(false);
+    expect(getMonitoredSystemLimitUnavailableReason(unavailableLimit)).toBe(
+      'supplemental_inventory_unsettled',
+    );
+    expect(getMonitoredSystemLimitUsageSummary(unavailableLimit)).toBe('Verifying…');
+    expect(getMonitoredSystemLimitRemainingCapacity(unavailableLimit)).toBe('Unavailable');
+    expect(isMonitoredSystemLimitUrgent(unavailableLimit)).toBe(false);
+    expect(
+      formatMonitoredSystemUsageUnavailableMessage(unavailableLimit.current_unavailable_reason),
+    ).toBe(
+      'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
+    );
+
+    expect(
+      getMonitoredSystemLimitUsageSummary({
+        current: 7,
+        limit: 10,
+        current_available: true,
+      }),
+    ).toBe('7 / 10');
+    expect(
+      getMonitoredSystemLimitRemainingCapacity({
+        current: 7,
+        limit: 10,
+        current_available: true,
+      }),
+    ).toBe(3);
+    expect(
+      getMonitoredSystemLimitRemainingCapacity({
+        current: 7,
+        limit: 0,
+        current_available: true,
+      }),
+    ).toBe('Unlimited');
+    expect(
+      isMonitoredSystemLimitUrgent({
+        current: 9,
+        limit: 10,
+        current_available: true,
+        state: 'warning',
+      }),
+    ).toBe(true);
   });
 
   it('returns canonical monitored-system admission unavailable copy', () => {

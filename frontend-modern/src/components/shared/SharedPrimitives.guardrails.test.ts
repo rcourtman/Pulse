@@ -694,7 +694,9 @@ describe('shared primitive guardrails', () => {
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'isMonitoredSystemLimitUsageAvailable',
     );
-    expect(monitoredSystemLimitWarningBannerModelSource).toContain('current_available');
+    expect(monitoredSystemLimitWarningBannerModelSource).not.toContain(
+      'current_available !== false',
+    );
     expect(monitoredSystemLimitWarningBannerModelSource).toContain(
       'SELF_HOSTED_PRO_BILLING_USAGE_COUNTING_RULES_HREF',
     );

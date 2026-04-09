@@ -350,7 +350,7 @@ describe('ProLicensePanel', () => {
     });
 
     expect(
-      screen.getByText(/still collecting the first supplemental inventory baseline/i),
+      screen.getByText(/still collecting the first provider-owned inventory baseline/i),
     ).toBeInTheDocument();
     expect(screen.getByText('Verifying…')).toBeInTheDocument();
     expect(screen.getByText('Unavailable')).toBeInTheDocument();

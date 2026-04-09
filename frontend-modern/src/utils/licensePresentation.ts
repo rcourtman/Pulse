@@ -1,11 +1,16 @@
 import type { BillingState, HostedOrganizationSummary } from '@/api/billingAdmin';
 import type {
   CommercialMigrationStatus,
-  EntitlementLimitStatus,
   LicenseStatus,
   MonitoredSystemContinuityStatus,
 } from '@/api/license';
 import { CLOUD_PLAN_LABELS } from '@/utils/cloudPlans';
+import {
+  formatMonitoredSystemUsageUnavailableMessage,
+  getMonitoredSystemLimitUnavailableReason,
+  isMonitoredSystemLimitUsageAvailable,
+  type MonitoredSystemLimitUsageStatus,
+} from '@/utils/monitoredSystemPresentation';
 import { titleCaseDelimitedLabel } from '@/utils/textPresentation';
 
 const TIER_LABELS: Record<string, string> = {
@@ -159,24 +164,11 @@ export const getGrandfatheredPriceContinuityNotice = (
   };
 };
 
-const monitoredSystemUnavailableReasonBody = (reason?: string): string => {
-  switch ((reason || '').trim().toLowerCase()) {
-    case 'supplemental_inventory_unsettled':
-      return 'Pulse is still collecting the first supplemental inventory baseline for this installation. Current monitored-system usage will appear after that baseline completes.';
-    case 'supplemental_inventory_rebuild_pending':
-      return 'Pulse has collected supplemental inventory, but it is still rebuilding the canonical monitored-system ledger. Current usage will appear when that rebuild finishes.';
-    case 'monitor_state_unavailable':
-    default:
-      return 'Pulse cannot currently verify monitored-system usage for this installation. Refresh after the monitoring runtime settles.';
-  }
-};
-
 export const getMonitoredSystemContinuityNotice = (
   continuity?: MonitoredSystemContinuityStatus | null,
-  limit?: Pick<EntitlementLimitStatus, 'current_available' | 'current_unavailable_reason'> | null,
+  limit?: MonitoredSystemLimitUsageStatus | null,
 ): LicenseInlineNotice | null => {
-  const currentAvailable = limit?.current_available !== false;
-  if (!currentAvailable) {
+  if (!isMonitoredSystemLimitUsageAvailable(limit)) {
     const title =
       continuity?.capture_pending === true
         ? 'Migration continuity verification pending'
@@ -184,7 +176,9 @@ export const getMonitoredSystemContinuityNotice = (
     return {
       tone: 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900 text-amber-900 dark:text-amber-100',
       title,
-      body: monitoredSystemUnavailableReasonBody(limit?.current_unavailable_reason),
+      body: formatMonitoredSystemUsageUnavailableMessage(
+        getMonitoredSystemLimitUnavailableReason(limit),
+      ),
     };
   }
 

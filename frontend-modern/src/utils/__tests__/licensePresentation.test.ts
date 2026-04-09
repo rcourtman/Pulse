@@ -187,6 +187,7 @@ describe('licensePresentation', () => {
       ),
     ).toMatchObject({
       title: 'Migration continuity verification pending',
+      body: expect.stringContaining('first provider-owned inventory baseline'),
       tone: expect.stringContaining('amber'),
     });
     expect(

@@ -45,6 +45,10 @@ import {
   type SelfHostedBillingSection,
 } from '@/utils/pricingHandoff';
 import { buildSelfHostedCommercialPlanModel } from '@/utils/commercialBillingModel';
+import {
+  getMonitoredSystemLimitRemainingCapacity,
+  getMonitoredSystemLimitUsageSummary,
+} from '@/utils/monitoredSystemPresentation';
 import { runStartProTrialAction } from '@/utils/trialStartAction';
 import { resolveUpgradeDestination, type UpgradeDestination } from '@/utils/upgradeNavigation';
 import { SELF_HOSTED_PRO_BILLING_PRESENTATION } from './selfHostedBillingPresentation';
@@ -241,27 +245,12 @@ export function useProLicensePanelState() {
   const limitStatus = (key: string) => entitlements()?.limits?.find((entry) => entry.key === key);
 
   const monitoredSystemLimitStatus = createMemo(() => limitStatus('max_monitored_systems'));
-  const monitoredSystemUsageAvailable = createMemo(
-    () => monitoredSystemLimitStatus()?.current_available !== false,
+  const monitoredSystemUsageSummary = createMemo(() =>
+    getMonitoredSystemLimitUsageSummary(monitoredSystemLimitStatus()),
   );
-  const monitoredSystemUsage = createMemo(() => monitoredSystemLimitStatus()?.current ?? 0);
-  const monitoredSystemLimit = createMemo(() => monitoredSystemLimitStatus()?.limit ?? 0);
-  const monitoredSystemUsageSummary = createMemo(() => {
-    if (!monitoredSystemUsageAvailable()) {
-      return 'Verifying…';
-    }
-    const limit = monitoredSystemLimit();
-    if (limit > 0) {
-      return `${monitoredSystemUsage()} / ${limit}`;
-    }
-    return monitoredSystemUsage();
-  });
-  const remainingSystemCapacity = createMemo(() => {
-    if (!monitoredSystemUsageAvailable()) return 'Unavailable';
-    const limit = monitoredSystemLimit();
-    if (limit <= 0) return 'Unlimited';
-    return Math.max(limit - monitoredSystemUsage(), 0);
-  });
+  const remainingSystemCapacity = createMemo(() =>
+    getMonitoredSystemLimitRemainingCapacity(monitoredSystemLimitStatus()),
+  );
   const monitoredSystemContinuity = createMemo(() => entitlements()?.monitored_system_continuity);
   const monitoredSystemContinuityNotice = createMemo(() =>
     getMonitoredSystemContinuityNotice(monitoredSystemContinuity(), monitoredSystemLimitStatus()),

@@ -24,6 +24,7 @@ import {
   formatMonitoredSystemLedgerUnavailableMessage,
   formatMonitoredSystemLatestIncludedSignalSentence,
   formatMonitoredSystemSurfaceAttribution,
+  getMonitoredSystemLimitUnavailableReason,
   getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerDescription,
   getMonitoredSystemLedgerHiddenState,
@@ -32,6 +33,7 @@ import {
   getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemCountingDetailsToggleLabel,
   getMonitoredSystemLedgerPresentation,
+  isMonitoredSystemLimitUsageAvailable,
 } from '@/utils/monitoredSystemPresentation';
 import { MonitoredSystemDefinitionDisclosure } from '@/components/Commercial/MonitoredSystemDefinitionDisclosure';
 import {
@@ -122,15 +124,15 @@ export function MonitoredSystemLedgerPanel(props: MonitoredSystemLedgerPanelProp
     if (apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable') {
       return apiErrorDetailField(explanation.error, 'reason') ?? undefined;
     }
-    if (!ledger() && props.monitoredSystemLimit?.current_available === false) {
-      return props.monitoredSystemLimit.current_unavailable_reason;
+    if (!ledger()) {
+      return getMonitoredSystemLimitUnavailableReason(props.monitoredSystemLimit);
     }
     return undefined;
   };
   const usageUnavailable = () =>
     !ledger() &&
     (apiErrorCode(explanation.error) === 'monitored_system_usage_unavailable' ||
-      props.monitoredSystemLimit?.current_available === false);
+      !isMonitoredSystemLimitUsageAvailable(props.monitoredSystemLimit));
   const genericError = () => Boolean(explanation.error) && !usageUnavailable();
   const continuity = () => props.monitoredSystemContinuity ?? null;
   const hasContinuityContext = () => {
