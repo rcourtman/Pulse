@@ -91,8 +91,9 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 
 	payload := buildEntitlementPayloadWithUsage(status, "", entitlementUsageSnapshot{
-		MonitoredSystems: 12,
-		Guests:           44,
+		MonitoredSystems:          12,
+		MonitoredSystemsAvailable: true,
+		Guests:                    44,
 		LegacyConnections: pkglicensing.LegacyConnectionCounts{
 			ProxmoxNodes:       2,
 			DockerHosts:        1,
@@ -201,7 +202,8 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 
 	payload := buildCommercialPosturePayloadWithUsage(status, "", entitlementUsageSnapshot{
-		MonitoredSystems: 7,
+		MonitoredSystems:          7,
+		MonitoredSystemsAvailable: true,
 		LegacyConnections: pkglicensing.LegacyConnectionCounts{
 			ProxmoxNodes: 2,
 			DockerHosts:  1,

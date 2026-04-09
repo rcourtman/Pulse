@@ -197,23 +197,22 @@ type EntitlementUsageSnapshot struct {
 	MonitoredSystems                  int64
 	MonitoredSystemsAvailable         bool
 	MonitoredSystemsUnavailableReason string
-	Nodes                             int64 // legacy compatibility alias for monitored systems
-	Guests                            int64
-	LegacyConnections                 LegacyConnectionCounts
+	// Nodes is retained only as a deprecated compatibility field. V6 monitored-
+	// system billing must be backed by an explicit canonical availability signal.
+	Nodes             int64
+	Guests            int64
+	LegacyConnections LegacyConnectionCounts
 }
 
 func (s EntitlementUsageSnapshot) monitoredSystemCount() int64 {
-	if s.MonitoredSystems > 0 {
-		return s.MonitoredSystems
+	if !s.MonitoredSystemsAvailable || s.MonitoredSystems < 0 {
+		return 0
 	}
-	return s.Nodes
+	return s.MonitoredSystems
 }
 
 func (s EntitlementUsageSnapshot) monitoredSystemCountAvailable() bool {
-	if s.MonitoredSystemsAvailable {
-		return true
-	}
-	return s.MonitoredSystems > 0 || s.Nodes > 0
+	return s.MonitoredSystemsAvailable
 }
 
 func (s EntitlementUsageSnapshot) monitoredSystemCountUnavailableReason() string {

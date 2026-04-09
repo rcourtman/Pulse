@@ -5081,7 +5081,8 @@ func TestContract_EntitlementPayloadMonitoredSystemUsageJSONSnapshot(t *testing.
 		Features:            append([]string(nil), pkglicensing.TierFeatures[pkglicensing.TierPro]...),
 		MaxMonitoredSystems: 15,
 	}, string(pkglicensing.SubStateActive), entitlementUsageSnapshot{
-		MonitoredSystems: 7,
+		MonitoredSystems:          7,
+		MonitoredSystemsAvailable: true,
 		LegacyConnections: legacyConnectionCountsModel{
 			ProxmoxNodes:       2,
 			DockerHosts:        1,

@@ -71,8 +71,9 @@ func TestBuildEntitlementPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 
 	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystems: 12,
-		Guests:           44,
+		MonitoredSystems:          12,
+		MonitoredSystemsAvailable: true,
+		Guests:                    44,
 		LegacyConnections: LegacyConnectionCounts{
 			ProxmoxNodes:       2,
 			DockerHosts:        1,
@@ -145,6 +146,34 @@ func TestBuildEntitlementPayload_TrialState(t *testing.T) {
 	}
 	if *payload.TrialDaysRemaining != 2 {
 		t.Fatalf("expected trial_days_remaining 2, got %d", *payload.TrialDaysRemaining)
+	}
+}
+
+func TestBuildEntitlementPayloadWithUsage_RequiresCanonicalMonitoredSystemAvailability(t *testing.T) {
+	status := &LicenseStatus{
+		Valid:               true,
+		Tier:                TierPro,
+		Features:            append([]string(nil), TierFeatures[TierPro]...),
+		MaxMonitoredSystems: 50,
+	}
+
+	payload := BuildEntitlementPayloadWithUsage(status, "", EntitlementUsageSnapshot{
+		MonitoredSystems:                  12,
+		Nodes:                             99,
+		MonitoredSystemsUnavailableReason: "canonical_usage_unavailable",
+	}, nil)
+
+	if len(payload.Limits) != 1 {
+		t.Fatalf("expected one limit, got %d", len(payload.Limits))
+	}
+	if payload.Limits[0].Current != 0 {
+		t.Fatalf("expected unavailable canonical usage to remain 0, got %d", payload.Limits[0].Current)
+	}
+	if payload.Limits[0].CurrentAvailable == nil || *payload.Limits[0].CurrentAvailable {
+		t.Fatalf("expected canonical usage availability to be false, got %+v", payload.Limits[0].CurrentAvailable)
+	}
+	if payload.Limits[0].CurrentUnavailableReason != "canonical_usage_unavailable" {
+		t.Fatalf("CurrentUnavailableReason=%q, want %q", payload.Limits[0].CurrentUnavailableReason, "canonical_usage_unavailable")
 	}
 }
 
@@ -316,7 +345,8 @@ func TestBuildCommercialPosturePayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 
 	payload := BuildCommercialPosturePayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystems: 7,
+		MonitoredSystems:          7,
+		MonitoredSystemsAvailable: true,
 		LegacyConnections: LegacyConnectionCounts{
 			ProxmoxNodes: 2,
 			DockerHosts:  1,
@@ -353,7 +383,8 @@ func TestCommercialPosturePayloadFromEntitlementPayload_StripsBillingIdentityFie
 		Features:            append([]string(nil), TierFeatures[TierPro]...),
 		MaxMonitoredSystems: 50,
 	}, string(SubStateActive), EntitlementUsageSnapshot{
-		MonitoredSystems: 12,
+		MonitoredSystems:          12,
+		MonitoredSystemsAvailable: true,
 		LegacyConnections: LegacyConnectionCounts{
 			ProxmoxNodes: 1,
 		},
@@ -400,7 +431,8 @@ func TestBuildRuntimeCapabilitiesPayloadWithUsage_CurrentValues(t *testing.T) {
 	}
 
 	payload := BuildRuntimeCapabilitiesPayloadWithUsage(status, "", EntitlementUsageSnapshot{
-		MonitoredSystems: 5,
+		MonitoredSystems:          5,
+		MonitoredSystemsAvailable: true,
 	})
 
 	if !reflect.DeepEqual(payload.Capabilities, status.Features) {

@@ -673,6 +673,11 @@ When canonical usage is not safe to read yet and the backend returns
 `monitored_system_usage_unavailable` or entitlements mark the monitored-system
 current count unavailable, the usage surface must render helper-owned
 verification copy instead of a synthetic `0 / limit` ledger total.
+The entitlement payload builder must only mark monitored-system usage available
+from an explicit canonical `MonitoredSystemsAvailable` signal supplied by the
+runtime usage boundary. Deprecated compatibility aliases such as `Nodes`, or a
+non-zero raw monitored-system count without that availability signal, must not
+drive current usage, limit state, or customer-facing cap warnings.
 The same usage view must also render monitored-system continuity context from
 the entitlement payload, including the base plan limit, effective limit,
 grandfathered floor, and capture state, so migration protection is visible
