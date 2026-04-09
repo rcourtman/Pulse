@@ -1233,8 +1233,11 @@ func TestTrueNASPollerCachesRecordsPerOrganization(t *testing.T) {
 	t.Cleanup(poller.Stop)
 
 	waitForCondition(t, 2*time.Second, func() bool {
-		return defaultOrgMock.RequestCount() >= 5 && tenantMock.RequestCount() >= 5
-	}, "expected polling for both default and org-a TrueNAS connections")
+		return defaultOrgMock.RequestCount() >= 5 &&
+			tenantMock.RequestCount() >= 5 &&
+			hasTrueNASHostForOrg(poller, "default", "default-nas") &&
+			hasTrueNASHostForOrg(poller, "org-a", "tenant-nas")
+	}, "expected polling for both default and org-a TrueNAS connections and cached records for each org")
 
 	poller.Stop()
 	if !hasTrueNASHostForOrg(poller, "default", "default-nas") {

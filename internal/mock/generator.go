@@ -1042,7 +1042,11 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 	}
 
 	cpu := float64(0)
-	mem := models.Memory{}
+	totalMem := int64((4 + rand.Intn(28)) * 1024 * 1024 * 1024) // 4-32 GB
+	mem := models.Memory{
+		Total: totalMem,
+		Free:  totalMem,
+	}
 	uptime := int64(0)
 
 	if status == "running" {
@@ -1056,7 +1060,6 @@ func generateVM(nodeName string, instance string, vmid int, config MockConfig) m
 			cpu = 0.60 + rand.Float64()*0.25 // 60-85%
 		}
 
-		totalMem := int64((4 + rand.Intn(28)) * 1024 * 1024 * 1024) // 4-32 GB
 		// More realistic memory usage: most VMs use 30-65% memory
 		var memUsage float64
 		memRand := rand.Float64()
@@ -3541,7 +3544,11 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 	}
 
 	cpu := float64(0)
-	mem := models.Memory{}
+	totalMem := int64((512 + rand.Intn(7680)) * 1024 * 1024) // 512 MB - 8 GB
+	mem := models.Memory{
+		Total: totalMem,
+		Free:  totalMem,
+	}
 	uptime := int64(0)
 
 	if status == "running" {
@@ -3555,7 +3562,6 @@ func generateContainer(nodeName string, instance string, vmid int, config MockCo
 			cpu = 0.40 + rand.Float64()*0.35 // 40-75%
 		}
 
-		totalMem := int64((512 + rand.Intn(7680)) * 1024 * 1024) // 512 MB - 8 GB
 		// More realistic memory for containers
 		var memUsage float64
 		memRand := rand.Float64()

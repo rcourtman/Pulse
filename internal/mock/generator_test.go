@@ -122,6 +122,46 @@ func TestBuildFixtureStateIncludesHostAgents(t *testing.T) {
 	}
 }
 
+func TestGenerateVMStoppedPreservesConfiguredCapacity(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.StoppedPercent = 1
+
+	vm := generateVM("node-01", "mock-cluster", 1001, cfg)
+
+	if vm.Status != "stopped" {
+		t.Fatalf("expected stopped VM, got %q", vm.Status)
+	}
+	if vm.Memory.Total <= 0 {
+		t.Fatalf("expected stopped VM to keep configured memory total, got %d", vm.Memory.Total)
+	}
+	if vm.Memory.Used != 0 || vm.Memory.Usage != 0 {
+		t.Fatalf("expected stopped VM memory usage to be zero, got used=%d usage=%f", vm.Memory.Used, vm.Memory.Usage)
+	}
+	if vm.Memory.Free != vm.Memory.Total {
+		t.Fatalf("expected stopped VM free memory %d to equal total %d", vm.Memory.Free, vm.Memory.Total)
+	}
+}
+
+func TestGenerateContainerStoppedPreservesConfiguredCapacity(t *testing.T) {
+	cfg := DefaultConfig
+	cfg.StoppedPercent = 1
+
+	ct := generateContainer("node-01", "mock-cluster", 2001, cfg)
+
+	if ct.Status != "stopped" {
+		t.Fatalf("expected stopped container, got %q", ct.Status)
+	}
+	if ct.Memory.Total <= 0 {
+		t.Fatalf("expected stopped container to keep configured memory total, got %d", ct.Memory.Total)
+	}
+	if ct.Memory.Used != 0 || ct.Memory.Usage != 0 {
+		t.Fatalf("expected stopped container memory usage to be zero, got used=%d usage=%f", ct.Memory.Used, ct.Memory.Usage)
+	}
+	if ct.Memory.Free != ct.Memory.Total {
+		t.Fatalf("expected stopped container free memory %d to equal total %d", ct.Memory.Free, ct.Memory.Total)
+	}
+}
+
 func TestNormalizeMockBlendWeight_ComposesAcrossUpdateInterval(t *testing.T) {
 	perMinuteWeight := 0.22
 	perTickWeight := normalizeMockBlendWeight(perMinuteWeight, updateInterval, time.Minute)
