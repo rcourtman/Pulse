@@ -47,6 +47,8 @@ Own alert truth.
 ## Canonical Files
 
 1. `internal/alerts/specs/types.go`
+2. `go.mod`
+3. `go.sum`
 
 ## Shared Boundaries
 

@@ -10,10 +10,17 @@ HOT_DEV="${ROOT_DIR}/scripts/hot-dev.sh"
 CLEAN_MOCK_ALERTS="${ROOT_DIR}/scripts/clean-mock-alerts.sh"
 DEV_CHECK="${ROOT_DIR}/scripts/dev-check.sh"
 PACKAGE_JSON="${ROOT_DIR}/package.json"
+PACKAGE_LOCK_JSON="${ROOT_DIR}/package-lock.json"
 FRONTEND_PACKAGE_JSON="${ROOT_DIR}/frontend-modern/package.json"
+FRONTEND_PACKAGE_LOCK_JSON="${ROOT_DIR}/frontend-modern/package-lock.json"
+FRONTEND_VITE_CONFIG="${ROOT_DIR}/frontend-modern/vite.config.ts"
+GO_MOD="${ROOT_DIR}/go.mod"
+GO_SUM="${ROOT_DIR}/go.sum"
 DEV_LAUNCHD_WRAPPER="${ROOT_DIR}/scripts/dev-launchd-wrapper.sh"
 DEV_LAUNCHD_SETUP="${ROOT_DIR}/scripts/dev-launchd-setup.sh"
 INTEGRATION_README="${ROOT_DIR}/tests/integration/README.md"
+DEPLOYMENT_INSTALLABILITY_CONTRACT="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/deployment-installability.md"
+SUBSYSTEM_REGISTRY="${ROOT_DIR}/docs/release-control/v6/internal/subsystems/registry.json"
 
 if [[ ! -x "${HOT_DEV_BG}" ]]; then
   echo "hot-dev-bg.sh not found or not executable at ${HOT_DEV_BG}" >&2
@@ -546,6 +553,77 @@ PY
   assert_contains "frontend package keeps explicit frontend-only escape hatch" "${output}" "dev:frontend-only=vite"
 }
 
+test_dev_runtime_dependency_manifests_are_governed() {
+  local output
+  output="$(
+    REGISTRY_PATH="${SUBSYSTEM_REGISTRY}" \
+    CONTRACT_PATH="${DEPLOYMENT_INSTALLABILITY_CONTRACT}" \
+    PACKAGE_JSON_PATH="${PACKAGE_JSON}" \
+    PACKAGE_LOCK_JSON_PATH="${PACKAGE_LOCK_JSON}" \
+    FRONTEND_PACKAGE_JSON_PATH="${FRONTEND_PACKAGE_JSON}" \
+    FRONTEND_PACKAGE_LOCK_JSON_PATH="${FRONTEND_PACKAGE_LOCK_JSON}" \
+    FRONTEND_VITE_CONFIG_PATH="${FRONTEND_VITE_CONFIG}" \
+    GO_MOD_PATH="${GO_MOD}" \
+    GO_SUM_PATH="${GO_SUM}" \
+    python3 - <<'PY'
+import json
+import os
+from pathlib import Path
+
+registry = json.loads(Path(os.environ["REGISTRY_PATH"]).read_text(encoding="utf-8"))
+contract = Path(os.environ["CONTRACT_PATH"]).read_text(encoding="utf-8")
+paths = [
+    "package.json",
+    "package-lock.json",
+    "frontend-modern/package.json",
+    "frontend-modern/package-lock.json",
+    "frontend-modern/vite.config.ts",
+    "go.mod",
+    "go.sum",
+]
+path_env = {
+    "package.json": "PACKAGE_JSON_PATH",
+    "package-lock.json": "PACKAGE_LOCK_JSON_PATH",
+    "frontend-modern/package.json": "FRONTEND_PACKAGE_JSON_PATH",
+    "frontend-modern/package-lock.json": "FRONTEND_PACKAGE_LOCK_JSON_PATH",
+    "frontend-modern/vite.config.ts": "FRONTEND_VITE_CONFIG_PATH",
+    "go.mod": "GO_MOD_PATH",
+    "go.sum": "GO_SUM_PATH",
+}
+
+subsystem = next(item for item in registry["subsystems"] if item["id"] == "deployment-installability")
+policy = next(
+    item
+    for item in subsystem["verification"]["path_policies"]
+    if item["id"] == "dev-runtime-orchestration"
+)
+owned = set(subsystem["owned_files"])
+matched = set(policy["match_files"])
+
+for path in paths:
+    exists = Path(os.environ[path_env[path]]).is_file()
+    print(f"{path}:exists={exists}")
+    print(f"{path}:owned={path in owned}")
+    print(f"{path}:policy={path in matched}")
+    print(f"{path}:contract={f'`{path}`' in contract}")
+PY
+  )"
+
+  for manifest_path in \
+    "package.json" \
+    "package-lock.json" \
+    "frontend-modern/package.json" \
+    "frontend-modern/package-lock.json" \
+    "frontend-modern/vite.config.ts" \
+    "go.mod" \
+    "go.sum"; do
+    assert_contains "dev runtime manifest exists: ${manifest_path}" "${output}" "${manifest_path}:exists=True"
+    assert_contains "dev runtime manifest owned: ${manifest_path}" "${output}" "${manifest_path}:owned=True"
+    assert_contains "dev runtime manifest has proof policy: ${manifest_path}" "${output}" "${manifest_path}:policy=True"
+    assert_contains "dev runtime manifest is in contract: ${manifest_path}" "${output}" "${manifest_path}:contract=True"
+  done
+}
+
 test_makefile_routes_managed_runtime_through_npm() {
   local output
   output="$(cat "${ROOT_DIR}/Makefile")"
@@ -927,6 +1005,7 @@ main() {
   test_launchd_setup_advertises_managed_runtime_controls
   test_root_package_exposes_managed_runtime_entrypoints
   test_frontend_package_exposes_managed_runtime_entrypoints
+  test_dev_runtime_dependency_manifests_are_governed
   test_makefile_routes_managed_runtime_through_npm
   test_hot_dev_script_advertises_foreground_escape_hatch
   test_hot_dev_script_ignores_test_only_backend_churn

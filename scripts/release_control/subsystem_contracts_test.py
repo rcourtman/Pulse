@@ -48,6 +48,8 @@ Own example truth.
 ## Canonical Files
 
 1. `internal/example/runtime.go`
+2. `go.mod`
+3. `go.sum`
 
 ## Shared Boundaries
 
@@ -83,16 +85,28 @@ Stable.
                     "heading_line": 15,
                 },
                 {
+                    "heading": "## Canonical Files",
+                    "path": "go.mod",
+                    "line": 18,
+                    "heading_line": 15,
+                },
+                {
+                    "heading": "## Canonical Files",
+                    "path": "go.sum",
+                    "line": 19,
+                    "heading_line": 15,
+                },
+                {
                     "heading": "## Shared Boundaries",
                     "path": "internal/shared/runtime.go",
-                    "line": 21,
-                    "heading_line": 19,
+                    "line": 23,
+                    "heading_line": 21,
                 },
                 {
                     "heading": "## Extension Points",
                     "path": "internal/example/",
-                    "line": 25,
-                    "heading_line": 23,
+                    "line": 27,
+                    "heading_line": 25,
                 },
             ],
         )
@@ -123,6 +137,8 @@ Own example truth.
 ## Canonical Files
 
 1. `internal/example/runtime.go`
+2. `go.mod`
+3. `go.sum`
 
 ## Shared Boundaries
 
@@ -162,8 +178,8 @@ Stable.
                 {
                     "heading": "## Extension Points",
                     "path": "internal/example/",
-                    "line": 25,
-                    "heading_line": 23,
+                    "line": 27,
+                    "heading_line": 25,
                 },
             ],
         )
@@ -177,8 +193,8 @@ Stable.
                 {
                     "heading": "## Shared Boundaries",
                     "path": "internal/shared/runtime.go",
-                    "line": 21,
-                    "heading_line": 19,
+                    "line": 23,
+                    "heading_line": 21,
                 },
             ],
         )

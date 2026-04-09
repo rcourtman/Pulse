@@ -238,30 +238,6 @@ export default defineConfig({
             return 'vendor';
           }
 
-          if (id.includes('/src/components/Settings/')) {
-            if (
-              /NodeModal|SSOProvidersPanel|OIDCPanel|ConfiguredNodeTables|AISettings|ReportingPanel|DiagnosticsPanel|SystemLogsPanel/.test(
-                id,
-              )
-            ) {
-              return 'settings-heavy';
-            }
-            if (/Security|RolesPanel|UserAssignmentsPanel|APIAccessPanel|APITokenManager|ChangePasswordModal|QuickSecuritySetup/.test(id)) {
-              return 'settings-auth';
-            }
-            if (/Audit|ProLicensePanel|GeneralSettingsPanel|NetworkSettingsPanel|UpdatesSettingsPanel|RecoverySettingsPanel/.test(id)) {
-              return 'settings-admin';
-            }
-            if (/Settings\.tsx|SettingsSectionNav|ResourcePicker|SuggestProfileModal/.test(id)) {
-              return 'settings-shell';
-            }
-            return 'settings-core';
-          }
-
-          if (id.includes('/src/components/AI/')) {
-            return 'ai-ui';
-          }
-
           return undefined;
         },
       },
