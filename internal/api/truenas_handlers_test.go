@@ -191,6 +191,50 @@ func TestTrueNASHandlers_HandleAdd_BlocksNewCountedSystemAtLimit(t *testing.T) {
 	}
 }
 
+func TestTrueNASHandlers_HandleAdd_ReturnsUnavailableWhenSupplementalInventoryNotSafe(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reason string
+	}{
+		{
+			name:   "unsettled",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		},
+		{
+			name:   "rebuild pending",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setTrueNASFeatureForTest(t, true)
+			setMockModeForTrueNASTest(t, false)
+			setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+			handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+			bindUnavailableSupplementalUsageProviderForTest(t, monitor, unifiedresources.SourceTrueNAS, tc.reason)
+
+			body := marshalTrueNASRequest(t, map[string]any{
+				"name":   "tower",
+				"host":   "tower.local",
+				"apiKey": "super-secret",
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.HandleAdd(rec, req)
+
+			assertMonitoredSystemUsageUnavailableReason(t, rec, tc.reason)
+
+			stored, err := persistence.LoadTrueNASConfig()
+			if err != nil {
+				t.Fatalf("load truenas config: %v", err)
+			}
+			if len(stored) != 0 {
+				t.Fatalf("expected unavailable monitored-system usage not to persist add, got %d connections", len(stored))
+			}
+		})
+	}
+}
+
 func TestTrueNASHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	setTrueNASFeatureForTest(t, true)
 	setMockModeForTrueNASTest(t, false)
@@ -607,6 +651,64 @@ func TestTrueNASHandlers_HandleUpdate_BlocksProjectedNetNewSystemAtLimit(t *test
 	}
 	if stored[0].Host != "archive.local" {
 		t.Fatalf("expected blocked update to preserve original host, got %+v", stored[0])
+	}
+}
+
+func TestTrueNASHandlers_HandleUpdate_ReturnsUnavailableWhenSupplementalInventoryNotSafe(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reason string
+	}{
+		{
+			name:   "unsettled",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		},
+		{
+			name:   "rebuild pending",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setTrueNASFeatureForTest(t, true)
+			setMockModeForTrueNASTest(t, false)
+			setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+			handler, persistence, monitor := newTrueNASHandlersForTest(t, nil)
+			bindUnavailableSupplementalUsageProviderForTest(t, monitor, unifiedresources.SourceTrueNAS, tc.reason)
+			if err := persistence.SaveTrueNASConfig([]config.TrueNASInstance{
+				{
+					ID:       "alpha",
+					Name:     "archive",
+					Host:     "archive.local",
+					APIKey:   "super-secret",
+					UseHTTPS: true,
+					Enabled:  true,
+				},
+			}); err != nil {
+				t.Fatalf("seed truenas config: %v", err)
+			}
+
+			body := marshalTrueNASRequest(t, map[string]any{
+				"name":     "archive",
+				"host":     "backup.local",
+				"apiKey":   "********",
+				"useHttps": true,
+				"enabled":  true,
+			})
+			req := httptest.NewRequest(http.MethodPut, "/api/truenas/connections/alpha", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.HandleUpdate(rec, req)
+
+			assertMonitoredSystemUsageUnavailableReason(t, rec, tc.reason)
+
+			stored, err := persistence.LoadTrueNASConfig()
+			if err != nil {
+				t.Fatalf("load truenas config: %v", err)
+			}
+			if len(stored) != 1 || stored[0].Host != "archive.local" {
+				t.Fatalf("expected unavailable monitored-system usage to preserve stored connection, got %+v", stored)
+			}
+		})
 	}
 }
 

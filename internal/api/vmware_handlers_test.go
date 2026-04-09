@@ -218,6 +218,64 @@ func TestVMwareHandlers_HandleAdd_BlocksProjectedNetNewSystemsAtLimit(t *testing
 	}
 }
 
+func TestVMwareHandlers_HandleAdd_ReturnsUnavailableBeforePreviewingInventory(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reason string
+	}{
+		{
+			name:   "unsettled",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		},
+		{
+			name:   "rebuild pending",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setVMwareFeatureForTest(t, true)
+			setMockModeForVMwareTest(t, false)
+			setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+			handler, persistence := newVMwareHandlersForTest(t)
+			monitor, _, _ := newTestMonitor(t)
+			handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+			bindUnavailableSupplementalUsageProviderForTest(t, monitor, unifiedresources.SourceVMware, tc.reason)
+
+			previewRecordsCalled := false
+			handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+				previewRecordsCalled = true
+				return nil, errors.New("preview records should not run while monitored-system usage is unavailable")
+			}
+
+			body := marshalVMwareRequest(t, map[string]any{
+				"name":     "lab-vcenter",
+				"host":     "vcsa.lab.local",
+				"port":     443,
+				"username": "administrator@vsphere.local",
+				"password": "super-secret",
+				"enabled":  true,
+			})
+			req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.HandleAdd(rec, req)
+
+			assertMonitoredSystemUsageUnavailableReason(t, rec, tc.reason)
+			if previewRecordsCalled {
+				t.Fatal("expected VMware add not to preview external inventory while monitored-system usage is unavailable")
+			}
+
+			stored, err := persistence.LoadVMwareConfig()
+			if err != nil {
+				t.Fatalf("load vmware config: %v", err)
+			}
+			if len(stored) != 0 {
+				t.Fatalf("expected unavailable monitored-system usage not to persist add, got %d connections", len(stored))
+			}
+		})
+	}
+}
+
 func TestVMwareHandlers_HandleAdd_AllowsCanonicalOverlapAtLimit(t *testing.T) {
 	setVMwareFeatureForTest(t, true)
 	setMockModeForVMwareTest(t, false)
@@ -690,6 +748,77 @@ func TestVMwareHandlers_HandleUpdate_BlocksProjectedNetNewSystemsAtLimit(t *test
 	}
 	if stored[0].Host != "vc-a.lab.local" {
 		t.Fatalf("expected blocked update to preserve original host, got %+v", stored[0])
+	}
+}
+
+func TestVMwareHandlers_HandleUpdate_ReturnsUnavailableBeforePreviewingInventory(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reason string
+	}{
+		{
+			name:   "unsettled",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		},
+		{
+			name:   "rebuild pending",
+			reason: monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setVMwareFeatureForTest(t, true)
+			setMockModeForVMwareTest(t, false)
+			setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+			handler, persistence := newVMwareHandlersForTest(t)
+			monitor, _, _ := newTestMonitor(t)
+			handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+			bindUnavailableSupplementalUsageProviderForTest(t, monitor, unifiedresources.SourceVMware, tc.reason)
+			if err := persistence.SaveVMwareConfig([]config.VMwareVCenterInstance{{
+				ID:                 "alpha",
+				Name:               "vc-a",
+				Host:               "vc-a.lab.local",
+				Port:               443,
+				Username:           "administrator@vsphere.local",
+				Password:           "super-secret",
+				InsecureSkipVerify: true,
+				Enabled:            true,
+			}}); err != nil {
+				t.Fatalf("seed vmware config: %v", err)
+			}
+
+			previewRecordsCalled := false
+			handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+				previewRecordsCalled = true
+				return nil, errors.New("preview records should not run while monitored-system usage is unavailable")
+			}
+
+			body := marshalVMwareRequest(t, map[string]any{
+				"name":               "vc-b",
+				"host":               "vc-b.lab.local",
+				"port":               443,
+				"username":           "administrator@vsphere.local",
+				"password":           "********",
+				"insecureSkipVerify": true,
+				"enabled":            true,
+			})
+			req := httptest.NewRequest(http.MethodPut, "/api/vmware/connections/alpha", bytes.NewReader(body))
+			rec := httptest.NewRecorder()
+			handler.HandleUpdate(rec, req)
+
+			assertMonitoredSystemUsageUnavailableReason(t, rec, tc.reason)
+			if previewRecordsCalled {
+				t.Fatal("expected VMware update not to preview external inventory while monitored-system usage is unavailable")
+			}
+
+			stored, err := persistence.LoadVMwareConfig()
+			if err != nil {
+				t.Fatalf("load vmware config: %v", err)
+			}
+			if len(stored) != 1 || stored[0].Host != "vc-a.lab.local" {
+				t.Fatalf("expected unavailable monitored-system usage to preserve stored connection, got %+v", stored)
+			}
+		})
 	}
 }
 

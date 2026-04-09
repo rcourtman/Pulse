@@ -70,6 +70,7 @@ querying, and the operator-facing storage health presentation layer.
    provider-backed recovery: storage and recovery must treat `truenas_disabled`
    as an explicit platform opt-out, not as the baseline onboarding state for a
    supported platform.
+   That same adjacent API boundary also owns direct provider write admission when canonical monitored-system usage is unavailable. `internal/api/truenas_handlers.go`, `internal/api/vmware_handlers.go`, and the shared monitored-system admission helpers must fail those connection saves closed before provider state persists, and VMware must not collect external vCenter inventory before the canonical capacity view is safe.
    That same adjacent API boundary now also owns SSO outbound discovery and metadata fetch trust: storage- and recovery-adjacent surfaces may share `internal/api/sso_outbound.go`, `internal/api/saml_service.go`, and `internal/api/oidc_service.go`, but they must not fork separate metadata/discovery HTTP clients, redirect policies, or credential-file read rules when they depend on shared backend auth helpers.
 5. Route canonical storage/recovery resource selection through `frontend-modern/src/hooks/useUnifiedResources.ts` and the owning `unified-resources` contract
    That shared hook now also projects resource `clusterId` through the shared cluster-name helper, so storage and recovery links keep the same cluster-context label as other unified-resource consumers instead of rebuilding a local fallback chain.

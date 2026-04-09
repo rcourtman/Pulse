@@ -286,12 +286,12 @@ func monitoredSystemLimitDecisionForCandidateReplacement(
 	return monitoredSystemLimitDecisionFromPreview(ctx, limit, true, projection)
 }
 
-func monitoredSystemLimitDecisionForRecords(
+func monitoredSystemLimitDecisionForRecordsFromUsage(
 	ctx context.Context,
-	monitor *monitoring.Monitor,
+	limit int,
+	usage monitoredSystemUsageSnapshot,
 	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord,
 ) monitoredSystemLimitDecision {
-	limit := maxMonitoredSystemsLimitForContext(ctx)
 	if limit <= 0 {
 		return monitoredSystemLimitDecision{
 			limit:          limit,
@@ -299,7 +299,6 @@ func monitoredSystemLimitDecisionForRecords(
 		}
 	}
 
-	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
 			limit:                  limit,
@@ -311,13 +310,13 @@ func monitoredSystemLimitDecisionForRecords(
 	return monitoredSystemLimitDecisionFromPreview(ctx, limit, false, projection)
 }
 
-func monitoredSystemLimitDecisionForRecordsReplacement(
+func monitoredSystemLimitDecisionForRecordsReplacementFromUsage(
 	ctx context.Context,
-	monitor *monitoring.Monitor,
+	limit int,
+	usage monitoredSystemUsageSnapshot,
 	replacement unifiedresources.MonitoredSystemReplacement,
 	recordsBySource map[unifiedresources.DataSource][]unifiedresources.IngestRecord,
 ) monitoredSystemLimitDecision {
-	limit := maxMonitoredSystemsLimitForContext(ctx)
 	if limit <= 0 {
 		return monitoredSystemLimitDecision{
 			limit:          limit,
@@ -325,7 +324,6 @@ func monitoredSystemLimitDecisionForRecordsReplacement(
 		}
 	}
 
-	usage := monitoredSystemUsage(monitor)
 	if !usage.available {
 		return monitoredSystemLimitDecision{
 			limit:                  limit,

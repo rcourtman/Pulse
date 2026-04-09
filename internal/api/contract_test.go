@@ -5432,6 +5432,80 @@ func TestContract_MonitoredSystemUsageUnavailableIncludesReason(t *testing.T) {
 	}
 }
 
+func TestContract_PlatformConnectionWritesFailClosedWhenUsageUnavailable(t *testing.T) {
+	t.Run("truenas add", func(t *testing.T) {
+		setTrueNASFeatureForTest(t, true)
+		setMockModeForTrueNASTest(t, false)
+		setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+		handler, _, monitor := newTrueNASHandlersForTest(t, nil)
+		bindUnavailableSupplementalUsageProviderForTest(
+			t,
+			monitor,
+			unifiedresources.SourceTrueNAS,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		)
+
+		body := marshalTrueNASRequest(t, map[string]any{
+			"name":   "tower",
+			"host":   "tower.local",
+			"apiKey": "super-secret",
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/truenas/connections", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleAdd(rec, req)
+
+		assertMonitoredSystemUsageUnavailableReason(
+			t,
+			rec,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		)
+	})
+
+	t.Run("vmware add", func(t *testing.T) {
+		setVMwareFeatureForTest(t, true)
+		setMockModeForVMwareTest(t, false)
+		setMaxMonitoredSystemsLicenseForTests(t, 1)
+
+		handler, _ := newVMwareHandlersForTest(t)
+		monitor, _, _ := newTestMonitor(t)
+		handler.getMonitor = func(context.Context) *monitoring.Monitor { return monitor }
+		bindUnavailableSupplementalUsageProviderForTest(
+			t,
+			monitor,
+			unifiedresources.SourceVMware,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		)
+
+		previewRecordsCalled := false
+		handler.previewRecords = func(context.Context, config.VMwareVCenterInstance) ([]unifiedresources.IngestRecord, error) {
+			previewRecordsCalled = true
+			return nil, nil
+		}
+
+		body := marshalVMwareRequest(t, map[string]any{
+			"name":     "lab-vcenter",
+			"host":     "vcsa.lab.local",
+			"port":     443,
+			"username": "administrator@vsphere.local",
+			"password": "super-secret",
+			"enabled":  true,
+		})
+		req := httptest.NewRequest(http.MethodPost, "/api/vmware/connections", bytes.NewReader(body))
+		rec := httptest.NewRecorder()
+		handler.HandleAdd(rec, req)
+
+		assertMonitoredSystemUsageUnavailableReason(
+			t,
+			rec,
+			monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled,
+		)
+		if previewRecordsCalled {
+			t.Fatal("expected VMware write admission to fail before external inventory preview")
+		}
+	})
+}
+
 func TestContract_ConfiguredNodeReplacementsUseCanonicalSelectors(t *testing.T) {
 	testCases := []struct {
 		name        string

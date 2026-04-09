@@ -82,6 +82,21 @@ func requireSnippetBefore(t *testing.T, source string, earlier string, later str
 	}
 }
 
+func requireSourceSegment(t *testing.T, source string, start string, end string) string {
+	t.Helper()
+
+	startIndex := strings.Index(source, start)
+	if startIndex < 0 {
+		t.Fatalf("missing segment start %q", start)
+	}
+	remainder := source[startIndex:]
+	endIndex := strings.Index(remainder[len(start):], end)
+	if endIndex < 0 {
+		t.Fatalf("missing segment end %q after %q", end, start)
+	}
+	return remainder[:len(start)+endIndex]
+}
+
 func TestMonitoredSystemLimitDecisionOnlyBlocksNetNewSystems(t *testing.T) {
 	ctx := context.Background()
 
@@ -301,8 +316,8 @@ func TestMonitoredSystemAdmissionSurfacesStayBehindSharedLimitGate(t *testing.T)
 			sources: []sourceContract{{
 				file: "vmware_handlers.go",
 				requiredSnippets: []string{
-					"monitoredSystemLimitDecisionForRecords(",
-					"monitoredSystemLimitDecisionForRecordsReplacement(",
+					"monitoredSystemLimitDecisionForRecordsFromUsage(",
+					"monitoredSystemLimitDecisionForRecordsReplacementFromUsage(",
 					"SaveVMwareConfig(",
 				},
 				requiredOrderings: [][2]string{
@@ -380,6 +395,48 @@ func TestMonitoredSystemAdmissionSurfacesStayBehindSharedLimitGate(t *testing.T)
 			}
 		})
 	}
+}
+
+func TestVMwareAdmissionEnforcementChecksUsageBeforeExternalInventory(t *testing.T) {
+	source := readAPIPackageFile(t, "vmware_handlers.go")
+
+	addEnforcement := requireSourceSegment(
+		t,
+		source,
+		"func (h *VMwareHandlers) enforceMonitoredSystemLimit(",
+		"func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(",
+	)
+	requireSnippetBefore(
+		t,
+		addEnforcement,
+		"usage := monitoredSystemUsage(monitor)",
+		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)",
+	)
+	requireSnippetBefore(
+		t,
+		addEnforcement,
+		"if !usage.available",
+		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), instance)",
+	)
+
+	replacementEnforcement := requireSourceSegment(
+		t,
+		source,
+		"func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(",
+		"func (h *VMwareHandlers) previewMonitoredSystemRecords(",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
+		"usage := monitoredSystemUsage(monitor)",
+		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)",
+	)
+	requireSnippetBefore(
+		t,
+		replacementEnforcement,
+		"if !usage.available",
+		"records, invalidConfig, err := h.previewMonitoredSystemRecords(r.Context(), next)",
+	)
 }
 
 func TestMonitoredSystemCountNilMonitor(t *testing.T) {

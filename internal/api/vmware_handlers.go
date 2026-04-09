@@ -653,13 +653,15 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimit(
 	r *http.Request,
 	instance config.VMwareVCenterInstance,
 ) bool {
-	if maxMonitoredSystemsLimitForContext(r.Context()) <= 0 {
+	limit := maxMonitoredSystemsLimitForContext(r.Context())
+	if limit <= 0 {
 		return false
 	}
 
 	monitor := h.monitorForRequest(r.Context())
-	if monitor == nil {
-		writeMonitoredSystemUsageUnavailable(w, monitoring.MonitoredSystemUsageUnavailableMonitorState)
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 		return true
 	}
 
@@ -669,7 +671,7 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimit(
 		return true
 	}
 
-	decision := monitoredSystemLimitDecisionForRecords(r.Context(), monitor, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
+	decision := monitoredSystemLimitDecisionForRecordsFromUsage(r.Context(), limit, usage, map[unifiedresources.DataSource][]unifiedresources.IngestRecord{
 		unifiedresources.SourceVMware: records,
 	})
 	if !decision.usageAvailable {
@@ -697,8 +699,9 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
 	}
 
 	monitor := h.monitorForRequest(r.Context())
-	if monitor == nil {
-		writeMonitoredSystemUsageUnavailable(w, monitoring.MonitoredSystemUsageUnavailableMonitorState)
+	usage := monitoredSystemUsage(monitor)
+	if !usage.available {
+		writeMonitoredSystemUsageUnavailable(w, usage.unavailableReason)
 		return true
 	}
 
@@ -709,7 +712,7 @@ func (h *VMwareHandlers) enforceMonitoredSystemLimitReplacement(
 	}
 
 	replacementID := strings.TrimSpace(current.ID)
-	decision := monitoredSystemLimitDecisionForRecordsReplacement(r.Context(), monitor, unifiedresources.MonitoredSystemReplacement{
+	decision := monitoredSystemLimitDecisionForRecordsReplacementFromUsage(r.Context(), limit, usage, unifiedresources.MonitoredSystemReplacement{
 		Source: unifiedresources.SourceVMware,
 		Selector: unifiedresources.MonitoredSystemReplacementSelector{
 			ResourceID: replacementID,

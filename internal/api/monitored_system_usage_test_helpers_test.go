@@ -67,6 +67,27 @@ func bindTestSupplementalUsageProvider(
 	monitor.SetSupplementalRecordsProvider(source, provider)
 }
 
+func bindUnavailableSupplementalUsageProviderForTest(
+	t *testing.T,
+	monitor *monitoring.Monitor,
+	source unifiedresources.DataSource,
+	reason string,
+) {
+	t.Helper()
+
+	provider := newTestSupplementalUsageProvider(source)
+	bindTestSupplementalUsageProvider(monitor, source, provider)
+
+	switch reason {
+	case monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryUnsettled:
+		return
+	case monitoring.MonitoredSystemUsageUnavailableSupplementalInventoryRebuildPending:
+		provider.settleAtWithRecords(time.Now().UTC().Add(time.Minute), nil)
+	default:
+		t.Fatalf("unsupported monitored-system usage unavailable reason %q", reason)
+	}
+}
+
 func assertMonitoredSystemUsageUnavailableReason(
 	t *testing.T,
 	rec *httptest.ResponseRecorder,

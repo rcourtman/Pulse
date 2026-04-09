@@ -223,6 +223,14 @@ management, and fleet control surfaces.
     ownership cleanup only, not as install inventory proof or fleet enrollment
     state.
 
+    The same lifecycle-adjacent platform-connections boundary also assumes
+    direct TrueNAS and VMware connection writes fail closed when canonical
+    monitored-system usage is unavailable. Shared `internal/api/` admission
+    helpers must return `monitored_system_usage_unavailable` before save, and
+    VMware must not collect external vCenter inventory before that canonical
+    capacity view is safe, so fleet/setup surfaces cannot bypass the
+    monitored-system accounting boundary through direct API writes.
+
 ## Forbidden Paths
 
 1. New install or update continuity behavior hidden only inside broad monitoring ownership.
