@@ -2237,6 +2237,141 @@ func TestPreviewMonitoredSystemRecords_ReturnsCurrentAndProjectedSystemsForVMwar
 	}
 }
 
+func TestPreviewMonitoredSystemRecordsReplacementOffsetsReplacedVMwareConnection(t *testing.T) {
+	rr := NewRegistry(nil)
+	now := time.Date(2026, 4, 7, 12, 0, 0, 0, time.UTC)
+
+	rr.IngestRecords(SourceAgent, []IngestRecord{
+		{
+			SourceID: "agent-host-1",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-01.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+	})
+	rr.IngestRecords(SourceVMware, []IngestRecord{
+		{
+			SourceID: "vc-1:host:host-101",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-01.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "host-101",
+					EntityType:      "host",
+					HostUUID:        "uuid-host-1",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-1",
+				Hostnames: []string{"esxi-01.lab.local"},
+			},
+		},
+		{
+			SourceID: "vc-1:host:host-102",
+			Resource: Resource{
+				Type:     ResourceTypeAgent,
+				Name:     "esxi-02.lab.local",
+				Status:   StatusOnline,
+				LastSeen: now,
+				VMware: &VMwareData{
+					ConnectionID:    "vc-1",
+					ConnectionName:  "Lab VC",
+					ManagedObjectID: "host-102",
+					EntityType:      "host",
+					HostUUID:        "uuid-host-2",
+				},
+			},
+			Identity: ResourceIdentity{
+				DMIUUID:   "uuid-host-2",
+				Hostnames: []string{"esxi-02.lab.local"},
+			},
+		},
+	})
+
+	preview := PreviewMonitoredSystemRecordsReplacement(rr, MonitoredSystemReplacement{
+		Source: SourceVMware,
+		Selector: MonitoredSystemReplacementSelector{
+			ResourceID: "vc-1",
+		},
+	}, map[DataSource][]IngestRecord{
+		SourceVMware: {
+			{
+				SourceID: "vc-1:host:host-101",
+				Resource: Resource{
+					Type:     ResourceTypeAgent,
+					Name:     "esxi-01.lab.local",
+					Status:   StatusOnline,
+					LastSeen: now,
+					VMware: &VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-101",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-1",
+					},
+				},
+				Identity: ResourceIdentity{
+					DMIUUID:   "uuid-host-1",
+					Hostnames: []string{"esxi-01.lab.local"},
+				},
+			},
+			{
+				SourceID: "vc-1:host:host-103",
+				Resource: Resource{
+					Type:     ResourceTypeAgent,
+					Name:     "esxi-03.lab.local",
+					Status:   StatusOnline,
+					LastSeen: now,
+					VMware: &VMwareData{
+						ConnectionID:    "vc-1",
+						ConnectionName:  "Lab VC",
+						ManagedObjectID: "host-103",
+						EntityType:      "host",
+						HostUUID:        "uuid-host-3",
+					},
+				},
+				Identity: ResourceIdentity{
+					DMIUUID:   "uuid-host-3",
+					Hostnames: []string{"esxi-03.lab.local"},
+				},
+			},
+		},
+	})
+
+	if preview.CurrentCount != 2 {
+		t.Fatalf("CurrentCount = %d, want 2", preview.CurrentCount)
+	}
+	if preview.ProjectedCount != 2 {
+		t.Fatalf("ProjectedCount = %d, want 2", preview.ProjectedCount)
+	}
+	if preview.AdditionalCount != 0 {
+		t.Fatalf("AdditionalCount = %d, want 0", preview.AdditionalCount)
+	}
+	if len(preview.CurrentSystems) != 2 {
+		t.Fatalf("len(CurrentSystems) = %d, want 2", len(preview.CurrentSystems))
+	}
+	if len(preview.ProjectedSystems) != 2 {
+		t.Fatalf("len(ProjectedSystems) = %d, want 2", len(preview.ProjectedSystems))
+	}
+	if preview.CurrentSystem != nil {
+		t.Fatalf("CurrentSystem = %+v, want nil for multi-system replacement", preview.CurrentSystem)
+	}
+	if preview.ProjectedSystem != nil {
+		t.Fatalf("ProjectedSystem = %+v, want nil for multi-system replacement", preview.ProjectedSystem)
+	}
+}
+
 func TestResourceRegistry_WorkloadsIncludeCanonicalAppContainers(t *testing.T) {
 	rr := NewRegistry(nil)
 	now := time.Date(2026, 3, 29, 12, 0, 0, 0, time.UTC)
