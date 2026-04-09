@@ -17,6 +17,11 @@ Use this as the final gate before cutting a Pulse v6 pre-release.
   `rc_ready` is intentionally held false in `status.json` by the open decision
   `rc-publication-judgment` until the current candidate is explicitly judged
   ready for a real governed RC.
+- The latest RC publication judgment packet is
+  `docs/release-control/v6/internal/records/rc-publication-judgment-packet-2026-04-09.md`.
+  It does not clear the open decision: the active-target proof currently blocks
+  on the parallel `pulse-enterprise` approval-handler slice requiring
+  `go mod tidy`.
 - The active target is back on `v6-rc-cut`, so GA rehearsal remains
   intentionally out of scope until a real RC has actually shipped and
   promotion is resumed explicitly.

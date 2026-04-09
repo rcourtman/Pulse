@@ -75,6 +75,14 @@ describe('licensePresentation', () => {
       planSectionDescription:
         'Review your active plan, expiry, included limits, and paid capabilities.',
       usageSectionTitle: 'Usage',
+      hiddenShellTitle: 'Demo mode',
+      hiddenShellDescription: 'Commercial settings are hidden for this session.',
+      hiddenStateTitle: 'License and billing details are hidden',
+      hiddenStateBody:
+        'This public demo uses sample infrastructure data, so Pulse hides license identity, billing state, monitored-system usage, and upgrade actions instead of creating a demo license.',
+      policyLoadingTitle: 'Loading settings access',
+      policyLoadingBody:
+        'Pulse waits for the session presentation policy before showing license, billing, or usage details.',
       monitoredSystemUpgradeArrivalTitle: 'Need a higher monitored-system cap?',
       monitoredSystemUpgradeArrivalBody:
         'Open Pulse Account to compare self-hosted plans, complete checkout, and return here with Pulse Pro activated automatically.',
