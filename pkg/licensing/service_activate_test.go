@@ -193,6 +193,120 @@ func TestServiceActivate_ExchangedLegacyJWTMarksLegacyMigrationContinuity(t *tes
 	}
 }
 
+func TestServiceActivate_CallsActivationStateChangeCallback(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+	setupTestPublicKey(t)
+
+	svc := NewService()
+	licenseKey, err := GenerateLicenseForTesting("activation-callback@example.com", TierPro, 24*time.Hour)
+	if err != nil {
+		t.Fatalf("GenerateLicenseForTesting: %v", err)
+	}
+
+	grantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_activation_callback",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/licenses/exchange" {
+			t.Fatalf("Path = %q, want /v1/licenses/exchange", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusCreated)
+		_ = json.NewEncoder(w).Encode(ActivateInstallationResponse{
+			License: ActivateResponseLicense{
+				LicenseID:           "lic_activation_callback",
+				State:               "active",
+				Tier:                "pro",
+				MaxMonitoredSystems: 10,
+			},
+			Installation: ActivateResponseInstallation{
+				InstallationID:    "inst_activation_callback",
+				InstallationToken: "pit_live_activation_callback",
+				Status:            "active",
+			},
+			Grant: GrantEnvelope{
+				JWT:       grantJWT,
+				JTI:       "grant_activation_callback",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	var callbackState *ActivationState
+	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
+		callbackState = state
+	})
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+
+	if _, err := svc.Activate(licenseKey); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	if callbackState == nil {
+		t.Fatal("activation-state callback was not invoked")
+	}
+	if callbackState.InstallationID != "inst_activation_callback" {
+		t.Fatalf("InstallationID = %q, want inst_activation_callback", callbackState.InstallationID)
+	}
+	if !callbackState.Continuity.LegacyMigration {
+		t.Fatal("expected legacy activation callback to preserve migration continuity")
+	}
+}
+
+func TestServiceRestoreActivation_CallsActivationStateChangeCallback(t *testing.T) {
+	setupTestPublicKey(t)
+
+	grantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID:           "lic_restore_callback",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	svc := NewService()
+	var callbackState *ActivationState
+	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
+		callbackState = state
+	})
+
+	state := &ActivationState{
+		InstallationID:      "inst_restore_callback",
+		InstallationToken:   "pit_live_restore_callback",
+		LicenseID:           "lic_restore_callback",
+		GrantJWT:            grantJWT,
+		GrantJTI:            "grant_restore_callback",
+		GrantExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		InstanceFingerprint: "fp-restore-callback",
+		Continuity: ActivationContinuity{
+			LegacyMigration: true,
+		},
+	}
+
+	if err := svc.RestoreActivation(state); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	if callbackState == nil {
+		t.Fatal("activation-state callback was not invoked")
+	}
+	if callbackState.InstallationID != "inst_restore_callback" {
+		t.Fatalf("InstallationID = %q, want inst_restore_callback", callbackState.InstallationID)
+	}
+	if !callbackState.Continuity.LegacyMigration {
+		t.Fatal("expected restore callback to preserve migration continuity")
+	}
+}
+
 func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesStatus(t *testing.T) {
 	setupTestPublicKey(t)
 
@@ -219,6 +333,10 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 
 	svc := NewService()
 	svc.SetPersistence(p)
+	var callbackState *ActivationState
+	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
+		callbackState = state
+	})
 	state := &ActivationState{
 		InstallationID:      "inst_floor",
 		InstallationToken:   "pit_live_floor",
@@ -234,8 +352,18 @@ func TestServiceCaptureLegacyMonitoredSystemGrandfatherFloorPersistsAndUpdatesSt
 		t.Fatalf("RestoreActivation: %v", err)
 	}
 
+	callbackState = nil
 	if err := svc.CaptureLegacyMonitoredSystemGrandfatherFloor(23); err != nil {
 		t.Fatalf("CaptureLegacyMonitoredSystemGrandfatherFloor: %v", err)
+	}
+	if callbackState == nil {
+		t.Fatal("expected activation-state callback after monitored-system capture")
+	}
+	if callbackState.Continuity.GrandfatheredMaxMonitoredSystems != 23 {
+		t.Fatalf("callback GrandfatheredMaxMonitoredSystems=%d, want 23", callbackState.Continuity.GrandfatheredMaxMonitoredSystems)
+	}
+	if callbackState.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
+		t.Fatal("expected callback capture timestamp")
 	}
 
 	status := svc.Status()

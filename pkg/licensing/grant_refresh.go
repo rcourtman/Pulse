@@ -240,7 +240,8 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 
 	cb := s.onLicenseChange
 	snapshot := cloneLicense(s.license)
-	stateCopy := s.activationState
+	activationCB := s.onActivationStateChange
+	stateCopy := cloneActivationState(s.activationState)
 	s.mu.Unlock()
 
 	// Apply updated refresh hints from the server (policy may change between refreshes).
@@ -255,6 +256,9 @@ func (s *Service) refreshGrantOnce(ctx context.Context) error {
 
 	if cb != nil {
 		cb(snapshot)
+	}
+	if activationCB != nil {
+		activationCB(stateCopy)
 	}
 
 	log.Info().
@@ -274,6 +278,7 @@ func (s *Service) clearActivationState() {
 	s.license = nil
 	s.evaluator = nil
 	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
 	s.mu.Unlock()
 
 	if persistence != nil {
@@ -284,6 +289,9 @@ func (s *Service) clearActivationState() {
 
 	if cb != nil {
 		cb(nil)
+	}
+	if activationCB != nil {
+		activationCB(nil)
 	}
 }
 

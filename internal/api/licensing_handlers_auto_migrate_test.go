@@ -480,12 +480,22 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	}
 
 	handlers.SetMonitors(buildGrandfatherFloorMonitor(23), nil)
-	svc = handlers.Service(ctx)
-	if svc == nil {
-		t.Fatal("expected cached service")
-	}
-	if got := svc.Status().MaxMonitoredSystems; got != 23 {
-		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after late monitor capture", got)
+
+	deadline := time.Now().Add(8 * time.Second)
+	for {
+		loaded, err := persistence.LoadActivationState()
+		if err != nil {
+			t.Fatalf("load activation state: %v", err)
+		}
+		if loaded != nil &&
+			loaded.Continuity.GrandfatheredMaxMonitoredSystems == 23 &&
+			loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt != 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("expected async grandfather capture after late monitor restore, last activation state=%+v", loaded)
+		}
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	loaded, err := persistence.LoadActivationState()
@@ -501,8 +511,109 @@ func TestGetTenantComponents_BackfillsGrandfatherFloorAfterRestoreWhenMonitorArr
 	if loaded.Continuity.GrandfatheredMonitoredSystemsCapturedAt == 0 {
 		t.Fatal("expected captured timestamp after late monitor restore")
 	}
+	if got := svc.Status().MaxMonitoredSystems; got != 23 {
+		t.Fatalf("status.MaxMonitoredSystems=%d, want 23 after late monitor capture", got)
+	}
 
 	handlers.StopAllBackgroundLoops()
+}
+
+func TestBillingReads_DoNotRestartLegacyGrandfatherReconcileLoop(t *testing.T) {
+	t.Setenv("PULSE_LICENSE_DEV_MODE", "false")
+
+	grantJWT, grantPublicKey, err := pkglicensing.GenerateGrantJWTForTesting(pkglicensing.GrantClaims{
+		LicenseID:           "lic_floor_read_only",
+		Tier:                "pro",
+		PlanKey:             "v5_pro_monthly_grandfathered",
+		State:               "active",
+		Features:            []string{"relay"},
+		MaxMonitoredSystems: 10,
+		IssuedAt:            time.Now().Unix(),
+		ExpiresAt:           time.Now().Add(72 * time.Hour).Unix(),
+		Email:               "floor-read-only@example.com",
+	})
+	if err != nil {
+		t.Fatalf("generate grant jwt: %v", err)
+	}
+	pkglicensing.SetPublicKey(grantPublicKey)
+	t.Cleanup(func() { pkglicensing.SetPublicKey(nil) })
+
+	baseDir := t.TempDir()
+	mtp := config.NewMultiTenantPersistence(baseDir)
+	cp, err := mtp.GetPersistence("default")
+	if err != nil {
+		t.Fatalf("init default persistence: %v", err)
+	}
+	persistence, err := pkglicensing.NewPersistence(cp.GetConfigDir())
+	if err != nil {
+		t.Fatalf("new persistence: %v", err)
+	}
+	if err := persistence.SaveActivationState(&pkglicensing.ActivationState{
+		InstallationID:      "inst_floor_read_only",
+		InstallationToken:   "pit_live_floor_read_only",
+		LicenseID:           "lic_floor_read_only",
+		GrantJWT:            grantJWT,
+		GrantJTI:            "grant_floor_read_only",
+		GrantExpiresAt:      time.Now().Add(72 * time.Hour).Unix(),
+		InstanceFingerprint: "fp-floor-read-only",
+		LicenseServerURL:    "https://license.pulserelay.pro",
+		ActivatedAt:         time.Now().Add(-time.Hour).Unix(),
+		LastRefreshedAt:     time.Now().Add(-time.Hour).Unix(),
+		Continuity: pkglicensing.ActivationContinuity{
+			LegacyMigration: true,
+		},
+	}); err != nil {
+		t.Fatalf("save activation state: %v", err)
+	}
+
+	handlers := NewLicenseHandlers(mtp, false)
+	t.Cleanup(handlers.StopAllBackgroundLoops)
+
+	ctx := context.WithValue(context.Background(), OrgIDContextKey, "default")
+	svc := handlers.Service(ctx)
+	if svc == nil {
+		t.Fatal("expected non-nil service")
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if value, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
+			if loop, ok := value.(*legacyGrandfatherReconcileLoop); ok && loop.isRunning() {
+				break
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("expected restore-owned grandfather reconcile loop to start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	handlers.stopLegacyGrandfatherReconcileLoop("default")
+	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
+		t.Fatal("expected grandfather reconcile loop to stop before read-only check")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/license/status", nil).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	handlers.HandleLicenseStatus(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("license status=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
+		t.Fatal("license status read restarted grandfather reconcile loop")
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/license/entitlements", nil).WithContext(ctx)
+	rec = httptest.NewRecorder()
+	handlers.HandleEntitlements(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("license entitlements=%d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	time.Sleep(100 * time.Millisecond)
+	if _, ok := handlers.legacyGrandfatherReconcile.Load("default"); ok {
+		t.Fatal("license entitlements read restarted grandfather reconcile loop")
+	}
 }
 
 func TestActivateLicenseKey_GrandfathersObservedMonitoredSystemsForLegacyMigration(t *testing.T) {

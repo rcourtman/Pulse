@@ -186,17 +186,17 @@ func (s *purchaseReturnRedemptionStore) begin(attempt purchaseReturnRedemptionAt
 		}
 		switch existing.Status {
 		case purchaseReturnRedemptionStateActivated:
-			committed = true
 			if err := tx.Commit(); err != nil {
 				return "", nil, fmt.Errorf("commit activated purchase redemption lookup: %w", err)
 			}
+			committed = true
 			return purchaseReturnRedemptionDecisionAlreadyActivated, existing, nil
 		case purchaseReturnRedemptionStateStarted:
 			if now.Sub(existing.UpdatedAt) < purchaseReturnRedemptionStaleAfter {
-				committed = true
 				if err := tx.Commit(); err != nil {
 					return "", nil, fmt.Errorf("commit in-progress purchase redemption lookup: %w", err)
 				}
+				committed = true
 				return purchaseReturnRedemptionDecisionInProgress, existing, nil
 			}
 		case purchaseReturnRedemptionStateFailed:
@@ -225,10 +225,10 @@ func (s *purchaseReturnRedemptionStore) begin(attempt purchaseReturnRedemptionAt
 		return "", nil, err
 	}
 	if byPortalHandoffID != nil {
-		committed = true
 		if err := tx.Commit(); err != nil {
 			return "", nil, fmt.Errorf("commit portal handoff conflict lookup: %w", err)
 		}
+		committed = true
 		return purchaseReturnRedemptionDecisionConflict, byPortalHandoffID, nil
 	}
 
@@ -237,10 +237,10 @@ func (s *purchaseReturnRedemptionStore) begin(attempt purchaseReturnRedemptionAt
 		return "", nil, err
 	}
 	if bySessionID != nil {
-		committed = true
 		if err := tx.Commit(); err != nil {
 			return "", nil, fmt.Errorf("commit checkout session conflict lookup: %w", err)
 		}
+		committed = true
 		return purchaseReturnRedemptionDecisionConflict, bySessionID, nil
 	}
 

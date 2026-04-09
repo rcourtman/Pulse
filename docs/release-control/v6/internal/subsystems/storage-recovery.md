@@ -181,6 +181,10 @@ querying, and the operator-facing storage health presentation layer.
     pending grandfather floor, use those reads to restart continuity
     reconciliation, or collapse continuity-verification payloads into a real
     `0 / limit` monitored-system reading.
+    When the commercial reconciler captures the floor, storage and recovery
+    must treat the resulting activation-state callback as commercial ownership
+    cleanup only, not as protected-inventory proof or recovery entitlement
+    state.
 
 ## Forbidden Paths
 

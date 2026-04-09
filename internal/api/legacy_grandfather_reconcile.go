@@ -43,13 +43,38 @@ func (h *LicenseHandlers) legacyGrandfatherReconcileLoop(orgID string) *legacyGr
 	return loop
 }
 
+func (h *LicenseHandlers) bindLegacyGrandfatherReconcileOwnership(orgID string, service *licenseService) {
+	if h == nil || service == nil {
+		return
+	}
+
+	orgID = normalizeHostedEntitlementOrgID(orgID)
+	service.SetActivationStateChangeCallback(func(*activationStateModel) {
+		h.syncLegacyGrandfatherReconcileOwnership(orgID, service)
+	})
+}
+
+func (h *LicenseHandlers) syncLegacyGrandfatherReconcileOwnership(orgID string, service *licenseService) {
+	if h == nil {
+		return
+	}
+
+	orgID = normalizeHostedEntitlementOrgID(orgID)
+	if service == nil || !service.NeedsLegacyMonitoredSystemCapture() {
+		h.requestLegacyGrandfatherReconcileLoopStop(orgID)
+		return
+	}
+
+	h.ensureLegacyGrandfatherReconcileLoop(orgID, service)
+}
+
 func (h *LicenseHandlers) ensureLegacyGrandfatherReconcileLoop(orgID string, service *licenseService) {
 	if h == nil || service == nil {
 		return
 	}
 	orgID = normalizeHostedEntitlementOrgID(orgID)
 	if !service.NeedsLegacyMonitoredSystemCapture() {
-		h.stopLegacyGrandfatherReconcileLoop(orgID)
+		h.requestLegacyGrandfatherReconcileLoopStop(orgID)
 		return
 	}
 
@@ -113,6 +138,35 @@ func (h *LicenseHandlers) stopLegacyGrandfatherReconcileLoop(orgID string) {
 	}
 	loop.wg.Wait()
 	h.legacyGrandfatherReconcile.Delete(orgID)
+}
+
+func (h *LicenseHandlers) requestLegacyGrandfatherReconcileLoopStop(orgID string) {
+	if h == nil {
+		return
+	}
+	orgID = normalizeHostedEntitlementOrgID(orgID)
+	value, ok := h.legacyGrandfatherReconcile.Load(orgID)
+	if !ok {
+		return
+	}
+	loop, ok := value.(*legacyGrandfatherReconcileLoop)
+	if !ok || loop == nil {
+		h.legacyGrandfatherReconcile.Delete(orgID)
+		return
+	}
+
+	loop.mu.Lock()
+	if !loop.running {
+		loop.mu.Unlock()
+		h.legacyGrandfatherReconcile.Delete(orgID)
+		return
+	}
+	cancel := loop.cancel
+	loop.mu.Unlock()
+
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func (h *LicenseHandlers) runLegacyGrandfatherReconcileLoop(

@@ -218,6 +218,10 @@ management, and fleet control surfaces.
     continuity, use those billing reads to restart pending continuity
     reconciliation, or reinterpret continuity-verification payloads as a real
     `0 / limit` monitored-system state.
+    When the commercial reconciler captures the floor, lifecycle-adjacent
+    code must treat the resulting activation-state callback as commercial
+    ownership cleanup only, not as install inventory proof or fleet enrollment
+    state.
 
 ## Forbidden Paths
 

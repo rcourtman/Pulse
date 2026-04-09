@@ -141,6 +141,10 @@ func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
 	svc := NewService()
 	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
 	svc.SetPersistence(p)
+	var callbackState *ActivationState
+	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
+		callbackState = state
+	})
 
 	state := &ActivationState{
 		InstallationID:      "inst_revoked",
@@ -197,6 +201,9 @@ func TestGrantRefreshLoop_401ClearsActivation(t *testing.T) {
 	}
 	if svc.IsActivated() {
 		t.Error("expected activation cleared after 401 revocation")
+	}
+	if callbackState != nil {
+		t.Fatalf("expected nil activation-state callback after 401 revocation, got %+v", callbackState)
 	}
 
 	// Verify the persisted state was also cleared.
@@ -663,6 +670,71 @@ func TestRefreshGrantOnce_CallsLicenseChangeCallback(t *testing.T) {
 	}
 	if callbackLicense.Claims.LicenseID != "lic_callback" {
 		t.Errorf("callback license ID = %q, want lic_callback", callbackLicense.Claims.LicenseID)
+	}
+}
+
+func TestRefreshGrantOnce_CallsActivationStateChangeCallback(t *testing.T) {
+	setupTestPublicKey(t)
+
+	newGrantJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID: "lic_activation_callback",
+		Tier:      "relay",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(RefreshGrantResponse{
+			Grant: GrantEnvelope{
+				JWT:       newGrantJWT,
+				JTI:       "grant_activation_callback",
+				ExpiresAt: time.Now().Add(72 * time.Hour).UTC().Format(time.RFC3339),
+			},
+		})
+	}))
+	defer server.Close()
+
+	initialJWT := makeTestGrantJWT(t, &GrantClaims{
+		LicenseID: "lic_initial_activation_callback",
+		Tier:      "pro",
+		State:     "active",
+		IssuedAt:  time.Now().Unix(),
+		ExpiresAt: time.Now().Add(72 * time.Hour).Unix(),
+	})
+
+	var callbackState *ActivationState
+	svc := NewService()
+	svc.SetActivationStateChangeCallback(func(state *ActivationState) {
+		callbackState = state
+	})
+	svc.SetLicenseServerClient(NewLicenseServerClient(server.URL))
+
+	state := &ActivationState{
+		InstallationID:      "inst_activation_callback",
+		InstallationToken:   "pit_live_activation_callback",
+		LicenseID:           "lic_initial_activation_callback",
+		GrantJWT:            initialJWT,
+		GrantJTI:            "grant_old_activation_callback",
+		InstanceFingerprint: "fp-activation-callback",
+	}
+	svc.mu.Lock()
+	svc.activationState = state
+	svc.mu.Unlock()
+	if err := svc.RestoreActivation(state); err != nil {
+		t.Fatalf("RestoreActivation: %v", err)
+	}
+
+	callbackState = nil
+	if err := svc.refreshGrantOnce(context.Background()); err != nil {
+		t.Fatalf("refreshGrantOnce: %v", err)
+	}
+
+	if callbackState == nil {
+		t.Fatal("activation-state callback was not invoked")
+	}
+	if callbackState.GrantJTI != "grant_activation_callback" {
+		t.Fatalf("GrantJTI = %q, want grant_activation_callback", callbackState.GrantJTI)
 	}
 }
 

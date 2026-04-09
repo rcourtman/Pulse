@@ -51,4 +51,51 @@ describe('apiClient structured error extraction', () => {
       },
     });
   });
+
+  it('preserves monitored-system preview payloads from canonical 402 errors', async () => {
+    const error = await apiErrorFromResponse(
+      new Response(
+        JSON.stringify({
+          error: 'license_required',
+          message: 'Monitored-system limit reached (6/5)',
+          feature: 'max_monitored_systems',
+          monitored_system_preview: {
+            current_count: 5,
+            projected_count: 6,
+            additional_count: 1,
+            limit: 5,
+            would_exceed_limit: true,
+            effect: 'creates_new',
+            current_systems: [],
+            projected_systems: [
+              {
+                name: 'backup',
+                type: 'truenas-system',
+                status: 'online',
+                source: 'truenas',
+              },
+            ],
+            current_system: null,
+            projected_system: null,
+          },
+        }),
+        {
+          status: 402,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      ),
+      'Fallback message',
+    );
+
+    expect(error).toMatchObject({
+      message: 'Monitored-system limit reached (6/5)',
+      status: 402,
+      feature: 'max_monitored_systems',
+      monitored_system_preview: {
+        current_count: 5,
+        projected_count: 6,
+        would_exceed_limit: true,
+      },
+    });
+  });
 });

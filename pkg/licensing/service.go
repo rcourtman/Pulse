@@ -74,6 +74,9 @@ type Service struct {
 	// Callback when license changes
 	onLicenseChange func(*License)
 
+	// Callback when activation state changes.
+	onActivationStateChange func(*ActivationState)
+
 	// Optional canonical evaluator for B2 entitlement checks.
 	// When set and no JWT license is active, HasFeature/Status/SubscriptionState
 	// delegate to evaluator primitives (capabilities/limits/subscription state).
@@ -119,6 +122,13 @@ func (s *Service) SetLicenseChangeCallback(cb func(*License)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.onLicenseChange = cb
+}
+
+// SetActivationStateChangeCallback sets a callback for activation-state changes.
+func (s *Service) SetActivationStateChangeCallback(cb func(*ActivationState)) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.onActivationStateChange = cb
 }
 
 // SetEvaluator overrides the entitlement evaluator.
@@ -176,6 +186,7 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 	// Clear any activation state — this is now a legacy JWT license.
 	s.activationState = nil
 	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
 	snapshot := cloneLicense(s.license)
 	persistence := s.persistence
 	s.mu.Unlock()
@@ -187,6 +198,9 @@ func (s *Service) Activate(licenseKey string) (*License, error) {
 
 	if cb != nil {
 		cb(snapshot)
+	}
+	if activationCB != nil {
+		activationCB(nil)
 	}
 
 	// Keep legacy mutability in explicit dev-mode to avoid breaking existing
@@ -321,7 +335,9 @@ func (s *Service) applyActivationResponse(
 	s.evaluator = NewEvaluator(source)
 	s.activationState = state
 	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
 	snapshot := cloneLicense(s.license)
+	stateSnapshot := cloneActivationState(state)
 	s.mu.Unlock()
 
 	// Apply refresh hints from the server.
@@ -339,6 +355,9 @@ func (s *Service) applyActivationResponse(
 	if cb != nil {
 		cb(snapshot)
 	}
+	if activationCB != nil {
+		activationCB(stateSnapshot)
+	}
 
 	return snapshot, nil
 }
@@ -354,11 +373,7 @@ func (s *Service) IsActivated() bool {
 func (s *Service) GetActivationState() *ActivationState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if s.activationState == nil {
-		return nil
-	}
-	stateCopy := *s.activationState
-	return &stateCopy
+	return cloneActivationState(s.activationState)
 }
 
 // SetLicenseServerClient sets the HTTP client for license server communication.
@@ -399,11 +414,16 @@ func (s *Service) RestoreActivation(state *ActivationState) error {
 	s.evaluator = NewEvaluator(source)
 	s.activationState = &stateCopy
 	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
 	snapshot := cloneLicense(s.license)
+	stateSnapshot := cloneActivationState(&stateCopy)
 	s.mu.Unlock()
 
 	if cb != nil {
 		cb(snapshot)
+	}
+	if activationCB != nil {
+		activationCB(stateSnapshot)
 	}
 
 	return nil
@@ -453,7 +473,9 @@ func (s *Service) CaptureLegacyMonitoredSystemGrandfatherFloor(count int) error 
 	stateCopy := *s.activationState
 	persistence := s.persistence
 	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
 	snapshot := cloneLicense(s.license)
+	stateSnapshot := cloneActivationState(s.activationState)
 	s.mu.Unlock()
 
 	if persistence != nil {
@@ -464,6 +486,9 @@ func (s *Service) CaptureLegacyMonitoredSystemGrandfatherFloor(count int) error 
 
 	if shouldNotify && cb != nil {
 		cb(snapshot)
+	}
+	if activationCB != nil {
+		activationCB(stateSnapshot)
 	}
 
 	return nil
@@ -536,6 +561,7 @@ func (s *Service) Clear() {
 	hadActivation := s.activationState != nil
 	s.activationState = nil
 	cb := s.onLicenseChange
+	activationCB := s.onActivationStateChange
 	s.mu.Unlock()
 
 	// Clear persisted activation state if it existed.
@@ -547,6 +573,9 @@ func (s *Service) Clear() {
 
 	if cb != nil {
 		cb(nil)
+	}
+	if activationCB != nil {
+		activationCB(nil)
 	}
 }
 
@@ -945,6 +974,16 @@ func cloneLicense(in *License) *License {
 		graceEnd := *in.GracePeriodEnd
 		out.GracePeriodEnd = &graceEnd
 	}
+	return &out
+}
+
+func cloneActivationState(in *ActivationState) *ActivationState {
+	if in == nil {
+		return nil
+	}
+
+	out := *in
+	out.Continuity = normalizeActivationContinuity(in.Continuity)
 	return &out
 }
 

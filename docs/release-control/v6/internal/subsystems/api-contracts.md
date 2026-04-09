@@ -1306,6 +1306,15 @@ also stay side-effect free with respect to the reconciler lifecycle itself:
 they may observe pending continuity state, but only activation-state
 transitions such as activate, restore, grant refresh, and clear/revocation may
 bootstrap or tear down the pending-floor reconcile loop.
+Continuity capture is itself an activation-state mutation: after the reconciler
+persists the one-time floor, the service callback must publish the updated
+activation state so ownership can cancel the pending loop without making
+ordinary billing reads restart or stop it.
+When save-time monitored-system admission fails with a commercial denial, the
+structured API error must preserve the canonical `monitored_system_preview`
+object through `frontend-modern/src/utils/apiClient.ts` and
+`frontend-modern/src/api/responseUtils.ts` so platform settings can render the
+same current/projected verdict instead of falling back to generic license copy.
 That same configured-path contract now also has an explicit shared owner for
 manual auth env files: `internal/api/auth_env_path.go` must remain the only
 place that derives `.env` from configured runtime paths, and neighboring

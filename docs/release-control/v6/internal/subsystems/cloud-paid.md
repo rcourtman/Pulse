@@ -853,6 +853,14 @@ settled. The reconcile loop itself is activation-state-owned as well:
 activation, restore, grant refresh, and revocation/clear transitions may
 start or stop continuity reconciliation, but ordinary billing reads must stay
 observer-only and must not bootstrap that background work on demand.
+The continuity capture path must notify through that same activation-state
+ownership boundary after it persists the grandfather floor, so the reconciler
+can stop because state changed rather than because a later status or
+entitlements read happened to observe the captured floor.
+Save-time monitored-system commercial denials must carry the canonical
+`monitored_system_preview` object through the shared frontend API error path,
+so TrueNAS and VMware settings render the same helper-owned projected-usage
+explanation after a rejected save that they render after an explicit preview.
 That continuity rule cannot depend on webhook metadata being perfect. The
 canonical Stripe price-to-plan lookup in `pkg/licensing/features.go` and
 `pkg/licensing/stripe_subscription.go` must recognize the still-renewing
