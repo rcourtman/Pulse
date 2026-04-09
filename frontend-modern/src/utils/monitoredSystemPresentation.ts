@@ -21,6 +21,18 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
   tableNameLabel: 'Name',
   tableStatusLabel: 'Status',
   tableLatestIncludedSignalLabel: 'Latest Included Signal',
+  countedSystemBadgeLabel: 'Counts as 1 monitored system',
+  groupedSourcesHeading: 'Grouped sources',
+  countingExplanationHeading: 'Why this counts',
+  continuityHeading: 'Plan continuity',
+  continuityPlanLimitLabel: 'Plan limit',
+  continuityEffectiveLimitLabel: 'Effective limit',
+  continuityGrandfatheredFloorLabel: 'Grandfathered floor',
+  continuityCaptureLabel: 'Continuity capture',
+  continuityCapturePendingLabel: 'Pending',
+  continuityCaptureCapturedLabel: 'Captured',
+  usageVerifyingLabel: 'Verifying…',
+  unlimitedLimitLabel: 'Unlimited',
   loadingState: {
     text: 'Loading monitored system usage…',
   },
@@ -28,6 +40,15 @@ const MONITORED_SYSTEM_LEDGER_PRESENTATION = {
     title: 'Monitored system usage is temporarily unavailable.',
     retryingLabel: 'Trying again…',
     retryLabel: 'Try again',
+  },
+  unavailableState: {
+    title: 'Verifying monitored-system inventory',
+    fallbackMessage:
+      'Pulse cannot currently verify monitored-system usage for this installation. Refresh after the monitoring runtime settles.',
+    unsettledMessage:
+      'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
+    rebuildPendingMessage:
+      'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
   },
   countingDetailsCollapsedLabel: 'View counting details',
   countingDetailsExpandedLabel: 'Hide counting details',
@@ -99,6 +120,21 @@ export function getMonitoredSystemLedgerLoadingState() {
 
 export function getMonitoredSystemLedgerErrorState() {
   return MONITORED_SYSTEM_LEDGER_PRESENTATION.errorState;
+}
+
+export function getMonitoredSystemLedgerUnavailableState() {
+  return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState;
+}
+
+export function formatMonitoredSystemLedgerUnavailableMessage(reason?: string): string {
+  switch (normalizeMonitoredSystemValue(reason)) {
+    case 'supplemental_inventory_unsettled':
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState.unsettledMessage;
+    case 'supplemental_inventory_rebuild_pending':
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState.rebuildPendingMessage;
+    default:
+      return MONITORED_SYSTEM_LEDGER_PRESENTATION.unavailableState.fallbackMessage;
+  }
 }
 
 export function getMonitoredSystemCountingDetailsToggleLabel(expanded: boolean): string {
@@ -196,6 +232,10 @@ export function formatMonitoredSystemLatestIncludedSignalSentence(signal: {
   relative: string;
 }): string {
   return `${MONITORED_SYSTEM_LEDGER_PRESENTATION.latestIncludedSignalSummaryLabel}: ${signal.attribution}, reported ${signal.relative}.`;
+}
+
+export function formatMonitoredSystemGroupedSourcesLabel(count: number): string {
+  return `${count} grouped ${count === 1 ? 'source' : 'sources'}`;
 }
 
 export function getMonitoredSystemSourceLabel(source: string | undefined): string {

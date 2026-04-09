@@ -654,6 +654,19 @@ That same helper now also owns the row-status fallback summaries used when
 mixed-version payloads omit `status_explanation.summary`. The API client and
 settings panel must derive online/warning/offline/unknown fallback text from
 that shared owner instead of keeping separate local defaults that can drift.
+That same customer/support-facing ledger surface must consume the canonical
+`/api/license/monitored-system-ledger/explain` model when showing counted
+systems. Rows must expose backend-authored `explanation.summary`, reasons, and
+grouped source surfaces through helper-owned labels so customers can see why a
+system counts once without the panel inventing a second counting model.
+When canonical usage is not safe to read yet and the backend returns
+`monitored_system_usage_unavailable` or entitlements mark the monitored-system
+current count unavailable, the usage surface must render helper-owned
+verification copy instead of a synthetic `0 / limit` ledger total.
+The same usage view must also render monitored-system continuity context from
+the entitlement payload, including the base plan limit, effective limit,
+grandfathered floor, and capture state, so migration protection is visible
+beside the canonical count explanation.
 That same settings owner split now also requires
 `frontend-modern/src/components/Settings/MonitoredSystemLedgerPanel.tsx` to
 consume the normalized ledger client contract directly. Panel-local fallback

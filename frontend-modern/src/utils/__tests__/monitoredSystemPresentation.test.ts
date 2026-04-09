@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatMonitoredSystemAdmissionPreviewUnavailableMessage,
+  formatMonitoredSystemGroupedSourcesLabel,
   formatMonitoredSystemLegacyConnectionBreakdown,
   getMonitoredSystemBriefSummary,
   formatMonitoredSystemLimitSummary,
+  formatMonitoredSystemLedgerUnavailableMessage,
   formatMonitoredSystemLatestIncludedSignalSentence,
   formatMonitoredSystemMigrationMessage,
   formatMonitoredSystemOverflowSummary,
@@ -18,6 +20,7 @@ import {
   getMonitoredSystemLedgerErrorState,
   getMonitoredSystemLedgerLoadingState,
   getMonitoredSystemLedgerPresentation,
+  getMonitoredSystemLedgerUnavailableState,
   getMonitoredSystemLimitInstallCollectorsLabel,
   getMonitoredSystemLimitLearnMoreLabel,
   getMonitoredSystemLimitUpgradeLabel,
@@ -41,6 +44,18 @@ describe('monitoredSystemPresentation', () => {
       tableNameLabel: 'Name',
       tableStatusLabel: 'Status',
       tableLatestIncludedSignalLabel: 'Latest Included Signal',
+      countedSystemBadgeLabel: 'Counts as 1 monitored system',
+      groupedSourcesHeading: 'Grouped sources',
+      countingExplanationHeading: 'Why this counts',
+      continuityHeading: 'Plan continuity',
+      continuityPlanLimitLabel: 'Plan limit',
+      continuityEffectiveLimitLabel: 'Effective limit',
+      continuityGrandfatheredFloorLabel: 'Grandfathered floor',
+      continuityCaptureLabel: 'Continuity capture',
+      continuityCapturePendingLabel: 'Pending',
+      continuityCaptureCapturedLabel: 'Captured',
+      usageVerifyingLabel: 'Verifying…',
+      unlimitedLimitLabel: 'Unlimited',
       loadingState: {
         text: 'Loading monitored system usage…',
       },
@@ -48,6 +63,15 @@ describe('monitoredSystemPresentation', () => {
         title: 'Monitored system usage is temporarily unavailable.',
         retryingLabel: 'Trying again…',
         retryLabel: 'Try again',
+      },
+      unavailableState: {
+        title: 'Verifying monitored-system inventory',
+        fallbackMessage:
+          'Pulse cannot currently verify monitored-system usage for this installation. Refresh after the monitoring runtime settles.',
+        unsettledMessage:
+          'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
+        rebuildPendingMessage:
+          'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
       },
       countingDetailsCollapsedLabel: 'View counting details',
       countingDetailsExpandedLabel: 'Hide counting details',
@@ -100,6 +124,15 @@ describe('monitoredSystemPresentation', () => {
       title: 'Monitored system usage is temporarily unavailable.',
       retryingLabel: 'Trying again…',
       retryLabel: 'Try again',
+    });
+    expect(getMonitoredSystemLedgerUnavailableState()).toEqual({
+      title: 'Verifying monitored-system inventory',
+      fallbackMessage:
+        'Pulse cannot currently verify monitored-system usage for this installation. Refresh after the monitoring runtime settles.',
+      unsettledMessage:
+        'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
+      rebuildPendingMessage:
+        'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
     });
     expect(getMonitoredSystemCountingDetailsToggleLabel(false)).toBe('View counting details');
     expect(getMonitoredSystemCountingDetailsToggleLabel(true)).toBe('Hide counting details');
@@ -172,6 +205,20 @@ describe('monitoredSystemPresentation', () => {
     );
   });
 
+  it('returns canonical monitored-system ledger unavailable copy', () => {
+    expect(formatMonitoredSystemLedgerUnavailableMessage('supplemental_inventory_unsettled')).toBe(
+      'Pulse is still collecting the first provider-owned inventory baseline. The monitored-system ledger will appear after that baseline completes.',
+    );
+    expect(
+      formatMonitoredSystemLedgerUnavailableMessage('supplemental_inventory_rebuild_pending'),
+    ).toBe(
+      'Pulse has collected provider-owned inventory and is rebuilding the canonical monitored-system ledger. Usage will appear when that rebuild finishes.',
+    );
+    expect(formatMonitoredSystemLedgerUnavailableMessage('monitor_state_unavailable')).toBe(
+      'Pulse cannot currently verify monitored-system usage for this installation. Refresh after the monitoring runtime settles.',
+    );
+  });
+
   it('returns customer-facing source and type labels', () => {
     expect(getMonitoredSystemSourceLabel('agent')).toBe('Agent');
     expect(getMonitoredSystemSourceLabel('multiple')).toBe('Multiple Sources');
@@ -186,6 +233,8 @@ describe('monitoredSystemPresentation', () => {
   });
 
   it('formats included signal attribution and summary sentences', () => {
+    expect(formatMonitoredSystemGroupedSourcesLabel(1)).toBe('1 grouped source');
+    expect(formatMonitoredSystemGroupedSourcesLabel(2)).toBe('2 grouped sources');
     expect(
       formatMonitoredSystemSurfaceAttribution({
         name: 'tower',

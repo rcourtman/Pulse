@@ -331,9 +331,12 @@ async function configureBillingFixtures(context: BrowserContext, page: Page) {
   });
 
   await context.route(
-    "**/api/license/monitored-system-ledger",
+    "**/api/license/monitored-system-ledger**",
     async (route) => {
-      await fulfillJSON(route, MONITORED_SYSTEM_LEDGER);
+      const payload = route.request().url().endsWith("/explain")
+        ? { ledger: MONITORED_SYSTEM_LEDGER, preview: null }
+        : MONITORED_SYSTEM_LEDGER;
+      await fulfillJSON(route, payload);
     },
   );
 }

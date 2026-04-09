@@ -144,11 +144,14 @@ async function configureMonitoredSystemBillingFixtures(page: Page) {
     });
   });
 
-  await page.route('**/api/license/monitored-system-ledger', async (route) => {
+  await page.route('**/api/license/monitored-system-ledger**', async (route) => {
+    const payload = route.request().url().endsWith('/explain')
+      ? { ledger: MONITORED_SYSTEM_LEDGER, preview: null }
+      : MONITORED_SYSTEM_LEDGER;
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify(MONITORED_SYSTEM_LEDGER),
+      body: JSON.stringify(payload),
     });
   });
 }
@@ -180,6 +183,16 @@ test.describe('Monitored-system billing focus', () => {
       'true',
     );
     await expect(page.getByRole('button', { name: 'Hide counting rules' })).toBeVisible();
+    await expect(page.getByText('Counts as 1 monitored system')).toBeVisible();
+    await expect(page.getByText('1 grouped source')).toBeVisible();
+    await expect(
+      page
+        .getByText(
+          'Counts as one monitored system because Pulse merged multiple top-level views into one canonical cluster.',
+        )
+        .first(),
+    ).toBeVisible();
+    await expect(page.getByText('edge-cluster (Cluster via Kubernetes)').first()).toBeVisible();
 
     await openPageWithUrgentMonitoredSystemBanner(page);
 
